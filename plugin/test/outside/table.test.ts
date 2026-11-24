@@ -34,6 +34,7 @@ const ROWS: [string, Agent, { status: string; startFailure?: object }?][] = [
   ["bb · ended in a shell, on a thread whose last turn failed", row("bb", false, "shell"), failed],
   ["bb · an operator's stop, on a thread whose last turn failed", row("bb", false, "stopped", "stopped"), failed],
   ["bb · session lost, on a thread that failed at its start", row("bb", false, "stopped", "lost"), neverStarted],
+  ["bb · runs outside OATS (the kernel's report), on a thread that failed at its start", { ...row("bb", false, "stopped", "stopped"), outsideOats: { code: "running-outside-oats", backend: "bb", message: "a harness runs" } }, neverStarted],
   ["bb · the kernel cannot reach it (the kernel's row)", row("bb", null, "unreachable")],
   ["bb · runs (a harness is loaded)", row("bb", true, "unknown")],
   ["tmux · stopped with OATS (recorded)", row("tmux", false, "shell", "stopped")],
@@ -73,6 +74,8 @@ test("the table of every row, from the one function", () => {
     ["bb · an operator's stop, on a thread whose last turn failed", "stopped", "Stopped", "(the stop's warning)", "refuses (stopped)", "—"],
     // It never ran: failed, nothing of a lost session, no message.
     ["bb · session lost, on a thread that failed at its start", "never-started", "Failed", "—", "refuses (stopped)", "—"],
+    // The kernel's report wins: it runs, whatever bb said of the thread's start.
+    ["bb · runs outside OATS (the kernel's report), on a thread that failed at its start", "stopped", "Running outside OATS", "", "refuses (stopped)", "—"],
     ["bb · the kernel cannot reach it (the kernel's row)", "unreachable", "Unreachable", "—", "refuses (unreachable)", "—"],
     ["bb · runs (a harness is loaded)", "runs", "Idle", "—", "—", "—"],
     ["tmux · stopped with OATS (recorded)", "stopped", "Stopped", "—", "refuses (stopped)", "—"],

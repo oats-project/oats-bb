@@ -6,6 +6,7 @@
 // The events are RECORDED (test/fixtures/outside/events/*.json: the pi run's probe).
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { useState } from "react";
 import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -14,7 +15,7 @@ import type { ExperimentalThreadHeaderRowProps, PluginThreadListProps } from "@g
 import { refusal } from "../../app/home/board";
 import { carriesOn } from "../../app/lifecycle/words";
 import { said } from "../../app/outside/say";
-import { ERRORED, STARTED, startFailureOf } from "../../app/outside/threads";
+import { ERRORED, STARTED, startFailureOf, useStartFailures } from "../../app/outside/threads";
 import { agentStatus } from "../../app/roster/status";
 import { notified } from "../../app/ui";
 import { messageResumes, rest } from "../../model/rest";
@@ -84,6 +85,42 @@ test("one reading of the row: it never ran, so it is failed, it is not carried o
   expect(rest({ ...agent, running: true, runtimeState: "unknown" }, failed)).toBe("runs");
   expect(state({ ...agent, running: true, runtimeState: "unknown" }, failed)).not.toBe("error");
   expect(rest({ ...agent, backend: "tmux" }, failed)).toBe("lost");
+  // Nor of one the kernel REPORTS running in a home OATS recorded stopped (its row stays not running): "Running outside OATS", with its notice.
+  const outside = { ...agent, sessionEnd: "stopped", outsideOats: { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs" } };
+  expect([state(outside, failed), rest(outside, failed), said(outside, "open", true, failed)?.kind]).toEqual(["outside", "stopped", "outside"]);
+});
+
+test("a read bb fails after it said that a thread failed at its start keeps that answer, and asks again", async () => {
+  let fail = false;
+  const asked: string[] = [];
+  const list = async (args: Asked) => {
+    asked.push(args.threadId);
+    if (fail) throw new Error("bb is away");
+    return events("never-started").filter((event) => args.types!.includes(event.type));
+  };
+  function Probe() {
+    const [token, setToken] = useState("t1");
+    const answers = useStartFailures(["thr_a"], token);
+    return (
+      <button data-testid="probe" onClick={() => setToken((now) => `${now}+`)}>
+        {JSON.stringify([...answers])}
+      </button>
+    );
+  }
+  const slot = renderSlot<Record<string, never>, Contract>({ component: Probe }, {}, { rpc: handlers(), sdk: { threads: { events: { list } } } as never });
+  const said = () => slot.getByTestId("probe").textContent;
+  const FAILED = JSON.stringify([["thr_a", { message: "Command thread.start failed", detail: REASON }]]);
+  await waitFor(() => expect(said()).toBe(FAILED));
+  // The next roster read, or the next minute: bb cannot answer.
+  fail = true;
+  fireEvent.click(slot.getByTestId("probe"));
+  await waitFor(() => expect(asked.length).toBe(4));
+  expect(said()).toBe(FAILED);
+  // And once bb answers again, its answer is the one kept.
+  fail = false;
+  fireEvent.click(slot.getByTestId("probe"));
+  await waitFor(() => expect(asked.length).toBe(6));
+  expect(said()).toBe(FAILED);
 });
 
 async function line(options: RenderSlotOptions<Contract>) {

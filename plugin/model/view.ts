@@ -63,6 +63,18 @@ export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): bo
   TURN_IN_PROGRESS.has(thread.status) || (AT_REST.has(thread.status) && thread.queuedWork === "waiting");
 
 /**
+ * Whether the agent NEVER RAN: bb says its thread failed at its start (`BbThread.startFailure`),
+ * and the kernel does not say that it runs: not by its row (`running` is not false beside a word
+ * that is not "stopped": an agent started again since), and not by its report that a harness runs
+ * in a home OATS recorded stopped (`outsideOats`: that agent runs, and "Running outside OATS" is
+ * what is said of it). The one test, for the state and for how it is at rest (model/rest.ts).
+ */
+export function failedAtStart(agent: Pick<Agent, "running" | "runtimeState"> & { backend?: string | null; outsideOats?: unknown }, thread: Pick<BbThread, "startFailure"> | null | undefined): boolean {
+  if (agent.backend === "tmux" || agent.outsideOats != null || thread?.startFailure == null) return false;
+  return agent.running === false || agent.runtimeState === "stopped";
+}
+
+/**
  * The state of one agent on its thread. First match wins.
  *
  * WORKING and IDLE, for an agent on a bb thread, are bb's own status of that thread, never the
@@ -92,16 +104,6 @@ export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): bo
  * (stopped, not running), and they would say "Stopped" of an agent that runs: ONE statement about
  * it, "Running outside OATS", in every place.
  */
-/**
- * Whether the agent NEVER RAN: bb says its thread failed at its start (`BbThread.startFailure`),
- * and the kernel does not say that it runs (`running` is not false beside a word that is not
- * "stopped": an agent started again since). The one test, for the state and for how it is at rest (model/rest.ts).
- */
-export function failedAtStart(agent: Pick<Agent, "running" | "runtimeState"> & { backend?: string | null }, thread: Pick<BbThread, "startFailure"> | null | undefined): boolean {
-  if (agent.backend === "tmux" || thread?.startFailure == null) return false;
-  return agent.running === false || agent.runtimeState === "stopped";
-}
-
 export function state(agent: Agent, thread: BbThread | null): AgentState {
   if (agent.backend !== "tmux" && agent.outsideOats != null) return "outside";
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";

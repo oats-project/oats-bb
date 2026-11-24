@@ -5,7 +5,7 @@
 import type { Agent, BbThread } from "./types";
 import { failedAtStart, recordedStopped } from "./view";
 
-type Row = Pick<Agent, "running" | "runtimeState"> & { backend?: string | null; sessionEnd?: string | null };
+type Row = Pick<Agent, "running" | "runtimeState"> & { backend?: string | null; sessionEnd?: string | null; outsideOats?: unknown };
 
 /**
  * - "runs": the kernel does not say the agent does not run (`running` is not false, and its word

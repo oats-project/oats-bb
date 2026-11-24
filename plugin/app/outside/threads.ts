@@ -196,9 +196,13 @@ export function useStartFailures(ids: readonly string[], token: string): Readonl
       if (failuresAsked !== key) return; // a newer question is out
       const next = new Map<string, StartFailure | null>();
       answers.forEach((answer, index) => {
-        if (answer.status === "fulfilled") next.set(wanted[index]!, answer.value);
+        const id = wanted[index]!;
+        if (answer.status === "fulfilled") next.set(id, answer.value);
+        // bb could not say THIS time: what it last said of the thread stands (a thread it said
+        // failed at its start does not go back to "session lost" for a read that failed), and it is asked again.
+        else if (failures.has(id)) next.set(id, failures.get(id)!);
       });
-      if (next.size < wanted.length) failuresAsked = "";
+      if (answers.some((answer) => answer.status === "rejected")) failuresAsked = "";
       publish(next);
     });
   }, [sdk, idsKey, token]);

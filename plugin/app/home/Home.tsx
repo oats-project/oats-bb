@@ -22,7 +22,7 @@ import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
-import { useReading } from "../roster/reading";
+import { READING as READING_WORD, useReading } from "../roster/reading";
 import { RosterNotice, useLineShowsNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { TMUX } from "../ui";
@@ -507,8 +507,15 @@ function LostRow({ entry, oats, held }: { entry: Entry; oats: Ready; held: boole
     <li data-testid="oats-lost-row" data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
       <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
         <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
-        {/* (No reason on the line: the heading says it.) */}
-        <RowFacts testId="oats-home-agent-where" soul={shown(oats.soulOf(entry.agent))} where={onTmux ? TMUX : undefined} className="max-w-full flex-1 basis-40" />
+        {/* (No reason on the line: the heading says it.) Behind a done Start, until the roster is read again, the line says
+            "Reading…" in its facts' place: its Start… is then off, and an off control is never alone (the Loading pattern's word, L13's). */}
+        {reading ? (
+          <span role="status" data-testid="oats-lost-reading" className="text-xs text-muted-foreground">
+            {READING_WORD}
+          </span>
+        ) : (
+          <RowFacts testId="oats-home-agent-where" soul={shown(oats.soulOf(entry.agent))} where={onTmux ? TMUX : undefined} className="max-w-full flex-1 basis-40" />
+        )}
       </span>
       {byMessage ? (
         <Button data-testid="oats-lost-open" onClick={open.onClick}>
@@ -807,7 +814,7 @@ export function HomePage({ subPath }: PluginNavPanelProps) {
 export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   const oats = useOats();
   const visible = useTabVisible();
-  // (A thread's own line on this screen says the roster's notice: an agent's archived thread, the outside feature's row.)
+  // (A thread's own line on this screen says the roster's notice: an agent's archived thread (the outside feature's row); and, where OATS was never read, every thread's line.)
   const lineSays = useLineShowsNotice();
   const AgentTab = getAgentTab();
   const ready = oats.phase === "ready";

@@ -75,8 +75,7 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
   const words = failureWords(failure, machine);
   const settings = useSettingsHref();
   // A PANE that draws the notice over a roster kept as last read says so (whoever draws it: the home,
-  // a soul's page, Teams; and the thread's own line or an agent's page, whose notice is the `compact`
-  // one), so that the sidebar beside it says one line and not the same notice a second time (the
+  // a soul's page, Teams, an agent's page: the whole notice; and a thread's own line: the `compact` one), so that the sidebar beside it says one line and not the same notice a second time (the
   // lead's T3: the notice ONCE, in the pane a person is looking at). The sidebar's own (`inSidebar`) does not count.
   // (Also where OATS was NEVER read, and there is no age to say: the same rule. The sidebar beside such a pane says the notice's title alone.)
   const fullOnPage = !inSidebar;
@@ -170,7 +169,7 @@ const tell = () => {
 };
 // (Nothing is reset with the window: each notice counts itself in when it mounts and out when it
 // unmounts, and a count set to zero under a mounted page would go below it.)
-/** Whether a page drawn now shows the full notice over a roster kept as last read. */
+/** Whether a pane drawn now shows the notice (over a roster kept as last read, or where OATS was never read). */
 export function usePageShowsNotice(): boolean {
   return useSyncExternalStore(
     (watcher) => {
@@ -181,7 +180,7 @@ export function usePageShowsNotice(): boolean {
   );
 }
 
-/** Whether a thread's own line drawn now says the notice (the compact one) over a roster kept as last read. */
+/** Whether a thread's own line drawn now says the notice (the compact one): over a roster kept as last read, or where OATS was never read. */
 export function useLineShowsNotice(): boolean {
   return useSyncExternalStore(
     (watcher) => {

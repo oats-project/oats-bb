@@ -1114,6 +1114,9 @@ test("the Lost section holds the agents whose roster row says \"Lost\", and no o
   const { act: settle } = await import("@testing-library/react");
   settle(() => noteActed([lostOne.instance], fixtureSnapshot(agents).at, { verb: "start", was: new Map([[lostOne.instance, "stopped"]]) }));
   expect((again.getByTestId("oats-lost-start") as HTMLButtonElement).disabled).toBe(true);
+  // Off, and not alone: the row says "Reading…" in its facts' place.
+  const row = again.getByTestId("oats-lost-start").closest('[data-testid="oats-lost-row"]') as HTMLElement;
+  expect([within(row).getByTestId("oats-lost-reading").textContent, within(row).queryByTestId("oats-home-agent-where")]).toEqual(["Reading…", null]);
   forgetActed();
   again.unmount();
   resetApp();

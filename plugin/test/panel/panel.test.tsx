@@ -756,10 +756,24 @@ test("in a ready roster an agent drawn on no thread says Idle in its panel, as i
   await waitFor(() => expect(stateOf(slot)).toMatch(/^Idle/));
 });
 
-test("a panel that opens while the roster cannot be read shows the agent its caller last read, and why nothing more", async () => {
+// (Where OATS was NEVER read. An agent's PAGE is the pane a person looks at: it says the notice, whole. The TAB beside a
+// thread draws none: that thread's own line says it, with the one Retry: the second review round of the T3 change.)
+test("a panel that opens while the roster cannot be read shows the agent its caller last read: as an agent's page with why nothing more, whole; as the tab beside a thread with no notice of its own", async () => {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const known = panelAgents().find((agent) => agent.instance === CHILD)!;
-  const slot = renderSlot<{ threadId: string; known: Agent }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD, known }, {
+  const never = () => handlers({
+    snapshot: () => ({ ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" }),
+    panelInstance: () => {
+      throw new Error("E_LOCAL_MISSING: no oats-local.yaml here");
+    },
+  });
+  const tab = renderSlot<{ threadId: string; known: Agent }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD, known }, { rpc: never(), sidebarThreads: panelThreads() });
+  await waitFor(() => expect(text(tab.getByTestId("oats-panel-name"))).toBe("Panel worktree helper"));
+  await act(async () => {});
+  expect([within(tab.getByTestId("oats-panel")).queryByRole("alert"), within(tab.getByTestId("oats-panel")).queryByRole("button", { name: "Retry" })]).toEqual([null, null]);
+  tab.unmount();
+  resetApp();
+  const slot = renderSlot<{ instance: string; known: Agent }, Contract>({ component: InstancePanel }, { instance: CHILD, known }, {
     rpc: handlers({
       snapshot: () => ({ ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" }),
       panelInstance: () => {

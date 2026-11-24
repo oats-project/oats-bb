@@ -251,9 +251,10 @@ function ReadState({ read, now, failure, page }: { read: InstanceRead; now: numb
     read.retry();
   };
   if (refusal === null) return read.status === "loading" ? <Loading>Reading…</Loading> : null;
-  // Nothing was read here, and no roster is kept (OATS was never read): the notice every place of the plugin shows
-  // when OATS cannot be read, whole.
-  if (failure !== null && read.data === undefined && failure.at === null) return <Unreadable failure={failure} machine={failure.machine} onRetry={again} />;
+  // Nothing was read here, and no roster is kept (OATS was never read). An agent's PAGE is the pane a person looks at:
+  // the notice every place of the plugin shows when OATS cannot be read, whole. The TAB beside a thread draws none:
+  // that thread's own line says the notice, with the one Retry (the second review round of the T3 change).
+  if (failure !== null && read.data === undefined && failure.at === null) return page ? <Unreadable failure={failure} machine={failure.machine} onRetry={again} /> : read.status === "loading" ? <Loading>Reading…</Loading> : null;
   // The roster is the last one read and this panel has read nothing yet (an agent opened meanwhile): the same rule as
   // below, before its first read lands: the page says the notice with the roster's age; the tab beside a thread draws none.
   if (failure !== null && read.data === undefined) return page ? <Unreadable failure={failure} machine={failure.machine} at={failure.at ?? undefined} now={now} onRetry={again} /> : read.status === "loading" ? <Loading>Reading…</Loading> : null;

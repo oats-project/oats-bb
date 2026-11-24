@@ -13,7 +13,9 @@ import { notLoaded, outside, recorded, sample, tmuxRow } from "./rows";
 
 const WHERES: ThreadWhere[] = ["open", "archived", "missing", "none", "unknown"];
 const NOW = Date.parse("2026-11-21T16:00:00.000Z");
-const PLAIN = { tone: "plain", rowTone: "plain", warning: null, acts: null, archived: false } as const;
+const PLAIN = { tone: "plain", rowTone: "plain", warning: null, acts: null, archived: false, message: false } as const;
+/** Where a MESSAGE is the way on (the agent's own listed thread; model/rest.ts `messageResumes`): the line says so, and has no act of its own. */
+const MESSAGE = { acts: [], message: true } as const;
 const word = (agent: Agent) => agentStatus(agent, null, NOW).word;
 
 /** The rows of the table, each with bb's answer for its thread and whether the tree draws it on its thread. */
@@ -66,10 +68,10 @@ describe("stopped by an operator (sessionEnd \"stopped\")", () => {
   it("sessionEnd \"exited\" (its harness ended by itself) is no stop: the agent FAILED, and a message carries it on; no warning", () => {
     const exited = { ...operator, sessionEnd: "exited" };
     expect(word(exited)).toBe("Failed");
-    expect(said(exited, "open", true)).toEqual({ ...PLAIN, kind: "failed-open", sentence: "session ended", note: null });
+    expect(said(exited, "open", true)).toEqual({ ...PLAIN, ...MESSAGE, kind: "failed-open", sentence: "session ended", note: null });
   });
   it("sessionEnd \"lost\" (its session ended without OATS stopping it) is the one stop that is spared the warning", () => {
-    expect(said({ ...operator, sessionEnd: "lost" }, "open", true)).toMatchObject({ kind: "lost-open", tone: "plain", acts: ["start"] });
+    expect(said({ ...operator, sessionEnd: "lost" }, "open", true)).toMatchObject({ kind: "lost-open", tone: "plain", ...MESSAGE });
   });
   it("with its thread archived in bb: the reason on its line, nothing after the state's word on its row, and the way to it; no warning", () => {
     expect(said(operator, "archived", false)).toEqual({ ...PLAIN, kind: "stopped-archived", sentence: "archived in bb", note: null, archived: true }); // its row says "Stopped" alone
@@ -99,8 +101,8 @@ describe("a session OATS lost (sessionEnd \"lost\")", () => {
     const kinds = (agent: Agent) => (["archived", "missing"] as const).map((where) => said(agent, where, false)!.kind);
     expect([kinds(lost), kinds(operator)]).toEqual([["lost-archived", "deleted"], ["stopped-archived", "deleted"]]);
   });
-  it("on a thread that is open: the reason alone, \"session lost\"; no cause guessed, nothing promised, no warning, and never the operator's sentence", () => {
-    expect(said(lost, "open", true)).toEqual({ ...PLAIN, kind: "lost-open", sentence: "session lost", note: "session lost", acts: ["start"] });
+  it("on a thread that is open: the reason \"session lost\", and that a message is the way on (no Start on the line); no cause guessed, nothing promised, no warning, and never the operator's sentence", () => {
+    expect(said(lost, "open", true)).toEqual({ ...PLAIN, ...MESSAGE, kind: "lost-open", sentence: "session lost", note: "session lost" });
     expect(said(lost, "open", true)!.sentence).not.toMatch(/outside OATS/);
     expect(said(lost, "open", true)!.sentence).not.toMatch(/machine|when|again by itself/);
     expect(said(lost, "unknown", false)).toBeNull();
@@ -197,8 +199,8 @@ describe("idle, no harness loaded (running false beside runtimeState \"unknown\"
   it("is the contract's row, and is \"Idle\", never \"Stopped\"", () => {
     expect([unloaded.running, unloaded.runtimeState, unloaded.sessionEnd, state(unloaded, null), word(unloaded)]).toEqual([false, "unknown", undefined, "idle", "Idle"]);
   });
-  it("on its open thread: the reason alone, \"not loaded\" (what Start does is its dialog's to say); Start, and no warning", () => {
-    expect(said(unloaded, "open", true)).toEqual({ ...PLAIN, kind: "idle-unloaded", sentence: "not loaded", note: "not loaded", acts: ["start"] });
+  it("on its open thread: the reason \"not loaded\", and that a message is the way on (no Start on the line: what Start does is its dialog's to say); no warning", () => {
+    expect(said(unloaded, "open", true)).toEqual({ ...PLAIN, ...MESSAGE, kind: "idle-unloaded", sentence: "not loaded", note: "not loaded" });
   });
   it("an idle agent the kernel says nothing of (running null: today's idle bb thread) says none of it", () => {
     expect(said(recorded("idle"), "open", true)).toBeNull();
@@ -245,8 +247,11 @@ describe("an agent on tmux: the three recorded rows (OATS 0.70.5, the real run)"
 });
 
 describe("failed, unreachable, and what is not this feature's", () => {
-  it("failed on an open thread: the reason alone, \"session ended\"; the line's own Restart, and no warning", () => {
-    expect(said(failed, "open", true)).toEqual({ ...PLAIN, kind: "failed-open", sentence: "session ended", note: null });
+  it("failed on an open thread: the reason \"session ended\", and that a message is the way on where the row says that it does not run (no Restart on the line); the roster's own act where the row does not say so; no warning", () => {
+    expect(failed.running).toBe(false);
+    expect(said(failed, "open", true)).toEqual({ ...PLAIN, ...MESSAGE, kind: "failed-open", sentence: "session ended", note: null });
+    // `running` null or true beside "shell": nothing says that it does not run, so a message is not the designed way on: the line keeps the roster's own act.
+    for (const running of [null, true]) expect(said({ ...failed, running }, "open", true), String(running)).toEqual({ ...PLAIN, kind: "failed-open", sentence: "session ended", note: null });
     expect(said(failed, "archived", false)).toEqual({ ...PLAIN, kind: "threadless", sentence: null, note: "archived in bb", archived: true });
   });
   it("unreachable says nothing about a message: what status says and its reason are the roster's line, whatever its session's end", () => {

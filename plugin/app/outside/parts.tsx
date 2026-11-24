@@ -19,7 +19,7 @@ import type { Agent, AgentState, ThreadWhere } from "../../model/types";
 import { said as sayOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
-import { LOST_NOTE, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, STOPPED_OPEN_ASKING } from "./words";
+import { MESSAGE_CONTINUES, LOST_NOTE, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, STOPPED_OPEN_ASKING } from "./words";
 
 /** On a button: with the dots, since each opens its dialog and nothing runs on the press. */
 const BUTTON: Record<Act, string> = { stop: "Stop…", start: "Start…", retire: "Retire…" };
@@ -112,6 +112,7 @@ export function rowWords(word: string, state: AgentState, note: string | null): 
  * reason, or the sentence that keeps a person from harm, and whether the line warns. `status` is
  * the roster's own (`agentStatus`). When OATS recorded a stop is a fact of the instance panel.
  * - the kernel's report: "recorded stopped";
+ * - where a MESSAGE is the way on (`said.message`): the reason, then "message to continue";
  * - any other reason, on a line whose state is the one the reason follows: the reason;
  * - a line whose state is another (bb holds a question on the thread, so it says "Needs you"): the
  *   roster's own words, which say what the agent asks. But for a stop that warns, where an answer
@@ -125,6 +126,10 @@ export function lineParts(said: Said | null, status: { state: AgentState; since:
   const tone = said.tone === "warning" ? "warning" : undefined;
   if (said.kind === "stopped-open" && status.state !== "stopped") return { since: null, detail: STOPPED_OPEN_ASKING, tone };
   if (!follows(said, status.state)) return own;
+  // Where a message is the way on: the reason, then "message to continue", each a part of the
+  // line with its own separator ("Stopped · session lost · message to continue"). No time before
+  // them: none of the three says since when.
+  if (said.message) return { since: said.sentence, detail: MESSAGE_CONTINUES, tone };
   // A lost session has no time: the kernel records none of the loss (never "lost since").
   if (said.kind === "lost-open" || said.kind === "lost-tmux") return { since: null, detail: said.sentence, tone };
   return { since: status.since, detail: said.sentence, tone };

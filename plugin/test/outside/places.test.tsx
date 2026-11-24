@@ -203,12 +203,20 @@ test("a stopped row with no report (an OATS that does not list the feature answe
   expect([words(slot)[0], acts(slot)]).toEqual(["Stopped", ["Start…"]]);
 });
 
-test("failed, on its open thread: \"Failed\", that a message here starts it again, and Restart; no warning", async () => {
+test("failed, on its open thread: \"Failed\", why in two words, and that a message is the way on: no Restart on the line (it begins a new conversation); no warning", async () => {
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "shell" } : agent));
   const slot = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
   await slot.findByTestId("oats-identity-row");
-  expect(words(slot)).toEqual(["Failed", "session ended"]);
-  expect(acts(slot)).toEqual(["Restart…"]);
+  expect(words(slot)).toEqual(["Failed", "session ended", "message to continue"]);
+  // The line has no act of the lifecycle's: the way on is the composer under it. (Restart… and Start… are in the thread's menu, the panel and the agent's page.)
+  expect(acts(slot)).toEqual([]);
+  resetApp();
+  // Where the row does not say that it does not run (`running` null beside "shell"), a message is not the designed way: the roster's own act stands.
+  const untold = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: null, runtimeState: "shell" } : agent));
+  const other = await line("thr_harvest", { rpc: handlers({}, untold), sidebarThreads: sidebarThreads() });
+  await other.findByTestId("oats-identity-row");
+  expect(words(other)).toEqual(["Failed", "session ended"]);
+  expect(acts(other)).toEqual(["Restart…"]);
   expect(slot.queryByTestId("oats-outside-warning")).toBeNull();
 });
 
@@ -355,11 +363,11 @@ test("a lost session's ROW reads \"Lost\" on bb and on tmux, side by side, and i
   expect(markOf(onTmux(slot))).toEqual(["stopped", null]);
   expect(markOf(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")!)).toEqual(["stopped", null]);
   resetApp();
-  // The bb agent's line: the reason alone; no sentence, no time (the kernel records none of the loss), no cause, no promise.
+  // The bb agent's line: the reason, then that a message is the way on; no Start on the line, no time (the kernel records none of the loss), no cause, no promise.
   const bbLine = await line("thr_digest", { rpc: handlers(noEvents, lostRows), sidebarThreads: sidebarThreads() });
   await bbLine.findByTestId("oats-identity-row");
-  await waitFor(() => expect(words(bbLine)).toEqual(["Stopped", "session lost"]));
-  expect(acts(bbLine)).toEqual(["Start…"]);
+  await waitFor(() => expect(words(bbLine)).toEqual(["Stopped", "session lost", "message to continue"]));
+  expect(acts(bbLine)).toEqual([]);
   expect(bbLine.getByTestId("oats-identity-row").textContent).not.toMatch(/Nobody stopped|To carry on|Start begins/);
   resetApp();
   // The tmux agent's page: the reason on its header's state line, and no sentence (what Start does is its dialog's one line; when it started is its Session's); the header's own Start, and no Restart: nothing runs.
@@ -376,6 +384,14 @@ test("a lost session's ROW reads \"Lost\" on bb and on tmux, side by side, and i
   const stopped = await sidebar({ rpc: handlers({}, rows({ running: false, runtimeState: "shell", sessionEnd: "stopped" })), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(rowFacts(onTmux(stopped.slot))).toBe("Stopped · oats-developer · tmux"));
   expect(markOf(onTmux(stopped.slot))).toEqual(["stopped", null]);
+});
+
+test("an agent that is not loaded, on its own thread at rest: \"Idle · not loaded · message to continue\", and no Start on the line", async () => {
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown", waiting: null } : agent));
+  const slot = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
+  await slot.findByTestId("oats-identity-row");
+  await waitFor(() => expect(words(slot)).toEqual(["Idle", "not loaded", "message to continue"]));
+  expect(acts(slot)).toEqual([]);
 });
 
 test("an agent that is not loaded, on a thread bb says works (a turn runs): the row and the line say \"Working\", with no \"not loaded\" and no Start", async () => {

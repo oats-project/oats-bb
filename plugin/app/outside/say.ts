@@ -14,7 +14,7 @@
 // - bb's answer for that thread id (`Oats.whereOf`): open, archived, missing (deleted), or not known yet.
 // "Archived" is told from "deleted" by bb's answer alone, never by the kernel's message.
 import type { Agent, OutsideOats, ThreadWhere } from "../../model/types";
-import { rest } from "../../model/rest";
+import { messageResumes, rest } from "../../model/rest";
 import { state } from "../../model/view";
 import {
   ARCHIVED_FACT,
@@ -79,9 +79,19 @@ export type Said = {
   acts: readonly Act[] | null;
   /** Whether bb still has the conversation, archived, to read. */
   archived: boolean;
+  /**
+   * A MESSAGE in the agent's own listed thread is the designed way on (model/rest.ts
+   * `messageResumes`): the line says so after the reason ("message to continue"), and has no
+   * Start… or Restart… (`acts` is empty: the act would begin a new conversation).
+   */
+  message: boolean;
 };
 
-const base = { sentence: null, tone: "plain", note: null, rowTone: "plain", warning: null, acts: null, archived: false } as const;
+const base = { sentence: null, tone: "plain", note: null, rowTone: "plain", warning: null, acts: null, archived: false, message: false } as const;
+/** No act of the line's own: where a message is the way on. */
+const NO_ACTS: readonly Act[] = [];
+/** bb lists the thread the roster draws the agent on (`where` "open", attached): what `messageResumes` asks of the thread, for a caller that holds no row of it. */
+const LISTED = {};
 
 /** The reason of a row whose thread cannot be opened from the tree, by where bb says the thread is. */
 function whereNote(where: ThreadWhere): string | null {
@@ -128,8 +138,13 @@ function whereNote(where: ThreadWhere): string | null {
  * - an agent on TMUX whose session was lost: that nobody stopped it (`sentenceOf` adds what Start
  *   does where the lifecycle offers Start for it). Nothing else is said of an agent on tmux.
  * - "idle" of a row the kernel calls not running (`running: false` beside `runtimeState:
- *   "unknown"`: no harness is loaded), on an open thread: that a message there carries the
- *   conversation on, and that Start begins a new one. Start.
+ *   "unknown"`: no harness is loaded), on an open thread: the reason, "not loaded".
+ * ONE RULE over the lines above (the lead's ruling on the read of 24 Nov 2026, T5): on the agent's
+ * own listed thread, where a MESSAGE is the designed way on (`messageResumes`, model/rest.ts: a
+ * lost session, a harness that ended by itself, no harness loaded), `message` is set: the line
+ * says "message to continue" after the reason and has NO act of its own (`acts` is empty): Start…
+ * and Restart… begin a new conversation, and stay in the thread's menu, the panel and the agent's
+ * page. An operator's stop keeps its warning and Start….
  */
 export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread: object | null = null): Said | null {
   // An agent on tmux has no thread in bb: this feature says one thing of it, that its session was
@@ -148,6 +163,11 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
   // it says of a stop, so that its line warns where the home's card refuses.
   const drawn = state(agent, null);
   const is = how === "stopped" && drawn === "needs-you" ? "stopped" : drawn;
+  // THE RULE of the line (the lead's T5): on the agent's own listed thread, where a message is the
+  // designed way on (the ONE predicate the home's card and the Start dialog read), the line says
+  // so and offers no Start… or Restart…: for a lost session, for no harness loaded, and for a
+  // harness that ended by itself, alike.
+  const message = where === "open" && attached && messageResumes(agent, thread ?? LISTED);
   // Archived while it RAN: bb's Archive never touches the harness, so the process goes on with no
   // thread a person can see. The row keeps its state's word, in the warning tone, and where it
   // leads says the remedy. "Still says it runs": the row is not stopped, failed, or unreachable
@@ -163,7 +183,8 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
       // `outsideOats` is set (the state function's own test).
       return { ...base, kind: "outside", sentence: OUTSIDE_RECORDED, tone: "warning", note: "", warning: agent.outsideOats ?? null, acts: ["stop", "start"], archived };
     case "error":
-      return where === "open" && attached ? { ...base, kind: "failed-open", sentence: FAILED_OPEN } : threadless;
+      // (Where the row does not say that it does not run, `running` null or true beside "shell", a message is not the designed way: the roster's own act stands.)
+      return where === "open" && attached ? { ...base, kind: "failed-open", sentence: FAILED_OPEN, ...(message ? { acts: NO_ACTS, message } : {}) } : threadless;
     case "stopped": {
       if (where === "missing") return { ...base, kind: "deleted", sentence: DELETED, tone: "warning", note: DELETED_NOTE, rowTone: "warning" };
       const lost = how === "lost";
@@ -182,7 +203,7 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
         // release or a thread a person unarchived, and the warning stays for exactly that case.
         // Start is this feature's on that line, so that the line has the act its sentence names
         // whatever its state's word is (bb's own question on the thread makes it "Needs you").
-        if (lost) return { ...base, kind: "lost-open", sentence: LOST_NOTE, note: LOST_NOTE, acts: ["start"] };
+        if (lost) return { ...base, kind: "lost-open", sentence: LOST_NOTE, note: LOST_NOTE, acts: message ? NO_ACTS : ["start"], message };
         // Every other stop warns: a safety sentence fails CLOSED. An operator's stop (`sessionEnd:
         // "stopped"`) and a row that names no end of its session (the kernel gives none while a
         // retire is pending, a rollback is incomplete or a spawn is in progress): in each, a
@@ -195,7 +216,7 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
       // The kernel's own word that no harness runs: `running: false`. (With no thread given, the state
       // function answers "idle" for every provider row that is not stopped, failed or unreachable:
       // one whose harness is loaded reads `true`, one the provider cannot tell reads `null`.)
-      if (where === "open" && attached && how === "unloaded") return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, note: NOT_LOADED_NOTE, acts: ["start"] };
+      if (where === "open" && attached && how === "unloaded") return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, note: NOT_LOADED_NOTE, acts: message ? NO_ACTS : ["start"], message };
       return threadless;
     default:
       return threadless;

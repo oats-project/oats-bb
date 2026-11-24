@@ -62,6 +62,19 @@ export const NOT_LOADED = NOT_LOADED_NOTE;
 /** A failed agent (its session ended) on a thread that is open: the reason alone, as on every failed agent's line (Restart is the line's button). */
 export const FAILED_OPEN = "session ended";
 
+// ---- where a message is the way on
+
+/**
+ * After the reason, on the line of an agent's own listed thread where a MESSAGE is the designed
+ * way on (model/rest.ts `messageResumes`: its session lost, no harness loaded, or ended by
+ * itself): "Stopped · session lost · message to continue". It stands in the place of the act that
+ * would mislead: such a line has no Start… (nor Restart…), which begins a NEW conversation and
+ * whose dialog would say first to message instead; Start… stays in the thread's menu, the panel
+ * and the agent's page. (The lead's ruling on the read of 24 Nov 2026, T5: one rule for every
+ * such thread; an operator's stop keeps its warning and Start….)
+ */
+export const MESSAGE_CONTINUES = "message to continue";
+
 // ---- the kernel's report: "Running outside OATS" is its state (app/ui/words.ts)
 
 /** The fact after the state on its line: what OATS recorded, which is no longer what the agent does. */

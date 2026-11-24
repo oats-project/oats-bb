@@ -196,7 +196,10 @@ export const stages = {
       fake();
     },
   },
-  outside: { label: "OUT", enter, leave },
+  // The live run's hold of the two working threads is lifted for this stage: the agent it draws as
+  // failed is on one of them (thr_mockups), and "Failed" over a turn bb runs is a mix the fixture
+  // made, not the product (the lead's read of 24 Nov 2026, T4). With the hold lifted the thread is at rest.
+  outside: { label: "OUT", tellsAThread: true, enter, leave },
   "outside-host": {
     label: "OUTH",
     // The live run's hold of the two working threads is lifted for this stage (the flag's one
@@ -428,7 +431,7 @@ export default [
       // failed, on its open thread
       await open("thr_mockups");
       line = await lineOf(page, /^Failed · /);
-      check(line !== null && line.words === "Failed · session ended" && same(line.acts, ["Restart…"]) && line.warning === null, `${at} failed, open: "Failed", the reason in two words, with Restart and no warning`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.words === "Failed · session ended · message to continue" && same(line.acts, []) && line.warning === null, `${at} failed, open: "Failed", the reason in two words, then that a message is the way on: no Restart on the line, no warning`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-failed`, { targets: true });
 
       // unreachable: what status says, and nothing about a message
@@ -534,21 +537,25 @@ export default [
       check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && one.stateTone === "warning" && same(one.tones, ["warning"]) && same(one.acts, ["Start…"]), `${at} (1) an operator's stop: "Stopped", the warning in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
       await page.shot(`outside-${viewport.name}-three-1-operator-stop`, { targets: true });
 
-      // (2) its session lost: "Stopped · session lost", the reason alone; no sentence, no time, no cause, no warning
+      // (2) its session lost: "Stopped · session lost · message to continue": the reason, then the way on; no Start on the line, no time, no cause, no warning
       await page.goto(`/projects/${host.projectId}/threads/${host.id}`);
-      const HOST = /^Stopped · session lost$/;
+      const HOST = /^Stopped · session lost · message to continue$/;
       const two = await lineOf(page, HOST);
-      check(two !== null && two.state === "stopped" && two.words === "Stopped · session lost" && two.stateTone === null && same(two.tones, []) && same(two.acts, ["Start…"]) && two.warning === null && !/outside OATS|machine|since|Nobody stopped/.test(two.words), `${at} (2) a session lost: "Stopped · session lost", the reason alone: no sentence, no time and no cause; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
+      check(two !== null && two.state === "stopped" && two.words === "Stopped · session lost · message to continue" && two.stateTone === null && same(two.tones, []) && same(two.acts, []) && two.warning === null && !/outside OATS|machine|since|Nobody stopped/.test(two.words), `${at} (2) a session lost: "Stopped · session lost · message to continue": the reason, then the way on, and NO Start on the line (it would begin a new conversation); no time and no cause; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
       await page.shot(`outside-${viewport.name}-three-2-session-lost`, { targets: true });
 
       // (3) its session is there, not loaded: "Idle · not loaded …", no warning
       await page.goto(`/projects/${idle.projectId}/threads/${idle.id}`);
       const three = await lineOf(page, /^Idle · /);
-      check(three !== null && three.state === "idle" && three.words === "Idle · not loaded" && three.stateTone === null && same(three.tones, []) && same(three.acts, ["Start…"]) && three.warning === null, `${at} (3) not loaded: "Idle", never "Stopped"; the reason alone, "not loaded", with Start (its dialog says first what Start does); no warning tone`, three === null ? await shown() : JSON.stringify(three));
+      check(three !== null && three.state === "idle" && three.words === "Idle · not loaded · message to continue" && three.stateTone === null && same(three.tones, []) && same(three.acts, []) && three.warning === null, `${at} (3) not loaded: "Idle", never "Stopped"; the reason, then the way on, and NO Start on the line; no warning tone`, three === null ? await shown() : JSON.stringify(three));
       await page.shot(`outside-${viewport.name}-three-3-idle-not-loaded`, { targets: true });
-      // Its Start is the lifecycle's Start dialog, which says FIRST that a message in the thread carries the conversation on
-      // (the line's own sentence, in the dialog's words), and then that a start begins a new one. Start stays possible; nothing is started here.
-      await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}[data-act="start"]`)})?.click()`);
+      // Start… stays where it is second: on the agent's own page (and in the thread's menu, the panel). It is the
+      // lifecycle's Start dialog, which says FIRST that a message in the thread carries the conversation on, and then
+      // that a start begins a new one. Start stays possible; nothing is started here.
+      await page.goto("/plugins/oats/agent/desktop-mockups-developer");
+      const pageStart = `${testId("oats-panel-header")} ${testId("oats-agent-act-start")}`;
+      check(Boolean(await page.until(visible(pageStart), 30)), `${at} (3) Start… is on the agent's own page`, await page.evaluate(textOf(testId("oats-panel-header"))));
+      await page.evaluate(`document.querySelector(${JSON.stringify(pageStart)})?.click()`);
       const confirmBox = testId("oats-confirm");
       const asked = await page.until(`document.querySelector(${JSON.stringify(confirmBox)})?.getAttribute("data-phase") === "ready" && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30);
       const dialogSays = asked
@@ -560,14 +567,15 @@ export default [
         : null;
       check(
         dialogSays !== null && dialogSays.first && dialogSays.title === "To continue its conversation, message it instead." && dialogSays.body.includes("Starts a new conversation.") && !dialogSays.body.includes("stays readable"),
-        `${at} (3) Start on the line of an agent that is not loaded opens the lifecycle's Start dialog, which says first to message it instead to continue its conversation, then that a start begins a new conversation`,
+        `${at} (3) Start… on the page of an agent that is not loaded opens the lifecycle's Start dialog, which says first to message it instead to continue its conversation, then that a start begins a new conversation`,
         JSON.stringify(dialogSays),
       );
       await page.shot(`outside-${viewport.name}-three-3-start-dialog`, { targets: true });
       await page.press("Escape");
       const shut = Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10));
+      await page.goto(`/projects/${idle.projectId}/threads/${idle.id}`);
       const after = await lineOf(page, /^Idle · /);
-      check(shut && after !== null && after.words === three?.words && same(after.acts, ["Start…"]), `${at} (3) Escape closes the Start dialog, and the line says what it said, with its Start: the agent was not started`, after === null ? await shown() : JSON.stringify(after));
+      check(shut && after !== null && after.words === three?.words && same(after.acts, []), `${at} (3) Escape closes the Start dialog, and the thread's line says what it said: the agent was not started`, after === null ? await shown() : JSON.stringify(after));
 
       // Never confused: the state word tells (3) from (1) and (2), the tone tells (1) from (2) and (3), and no two lines say the same.
       const lines = [one, two, three];

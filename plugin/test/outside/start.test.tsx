@@ -180,8 +180,8 @@ test("a thread in \"error\" that started a turn (the recorded events of a thread
     const slot = await line({ rpc: handlers({}, agents()), sidebarThreads: threads(), sdk });
     await waitFor(() => expect(asked.length).toBeGreaterThanOrEqual(2));
     await waitFor(() => expect(words(slot)[0]).toBe("Stopped"));
-    // The lost session's words, not "Failed": the reason alone since the text cut (its sentence went; the Start dialog says to message it instead).
-    expect(words(slot)).toEqual(["Stopped", "session lost"]);
+    // The lost session's words, not "Failed": the reason, and that a message is the way on.
+    expect(words(slot)).toEqual(["Stopped", "session lost", "message to continue"]);
     expect(slot.queryByTestId("oats-status-bb")).toBeNull();
     resetApp();
   }

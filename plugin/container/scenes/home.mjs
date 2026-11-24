@@ -433,26 +433,12 @@ export default [
         // The roster is not on the page at this width: it is in bb's drawer, behind bb's own toggle. bb keeps the
         // drawer as a person left it (a scene before this one, or the press before, may have left it open): it is
         // closed first, with bb's own toggle, so that what follows proves the toggle OPENS it from the plugin's page.
-        const HIDDEN = `(() => { const side = document.querySelector(${JSON.stringify(SIDE)}); if (!side) return true; const box = side.getBoundingClientRect(); return box.width === 0 || box.right <= 0 || box.left >= innerWidth; })()`;
-        // How bb closes it: Escape, or one of its own buttons (its toggle; which one closed it is printed).
-        const candidates = `[...document.querySelectorAll("button")].filter((b) => /sidebar|menu|navigation|close/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0 && !b.closest('[data-testid="oats-home-page"]'))`;
-        let closedBy = "it was closed";
-        if ((await page.evaluate(HIDDEN)) !== true) {
-          await page.press("Escape");
-          closedBy = "Escape";
-          if (!(await page.until(`${HIDDEN} === true`, 2))) {
-            const labels = JSON.parse(await page.evaluate(`JSON.stringify(${candidates}.map((b) => b.getAttribute("aria-label")))`));
-            closedBy = `none of ${JSON.stringify(labels)}`;
-            for (let index = 0; index < labels.length; index += 1) {
-              await page.evaluate(`${candidates}[${index}]?.click()`);
-              if (await page.until(`${HIDDEN} === true`, 2)) {
-                closedBy = `bb's button "${labels[index]}"`;
-                break;
-              }
-            }
-          }
-        }
-        const hidden = await page.until(`${HIDDEN} === true`, 5);
+        // (A closed drawer keeps the sidebar in the page where it was, INERT and under the page: bb marks it so. Its
+        // box alone says nothing: "not on screen" is "inert, or not what a press at its place would reach".)
+        const HIDDEN = `(() => { const side = document.querySelector(${JSON.stringify(SIDE)}); if (!side) return true; if (side.closest("[inert]") !== null) return true; const box = side.getBoundingClientRect(); if (box.width === 0) return true; const top = document.elementFromPoint(Math.min(Math.max(box.left + box.width / 2, 0), innerWidth - 1), Math.min(Math.max(box.top + 40, 0), innerHeight - 1)); return top === null || !side.contains(top); })()`;
+        const TOGGLE = `(() => { const b = [...document.querySelectorAll("button")].find((b) => /^Toggle sidebar/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0); b?.click(); return b?.getAttribute("aria-label") ?? null; })()`;
+        const closedBy = (await page.evaluate(HIDDEN)) === true ? "as bb opened the page" : `by bb's own "${await page.evaluate(TOGGLE)}"`;
+        const hidden = await page.until(`${HIDDEN} === true`, 10);
         check(Boolean(hidden), `${at} ${what}: with bb's drawer closed (${closedBy}) the sidebar is not on screen beside the home at this width`, String(await page.evaluate(HIDDEN)));
         check(await showSidebar(page, viewport), `${at} ${what}: bb's own toggle opens its drawer over the plugin's home, and the roster is in it`, await page.evaluate(`JSON.stringify([...document.querySelectorAll("button")].filter((b) => b.getBoundingClientRect().width > 0).map((b) => b.getAttribute("aria-label") ?? b.innerText.trim()).slice(0, 12))`));
         return page.until(`(() => { const rows = ${roster}; return rows !== "" && JSON.parse(rows).length >= 8 ? rows : ""; })()`, 20);

@@ -2561,10 +2561,11 @@ test("a Stop that did not stop them all: the sessions that DID stop are marked (
   expect(partial.results.map((row) => [row.ok, actedAt(row.instance)])).toEqual(partial.results.map((row) => [row.ok, row.ok ? ENDED : null]));
 });
 
-// "Check again" asks for the receipt of an act the kernel already did: a REPLAYED receipt. The act is not new, and the
-// server's stamp on a replay is when the replay returned, not when the act ended: it marks nobody (ruled from the fourth
-// review round: each press held the agents ten seconds for nothing).
-test("a REPLAYED receipt marks nobody: neither a stop's sessions nor a retire's agent and children", async () => {
+// "Check again" asks for the receipt of an act the kernel already did: a REPLAYED receipt. It marks as any other
+// (ruled after the fourth review round's last read, the earlier ruling reversed): pressed in the second or two between
+// the act's end and its own read's publish the window's roster is still the one from before; and now that the server
+// publishes the read a replay asks for, the mark costs a second of "Reading…", not the bound.
+test("a REPLAYED receipt marks as any other: a stop's sessions, a retire's agent and children, with the replay's stamp", async () => {
   const { actedAt } = await import("../../app/roster/reading");
   const stop = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => ({ ...stopReceiptOf(), replayed: true, endedAt: ENDED }) });
   await stop.pick("stop");
@@ -2572,7 +2573,7 @@ test("a REPLAYED receipt marks nobody: neither a stop's sessions nor a retire's 
   fireEvent.click(button(stop.slot, "oats-confirm-act"));
   await waitFor(() => expect(stop.slot.getByTestId("oats-confirm").getAttribute("data-phase")).not.toBe("running"));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"].map(actedAt)).toEqual([null, null, null]);
+  await waitFor(() => expect(["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"].map(actedAt)).toEqual([ENDED, ENDED, ENDED]));
   resetApp();
   const stoppedChild = { instance: "digest-links-helper", ok: true, alreadyIdle: false, code: null, stillRunning: null, detail: null };
   const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => ({ ...retireReceiptOf(), replayed: true, children: [stoppedChild], endedAt: ENDED }) });
@@ -2581,7 +2582,7 @@ test("a REPLAYED receipt marks nobody: neither a stop's sessions nor a retire's 
   fireEvent.click(button(retire.slot, "oats-confirm-act"));
   await waitFor(() => expect(retire.slot.getByTestId("oats-confirm").getAttribute("data-phase")).not.toBe("running"));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect([actedAt("weekly-digest-helper"), actedAt("digest-links-helper")]).toEqual([null, null]);
+  await waitFor(() => expect([actedAt("weekly-digest-helper"), actedAt("digest-links-helper")]).toEqual([ENDED, ENDED]));
 });
 
 test("a Start, a Restart and a Retire that are done mark their agent with the act's end (mid-act roster: before; one read after it: read); a Retire marks the children it stopped too; a refused apply marks nothing", async () => {

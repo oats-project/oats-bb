@@ -330,7 +330,9 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const refused = refusal(entry.agent, entry.thread);
   const offer: Offer =
     thread === undefined ? "elsewhere" : refused !== null ? refused : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
-  const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
+  // (Behind a lifecycle result that says this agent changed, until the roster is read again, the card's answers are
+  // off as the thread's line's Answer is: app/roster/reading.tsx.)
+  const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held || reading} said={said} onSend={send} />;
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
     <Disclosure summary={MESSAGE_INSTEAD} testId="oats-needs-message">
@@ -357,7 +359,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           </Button>
         </div>
         {/* Under "Needs you" the heading says the word: the card keeps the mark (named for a screen reader) and the wait. */}
-        <StatusLine state={entry.status.state} markOnly={entry.status.state === "needs-you"} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
+        {/* "Reading…" stands in the state's place while the card's answers are off for it (a stopped agent's card says it where it said "Not running.", below). */}
+        {reading && offer !== "stopped" ? <ReadingLine /> : <StatusLine state={entry.status.state} markOnly={entry.status.state === "needs-you"} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />}
         {message === null ? null : (
           <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
             {shown(message)}
@@ -394,7 +397,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           <>
             <div className="flex flex-wrap items-center gap-2">
               {(asked?.choices ?? []).map((choice, index) => (
-                <Button key={index} data-testid="oats-needs-choice" disabled={busy !== null || held} onClick={() => answer(choice)}>
+                <Button key={index} data-testid="oats-needs-choice" disabled={busy !== null || held || reading} onClick={() => answer(choice)}>
                   {shown(choice.label)}
                 </Button>
               ))}

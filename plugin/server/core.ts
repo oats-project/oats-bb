@@ -422,8 +422,10 @@ export function createCore(bb: BbPluginApi) {
    * than the act's end: app/roster/reading.tsx), and both are whole milliseconds: a read that
    * starts in the very millisecond the act ended would be a tie, read as "before", with no later
    * read owed. One strictly increasing stamp for both: of two events on this server the later has
-   * the later stamp, always. (It can run a millisecond ahead of the clock in such a tie; nothing
-   * reads it as a wall time but the roster's age, in minutes.)
+   * the later stamp, always. (It can run a millisecond ahead of the clock in such a tie, and by the
+   * whole step after the clock is set back, until the clock catches up; nothing reads it as a wall
+   * time but the roster's age, in minutes. While it is ahead, an events answer, stamped by the bare
+   * clock, is dropped as older than the status read: fail safe, the status read carries it.)
    */
   function stamp(): number {
     lastStamp = Math.max(Date.now(), lastStamp + 1);

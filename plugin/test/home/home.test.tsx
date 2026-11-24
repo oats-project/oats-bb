@@ -1074,6 +1074,26 @@ test("behind a result the home's card of a stopped agent that asks says \"Readin
   expect(within(card).getByTestId("oats-needs-stopped").textContent).not.toContain(said!);
 });
 
+test("behind a result the home's card of a RUNNING agent that asks says \"Reading…\" in its state's place, with its reply field and Send off; its choices too", async () => {
+  const { noteActed } = await import("../../app/roster/reading");
+  const slot = await homePage({ rpc: handlers({}, fixtureAgents()) });
+  const card = await cardOf(slot, "release-070-maintainer");
+  const box = () => within(card).getByRole("textbox") as HTMLTextAreaElement;
+  expect([box().disabled, within(card).queryByTestId("oats-reading")]).toEqual([false, null]);
+  act(() => noteActed(["release-070-maintainer"], fixtureSnapshot(fixtureAgents()).at));
+  expect([box().disabled, within(card).getByTestId("oats-reading").textContent]).toEqual([true, "Reading…"]);
+  expect(Array.from(card.querySelectorAll("button")).filter((button) => button.textContent === "Send").every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+  slot.unmount();
+  resetApp();
+  const asks = await homePage({ rpc: handlers({}, fixtureAgents()), sdk: BB_ASKS });
+  const choices = () => asks.queryAllByTestId("oats-needs-choice") as HTMLButtonElement[];
+  await waitFor(() => expect(choices().length).toBeGreaterThan(0));
+  const of = choices()[0]!.closest('[data-testid="oats-needs-card"]')!.getAttribute("data-instance")!;
+  expect(choices().every((choice) => !choice.disabled)).toBe(true);
+  act(() => noteActed([of], fixtureSnapshot(fixtureAgents()).at));
+  expect(choices().filter((choice) => choice.closest(`[data-instance="${of}"]`) !== null).every((choice) => choice.disabled)).toBe(true);
+});
+
 /** The one count line of the home, on Home › Agents ("2 working · 4 need you · …"), for a roster. */
 async function agentsLine(agents: Agent[]): Promise<string> {
   const app = await loadApp();

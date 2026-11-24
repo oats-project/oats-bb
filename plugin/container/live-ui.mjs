@@ -23,7 +23,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renam
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { launchBrowser, lowTargets } from "./browser.mjs";
+import { launchBrowser, lowTargets, gapsIn, tight, loose, MAX_GAP } from "./browser.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
 import { TMUX_ROSTER } from "./tmux-roster.mjs";
@@ -371,7 +371,13 @@ async function themedPage(browser, viewport, theme, at) {
   const shot = page.shot;
   // `plugin: false`: a scene in which the plugin may draw nothing (a thread while OATS cannot be read).
   // `targets: true`: every control of the plugin in the page is as high as a person can press (32 px, 44 at phone width).
-  page.shot = async (name, { plugin = true, targets = false } = {}) => {
+  // `gaps: "<selector>"`: every block the selector finds is as high as what it holds (browser.mjs `gapsIn`): no empty
+  // room over MAX_GAP px between two of its lines or at its edges.
+  page.shot = async (name, { plugin = true, targets = false, gaps = null } = {}) => {
+    if (gaps !== null) {
+      const measured = JSON.parse(await page.evaluate(gapsIn(gaps)));
+      check(tight(measured), `${at} ${name}: ${measured.length} block(s) as high as what they hold: no gap over ${MAX_GAP} px between two lines or at an edge (heights ${measured.map((block) => block.height).join(", ")} px)`, measured.length === 0 ? `nothing drawn matches ${gaps}` : loose(measured));
+    }
     if (targets) {
       const min = viewport.mobile ? 44 : 32;
       const low = JSON.parse(await page.evaluate(lowTargets(min)));
@@ -550,6 +556,50 @@ function record(threads, changes = {}) {
   return at;
 }
 
+/**
+ * A change of ONE instance, as the kernel records it, for the event path (server/core.ts): the
+ * line is appended to THAT instance's own file of the event log (`<agent>--<instance>.jsonl`),
+ * which the watch names; the fake answers `oats instance events … --since` for it with `said`
+ * (the fields of the kernel's answer the plugin reads: shaped here in step with `changes`, not
+ * recorded), and its status answers the fixtures with `changes`, HELD `statusHeldMs` first: so a
+ * scene can see what the events alone put on the screen before any status read can have answered.
+ * → the instant the change was recorded.
+ */
+let heldSince = 0;
+function recordFor(threads, { agent, instance }, { changes = {}, said = {}, statusHeldMs = 0 } = {}) {
+  heldSince = Date.now(); // before the fake is rewritten: a status call that started at or after this may have read the new answer
+  const answer = { schemaVersion: 1, ok: true, result: { eventsApi: 2, instance, incarnation: "2026-11-23T09:00:00.000Z", count: 0, returned: 0, truncated: false, events: [], lastEvent: null, waitingOnYou: null, waitingClaims: [], ...said } };
+  fake({ status: { stdout: statusWithRealIds(threads, changes), ...(statusHeldMs > 0 ? { sleepMs: statusHeldMs } : {}) }, "instance events --since": { stdout: JSON.stringify(answer) } });
+  const at = Date.now();
+  appendFileSync(join(homedir(), "deployment", ".agents", "events", `${agent}--${instance}.jsonl`), `${JSON.stringify({ kind: "live-ui", at: new Date(at).toISOString() })}\n`);
+  return at;
+}
+
+/**
+ * Whether a status read that could carry the last `recordFor`'s change HAS ANSWERED: an `oats status`
+ * the fake logged at or after the fake was rewritten, and that is no longer running. While none has,
+ * nothing but the events can have put that change on the screen (a status read stamped before the
+ * record whose process started after the fake was rewritten would answer the change under an older
+ * stamp: this tells it).
+ */
+function statusAnsweredSinceRecord() {
+  let calls = [];
+  try {
+    calls = readFileSync(FAKE_LOG, "utf8").split("\n").filter((line) => line !== "").map((line) => JSON.parse(line));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const running = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  return calls.some((call) => call.verb === "status" && Date.parse(call.at) >= heldSince && !running(call.pid));
+}
+
 // ---- the run
 
 // A bb that was never opened shows its first-run guide in place of the app: mark it as done, as a
@@ -624,7 +674,7 @@ try {
           const page = await themedPage(browser, viewport, theme, at);
           try {
             for (const scene of mine) {
-              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads, recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
               if (!PILOT) await scene.run(given);
               else {
                 // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.

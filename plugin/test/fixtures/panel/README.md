@@ -6,15 +6,42 @@ substitution of `test/fixtures/README.md` and no other edit: the paths (the depl
 thread and project ids, start ids, commit ids and times are as recorded, and the tests hold them as
 literals.
 
-Recorded on 2026-11-21 in the real run's container (`container/real/`, kept with `KEEP=1`, after its
-scenario passed): bb-app 0.50.1, OATS 0.70.0 from npm (`@awebai/oats@0.70.0`), the bb session
-provider of this repository's `main` at 134ca09ab6d89c0432ba2e53cd7bbfd9bfc185e5, Claude Code on the
-mock model, no aweb. By hand, with the commands below, before the real run had a place for a
-feature's own steps; `container/real/parts/panel.mjs` now makes the same state with the same
-commands and keeps the same answers, as the plugin's own calls of `oats` printed them. One
-difference: before the hand recording, three agents the scenario had left were retired (`oats
-retire harvest-knowledge-helper`, `desktop-mockups-developer`, `digest-links-helper`); the run
-retires nobody, so its roster holds them too.
+Recorded on 2026-11-23 by ONE real run (`plugin/container/ci.sh real`, its scenario and every check
+passed), all eight from that run and none edited after it: this repository's `main` at
+a1678578516bd030c33baa017de72bc53d071e6e (the plugin, the real run's own scripts and the bb session
+provider the run tests: the one that archives a home's thread at its stop; the run was made on
+this change's branch at 72ffb124, which differs from that `main` in tests, scenes, fixtures and
+READMEs only, none of which the run uses), bb-app 0.50.1, OATS
+0.70.5 from npm (`@awebai/oats@0.70.5`, gitHead e5e7a2a48db42140718948553e8272fb4e8e3ed4), the
+plugin's floor; the `oats.bb` package as the run's lock pins it, at
+ce546bb879b58d1a16400eccc0e964c9487f4621, the commit every `oats.bb` origin in these files names;
+Claude Code on the mock model, no aweb. `container/real/parts/panel.mjs` makes the state with the
+commands below and keeps the answers as the plugin's own calls of `oats` printed them
+(`container/real/fixtures.mjs` writes them to the run's `out/fixtures/panel/`, with the paths'
+substitution); they were copied here as written.
+
+The eight are of one build and, where the table says so, of one moment: a screen or a test that
+draws two of them together shows one agent's one story. Before this recording they were of
+2026-11-21 at OATS 0.70.0, made by hand in a kept container, and three differences from then are
+visible in them:
+
+- The roster holds every agent the run's scenario leaves (`harvest-knowledge-helper`,
+  `desktop-mockups-developer`, `digest-links-helper`, and the agent the scenario's schedule started,
+  named for the minute its schedule fired: `oats-developer-real-run-digest-202611231754`), beside
+  `redesign-ui-lead` and `panel-worktree-helper`: the run retires nobody. The hand recording had
+  retired three of them first, so its three status files held their souls with no instance and a
+  `key` of null; a soul with an instance has its key, as here. `redesign-ui-lead` therefore has
+  three children in these files, not one.
+- `panel-worktree-helper`, idle in bb, reads `running: true` (it read `null`): with this provider
+  an idle agent whose harness is loaded reads running. That it works or is idle is what bb says of
+  its thread, which the tests name themselves (`panelThreads(agents, works)`, `test/panel/handlers.ts`).
+- In `oats readiness --home` for a home on a session provider, the item of producer "harness
+  folder trust" is `status: "not-applicable"` with `file: null` and the kernel's reason ("a session
+  provider runs this launch (backend bb), with no OATS pane: claude folder trust is not read for
+  it …"), from OATS 0.70.4; at 0.70.0 it was `unknown` with the file it had read. The panel says
+  the kernel's word on the item's line, as the Desktop does ("launch · not-applicable · optional"),
+  and names a configuration file only where the kernel does: `readiness-soul.json`, a soul's
+  readiness, where there is no home to record a session provider, still holds that item as `unknown` with the file it read.
 
 In the deployment the scenario left (`redesign-ui-lead` of `oats-product-expert`, stopped through
 OATS by the scenario's last stop), one more agent
@@ -24,17 +51,17 @@ was spawned, a child on a worktree:
 oats spawn oats-expert --backend bb --yolo --name panel-worktree-helper --parent redesign-ui-lead --task-file <f> --json
 ```
 
-and, as its session would (in its home, with `OATS_INSTANCE` and `OATS_INSTANCE_HOME` set), two facts
-and two questions were put on its board (`oats instance board set`, `oats instance board ask`), which
+and, as its session would (in its home, with `OATS_INSTANCE` and `OATS_INSTANCE_HOME` set), facts
+and questions were put on its board (`oats instance board set`, `oats instance board ask`), which
 sets the waiting claim of producer `oats.board`.
 
 | File | The call, in the deployment directory | State |
 |---|---|---|
-| `status.json` | `oats status --json` | `panel-worktree-helper` idle in bb (`running: null`), on its branch, child of `redesign-ui-lead`, its board and the board's claim in its row |
+| `status.json` | `oats status --json` | `panel-worktree-helper` idle in bb (`running: true`: its harness is loaded; bb's thread is at rest), on its branch, child of `redesign-ui-lead`, its board and the board's claim in its row |
 | `status-soul-moved.json` | `oats status --json` | the same, after one commit to `souls/oats-expert/AGENTS.md` in the workspace's member repository: the row's `soul.status` is `moved` |
 | `inspect-home.json` | `oats inspect --home <home of panel-worktree-helper> --json` | the instance as spawned: no core slot filled (the run's workspace has no knowledge, messaging or tasks capability), `oats.bb` and `oats.core` from packages |
 | `events.json` | `oats instance events panel-worktree-helper --home <its home> --limit 100 --json` | after `oats session restart`, a stop (`oats instance stop`, plan and apply), `oats session start` and one more board question: 8 rows, the board's claim live |
-| `status-board.json` | `oats status --json` | right after `events.json`: the roster of the same moment. The child's claim is the one its activity names (`oats.board`, since 18:23:39, "Which base branch?"); its soul's repository has moved. The live scenes draw this roster with that activity: one agent, one story |
+| `status-board.json` | `oats status --json` | right after `events.json`: the roster of the same moment. The child's claim is the one its activity names (`oats.board`, since 18:01:45, "Which base branch?"); its soul's repository has moved. The live scenes draw this roster with that activity: one agent, one story |
 | `readiness-home.json` | `oats readiness --home <its home> --policy --json` | ready; the provider's own answer has two warnings; read after the commit to the member repository, so its `member` item names that commit |
 | `readiness-soul.json` | `oats readiness --soul oats-expert --policy --json` | ready |
 | `readiness-home-not-ready.json` | `oats readiness --home <its home> --policy --json`, run with a `PATH` that has no `bb` on it | not ready: the session provider's check cannot run bb (`needs-configuration`, `E_BACKEND_VERSION`), one of four required checks fails. Not a call of the plugin's: its host runs `oats` with bb's own `PATH`, so the real run asks the kernel itself (step C panel 3b) |

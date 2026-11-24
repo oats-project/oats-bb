@@ -16,16 +16,13 @@
 import type { Agent, OutsideOats, ThreadWhere } from "../../model/types";
 import { messageResumes, rest } from "../../model/rest";
 import { state } from "../../model/view";
+import { SESSION_ENDED } from "../roster/status";
 import {
-  ARCHIVED_FACT,
   ARCHIVED_NOTE,
-  DELETED,
   DELETED_NOTE,
-  FAILED_OPEN,
   LOST_ARCHIVED,
   MAY_RUN_NOTE,
   NO_THREAD_NOTE,
-  NOT_LOADED,
   NOT_LOADED_NOTE,
   NOT_SHOWN_NOTE,
   OUTSIDE_RECORDED,
@@ -191,16 +188,16 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
       // kernel's or the provider's fact shows that a message carries the agent on under OATS; no
       // provider prints a session that ended by itself on a bb thread, and nothing shows a message
       // carrying one on).
-      return where === "open" && attached ? { ...base, kind: "failed-open", sentence: FAILED_OPEN } : threadless;
+      return where === "open" && attached ? { ...base, kind: "failed-open", sentence: SESSION_ENDED } : threadless;
     case "stopped": {
-      if (where === "missing") return { ...base, kind: "deleted", sentence: DELETED, tone: "warning", note: DELETED_NOTE, rowTone: "warning" };
+      if (where === "missing") return { ...base, kind: "deleted", sentence: DELETED_NOTE, tone: "warning", note: DELETED_NOTE, rowTone: "warning" };
       const lost = how === "lost";
       if (where === "archived") {
         if (lost) return { ...base, kind: "lost-archived", sentence: LOST_ARCHIVED, tone: "warning", note: MAY_RUN_NOTE, rowTone: "warning", acts: ["stop"], archived };
         // The row keeps the soul beside "Stopped", in the plain tone: once the provider archives at
         // stop this is EVERY stopped agent, and nothing is wrong with it (the spec's author's ruling).
         // The row opens the archived thread, whose own row says since when and that it is archived.
-        return { ...base, kind: "stopped-archived", sentence: ARCHIVED_FACT, archived };
+        return { ...base, kind: "stopped-archived", sentence: ARCHIVED_NOTE, archived };
       }
       if (where === "open" && attached) {
         // THE GATE (the one place): whether the bb session provider archives the thread of a home
@@ -223,7 +220,7 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
       // The kernel's own word that no harness runs: `running: false`. (With no thread given, the state
       // function answers "idle" for every provider row that is not stopped, failed or unreachable:
       // one whose harness is loaded reads `true`, one the provider cannot tell reads `null`.)
-      if (where === "open" && attached && how === "unloaded") return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED, note: NOT_LOADED_NOTE, acts: message ? NO_ACTS : ["start"], message };
+      if (where === "open" && attached && how === "unloaded") return { ...base, kind: "idle-unloaded", sentence: NOT_LOADED_NOTE, note: NOT_LOADED_NOTE, acts: message ? NO_ACTS : ["start"], message };
       return threadless;
     default:
       return threadless;

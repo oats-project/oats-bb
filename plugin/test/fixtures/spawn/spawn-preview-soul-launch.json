@@ -1,0 +1,239 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "modules": [
+   {
+    "name": "oats.aweb",
+    "from": {
+     "kind": "package",
+     "package": "oats.aweb",
+     "version": "1.30.0",
+     "commit": "0000000000000000000000000000000000000000",
+     "integrity": "sha256-0000000000000000000000000000000000000000000000000000000000000000",
+     "repoKey": "github.com/example/oats.aweb"
+    },
+    "layer": null,
+    "private": false,
+    "declares": [
+     "claudeChannelMode",
+     "delivery",
+     "identity",
+     "roots"
+    ],
+    "changedSince": false,
+    "composedFrom": "workspace"
+   },
+   {
+    "name": "oats.core",
+    "from": {
+     "kind": "package",
+     "package": "oats.framework",
+     "version": "1.26.0",
+     "commit": "0000000000000000000000000000000000000000",
+     "integrity": "sha256-0000000000000000000000000000000000000000000000000000000000000000",
+     "repoKey": "github.com/example/oats.framework"
+    },
+    "layer": null,
+    "private": false,
+    "declares": [],
+    "changedSince": false,
+    "composedFrom": "workspace"
+   },
+   {
+    "name": "example.team-rules",
+    "from": {
+     "kind": "package",
+     "package": "example.rules",
+     "version": "0.1.0",
+     "commit": "0000000000000000000000000000000000000000",
+     "integrity": "sha256-0000000000000000000000000000000000000000000000000000000000000000",
+     "repoKey": "github.com/example/example.rules"
+    },
+    "layer": null,
+    "private": false,
+    "declares": [],
+    "changedSince": false,
+    "composedFrom": "workspace"
+   }
+  ],
+  "teams": [
+   {
+    "label": "team",
+    "team": "default:example.aweb.ai",
+    "default": true,
+    "from": "shared",
+    "via": [
+     "default"
+    ]
+   }
+  ],
+  "defaultTeam": {
+   "label": "team",
+   "team": "default:example.aweb.ai",
+   "from": "workspace"
+  },
+  "resolution": "0a1b2c3d4e5f60718293a4b5",
+  "declRevision": "1a1b2c3d4e5f60718293a4b5",
+  "payloadRevision": "2a1b2c3d4e5f60718293a4b5",
+  "workspace": "github.com/example/workspace",
+  "standalone": false,
+  "providers": {},
+  "settings": {
+   "oats.aweb": {
+    "delivery": "channel",
+    "claudeChannelMode": "approved",
+    "identity": {
+     "mode": "local"
+    },
+    "roots": {
+     "default:example.aweb.ai": "/abs/deployment/.aweb-root"
+    }
+   },
+   "oats.core": {},
+   "example.team-rules": {}
+  },
+  "settingsOrigins": {
+   "oats.aweb": {
+    "/identity/mode": {
+     "kind": "manifest-default",
+     "at": "oats.json#/settings/identity/default"
+    },
+    "/delivery": {
+     "kind": "host",
+     "at": "oats-local.yaml#/settings/oats.aweb"
+    },
+    "/claudeChannelMode": {
+     "kind": "host",
+     "at": "oats-local.yaml#/settings/oats.aweb"
+    },
+    "/roots/default:example.aweb.ai": {
+     "kind": "host",
+     "at": "oats-local.yaml#/settings/oats.aweb"
+    }
+   },
+   "oats.core": {},
+   "example.team-rules": {}
+  },
+  "spawnPreviewApi": 2,
+  "preview": true,
+  "agent": "release-maintainer",
+  "kind": "persistent",
+  "instance": "release-maintainer-1",
+  "home": "/abs/deployment/agents/release-maintainer/instances/release-maintainer-1",
+  "repo": "/abs/deployment",
+  "work": "directory",
+  "subject": {
+   "soul": "release-maintainer",
+   "agentsRoot": null,
+   "dir": "/abs/deployment"
+  },
+  "decision": {
+   "instance": "release-maintainer-1",
+   "home": "/abs/deployment/agents/release-maintainer/instances/release-maintainer-1",
+   "branch": null,
+   "base": null,
+   "effective": {
+    "repo": "/abs/deployment",
+    "work": "directory",
+    "harness": "pi",
+    "model": "claude-fable-5.1",
+    "launchConfig": null,
+    "yolo": null,
+    "backend": "tmux",
+    "childSpawns": true,
+    "relation": null,
+    "providers": {
+     "oats.aweb": {
+      "delivery": "channel",
+      "claudeChannelMode": "approved",
+      "identity": {
+       "mode": "local"
+      },
+      "roots": {
+       "default:example.aweb.ai": "/abs/deployment/.aweb-root"
+      }
+     },
+     "oats.core": {},
+     "example.team-rules": {}
+    }
+   },
+   "resolution": "0a1b2c3d4e5f60718293a4b5",
+   "revision": "3a1b2c3d4e5f60718293a4b5"
+  },
+  "preflight": {
+   "status": "complete",
+   "budgetMs": 20000,
+   "elapsedMs": 463
+  },
+  "backendStatus": {
+   "name": "tmux",
+   "installed": true,
+   "started": false
+  },
+  "harness": "pi",
+  "model": "claude-fable-5.1",
+  "modelSource": "soul preference",
+  "launchConfig": null,
+  "launchConfigSource": null,
+  "launchConfigDefault": false,
+  "backend": "tmux",
+  "background": false,
+  "launch": {
+   "declared": {
+    "harness": "pi",
+    "model": "claude-fable-5.1"
+   },
+   "effective": {
+    "harness": "pi",
+    "model": "claude-fable-5.1",
+    "launchConfig": null
+   },
+   "from": "soul",
+   "at": "github.com/example/workspace:souls/release-maintainer/soul.yaml#/launch",
+   "problem": null
+  },
+  "branch": null,
+  "base": null,
+  "worktree": null,
+  "worktreeHooks": null,
+  "relation": null,
+  "parentInstance": null,
+  "policy": {
+   "childSpawns": {
+    "allowed": true,
+    "origin": {
+     "kind": "default",
+     "detail": "no spawn option: children allowed"
+    }
+   }
+  },
+  "executable": "/abs/home/.local/bin/pi",
+  "capabilities": [
+   {
+    "name": "oats.aweb",
+    "origin": "package:oats.aweb@1.30.0"
+   },
+   {
+    "name": "oats.core",
+    "origin": "package:oats.framework@1.26.0"
+   },
+   {
+    "name": "example.team-rules",
+    "origin": "package:example.rules@0.1.0"
+   }
+  ],
+  "skills": [
+   {
+    "name": "oats-aweb",
+    "source": "module:oats.aweb"
+   },
+   {
+    "name": "oats-operate",
+    "source": "module:oats.core"
+   }
+  ],
+  "task": null,
+  "soulFetched": false
+ }
+}

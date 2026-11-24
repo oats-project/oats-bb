@@ -18,7 +18,7 @@ describe("panelInstance", () => {
     const answer = await backend.rpc<{ at: string; facts: Record<string, unknown>; agentsRoot: unknown; soul: unknown }>("panelInstance", { instance: "panel-worktree-helper" });
     expect(answer.facts).toMatchObject({
       instance: "panel-worktree-helper", soul: "oats-expert", work: "worktree", repo: "oats-real", branch: "agents/panel-worktree-helper", parent: "redesign-ui-lead",
-      harness: "claude", model: "claude-opus-5-5", modelFrom: "soul", backend: "bb", threadId: "thr_gx4sgexjgw", running: null, startedAt: "2026-11-21T18:13:36.478Z",
+      harness: "claude", model: "claude-opus-5-5", modelFrom: "soul", backend: "bb", threadId: "thr_u2jw8887aw", running: true, startedAt: "2026-11-23T18:00:56.149Z",
     });
     expect(answer.soul).toEqual({ key: "oats-expert", description: "OATS expert: answers questions about OATS." });
     expect(answer.agentsRoot).toBe("/abs/deployment/agents");

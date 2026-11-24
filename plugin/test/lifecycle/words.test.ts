@@ -744,9 +744,9 @@ describe("what a start says before the press, and a tmux start that did not fini
   it("a resume says what it tries, and promises no more; nothing of a question a harness may ask (the result says it when it happens)", () => {
     expect(startSays("start", { resumes: true })).toEqual(["Tries to continue its last conversation; else starts fresh."]);
   });
-  it("under Details: bb's full mode for an agent on bb, never for one on tmux; and for a restart, that it starts a new conversation too", () => {
-    expect(startDetails("start", { onBb: true })).toEqual(["Runs in bb's full mode: no sandbox."]);
-    expect(startDetails("restart", { onBb: true })).toEqual(["Starts a new conversation.", "Runs in bb's full mode: no sandbox."]);
+  it("under Details: for an agent on bb that its model is saved (the dialog has the field) and bb's full mode, never for one on tmux; and for a restart, that it starts a new conversation too", () => {
+    expect(startDetails("start", { onBb: true })).toEqual(["The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
+    expect(startDetails("restart", { onBb: true })).toEqual(["Starts a new conversation.", "The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
     expect(startDetails("start", { onBb: false })).toEqual([]);
     expect(startDetails("restart", { onBb: false })).toEqual(["Starts a new conversation."]);
   });

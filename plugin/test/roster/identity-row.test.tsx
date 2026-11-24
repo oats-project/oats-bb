@@ -258,7 +258,7 @@ test("the soul is not on the row, whether the Souls page is shown or not", async
 // the instance panel's Session now (test/panel/panel.test.tsx): the line says the state and its
 // warning, and the thread's row asks the kernel for no events, of a stopped agent or of any other.
 test("a stopped agent's line says no time, and the thread's row reads no events: of a stopped agent or of one that works", async () => {
-  const slot = await render("thr_digest", fixtureAgents()); // the recorded events hold a stop at 2026-11-21T18:23:24.196Z
+  const slot = await render("thr_digest", fixtureAgents()); // the recorded events hold a stop at 2026-11-23T18:01:33.424Z
   await slot.findByTestId("oats-status-line");
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.Start…Instance panel");
@@ -293,8 +293,8 @@ test("a stopped agent that was started and stopped again: the line says Stopped 
 });
 
 test("a session started after the last recorded stop: the line says Stopped and its warning, and no earlier stop's time", async () => {
-  const agents = fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, startedAt: "2026-11-22T08:00:00.000Z" } : agent));
-  const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-21T18:23:24.196Z, before that start
+  const agents = fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, startedAt: "2026-11-24T08:00:00.000Z" } : agent));
+  const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-23T18:01:33.424Z, before that start
   await slot.findByTestId("oats-status-line");
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message here starts it outside OATS.Start…Instance panel");

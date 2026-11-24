@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Agent } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { OUTSIDE_FEATURE, readOutsideOats } from "./outside.js";
+import { parseRosterEvents, ROSTER_EVENTS_TIMEOUT_MS, rosterEventsArgv, type RosterEvents } from "./roster-events.js";
 import { ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 
@@ -155,6 +156,11 @@ export function parseVersion(document: unknown): Result<Version> {
 
 /** The roster's commands, and the one read of the kernel's version that every feature shares. */
 export const verbs = (oats: Runner) => ({
+  /** `oats instance events <instance> --home <abs> --since <iso> --limit 50 --json`: what one instance's events say since a status read (kernel/roster-events.ts). */
+  rosterEvents: async (instance: string, home: string, since: string, signal?: AbortSignal): Promise<Result<RosterEvents>> => {
+    const argv = rosterEventsArgv(instance, home, since);
+    return argv.ok ? oats.run(argv, parseRosterEvents, ROSTER_EVENTS_TIMEOUT_MS, signal) : argv;
+  },
   version: (signal?: AbortSignal): Promise<Result<Version>> => oats.run(versionArgv(), parseVersion, oats.timeouts.read, signal),
   status: (signal?: AbortSignal): Promise<Result<Status>> => oats.run(statusArgv(), parseStatus, oats.timeouts.read, signal),
 });

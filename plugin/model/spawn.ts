@@ -9,6 +9,8 @@
 // them filters them, as every text of the kernel's; the one SENTENCE that is the kernel's own
 // words is filtered here, where it is chosen.
 import { DETAIL_WITHHELD, displayLine } from "./text.js";
+import { served } from "./served.js";
+import type { ListedModel } from "./served.js";
 
 type Json = Record<string, unknown>;
 const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -158,7 +160,8 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
 }
 /**
  * The preview's facts as the form's column lists them: the Desktop's (`previewFacts`), and three
- * of the plugin's own, each read from the same answer and never assumed: the soul (the Desktop's
+ * of the plugin's own, each read from the same answer (never assumed, but the access where the
+ * answer is silent on it: below): the soul (the Desktop's
  * dialog names it in its title alone), that the session is a bb thread (the Desktop's Session
  * backend is a control; here it is always bb, and said), and the access the agent runs with (the
  * plugin asks for bb's full mode on every spawn: the row says what the kernel decided). The
@@ -167,6 +170,58 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
 export type FormFacts = Omit<PreviewFacts, "prompts">;
 /** The model of a spawn on bb that names none for its harness: bb's own default for it. */
 export const bbDefaultModel = (harness: string): string => `bb’s default for ${harnessLabel(harness)}`;
+
+// ---- the Model field: whether a spawn may go with the model it would send ----
+
+/** Why Spawn is held for the model: the field's mark (which the off button is described by), two words at most. */
+export const MODEL_HELD = { required: "Required", ambiguous: "Pick provider" } as const;
+export type ModelCheck = { held: null } | { held: (typeof MODEL_HELD)[keyof typeof MODEL_HELD]; /** the listed ids that serve the bare one, to pick from */ offers: string[] };
+/**
+ * The ONE rule of the form's Model field: may a spawn go with the model it would send?
+ *
+ * - `chosenHarness`: the harness the person chose in the form; null while it is the first entry
+ *   (nothing is passed, the kernel resolves the soul's own).
+ * - `soulHarness`: the harness the kernel resolves for the soul when none is chosen, as its last
+ *   preview with none said; null while no such preview answered (a chosen harness is then not
+ *   known to be the soul's own).
+ * - `picked`: the model the person picked or typed; null while it is "Default" (none is passed).
+ * - `resolved`: what the kernel's preview resolved for the values on screen; null before it answered.
+ * - `listed`: the models bb lists for the harness the spawn would run on; null when bb's list was
+ *   not read or cannot be (the kernel's answer then stands).
+ * - `byProvider`: that harness's models are resolved by provider (pi: model/served.ts), which is
+ *   where the bb session provider checks a model at all; for any other harness nothing is held
+ *   for the list.
+ *
+ * The model the spawn WOULD SEND is the one picked, else the one the kernel resolved from the soul.
+ * 1. None at all, for a harness the person chose that is NOT the soul's own: REQUIRED. The soul's
+ *    model is another harness's, the kernel resolves none, and nothing says what the agent would
+ *    run on. (The soul's own harness with no model declared is the soul's decision, picked in the
+ *    form or not: it goes, on bb's default.)
+ * 2. A bare id that MORE THAN ONE listed model serves (`served`, the bb session provider's own
+ *    resolution): PICK PROVIDER, with exactly the ids that serve it, which are the ids the
+ *    provider's refusal would name at the launch. Two listed models are two, whatever else bb's
+ *    list leaves out. Not for an id that holds a slash: where bb's list is not whole such an id
+ *    may be the exact `<provider>/<id>` of a model the list holds back, and the provider lets it
+ *    go; the form never holds an agent the provider would start.
+ *
+ * That NO listed model serves the id is not the form's to judge: bb's list leaves models out that
+ * a thread still starts on (an id that ends in a date, a list pi's own configuration narrows, a
+ * list older than pi's configuration), and the provider, which knows, refuses such a spawn at its
+ * launch with nothing left behind, or lets it go. The form arms it.
+ */
+export function modelCheck({ chosenHarness, soulHarness, picked, resolved, listed, byProvider }: { chosenHarness: string | null; soulHarness: string | null; picked: string | null; resolved: { harness: string | null; model: string | null } | null; listed: readonly ListedModel[] | null; byProvider: boolean }): ModelCheck {
+  const sent = picked ?? resolved?.model ?? null;
+  if (sent === null) return chosenHarness !== null && chosenHarness !== soulHarness && resolved !== null ? { held: MODEL_HELD.required, offers: [] } : { held: null };
+  // Only where the provider checks a model at all (a harness whose models are resolved by provider: pi).
+  if (listed === null || !byProvider || sent.includes("/")) return { held: null };
+  const answer = served(sent, listed, true);
+  return answer.kind === "several" ? { held: MODEL_HELD.ambiguous, offers: answer.ids } : { held: null };
+}
+/** The column's rows with no default promised for the harness: its row names the harness alone (where a model is required of the person). */
+export function withoutDefault<Row extends { label: string; parts: { text: string }[] }>(rows: readonly Row[], harness: string): Row[] {
+  const promised = `${harnessLabel(harness)} · ${bbDefaultModel(harness)}`;
+  return rows.map((row) => (row.label === "Harness" && row.parts[0]?.text === promised ? { ...row, parts: [{ ...row.parts[0], text: harnessLabel(harness) }, ...row.parts.slice(1)] } : row));
+}
 export function formFacts(preview: unknown, options: { name?: string | null } = {}): FormFacts {
   const { prompts: _later, ...facts } = previewFacts(preview, options);
   const data: Json = record(preview) ? preview : {};
@@ -177,7 +232,8 @@ export function formFacts(preview: unknown, options: { name?: string | null } = 
   };
   // No model for the harness (the soul's launch names another harness's, and none was chosen): the bb
   // session provider passes none, and bb starts the harness on bb's own default. Said as that, never
-  // as an empty value.
+  // as an empty value. (Where the form holds Spawn until a model is picked, `modelCheck`'s
+  // "Required", it draws the row without that promise: `withoutDefault`.)
   const harness = text(data.harness);
   if (harness !== null && text(data.model) === null && text(data.backend) === "bb") {
     const at = rows.findIndex((fact) => fact.label === "Harness");
@@ -187,15 +243,16 @@ export function formFacts(preview: unknown, options: { name?: string | null } = 
   if (soul !== null) rows.unshift({ label: "Soul", parts: [{ text: soul }] });
   const decision = record(data.decision) && record(data.decision.effective) ? data.decision.effective : {};
   const backend = text(data.backend);
-  const access = decision.yolo === true ? "full mode: no sandbox" : decision.yolo === false ? "the harness asks before it acts" : null;
+  // What the agent may do: ALWAYS a row (it is the one place the form says it, in view of Spawn). The kernel's own
+  // decision where the preview carries it; where it carries none, what the plugin asks on every spawn (`--yolo`: bb's
+  // full mode): a preview that is silent on it never leaves a Spawn that can be pressed with nothing saying "no sandbox"
+  // (the review of part 7).
+  const access = decision.yolo === false ? "the harness asks before it acts" : "full mode: no sandbox";
   // After the harness: where its session is, then what it may do.
-  if (access !== null) after("Harness", { label: "Access", parts: [{ text: access }] });
+  after("Harness", { label: "Access", parts: [{ text: access }] });
   if (backend !== null) after("Harness", { label: "Session", parts: [{ text: backend === "bb" ? "bb thread" : backend }] });
   return { ...facts, facts: rows };
 }
-
-/** Under the column: who resolved it, and what the spawn does if it moves (the Desktop's sentence). */
-export const PREVIEW_FOOT = "Resolved by the installed CLI. Spawn refuses if this changes before you confirm.";
 
 // ---- a refusal, in a person's words ----
 /** The act that follows a refusal, where its sentence names one. */
@@ -274,7 +331,7 @@ const SPAWN_FAILED = said("OATS couldn’t complete the spawn.", "details");
 // (Spawn, Details, the fields above), as the Desktop's name the Desktop's (spawn-words.mjs).
 const NEXT: Record<Exclude<SpawnNext, null | "change-options">, string> = {
   "review-again": "Check the values and press Spawn again.",
-  "check-result": "Press Check result: it asks OATS again, and starts nothing twice.",
+  "check-result": "Press Check result: nothing starts twice.",
   "update-oats": "Update OATS, then open this form again.",
   "sync-workspace": "Run oats sync in the deployment, then try again.",
   details: "Try again, or see Details.",
@@ -346,8 +403,8 @@ export type SpawnReason = { code: string | null; message: string | null; unconfi
 const CREATED: ReadonlySet<string> = new Set(["E_SPAWN_INCOMPLETE", "E_INSTANCE_GONE", "NO_THREAD_NAMED"]);
 /** The plugin's own codes for a call that never ran `oats spawn`: nothing was asked of the kernel. */
 const NEVER_RAN: ReadonlySet<string> = new Set(["INVALID_INPUT", "OATS_NOT_FOUND", "NO_DEPLOYMENT", "CHOOSE_HOST", "HOST_NOT_FOUND", "NO_HOST"]);
-const UNKNOWN = said("OATS didn’t say whether the instance was created.", "check-result");
-const UNCONFIRMED = said("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
+const UNKNOWN = said("OATS didn’t say whether it was created.", "check-result");
+const UNCONFIRMED = said("Part of the instance may remain. See Details before spawning again.");
 /**
  * What is known of the instance after a failure, in the order the safety rule is read (`SpawnOutcome`):
  * `code` is the failure's own (null when it has none), `named` what the tables say of it.
@@ -393,17 +450,25 @@ export function spawnProblem(
 ): SpawnProblem {
   const code = reason.code ?? "OATS_FAILED";
   const message = reason.message === null ? "" : reason.message.trim();
-  const kernelLine = code === "E_HARNESS_UNAVAILABLE" ? displayLine(message) : null;
-  const kernelWords = kernelLine !== null && kernelLine !== "" && kernelLine !== DETAIL_WITHHELD ? said(kernelLine, "change-options") : null;
+  // The bb session provider's refusal of a launch's argument, after the press (a pi model that bb's pi does not have,
+  // or that several providers serve: test/fixtures/spawn/spawn-pi-model-refused.json, the real kernel's). The
+  // provider's sentence says which and what to use, and the kernel's message ends "spawn rolled back": it is said
+  // whole, once, through the display filter, as the result's sentence. No field is marked: the answer names none.
+  const launchArg = stage === "spawn" && code === "E_BACKEND_LAUNCH_ARG";
+  const kernelLine = code === "E_HARNESS_UNAVAILABLE" || launchArg ? displayLine(message) : null;
+  const kernelWords = kernelLine !== null && kernelLine !== "" && kernelLine !== DETAIL_WITHHELD ? said(kernelLine, launchArg ? null : "change-options") : null;
   const facts = stage === "spawn" ? SPAWN_FACTS : PREVIEW_FACTS;
   // A failure with no code at all reads the stage's general sentence: only a code says what happened.
   const general = stage === "spawn" ? SPAWN_FAILED : PREVIEW_FAILED;
-  const named = reason.code === null ? undefined : (kernelWords ?? facts[code] ?? COMMON_FACTS[code]);
+  // (Where the filter leaves nothing of that message, or withholds it: the stage's general sentence, and Details.)
+  const named = reason.code === null ? undefined : (kernelWords ?? facts[code] ?? COMMON_FACTS[code] ?? (launchArg ? general : undefined));
   const outcome = outcomeOf(stage, reason.code, reason.unconfirmed === true, named, replay);
   const words = outcome === "unconfirmed" ? UNCONFIRMED : outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
   const dashed = Object.hasOwn(DASHED, code) && DASHED[code]![0] === words.next ? DASHED[code]![1] : null;
   const tail = BY_CODE[code] ?? null;
   const after = words.next === null ? null : words.next !== "change-options" ? NEXT[words.next] : tail !== null && !harnessField && HARNESS_TAILS.has(code) ? (NO_HARNESS_FIELD[code] ?? SEE_DETAILS) : tail;
   const sentence = dashed !== null ? `${words.fact.replace(/\.$/, "")} — ${dashed}` : after === null ? words.fact : `${words.fact} ${after}`;
-  return { sentence, next: words.next, code, detail: message === "" ? null : message, outcome };
+  // The message is not drawn twice: where it IS the sentence, no Details repeats it. (Where the kernel could not undo
+  // the spawn the sentence is the plugin's, and Details holds the kernel's message: what to clean up.)
+  return { sentence, next: words.next, code, detail: message === "" || (kernelWords !== null && words === kernelWords && launchArg) ? null : message, outcome };
 }

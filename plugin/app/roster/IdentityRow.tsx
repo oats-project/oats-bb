@@ -159,9 +159,10 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       </Button>
     ) : status.state === "working" || status.state === "idle" ? (
       // An agent that runs is stopped from its own thread, through OATS: the plan first (what stops
-      // with it), then the confirmation. bb's own stop of a turn is not this.
+      // with it), then the confirmation. bb's own stop of a turn is not this. "Stop…": it opens a
+      // dialog, as the same act says in the instance panel (the lifecycle's rule for what asks first).
       <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : "Stop this agent through OATS"} onClick={() => askPlan("stop", agent.instance)}>
-        Stop
+        Stop…
       </Button>
     ) : held ? undefined : status.state === "unreachable" ? (
       <Button data-testid="oats-status-act" onClick={oats.retry}>

@@ -98,10 +98,29 @@ together.
 
 Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).
 The run also measures freshness (the UX standard, section 6): how long after the kernel recorded a
-claim set, a claim cleared and a stop the plugin's own snapshot has it (3 s at most, counted from
-the kernel's own record: the time of the event the change wrote, read from `oats instance events
---json`, so the `oats` command's own start-up is not in it; the kernel's own `oats status` time is
-said beside it, with the delay from before the command; a NOTE reports either delay over 3 s), and
+claim set, a claim cleared and a stop the plugin's own snapshot has it, counted from the kernel's
+own record (the time of the event the change wrote, read from `oats instance events --json`, so the
+`oats` command's own start-up is not in it); the kernel's own `oats status` time is said beside it,
+with the delay from before the command, and a NOTE reports either delay over 3 s. The run's last
+lines hold them in ONE line, in every run that reaches its end, green or red ("== freshness, measured …: the claim N ms, the claim
+cleared N ms, the agent stopped … N ms"), and `out/freshness.json` keeps them: a drift is to be
+seen there, since the delays are printed and fail nothing (the 3 s bar is asserted on a real host
+by the release's QA): what the check ASSERTS is the order of reads (a bound on elapsed time
+failed pull requests at random on a slow runner): the change comes, and no snapshot it polled on
+the way was the answer of a read that started after the kernel's record and yet without the change
+(a snapshot's `at` is its read's start). It
+shows the server's one read at once (step A5b2; `FOLLOW_UP_WITHIN_MS`, `server/core.ts`) with the
+plugin's own `oats status` calls as the wrapper recorded them: the agent sets a claim and clears it
+while the read the claim started is in flight (each status is held 600 ms for that, and the clear is
+made the moment the plugin's `oats status` is seen running in the process list), and the next
+read must start under 1 s after the first ended, which no other read does (and never before it
+ended: two calls alive at once fail the step); then it sets a claim
+again, in that second read, and the read after it must have waited the pause (1 s or more): never
+two reads at once in a row. It tries the three up to four times (whether each change lands in the
+read it is meant for is timing) and prints every try's reads and their times. It depends on the
+kernel's speed in one way, and says so: where the first read of every try took about the server's
+2 s limit or more, the server rightly waits the pause, and the run prints a NOTE that the read at
+once is NOT SHOWN, in place of a pass or a failure; and a NOTE where no read followed a pair. And
 at its end it compares its images: two scenes of different states must not be the same image (the
 thread's own row says its agent's state at every width).
 

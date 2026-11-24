@@ -892,3 +892,33 @@ test("while the roster is the last one read the acts are off, and say why", asyn
   await waitFor(() => expect(Array.from(slot.getByTestId("oats-agent-acts").querySelectorAll("button")).every((button) => button.disabled)).toBe(true));
   expect(within(slot.getByTestId("oats-agent-acts")).getByTestId("oats-disabled-reason").textContent).not.toBe("");
 });
+
+// The panel's own live read is answered from the server's cache, as the roster's is: an event that
+// arrives while its FIRST answer is on its way is not served by that answer (app/store.ts `reread`;
+// the roster's side of it: test/app/window-loads.test.tsx). Without it a panel that is opened, or a
+// window that loads on a thread, while the server reads a change keeps the facts from before it.
+test("the panel's live read: the change is published while its first answer is on its way, and the panel ends on the facts after the change", async () => {
+  let calls = 0;
+  let deliver: (() => void) | undefined;
+  const first = new Promise<void>((resolve) => (deliver = resolve));
+  const slot = panel({ threadId: CHILD_THREAD }, {}, {
+    rpc: handlers({
+      snapshot: () => panelSnapshot(),
+      panelInstance: async ({ instance }) => {
+        calls += 1;
+        if (calls === 1) {
+          await first;
+          return instanceAnswer(instance, (facts) => ({ ...facts, model: "claude-opus-5-5" })); // made by the server before the change
+        }
+        return instanceAnswer(instance, (facts) => ({ ...facts, model: "claude-fable-5.2" }));
+      },
+    }),
+  });
+  await waitFor(() => expect(calls).toBe(1));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:31:00.000Z" }));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:31:00.300Z" })); // and a second: one read is owed for both
+  await act(async () => deliver!());
+  // (The first answer, from before the change, may be drawn for a moment or not at all: what is held is where the panel ENDS.)
+  await waitFor(() => expect(text(slot.getByTestId("oats-panel-model"))).toContain("claude-fable-5.2"));
+  expect(calls).toBe(2);
+});

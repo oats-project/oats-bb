@@ -83,6 +83,12 @@ test("a card says who (the name as words, its soul under it, and no machine), wh
   expect(workerFacts.querySelector('[data-phrase="soul"]')!.className.split(/\s+/)).toEqual(expect.arrayContaining(["shrink", "truncate"])); // the soul is the part that gives way
   // Its soul is under its name on the card (Joan, 24 Nov: "Keep the agent type"); its machine is on its page.
   expect(within(release).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer");
+  // That line is ONE line high on a card: under the name it stands in a column, where a flex base is a height (a base
+  // of ten rem once left an empty 150 px under the soul on every card). It takes the column's width and nothing else;
+  // beside a name, in a row of a list, it takes the rest of the row's width (the live scene measures the cards' boxes).
+  expect(within(release).getByTestId("oats-needs-where").className.split(/\s+/).filter((name) => /^(flex-1|grow|basis-|h-|min-h-)/.test(name))).toEqual([]);
+  expect(within(release).getByTestId("oats-needs-where").className.split(/\s+/)).toContain("w-full");
+  expect(workerFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["flex-1", "basis-40"]));
   expect(release.textContent).not.toMatch(/falcon/);
   expect(within(release).getByTestId("oats-needs-where").querySelector('[data-phrase="reason"], [data-phrase="where"]')).toBeNull(); // on its thread: no reason, no glyph
   // Under "Needs you" the heading says the word: the card keeps the mark, named for a screen reader, and the wait.

@@ -335,10 +335,11 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={offer === "stopped" || offer === "unreachable" || answered === null ? offer : "answered"}>
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-col gap-0.5">
+          {/* (The column takes the card's width, so that the line under the name can measure what fits; the name stays as wide as its words.) */}
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            {/* Under its name, one line: the reason where there is one, its soul, and where it is for an agent on tmux. */}
-            <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" />
+            {/* Under its name, one line: its soul, the reason where there is one, and where it is for an agent on tmux. */}
+            <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" under />
           </div>
           {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page.
               Where the request can only be answered in its thread the word is "Answer": the same press, the same place. */}
@@ -444,13 +445,16 @@ function reasonOf(entry: Entry, oats: Ready): { reason: string | null; tone: "wa
   return { reason, tone: said?.rowTone === "warning" ? "warning" : undefined, onTmux };
 }
 
-function AgentFacts({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
+function AgentFacts({ entry, oats, testId, under = false }: { entry: Entry; oats: Ready; testId: string; /** under the name, in a column (a card): as wide as the column, and one line high. Beside the name, in a row: the rest of the row's width */ under?: boolean }) {
   const { reason, tone, onTmux } = reasonOf(entry, oats);
   // A lost session is said in the state's place on a row ("Lost": app/outside `rowWords`), so its line has no reason to hold; its title keeps it.
   const words = rowWords(entry.status.word, entry.status.state, reason);
   const soul = shown(oats.soulOf(entry.agent));
-  // (Beside a name the line takes the rest of the row's width, so that it can measure what fits; under a name, the card's.)
-  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} className="max-w-full flex-1 basis-40" />;
+  // The line measures what fits, so it needs a width that is not its own words': beside a name it takes the rest of
+  // the ROW's width (it grows, from a base of ten rem: `flex-1 basis-40`); under a name, in a COLUMN, it is as wide as
+  // the column and nothing else: there a flex base is a HEIGHT (it made every card's line ten rem tall: an empty gap
+  // of about 150 px under the soul; the specialist's finding on the image set of 24 Nov 2026).
+  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} className={under ? "w-full" : "max-w-full flex-1 basis-40"} />;
 }
 
 /**

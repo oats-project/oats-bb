@@ -25,7 +25,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fill, testId, textOf, texts, textsNamed, showSidebar } from "../browser.mjs";
+import { fill, gapsIn, loose, MAX_GAP, testId, textOf, texts, textsNamed, showSidebar, tight } from "../browser.mjs";
 import { FAILS, fits, printing, refresh, setVerb, settled } from "./panel.mjs";
 
 /** The oldest OATS the plugin works with, as kernel/compat.ts holds it: the card's "Required" says it. */
@@ -245,6 +245,10 @@ export default [
       // every card: the agent's name as words (its soul under it, no machine), what it asks, and the answer its request takes
       const cards = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(within("oats-needs-card"))})].map((card) => ({ instance: card.dataset.instance, offer: card.dataset.offer, name: card.querySelector('[data-testid="oats-needs-name"]')?.innerText.trim(), state: card.querySelector('[data-testid="oats-state"]')?.innerText.replace(/\\s+/g, " ").trim(), mark: card.querySelector('[data-testid="oats-state"] [data-mark][role="img"]')?.getAttribute("aria-label") ?? null, open: card.querySelector('[data-testid="oats-needs-open"]')?.innerText.trim(), replyShown: [...card.querySelectorAll('[data-testid="oats-reply-text"]')].some((box) => box.checkVisibility()), reply: card.querySelector('[data-testid="oats-reply-text"]')?.getAttribute("aria-label") ?? null, text: card.innerText.replace(/\\s+/g, " ").trim() })))`));
       check(cards.length === 3 && cards.every((each) => each.reply === `Reply to ${each.name}` && each.state === "!" && each.mark === "Needs input" && !/\bNeeds you\b/.test(each.text) && !each.name.includes("-") && each.open === (each.offer === "in-thread" ? "Answer" : "Open") && /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(each.text) && !new RegExp(MACHINE).test(each.text)), `${at} each card names its agent in words, keeps the mark (named for a screen reader) with no "Needs you" of its own (the heading says it), has Open, or Answer where its request is answered in its thread, and says its soul and no machine`, JSON.stringify(cards));
+      // A card is as high as its lines: no empty room between two of them, nor at its edges (a line of a card stretched to
+      // ten rem once: an empty 150 px under the soul, which no check of words could see).
+      const cardGaps = JSON.parse(await page.evaluate(gapsIn(within("oats-needs-card-body"))));
+      check(cardGaps.length === 3 && tight(cardGaps), `${at} each card is as high as what it holds: no gap over ${MAX_GAP} px between two of its lines or at its edges (heights ${cardGaps.map((card) => card.height).join(", ")} px)`, loose(cardGaps));
       check(cards.some((each) => each.instance === "release-070-maintainer" && each.name === "Release 070 maintainer" && each.text.includes("Green light at 9f2e1c? Second reader done.")), `${at} a card says what its agent asks, in the agent's words`, JSON.stringify(cards));
       // an agent that asks in its own words is answered by the reply on its card; one that waits for an approval is not offered a message as its answer
       const byOffer = Object.fromEntries(cards.map((each) => [each.instance, [each.offer, each.replyShown]]));
@@ -291,6 +295,8 @@ export default [
       const working = await page.evaluate(`JSON.stringify(${texts(within("oats-working-row"))})`);
       const repeats = await page.evaluate(`document.querySelectorAll(${JSON.stringify(`${within("oats-working-row")} ${testId("oats-state")}, ${within("oats-finished-row")} ${testId("oats-state")}`)}).length`);
       check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => !/Working$/.test(row) && /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(row)) && repeats === 0, `${at} every agent at work is a row under the heading "Working", with its soul beside its name: no row repeats the state's word`, working);
+      const workingGaps = JSON.parse(await page.evaluate(gapsIn(within("oats-working-row"))));
+      check(tight(workingGaps), `${at} each row of the Working list is as high as its line: no empty room in it (heights ${[...new Set(workingGaps.map((row) => row.height))].join(", ")} px)`, loose(workingGaps));
       await shown(page, check, at, within("oats-home-tiles"), "the tiles and who works");
       await sound(page, viewport, check, at, "the tiles and who works");
       await page.shot(`home-${viewport.name}-working`);
@@ -309,6 +315,8 @@ export default [
       // ("tmux" is read by the glyph's name: on a row it is bb's terminal glyph, named "tmux".)
       const rows = JSON.parse(await page.evaluate(`JSON.stringify(${textsNamed(within("oats-home-agent-row"))})`));
       check(rows.length === 8 && rows.some((row) => /\btmux\b/.test(row) && !/runs in/.test(row)) && rows.some((row) => /Stopped$/.test(row)) && rows.every((row) => /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(row) && !new RegExp(`started by|${MACHINE}`).test(row)), `${at} the stopped agent and the one on tmux are in the list, each row with its soul and its state, where it is ("tmux"), and no machine or who started it`, JSON.stringify(rows));
+      const agentGaps = JSON.parse(await page.evaluate(gapsIn(within("oats-home-agent-row"))));
+      check(agentGaps.length === 8 && tight(agentGaps), `${at} each row of Home › Agents is as high as its line: no empty room in it (heights ${[...new Set(agentGaps.map((row) => row.height))].join(", ")} px)`, loose(agentGaps));
       // The one count line of the home is here: by state, each agent once; how many there are is the heading's count.
       const summary = await page.evaluate(textOf(within("oats-home-summary")));
       const counted = summary.split(" · ").map((part) => Number(part.split(" ")[0]));

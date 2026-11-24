@@ -19,6 +19,7 @@ import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { DESKTOP_API, OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineParts, outsideOf, OutsideWarning } from "../outside";
+import type { Said } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
@@ -30,13 +31,13 @@ import { attachCommand } from "../panel/words";
 import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
-import { board, mayAnswer, notRunning } from "./board";
+import { board, mayAnswer, refusal } from "./board";
 import { useCli } from "./cli";
 import type { Cli } from "./cli";
 import type { Board, Entry } from "./board";
 import {
   BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, CLI_UNCHECKED, CLI_REQUIRED_WHY, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, HELD, HOME, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEW_AGENT_HELD,
-  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREAD, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, STOPPED_WAITS, THREAD_GONE, WORKING, WORKING_SHOWN,
+  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREACHABLE, NOT_NOW_UNREAD, UNREACHABLE_WAITS, NOT_SENT, OPEN_PAGE, OPEN_THREAD, PAGE_LEADS, THREAD_NOT_LISTED, PERMISSION_IN_THREAD, READING, REQUIRED, SEND, SENDING, SHOW_FEWER, STOPPED_WAITS, THREAD_GONE, WORKING, WORKING_SHOWN,
   answeredWith, detected, installCommand, newerApiWhy, replyLabel, replyPlaceholder, required, sentTo, showAll, showAllWorking, soulAndMachine, startedBy, summaryLine, testedWhy, tileCount, tmuxWhere,
 } from "./home-words";
 import { question } from "./interactions";
@@ -57,12 +58,18 @@ type Ready = Extract<Oats, { phase: "ready" }>;
  * Where an agent opens: its bb thread, or, for an agent with none (on tmux, or its thread gone), its
  * own page. The roster comes from the one `useOats` of the view: a second call would read it again.
  */
-function useOpen(oats: Ready): (entry: Entry) => { href?: string; onClick(event: React.MouseEvent): void } {
+function useOpen(oats: Ready): (entry: Entry) => { href?: string; /** where a press leads: a thread of bb's (the agent's own, or its archived one), or the agent's page */ leads: "thread" | "page"; onClick(event: React.MouseEvent): void } {
   const navigate = useBbNavigate();
+  const outside = outsideOf(oats);
   return (entry) => {
     const thread = entry.thread === null ? undefined : oats.threadById.get(entry.thread.id);
-    if (thread === undefined) return { onClick: () => void openAgentPage(navigate as BbNavigate, entry.agent.instance) };
+    if (thread === undefined) {
+      // Its archived conversation, where bb keeps one, as the sidebar's row opens it; else its own page.
+      const archived = outside.of(entry.agent)?.archived === true && entry.agent.threadId !== null ? entry.agent.threadId : null;
+      return { leads: archived === null ? "page" : "thread", onClick: () => void (archived === null ? openAgentPage(navigate as BbNavigate, entry.agent.instance) : navigate.toThread(archived)) };
+    }
     return {
+      leads: "thread",
       href: thread.href,
       onClick: (event) => {
         if (!plainClick(event)) return;
@@ -89,14 +96,26 @@ function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId:
   );
 }
 
-/** Where an agent with no bb thread is, in words. */
-const elsewhere = (entry: Entry): string => (entry.agent.backend === "tmux" ? "Runs in tmux" : "Its bb thread is gone");
+/**
+ * Where an agent the roster draws on no thread is, in a few words, or null where there is nothing
+ * to say of it: from the outside feature's ONE answer (app/outside `said`: the kernel's row and
+ * bb's own answer for the row's thread), the same words as the sidebar's row. An agent on tmux
+ * "runs in tmux", after "session lost" where its session was; an agent on bb says "archived in
+ * bb", "deleted in bb", "no bb thread" or "thread not shown in bb"; nothing until bb has answered,
+ * and nothing for an agent OATS stopped whose thread bb has archived (on a provider that archives
+ * at stop that is every stopped agent: its row says Stopped, and opens the archived thread).
+ */
+function elsewhere(entry: Entry, said: Said | null): string | null {
+  if (entry.agent.backend === "tmux") return said !== null && said.note ? `${said.note} · tmux` : "runs in tmux"; // (after a reason, where it is: an agent whose session was lost does not "run")
+  if (said === null || said.kind === "stopped-archived") return null;
+  return said.note ? said.note : null;
+}
 
 /** The lifecycle's own word for the act that starts an agent ("Start…": it opens that act's dialog). */
 const START = ACTS.find((each) => each.verb === "start")!.button;
 
 /** How a card is answered: what the agent asks decides what the card offers (`offer`, below). */
-type Offer = "stopped" | "choices" | "in-thread" | "reply" | "elsewhere";
+type Offer = "stopped" | "unreachable" | "choices" | "in-thread" | "reply" | "elsewhere";
 
 /** The reply to one agent: one line that grows with its text, Send beside it, on that agent's card. */
 function Reply({ name, text, onText, busy, held, said, onSend }: { name: string; text: string; onText: (text: string) => void; busy: boolean; held: boolean; said: string | null; onSend: () => void }) {
@@ -185,7 +204,7 @@ function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: b
   const open = useOpen(oats)(entry);
   const name = agentName(entry.agent.instance);
   const said = outsideOf(oats).of(entry.agent);
-  const paged = entry.thread === null || !oats.threadById.has(entry.thread.id);
+  const paged = open.leads === "page"; // (the button says where it leads: an archived thread is a thread)
   return (
     <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer="outside">
       <Card testId="oats-needs-card-body">
@@ -260,7 +279,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
    * the press. Nothing goes to bb unless that roster reads and says the agent runs.
    */
   const act = (kind: "answer" | "send", run: () => Promise<unknown>, done: () => void) => {
-    if (busy !== null || !mayAnswer(entry.agent, held)) return;
+    if (busy !== null || !mayAnswer(entry.agent, entry.thread, held)) return;
     setBusy(kind);
     setFailure(null);
     setSaid(null);
@@ -269,7 +288,10 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
       if (!now.ok) throw new Error(NOT_NOW_UNREAD);
       const agent = now.agents.find((each) => each.instance === entry.agent.instance);
       if (agent === undefined) throw new Error(NOT_NOW_GONE);
-      if (notRunning(agent)) throw new Error(NOT_NOW_STOPPED);
+      // The AGENT is the server's roster's, read now; the THREAD is the card's own (bb's row as it
+      // was drawn): the guard is fresh on what OATS says, not on what bb says of the thread.
+      const why = refusal(agent, entry.thread);
+      if (why !== null) throw new Error(why === "unreachable" ? NOT_NOW_UNREACHABLE : NOT_NOW_STOPPED);
       return run();
     }).then(
       () => {
@@ -304,14 +326,16 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const message = claim?.message ?? asked?.title ?? null;
   // What an in-place answer is about, when the line above is the kernel's claim and not bb's title.
   const detail = asked !== null && asked.choices.length > 0 && asked.title !== null && asked.title !== message ? asked.title : null;
-  // The kernel says the agent does not run (it is stopped, or its session ended), and it needs the
-  // person all the same (bb still holds a request on its thread, or it still carries its claim): an
-  // answer or a message to its thread would start its harness again behind OATS's back (a stopped
-  // agent stays stopped). The card then offers neither: it says so, and offers Start, the
-  // lifecycle's own act, which starts it through OATS.
-  const stopped = notRunning(entry.agent);
+  // The kernel says the agent is STOPPED (an operator's stop, or a stop that does not say how its
+  // session ended), and it needs the person all the same (bb still holds a request on its thread,
+  // or it still carries its claim): an answer or a message to its thread would start its harness
+  // again behind OATS's back (a stopped agent stays stopped). The card then offers neither: it
+  // says so, and offers Start, the lifecycle's own act, which starts it through OATS. An agent
+  // whose session was LOST, or that has no harness loaded, is answered as any other: a message in
+  // its thread is how it comes back (`refusal`, board.ts: the Start dialog's own reading).
+  const refused = refusal(entry.agent, entry.thread);
   const offer: Offer =
-    thread === undefined ? "elsewhere" : stopped ? "stopped" : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
+    thread === undefined ? "elsewhere" : refused !== null ? refused : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
@@ -320,18 +344,19 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
       {reply}
     </Disclosure>
   );
-  const where = entry.thread === null ? elsewhere(entry) : null;
+  const saidOf = entry.thread === null ? outsideOf(oats).of(entry.agent) : null;
+  const where = entry.thread === null ? elsewhere(entry, saidOf) : null;
   return (
-    <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={offer === "stopped" || answered === null ? offer : "answered"}>
+    <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={offer === "stopped" || offer === "unreachable" || answered === null ? offer : "answered"}>
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-0.5">
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            <span className="break-words text-xs text-muted-foreground">{[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), where === null ? null : where.toLowerCase()].filter((part) => part !== null).join(" · ")}</span>
+            <span className="break-words text-xs text-muted-foreground">{[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), where].filter((part) => part !== null).join(" · ")}</span>
           </div>
           {/* The button says where it leads: the agent's thread, or, for an agent with none, its own page. */}
-          <Button data-testid="oats-needs-open" aria-label={`${thread === undefined ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
-            {thread === undefined ? OPEN_PAGE : OPEN_THREAD}
+          <Button data-testid="oats-needs-open" aria-label={`${open.leads === "page" ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
+            {open.leads === "page" ? OPEN_PAGE : OPEN_THREAD}
           </Button>
         </div>
         <StatusLine state={entry.status.state} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
@@ -345,7 +370,12 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             {shown(detail)}
           </p>
         )}
-        {offer === "stopped" ? (
+        {offer === "unreachable" ? (
+          // Nobody can tell where an answer or a message would go: none is offered, and no Start (the lifecycle has none for it).
+          <p data-testid="oats-needs-unreachable" className="m-0 text-xs text-muted-foreground">
+            {UNREACHABLE_WAITS}
+          </p>
+        ) : offer === "stopped" ? (
           <div data-testid="oats-needs-stopped" className="flex min-w-0 flex-col gap-2">
             <p className="m-0 text-xs text-muted-foreground">{STOPPED_WAITS}</p>
             <div className="flex flex-wrap items-center gap-2">
@@ -393,9 +423,10 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
                 </p>
               </>
             ) : (
-              <p className="m-0">{THREAD_GONE}</p>
+              <p className="m-0">{/* "gone" only where bb answers that it has no thread of that id (deleted); else as far as bb's answer goes. */ oats.whereOf(entry.agent) === "missing" ? THREAD_GONE : THREAD_NOT_LISTED}</p>
             )}
-            <p className="m-0">{PAGE_LEADS}</p>
+            {/* Said of the button only where it leads to the page (an agent whose thread bb has archived is opened on that thread). */}
+            {open.leads === "page" ? <p className="m-0">{PAGE_LEADS}</p> : null}
           </div>
         )}
         {failure === null ? null : <Notice title={failure.kind === "send" ? NOT_SENT : NOT_ANSWERED} tone="error" code={refusalCode(failure.message)} details={failure.message} />}
@@ -430,7 +461,7 @@ function AgentRow({ entry, oats, testId, startedByToo = false }: { entry: Entry;
       <span className="flex min-w-0 flex-1 flex-col">
         <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
         <span className="break-words text-xs text-muted-foreground">
-          {[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), entry.thread === null ? elsewhere(entry).toLowerCase() : null, started].filter((part) => part !== null).join(" · ")}
+          {[soulAndMachine(oats.soulOf(entry.agent), oats.deployment.machine), entry.thread === null ? elsewhere(entry, outsideOf(oats).of(entry.agent)) : null, started].filter((part) => part !== null).join(" · ")}
         </span>
       </span>
       <span className="shrink-0 text-sm">

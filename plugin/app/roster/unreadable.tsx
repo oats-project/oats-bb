@@ -157,6 +157,9 @@ export function RosterNotice({ oats, seen = true }: { oats: Oats; /** false: the
 }
 
 // ---- one full notice on a screen ----
+// ANY pane's notice with a Retry counts, also one whose Retry is not the roster's own (the Automations page's notice
+// of its own read; a dialog's "cannot read" of its plan): there is then ONE Retry on the screen, that one, and the
+// sidebar's comes back when that notice leaves (ruled 24 Nov 2026, with the lead's T3).
 // The sidebar and a page are drawn side by side. While a page shows the full notice over what it
 // keeps, the sidebar says ONE line (how old the roster is, that the acts are off): `LastObservation`.
 let pagesWithNotice = 0;

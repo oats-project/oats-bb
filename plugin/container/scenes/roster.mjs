@@ -90,7 +90,7 @@ export default [
       const expected = fixtureThreads.filter((thread) => thread.id !== "thr_plain").map((thread) => threads.get(thread.id).id);
       check(rows.length === 7 && expected.every((id) => rows.includes(id)), `${at} the tree draws the 7 bb agents, joined by bb's own thread ids`, JSON.stringify(rows));
       const child = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_mockups").id}"]`;
-      check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.split(/\s+/).includes("pl-10") === true && document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_redesign").id}"]`)})?.className.split(/\s+/).includes("pl-6") === true`), `${at} a child is indented one step under its parent (the roster's gutter for the chevron is every row's)`);
+      check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.split(/\\s+/).includes("pl-10") === true && document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_redesign").id}"]`)})?.className.split(/\\s+/).includes("pl-6") === true`), `${at} a child is indented one step under its parent (the roster's gutter for the chevron is every row's)`);
       // The machine is shown by the name bb gives it, which is the host's own (G1): a name, never an id.
       check(!/^[0-9a-f]{12}$/.test(MACHINE), `${at} the machine the checks run on has a name (${MACHINE}), not a container's id: start the container through ci.sh, or with --hostname and MACHINE_NAME`);
       // The workspace's name alone heads the roster: no machine, no count, and no heading "Agents" under it.

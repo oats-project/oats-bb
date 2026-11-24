@@ -87,6 +87,9 @@ const fake = (verbs = {}) =>
 const PILOT = process.env.LIVE_PILOT_IMAGES === "1";
 /** By hand only: LIVE_ONLY_STAGES="tmux-roster,…" runs those stages alone (a look at one screen, in minutes; never a gate). */
 const ONLY_STAGES = (process.env.LIVE_ONLY_STAGES ?? "").split(",").map((name) => name.trim()).filter((name) => name !== "");
+/** By hand only, never a gate: LIVE_ONLY_SCENE="words of a scene's name" runs the scenes whose name holds them, alone; LIVE_REPEAT=10 runs each that many times in every view (to show whether a check that failed once is the scene's or the product's). */
+const ONLY_SCENE = (process.env.LIVE_ONLY_SCENE ?? "").trim();
+const REPEAT = Math.max(1, Number.parseInt(process.env.LIVE_REPEAT ?? "1", 10) || 1);
 const PILOT_FEATURES = ["roster", "outside", "panel", "home", "lifecycle", "spawn"];
 /** Every page's id, as live.sh sets them for the checks (the default alone in the pilot's image pass); and how a stage or a scene sets the plugin's `pages`. */
 const ALL_PAGES = PILOT ? "home" : "home, automations, souls, capabilities, teams, machines";
@@ -605,7 +608,7 @@ try {
   if (PILOT) pages(ALL_PAGES); // live.sh showed every page for its own checks: the default from here on
   browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
   for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
-    const mine = scenes.filter((scene) => scene.stage === name);
+    const mine = scenes.filter((scene) => scene.stage === name && (ONLY_SCENE === "" || scene.name.includes(ONLY_SCENE))).flatMap((scene) => Array.from({ length: REPEAT }, () => scene));
     if (mine.length === 0) continue;
     if (ONLY_STAGES.length > 0 && !ONLY_STAGES.includes(name)) continue;
     if ((name === "local-roster") !== (LOCAL_STATUS !== "")) continue; // the local stage alone, or every stage but it
@@ -621,7 +624,7 @@ try {
           const page = await themedPage(browser, viewport, theme, at);
           try {
             for (const scene of mine) {
-              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads };
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
               if (!PILOT) await scene.run(given);
               else {
                 // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.

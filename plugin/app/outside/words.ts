@@ -67,7 +67,7 @@ export const FAILED_OPEN = "session ended";
 /** The fact after the state on its line: what OATS recorded, which is no longer what the agent does. */
 export const OUTSIDE_RECORDED = "recorded stopped";
 export const OUTSIDE_WHAT = "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.";
-/** The same, of an agent the lifecycle offers no Start for here (its session provider is not bb): the one remedy this plugin has is Stop. */
+/** The same, of an agent the lifecycle offers no Start for here (its session provider is neither bb nor tmux; the report is never a tmux agent's): the one remedy this plugin has is Stop. */
 export const OUTSIDE_WHAT_STOP = "Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.";
 
 // ---- a row the tree draws on no thread, in any other state: where its thread is

@@ -76,7 +76,16 @@ export type BbThread = {
    * itself; "none"; "failed"): a thread at rest with a turn in line is one whose agent works.
    */
   queuedWork: string;
+  /**
+   * Not bb's sidebar's: joined by the app from bb's own events of the thread (app/outside/threads.ts),
+   * for a thread whose status is "error". Set: the thread FAILED AT ITS START (bb recorded an error
+   * and never a turn), with bb's own reason. null or absent: it did not, or bb has not answered.
+   */
+  startFailure?: StartFailure | null;
 };
+
+/** bb's own words for a thread that failed at its start (its `system/error` event): `detail` is the reason, where bb gave one. */
+export type StartFailure = { message: string; detail: string | null };
 
 /**
  * `outside`: the kernel reports that a harness runs in a home OATS recorded stopped

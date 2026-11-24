@@ -219,6 +219,40 @@ test("a closed parent whose subtree holds a row that needs a person carries that
   expect(within(rowOn(quiet.slot, LEAD)!).queryByTestId("oats-row-inside")).toBeNull();
 });
 
+// The mark a closed parent carries is computed from the roster on screen at every draw: nothing of it is kept from an
+// earlier roster (no memo, no memory of what is inside). A mark that outlived its cause would be a false alarm on the
+// one row a person trusts.
+test("a closed parent's mark follows the roster: it comes when a hidden child starts to wait and GOES with the next roster in which it no longer does, while the parent stays closed", async () => {
+  const claim = { reason: "attention" as const, message: "Which mockup?", since: "2026-11-19T12:00:00.000Z" };
+  const waits = (on: boolean) => fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, waiting: on ? claim : null } : agent));
+  let now = { ...fixtureSnapshot(waits(false)), at: "2026-11-19T12:30:00.000Z" };
+  const { slot } = await sidebar({ snapshot: () => now });
+  await slot.findByTestId("oats-tree");
+  const inside = () => within(rowOn(slot, LEAD)!).queryByTestId("oats-row-inside")?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null;
+  const closed = () => [toggles(slot)[0]!.getAttribute("aria-expanded"), rowOn(slot, "thr_mockups")];
+  expect([inside(), ...closed()]).toEqual([null, "false", null]);
+  // The child starts to wait: the next roster marks the closed parent.
+  now = { ...fixtureSnapshot(waits(true)), at: "2026-11-19T12:30:05.000Z" };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: now.at }));
+  await waitFor(() => expect(inside()).toBe("needs-you"));
+  expect(closed()).toEqual(["false", null]);
+  // It no longer waits: the next roster takes the mark away, with the parent still closed and nothing pressed.
+  now = { ...fixtureSnapshot(waits(false)), at: "2026-11-19T12:30:10.000Z" };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: now.at }));
+  await waitFor(() => expect(inside()).toBeNull());
+  expect(closed()).toEqual(["false", null]);
+  expect(within(rowOn(slot, LEAD)!).getByTestId("oats-row-facts").getAttribute("title")).toBe("Working · oats-product-expert");
+  // And again, after the person opened and closed it in between (the window's memory of what was opened holds nothing of a mark).
+  fireEvent.click(toggles(slot)[0]!);
+  fireEvent.click(toggles(slot)[0]!);
+  now = { ...fixtureSnapshot(waits(true)), at: "2026-11-19T12:30:15.000Z" };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: now.at }));
+  await waitFor(() => expect(inside()).toBe("needs-you"));
+  now = { ...fixtureSnapshot(waits(false)), at: "2026-11-19T12:30:20.000Z" };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: now.at }));
+  await waitFor(() => expect(inside()).toBeNull());
+});
+
 test("the parent of the thread on screen is open and its chevron is OFF (never a button that swallows a press): disabled, out of the tab order, named as open; once another thread is on screen it is live, and as the person left it", async () => {
   const child = await sidebar({}, "thr_mockups");
   await child.slot.findByTestId("oats-tree");

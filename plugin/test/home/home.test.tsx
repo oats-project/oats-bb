@@ -13,7 +13,12 @@ import type { Contract, Handlers } from "../helpers/render";
 import { setAgentTab } from "../../app/home/agent-tab";
 import type { Agent } from "../../model/types";
 
-afterEach(resetApp);
+afterEach(() => {
+  resetApp();
+  vi.useRealTimers();
+});
+/** A test that pins how long an agent has waited ("4 d") reads no clock but this one: the day the sample's claims were four days old. */
+const FOUR_DAYS_ON = Date.parse("2026-11-23T18:00:00.000Z");
 
 const quiet = (): Agent[] =>
   fixtureAgents().map((agent) => ({ ...agent, waiting: null, running: agent.running === true ? null : agent.running }));
@@ -641,6 +646,7 @@ test("in the thread's tab the home has no way to Home › Agents: no tile for th
 });
 
 test("an agent with no bb thread that needs the person has its card: what it asks, where to answer it in five words, Open to its own page, and no reply and no command", async () => {
+  vi.useFakeTimers({ now: FOUR_DAYS_ON, toFake: ["Date"] }); // (the card's wait is pinned below: never the real clock)
   let opened: string | null = null;
   const { setAgentPage } = await import("../../app/home/agent-tab");
   const slot = await homePage({ rpc: handlers({}, [...fixtureAgents(), TMUX_ASKS]) });
@@ -1397,6 +1403,7 @@ test("the home's one more try of the version waits for the roster: none while th
 // it from bb. The card's second line says what became of its thread, as the reason alone (bb's own
 // answer: "deleted in bb"); no sentence repeats it, and the card draws no reply. Open leads to its page.
 test("an agent whose bb thread was deleted that needs the person: the reason and its soul on its second line, no sentence under it, no reply, and Open to its page", async () => {
+  vi.useFakeTimers({ now: FOUR_DAYS_ON, toFake: ["Date"] }); // (the card's wait is pinned below: never the real clock)
   const sdk = { threads: { list: async () => [], interactions: { list: async () => [] } } } as never as RenderSlotOptions<Contract>["sdk"];
   const slot = await homePage({ sidebarThreads: { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_release") }, sdk });
   const card = await cardOf(slot, "release-070-maintainer");

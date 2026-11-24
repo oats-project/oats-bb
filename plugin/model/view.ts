@@ -63,6 +63,18 @@ export const threadWorks = (thread: Pick<BbThread, "status" | "queuedWork">): bo
   TURN_IN_PROGRESS.has(thread.status) || (AT_REST.has(thread.status) && thread.queuedWork === "waiting");
 
 /**
+ * Whether the agent NEVER RAN: bb says its thread failed at its start (`BbThread.startFailure`),
+ * and the kernel does not say that it runs: not by its row (`running` is not false beside a word
+ * that is not "stopped": an agent started again since), and not by its report that a harness runs
+ * in a home OATS recorded stopped (`outsideOats`: that agent runs, and "Running outside OATS" is
+ * what is said of it). The one test, for the state and for how it is at rest (model/rest.ts).
+ */
+export function failedAtStart(agent: Pick<Agent, "running" | "runtimeState"> & { backend?: string | null; outsideOats?: unknown }, thread: Pick<BbThread, "startFailure"> | null | undefined): boolean {
+  if (agent.backend === "tmux" || agent.outsideOats != null || thread?.startFailure == null) return false;
+  return agent.running === false || agent.runtimeState === "stopped";
+}
+
+/**
  * The state of one agent on its thread. First match wins.
  *
  * WORKING and IDLE, for an agent on a bb thread, are bb's own status of that thread, never the
@@ -96,6 +108,10 @@ export function state(agent: Agent, thread: BbThread | null): AgentState {
   if (agent.backend !== "tmux" && agent.outsideOats != null) return "outside";
   if (claimOf(agent) !== null || thread?.hasPendingInteraction === true) return "needs-you";
   if (agent.runtimeState === "unreachable") return "unreachable";
+  // Its thread FAILED AT ITS START (bb's own events, joined on the thread: `startFailure`): it never
+  // ran, whatever the row says of how its session ended (the kernel reads such a home "stopped",
+  // its session "lost"). Failed, in every place. Not of a row the kernel does not call at rest.
+  if (failedAtStart(agent, thread)) return "error";
   // A row that does not run and says how its session ended: that decides (`recordedStopped`): an
   // operator's stop and a lost session are stopped beside any word; a harness that ended by itself failed.
   if (recordedStopped(agent)) return "stopped";

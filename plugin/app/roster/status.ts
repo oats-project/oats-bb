@@ -3,7 +3,7 @@
 // (through `State` and `StatusLine`, app/ui.tsx), so they say the same thing. Pure.
 import { GONE_MARK, GONE_WORD } from "./gone";
 import type { Agent, AgentState, BbThread } from "../../model/types";
-import { claimOf, state } from "../../model/view";
+import { claimOf, failedAtStart, state } from "../../model/view";
 import { STATE, waitingClock, waitingDetail, waitingSince } from "../ui/words";
 
 export type AgentStatus = {
@@ -25,6 +25,11 @@ export type AgentStatus = {
    * the line's words. null where the kernel said nothing more.
    */
   kernel: string | null;
+  /**
+   * bb's own reason for a thread that failed at its start (`BbThread.startFailure`), shown the
+   * same way: one press away, under Details. Absent for every other agent.
+   */
+  bb?: string;
 };
 
 /** The reason after "Failed": the Desktop's "Its session ended", as a reason. */
@@ -42,8 +47,12 @@ export function agentStatus(agent: Agent, thread: BbThread | null, now: number):
       if (claim === null) return { ...base, since: null, detail: null };
       return { ...base, since: waitingSince(claim.since, now), detail: waitingDetail(claim) };
     }
-    case "error":
+    case "error": {
+      // It never ran (bb says its thread failed at its start): the word alone, and bb's reason under Details.
+      const failure = failedAtStart(agent, thread) ? (thread?.startFailure ?? null) : null;
+      if (failure !== null) return { ...base, since: null, detail: null, bb: failure.detail ?? failure.message };
       return { ...base, since: null, detail: SESSION_ENDED };
+    }
     case "unreachable":
       // "Unreachable" says it; the kernel's own text is one press away.
       return { ...base, since: null, detail: null, kernel: agent.runtimeError };

@@ -15,7 +15,9 @@ import type { Contract } from "../helpers/render";
 
 afterEach(resetApp);
 
-const WAITS = "desktop-mockups-developer"; // on thr_mockups: it waits on a person before the change, and not after it
+// A ROOT of the tree, so that its row is drawn as the page loads (a child's is folded away under its parent until a person opens it).
+const WAITS = "redesign-ui-lead"; // on thr_redesign: it waits on a person before the change, and not after it
+const THREAD = "thr_redesign";
 const claim = { reason: "attention" as const, message: "Which mockup?", since: "2026-11-19T12:00:00.000Z" };
 const before = (): Agent[] => fixtureAgents().map((agent) => (agent.instance === WAITS ? { ...agent, waiting: claim } : agent));
 const after = (): Agent[] => fixtureAgents().map((agent) => (agent.instance === WAITS ? { ...agent, waiting: null } : agent));
@@ -44,14 +46,14 @@ test("a window that loads while the server reads a change: its first answer is t
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.000Z" }));
   // The first answer arrives: the roster from before the change.
   await act(async () => deliver!());
-  const facts = () => within(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_mockups")!).getByTestId("oats-row-facts").textContent;
+  const facts = () => within(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === THREAD)!).getByTestId("oats-row-facts").textContent;
   await slot.findByTestId("oats-tree");
   // Nothing else changes, and nothing else is published: the window must still come to the new roster.
   await waitFor(() => expect(facts()).not.toMatch(/^Needs you/));
   expect(calls).toBeGreaterThanOrEqual(2);
 });
 
-/** The sidebar over a `snapshot` handler of the test's own; what the mockups developer's row says; how many times `snapshot` was answered. */
+/** The sidebar over a `snapshot` handler of the test's own; what that agent's row says; how many times `snapshot` was answered. */
 async function sidebarOver(snapshot: () => Promise<ReturnType<typeof fixtureSnapshot>>) {
   const app = await loadApp();
   const slot = renderSlot<PluginThreadListProps, Contract>(
@@ -59,7 +61,7 @@ async function sidebarOver(snapshot: () => Promise<ReturnType<typeof fixtureSnap
     { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
     { rpc: handlers({ snapshot }), sidebarThreads: sidebarThreads() },
   );
-  const facts = () => within(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_mockups")!).getByTestId("oats-row-facts").textContent;
+  const facts = () => within(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === THREAD)!).getByTestId("oats-row-facts").textContent;
   return { slot, facts };
 }
 
@@ -96,7 +98,7 @@ test("an event with no read on its way is one read, as before: nothing is read t
     return fixtureSnapshot(calls === 1 ? before() : after());
   });
   await slot.findByTestId("oats-tree");
-  expect([calls, facts()]).toEqual([1, "Needs you · oats-desktop-developer"]);
+  expect([calls, facts()]).toEqual([1, "Needs you · oats-product-expert"]);
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.000Z" }));
   await waitFor(() => expect(facts()).not.toMatch(/^Needs you/));
   // Given time for a second read to be made, none is.

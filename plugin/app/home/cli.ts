@@ -3,12 +3,33 @@
 // person asks ("Check again", after an install). Read by a call of its
 // own, not by a kept query: the home has to know when a check ENDS, also when its answer is the
 // same as before (a kept query hands back the same object then, and says nothing).
-import { useCallback, useEffect, useRef, useState } from "react";
+//
+// The sidebar reads it too, the same way, when IT is first seen: its "New agent" is held by the
+// same rule as the home's (app/workspace/pages.ts `newAgentHeld`), and the sidebar is on screen
+// before any home is. The ANSWER is one for the window, whoever read it: a check a person asks on
+// the home moves the sidebar's button with the home's. (Each place still asks once itself; the
+// server keeps the version, so that is one `oats version`.)
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../../contract";
 import { attempt, errorMessage, type Result } from "../store";
 
 export type Cli = Result<"homeCli">;
+
+// The window's one answer: the last one any place read.
+let known: Cli | undefined;
+const heard = new Set<() => void>();
+const say = (answer: Cli | undefined) => {
+  known = answer;
+  for (const hear of heard) hear();
+};
+const hearCli = (hear: () => void) => {
+  heard.add(hear);
+  return () => void heard.delete(hear);
+};
+const knownCli = () => known;
+/** Forgets the window's answer (a test's reset: a module's state outlives a mounted tree). */
+export const forgetCli = (): void => say(undefined);
 
 /**
  * `cli`: the last answer, undefined before the first one and while none was ever read (a read that
@@ -23,7 +44,7 @@ export type Cli = Result<"homeCli">;
  */
 export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | undefined; checking: boolean; failure: string | null; unchecked: boolean; check(): void } {
   const rpc = useRpc<typeof rpcContract>();
-  const [cli, setCli] = useState<Cli | undefined>(undefined);
+  const cli = useSyncExternalStore(hearCli, knownCli);
   const [checking, setChecking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   /** How the home's own reads stand: none asked, the first under way, the first failed, the second under way, the second failed (answered: `cli` holds it). */
@@ -40,10 +61,9 @@ export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | unde
     (): Promise<boolean> =>
       attempt(() => rpc.call("homeCli", null)).then(
         (answer) => {
-          if (alive.current) {
-            setCli(answer);
-            setFailure(null);
-          }
+          // The answer is the window's, also when the place that asked has left the screen.
+          say(answer);
+          if (alive.current) setFailure(null);
           return true;
         },
         (cause: unknown) => {

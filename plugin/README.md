@@ -503,6 +503,16 @@ again; one that fails says so on the card ("Check failed: …")
 and keeps what was read before. The version is read by a call of the home's own (`app/home/cli.ts`),
 not by a kept query, so that the home knows when a check ends.
 
+**One rule for every New agent** (`newAgentHeld`, `app/workspace/pages.ts`). The sidebar's New
+agent and the home's are held by the same rule, so one is never live where the other is off: off
+while the roster shown is the last one read, and off behind an `oats` the plugin does not work
+with (older, a newer API, a version it cannot tell). The sidebar is on screen before any home is,
+so it reads where the installed `oats` stands itself, the same way, when it is first seen; the
+answer is one for the window, and the home's Check again moves the sidebar's button with the
+home's. While that is not read yet, or its read failed, New agent is on: nothing is known against
+it. The sidebar says nothing beside its button: the home's card, and the notice over the roster,
+say why.
+
 It is one RPC, `homeCli`, which answers picked fields (`version`, `desktopApi`, `state`) from the
 `oats version --json` the server reads once for every feature: no process of its own. An `oats`
 that cannot be run at all is the roster's notice, not this one.

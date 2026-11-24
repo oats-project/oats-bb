@@ -730,6 +730,86 @@ async function besidePage(agents: ReturnType<typeof nested>, onPage: string | nu
   return { slot, threadless, toggles };
 }
 
+// ---- "New agent" is held by ONE rule, here and on the home (the lead's ruling T10 on its reader's report, 24 Nov 2026) ----
+type Installed = { version: string | null; desktopApi: number | null; state: "older" | "tested" | "newer" | "unknown" | "newer-api" };
+const INSTALLED: Record<Installed["state"], Installed> = {
+  tested: { version: "0.70.5", desktopApi: 1, state: "tested" },
+  newer: { version: "0.71.0", desktopApi: 1, state: "newer" },
+  older: { version: "0.69.4", desktopApi: 1, state: "older" },
+  unknown: { version: null, desktopApi: null, state: "unknown" },
+  "newer-api": { version: "0.72.0", desktopApi: 2, state: "newer-api" },
+};
+const asked = (slot: Awaited<ReturnType<typeof sidebar>>["slot"]) => slot.inspection.rpcCalls.filter((call) => call.method === "homeCli").length;
+
+test("the sidebar's New agent is off behind an oats the plugin does not work with, as the home's is: it reads where the installed oats stands itself, once, when it is first seen", async () => {
+  const on: Record<string, boolean> = {};
+  for (const state of ["tested", "newer", "older", "unknown", "newer-api"] as const) {
+    const { slot, navigated } = await sidebar({ homeCli: () => INSTALLED[state] } as Partial<Handlers>);
+    await slot.findByTestId("oats-tree");
+    await waitFor(() => expect(asked(slot)).toBe(1)); // the sidebar asked: no home was ever opened in this window
+    const button = () => slot.getByTestId("oats-new-agent") as HTMLButtonElement;
+    const held = state === "older" || state === "unknown" || state === "newer-api";
+    await waitFor(() => expect(button().disabled).toBe(held));
+    on[state] = !button().disabled;
+    // Off, it opens nothing; nothing stands beside it or in a title (the home's card says why).
+    expect([button().title, button().getAttribute("aria-describedby"), button().textContent]).toEqual(["", null, "New agent"]);
+    fireEvent.click(button());
+    expect([slot.inspection.navigateCalls.length, navigated()]).toEqual(held ? [0, 0] : [1, 1]);
+    expect(asked(slot)).toBe(1); // read once: the roster's events and its reads ask nothing more
+    resetApp();
+  }
+  expect(on).toEqual({ tested: true, newer: true, older: false, unknown: false, "newer-api": false });
+});
+
+test("while where the installed oats stands is not read, and when its read fails, the sidebar's New agent is on: nothing is known against it", async () => {
+  // Not answered yet.
+  let answer: (installed: Installed) => void = () => undefined;
+  const waiting = await sidebar({ homeCli: () => new Promise<Installed>((resolve) => (answer = resolve)) } as Partial<Handlers>);
+  await waiting.slot.findByTestId("oats-tree");
+  await waitFor(() => expect(asked(waiting.slot)).toBe(1));
+  const button = () => waiting.slot.getByTestId("oats-new-agent") as HTMLButtonElement;
+  expect(button().disabled).toBe(false);
+  // The answer is against it: off from then on.
+  await act(async () => answer(INSTALLED.older));
+  await waitFor(() => expect(button().disabled).toBe(true));
+  resetApp();
+  // The read fails (twice: the second try once the roster is read): on, and asked no third time.
+  const failing = await sidebar({
+    homeCli: () => {
+      throw new Error("oats did not answer");
+    },
+  } as Partial<Handlers>);
+  await failing.slot.findByTestId("oats-tree");
+  await waitFor(() => expect(asked(failing.slot)).toBe(2));
+  expect((failing.slot.getByTestId("oats-new-agent") as HTMLButtonElement).disabled).toBe(false);
+});
+
+test("the answer is one for the window: the home's Check again, after an install, turns the sidebar's New agent on with the home's, and both are off before it", async () => {
+  let installed = INSTALLED.older;
+  const app = await loadApp();
+  const List = app.threadLists[0]!.component;
+  const Home = app.navPanels.find((candidate) => candidate.id === "home")!.component as (props: { subPath: string }) => ReactNode;
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    {
+      component: (props: PluginThreadListProps) => (
+        <>
+          <List {...props} />
+          <Home subPath="" />
+        </>
+      ),
+    } as never,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    { rpc: handlers({ homeCli: () => installed } as Partial<Handlers>), sidebarThreads: sidebarThreads() },
+  );
+  const both = () => [slot.getByTestId("oats-new-agent"), slot.getByTestId("oats-home-new-agent")].map((button) => (button as HTMLButtonElement).disabled);
+  await slot.findByTestId("oats-home-cli");
+  await waitFor(() => expect(both()).toEqual([true, true]));
+  installed = INSTALLED.tested;
+  fireEvent.click(slot.getByTestId("oats-home-cli-retry"));
+  await waitFor(() => expect(both()).toEqual([false, false]));
+  expect(slot.queryByTestId("oats-home-cli")).toBeNull();
+});
+
 test("the page of an agent with no bb thread is on screen: the parents of its row are open as the page loads, by chevrons that are off; nothing below it is opened", async () => {
   // The plugin's own page of that agent, as bb mounts it: it says whose it is (app/panel AgentPage, app/roster/open-agent.ts).
   const { slot, threadless, toggles } = await besidePage(nested(), "tmux-grandchild");

@@ -25,8 +25,9 @@ import { outsideOf, rowParts, rowWarns, rowWords } from "../outside";
 import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET, TMUX } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
+import { useCli } from "../home/cli";
 import { agentStatus, rowState } from "./status";
-import { hasNewAgent, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
+import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
@@ -92,6 +93,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const pagesNow = usePagesShown();
   const links = pageLinks().filter((page) => pagesNow.has(page.path));
   const newAgentShown = hasNewAgent(pagesNow.has("souls"));
+  // Where the installed `oats` stands, read once the sidebar is seen: "New agent" here is held by the rule that holds the home's.
+  const { cli } = useCli(newAgentShown, oats.phase === "ready");
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
   const opened = useOpened();
@@ -337,11 +340,13 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           plugin's entry says how many (the lead's ruling L6 on the text audit, 23 Nov 2026). */}
       {newAgentShown ? (
         <div className="px-2 py-1">
-          {/* On the last roster read "New agent" is held with the OATS acts: in its place, off. Why is
-              said by the notice over the roster (or the page's, beside it), never beside the button. */}
+          {/* "New agent" is held by the ONE rule of every New agent (`newAgentHeld`): on the last roster read,
+              with the OATS acts, and behind an `oats` the plugin does not work with, as the home's is. In its
+              place, off. Why is said by the notice over the roster (or the page's, beside it) and by the
+              home's card, never beside the button. */}
           <Button
             data-testid="oats-new-agent"
-            disabled={oats.stale !== null}
+            disabled={newAgentHeld(oats.stale !== null, cli)}
             onClick={() => {
               if (openNewAgent(navigate, pagesNow.has("souls"))) onNavigate();
             }}

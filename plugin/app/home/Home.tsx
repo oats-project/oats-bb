@@ -27,7 +27,7 @@ import { RowFacts } from "../ui/row-facts";
 import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
-import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
+import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
 import { board, mayAnswer, refusal } from "./board";
@@ -643,8 +643,6 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
   // Read once the home is seen (once more by itself when that failed and the roster reads), and again when the person asks: the installed CLI changes with an install, not with what the agents do.
   const { cli, checking, failure: checkFailure, check } = useCli(visible, oats.phase === "ready");
   const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} onCheck={check} />;
-  // Behind the card New agent is off: a spawn through a CLI the plugin does not work with is not offered.
-  const incompatible = cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api");
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is. The page has no heading of its own:
   // bb's bar over it names it.
@@ -656,7 +654,8 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
   // open (the sidebar's rule); off behind the CLI card and while the roster shown is the last one
   // read. Why is said by the notice under it, on the same screen (the CLI card, the roster's
   // notice), never beside the button. On the home of a workspace with no agent it is the one act.
-  const off = incompatible || held;
+  // The ONE rule of every New agent, the sidebar's too (`newAgentHeld`): behind the CLI card a spawn is not offered.
+  const off = newAgentHeld(held, cli);
   const head = (
     <div data-testid="oats-home-head" className="flex min-w-0 flex-wrap items-center justify-end gap-2">
       {hasNewAgent(pages.has("souls")) ? (
@@ -674,7 +673,7 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
         {head}
         {stale}
         {/* New agent is off behind the CLI card: the card is on this screen too, so the button is never off with nothing saying why. */}
-        {incompatible ? notice : null}
+        {newAgentHeld(false, cli) ? notice : null}
         <EveryAgent made={made} oats={oats} onBack={onBack} />
       </>
     );

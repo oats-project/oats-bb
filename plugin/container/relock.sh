@@ -9,17 +9,23 @@
 # goes in on its standard input and the lock comes back on its standard output. npm resolves the
 # tree ONCE, here (`npm install --package-lock-only`: nothing is installed, no script of a package
 # runs); a run of the checks then installs exactly what the lock names (`npm ci`).
+# The lock is written by npm 11 (RELOCK_NPM), not by the image's own npm: npm 10 drops the `libc`
+# field of platform packages, and `npm ci` then also installs their musl builds
+# (../../container/README.md, "Changing bb's version").
 set -eu
 TOOL=${1:?usage: plugin/container/relock.sh <tool>   (a directory of plugin/container/locks/)}
 HERE=$(cd "$(dirname "$0")" && pwd)
 LOCK=$HERE/locks/$TOOL
 [ -f "$LOCK/package.json" ] || { echo "relock: there is no $LOCK/package.json" >&2; exit 2; }
 IMAGE=${IMAGE:-bb-plugin-oats-test}
+RELOCK_NPM=${RELOCK_NPM:-11}
+# A lock half written is never left beside the tree: a run would copy it into its container.
+trap 'rm -f "$LOCK/package-lock.json.new"' EXIT
 docker build -q -t "$IMAGE" "$HERE" > /dev/null
-docker run --rm -i --cpus 2 --memory 6g "$IMAGE" sh -c '
+docker run --rm -i --cpus 2 --memory 6g -e "RELOCK_NPM=$RELOCK_NPM" "$IMAGE" sh -c '
   set -eu
   mkdir /tmp/relock && cd /tmp/relock && cat > package.json
-  npm install --package-lock-only --ignore-scripts --no-audit --no-fund >&2
+  npx --yes "npm@$RELOCK_NPM" install --package-lock-only --ignore-scripts --no-audit --no-fund >&2
   cat package-lock.json' < "$LOCK/package.json" > "$LOCK/package-lock.json.new"
 mv "$LOCK/package-lock.json.new" "$LOCK/package-lock.json"
-echo "relock: $LOCK/package-lock.json names $(grep -c '"integrity"' "$LOCK/package-lock.json") packages; commit it with its package.json"
+echo "relock: $LOCK/package-lock.json names $(grep -c '^    "node_modules/' "$LOCK/package-lock.json") packages; commit it with its package.json"

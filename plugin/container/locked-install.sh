@@ -1,7 +1,8 @@
 #!/bin/sh
 # Runs inside the container: installs a tool from its committed lock, plugin/container/locks/<tool>/
-# (a package.json that names ONE package at an exact version, and the package-lock.json npm wrote
-# for it: locks/README.md), and puts that package's commands on the PATH.
+# (a package.json that names the tool's package at an exact version, and with it only what the tool
+# would fetch from npm by itself; and the package-lock.json npm wrote for it: locks/README.md), and
+# puts the tool's commands on the PATH.
 #
 #   locked-install.sh <tool>
 #
@@ -19,8 +20,8 @@ LOCK=$HERE/locks/$TOOL
 DEST=${TOOLS:-$HOME/tools}/$TOOL
 BIN=${NPM_CONFIG_PREFIX:-$HOME/.npm-global}/bin
 [ -f "$LOCK/package.json" ] && [ -f "$LOCK/package-lock.json" ] || { echo "locked install: $LOCK has no package.json with its package-lock.json" >&2; exit 2; }
-# The one package the lock is for, and its version.
-PACKAGE=$(node -pe 'const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).dependencies; const names = Object.keys(d); if (names.length !== 1) throw new Error("a lock names one package"); names[0]' "$LOCK/package.json")
+# The package the lock is for (its `tool`): the one whose commands go on the PATH.
+PACKAGE=$(node -pe 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (typeof m.tool !== "string" || typeof (m.dependencies ?? {})[m.tool] !== "string") throw new Error("a lock names its tool, a package of its dependencies"); m.tool' "$LOCK/package.json")
 mkdir -p "$DEST" "$BIN"
 cp "$LOCK/package.json" "$LOCK/package-lock.json" "$DEST/"
 installed=0
@@ -29,7 +30,7 @@ for attempt in 1 2 3; do
   echo "locked install: the install of $TOOL did not finish (attempt $attempt of 3)" >&2
 done
 [ "$installed" = 1 ] || { echo "locked install: $TOOL could not be installed from its lock" >&2; exit 1; }
-# That package's own commands, by its manifest (not every command of its tree).
+# The tool's own commands, by its manifest (not every command of its tree).
 node -e '
   const { readFileSync, rmSync, symlinkSync } = require("fs");
   const { join, resolve } = require("path");

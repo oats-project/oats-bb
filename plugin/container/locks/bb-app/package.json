@@ -1,8 +1,13 @@
 {
   "name": "oats-bb-lock-bb-app",
   "private": true,
-  "description": "The exact tree of bb-app that the plugin's container checks install (plugin/container/locks/README.md).",
+  "description": "The exact tree of bb-app that the plugin's container checks install, with the build toolchain bb-app would otherwise fetch by itself (plugin/container/locks/README.md).",
+  "tool": "bb-app",
   "dependencies": {
-    "bb-app": "0.50.1"
+    "bb-app": "0.50.1",
+    "esbuild": "0.28.2",
+    "@tailwindcss/node": "4.3.0",
+    "@tailwindcss/oxide": "4.3.0",
+    "tailwindcss": "4.3.0"
   }
 }

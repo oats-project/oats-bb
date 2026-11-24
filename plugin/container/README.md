@@ -41,6 +41,7 @@ of its own with the same limits, started after the first is gone, and its artefa
 | `setup.sh` | in the container | bb-app at the pinned version, from its lock (`locked-install.sh bb-app`); `npm ci` |
 | `locked-install.sh` | in the container | installs a tool from its committed lock (`locks/<tool>/`, `locks/README.md`) with `npm ci` and links its commands onto the PATH: nothing is resolved at run time |
 | `relock.sh` | on the host | writes a tool's lock again (`relock.sh bb-app`, `relock.sh pi`): when its pin moves, and before a release |
+| `no-toolchain-fetch.sh` | in the container, after each build and install of the plugin | fails when bb fetched its build toolchain from npm (a `toolchain-*` directory in its data): the proof that bb built with the locked one |
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, the shell test of the real run's wait for a bb plugin's command, `bb plugin build` |
 | `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15, G1 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
 | `live-ui.mjs`, `browser.mjs`, `contrast.mjs` | in the container | the app's live checks (A13, A14, A16) with screenshots at two widths in bb's light and dark themes, the small DevTools-protocol driver of the image's Chromium they use, and the contrast check run at each screenshot (below) |

@@ -94,7 +94,9 @@ Recorded by the lost session's part of the real run (`container/real/parts/lost.
 OATS 0.70.5 from npm, on ONE agent on the tmux backend (`lost-tmux-developer` of `oats-developer`,
 Claude Code on the run's mock model in a window of the OATS tmux server), with the one substitution
 (the paths) and no other edit. Each is what the kernel printed for the command named, made on the
-command line (the plugin offered no Start and no Restart for an agent on tmux when they were recorded); `<home>` is
+command line (the plugin offered no Start and no Restart for an agent on tmux when they were recorded; the part
+now makes the restart, the start and the resume through the plugin's dialogs and keeps what the kernel answered the
+plugin's own call, the same commands; the two refusals are still asked on the command line); `<home>` is
 `/abs/deployment/agents/oats-developer/instances/lost-tmux-developer`. None is a default answer of
 the fake (`verbs.json`): a test names the file for the verb it asks.
 

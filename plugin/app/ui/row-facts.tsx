@@ -48,6 +48,7 @@ export function RowFacts({
   where,
   inside = null,
   insideTone = null,
+  said: whole,
   className = "",
 }: {
   testId: string;
@@ -63,6 +64,8 @@ export function RowFacts({
   /** A closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word. */
   inside?: AgentState | null;
   insideTone?: "warning" | null;
+  /** What the line's TITLE says in the state's and the reason's place, where the row draws other words for them (a lost session: "Lost" on the row, "Stopped · session lost" in its title). */
+  said?: { state?: string; reason: string | null };
   className?: string;
 }) {
   const line = useRef<HTMLSpanElement>(null);
@@ -103,7 +106,7 @@ export function RowFacts({
   }, [said, warns, left, reason, state, soul, where, inside]);
 
   const shownReason = said && !left;
-  const title = [state, soul, said ? reason : null, where].filter((part) => part !== undefined && part !== null && part !== "").join(" · ");
+  const title = [whole === undefined ? state : whole.state, soul, whole === undefined ? (said ? reason : null) : whole.reason, where].filter((part) => part !== undefined && part !== null && part !== "").join(" · ");
   const sep = (of: string) => (
     <span data-sep={of} className="shrink-0 whitespace-pre">
       {" · "}

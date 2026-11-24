@@ -316,7 +316,28 @@ test("bb holds a question on the thread of an agent that is not loaded, or whose
   expect([words(unloaded), acts(unloaded)]).toEqual([["!Needs you"], []]);
 });
 
-test("a lost session says \"session lost\" on bb and on tmux, side by side; an agent on tmux that OATS stopped reads \"Stopped\", never \"Failed\"", async () => {
+// A ROW's word for a lost session (the lead's L17, 24 Nov 2026): "Lost" in the state's place, and no reason after it;
+// the state is untouched, and the row's title, the thread's line and the agent's page keep "Stopped · session lost".
+test("what a row draws in the state's place (rowWords): a lost session reads \"Lost\" with no reason; every other row keeps its state's word and its reason", async () => {
+  const { rowWords, LOST_WORD } = await import("../../app/outside");
+  expect(LOST_WORD).toBe("Lost");
+  const whole = (state: string, reason: string | null) => ({ state, reason });
+  // Lost: the word, no reason; the title's words are the true ones.
+  expect(rowWords("Stopped", "stopped", "session lost")).toEqual({ state: "Lost", reason: null, title: whole("Stopped", "session lost") });
+  // An operator's stop (no reason on its row): "Stopped".
+  expect(rowWords("Stopped", "stopped", null)).toEqual({ state: "Stopped", reason: null, title: whole("Stopped", null) });
+  // A lost session whose thread bb archived, or deleted: its row's reason is where the thread is, in the warning tone
+  // (that is what needs a person: its process may still run), so it reads "Stopped" and that reason, never "Lost".
+  expect(rowWords("Stopped", "stopped", "archived in bb")).toEqual({ state: "Stopped", reason: "archived in bb", title: whole("Stopped", "archived in bb") });
+  expect(rowWords("Stopped", "stopped", "deleted in bb").state).toBe("Stopped");
+  // Nothing else gets a word of its own in the state's place: not another reason, and not "session lost" after another state.
+  expect(rowWords("Idle", "idle", "not loaded")).toEqual({ state: "Idle", reason: "not loaded", title: whole("Idle", "not loaded") });
+  expect(rowWords("Failed", "error", "archived in bb").state).toBe("Failed");
+  expect(rowWords("Needs you", "needs-you", "session lost")).toEqual({ state: "Needs you", reason: "session lost", title: whole("Needs you", "session lost") });
+  expect(rowWords("Not in OATS any more", "stopped", null).state).toBe("Not in OATS any more");
+});
+
+test("a lost session's ROW reads \"Lost\" on bb and on tmux, side by side, and its title, its thread's line and its page say \"Stopped · session lost\"; an agent on tmux that OATS stopped reads \"Stopped\", never \"Failed\"", async () => {
   // The rows as the kernel prints them: on bb "stopped" beside sessionEnd "lost"; on tmux (recorded, the real run) no word
   // beside "lost" for a lost session, and "shell" beside "stopped" for a stop with OATS.
   const TMUX = "kernel-fix-developer";
@@ -325,8 +346,13 @@ test("a lost session says \"session lost\" on bb and on tmux, side by side; an a
   const { slot } = await sidebar({ rpc: handlers({}, lostRows), sidebarThreads: sidebarThreads() });
   const onBb = () => rowFacts(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")!);
   const onTmux = (from: typeof slot) => from.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === TMUX)!;
-  await waitFor(() => expect([onBb(), rowFacts(onTmux(slot))]).toEqual(["Stopped · oats-expert · session lost", "Stopped · oats-developer · session lost · tmux"]));
-  expect(markOf(onTmux(slot))).toEqual(["stopped", null]); // plain: nobody did anything wrong
+  // The row: "Lost" in the state's place, no reason after it (so nothing has to fit or leave); the title says all, with the true words.
+  await waitFor(() => expect([onBb(), rowFacts(onTmux(slot))]).toEqual(["Lost · oats-expert", "Lost · oats-developer · tmux"]));
+  const titleOf = (row: HTMLElement) => within(row).getByTestId("oats-row-facts").getAttribute("title");
+  expect([titleOf(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")!), titleOf(onTmux(slot))]).toEqual(["Stopped · oats-expert · session lost", "Stopped · oats-developer · session lost · tmux"]);
+  // The state is untouched: the agent is stopped (the stopped mark, plain: nobody did anything wrong).
+  expect(markOf(onTmux(slot))).toEqual(["stopped", null]);
+  expect(markOf(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")!)).toEqual(["stopped", null]);
   resetApp();
   // The bb agent's line: the reason alone; no sentence, no time (the kernel records none of the loss), no cause, no promise.
   const bbLine = await line("thr_digest", { rpc: handlers(noEvents, lostRows), sidebarThreads: sidebarThreads() });

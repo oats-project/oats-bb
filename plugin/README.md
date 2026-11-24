@@ -225,7 +225,12 @@ REASON · glyph (`app/ui/row-facts.tsx`): when it is short of room the reason sh
 leaves the row (it stays whole in the line's title, on the thread's line and on the agent's page),
 and only then the soul shortens; a reason in the warning tone stays, and the soul gives way first.
 The state's word and the glyph never shrink. The fit is measured by the line itself, so it holds at
-every depth of the tree. A sentence stands in the reason's place only where a person would otherwise do harm, and
+every depth of the tree. ONE reason is said in the state's place on a row: a stopped agent whose
+session was lost reads **Lost** (the kernel's own word), with no reason after it ("Lost ·
+oats-maintainer · glyph"; app/outside `rowWords`): at bb's sidebar width "session lost" had to leave
+every such row. Its state is untouched (it is stopped: its mark, Start, its place), and the row's
+title, the thread's line and the agent's page keep "Stopped · session lost". A lost session whose
+thread bb archived or deleted reads "Stopped" and that reason, in the warning tone. A sentence stands in the reason's place only where a person would otherwise do harm, and
 never names the remedy: that is the button beside it. No line says a time: when OATS stopped an
 agent is a fact of the instance panel's Session. "Archived in bb" and "deleted in bb" are reasons,
 never states.

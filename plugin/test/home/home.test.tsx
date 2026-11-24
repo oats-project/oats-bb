@@ -935,16 +935,17 @@ test("Home › Agents says where an agent the roster draws on no thread is, from
   expect(deleted.words()).not.toContain("gone");
   deleted.list.unmount();
   resetApp();
-  // An agent on tmux whose session was lost: the same reason word as on bb, then where it runs (bb's terminal glyph, named "tmux").
+  // An agent on tmux whose session was lost: on a ROW its state's word is "Lost" (the row's end), so its line holds no reason: its soul, then where it runs; the title keeps "session lost".
   const tmuxLost: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
   const tmux = await rowOf([...fixtureAgents(), tmuxLost], tmuxLost.instance, { sidebarThreads: sidebarThreads(), sdk: bb() });
-  await waitFor(() => expect(tmux.words()).toBe("oats-maintainer · session lost · tmux"));
-  // One line beside the name, in the row's one order: the soul, the reason, then where it is (bb's terminal glyph; the word here: the test SDK's icon set has no glyph).
+  await waitFor(() => expect(tmux.words()).toBe("oats-maintainer · tmux"));
+  // One line beside the name, in the row's one order: the soul, then where it is (bb's terminal glyph; the word here: the test SDK's icon set has no glyph).
   const facts = within(tmux.row).getByTestId("oats-home-agent-where");
   expect(facts.previousElementSibling).toBe(within(tmux.row).getByTestId("oats-home-agent"));
-  expect(Array.from(facts.querySelectorAll("[data-phrase]")).map((part) => [part.getAttribute("data-phrase"), part.className.split(/\s+/).includes("shrink-0")])).toEqual([["soul", true], ["reason", false], ["where", true]]); // the reason gives way first (it shortens, then leaves: test/app/row-facts.test.tsx); the glyph never
+  expect(Array.from(facts.querySelectorAll("[data-phrase]")).map((part) => [part.getAttribute("data-phrase"), part.className.split(/\s+/).includes("shrink-0")])).toEqual([["soul", false], ["where", true]]); // with no reason on the line the soul is the part that gives way; the glyph never (test/app/row-facts.test.tsx)
   expect(facts.getAttribute("title")).toBe("oats-maintainer · session lost · tmux");
-  expect(within(tmux.row).getByTestId("oats-state").textContent).toBe("Stopped");
+  // Its state, at the row's end: the word "Lost", said once on the row, on the mark of a stopped agent (it IS stopped).
+  expect([within(tmux.row).getByTestId("oats-state").textContent, within(tmux.row).getByTestId("oats-state").getAttribute("data-state")]).toEqual(["Lost", "stopped"]);
 });
 
 test("the card of an agent that asks and that bb lists no thread of says what became of its thread as the reason before its soul, as far as bb's answer goes, with no sentence; its Open leads to its page, or to the archived thread", async () => {

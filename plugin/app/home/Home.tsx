@@ -18,7 +18,7 @@ import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
-import { lineActs, lineParts, outsideOf, OutsideWarning } from "../outside";
+import { lineActs, lineParts, outsideOf, OutsideWarning, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
@@ -436,13 +436,21 @@ function Cropped<Item>({ items, shown: most, more, testId, children }: { items: 
  * does not fit, the reason shortens, then leaves, and only then the soul shortens; a reason that
  * warns stays. Its title says the whole of it. (The machine is not on a row: it is on the agent's page.)
  */
-function AgentFacts({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
+/** What a row of the home says of an agent the roster draws on no thread, after its soul: the reason, its tone, and whether it is on tmux. */
+function reasonOf(entry: Entry, oats: Ready): { reason: string | null; tone: "warning" | undefined; onTmux: boolean } {
   const said = entry.thread === null ? outsideOf(oats).of(entry.agent) : null;
   const onTmux = entry.thread === null && entry.agent.backend === "tmux";
   const reason = entry.thread !== null ? null : onTmux ? (said !== null && said.note ? said.note : null) : said === null || said.kind === "stopped-archived" ? null : said.note || null;
+  return { reason, tone: said?.rowTone === "warning" ? "warning" : undefined, onTmux };
+}
+
+function AgentFacts({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
+  const { reason, tone, onTmux } = reasonOf(entry, oats);
+  // A lost session is said in the state's place on a row ("Lost": app/outside `rowWords`), so its line has no reason to hold; its title keeps it.
+  const words = rowWords(entry.status.word, entry.status.state, reason);
   const soul = shown(oats.soulOf(entry.agent));
   // (Beside a name the line takes the rest of the row's width, so that it can measure what fits; under a name, the card's.)
-  return <RowFacts testId={testId} soul={soul} reason={reason} reasonTone={said?.rowTone === "warning" ? "warning" : undefined} where={onTmux ? TMUX : undefined} className="max-w-full flex-1 basis-40" />;
+  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} className="max-w-full flex-1 basis-40" />;
 }
 
 /**
@@ -460,7 +468,8 @@ function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oat
       </span>
       {stateToo ? (
         <span className="shrink-0 text-sm">
-          <State state={entry.status.state} />
+          {/* The state in words; a lost session's word on a row is "Lost" (its mark is the stopped one: the agent is stopped). */}
+          <State state={entry.status.state} word={rowWords(entry.status.word, entry.status.state, reasonOf(entry, oats).reason).state} />
         </span>
       ) : null}
     </li>

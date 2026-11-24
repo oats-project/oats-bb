@@ -21,7 +21,7 @@ import { flatten, isListed, treeRows } from "../../model/view";
 import type { TreeRow } from "../../model/view";
 import { count } from "../format";
 import { useOats } from "../oats";
-import { outsideOf, rowParts } from "../outside";
+import { outsideOf, rowParts, rowWords } from "../outside";
 import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET, TMUX } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
@@ -142,11 +142,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    *   first. The state's word and the glyph never shrink. The whole line is its title.
    *   (The machine is not on a row: the instance panel says it.)
    */
-  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** a closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word */ inside?: AgentState | null; /** "warning": the hidden row's own mark is drawn in the warning tone */ insideTone?: "warning" | null; /** "warning": the reason asks a person to look: it stays, and the soul gives way first */ reasonTone?: "warning" | undefined }, full: string) => {
+  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** a closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word */ inside?: AgentState | null; /** "warning": the hidden row's own mark is drawn in the warning tone */ insideTone?: "warning" | null; /** "warning": the reason asks a person to look: it stays, and the soul gives way first */ reasonTone?: "warning" | undefined; /** what the line's title says for the state and the reason, where the row draws another word (app/outside `rowWords`) */ said?: { state: string; reason: string | null } }, full: string) => {
     return (
       <span className="flex min-w-0 flex-1 flex-col">
         <span data-testid="oats-row-name" title={full} className={`line-clamp-2 break-words ${strong ? "font-semibold" : ""}`}>{name}</span>
-        <RowFacts testId="oats-row-facts" state={phrases.state} soul={phrases.soul} reason={phrases.reason} reasonTone={phrases.reasonTone} where={phrases.where} inside={phrases.inside} insideTone={phrases.insideTone} />
+        <RowFacts testId="oats-row-facts" state={phrases.state} soul={phrases.soul} reason={phrases.reason} reasonTone={phrases.reasonTone} where={phrases.where} inside={phrases.inside} insideTone={phrases.insideTone} said={phrases.said} />
       </span>
     );
   };
@@ -172,6 +172,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       const said = gone.has(node.agent.instance) ? null : outside.of(node.agent);
       // The reason only after the state it follows (bb's own question on the thread makes the row "Needs you": no reason then).
       const reason = rowParts(said, status.state);
+      // (A lost session reads "Lost" in the state's place on a row, with no reason after it: app/outside `rowWords`.)
+      const words = rowWords(drawn.word, drawn.state, reason.note);
       return [
         threadRow(
           thread,
@@ -180,7 +182,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden tone={reason.tone} />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, soul: shown(oats.soulOf(node.agent)), reason: reason.note, reasonTone: reason.tone, inside, insideTone }, shown(node.agent.instance))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: words.state, soul: shown(oats.soulOf(node.agent)), reason: words.reason, reasonTone: reason.tone, inside, insideTone, said: words.title }, shown(node.agent.instance))}
           </>,
           toggle,
           keys,
@@ -202,6 +204,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     const name = agentName(agent.instance);
     // The reason only after the state it follows, as on a thread's row.
     const reason = rowParts(said, status.state);
+    const words = rowWords(drawn.word, drawn.state, reason.note);
     return (
       <li key={agent.instance}>
         <button
@@ -220,7 +223,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           }}
         >
           <StateMark state={drawn.state} hidden tone={gone.has(agent.instance) ? undefined : reason.tone} />
-          {lines(name, status.state === "needs-you", { state: drawn.word, soul: shown(oats.soulOf(agent)), reason: reason.note, reasonTone: gone.has(agent.instance) ? undefined : reason.tone, where }, shown(agent.instance))}
+          {lines(name, status.state === "needs-you", { state: words.state, soul: shown(oats.soulOf(agent)), reason: words.reason, reasonTone: gone.has(agent.instance) ? undefined : reason.tone, where, said: words.title }, shown(agent.instance))}
         </button>
       </li>
     );

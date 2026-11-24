@@ -70,7 +70,8 @@ export default async (run) => {
     let target = planned();
     show("the kernel's plan, for the idle agent", { midTask: target?.midTask, session: target?.session, work: target?.work ? { observed: target.work.observed, changed: target.work.changed, untracked: target.work.untracked } : null });
     check(said.title === `Stop ${called}?` && target?.midTask === true && target.work?.observed === true && target.work.changed + target.work.untracked === 0, `${at} the kernel's plan for the idle agent says midTask true (its session runs), and a clean work tree`, JSON.stringify(target ?? null));
-    check(attention === null && !/middle of a task/.test(said.body) && said.body.includes("Session running"), `${at} IDLE, nothing uncommitted: the dialog has no "Before you confirm" box at all, and says "Session running" in its Current state`, JSON.stringify({ attention, body: said.body }));
+    const state = await page.evaluate(`(document.querySelector('[data-testid="oats-plan-details"]')?.textContent ?? "").replace(/\\s+/g, " ").trim()`);
+    check(attention === null && !/middle of a task/.test(said.body) && state.includes("Session running"), `${at} IDLE, nothing uncommitted: the dialog has no box of facts at all, and says "Session running" in its current state, under Details`, JSON.stringify({ attention, body: said.body, details: state }));
     await shot("idle");
     if (view === 1) evidence.keep("stop-plan-idle-loaded.json", recorded(["instance", "stop", name], ["--plan"]).stdout);
     await cancel();

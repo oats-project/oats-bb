@@ -653,6 +653,29 @@ test("the page keeps the agent and its way back while the roster cannot be read 
   expect(text(slot.getByTestId("oats-panel-work-sentence"))).toBe("worktree · agents/panel-worktree-helper");
 });
 
+// ONE Retry on a screen (T3; PR E's third review round), on an agent's PAGE: the page's notice has it; the panel's parts
+// whose own reads fail for the same cause add none. And the page of a name the LAST roster does not list says the
+// roster's notice over its title: reading again can change that answer.
+test("an agent's page while the roster is the last one read: ONE Retry on it, the notice's, also where readiness fails for the same cause; the page of a name that roster does not list has the notice and its Retry too", async () => {
+  const read = panelSnapshot();
+  const stale = { ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last: { at: read.at, deployment: read.deployment, agents: read.agents } };
+  const timeout = (): never => {
+    throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
+  };
+  const page = await agentPage(CHILD, { rpc: handlers({ snapshot: () => stale, panelReadiness: timeout }) });
+  await waitFor(() => expect(text(page.getByTestId("oats-agent-page"))).toContain("Readiness could not be read"));
+  const retry = within(page.getByTestId("oats-agent-page")).getAllByRole("button", { name: "Retry" });
+  expect(retry).toHaveLength(1);
+  expect(retry[0]!.closest('[role="alert"]')!.querySelector("h3")!.textContent).not.toContain("Readiness");
+  page.unmount();
+  resetApp();
+  const gone = await agentPage("gone-helper", { rpc: handlers({ snapshot: () => stale }) });
+  await waitFor(() => expect(text(gone.getByTestId("oats-agent-page"))).toContain("This agent is not in OATS"));
+  const notice = within(gone.getByTestId("oats-agent-page")).getByRole("alert");
+  expect(text(notice)).toMatch(/Read .+\. Acts are off\./);
+  expect(within(gone.getByTestId("oats-agent-page")).getAllByRole("button", { name: "Retry" })).toHaveLength(1);
+});
+
 // The roster is the last one read AND this panel has read nothing yet (an agent opened meanwhile, its read in flight):
 // the same rule as over what it read (the first review round of the T3 change). An agent's PAGE says the notice, with
 // the roster's age (so it counts as the pane's and the sidebar says its line); the TAB beside a thread draws none.

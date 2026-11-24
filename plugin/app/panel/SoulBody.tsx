@@ -107,12 +107,12 @@ function Spawned({ soul }: { soul: PanelSoul }) {
 }
 
 /** `read` is the panel's read of `oats inspect --home` for the instance shown. */
-export function SoulBody({ read, now }: { read: PanelRead<"panelSoul">; now: number }) {
+export function SoulBody({ read, now, unread }: { read: PanelRead<"panelSoul">; now: number; /** the roster cannot be read: no act of this part's own (state.tsx `CommandState`) */ unread: boolean }) {
   return (
     <div data-testid="oats-panel-soul-body" className="flex min-w-0 flex-col gap-4">
-      <CommandState read={read} of="soul" reading="Reading…" failed="The soul as spawned could not be read" now={now} />
+      <CommandState read={read} of="soul" reading="Reading…" failed="The soul as spawned could not be read" now={now} unread={unread} />
       {/* After a refusal that reading again cannot change as things are, the notice has no Retry: the way to read again, once it is mended, is here. */}
-      {read.status === "error" && !offersRetry(read, "soul") && mendable(read, "soul") ? (
+      {read.status === "error" && !offersRetry(read, "soul") && mendable(read, "soul") && !unread ? (
         <div>
           <Button data-testid="oats-panel-soul-again" disabled={read.fetching} onClick={read.retry}>
             Retry

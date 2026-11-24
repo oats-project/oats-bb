@@ -231,7 +231,7 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
         <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
+        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} unread={failure !== null} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} />}
       </div>
     </>
   );
@@ -270,7 +270,7 @@ function ReadState({ read, now, failure, page }: { read: InstanceRead; now: numb
   );
 }
 
-function InstancePage({ oats, agent, read, now, state: readState, status, held }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; status: AgentState; /** the roster is the last one read: the acts are held */ held: boolean }) {
+function InstancePage({ oats, agent, read, now, state: readState, status, held, unread }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; status: AgentState; /** the roster is the last one read: the acts are held */ held: boolean; /** the roster cannot be read: the parts below draw no Retry of their own and their Refresh and Load are off (ONE Retry on a screen: the notice's) */ unread: boolean }) {
   const facts = read.data?.facts;
   const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
@@ -307,9 +307,9 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
 
       {readState}
       {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} running={agent.running} lost={agent.sessionEnd === "lost"} instance={agent.instance} startedAt={agent.startedAt ?? null} now={now} />}
-      <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : { name: agent.instance, root: answerRoot }} now={now} />
+      <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : { name: agent.instance, root: answerRoot }} now={now} unread={unread} />
       {/* The header's claim is the roster's; a recorded activity that names a newer one asks for the roster again. */}
-      <Activity instance={agent.instance} claimSince={agent.waiting?.since ?? null} onNewerClaim={oats.retry} now={now} />
+      <Activity instance={agent.instance} claimSince={agent.waiting?.since ?? null} onNewerClaim={oats.retry} now={now} unread={unread} />
     </>
   );
 }
@@ -534,7 +534,7 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
   );
 }
 
-function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode }) {
+function SoulPage({ oats, agent, read, now, state: readState, unread }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; /** the roster cannot be read: see `InstancePage` */ unread: boolean }) {
   const navigate = useBbNavigate();
   const soulsShown = usePageShown("souls");
   const answer = read.data;
@@ -574,8 +574,8 @@ function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; 
         ) : null}
       </header>
       {readState}
-      <SoulBody read={soul} now={now} />
-      {key === null ? null : <Readiness instance={agent.instance} of="soul" context={answer?.agentsRoot == null ? null : { name: key, root: answer.agentsRoot }} now={now} />}
+      <SoulBody read={soul} now={now} unread={unread} />
+      {key === null ? null : <Readiness instance={agent.instance} of="soul" context={answer?.agentsRoot == null ? null : { name: key, root: answer.agentsRoot }} now={now} unread={unread} />}
       {answer === undefined || answer.agentsRoot === null ? null : (
         <Disclosure summary="Details" testId="oats-panel-details">
           <Facts>

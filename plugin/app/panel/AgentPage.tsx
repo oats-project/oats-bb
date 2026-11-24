@@ -1,7 +1,7 @@
 // One agent's panel as a page of its own, `/plugins/oats/agent/<instance>`: where the panel is on
 // a phone (bb's compact layout has no side panel to show the thread's tab in), and for an agent
 // that has no bb thread at all. The page shows one agent and a way back.
-import { Unreadable } from "../roster/unreadable";
+import { RosterNotice, Unreadable } from "../roster/unreadable";
 import { useState } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
@@ -65,15 +65,19 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
           <InstancePanel instance={known.instance} />
         </div>
       ) : (
-        <div className="p-3">
+        <div className="flex flex-col gap-3 p-3">
           {oats.phase === "loading" ? (
             <Loading />
           ) : oats.phase === "failed" ? (
             // The notice every place shows when OATS cannot be read: what is missing in a person's words, on which machine, the code, Retry.
             <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />
           ) : (
-            // The page says why it is empty, in its title; the way on is the button over it.
-            <Empty title={instance === null ? "No agent to show" : "This agent is not in OATS"} />
+            // The page says why it is empty, in its title; the way on is the button over it. Where the roster is the
+            // last one read, its notice stands over that (with the Retry: reading again can change the answer).
+            <>
+              <RosterNotice oats={oats} />
+              <Empty title={instance === null ? "No agent to show" : "This agent is not in OATS"} />
+            </>
           )}
         </div>
       )}

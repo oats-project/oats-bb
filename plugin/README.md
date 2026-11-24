@@ -63,7 +63,11 @@ whether bb shows its sidebar, a drawer at a phone's width: so the Retry is the p
 are never two on a screen and never none); where no pane shows the notice, the sidebar's own is
 the whole one, with the Retry. A notice counts as a pane's only while it is SEEN: the home in a
 thread's tab says none while bb keeps that tab mounted out of sight, nor beside a thread whose own
-line says it. The panel in a thread's tab draws none: it holds its buttons. Where OATS was NEVER
+line says it. The panel in a thread's tab draws none: it holds its buttons; and on an
+agent's page too the panel's parts with a read of their own (readiness, the soul, the activity)
+draw no Retry and hold their Refresh and Load while the roster cannot be read: the one Retry reads
+them again. The rule holds on the pilot's screens; on Souls, Teams, Machines, Capabilities and
+Automations a page's own failed read still draws a Retry of its own, which is not counted. Where OATS was NEVER
 read the same rule holds: beside a pane that shows the notice the sidebar says one line, the
 notice's TITLE alone, and so does the home in a thread's tab there (every thread's line says the
 notice then: never an empty pane). A modal dialog is its own place: its own "cannot read" notice

@@ -19,9 +19,15 @@ import { checkHarness, checkModel } from "./spawn.js";
 export type SessionFact = "there" | "none" | "unknown";
 /** The Git observation of a work tree, summarized; `observed: false` when there was none to make. */
 export type WorkFact = { observed: boolean; branch: string | null; detached: boolean; drift: boolean; changed: number; untracked: number };
-/** `midTask` is the kernel's `true`, `false` or `"unknown"` (a provider that reports no activity). */
+/**
+ * `midTask` is the kernel's `true`, `false` or `"unknown"` (a provider that reports no activity).
+ * True is REPORTED ACTIVITY: a session that runs (a harness is loaded: an idle agent reads true
+ * too) or uncommitted work; never "it runs a turn". What a person is told comes from the facts
+ * (`work`, and bb's own word on the thread), not from this (app/lifecycle/words.ts `stopPlanView`).
+ * `work` is the target's work tree as the plan observed it.
+ */
 /** `backend` is where the session runs, as the kernel names it ("bb", "tmux"); null when it does not say. */
-export type StopTarget = { instance: string; soul: string | null; depth: number; session: SessionFact; backend: string | null; midTask: boolean | "unknown" };
+export type StopTarget = { instance: string; soul: string | null; depth: number; session: SessionFact; backend: string | null; midTask: boolean | "unknown"; work: WorkFact };
 /** `instance` is the agent the KERNEL's plan is for, as its answer names it (null when it names none): what a confirmation is titled with, never the name that was asked for. */
 export type StopPlan = {
   action: "stop";
@@ -197,7 +203,7 @@ const stopPlan = z.looseObject({
   planRevision: z.string().min(1),
   at: text,
   recursive: z.boolean().nullish(),
-  targets: z.array(z.looseObject({ instance: z.string(), agent: text, depth: z.number().nullish(), session, midTask: z.unknown() })),
+  targets: z.array(z.looseObject({ instance: z.string(), agent: text, depth: z.number().nullish(), session, midTask: z.unknown(), work })),
   skipped: z.array(named).nullish(),
   ambiguous: z.array(named).nullish(),
 });
@@ -216,6 +222,7 @@ export function parseStopPlan(document: unknown): Result<StopPlan> {
       session: sessionFact(target.session),
       backend: target.session?.backend ?? null,
       midTask: target.midTask === true ? true : target.midTask === false ? false : "unknown",
+      work: workFact(target.work),
     }));
   // The agent the plan is for: the kernel's own target at depth 0.
   const root = targets.find((target) => target.depth === 0);

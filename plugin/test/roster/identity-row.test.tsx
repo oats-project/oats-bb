@@ -65,9 +65,9 @@ test("the status line comes first and says where the agent is in words: a workin
   const slot = await row("thr_mockups", { experimental_panel: { openTab: () => true } });
   const block = await slot.findByTestId("oats-identity-row");
   expect(block.firstElementChild).toBe(slot.getByTestId("oats-status-line"));
-  expect(slot.getByTestId("oats-status-line").textContent).toBe("WorkingStopInstance panel"); // the state, then the one row of buttons: the act that applies, and the panel
+  expect(slot.getByTestId("oats-status-line").textContent).toBe("WorkingStop…Instance panel"); // the state, then the one row of buttons: the act that applies, and the panel
   const stop = slot.getByTestId("oats-status-act") as HTMLButtonElement;
-  expect([stop.textContent, stop.disabled, stop.title]).toEqual(["Stop", false, "Stop this agent through OATS"]);
+  expect([stop.textContent, stop.disabled, stop.title]).toEqual(["Stop…", false, "Stop this agent through OATS"]);
   // Each fact has its label; the instance is not repeated (the thread's title is it), and there is no "✓".
   expect(fact(slot, "oats-fact-soul")).toBe("instance ofoats-desktop-developer");
   expect(fact(slot, "oats-fact-parent")).toBe("ParentRedesign ui lead");
@@ -210,10 +210,10 @@ test("the block wraps and nothing in it scrolls out of sight or is cut", async (
 test("on the last roster read, while OATS cannot be read: the line as last read, its act off with the reason, and under it the one drawing of that: the age, that the acts are held, Retry", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
-  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingStopInstance panel");
+  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingStop…Instance panel");
   // The act that applies is held: in its place, off, with the reason.
   const held = slot.getByTestId("oats-status-act") as HTMLButtonElement;
-  expect([held.textContent, held.disabled, held.title]).toEqual(["Stop", true, "Comes back when OATS is read again"]);
+  expect([held.textContent, held.disabled, held.title]).toEqual(["Stop…", true, "Comes back when OATS is read again"]);
   const stale = slot.getByTestId("oats-unreadable");
   expect(stale.getAttribute("data-compact")).toBe("");
   expect(stale.textContent).toBe("OATS did not answer on falconShowing what was read 2 min ago. Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again.Retry");
@@ -333,7 +333,7 @@ test("Stop on an idle agent's line too: an agent at rest on its thread runs, and
   const slot = await withThread("thr_mockups", { status: "idle", queuedWork: "none", hasPendingInteraction: false });
   const line = await slot.findByTestId("oats-status-line");
   expect(line.getAttribute("data-state")).toBe("idle");
-  expect(line.textContent).toBe("IdleStopInstance panel");
+  expect(line.textContent).toBe("IdleStop…Instance panel");
   fireEvent.click(slot.getByTestId("oats-status-act"));
   expect(asked()).toEqual({ verb: "stop", instance: "desktop-mockups-developer" });
   expect(slot.inspection.rpcCalls.some((call) => call.method === "stopApply")).toBe(false);

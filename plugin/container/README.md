@@ -12,10 +12,12 @@ plugin/container/ci.sh pi         # the pi run: a pi agent launched from the New
 ```
 
 The paths here are from the repository's root; the scripts find the plugin by their own place, so
-they run from any directory. CI runs the three stages of the first line as three jobs side by side,
-each on a runner of its own (`.github/workflows/plugin.yml`: `plugin-unit`, `test` for the live
-stage, `plugin-real`), and the pi run as a fourth (`plugin-pi`), so each line after the first
-installs and builds what it needs by itself.
+they run from any directory. CI runs the stages of the first line as jobs side by side, each on a
+runner of its own (`.github/workflows/plugin.yml`: `plugin-unit`; the live stage as two, `test` in
+bb's light theme and `plugin-live-dark` in its dark one; `plugin-real`), and the pi run as one more
+(`plugin-pi`), so each line after the first installs and builds what it needs by itself.
+`LIVE_THEMES=light` (or `dark`) makes the live stage draw one theme, as each of CI's two live jobs
+does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a machine.
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
@@ -52,7 +54,7 @@ The live checks of the backend:
 
 - **L1** the installed plugin reads the deployment through the host entry (`bb plugin rpc call oats snapshot`).
 - **L2** with the poll off (no RPC for 50 s), one line appended to `<deployment>/.agents/events/` makes the server run `oats status`: the host watch, the `changed` signal, the reread. The proof is the fake's call log.
-- **L3** an `oats status` slower than the kernel's 20 s limit is the typed `OATS_TIMEOUT` in the snapshot, about 20 s after the read starts (the check allows the pause between two reads, and one read of the poll, before it): bb's retry of a retryable host call does not cut it short. The check asserts the code and the time; a second `status` in the fake's log is the server's next reread, started after the first ended.
+- **L3** an `oats status` slower than the kernel's 20 s limit is the typed `OATS_TIMEOUT` in the snapshot, about 20 s after the read starts (counted from the start of the read that `refresh` answers, its `at`, so a read the server had in front of it is not in the time): bb's retry of a retryable host call does not cut it short. The check asserts the code and the time; a second `status` in the fake's log is the server's next reread, started after the first ended. Before it sets the slow `oats`, the check waits until no `oats` is alive: a read asked for during the read before it (the poll's tick) starts at once when that one ends, and would otherwise meet the slow `oats` first and put 20 s in front of the check's own read.
 - **A14** (the backend's part) with `oats` removed, the snapshot says what is missing and bb's own lists answer; with `oats` back, the snapshot is back.
 - **A15** `bb plugin reload oats` while a fake `oats` sleeps and holds a child of its own: neither process is left.
 - **G1** the README's install route: `bb plugin install git:<repository>@<ref> --subdirectory plugin`, from a local repository that holds this tree as `plugin/`. A git install gets the manifest's `dependencies` only, so this fails when something the build needs is left in `devDependencies`.
@@ -104,7 +106,10 @@ What a scene has to work with (`live-ui.mjs` and `browser.mjs` say each in full)
 - **`record(changes)`** makes a change as the kernel records one (the fake's status with
   `changes` by instance, and a line in the deployment's event log) and answers when: the freshness
   scenes time from it to the row or the count on screen, 3 s at most.
-- **No two images of a run are the same image** (`images.mjs`), checked at the end.
+- **No two images of a run are the same image** (`images.mjs`), checked at the end. A run that
+  draws one theme (`LIVE_THEMES`, as each of CI's two live jobs does) compares that theme's images
+  with each other: a light image is then never compared with a dark one. That the theme asked for
+  is the one bb draws is checked at every screenshot.
 
 Beside the features' scenes, `scenes/patterns.mjs` reads the pattern book (`/plugins/oats/patterns`,
 `../README.md`, "The patterns: one component each"): every pattern in each of its states, the menu
@@ -131,7 +136,10 @@ open, a confirmation before its act, in progress, done, refused and with another
   its agent's own page.
 - **LR**, by hand only, never in CI: `LOCAL_STATUS=<path> container/ci.sh live` draws ONE stage,
   `local-roster`, from an `oats status --json` answer of a real deployment, with the release's
-  default pages, and nothing else of the live run's scenes. The file is copied to the
+  default pages (the setting `pages` left as a fresh install has it, unset with bb's own `plugin
+  config oats unset pages`, as in the stage `pages-default` and the real run's default-pages
+  images: an unset setting is what is proven to hide the other pages, not the value "home"), and
+  nothing else of the live run's scenes. The file is copied to the
   container's `/tmp`, never into the tree; the stage archives the run's own bb threads first
   (and puts them back), so that what stands under the roster is what that deployment's bb would
   show; the log holds counts only, on every path (a file that is no JSON, a roster that does not
@@ -148,13 +156,13 @@ open, a confirmation before its act, in progress, done, refused and with another
   ended", and what brings it back, Restart); and the agent whose bb thread is gone, which stays in the
   roster and says that its conversation was deleted in bb.
   With A13's rows, all six states are drawn, each with its word.
-- **OUT**, **OUTH**, **OUTA**, **OUTQ** (`scenes/outside.mjs`, stages of its own) every row of the table of
+- **OUTA**, **OUT**, **OUTH**, **OUTQ** (`scenes/outside.mjs`, in the order they run; stages of its own) every row of the table of
   "Outside OATS" (`../README.md`) on the sidebar's rows, on each thread's line and on the agent's
   own page. OUT, one roster: stopped with its thread archived, stopped on an open thread, the
   kernel's `outsideOats`, a session lost with its thread archived and with its thread deleted,
   failed, unreachable; and the home's card of the agent that runs outside OATS, counted as the
   roster's foot counts it. OUTH: the three rows that read "not running" side by side (an operator's
-  stop, stopped with the machine, idle with no harness loaded), asserting the state word and the
+  stop, a session lost, idle with no harness loaded), asserting the state word and the
   tone of each, and that Start on the line of the one that is not loaded opens the lifecycle's
   Start dialog, which says first that a message in the thread carries the conversation on. OUTA:
   the three agents whose thread bb has archived, side by side (an operator's stop: plain, with its

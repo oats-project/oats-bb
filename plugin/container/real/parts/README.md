@@ -16,3 +16,10 @@ function once per view (bb's light and dark themes, at each width) with a page o
 navigate, wait on what is read (`page.until`), check it (`run.check(ok, \`${at} …\`, whatRead)`),
 then `await shot("<name>")`, which saves `<scene>-<width>x<height>-<name>[-dark].png` with the
 run's other images. One state per scene, the same in both themes.
+
+The order is the files' order, and one part depends on it: `tagged.mjs` must stay the last. It pins
+the run's provider by a scratch tag, so that the kernel prints a release's version for it, and
+every read of a later part would see that pin. A part's images need a scene name of their own
+(the run's end compares all images: two scenes of different states must not be the same image),
+and a part that changes the recording wrapper's delays puts them back (`wrapper({})`).
+

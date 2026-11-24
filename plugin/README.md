@@ -90,7 +90,7 @@ bb settings ui reset sidebar.threadListProvider
 The four acts are OATS's own, each through the kernel, and each opens a dialog first: nothing runs
 on one press. They are in an agent's thread menu (**Stop agent (OATS)**, **Start agent (OATS)**,
 **Restart agent (OATS)**, **Retire agent (OATS)**: the menu holds bb's own Stop beside them, hence
-the suffix), on the thread's status line, the OATS line under the thread's header (**Stop** for an
+the suffix), on the thread's status line, the OATS line under the thread's header (**Stop…** for an
 agent that works or is idle, **Start** for one that does not run, **Restart** for one whose session
 ended; and **Answer**, which is no act of OATS's: it opens the instance panel at what the agent
 waits for), on a soul's page for an agent whose thread bb does not have (**Start**,
@@ -114,8 +114,11 @@ while its Terminal tab has the focus.
 
 - **Stop** and **Retire** read the kernel's plan and show it as sentences about the agent the
   PLAN names (never the row that was pressed): **What will happen**, **What is kept**, the state of
-  each session and of its uncommitted work, and what a person should see first (an agent in the
-  middle of a task). Stop has the switch **Include child instances** (on: the kernel's default; off
+  each session and of its uncommitted work, and what a person should see first. For a stop that is
+  said from facts, never from the plan's `midTask` (reported activity: true for every session that
+  runs, an idle one too): "<Name> has uncommitted work in its home." (the plan's own observation of
+  its work tree) and, for an agent on bb, "<Name> is working on a turn now." (bb's word on its
+  thread); an agent whose session runs with neither gets no line. Stop has the switch **Include child instances** (on: the kernel's default; off
   reads the plan again for the agent alone). Retire has **Also delete the worktree** for an agent
   with a worktree of its own, with what would be lost said under it; without it the worktree is
   kept, moved aside. Both dialogs open with the focus on Cancel. Stop says what it means for the
@@ -185,8 +188,9 @@ in the soul's place. "Archived in bb" and "deleted in bb" are reasons, never sta
 
 | What OATS says | What bb says of its thread | The thread's line | The sidebar's row | Acts |
 |---|---|---|---|---|
-| stopped, and not with the machine (`sessionEnd` "stopped", "exited" or none: every end but "lost") | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped · <soul>" | Start |
-| stopped with the machine (`sessionEnd: "lost"`) | open | "Stopped · with the machine. OATS starts it again when the machine is back." No warning: OATS resumes it by itself. | "Stopped · with the machine" | Start |
+| stopped by an operator, or stopped with no word how its session ended (`sessionEnd` "stopped" or none) | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped · <soul>" | Start |
+| its session lost (`sessionEnd: "lost"`: it ended without OATS stopping it) | open | "Stopped · Its session ended without OATS stopping it. Nobody stopped it. To carry on, send it a message here. Start begins a new conversation." No warning, no time (the kernel records none of the loss), no cause guessed, nothing promised. | "Stopped · session lost" | Start (its dialog says first to send a message instead: the lifecycle's) |
+| its session lost, on TMUX (no thread in bb) | none | on its page: "Its session ended without OATS stopping it. Nobody stopped it." and "Last started <time>" where the row has it; "Start tries to continue its last conversation." after the first only where the lifecycle offers Start for that agent | "Stopped · session lost · tmux" | the header's (the lifecycle's) |
 | idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread. | "Idle · not loaded" | Start (its dialog says first to send a message instead: the lifecycle's) |
 | stopped, its session not lost | archived | "Stopped · since when · Its conversation is archived in bb. Start begins a new one." (so that nobody expects the archived one to continue). The row opens the archived thread, which bb shows to read (no composer). | "Stopped · <soul>", in the plain tone (once the provider archives at stop, this is every stopped agent) | Start…, Retire… |
 | its session lost (`sessionEnd: "lost"`) | archived | "Stopped · Its conversation was archived in bb while it ran, and its process may still run. Stop it, then start it from OATS.", in the warning tone | "Stopped · archived in bb", its mark in the warning tone | Stop, Retire (Start once it is stopped) |
@@ -215,30 +219,43 @@ of who needs a person):
   say "Stopped" of an agent that runs: there is ONE statement about it. Such an agent is counted
   among those that need a person (`view().needing`: the sidebar's "N need you"), since only a
   person can stop or start it again. What OATS recorded is a fact after the state.
-- **Stopped is said of a provider's row only when the kernel calls it stopped**
-  (`recordedStopped`: not running, beside the word "stopped" or no word; the claim's gate reads the
-  same predicate). A row that is not running beside `runtimeState: "unknown"` has its session there
-  and no harness loaded (a reboot on a host that does not run `oats host run`, or bb let the
-  harness exit): it is idle, and keeps a question it asked. (A tmux row that does not run is
-  stopped as before.) That row is shaped from the kernel's contract, not recorded: the bb session
-  provider prints it only from its next release, and until then an idle bb thread reads `running:
-  null` and says "Idle" with nothing after it.
+- **Stopped is said of a row only when the kernel calls it stopped** (`recordedStopped`, for
+  every backend; the claim's gate reads the same predicate): the row does not run, and says that
+  an operator stopped it or that its session was lost (`sessionEnd`, beside any word: a tmux agent
+  stopped with OATS reads "shell"), or says nothing of how it ended beside the word "stopped" or
+  no word at all. A harness that ended by itself (`sessionEnd: "exited"`) failed. A row that is
+  not running beside `runtimeState: "unknown"` has its session there and no harness loaded (a
+  reboot on a host that does not run `oats host run`, or bb let the harness exit): it is idle, and
+  keeps a question it asked. A session the kernel cannot reach is never called stopped. That
+  not-loaded row is recorded live (`test/fixtures/outside/status-not-loaded.json`: the real run
+  ends the thread's harness process and reads the row), on the provider that scans its harness
+  (oats-bb #40); with a provider before it an idle bb thread reads `running: null` and says "Idle"
+  with nothing after it.
 
 **Three rows read "not running", and they are never drawn alike**: an operator's stop (Start, and
-never a message), a stop with the machine (nothing to do: OATS resumes it), and no harness loaded
-(a message; Start begins a new conversation). The state word tells the third from the first two;
+never a message), a session that was lost (nobody stopped it: a message carries it on), and no
+harness loaded (a message; Start begins a new conversation). The state word tells the third from the first two;
 the tone tells the first from the others (the line's `tone="warning"`: the state's mark and the
 sentence, `data-tone="warning"`); and the rows' words differ. One live scene draws the three side
 by side and asserts the word and the tone, not only the text. The tone never carries the meaning
 alone: the sentence does.
 
-**The warning fails closed.** A stopped agent on an open thread gets the operator's sentence for
-EVERY end of its session but one: `sessionEnd: "stopped"` (an operator's stop), `"exited"` (a
-harness that ended by itself), and none at all (the kernel gives none while a retire is pending, a
-rollback is incomplete or a spawn is in progress). In each, a message in bb would start a harness
-OATS does not expect. Only `sessionEnd: "lost"` (stopped with the machine: OATS resumes it) is
-spared it. The spec's author's ruling of 23 Nov 2026, which reversed "an operator's stop, and only
-that". `outsideOats` stays what the kernel says: only an operator's stop carries it.
+**One reading of a row that does not run** (`model/rest.ts`: `rest`, `messageResumes`; and
+`recordedStopped`, `model/view.ts`), which the state, the claim's gate, this feature's reasons,
+the home's card and the Start dialog all read. Where the row says how its session ended
+(`sessionEnd`), that decides, for every backend: "stopped" is an operator's stop and "lost" a
+lost session, both Stopped beside any word (a tmux agent stopped with OATS reads "shell": the
+stop leaves its window at a shell); "exited" is a harness that ended by itself: Failed. Where it
+does not say: the word "stopped", or no word at all, is a stop. THE RULE for a message: it is
+refused only for a stop (an operator's, or one that does not say that its session was lost: a
+message in bb would start a harness OATS does not expect) and where nobody can tell (the kernel
+cannot reach its session); everything else that does not run, on bb, with a thread bb lists,
+carries on by a message (the kernel's contract for a provider home, `docs/desktop-cli-api.md` at
+v0.70.5: a session that a message started reads running at the next status, and `outsideOats` is
+reported only against a recorded stop). So **the warning fails closed**: a stopped agent on an
+open thread gets the operator's sentence unless its row says "lost" or "exited", and the home's
+card of such an agent offers no answer and no reply, and Start. `test/outside/table.test.ts`
+prints the table of every row. The spec's author's rulings of 23 Nov 2026.
 
 `outsideOats` is read by the roster's parser (`kernel/roster.ts`, with `kernel/outside.ts`) only
 where the status document's own `features` lists `provider-outside-oats` (OATS 0.70.5; `features`
@@ -284,12 +301,46 @@ On the home, an agent that runs outside OATS is one of those that need you: its 
 choice and no reply, and the badge, the heading and the summary's "N need you" count it as the
 sidebar's foot does (`view.needing`).
 
-Not there yet: the one predicate the home's card, the Start dialog and this feature's lines share
-for "a message here is the designed resume" (the change after this one: until then the home's
-card of an agent that does not run refuses an answer for every such agent, and offers Start);
-the line of a thread that belonged to a RETIRED agent;
-the row of `outsideOats` recorded live, and the proof against the real run's kernel (0.70.5: they
-come with this feature's second change; `test/fixtures/outside/README.md` says what is shaped meanwhile).
+Not there yet: the line of a thread that belonged to a RETIRED agent.
+The rows are recorded live and proven against the real run's kernel (0.70.5, the provider at
+oats-bb #40): `container/real/parts/outside.mjs` makes each state, keeps the kernel's row
+(`test/fixtures/outside/README.md`) and checks what the plugin says and that its Stop mends it.
+
+### A provider home's row, case by case
+
+One table for the two sides that must agree on it: the bb session provider, which answers
+`running` and the state of a home's thread (`inspectAnswer`,
+`oats-package/capabilities/oats-bb/lib/threads.mjs`, from bb's status of the thread and from the
+harness process it finds in the home), and the plugin, which says the state from the kernel's row
+and from bb's own word on the thread (`state` and `threadWorks`, `model/view.ts`). `running` is
+endpoint activity: true while a harness is loaded, an idle agent's too; it never says that an
+agent works. Each row below that names a recording is the kernel's row as printed: the five
+of `outside/` on that provider (OATS 0.70.5, the provider at oats-bb #40), the two of
+`roster/status-recorded.json` on the earlier recording (OATS 0.70.0, the provider before #40:
+those two rows read the same on both). A test reads every recorded row against this table (`test/model/cases.test.ts`): the row's four fields, and the state the plugin says of
+it with the thread as the column gives it. That test holds the plugin's side alone: the
+provider's `inspectAnswer` is named here, not checked: no test of the plugin calls it (the
+provider's own tests hold its side). A dash is a field the row does not carry, or carries as null.
+
+| Case | `running` | `runtimeState` | `sessionEnd` | `outsideOats` | bb's thread | The plugin says | Recorded as |
+|---|---|---|---|---|---|---|---|
+| in a turn | true | unknown | - | - | in a turn | Working | `roster/status-recorded.json#working` |
+| a turn bb holds in line (a message waits to start: `queuedWork: "waiting"`) | true | unknown | - | - | at rest, a turn in line | Working | (no recording here: the real run's B1b makes it and shows the kernel's row) |
+| at rest, its harness loaded | true | unknown | - | - | at rest | Idle | `outside/status-at-rest.json` |
+| at rest, with a word for its queue the provider does not know | - | unknown | - | - | at rest | Idle | (no recording: bb 0.50.1 has no such word) |
+| at rest, no harness loaded (its process ended; a reboot without `oats host run`) | false | unknown | - | - | at rest | Idle | `outside/status-not-loaded.json` |
+| stopped with OATS; the provider archived its thread | false | stopped | stopped | - | archived | Stopped | `outside/status-stopped-archived.json` |
+| stopped with OATS, then started again by a message in bb | false | stopped | stopped | running-outside-oats | in a turn | Running outside OATS | `outside/status-outside.json` |
+| its thread archived in bb while it ran | false | stopped | lost | - | archived | Stopped | `outside/status-archived-while-running.json` |
+| its thread deleted in bb | false | stopped | lost | - | deleted | Stopped | `roster/status-recorded.json#threadDeleted` |
+| stopped with the machine (`oats host run`'s shutdown) | false | stopped | lost | - | at rest | Stopped | (no recording: the run stops no host) |
+| its session ended in a shell | false | shell | - | - | at rest | Failed | (no recording) |
+| the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
+
+What comes after the state's word (the reason, the tone, the acts) is the table at the head of
+this section; this one holds only what the two functions must agree on. An agent on tmux is not
+in it: its row has no `runtimeState` while it runs, and the kernel's `running` is its own word
+for whether it works.
 
 ## The home
 
@@ -346,9 +397,12 @@ that one, not a free-text box beside it as an equal:
 | bb shows its request in a form the card cannot draw (a plugin's form, free text) | "bb shows its request in its thread: open the thread to answer it.", and **Open thread** |
 | the kernel says it waits for a tool approval (its claim's reason is `permission`) and bb lists **no** request for its thread: the claim is older than bb's request, bb's request was answered in the thread and the claim not yet cleared, or the approval is asked where bb has no interaction for it | "It waits for an approval, and bb lists no request to answer here: open its thread to see what it waits for.", and **Open thread**. The card cannot grant what bb does not list, and does not pretend to |
 | it asks in its own words (a question, its attention) | the **reply**, on its card, named for it ("Write to Release 070 maintainer…"), sent as the person at the screen through bb's own send. The box grows with what is written, so all of what will be sent is in view. There is no reply apart from a card: a message cannot go to another agent than the one read |
-| the kernel says it does not run (it is stopped, or its session ended), and it needs you all the same (bb still holds a request on its thread, or it still carries its claim) | no choices and no message: either would go to its thread and start its harness again outside OATS (a stopped agent stays stopped). The card says "This agent is not running, and its request waits for it: an answer or a message would start it outside OATS. Start it to answer.", and offers **Start…** (the lifecycle's own act and dialog: it asks the kernel first, and starts the agent through OATS; where the kernel cannot say whether the agent runs, the dialog says so and starts nothing) beside **Open thread** |
+| the kernel cannot reach its session, and it needs you all the same | no choices and no message: nobody can tell where either would go. The card says "OATS cannot reach this agent's session, so nothing is sent to it from here. Open its thread to see it.", with **Open thread** and no Start (the lifecycle offers none for it) |
+| the kernel calls it STOPPED (an operator's stop, or a stop with no word that its session was lost), and it needs you all the same (bb still holds a request on its thread) | no choices and no message: either would go to its thread and start its harness again outside OATS (a stopped agent stays stopped). The card says "This agent is not running, and its request waits for it: an answer or a message would start it outside OATS. Start it to answer.", and offers **Start…** (the lifecycle's own act and dialog: it asks the kernel first, and starts the agent through OATS; where the kernel cannot say whether the agent runs, the dialog says so and starts nothing) beside **Open thread** |
+| the kernel says it does not run and NOBODY STOPPED IT (its session was lost, it ended in a shell, or no harness is loaded), on a thread bb lists (one whose last turn bb calls failed included) | answered as any other agent: its choices, or the reply. A message in its thread is the provider's designed way back for such a session, and OATS reads it running at its next read; the Start dialog says the same first (`messageResumes`, `model/rest.ts`: one reading for the card, the dialog and the thread's line) |
 | it has no thread in bb: it runs in tmux | "It runs in tmux on <machine>, where bb cannot write to it. Answer it in its terminal there:", the kernel's own command to copy (`oats session attach --home <its home>`), and **Open its page**, with "Open its page shows who it is and how it runs." |
-| it has no thread in bb: its thread was archived or deleted | "Its bb thread is gone, so nothing can be sent to it from here.", and **Open its page** |
+| it has no thread bb lists: bb answers that it has none of that id (deleted) | "Its bb thread is gone, so nothing can be sent to it from here.", and **Open its page** |
+| it has no thread bb lists: bb has it archived or hidden, or the row names none | "bb lists no thread of it to write in, so nothing can be sent to it from here.", and the button that says where it leads: **Open thread** where bb has its thread archived (the press opens that thread, as the sidebar's row does), else **Open its page** |
 
 Beside choices, or a request answered in the thread, a message is still possible, behind **Write a
 message instead**, which first says what a message does not do: "A message does not answer its
@@ -840,7 +894,7 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   that thread; the act stays possible. Cut off is two facts, both read: the kernel's row says the
   agent does not run and that no operator stopped it (a session lost with the host or with its
   harness: `running: false`, `sessionEnd: "lost"`; or a thread at rest with no harness loaded:
-  `running: false` with a runtime state that is not `stopped`), and bb has its thread in the sidebar and not in error. An operator's stop never
+  `running: false` with a runtime state that is not `stopped`), and bb has its thread in the sidebar (whatever bb says of its last turn: the one reading, `messageResumes`, `model/rest.ts`). An operator's stop never
   gets the line. The sentence under "What will happen" is decided once, when the check answers:
   the launch archives the old thread while it runs.
 - **Spawn.** The kernel takes an idempotency key only with the decision it confirms
@@ -855,10 +909,20 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   plugin's own acts, on bb's thread created and deleted events, and every 15 s while a client
   watches the snapshot: never two reads at once, a pause between two reads of 1 s or of the time
   the last one took to answer, whichever is longer (after a read that failed, 1 s), 20 s limit. A status that hangs is ended at its limit before the
-  next starts: under any burst of events one `oats status` is alive at a time. So a change the watch reports is on screen
-  within 3 s on a kernel that answers well under a second (a change that lands just after a read
-  started waits that read, the pause and the next read), and a slow kernel spends at most half its
-  time on status (the first spec's "never within 5 s of the last" gave way to this). Each
+  next starts: under any burst of events one `oats status` is alive at a time. ONE read is at once: a
+  read asked for while another is in flight (a change that read may not have seen) starts with no
+  pause when that one ends, if it answered within 2 s (`FOLLOW_UP_WITHIN_MS`, `server/core.ts`), and
+  only once: a change during that second read waits the pause again. So a change that lands in the
+  FIRST read of such a pair is on screen after about two reads: 2.1 to 3.04 s on the pilot's host,
+  where one `oats status` took 1.05 to 1.52 s under load (2026-11-23; with the pause it was 3.3 to
+  4.3 s), so at its slow end still at the 3 s, not under it. A change that lands in the SECOND read
+  (the clear after a set, the second event of one act) still waits that read, the pause and the
+  next, as before: no read is later than it was, the worst case is not shorter, the common one is.
+  The cost is in a sustained burst: a kernel that answers in t spends 2t of every
+  2t + max(1 s, t) on status (63 % at 0.85 s, 67 % from 1 s to 2 s); a kernel slower than 2 s keeps
+  the pause after every read and spends at most half its time on status (the first spec's "never
+  within 5 s of the last" gave way to this). The server says in its log, at debug level, which rule
+  each read asked for mid-read took. Each
   reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read
@@ -920,8 +984,8 @@ plugin/container/ci.sh pi         # the pi run only: a pi agent launched from th
 of work. The unit tests run `kernel/`, `host.ts` and `server.ts` against a fake `oats`
 (`container/fake-oats.mjs`) that prints the recorded answers in `test/fixtures/`; the live tests
 run bb-app at the pinned version with the plugin installed from the checkout and the same fake.
-CI runs the same three stages, as three jobs side by side (`ci.sh unit`, `ci.sh live`, `ci.sh real`),
-and the pi run as a fourth (`ci.sh pi`):
+CI runs the same three stages, as jobs side by side (`ci.sh unit`, `ci.sh live` once per theme, `ci.sh real`),
+and the pi run as one more (`ci.sh pi`):
 `.github/workflows/plugin.yml`.
 
 The fake is checked against the real thing by a run of its own: `plugin/container/real/run.sh`

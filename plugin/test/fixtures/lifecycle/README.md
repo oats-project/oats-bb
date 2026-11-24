@@ -27,12 +27,13 @@ from a contract:
 - **A lost session**: `running: false`, `runtimeState: "stopped"`, `sessionEnd: "lost"`. The ROW is
   RECORDED: `threadDeleted` in `../roster/status-recorded.json`, an agent whose thread was deleted
   in bb; with no thread in bb it gets no line. What is SHAPED is only its pairing with a thread bb
-  still has: a home stopped with the host (`oats host run`'s shutdown; the kernel's
+  still has: for example a home stopped with the host (`oats host run`'s shutdown; the kernel's
   `lib/instance-listing.mjs` answers the same three fields for it). Its thread is not archived,
   and a message in it carries the conversation on (confirmed by the kernel's side). The live scene
   is that pairing: the same fields over the recorded roster, on a thread the run's bb has. A
-  thread in `error` whose harness is gone reads the same row; bb's status excludes it from the
-  line, which is harmless (it could take a message too) and kept.
+  thread in `error` whose harness is gone reads the same row, and takes a message as any listed
+  thread does (bb's composer is live on it): it gets the line too (the one reading,
+  `messageResumes`; read from bb's behaviour, not proven by a run).
 - **A thread at rest with no harness loaded**: `running: false`, `runtimeState: "unknown"`, no
   `sessionEnd`. SHAPED from the bb session provider's A15(1) change (its harness scan answers
   `running` for an idle thread: `inspectAnswer` in the provider's `lib/threads.mjs`, on its branch
@@ -103,7 +104,8 @@ the fake (`verbs.json`): a test names the file for the verb it asks.
   (`running: false`, `runtimeState: "shell"`, `sessionEnd: "stopped"`: an OATS stop leaves the
   agent's tmux window at a shell); and LOST, its tmux window killed as a crash ends it
   (`running: false`, `sessionEnd: "lost"`, no `runtimeState`; the row carries no time of the loss
-  and no cause).
+  and no cause). The plugin's one reading of a row that does not run reads these three
+  (`test/model/rest.test.ts`).
 - `tmux-start-resume.json`: `oats session start --resume --home <home> --json` on the lost home:
   started, with `resume: {resumed: true, harness: "claude", sessionId}` and `reused: "new"` (a new
   window); `target` names the tmux session, the window and the socket. No `waiting` member: Claude

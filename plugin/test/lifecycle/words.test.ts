@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startSays, startRefused, ARCHIVES_AT_STOP_FROM, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
+import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startSays, startRefused, ARCHIVES_AT_STOP_FROM, PLAN_CHANGED, stopArchivesThread, stopOutcome, stopPlanView, stopThreadSentence, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -40,7 +40,8 @@ describe("a stop plan", () => {
         "A message sent in its thread starts it again without OATS. To talk to it again, use Start.",
       ],
       kept: ["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."],
-      attention: ["Redesign ui lead reports it is in the middle of a task.", "Desktop mockups developer reports it is in the middle of a task."],
+      // From the plan's facts: the two whose work tree holds uncommitted work (the recorded plan: 2 changed, 1 untracked each). Not from its midTask.
+      attention: ["Redesign ui lead has uncommitted work in its home.", "Desktop mockups developer has uncommitted work in its home."],
       state: [
         { label: "Redesign ui lead", value: "Session running" },
         { label: "Desktop mockups developer", value: "Session running" },
@@ -70,7 +71,8 @@ describe("a stop plan", () => {
     const view = stopPlanView({ ...plan, targets: [{ ...plan.targets[0]!, session: "unknown", midTask: "unknown" }], ambiguous: ["lost-child"] });
     expect(view.choice).toBeNull();
     expect(view.state).toEqual([{ label: "Redesign ui lead", value: "Session unknown (couldn't be checked)" }]);
-    expect(view.attention).toEqual([]);
+    // Its uncommitted work is said whatever is known of its session (the recorded plan observed its work tree).
+    expect(view.attention).toEqual(["Redesign ui lead has uncommitted work in its home."]);
     expect(view.notes).toEqual(["Not included: Lost child (another instance has the same parent name, so OATS can't tell whose child it is)."]);
   });
 });
@@ -191,12 +193,62 @@ describe("a stop and the agent's thread", () => {
   });
 });
 
+describe("what a stop says first, before the confirmation: from facts, never from the plan's midTask", () => {
+  // The kernel's `midTask: true` is reported activity: a session that runs (an idle agent's harness is loaded) or
+  // uncommitted work; never "it runs a turn" (the kernel side's ruling, 23 Nov). The dialog says the two facts.
+  const one = (change: Partial<StopPlan["targets"][number]>): StopPlan => {
+    const plan = stopPlan();
+    return { ...plan, recursive: false, targets: [{ ...plan.targets[0]!, ...change }] };
+  };
+  const clean = { observed: true, branch: "agents/redesign-ui-lead", detached: false, drift: false, changed: 0, untracked: 0 };
+
+  it("uncommitted work in its home: said, from the plan's own observation of the work tree (changed or untracked files)", () => {
+    expect(stopPlanView(one({ work: { ...clean, changed: 1 } })).attention).toEqual(["Redesign ui lead has uncommitted work in its home."]);
+    expect(stopPlanView(one({ work: { ...clean, untracked: 3 } })).attention).toEqual(["Redesign ui lead has uncommitted work in its home."]);
+    // Whatever midTask says of it.
+    expect(stopPlanView(one({ work: { ...clean, changed: 1 }, midTask: false })).attention).toEqual(["Redesign ui lead has uncommitted work in its home."]);
+    // A work tree that was not observed says nothing of work.
+    expect(stopPlanView(one({ work: { ...clean, observed: false, changed: 4 } })).attention).toEqual([]);
+  });
+
+  it("a bb agent whose thread runs a turn: said, from bb's word on its thread (the caller's `working`)", () => {
+    expect(stopPlanView(one({ work: clean }), false, new Set(["redesign-ui-lead"])).attention).toEqual(["Redesign ui lead is working on a turn now."]);
+    // Both facts: the work first.
+    expect(stopPlanView(one({ work: { ...clean, untracked: 1 } }), false, new Set(["redesign-ui-lead"])).attention).toEqual(["Redesign ui lead has uncommitted work in its home.", "Redesign ui lead is working on a turn now."]);
+    // An agent that is not of the plan is not said.
+    expect(stopPlanView(one({ work: clean }), false, new Set(["someone-else"])).attention).toEqual([]);
+  });
+
+  it("a session that runs with neither (an idle bb agent, any tmux agent): NO line, though the kernel's midTask is true", () => {
+    expect(stopPlanView(one({ work: clean, midTask: true, session: "there" })).attention).toEqual([]);
+    expect(stopPlanView(one({ work: clean, midTask: true, session: "there", backend: "tmux" })).attention).toEqual([]);
+    // The state below says of it what is so.
+    expect(stopPlanView(one({ work: clean, midTask: true, session: "there" })).state).toEqual([{ label: "Redesign ui lead", value: "Session running" }]);
+  });
+
+  it("midTask unknown, or false: no line", () => {
+    expect(stopPlanView(one({ work: clean, midTask: "unknown" })).attention).toEqual([]);
+    expect(stopPlanView(one({ work: clean, midTask: false })).attention).toEqual([]);
+  });
+
+  it("the Desktop's sentence is said nowhere", () => {
+    expect(JSON.stringify(stopPlanView(stopPlan(), false, new Set(["redesign-ui-lead"])))).not.toMatch(/middle of a task/);
+  });
+});
+
 describe("a plan that changed under the confirmation", () => {
-  it("says what differs, in sentences: who is in it, whose session runs, who is in the middle of a task", () => {
+  it("says what differs, in sentences: who is in it, whose session runs; uncommitted work that came or went has no sentence of its own", () => {
     const before = stopPlan();
     // The recorded case: one child stopped by itself between the plan and its apply.
-    const after = { ...before, targets: before.targets.map((target) => (target.instance === "harvest-knowledge-helper" ? { ...target, session: "none" as const } : target.instance === "desktop-mockups-developer" ? { ...target, midTask: false } : target)) };
-    expect(planChanges(before, after)).toEqual(["Desktop mockups developer no longer reports it is in the middle of a task.", "Harvest knowledge helper: its session was running, and is now not running."]);
+    const after = { ...before, targets: before.targets.map((target) => (target.instance === "harvest-knowledge-helper" ? { ...target, session: "none" as const } : target.instance === "desktop-mockups-developer" ? { ...target, midTask: false, work: { ...target.work, changed: 0, untracked: 0 } } : target)) };
+    expect(planChanges(before, after)).toEqual(["Harvest knowledge helper: its session was running, and is now not running."]);
+    expect(planChanges(after, before)).toEqual(["Harvest knowledge helper: its session was not running, and is now running."]);
+    // Its work alone came or went: the dialog draws another box, and the one line says that what this would do has changed.
+    const worked = { ...before, targets: before.targets.map((target) => (target.instance === "desktop-mockups-developer" ? { ...target, work: { ...target.work, changed: 0, untracked: 0 } } : target)) };
+    expect(planChanges(before, worked)).toEqual([PLAN_CHANGED]);
+    expect(planChanges(worked, before)).toEqual([PLAN_CHANGED]);
+    // The plan's midTask alone is no fact a person is told: a change of it changes no line.
+    expect(planChanges(before, { ...before, targets: before.targets.map((target) => ({ ...target, midTask: false as const })) })).toEqual([]);
     expect(planChanges(before, { ...before, targets: before.targets.slice(0, 2) })).toEqual(["Harvest knowledge helper is no longer in this plan."]);
     expect(planChanges({ ...before, targets: before.targets.slice(0, 2) }, before)).toEqual(["Harvest knowledge helper is now in this plan."]);
     expect(planChanges(before, before)).toEqual([]);
@@ -429,16 +481,23 @@ describe("whether a start says that a message in the thread carries the conversa
     expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: "stopped" }, thread)).toBe(false);
     expect(carriesOn({ running: false, runtimeState: "unknown", sessionEnd: "stopped" }, thread)).toBe(false);
     expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: null }, thread)).toBe(false);
+    // A row with no word of the runtime's state is stopped (the one predicate): the thread's line warns there, and the dialog says nothing else.
+    expect(carriesOn({ running: false, runtimeState: null, sessionEnd: null }, thread)).toBe(false);
+    // A harness that ended by itself is no stop (the agent failed): a message carries it on, as its line says.
+    expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: "exited" }, thread)).toBe(true);
   });
   it("never of an agent that runs, or whose state is not known", () => {
     expect(carriesOn({ running: true, runtimeState: "unknown", sessionEnd: null }, thread)).toBe(false);
     expect(carriesOn({ running: null, runtimeState: "unknown", sessionEnd: null }, thread)).toBe(false);
     expect(carriesOn({ running: null, runtimeState: "unreachable", sessionEnd: "lost" }, thread)).toBe(false);
+    // Nobody can tell whether a message reaches a session the kernel cannot reach: no line (the one predicate fails closed).
+    expect(carriesOn({ running: false, runtimeState: "unreachable", sessionEnd: null }, thread)).toBe(false);
+    expect(carriesOn({ running: null, runtimeState: "unreachable", sessionEnd: null }, thread)).toBe(false); // the row the kernel prints
   });
-  it("never when the thread cannot take a message: bb shows none, or says it is in error", () => {
+  it("never when bb shows no thread of it; a listed thread takes a message whatever bb says of its last turn", () => {
     const lost = { running: false, runtimeState: "stopped", sessionEnd: "lost" };
     expect(carriesOn(lost, null)).toBe(false);
-    expect(carriesOn(lost, { status: "error" })).toBe(false);
+    expect(carriesOn(lost, { status: "error" })).toBe(true); // bb's last turn failed and the session is there: how a session is lost
     expect(carriesOn(lost, { status: "active" })).toBe(true);
   });
 });

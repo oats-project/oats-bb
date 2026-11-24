@@ -3,8 +3,9 @@ its `verbs.json`: the `oats` verbs the fake answers for that feature, and the fi
 (`container/fake-oats.mjs`). The files named below are in `roster/` (`status.json`,
 `status-recorded.json`, `threads.json`, `version.json`), `workspace/` (`souls.json`, `capabilities.json`,
 `teams.json`, `servers.json`), `spawn/` (`spawn-preview.json`, `spawn.json`) and `lifecycle/` (the
-stop, start, restart and retire answers). `outside/` has a README of its own: its one file is
-SHAPED from the kernel's own test at v0.70.5, not recorded (no live `outsideOats` can be recorded yet).
+stop, start, restart and retire answers). `outside/` has a README of its own: its five files are
+recorded live by the real run's outside part (`container/real/parts/outside.mjs`), the kernel's own
+`outsideOats` among them.
 
 Pinned by the spec.
 - `status.json`: `oats status --json` reduced to the fields the plugin reads, in the shape agreed
@@ -74,6 +75,10 @@ The other files are one answer per other `oats` verb, as the kernel prints it (a
   agents, and `research-expert` and the unspawnable `oats.okf/knowledge-maintainer` are shaped rows.
 - Shaped as docs/desktop-cli-api.md documents the answer: `retire-incomplete.json` (a receipt with
   `rollbackIncomplete`, which the kernel prints with exit 1), and what `stop-plan.json` holds
-  around its recorded targets. In it, the idle child's `midTask` is `"unknown"`, as the kernel of
-  the real run prints it for a bb agent whose thread is idle (`container/real/out/answers/stop-plan.json`).
+  around its recorded targets. In it, the idle child's `midTask` is `"unknown"`, as the kernel
+  printed it for a bb agent whose thread is idle with the provider BEFORE oats-bb #40, which could
+  not tell whether a harness was loaded. With the provider that scans its harness the real run's
+  kernel prints `true` there (`container/real/out/answers/stop-plan.json`,
+  `stop-plan-idle-loaded.json`); the fixture keeps the earlier value, so that the `"unknown"` case
+  stays held by a test.
 `container/fake-oats.mjs` prints them; the unit and live tests run the plugin against it.

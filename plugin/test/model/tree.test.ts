@@ -4,7 +4,7 @@
 // nothing on a roster of tmux agents. The rules are the tree's own, for all: a parent that is no
 // row makes a root; a cycle is cut at one link; deeper than 2 is drawn at 2; every level is in
 // the one order (test/model/order.test.ts), by the most urgent state of each row's SUBTREE
-// (`urgent`: what a folded parent is marked with).
+// (`urgent`: what orders the row; a folded parent's mark is `insideOf`'s: test/model/fold.test.ts).
 import { describe, expect, test } from "vitest";
 import type { Agent, BbThread, Row } from "../../model/types";
 import { board } from "../../app/home/board";

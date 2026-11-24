@@ -808,6 +808,12 @@ test("two pages in turn: the one that is drawn is the one on screen, and a page 
   expect(onScreen()).toBe("none");
   drawn.rerender(<Both first="c" second={undefined} />);
   expect(onScreen()).toBe("c");
+  // A second page of the SAME agent is drawn before the first leaves (a page mounted anew): it is the one on screen,
+  // and the first, leaving, does not take the agent away from it.
+  drawn.rerender(<Both first="c" second="c" />);
+  expect(onScreen()).toBe("c");
+  drawn.rerender(<Both first={undefined} second="c" />);
+  expect(onScreen()).toBe("c");
   drawn.rerender(<Both first={undefined} second={undefined} />);
   expect(onScreen()).toBe("none");
   drawn.unmount();

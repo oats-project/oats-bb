@@ -5,6 +5,8 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 let open: string | null = null;
+/** The page that said it last: the one on screen. A page that leaves takes the word away only while it is still that one. */
+let holder: object | null = null;
 const watchers = new Set<() => void>();
 const set = (instance: string | null) => {
   if (open === instance) return;
@@ -26,18 +28,23 @@ export function useOpenAgent(): string | null {
 /**
  * For an agent's page: while it is drawn, `instance` is the agent on screen (null: the page names
  * none). Only the page that is still the one on screen takes it away: the next may have said its
- * own first.
+ * own first, and it may name the SAME agent (so it is the page that is held, not the name).
  */
 export function useSayOpenAgent(instance: string | null): void {
   useEffect(() => {
+    const mine = {};
+    holder = mine;
     set(instance);
     return () => {
-      if (open === instance) set(null);
+      if (holder !== mine) return;
+      holder = null;
+      set(null);
     };
   }, [instance]);
 }
 
 /** For a test: the page loads again. */
 export function forgetOpenAgent(): void {
+  holder = null;
   set(null);
 }

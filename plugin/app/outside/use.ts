@@ -18,7 +18,8 @@ export function outsideOf(oats: Oats): Outside {
   if (oats.phase !== "ready") return NOTHING;
   const attached = (agent: Agent): boolean => oats.nodeByInstance.get(agent.instance)?.agent === agent;
   return {
-    of: (agent) => said(agent, oats.whereOf(agent), attached(agent)),
+    // (Its thread, where the roster draws it on one: bb's word that the thread failed at its start rides on it.)
+    of: (agent) => said(agent, oats.whereOf(agent), attached(agent), attached(agent) ? (oats.nodeByInstance.get(agent.instance)?.thread ?? null) : null),
     agentOn: (threadId) => oats.view.detached.find((agent) => agent.threadId === threadId && oats.whereOf(agent) === "archived"),
   };
 }

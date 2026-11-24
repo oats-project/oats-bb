@@ -168,18 +168,23 @@ async function stopExtraBb(dir) {
  *  the test needs it (its daemon connected, or its server healthy). bb-app's own start can fail on this two-CPU
  *  container beside the first bb: on CI its server once "failed to become healthy" and its host daemon once "failed to
  *  start", each time with no other bb process left over (2026-11-24, runs 45421291925 and 45429539876, both green on a
- *  rerun). So where bb-app EXITS before it is up, what it printed and its own logs are printed, its stale locks are
- *  cleared once none of its processes is left, and the START is tried once more. Only the start: what a test asserts
+ *  rerun). So where bb-app EXITS before it is up, what it printed and its own logs are printed, its stale lock is
+ *  cleared once nothing answers on its ports any more, and the START is tried once more. Only the start: what a test asserts
  *  of that bb runs once, after it is up. A bb that neither comes up nor exits in time fails as before, with what it
  *  printed, what it answered and every bb process.
  *  `out`: the file bb-app's output goes to; `prefix`: what runs before bb-app in the shell (env -u …); `env`: variables
- *  for its server (docker exec -e); `args`: its address and port flags; `answered`: the read whose answer a time-out
- *  quotes. */
-async function startExtraBb({ dir, out, prefix = "", env = {}, args, up, what, answered, timeoutMs = 180_000 }) {
+ *  for its server (docker exec -e); `args`: its address and port flags; `ports`: the ports those flags name;
+ *  `answered`: the read whose answer a time-out quotes. */
+async function startExtraBb({ dir, out, prefix = "", env = {}, args, ports, up, what, answered, timeoutMs = 180_000 }) {
   const command = `cd ~ && echo started > ${out} && ${prefix ? `${prefix} ` : ""}bb-app --data-dir ~/${dir} ${args} --no-in-app-updates >> ${out} 2>&1; echo "bb-app exited with status $?" >> ${out}`;
   const exited = async () => (await sh(`cat ${out} 2>/dev/null || true`)).includes("bb-app exited with status");
-  const printed = async () => `bb-app printed: ${await said(`tail -c 1500 ${out} 2>&1 || true`)}. Its logs: ${await said(`tail -n 30 ~/${dir}/logs/* 2>/dev/null | tail -c 3000 || echo none`)}`;
+  const printed = async () => `bb-app printed: ${await said(`tail -c 1500 ${out} 2>&1 || true`)}. Its logs: ${await said(`{ tail -n 30 ~/${dir}/logs/* 2>/dev/null || echo none; } | tail -c 3000`)}`;
+  // Whether anything still answers on one of its ports: a server or daemon of that bb left alive.
+  const open = async () => (await sh(ports.map((port) => `curl -s -o /dev/null -m 1 http://127.0.0.1:${port}/ && echo open`).join("; ") + "; true")).includes("open");
   for (let attempt = 1; ; attempt += 1) {
+    // Emptied before the launch, not by it: `docker exec -d` returns before the new shell has run, and a read of the
+    // file in between would see the last attempt's exit line.
+    await sh(`: > ${out}`);
     await run("docker", ["exec", "-d", ...Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]), NAME, "sh", "-c", command]);
     let state = null;
     await waitFor(what, async () => {
@@ -193,7 +198,9 @@ async function startExtraBb({ dir, out, prefix = "", env = {}, args, up, what, a
     if (attempt === 2) throw new Error(`${what}: bb-app exited before it was up, twice. ${why}. Its processes: ${await said(BB_PROCESSES)}`);
     console.error(`${what}: bb-app exited before it was up; its start is tried once more. ${why}`);
     await stopExtraBb(dir);
-    await sh(`rm -f ~/${dir}/daemon.lock ~/${dir}/daemon.lock.lock`);
+    await waitFor(`nothing of ${dir}'s bb to answer on ${ports.join(" or ")}`, async () => !(await open()), { timeoutMs: 60_000, everyMs: 500 });
+    // bb's daemon lock (proper-lockfile): a directory beside a file.
+    await sh(`rm -rf ~/${dir}/daemon.lock.lock && rm -f ~/${dir}/daemon.lock`);
   }
 }
 /** Every bb process in the container, with how long it has run, its state and what it waits on in the kernel: when a
@@ -1067,7 +1074,7 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
   const signedOut = { ...SETTINGS, server: "http://127.0.0.1:58886", daemon: "http://127.0.0.1:58887" };
   try {
   await startExtraBb({ dir: "bbdata-signed-out", out: "bb-app-signed-out.out", prefix: "env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL",
-    args: "--server-bind-host 127.0.0.1 --server-port 58886 --host-daemon-port 58887", what: "the signed-out bb's daemon to connect",
+    args: "--server-bind-host 127.0.0.1 --server-port 58886 --host-daemon-port 58887", ports: [58886, 58887], what: "the signed-out bb's daemon to connect",
     up: async () => (await sh("curl -s -m 2 http://127.0.0.1:58887/status || true")).includes('"connected":true'),
     answered: "curl -s -m 2 http://127.0.0.1:58887/status || echo nothing" });
 
@@ -1110,7 +1117,7 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
   let made = null;
   try {
     await startExtraBb({ dir: "bbdata-second", out: "bb-app-second.out", env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:9999", ANTHROPIC_API_KEY: "dummy-not-a-real-key" },
-      args: "--server-bind-host 127.0.0.1 --server-port 39011 --host-daemon-port 39012", what: "the second bb's daemon to connect",
+      args: "--server-bind-host 127.0.0.1 --server-port 39011 --host-daemon-port 39012", ports: [39011, 39012], what: "the second bb's daemon to connect",
       up: async () => (await sh("curl -s -m 2 http://127.0.0.1:39012/status || true")).includes('"connected":true'),
       answered: "curl -s -m 2 http://127.0.0.1:39012/status || echo nothing" });
     await waitFor("the second bb to be ready", async () => (await check(second)).result?.status === "ready", { timeoutMs: 120_000, everyMs: 1_000 });
@@ -1210,7 +1217,7 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
 test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", async () => {
   const exposed = { ...SETTINGS, server: "http://127.0.0.1:48886", daemon: "http://127.0.0.1:48887" };
   await startExtraBb({ dir: "bbdata-exposed", out: "bb-app-exposed.out", env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:9999", ANTHROPIC_API_KEY: "dummy-not-a-real-key" },
-    args: "--server-bind-host 0.0.0.0 --server-port 48886 --host-daemon-port 48887", what: "the exposed bb to answer", timeoutMs: 240_000,
+    args: "--server-bind-host 0.0.0.0 --server-port 48886 --host-daemon-port 48887", ports: [48886, 48887], what: "the exposed bb to answer", timeoutMs: 240_000,
     up: async () => (await sh("curl -s -m 2 http://127.0.0.1:48886/health || true")).includes('"ok":true'),
     answered: "curl -s -m 2 http://127.0.0.1:48886/health || echo nothing" });
 

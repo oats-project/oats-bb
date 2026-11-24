@@ -899,7 +899,7 @@ const more = [
       check(/^\{"text":"LINEAGE Sibling Redesign ui lead ▸ ?Details","open":false\}$/.test(face), `${at} Lineage: the sibling, by its name as words, on the page's face; "Owning human" and "Messaging ID" are not on it: one fold, closed`, face);
       await page.evaluate(click(`${FOLD} summary`));
       const lineage = await page.until(`document.querySelector(${JSON.stringify(FOLD)})?.open === true ? ${factsOf("oats-panel-lineage-details")} : ""`, 10);
-      check(lineage === "Owning human: Ana | Messaging ID: oats.aweb.ai/panel-worktree-helper", `${at} opened, the fold holds the owning human, then the messaging ID`, String(lineage));
+      check(lineage === "Owning human: Ana | Messaging ID: oats.aweb.ai/panel-worktree-helper Copy", `${at} opened, the fold holds the owning human, then the messaging ID with its Copy`, String(lineage));
       const noHeading = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-messaging"))}) === null && !/Messaging & Teams/i.test(document.querySelector(${JSON.stringify(testId("oats-panel"))}).innerText)`);
       check(noHeading === true, `${at} under no heading of its own`, noHeading);
       const copyId = await page.evaluate(`document.querySelector(${JSON.stringify(`${inPanel("oats-panel-lineage")} button`)})?.getAttribute("aria-label")`);

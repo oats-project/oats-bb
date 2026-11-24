@@ -536,6 +536,8 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
           </Facts>
           )}
           {facts.human === null && facts.messagingId === null ? null : (
+            // (A relative's link over it is a target as high as a finger needs, taken back from its line: at a phone's width the fold stands clear of it.)
+            <div className="pt-2 md:pt-0">
             <Disclosure summary="Details" testId="oats-panel-lineage-details">
               <Facts>
                 {facts.human === null ? null : (
@@ -551,6 +553,7 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
                 )}
               </Facts>
             </Disclosure>
+            </div>
           )}
         </Section>
       )}

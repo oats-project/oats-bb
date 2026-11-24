@@ -43,7 +43,7 @@ import { showSidebar } from "../../browser.mjs";
 import { click, closed, dialog, phaseIs } from "../../scenes/lifecycle.mjs";
 
 /** The row and the page say a tmux agent's stop and its loss by the row's sessionEnd (the one-predicate PR is on main). */
-const WORDS = false;
+const WORDS = true;
 /** Start and Restart are offered for an agent on tmux, and a lost one's Start resumes (the dialogs' PR for tmux is on main). */
 const ACTS = true;
 
@@ -66,6 +66,8 @@ const EXPECTED = {
 // The dialogs' words for an agent on tmux, as their author gave them (bb-plugin-dialogs-developer,
 // 23 Nov, from app/lifecycle/words.ts RESUME and START and app/panel/words.ts attachWhere): read
 // only with ACTS on, and to be read again against the PR that lands.
+/** The lost tmux agent's page, under its state (app/outside/words.ts LOST_TMUX): read only with WORDS on. */
+const LOST_SAYS = "Its session ended without OATS stopping it. Nobody stopped it.";
 const SAYS = {
   start: "This starts a new conversation using the saved briefing and state.",
   restart: "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.",
@@ -186,7 +188,7 @@ export default async (run) => {
   const clean = (expression) => `(${expression} ?? "").replace(/\\s+/g, " ").trim()`;
   /** The agent's page once it shows a state among `words` (a wait on the state it asserts) → what it says and offers. */
   const pageSays = (words) =>
-    `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); const s = p?.querySelector('[data-testid="oats-panel-state"]'); if (!p || !s) return ""; const state = ${clean("s.innerText")}; if (!${JSON.stringify(words)}.some((word) => state.includes(word))) return ""; return JSON.stringify({ name: ${clean(`p.querySelector('[data-testid="oats-panel-name"]')?.innerText`)}, state, acts: [...p.querySelectorAll('[data-testid="oats-agent-acts"] button')].map((b) => b.innerText.trim()) }); })()`;
+    `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); const s = p?.querySelector('[data-testid="oats-panel-state"]'); if (!p || !s) return ""; const state = ${clean("s.innerText")}; if (!${JSON.stringify(words)}.some((word) => state.includes(word))) return ""; return JSON.stringify({ name: ${clean(`p.querySelector('[data-testid="oats-panel-name"]')?.innerText`)}, state, acts: [...p.querySelectorAll('[data-testid="oats-agent-acts"] button')].map((b) => b.innerText.trim()), block: p.querySelector('[data-testid="oats-outside-agent-block"]')?.getAttribute("data-outside") ?? null, reason: ${clean(`p.querySelector('[data-testid="oats-outside-reason"]')?.innerText`)}, lastStarted: ${clean(`p.querySelector('[data-testid="oats-outside-last-started"]')?.innerText`)} }); })()`;
   const pageNow = `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); return p ? ${clean("p.innerText")}.slice(0, 600) : ${clean("document.body.innerText")}.slice(0, 300); })()`;
   /** The agent's row in the sidebar, once its state is one of `words` → its facts, whole (the row's own title: state · soul or reason · where). */
   const rowSays = (words) => `(() => { const facts = document.querySelector(${JSON.stringify(ROW)})?.querySelector('[data-testid="oats-row-facts"]')?.getAttribute("title") ?? ""; return ${JSON.stringify(words)}.some((word) => facts.startsWith(word)) ? facts : ""; })()`;
@@ -208,6 +210,8 @@ export default async (run) => {
     const read = said ? JSON.parse(said) : null;
     check(read !== null && read.name === CALLED, `${at} the agent's own page opens for it and says its state`, said ?? (await page.evaluate(pageNow)));
     check(JSON.stringify(read?.acts) === JSON.stringify(acts), `${at} the page offers ${acts.join(" and ")}${ACTS ? "" : state === "running" ? ": no Restart for an agent on tmux (main today)" : ": no Start for an agent on tmux (main today)"}`, JSON.stringify(read?.acts));
+    if (WORDS && state === "lost") check(read?.block === "lost-tmux" && read.reason.startsWith(LOST_SAYS) && /^Last started /.test(read.lastStarted), `${at} the lost agent's page says what happened under its state: "${LOST_SAYS}", and when it was last started`, JSON.stringify(read));
+    if (WORDS && state === "stopped") check(read?.block === null, `${at} the page of an agent stopped with OATS says nothing more than "Stopped": no block of what happened outside OATS`, JSON.stringify(read));
     await shot(`${state}-page`);
     return { at, row: inRow ?? null, ...read };
   };

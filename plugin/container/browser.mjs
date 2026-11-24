@@ -209,7 +209,16 @@ export const fill = (selector, value) =>
   `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; const kind = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement : HTMLInputElement; Object.getOwnPropertyDescriptor(kind.prototype, "value").set.call(e, ${JSON.stringify(value)}); e.dispatchEvent(new Event("input", { bubbles: true })); e.scrollIntoView({ block: "center" }); return true; })()`;
 
 /** At phone width the thread list is in bb's drawer: open it with bb's own toggle. */
-export async function showSidebar(page, viewport) {
+export async function showSidebar(page, viewport, { fold = "open" } = {}) {
+  const shown = await showsSidebar(page, viewport);
+  // The roster's parents are closed when the page loads (the fold). A scene that reads a child's
+  // row opens them, as a person does: every chevron pressed. `fold: "asLoaded"` leaves the tree as
+  // the page drew it (the fold's own scene, and the image of the sidebar as a fresh install shows it).
+  if (shown && fold === "open") await openParents(page);
+  return shown;
+}
+
+async function showsSidebar(page, viewport) {
   if (await page.until(visible(testId("oats-sidebar")), viewport.mobile ? 4 : 30)) return true;
   if (!viewport.mobile) return false;
   await page.evaluate(
@@ -218,5 +227,17 @@ export async function showSidebar(page, viewport) {
   );
   await sleep(600); // the drawer slides in
   return Boolean(await page.until(visible(testId("oats-sidebar")), 15));
+}
+
+/**
+ * Presses the chevron of every closed parent of the roster's tree, until none is closed (a child
+ * that is a parent too is closed when its parent opens). It waits a little for the tree first: a
+ * sidebar with no roster (not read, no agents) has nothing to open. → how many it pressed.
+ */
+export async function openParents(page) {
+  await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-tree")}, ${testId("oats-no-agents")}`)}) !== null`, 5);
+  return page.evaluate(
+    `(() => { let pressed = 0; for (;;) { const closed = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-row-toggle")}[aria-expanded="false"]`)}); if (!closed || pressed > 200) return pressed; closed.click(); pressed += 1; } })()`,
+  );
 }
 

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { showSidebar, testId, textOf, texts, visible, textsNamed, tmuxMarks } from "../browser.mjs";
+import { openParents, showSidebar, testId, textOf, texts, visible, textsNamed, tmuxMarks } from "../browser.mjs";
 import { PILOT_ROSTER, TMUX_ROSTER } from "../tmux-roster.mjs";
 import { click, closed, dialog, phaseIs, saysNow } from "./lifecycle.mjs";
 
@@ -47,18 +47,6 @@ const folds = (page) =>
   page.evaluate(
     `JSON.stringify((() => { const tree = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")}`)}); const toggles = [...(tree?.querySelectorAll(${JSON.stringify(testId("oats-row-toggle"))}) ?? [])]; const inside = [...(tree?.querySelectorAll(${JSON.stringify(testId("oats-row-inside"))}) ?? [])].map((mark) => { const row = mark.closest(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)}); return [row?.getAttribute("data-instance") ?? row?.getAttribute("data-sidebar-thread-id") ?? null, mark.querySelector("[data-mark]")?.getAttribute("data-state") ?? null]; }); return { parents: toggles.length, closed: toggles.filter((toggle) => toggle.getAttribute("aria-expanded") === "false").length, inside }; })())`,
   );
-/** Opens every parent of the roster, the ones that come into view with it too: a parent is closed when the page loads. Answers how many it opened. */
-async function openAll(page) {
-  let opened = 0;
-  for (let round = 0; round < 40; round += 1) {
-    const clicked = await page.evaluate(`(() => { const toggle = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-row-toggle")}[aria-expanded="false"]`)}); if (!toggle) return false; toggle.click(); return true; })()`);
-    if (clicked !== true) return opened;
-    opened += 1;
-    // Waited for: that parent says it is open before the next is looked for.
-    await page.until(`document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-row-toggle")}[aria-expanded="true"]`)}).length >= ${opened} ? "1" : ""`, 10);
-  }
-  return opened;
-}
 /** Presses one parent's chevron (by its agent's instance). */
 const toggleOf = (instance) => `document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-row-toggle")}[data-instance="${instance}"]`)})?.click()`;
 /** `treeRows` with each row's depth: the indents drawn, smallest first, are depth 0, 1, 2. */
@@ -99,15 +87,52 @@ export default [
     stage: "fixtures",
     name: "the sidebar, an agent's thread, a thread that is no agent",
     run: async ({ page, at, viewport, threads, fixtureThreads, check, sleep }) => {
-      // the sidebar with the tree
+      // the sidebar with the tree, as the page loads it: every parent closed (the fold)
       await page.goto("/");
-      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
       await page.until(visible(testId("oats-tree")), 30);
+      {
+        const LEAD = threads.get("thr_redesign").id; // redesign-ui-lead: the one parent, of desktop-mockups-developer and harvest-knowledge-helper
+        const KIDS = [threads.get("thr_mockups").id, threads.get("thr_harvest").id];
+        const lead = `${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${LEAD}"]`;
+        const toggle = `${testId("oats-sidebar")} ${testId("oats-row-toggle")}`;
+        const fold = `JSON.stringify({ rows: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}`)})].map((e) => e.getAttribute("data-sidebar-thread-id")), toggles: [...document.querySelectorAll(${JSON.stringify(toggle)})].map((b) => [b.tagName, b.getAttribute("data-instance"), b.getAttribute("aria-expanded"), b.getAttribute("aria-label"), b.innerText.trim()]) })`;
+        const closedNow = { toggles: [["BUTTON", "redesign-ui-lead", "false", "Show Redesign ui lead's agents", "▸"]] };
+        const openNow = { toggles: [["BUTTON", "redesign-ui-lead", "true", "Hide Redesign ui lead's agents", "▸"]] };
+        const is = (read, want, kids) => JSON.stringify(read.toggles) === JSON.stringify(want.toggles) && read.rows.length === (kids ? 7 : 5) && KIDS.every((id) => read.rows.includes(id) === kids);
+        const loaded = JSON.parse(await page.evaluate(fold));
+        check(is(loaded, closedNow, false), `${at} on load every parent is closed: the five roots on bb are rows, the lead's two children are not, and the lead has ONE chevron, a button that says "Show Redesign ui lead's agents" (no count)`, JSON.stringify(loaded));
+        // The chevron is before the row's mark, inside the row, not over it; and it is not part of the row's link.
+        const placed = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(toggle)}).getBoundingClientRect(); const row = document.querySelector(${JSON.stringify(lead)}); const r = row.getBoundingClientRect(); const m = row.querySelector("[data-mark]").getBoundingClientRect(); return JSON.stringify({ inRow: b.left >= r.left - 1 && b.top >= r.top - 1 && b.bottom <= r.bottom + 1, beforeMark: b.right <= m.left + 1, high: Math.round(b.height) >= ${viewport.mobile ? 44 : 32}, wide: Math.round(b.width) >= 24, apart: !row.contains(document.querySelector(${JSON.stringify(toggle)})) }); })()`);
+        check(placed === JSON.stringify({ inRow: true, beforeMark: true, high: true, wide: true, apart: true }), `${at} the chevron stands in the row, before its mark, as high as a control (${viewport.mobile ? 44 : 32} px) and 24 px wide, and is no part of the row's link`, placed);
+        // Every row's mark stands in one column: the gutter is every row's.
+        const column = await page.evaluate(`JSON.stringify([...new Set([...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} > li > [data-testid], ${testId("oats-tree")} > li a[data-testid]`)})].filter((row) => row.matches(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})).map((row) => Math.round(row.querySelector("[data-mark]").getBoundingClientRect().left)))])`);
+        check(JSON.parse(column).length === 1, `${at} every root's mark starts in one column, the parent's among them`, column);
+        // The image of the sidebar as a fresh install shows it: the tree closed.
+        await page.shot(`a13-${viewport.name}-sidebar`, { targets: true });
+        // The keys, on the row: Right opens, Left closes.
+        await page.evaluate(`document.querySelector(${JSON.stringify(lead)}).focus()`);
+        await page.press("ArrowRight");
+        const byKey = (await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === 7 ? now : ""; })()`, 10)) || (await page.evaluate(fold));
+        check(is(JSON.parse(byKey), openNow, true), `${at} Right on the lead's row opens it: its two children are rows, and the chevron says "Hide Redesign ui lead's agents"`, byKey);
+        await page.evaluate(`document.querySelector(${JSON.stringify(lead)}).focus()`);
+        await page.press("ArrowLeft");
+        const closedByKey = (await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === 5 ? now : ""; })()`, 10)) || (await page.evaluate(fold));
+        check(is(JSON.parse(closedByKey), closedNow, false), `${at} Left closes it again`, closedByKey);
+        // The chevron by the keyboard: it takes the focus, and Enter presses it.
+        const focused = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(toggle)}); b.focus(); return document.activeElement === b && b.tabIndex === 0; })()`);
+        await page.press("Enter");
+        const byEnter = (await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === 7 ? now : ""; })()`, 10)) || (await page.evaluate(fold));
+        check(focused === true && is(JSON.parse(byEnter), openNow, true), `${at} the chevron takes the keyboard's focus, and Enter on it opens the lead`, `${focused} ${byEnter}`);
+        const where = await page.evaluate(`location.pathname`);
+        check(where === "/", `${at} opening and closing a parent opens no thread`, where);
+        await page.shot(`a13-${viewport.name}-sidebar-opened`, { targets: true });
+      }
       const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.getAttribute("data-sidebar-thread-id"))`);
       const expected = fixtureThreads.filter((thread) => thread.id !== "thr_plain").map((thread) => threads.get(thread.id).id);
       check(rows.length === 7 && expected.every((id) => rows.includes(id)), `${at} the tree draws the 7 bb agents, joined by bb's own thread ids`, JSON.stringify(rows));
       const child = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_mockups").id}"]`;
-      check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.includes("pl-6") === true`), `${at} a child is indented under its parent`);
+      check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.split(/\s+/).includes("pl-10") === true && document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_redesign").id}"]`)})?.className.split(/\s+/).includes("pl-6") === true`), `${at} a child is indented one step under its parent (the roster's gutter for the chevron is every row's)`);
       // The machine is shown by the name bb gives it, which is the host's own (G1): a name, never an id.
       check(!/^[0-9a-f]{12}$/.test(MACHINE), `${at} the machine the checks run on has a name (${MACHINE}), not a container's id: start the container through ci.sh, or with --hostname and MACHINE_NAME`);
       // The workspace's name alone heads the roster: no machine, no count, and no heading "Agents" under it.
@@ -134,7 +159,6 @@ export default [
       check(cut.length === 0, `${at} no row's second line is cut`, JSON.stringify(cut));
       const others = await page.evaluate(texts(testId("oats-other-row")));
       check(others.some((text) => text.includes("Plain bb thread")), `${at} the thread that is no agent is under Other threads`, JSON.stringify(others));
-      await page.shot(`a13-${viewport.name}-sidebar`);
 
       // the home's badge: bb's own navigation entry for the home (the rail on desktop, the drawer on a
       // phone), never the plugin's own "3 need you" line, carries the label and draws the count
@@ -206,9 +230,9 @@ export default [
       await page.shot(`a13-${viewport.name}-thread-needs`, { targets: true });
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const open = `${testId("oats-agent-row")}[data-sidebar-thread-id="${release.id}"]`;
-      const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-mark][data-state="needs-you"]')?.innerText.trim() === "!" && row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() === "Needs you" ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
+      const marked = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(open)}); return row?.querySelector('[data-mark][data-state="needs-you"]')?.innerText.trim() === "!" && row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() === "Needs you · oats-maintainer" ? getComputedStyle(row).backgroundColor : ""; })()`, 30);
       const resting = await page.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${mockups.id}"]`)})).backgroundColor`);
-      check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its "!" and says "Needs you", on the open row's background`, `${marked} against ${resting}`);
+      check(Boolean(marked) && marked !== resting, `${at} the open row of an agent that needs you has its "!" and says "Needs you" and its soul, on the open row's background`, `${marked} against ${resting}`);
       // At 1280 the sidebar is beside the thread: the image above already shows the open row. At 390 it is bb's drawer, over the thread.
       if (viewport.mobile) await page.shot(`a13-${viewport.name}-sidebar-open-row`);
 
@@ -262,6 +286,47 @@ export default [
     },
   },
   {
+    stage: "fixtures",
+    name: "the fold: a closed parent whose child waits on a person carries the child's mark after its own state; the parent of the thread on screen is open",
+    run: async ({ page, at, viewport, threads, check, record }) => {
+      const LEAD = threads.get("thr_redesign").id;
+      const CHILD = threads.get("thr_mockups").id;
+      const lead = `${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${LEAD}"]`;
+      const child = `${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${CHILD}"]`;
+      const toggle = `${testId("oats-sidebar")} ${testId("oats-row-toggle")}`;
+      // The kernel records that the lead's child waits on a person.
+      record({ "desktop-mockups-developer": { waitingOnYou: { since: "2026-11-19T12:40:00.000Z", producer: "oats.core", reason: "attention", message: "Which mockup do I keep?" } } });
+      await page.goto("/");
+      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
+      const read = `(() => { const row = document.querySelector(${JSON.stringify(lead)}); if (!row) return ""; const inside = row.querySelector(${JSON.stringify(`${testId("oats-row-inside")} [data-mark]`)}); return JSON.stringify({ own: row.querySelector("[data-mark]").getAttribute("data-state"), word: row.querySelector('[data-phrase="state"]').innerText.trim(), inside: inside ? [inside.getAttribute("data-state"), inside.getAttribute("role"), inside.getAttribute("aria-label")] : null, after: row.querySelector(${JSON.stringify(testId("oats-row-inside"))})?.previousElementSibling?.getAttribute("data-phrase") ?? null, lines: Math.round(row.querySelector(${JSON.stringify(testId("oats-row-facts"))}).getBoundingClientRect().height / parseFloat(getComputedStyle(row.querySelector(${JSON.stringify(testId("oats-row-facts"))})).lineHeight)), open: document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, child: document.querySelector(${JSON.stringify(child)}) !== null, first: document.querySelector(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)}) === null ? null : [...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})].findIndex((r) => r === row) }); })()`;
+      const marked = (await page.until(`(() => { const now = ${read}; return now !== "" && JSON.parse(now).inside !== null ? now : ""; })()`, 30)) || (await page.evaluate(read));
+      const m = marked === "" ? {} : JSON.parse(marked);
+      check(m.open === "false" && m.child === false && m.own === "working" && m.word === "Working" && JSON.stringify(m.inside) === JSON.stringify(["needs-you", "img", "Needs input"]) && m.after === "state" && m.lines === 1, `${at} the closed lead keeps its own state ("Working", its own mark), and carries after it the mark of the child that waits, named for a screen reader, on the same one line; the child's row is not drawn`, marked);
+      check(typeof m.first === "number" && m.first <= 2, `${at} the lead stands among the rows that need a person: its subtree's most urgent state brings it up`, marked);
+      await page.shot(`a13-${viewport.name}-sidebar-child-waits`, { targets: true });
+      // Opened: the child's own row says it, and the lead carries no mark.
+      await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
+      const opened = (await page.until(`(() => { const now = ${read}; return now !== "" && JSON.parse(now).child ? now : ""; })()`, 10)) || (await page.evaluate(read));
+      const childState = await page.evaluate(`document.querySelector(${JSON.stringify(`${child} [data-mark]`)})?.getAttribute("data-state") ?? null`);
+      check(opened !== "" && JSON.parse(opened).inside === null && JSON.parse(opened).open === "true" && childState === "needs-you", `${at} opened, the child's own row is marked and the lead carries no mark`, `${opened} ${childState}`);
+      await page.shot(`a13-${viewport.name}-sidebar-child-waits-opened`);
+      // The thread on screen is the child's: after a load its parent is open, and a press on the chevron does not hide the row.
+      await page.goto(`/projects/${threads.get("thr_mockups").projectId}/threads/${CHILD}`);
+      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is shown beside the child's thread`);
+      const onScreen = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(child)}); return row && row.getAttribute("aria-current") === "page" ? document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? "" : ""; })()`, 30);
+      check(onScreen === "true", `${at} with the child's thread on screen its parent is open on load`, String(onScreen));
+      await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
+      const kept = await page.evaluate(`JSON.stringify([document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, document.querySelector(${JSON.stringify(child)}) !== null])`);
+      check(kept === JSON.stringify(["true", true]), `${at} a parent is never closed over the row on screen`, kept);
+      // And back, so the scenes after this one draw the fixtures.
+      record();
+      await page.goto("/");
+      await showSidebar(page, viewport, { fold: "asLoaded" });
+      const back = await page.until(`(() => { const now = ${read}; return now !== "" && JSON.parse(now).inside === null && JSON.parse(now).open === "false" ? now : ""; })()`, 30);
+      check(Boolean(back), `${at} once the child no longer waits the closed lead carries no mark`, String(back));
+    },
+  },
+  {
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {
@@ -280,11 +345,11 @@ export default [
 
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const factsOf = (id) => `(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
-      const words = await page.until(`(() => { const rows = [${factsOf(unreachable.id)}, ${factsOf(failed.id)}]; return rows[0] === "Unreachable" && rows[1] === "Failed" ? JSON.stringify(rows) : ""; })()`, 30);
-      check(Boolean(words), `${at} in the sidebar the two rows say "Unreachable" and "Failed", each beside its mark`, words ?? (await page.evaluate(`JSON.stringify([${factsOf(unreachable.id)}, ${factsOf(failed.id)}])`)));
+      const words = await page.until(`(() => { const rows = [${factsOf(unreachable.id)}, ${factsOf(failed.id)}]; return rows[0] === "Unreachable · oats-desktop-developer" && rows[1] === "Failed · knowledge-harvester" ? JSON.stringify(rows) : ""; })()`, 30);
+      check(Boolean(words), `${at} in the sidebar the two rows say "Unreachable" and "Failed", each beside its mark and before its soul`, words ?? (await page.evaluate(`JSON.stringify([${factsOf(unreachable.id)}, ${factsOf(failed.id)}])`)));
       // And the agent whose bb thread is gone stays in the roster (S3): bb has no thread of its id, and the row says so (the outside feature's words).
       const gone = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-agent-row-threadless")}[data-instance="weekly-digest-helper"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
-      check(gone === "Stopped · deleted in bb", `${at} the agent whose bb thread is gone stays in the roster, and says "Stopped", then the reason, "deleted in bb"`, gone ?? (await page.evaluate(textOf(testId("oats-tree")))));
+      check(gone === "Stopped · deleted in bb · oats-expert", `${at} the agent whose bb thread is gone stays in the roster, and says "Stopped", then the reason, "deleted in bb", then its soul`, gone ?? (await page.evaluate(textOf(testId("oats-tree")))));
       // At 1280 the image of the failed thread already shows the sidebar's rows; at 390 they are in bb's drawer.
       // The detached row says what happened after its state's word ("deleted in bb"), which does not give way: it obeys the row's rule too:
       // one line, nothing past the row's edge, the state's word whole.
@@ -388,7 +453,7 @@ export default [
     name: "a deployment that is mostly tmux agents: every one a row that says where it runs, each one that waits marked, no phrase broken, the last row reachable, and a row opens its agent's page",
     run: async ({ page, at, viewport, threads, check }) => {
       await page.goto("/");
-      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
       const side = JSON.stringify(testId("oats-sidebar"));
       const tmux = TMUX_ROSTER.tmux;
       // As the page loads every parent is CLOSED, whatever its backend: the roots alone are drawn. Two closed parents
@@ -402,7 +467,7 @@ export default [
       check(JSON.stringify(foldsClosed.inside.map(([who, state]) => `${who}:${state}`).sort()) === JSON.stringify(hidesWaiting.map((instance) => `${instance}:needs-you`).sort()), `${at} the ${hidesWaiting.length} closed tmux parents that hide an agent that waits carry its mark after their own word, and no other parent carries one`, JSON.stringify(foldsClosed.inside));
       await page.shot(`tmux-roster-${viewport.name}-sidebar-closed`, { targets: true });
       // Every parent opened: the rest of this scene reads every agent's row.
-      const openedNow = await openAll(page);
+      const openedNow = await openParents(page);
       check(openedNow === tmux.filter(([instance]) => tmux.some(([, , of]) => of === instance)).length + 1, `${at} every parent opens by its chevron, a parent under a parent too: ${openedNow}`, String(openedNow));
       // Every tmux agent is a row, by its one name, and says its state, its soul and "tmux".
       const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), ((row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? "") + (row.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim()])) : ""; })()`, 30);
@@ -469,6 +534,8 @@ export default [
       const longest = await page.evaluate(`(() => { const row = document.querySelector(${JSON.stringify(row)}); const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const box = (e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right)]; }; const part = (kind) => facts.querySelector('[data-phrase="' + kind + '"]'); return JSON.stringify({ title: facts.getAttribute("title"), lines: Math.round(facts.getBoundingClientRect().height / parseFloat(getComputedStyle(facts).lineHeight)), state: getComputedStyle(part("state")).flexShrink === "0" && part("state").scrollWidth <= part("state").clientWidth + 1, reason: getComputedStyle(part("reason")).flexShrink === "0" && getComputedStyle(part("reason")).textOverflow !== "ellipsis" && part("reason").scrollWidth <= part("reason").clientWidth + 1, soulCut: part("soul").scrollWidth > part("soul").clientWidth + 1, soulRoom: part("soul").clientWidth >= 12, glyphIn: box(part("where"))[1] <= box(facts)[1] + 1 }); })()`);
       check(/^\{"title":"Stopped · session lost · oats-contrib-developer · tmux","lines":1,"state":true,"reason":true,"soulCut":(true|false),"soulRoom":true,"glyphIn":true\}$/.test(longest), `${at} the longest row is ONE line: the state and the reason whole, the soul (giving way with "…" where it must), the glyph inside the row; its title says all of it`, longest);
       await page.shot(`tmux-roster-${viewport.name}-longest-row`);
+      // (The roster back at its top: bb's drawer keeps where it was scrolled, and a sidebar scrolled away reads as not shown.)
+      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-sidebar"))}).scrollIntoView({ block: "start" })`);
       const facts = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(row)}); const facts = row?.querySelector(${JSON.stringify(testId("oats-row-facts"))}); return facts ? ((facts.innerText.replace(/\\s+/g, " ").trim()) + (facts.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim() : ""; })()`, 30);
       check(facts === "Stopped · session lost · oats-contrib-developer · tmux", `${at} its row: "Stopped · session lost", its soul, then where it is (bb's terminal glyph, named "tmux")`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       await page.evaluate(`document.querySelector(${JSON.stringify(row)}).click()`);
@@ -477,12 +544,12 @@ export default [
       const flat = `(e) => (e?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
       const read = JSON.parse(
         await page.evaluate(
-          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = document.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}); const session = document.querySelector(${JSON.stringify(testId("oats-panel-session"))}); const whole = flat(document.querySelector(${JSON.stringify(testId("oats-agent-page"))})); return JSON.stringify({ state: flat(head?.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), acts: [...(head?.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)}) ?? [])].map(flat), reason: flat(block), kind: block?.getAttribute("data-outside") ?? null, session: flat(session), sentence: /Nobody stopped|without OATS stopping|Start tries|To carry on|Last started/.test(whole) }); })()`,
+          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = document.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}); const session = document.querySelector(${JSON.stringify(testId("oats-panel-session"))}); const whole = flat(document.querySelector(${JSON.stringify(testId("oats-agent-page"))})); return JSON.stringify({ state: flat(head?.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), acts: [...(head?.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)}) ?? [])].map(flat), reason: [...(head?.querySelectorAll(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-status-part")}`)}) ?? [])].map((part) => flat(part).replace(/^· /, "")).join(" | "), kind: head?.querySelector(${JSON.stringify(testId("oats-panel-state"))})?.getAttribute("data-outside") ?? null, alone: block !== null, times: (whole.match(/session lost/g) ?? []).length, session: flat(session), sentence: /Nobody stopped|without OATS stopping|Start tries|To carry on|Last started/.test(whole) }); })()`,
         ),
       );
-      check(read.state === "Stopped" && read.kind === "lost-tmux" && read.reason === "session lost" && read.sentence === false, `${at} its page says "Stopped", and under its header the reason alone, "session lost": no sentence, and no "Last started"`, JSON.stringify(read));
+      check(read.state === "Stopped" && read.kind === "lost-tmux" && read.reason === "session lost" && read.alone === false && read.times === 1 && read.sentence === false, `${at} its page says "Stopped · session lost" on its header's state line, once: nothing of it alone under the tabs, no sentence, and no "Last started"`, JSON.stringify(read));
       check(JSON.stringify(read.acts) === JSON.stringify(["Start…", "Retire…"]), `${at} its acts are Start… and Retire…, and no Restart (nothing runs)`, JSON.stringify(read.acts));
-      check(/^SESSION\b/i.test(read.session) && /Runs in tmux/.test(read.session) && !/Last started/.test(read.session), `${at} its Session card: the harness, the model, that it runs in tmux, and when it started, each a labelled fact`, read.session);
+      check(/^SESSION\b/i.test(read.session) && /Runs in tmux/.test(read.session) && !/Last started|Stopped/.test(read.session), `${at} its Session card: that it runs in tmux, and no "Stopped <time>" (the kernel records no time of a loss, and an earlier stop's is not this one's)`, read.session);
       await page.shot(`tmux-roster-${viewport.name}-lost-page`, { targets: true });
       // Start…: the dialog's ONE consequence line for a lost tmux agent; nothing starts on the press.
       await page.evaluate(click("oats-agent-act-start"));
@@ -531,7 +598,7 @@ export default [
       try {
         fake({ status: { stdout: tmuxStatus({}, PILOT_ROSTER) } });
         await page.goto("/");
-        check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+        check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
         // Waited for: the roster is the pilot's, and nobody else (the stage's own agents are gone from it). As the page
         // loads the parent is CLOSED: seven rows, one chevron, and no mark of a hidden row (the child does not wait).
         const roots = names.filter((name) => name !== CHILD);

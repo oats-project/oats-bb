@@ -227,7 +227,7 @@ test("the activity is read only when a person asks: Load, then the rows newest f
   fireEvent.click(load);
   // The last recorded event, its instant in the plugin's one form. What the agent waits for is the header's and
   // Needs input's to say, from the roster as it is now: the summary says nothing of it.
-  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toBe(`Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
+  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toBe(`Last: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
   expect(text(slot.getByTestId("oats-panel-activity-load"))).toBe("Refresh");
   // What was read stands there: no line says that it was loaded.
   await waitFor(() => expect(slot.queryByTestId("oats-panel-activity-status")).toBeNull());
@@ -295,7 +295,7 @@ test("the activity read earlier is shown again after the tab was left and come b
   await slot.findByTestId("oats-panel-soul-body");
   act(() => showPanelTab("instance"));
   expect(text(await slot.findByTestId("oats-panel-activity-load"))).toBe("Refresh");
-  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toBe(`Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
+  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toBe(`Last: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
   await act(async () => {});
   // Coming back reads nothing, and says nothing of it: what was read is there, with the act that reads it again.
   expect(slot.queryByTestId("oats-panel-activity-status")).toBeNull();

@@ -3,7 +3,7 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { OutsideAgent } from "../outside";
+import { OutsideAgent, pageParts } from "../outside";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
@@ -178,6 +178,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
   // bb thread has none to give it (`thread`, from InstancePanel).
   const status = agentStatus(agent, thread, now);
   const drift = read.data === undefined ? null : driftLines(read.data.facts.drift);
+  const line = pageParts(agent, oats, status);
   const soul = shown(oats.soulOf(agent));
   return (
     <>
@@ -189,9 +190,10 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
             {agentName(agent.instance)}
           </h2>
         </div>
-        <div data-testid="oats-panel-state">
-          {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here. */}
-          <StatusLine state={status.state} since={status.since} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : status.detail} />
+        <div data-testid="oats-panel-state" data-outside={line.kind ?? undefined}>
+          {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here.
+              For an agent the roster draws on no thread, what happened to it outside OATS follows the state's word, as on its row ("Stopped · session lost"). */}
+          <StatusLine state={status.state} since={line.since} tone={line.tone} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : line.detail} />
           <KernelSays text={status.kernel} />
         </div>
         {/* What a person can do with the agent, where its state is said: the lifecycle's own acts (each opens its dialog; nothing runs on the press), the ones that apply to its state, held with the reason while the roster is the last one read. Here an agent with no thread in bb has them too: its row opens this panel on its own page. */}
@@ -315,7 +317,7 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
       )}
 
       {readState}
-      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} running={agent.running} instance={agent.instance} startedAt={agent.startedAt ?? null} now={now} />}
+      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} running={agent.running} lost={agent.sessionEnd === "lost"} instance={agent.instance} startedAt={agent.startedAt ?? null} now={now} />}
       <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : { name: agent.instance, root: answerRoot }} now={now} />
       {/* The header's claim is the roster's; a recorded activity that names a newer one asks for the roster again. */}
       <Activity instance={agent.instance} claimSince={agent.waiting?.since ?? null} onNewerClaim={oats.retry} now={now} />
@@ -324,14 +326,16 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
 }
 
 /** `state` is the state the header says: what OATS says of an unreachable session is said there, once, and an agent that does not run was last started, not started. */
-function InstanceFacts({ oats, facts, state, running, instance, startedAt, now }: { oats: Roster; facts: PanelInstance; state: AgentState; /** the kernel's own word of the roster's row, as `state` is read from it */ running: Agent["running"]; instance: string; /** the roster's own time of the session's last start: a stop recorded before it is not this stop */ startedAt: string | null; now: number }) {
+function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt, now }: { oats: Roster; facts: PanelInstance; state: AgentState; /** the kernel's row says its session was lost (`sessionEnd: "lost"`): nobody stopped it */ lost: boolean; /** the kernel's own word of the roster's row, as `state` is read from it */ running: Agent["running"]; instance: string; /** the roster's own time of the session's last start: a stop recorded before it is not this stop */ startedAt: string | null; now: number }) {
   const unreachable = state === "unreachable";
   // When OATS stopped it: the time of the instance's last recorded "stopped" (also for one that runs
   // outside OATS, which OATS recorded stopped). One read, for this agent, only while it is stopped.
   // That read runs once and is kept (by bb, also for the Activity below): an answer held from before
   // THIS stop does not hold it, so each time the agent is seen to turn stopped, events already held
   // are read again. (Kept in an effect, declared before the effect that reads it.)
-  const recordedStopped = state === "stopped" || state === "outside";
+  // A session OATS LOST has no such time: the kernel records none of a loss (never "lost since"), and
+  // the last "stopped" its events hold is an earlier stop's. No "Stopped <time>" for it, and no read.
+  const recordedStopped = (state === "stopped" || state === "outside") && !lost;
   const events = usePanelEvents(instance, recordedStopped);
   const eventsNow = useRef(events);
   useEffect(() => {

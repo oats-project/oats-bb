@@ -336,12 +336,14 @@ test("a lost session says \"session lost\" on bb and on tmux, side by side; an a
   expect(acts(bbLine)).toEqual(["Start…"]);
   expect(bbLine.getByTestId("oats-identity-row").textContent).not.toMatch(/Nobody stopped|To carry on|Start begins/);
   resetApp();
-  // The tmux agent's page: the reason alone under its header, and no sentence (what Start does is its dialog's one line; when it started is its Session's); the header's own Start, and no Restart: nothing runs.
+  // The tmux agent's page: the reason on its header's state line, and no sentence (what Start does is its dialog's one line; when it started is its Session's); the header's own Start, and no Restart: nothing runs.
   const page = await agentPage(TMUX, { rpc: handlers({}, lostRows), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(page).kind).toBe("lost-tmux"));
-  expect(header(page)).toMatchObject({ state: "Stopped", sentence: "session lost", tone: null, acts: [] });
+  // ON the state's line, as on its row: "Stopped · session lost"; nothing alone under the tabs (no block at all: it has no act of this feature's).
+  expect(header(page)).toMatchObject({ state: "Stopped", sentence: "session lost", tone: null, acts: [], alone: null, block: null });
   expect(page.queryByTestId("oats-outside-last-started")).toBeNull();
-  expect(page.getByTestId("oats-outside-agent-block").textContent).not.toMatch(/Nobody stopped|Start tries|Last started/);
+  expect(page.getByTestId("oats-agent-page").textContent).not.toMatch(/Nobody stopped|Start tries|Last started/);
+  expect(page.getByTestId("oats-agent-page").textContent!.match(/session lost/g)).toHaveLength(1);
   expect(header(page).headed).toEqual(["Start…", "Retire…"]);
   resetApp();
   // Stopped with OATS, on tmux: "Stopped" and where it is, and nothing of this feature's.
@@ -389,16 +391,23 @@ async function agentPage(instance: string, options: RenderSlotOptions<Contract>)
   await slot.findByTestId("oats-panel-header");
   return slot;
 }
-/** The agent's page: its state in the header over the tabs, and this feature's block, first on the Instance tab's page. */
+/**
+ * The agent's page: its state in the header over the tabs, with what happened to it ON the state's
+ * line (`sentence`, `tone`: nothing of it stands alone under the tabs), and this feature's block,
+ * first on the Instance tab's page, where it has an act or the kernel's report to draw.
+ */
 const header = (slot: Awaited<ReturnType<typeof agentPage>>) => {
   const head = slot.getByTestId("oats-panel-header");
   const page = slot.getByTestId("oats-panel-page-instance");
   const block = page.firstElementChild?.getAttribute("data-testid") === "oats-outside-agent-block" ? (page.firstElementChild as HTMLElement) : null;
+  const parts = within(within(head).getByTestId("oats-panel-state")).queryAllByTestId("oats-status-part");
   return {
     state: within(within(head).getByTestId("oats-panel-state")).getByTestId("oats-state").textContent,
-    kind: block?.getAttribute("data-outside") ?? null,
-    sentence: block?.querySelector(":scope > p")?.textContent ?? null,
-    tone: block?.querySelector(":scope > p")?.getAttribute("data-tone") ?? null,
+    kind: block?.getAttribute("data-outside") ?? within(head).getByTestId("oats-panel-state").getAttribute("data-outside"),
+    sentence: parts.length === 0 ? null : parts.map((part) => part.textContent!.replace(/^· /, "")).join(" | "),
+    tone: parts.at(-1)?.getAttribute("data-tone") ?? null,
+    /** Nothing of what happened stands alone on the page under the tabs: no paragraph in the block, or no block. */
+    alone: block?.querySelector(":scope > p")?.textContent ?? null,
     acts: block === null ? [] : actsIn(block),
     /** The lifecycle's own acts for the agent's state, in the panel's header (`AgentActs`, the panel's). */
     headed: actsIn(within(head).getByTestId("oats-agent-acts")),
@@ -463,7 +472,7 @@ test("no act is drawn twice on the agent's page: the three agents whose thread b
   await waitFor(() => expect(header(failed).state).toBe("Failed"));
   await waitFor(() => expect(answer.asked).toHaveLength(1)); // bb has been asked where the thread is: the row is the one that says only that
   await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a block to be drawn, if one were)
-  expect(header(failed)).toMatchObject({ kind: null, acts: [] });
+  expect(header(failed)).toMatchObject({ block: null, alone: null, acts: [] });
   once(verbs(failed));
   resetApp();
   // It runs outside OATS: the header's Stop, Start and Retire; the notice says what Stop and Start do.

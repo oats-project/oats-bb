@@ -98,6 +98,19 @@ person reads it, unless an agent starts to need them (it rises) or is answered (
 its kernel place). The sidebar has no line that counts who waits: those rows are first and
 marked, and bb's badge on the plugin's entry says how many.
 
+**Children are collapsed by default** (`model/view.ts` `treeRows`, `insideOf`, `ancestorsOf`, whose
+table is `test/model/fold.test.ts`; `app/roster/fold.tsx`). A parent has ONE chevron before its
+mark, with no count: a button of its own, not part of the row's link, that says whose agents it
+shows or hides ("Show Redesign ui lead's agents", "Hide …") and whether they are shown
+(`aria-expanded`). Right on a parent's row opens it and Left closes it. Every parent is closed when
+the page loads, and stays as the person left it while the window lives: the open set is the
+window's memory (it outlives bb's drawer, which draws the sidebar anew), and nothing of it is
+stored. A closed parent's children are not in the page, so nothing of them takes the focus. A
+closed parent keeps its own state, mark and word, and where its subtree hides a row that needs a
+person, or one a person must look at, it carries that row's mark after its own word, named for a
+screen reader. The parents of the thread that is on screen are open, and are never closed over it.
+A roster with a parent in it keeps a gutter before every row, so every mark stands in one column.
+
 ## Stopping, starting, restarting and retiring an agent
 
 The four acts are OATS's own, each through the kernel, and each opens a dialog first: nothing runs
@@ -219,7 +232,7 @@ never states.
 | stopped, its session not lost | archived | "Stopped · archived in bb" (the Start dialog's one line says that Start begins a new conversation). The row opens the archived thread, which bb shows to read (no composer). | "Stopped", in the plain tone (once the provider archives at stop, this is every stopped agent) | Start…, Retire… |
 | its session lost (`sessionEnd: "lost"`) | archived | "Stopped · Archived in bb while running: it may still run.", in the warning tone | "Stopped · archived in bb", its mark in the warning tone | Stop, Retire (Start once it is stopped) |
 | still says it runs (not stopped, failed or unreachable, and not `running: false`) | archived | "<its state> · Archived in bb while running: it may still run.", in the warning tone, on the archived thread's own row: a person archived the conversation of an agent whose process goes on | "<its state> · archived in bb" (for example "Idle · archived in bb"), its mark in the warning tone | Stop, Retire |
-| stopped, or its session lost | deleted | "deleted in bb", on the agent's own page (it has no thread): in the warning tone, under the header's "Stopped" | "Stopped · deleted in bb", its mark in the warning tone | Start…, Retire… |
+| stopped, or its session lost | deleted | "Stopped · deleted in bb" on the state's line of the agent's own page's header (it has no thread): the reason in the warning tone, on the line as on the row, never alone under the tabs | "Stopped · deleted in bb", its mark in the warning tone | Start…, Retire… |
 | recorded stopped, with the kernel's `outsideOats` | any | "Running outside OATS · recorded stopped", in the warning tone, with **Stop…** and **Start…** as the line's own acts (Stop… alone for an agent that is not on bb); under the line no box and no title: one fold, **Details**, with what happened in a person's words ("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again."), then the kernel's own code and sentence. The same drawing on the home's card; on the instance panel the acts are the header's. | "Running outside OATS" | Stop…, Start… |
 | failed (its session ended) | open | "Failed · session ended". No warning: status sees a message that starts it. | "Failed" | Restart |
 | unreachable | any | "Unreachable" (the kernel's own message under Details); nothing about a message | "Unreachable" | Retry |
@@ -293,9 +306,10 @@ opens that act's dialog (`openAct`, `app/lifecycle`), which asks the kernel firs
 one press. The thread's menu offers Stop for an agent that runs outside OATS too. An agent the
 roster draws on no thread has none of the menu's entries, so its row leads to its acts: to the
 ARCHIVED thread, whose own row (`OutsideThreadRow`) has them; or, for a thread that is deleted, to
-the agent's own page, whose header has them (the panel's `AgentActs`), over what happened, which
-stands first on the Instance tab (`OutsideAgent`; the header over the tabs says the state and does
-not scroll, so the block is on the page). They are the lifecycle's buttons for the agent's state
+the agent's own page, whose header has them (the panel's `AgentActs`) under its state's line, which
+says what happened after the state's word, as the row does ("Stopped · session lost"; `pageParts`).
+The kernel's report, and the one act the header lacks, stand first on the Instance tab
+(`OutsideAgent`; the header over the tabs does not scroll, so that block is on the page). They are the lifecycle's buttons for the agent's state
 (`AgentActs`: Start… and Retire… for a stopped agent), but where a process runs, or may, with no
 thread a person can see: a session lost to bb's Archive and an agent archived while it ran have
 Stop and Retire on the archived thread's row (Start comes once it is stopped), and the kernel's
@@ -481,7 +495,9 @@ confirmation OATS answers (what OATS expected and what the terminal showed, each
 is). **Refresh** reads it again. It is the history of the instance's address as the kernel
 recorded it, not its current state. When the tab is left and come back to, what was read is shown
 again, and nothing is read until Refresh. (For an agent OATS stopped the events are read by the
-Session's "Stopped" fact, so its Activity shows them without a press.)
+Session's "Stopped" fact, so its Activity shows them without a press. A session OATS lost has no
+such fact and no such read: the kernel records no time of a loss, and the last "stopped" its events
+hold is an earlier stop's.)
 
 Where OATS has none of a thing for a kind of agent (`E_UNSUPPORTED_MODE`: no readiness check, no
 record of what it was spawned from), that part is not drawn: there is nothing to show, and no

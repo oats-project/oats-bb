@@ -62,6 +62,30 @@ describe("stop", () => {
     expect(await refusalOf(backend.rpc("stopPlan", { instance: "redesign-ui-lead" }))).toMatchObject({ message: expect.stringContaining("E_SESSION_UNKNOWN") });
   }, 40_000);
 
+  // The lead's L13, in the form ruled on 24 Nov 2026: an act's answer carries WHEN THE ACT ENDED on this server's clock,
+  // the clock a roster's `at` is taken from at the start of its status read: the window compares the two, and never
+  // its own clock. And every act asks for a status read as it ends: a roster read after the end always follows.
+  it("stamps an act's answer with when it ended, on the roster's own clock: the roster read before the act is not later than the end, and the read the act asks for is", async () => {
+    backend = await startBackend();
+    const { rpc } = backend;
+    const before = await rpc<{ at: string }>("snapshot");
+    const plan = await rpc<{ revision: string }>("stopPlan", { instance: "redesign-ui-lead" });
+    const receipt = await rpc<{ endedAt: string; ok: boolean }>("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-7f3a9c2e41b8" });
+    expect(new Date(receipt.endedAt).toISOString()).toBe(receipt.endedAt); // an ISO instant
+    expect(Date.parse(before.at)).toBeLessThanOrEqual(Date.parse(receipt.endedAt)); // read before the act: "before"
+    // The read the act asked for is PUBLISHED (a window reads the roster again only on a publish: this test does not poll
+    // `snapshot` for it, which no window does), and the roster it then gets has a stamp later than the act's end.
+    const signals = () => backend!.server.harness.realtimeSignals.length;
+    const publishedBefore = signals();
+    for (let tries = 0; tries < 100 && signals() === publishedBefore; tries += 1) await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(signals()).toBeGreaterThan(publishedBefore);
+    const after = await rpc<{ at: string }>("snapshot"); // as the window does, on that publish
+    expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(receipt.endedAt));
+    // The same stamp on a start's answer.
+    const started = await rpc<{ endedAt: string }>("start", { instance: "weekly-digest-helper" });
+    expect(new Date(started.endedAt).toISOString()).toBe(started.endedAt);
+  });
+
   it("answers the plan as the kernel's facts, applies it with its revision, and shows the kernel's refusal of a stale one unchanged", async () => {
     backend = await startBackend();
     const { rpc, fake } = backend;

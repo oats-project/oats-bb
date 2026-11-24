@@ -21,6 +21,7 @@ import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, outsideNeeds, outsideOf, OutsideWarning, rowWords } from "../outside";
 import { useNow } from "../roster/now";
+import { READING as READING_WORD, ReadingLine, readingNow, useActed } from "../roster/reading";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { TMUX } from "../ui";
@@ -187,6 +188,9 @@ function Reply({ name, text, onText, busy, held, said, onSend }: { name: string;
  * thread. No choice and no reply: a message is what put it outside OATS.
  */
 function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
+  // (Asked of the roster this card is drawn from, never by a read of its own: a card that mounts must not read OATS again.)
+  useActed();
+  const reading = readingNow(oats, entry.agent.instance);
   const open = useOpen(oats)(entry);
   const name = agentName(entry.agent.instance);
   const said = outsideOf(oats).of(entry.agent);
@@ -203,20 +207,24 @@ function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: b
           </Button>
         </div>
         {/* The same drawing as under the thread's line: Stop… and Start… are the line's own acts, and Details is under it. */}
-        <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} action={lineActs(said, entry.agent.instance, held, entry.status.state)} />
-        {/* What it needs, in the words of its line: the card is under "Needs you", and asks no question. (None for an agent whose one act is Stop.) */}
-        {outsideNeeds(said) === null ? null : (
+        {/* Behind a lifecycle result that says this agent changed, until the roster is read again: "Reading…" in the state's place, its acts off (app/roster/reading.tsx: L13). */}
+        {reading ? <ReadingLine action={lineActs(said, entry.agent.instance, true, entry.status.state)} /> : <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} action={lineActs(said, entry.agent.instance, held, entry.status.state)} />}
+        {/* What it needs, in the words of its line: the card is under "Needs you", and asks no question. (None for an agent whose one act is Stop; and none behind "Reading…": the state it is said of is being read again.) */}
+        {reading || outsideNeeds(said) === null ? null : (
           <p data-testid="oats-needs-outside" className="m-0 min-w-0 break-words text-foreground">
             {outsideNeeds(said)}
           </p>
         )}
-        <OutsideWarning said={said} instance={entry.agent.instance} held={held} />
+        <OutsideWarning said={said} instance={entry.agent.instance} held={held || reading} />
       </Card>
     </li>
   );
 }
 
 function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
+  // (Asked of the roster this card is drawn from, never by a read of its own: a card that mounts must not read OATS again.)
+  useActed();
+  const reading = readingNow(oats, entry.agent.instance);
   const sdk = useSdk();
   const rpc = useRpc<typeof rpcContract>();
   const open = useOpen(oats)(entry);
@@ -373,9 +381,12 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           </p>
         ) : offer === "stopped" ? (
           <div data-testid="oats-needs-stopped" className="flex min-w-0 flex-col gap-2">
-            <p className="m-0 text-xs text-muted-foreground">{STOPPED_WAITS}</p>
+            {/* Behind a result that says it started, until the roster is read again: never "Not running." stated plainly; "Reading…" in its place, Start… off (L13). */}
+            <p role={reading ? "status" : undefined} data-testid={reading ? "oats-needs-reading" : undefined} className="m-0 text-xs text-muted-foreground">
+              {reading ? READING_WORD : STOPPED_WAITS}
+            </p>
             <div className="flex flex-wrap items-center gap-2">
-              <Button data-testid="oats-needs-start" disabled={held} onClick={() => openAct("start", entry.agent.instance)}>
+              <Button data-testid="oats-needs-start" disabled={held || reading} onClick={() => openAct("start", entry.agent.instance)}>
                 {START}
               </Button>
             </div>

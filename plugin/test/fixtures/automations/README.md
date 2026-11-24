@@ -116,4 +116,16 @@ because each needs a deployment the recording could not go on from:
 - `oats version --json` of an OATS from before the lists (0.28.0): its shape with no `automations`
   feature and no `automationsApi`.
 
+Three answers were recorded later, on 2026-11-23, from OATS 0.70.5 (the recorder's kernel now),
+by the same recorder at the same point of its story, and only they were copied in (their calls
+are in `recorded.json` under `later`, with that kernel and time):
+`schedule-enable-unknown.json`, `schedule-describe-unknown.json` and `schedule-test-unknown.json`,
+what the kernel answers to `schedule enable`, `schedule update --description` and `schedule test`
+of `weekly-cleanup` once it is removed (`E_SCHEDULE_UNKNOWN`, the sentence `schedule-remove-unknown.json`
+has from 0.70.0). The live stage `automations-row-gone` plays them: a page that still lists a
+schedule someone removed after the list was read. That recording also showed two answers that
+0.70.5 gives differently from the ones kept here (a bb job without `yolo` is refused when it is
+added, so no run of it fails to launch); the answers here stay the 0.70.0 recording until the
+whole set is recorded again.
+
 The unit tests' refusals are written inline, as every feature's are.

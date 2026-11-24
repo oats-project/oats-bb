@@ -15,7 +15,7 @@
 //     did not, never a second.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
+import { useBbNavigate, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import { isUnconfirmed } from "../../contract/shared";
@@ -23,7 +23,9 @@ import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
 import { bbDefaultModel, harnessLabel, PREVIEW_FOOT, spawnProblem } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
 import { newKey } from "../keys";
+import { openAgentPage } from "../home/agent-tab";
 import { useOats } from "../oats";
+import { startOutcome } from "../outside/threads";
 import { HELD_REASON, RosterNotice } from "../roster/unreadable";
 import { errorMessage, onWindowReset, useRead } from "../store";
 import type { Contract, Result as Answer } from "../store";
@@ -231,6 +233,7 @@ function Created({ facts, machine }: { facts: SpawnFacts; machine: string | null
 export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const rpc = useRpc<Contract>();
   const navigate = useBbNavigate();
+  const sdk = useSdk();
   const oats = useOats();
   const souls = useRead("souls");
   const harnesses = useHarnesses();
@@ -339,6 +342,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const [phase, setPhase] = useState<"idle" | "spawning" | "created" | "unknown" | "incomplete">("idle");
   const [failure, setFailure] = useState<SpawnProblem | null>(null);
   const [made, setMade] = useState<{ instance: string; threadId: string } | null>(null);
+  /** The agent was made and its thread FAILED AT ITS START in bb: bb's own reason (app/outside/threads.ts). Never "Created" of it. */
+  const [unstarted, setUnstarted] = useState<{ instance: string; threadId: string; reason: string } | null>(null);
   /** The spawn that was pressed: the values and the decision the person saw, and the key that makes it one spawn however often it is asked. */
   const intent = useRef<{ input: Input; revision: string; key: string } | null>(null);
   /** The key of the last press, by its values and its decision: the same ones pressed again are the same spawn to the kernel, which answers it once. */
@@ -361,17 +366,31 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
       .then(() => rpc.call("spawn", { ...asked.input, key: asked.key, revision: asked.revision }))
       .then(
         (answer) => {
-          setFlight(null);
           intent.current = null;
-          // Said where the person will be: in bb's own toaster, which stays when the thread opens, and
-          // reaches a person who left the form meanwhile, with the way to the agent.
-          const created = agentName(answer.instance);
-          notify({ tone: "done", title: W.createdNotice(created), open: { label: W.openAgent(created), run: () => navigate.toThread(answer.threadId) } });
-          if (!alive.current) return;
-          // Created: the form stays held, says so, and opens the agent's thread.
-          setMade(answer);
-          setPhase("created");
-          navigate.toThread(answer.threadId);
+          // The kernel says "launched" before the thread has started in bb: "Created" is said once
+          // bb's own status of the thread is past its start (or after 10 s), the form busy meanwhile.
+          // A thread that FAILED AT ITS START is never called created.
+          return startOutcome(sdk, answer.threadId).then((failed) => {
+            setFlight(null);
+            const created = agentName(answer.instance);
+            if (failed !== null) {
+              const open = () => void (openAgentPage(navigate, answer.instance) || navigate.toThread(answer.threadId));
+              // The person left the form: told where they are, and it stays until dismissed (a failure's notification does).
+              if (!alive.current) return notify({ tone: "failed", title: W.didNotStart(created), open: { label: W.OPEN, run: open } });
+              // An instance exists: the form stays held, so that no second one is made from it.
+              setUnstarted({ ...answer, reason: failed.detail ?? failed.message });
+              setPhase("incomplete");
+              return;
+            }
+            // Said where the person will be: in bb's own toaster, which stays when the thread opens, and
+            // reaches a person who left the form meanwhile, with the way to the agent.
+            notify({ tone: "done", title: W.createdNotice(created), open: { label: W.openAgent(created), run: () => navigate.toThread(answer.threadId) } });
+            if (!alive.current) return;
+            // Created: the form stays held, says so, and opens the agent's thread.
+            setMade(answer);
+            setPhase("created");
+            navigate.toThread(answer.threadId);
+          });
         },
         (cause: unknown) => {
           setFlight(null);
@@ -403,7 +422,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           }
         },
       );
-  }, [rpc, navigate]);
+  }, [rpc, navigate, sdk]);
 
   // A refusal about the values that were on screen goes when they change.
   // Only while the form can be changed: held, the values can vanish for a moment (the roster being read again) without anyone changing them.
@@ -672,6 +691,21 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 <p>{W.OPENING}</p>
               </Result>
             ) : null}
+            {unstarted === null ? null : (
+              <Result
+                title={W.didNotStart(agentName(unstarted.instance))}
+                tone="failed"
+                actions={
+                  <Button data-testid="oats-spawn-open" onClick={() => void (openAgentPage(navigate, unstarted.instance) || navigate.toThread(unstarted.threadId))}>
+                    {W.OPEN}
+                  </Button>
+                }
+              >
+                <Disclosure summary="Details" testId="oats-spawn-start-details">
+                  <p className="text-xs text-muted-foreground">{shown(unstarted.reason)}</p>
+                </Disclosure>
+              </Result>
+            )}
             {failure === null ? null : (
               <Result title={W.FAILURE_TITLE[failure.outcome]} tone={failure.outcome === "refused" || failure.outcome === "unconfirmed" ? "failed" : "unknown"} code={failure.code}>
                 <p>{failure.sentence}</p>
@@ -691,22 +725,26 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               <Button data-testid="oats-spawn-cancel" onClick={cancel} disabled={phase === "spawning"}>
                 {phase === "created" || phase === "incomplete" ? W.CLOSE : W.CANCEL}
               </Button>
-              <Button
-                variant="primary"
-                data-testid="oats-spawn-submit"
-                aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`}
-                aria-busy={phase === "spawning"}
-                disabled={!(canSpawn || (phase === "unknown" && !held))}
-                onClick={press}
-              >
-                {spawnWord}
-              </Button>
+              {/* A thread that failed at its start: the result has its title, Details, Open and Close, and nothing
+                  that is off. The submit is not drawn there (a control that cannot be used and tells nothing new). */}
+              {unstarted !== null ? null : (
+                <Button
+                  variant="primary"
+                  data-testid="oats-spawn-submit"
+                  aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`}
+                  aria-busy={phase === "spawning"}
+                  disabled={!(canSpawn || (phase === "unknown" && !held))}
+                  onClick={press}
+                >
+                  {spawnWord}
+                </Button>
+              )}
               {phase === "idle" || phase === "unknown" ? (
                 <kbd data-testid="oats-spawn-key" aria-hidden="true" className="rounded border border-border px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
                   {mac ? "⌘ Enter" : "Ctrl+Enter"}
                 </kbd>
               ) : null}
-              {reason === null ? null : <DisabledReason>{reason}</DisabledReason>}
+              {reason === null || unstarted !== null ? null : <DisabledReason>{reason}</DisabledReason>}
             </div>
             {/* What a person waits on, announced once: the read, the spawn. */}
             <span role="status" data-testid="oats-spawn-status" className="sr-only">

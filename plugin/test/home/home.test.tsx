@@ -1045,6 +1045,53 @@ test("an agent that runs outside OATS is one of those that need you, in every pl
   expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
 });
 
+// The lead's T2 (24 Nov 2026): the pilot's first home is eight tmux agents whose sessions were lost, and nobody asking.
+// The home had no place for them. ONE quiet section, only when it has rows: the roster's own word and their count
+// ("Lost 8"), one line each (name · soul · glyph) with Start…: eight presses in one list, not eight pages.
+test("THE PILOT'S FIRST HOME: eight tmux agents whose sessions were lost, nobody asking: \"Nothing needs you.\", then \"Lost 8\": one line each (name · soul · glyph) with Start…, which opens that agent's Start dialog", async () => {
+  const names = ["birch", "cedar", "elm", "fir", "hazel", "larch", "oak", "pine"].map((tree) => `${tree}-developer`);
+  const lostOnTmux = (instance: string): Agent => ({ ...TMUX_ASKS, instance, home: TMUX_ASKS.home.replace(TMUX_ASKS.instance, instance), alias: instance, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" });
+  const slot = await homePage({ rpc: handlers({}, names.map(lostOnTmux)), sidebarThreads: { ...sidebarThreads(), threads: [] } });
+  const section = await slot.findByTestId("oats-home-lost");
+  expect(heading(section)).toBe("Lost8");
+  expect(slot.getByTestId("oats-home-nothing").textContent).toBe("Nothing needs you.");
+  const rows = within(section).getAllByTestId("oats-lost-row");
+  expect(rows.map((row) => row.getAttribute("data-instance"))).toEqual(names); // the roster's order
+  // One line each: the name (the way to its page), its soul, where it runs; no reason (the heading says it) and no state word; then the one act.
+  expect(rows.map((row) => [within(row).getByTestId("oats-home-agent").textContent, within(row).getByTestId("oats-home-agent-where").textContent, Array.from(row.querySelectorAll("button")).map((button) => button.textContent).at(-1)])).toEqual(names.map((name) => [`${name[0]!.toUpperCase()}${name.slice(1).replace("-", " ")}`, "oats-maintainer · tmux", "Start…"]));
+  expect(section.textContent).not.toMatch(/session lost|Stopped/);
+  expect(within(section).queryAllByTestId("oats-state")).toHaveLength(0);
+  // Start… opens the act's dialog for THAT agent: nothing is started on the press.
+  const { asked } = await import("../../app/lifecycle");
+  fireEvent.click(within(rows[2]!).getByTestId("oats-lost-start"));
+  expect(asked()).toEqual({ verb: "start", instance: "elm-developer" });
+});
+
+test("the Lost section holds the agents whose roster row says \"Lost\", and no other: not one a person stopped; with none lost there is no section; over a roster that is the last one read its Start… is off", async () => {
+  // The sample's roster: nobody's session was lost.
+  const none = await homePage();
+  await none.findByTestId("oats-home-needs");
+  expect(none.queryByTestId("oats-home-lost")).toBeNull();
+  none.unmount();
+  resetApp();
+  // One lost on tmux, one a person stopped on tmux: only the first is listed.
+  const lostOne: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
+  const stoppedOne: Agent = { ...TMUX_ASKS, instance: "day-watch-helper", home: TMUX_ASKS.home.replace(TMUX_ASKS.instance, "day-watch-helper"), alias: "day-watch-helper", waiting: null, running: false, runtimeState: "stopped", sessionEnd: "operator" };
+  const agents = [...fixtureAgents(), lostOne, stoppedOne];
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  const section = await slot.findByTestId("oats-home-lost");
+  expect([heading(section), within(section).getAllByTestId("oats-lost-row").map((row) => row.getAttribute("data-instance"))]).toEqual(["Lost1", [lostOne.instance]]);
+  expect((within(section).getByTestId("oats-lost-start") as HTMLButtonElement).disabled).toBe(false);
+  slot.unmount();
+  resetApp();
+  // The roster shown is the last one read: the acts are off, this one too (the notice on the same screen says so).
+  const last = { at: new Date(Date.now() - 120_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents };
+  const stale = await homePage({ rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }) });
+  const held = await stale.findByTestId("oats-lost-start");
+  expect((held as HTMLButtonElement).disabled).toBe(true);
+  expect(stale.getByTestId("oats-unreadable").textContent).toContain("Acts are off.");
+});
+
 /** The one count line of the home, on Home › Agents ("2 working · 4 need you · …"), for a roster. */
 async function agentsLine(agents: Agent[]): Promise<string> {
   const app = await loadApp();

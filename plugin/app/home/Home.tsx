@@ -19,7 +19,7 @@ import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
-import { lineActs, lineParts, outsideOf, OutsideWarning, rowWords } from "../outside";
+import { lineActs, lineParts, LOST_WORD, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
@@ -481,6 +481,33 @@ function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oat
   );
 }
 
+/**
+ * Whether the roster's row of this agent says "Lost" (its session was lost: nobody stopped it): the row's own words,
+ * asked as the sidebar asks them (`rowParts`, `rowWords`), so the home's list and the roster never disagree on who is in it.
+ */
+const isLost = (entry: Entry, oats: Ready): boolean => rowWords(entry.status.word, entry.status.state, rowParts(outsideOf(oats).of(entry.agent), entry.status.state).note).state === LOST_WORD;
+
+/**
+ * One agent whose session was lost, under the heading that says so: its name, its soul and where it is, and the act
+ * that brings it back. The one place where eight lost agents are eight presses in one list, not eight pages (the
+ * lead's T2). Start… opens the act's dialog, like every Start…; it is off while the roster shown is the last one read.
+ */
+function LostRow({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
+  const onTmux = entry.thread === null && entry.agent.backend === "tmux";
+  return (
+    <li data-testid="oats-lost-row" data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
+      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+        <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
+        {/* (No reason on the line: the heading says it.) */}
+        <RowFacts testId="oats-home-agent-where" soul={shown(oats.soulOf(entry.agent))} where={onTmux ? TMUX : undefined} className="max-w-full flex-1 basis-40" />
+      </span>
+      <Button data-testid="oats-lost-start" disabled={held} onClick={() => openAct("start", entry.agent.instance)}>
+        {START}
+      </Button>
+    </li>
+  );
+}
+
 /** The mark a page's feature gives it (Automations, while a run failed). Its own component: the feature's hook reads, so it is drawn only while the home is seen. */
 function PageMark({ useMark }: { useMark: NonNullable<PageLink["useMark"]> }) {
   const mark = useMark();
@@ -655,6 +682,8 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
   if (oats.phase === "loading" || oats.phase === "failed") return oats.phase === "loading" ? <Loading>{READING}</Loading> : <RosterNotice oats={oats} />;
   const made = board(oats.view, now);
   const held = oats.stale !== null;
+  // The agents whose session was lost (not the ones a person stopped), in the roster's order.
+  const lost = made.all.filter((entry) => isLost(entry, oats));
   // New agent is on every home, first on the page (the Desktop's Home has none: its act is the
   // sidebar's, which bb keeps in a drawer at a phone's width). Offered where it has somewhere to
   // open (the sidebar's rule); off behind the CLI card and while the roster shown is the last one
@@ -716,6 +745,16 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
           <Cropped items={made.working} shown={WORKING_SHOWN} more={showAll} testId="oats-home-working-all">
             {(entry) => <AgentRow key={entry.agent.instance} entry={entry} oats={oats} testId="oats-working-row" />}
           </Cropped>
+        </Section>
+      )}
+      {/* A quiet section, only when it has rows: headed with the roster's own word for them and their count ("Lost 8"). */}
+      {lost.length === 0 ? null : (
+        <Section title={LOST_WORD} n={lost.length} testId="oats-home-lost">
+          <ul className="m-0 flex list-none flex-col p-0">
+            {lost.map((entry) => (
+              <LostRow key={entry.agent.instance} entry={entry} oats={oats} held={held} />
+            ))}
+          </ul>
         </Section>
       )}
       {made.finished.length === 0 ? null : (

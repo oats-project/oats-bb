@@ -826,6 +826,44 @@ export default [
     },
   },
   {
+    // THE PILOT'S FIRST HOME (the lead's T2, 24 Nov 2026): the same eight agents on tmux, every session lost, and
+    // nobody asking. The home had no place for them: it said "Nothing needs you." over nothing. ONE quiet section
+    // lists them under the roster's own word and their count, one line each, with the act that brings each back.
+    stage: "tmux-roster",
+    name: "the pilot's first home: eight tmux agents whose sessions were lost, nobody asking: \"Nothing needs you.\", then \"Lost 8\", one line each (name, soul, glyph) with Start…, which opens that agent's Start dialog",
+    run: async ({ page, at, viewport, check, fake, tmuxStatus }) => {
+      const names = PILOT_ROSTER.tmux.map(([instance]) => instance);
+      const words = (instance) => `${instance[0].toUpperCase()}${instance.slice(1).replace(/-/g, " ")}`;
+      const section = testId("oats-home-lost");
+      try {
+        fake({ status: { stdout: tmuxStatus({}, PILOT_ROSTER) } });
+        await page.goto("/plugins/oats/home");
+        // Waited for: the home's roster is the pilot's (eight rows in the section), not the stage's own.
+        const read = `JSON.stringify({ heading: (document.querySelector(${JSON.stringify(`${section} h2`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(), nothing: ${textOf(testId("oats-home-nothing"))}, rows: [...document.querySelectorAll(${JSON.stringify(`${section} ${testId("oats-lost-row")}`)})].map((row) => ({ who: row.getAttribute("data-instance"), says: row.innerText.replace(/\\s+/g, " ").trim(), glyph: row.querySelector(${JSON.stringify(testId("oats-tmux"))}) !== null, state: row.querySelector(${JSON.stringify(testId("oats-state"))}) !== null, off: row.querySelector(${JSON.stringify(testId("oats-lost-start"))})?.disabled ?? null, lines: row.getBoundingClientRect().height })), cards: document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))}).length, working: document.querySelector(${JSON.stringify(testId("oats-home-working"))}) !== null })`;
+        const drawn = (await page.until(`(() => { const now = ${read}; return JSON.parse(now).rows.length === ${names.length} && JSON.parse(now).cards === 0 ? now : ""; })()`, 60)) ?? null;
+        const home = drawn === null ? null : JSON.parse(drawn);
+        check(home !== null && /^LOST 8$/i.test(home.heading) && home.nothing === "Nothing needs you." && home.working === false, `${at} the pilot's first home: nobody asks ("Nothing needs you."), nobody works, and one section is headed "Lost 8"`, drawn ?? (await page.evaluate(read)));
+        const souls = Object.fromEntries(PILOT_ROSTER.tmux.map(([instance, soul]) => [instance, soul]));
+        const wrong = (home?.rows ?? []).filter((row) => !new RegExp(`^${words(row.who)} ${souls[row.who]} ·( tmux)? Start…$`).test(row.says) || !row.glyph || row.state || row.off !== false);
+        check(home !== null && JSON.stringify(home.rows.map((row) => row.who).sort()) === JSON.stringify([...names].sort()) && wrong.length === 0, `${at} each of the eight is one line: its name, its soul, the tmux mark, and Start… (live); no reason and no state word on the line (the heading says it)`, JSON.stringify(wrong.length > 0 ? wrong : home?.rows));
+        const tall = (home?.rows ?? []).filter((row) => row.lines > (viewport.mobile ? 80 : 48));
+        check(tall.length === 0, `${at} no row of the list is taller than ${viewport.mobile ? "two lines at a phone's width" : "one line"}`, JSON.stringify(tall));
+        await page.shot(`pilot-home-${viewport.name}-first-home`, { targets: true });
+        // Start… opens that agent's Start dialog (nothing is started on the press); Cancel leaves the home as it was.
+        const WHO = names[2];
+        await page.evaluate(`document.querySelector(${JSON.stringify(`${section} ${testId("oats-lost-row")}[data-instance="${WHO}"] ${testId("oats-lost-start")}`)}).click()`);
+        const opened = (await page.until(`(() => { const d = document.querySelector('${testId("oats-modal")} [role="dialog"]'); return d && document.querySelector(${JSON.stringify(testId("oats-confirm"))})?.getAttribute("data-phase") === "ready" ? (document.querySelector('${testId("oats-modal")} h2')?.innerText ?? "").trim() : ""; })()`, 30)) ?? null;
+        check(opened === `Start ${words(WHO)}`, `${at} Start… on ${WHO}'s line opens "Start ${words(WHO)}"`, String(opened));
+        await page.shot(`pilot-home-${viewport.name}-first-home-start`);
+        await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-confirm-cancel"))})?.click()`);
+        check(Boolean(await page.until(`document.querySelector('${testId("oats-modal")} [role="dialog"]') === null ? "1" : ""`, 10)), `${at} Cancel closes it`);
+      } finally {
+        // The stage's own roster again, for the scenes after this one.
+        fake({ status: { stdout: tmuxStatus() } });
+      }
+    },
+  },
+  {
     // By hand only (LIVE_UI_STATUS_FILE): a real deployment's roster, for a look at it. Nothing of it
     // is printed but counts; its images stay with whoever ran it.
     stage: "local-roster",

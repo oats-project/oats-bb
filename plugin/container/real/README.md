@@ -27,12 +27,12 @@ which is also the plugin's own floor (`kernel/compat.ts`, `OATS_FLOOR`). It was 
 without recording the fixtures again: every check of the run passed on 0.70.5 against the answers
 recorded at 0.70.0, and no answer it records gained or lost a field. One fixture is of the 0.70.5
 run, because it is the kernel's version itself: `roster/version.json` (`test/fixtures/README.md`).
-One recorded answer does differ in what it says, and its fixtures were left as recorded, since no
-check of the run reads the difference: in `oats readiness --home` for a bb home
-(`panel/readiness-home.json`, `panel/readiness-home-not-ready.json`), the item "harness folder
-trust" is `status: "unknown"` with `file: "…/.claude.json"` at 0.70.0, and from OATS 0.70.4
-`status: "not-applicable"` with `file: null` ("a session provider runs this launch … claude folder
-trust is not read for it"). The panel's tests on those two fixtures hold the 0.70.0 answer.
+One recorded answer did differ in what it says: in `oats readiness --home` for a bb home, the item
+"harness folder trust" is `status: "unknown"` with `file: "…/.claude.json"` at 0.70.0, and from
+OATS 0.70.4 `status: "not-applicable"` with `file: null` ("a session provider runs this launch …
+claude folder trust is not read for it"). The instance panel's eight fixtures (`panel/*.json`) were
+therefore recorded again, all from one run on 0.70.5 (`test/fixtures/panel/README.md`), and the
+panel's tests hold the 0.70.5 answer.
 The floor is the provider's own (`compatibility.oats`: `>=0.70.0` when the run was moved, `>=0.70.5`
 from oats-bb#40): it admits the kernel, so **no trial commit is made**, and the run's log says so
 (`workspace: … (no trial commit: its own floor (>=…) admits the kernel)`).

@@ -97,6 +97,21 @@ together.
 | `pi/` | with `REAL_PI=1` only | the pi run: its part of the setup, its mock model, its scenario (`pi/README.md`) |
 
 Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).
+The run also says, for each change, WHICH ROAD showed it, by order and not by the clock, from the
+wrapper's records of the plugin's own calls: "by its events" only where the snapshot that has the
+change is of a status read that had ENDED before the command that made the change began (no
+state of the kernel's has changed before that, so that answer cannot hold it) and the plugin
+read that instance's events since (`server/core.ts`, the event path); "by a status read" where
+the snapshot is of a status read that started after the kernel's record; and "not told", with
+why, in every other case: a status read that ended or was in flight after the command began may
+hold the change by itself (for a stop the kernel's row says stopped from the moment it records
+the stop's start, seconds before it writes the "stopped" event: so a stop can be "not told"). Then it waits
+for the status read that started after the record, which must confirm what was shown, and prints
+that delay beside the first. The run's freshness line says it ("the claim N ms by its events (the
+status read confirmed it at M ms)"), and one check holds the event path against the real kernel:
+at least one of the changes measured was shown by its events. A change that a status read shows
+first, or whose road is not told, is no failure by itself.
+
 The run also measures freshness (the UX standard, section 6): how long after the kernel recorded a
 claim set, a claim cleared and a stop the plugin's own snapshot has it, counted from the kernel's
 own record (the time of the event the change wrote, read from `oats instance events --json`, so the

@@ -2,7 +2,8 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { outsideOats } from "../kernel/outside.js";
-import { answer, hostRead } from "./shared.js";
+import { rosterEvents } from "../kernel/roster-events.js";
+import { answer, hostBase, hostRead, instanceName } from "./shared.js";
 
 export const agent = z.object({
   instance: z.string(),
@@ -85,6 +86,16 @@ export const host = defineRpcContract({
     experimental_retryable: true,
     input: hostRead,
     output: answer(z.object({ version: z.string(), desktopApi: z.number().nullable(), features: z.array(z.string()), apis: z.record(z.string(), z.number()) })),
+  },
+  /**
+   * `oats instance events <instance> --home <abs> --since <iso> --json`: what one instance's events
+   * say since a status read (kernel/roster-events.ts). The instance and the home are a row's of the
+   * server's own snapshot; `since` is the start of that snapshot's read, as the server stamped it.
+   */
+  rosterEvents: {
+    experimental_retryable: true,
+    input: z.object({ ...hostBase, instance: instanceName, home: z.string().min(1), since: z.string().min(1) }).strict(),
+    output: answer(rosterEvents),
   },
   /** Watches the deployment's event log; each batch is one `changed` signal. Null: nothing to watch yet. */
   watch: {

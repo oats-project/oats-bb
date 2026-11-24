@@ -299,8 +299,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const selected = activeThreadId === null ? openAgent : (flatten(view.rows).find((row) => row.thread?.id === activeThreadId)?.agent.instance ?? null);
   const guttered = view.rows.some((row) => row.children.length > 0);
   // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a
-  // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the state the row itself draws.
-  const warns = (row: Row): boolean => !gone.has(row.agent.instance) && rowWarns(outside.of(row.agent), agentStatus(row.agent, row.thread, now).state);
+  // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the row's own state, which is the one its line draws.
+  const warns = (row: Row): boolean => !gone.has(row.agent.instance) && rowWarns(outside.of(row.agent), row.state);
   return (
     // `data-pages`: whether bb has given the settings that say which pages are shown. With nobody
     // waiting the foot has no line, so nothing drawn says it: a live check that asserts an absence

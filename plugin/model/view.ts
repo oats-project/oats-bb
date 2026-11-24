@@ -239,7 +239,7 @@ export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boo
  *   closed over the row a person is on.
  * Every other parent is closed: its children are not drawn, and it carries `inside` (`insideOf`;
  * `warns`: which rows carry their mark in the warning tone, the caller's to say).
- * The order is the tree's own (`view().roots`, already in the roster's one order). Pure.
+ * The order is the tree's own (`view().rows`, already in the roster's one order). Pure.
  */
 export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: ReadonlySet<string>, selected: string | null = null, warns?: (node: T) => boolean): TreeRow<T>[] {
   const above = selected === null ? new Set<string>() : ancestorsOf(roots, selected);
@@ -353,13 +353,15 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     if (parent !== null && parent !== row.agent.instance && rowOf.has(parent)) rowParent.set(row.agent.instance, parent);
   }
   const rowCut = cutLinks(rowParent);
-  const rows: Row[] = [...twice];
+  const rows: Row[] = [];
   for (const row of rowOf.values()) {
     const parent = rowCut.has(row.agent.instance) ? undefined : rowParent.get(row.agent.instance);
     const over = parent === undefined ? undefined : rowOf.get(parent);
     if (over === undefined) rows.push(row);
     else over.children.push(row);
   }
+  // After the named rows: of one rank, a name's second row is drawn after its first (the sort is stable), as the kernel lists them.
+  rows.push(...twice);
   // Children first: a row's `urgent` is its own state, or that of the most urgent row under it
   // (the first in the order, where two are of one rank), and each level is sorted by it.
   const byUrgency = (a: Row, b: Row): number => RANK[a.urgent] - RANK[b.urgent] || placeOf(a.agent) - placeOf(b.agent);

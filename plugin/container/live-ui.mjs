@@ -203,7 +203,16 @@ const ownThreads = {
     }
   },
   back: () => {
-    for (const id of awayThreads.splice(0)) bb("thread", "unarchive", id);
+    // Each one is tried: one that cannot be put back does not keep the others archived. What failed is said, then thrown.
+    const failed = [];
+    for (const id of awayThreads.splice(0)) {
+      try {
+        bb("thread", "unarchive", id);
+      } catch (error) {
+        failed.push(`${id}: ${String(error?.message ?? error).split("\n")[0]}`);
+      }
+    }
+    if (failed.length > 0) throw new Error(`the image pass could not put back ${failed.length} thread(s) it archived: ${failed.join("; ")}`);
   },
 };
 /** The bb threads the local stage archived for its image, to put back when it leaves. */

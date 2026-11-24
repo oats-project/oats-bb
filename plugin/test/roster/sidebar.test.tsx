@@ -2,6 +2,7 @@
 // A8: the Sidebar (experimental_threadList) with the pinned fixtures.
 import { afterEach, expect, test } from "vitest";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { addPageLink } from "../../app/workspace/pages";
@@ -636,41 +637,122 @@ test("an agent on tmux is drawn under its parent, on a thread or not, indented b
   expect(navigated()).toBe(1);
 });
 
+test("a parent with no bb thread is a parent like any other: Left on its row closes it and Right opens it; closed, it carries after its own word the mark of an agent that waits under it", async () => {
+  const lead = fixtureAgents().find((agent) => agent.instance === "kernel-fix-developer")!;
+  const claim = { reason: "attention" as const, message: "Which branch?", since: "2026-11-19T12:00:00.000Z" };
+  const agents = [...fixtureAgents(), { ...lead, instance: "tmux-child", home: lead.home.replace("kernel-fix-developer", "tmux-child"), alias: "tmux-child", parent: "kernel-fix-developer", running: true, runtimeState: null, waiting: claim }];
+  const { slot } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents }) });
+  await slot.findByTestId("oats-tree");
+  const row = (instance: string) => slot.queryAllByTestId("oats-agent-row-threadless").find((each) => each.getAttribute("data-instance") === instance);
+  const toggle = () => slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "kernel-fix-developer")!;
+  /** The mark the parent's line carries for a row it hides: its state; null when it carries none. */
+  const inside = () => within(row("kernel-fix-developer")!).queryByTestId("oats-row-inside")?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null;
+  // As the page loads it is closed: its child is not in the page, and its line says its own word, then the child's mark.
+  expect([toggle().getAttribute("aria-expanded"), row("tmux-child")]).toEqual(["false", undefined]);
+  expect(inside()).toBe("needs-you");
+  expect(within(row("kernel-fix-developer")!).getByTestId("oats-row-facts").getAttribute("title")).toBe("Working · oats-developer · tmux"); // its own words, whole
+  expect(row("kernel-fix-developer")!.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("working"); // its own mark stays its own
+  // Right on its row opens it: the child's row is there, and the parent carries no mark of it any more.
+  fireEvent.keyDown(row("kernel-fix-developer")!, { key: "ArrowRight" });
+  expect([toggle().getAttribute("aria-expanded"), row("tmux-child") !== undefined, inside()]).toEqual(["true", true, null]);
+  // Right again does nothing (it is open); Left closes it.
+  fireEvent.keyDown(row("kernel-fix-developer")!, { key: "ArrowRight" });
+  expect(toggle().getAttribute("aria-expanded")).toBe("true");
+  fireEvent.keyDown(row("kernel-fix-developer")!, { key: "ArrowLeft" });
+  expect([toggle().getAttribute("aria-expanded"), row("tmux-child"), inside()]).toEqual(["false", undefined, "needs-you"]);
+});
+
 // The row a person is on keeps its parents open (the fold's `selected`). For a row with no bb thread
 // that is its agent's own PAGE: bb tells the sidebar the open thread only, so the page says whose it
 // is (app/roster/open-agent.ts; app/panel AgentPage calls it).
-test("the page of an agent with no bb thread is on screen: the parents of its row are open as the page loads, by chevrons that are off; nothing below it is opened", async () => {
-  const { useSayOpenAgent } = await import("../../app/roster/open-agent");
+/** The roster of the tests of the row on screen: redesign-ui-lead (a thread) > kernel-fix-developer (tmux) > tmux-grandchild (tmux) > weekly-digest-helper (a thread). */
+const nested = () => {
   const lead = fixtureAgents().find((agent) => agent.instance === "kernel-fix-developer")!;
-  const agents = [
+  return [
     ...fixtureAgents().map((agent) => (agent.instance === "kernel-fix-developer" ? { ...agent, parent: "redesign-ui-lead" } : agent.instance === "weekly-digest-helper" ? { ...agent, parent: "tmux-grandchild" } : agent)),
     { ...lead, instance: "tmux-grandchild", home: lead.home.replace("kernel-fix-developer", "tmux-grandchild"), alias: "tmux-grandchild", parent: "kernel-fix-developer" },
   ];
+};
+/** The sidebar drawn beside the plugin's REAL page of one agent (the nav panel "agent", as bb mounts it for `/agent/<instance>`), or beside none. */
+async function besidePage(agents: ReturnType<typeof nested>, onPage: string | null, activeThreadId: string | null = null) {
   const app = await loadApp();
   const List = app.threadLists[0]!.component;
-  const OnScreen = ({ instance }: { instance: string | null }) => (useSayOpenAgent(instance), null);
-  const draw = (instance: string | null) => (props: PluginThreadListProps) => (
-    <>
-      <List {...props} />
-      <OnScreen instance={instance} />
-    </>
-  );
+  const Page = app.navPanels.find((candidate) => candidate.id === "agent")!.component as (props: { subPath: string }) => ReactNode;
   const slot = renderSlot<PluginThreadListProps, Contract>(
-    { component: draw("tmux-grandchild") } as never,
-    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    {
+      component: (props: PluginThreadListProps) => (
+        <>
+          <List {...props} />
+          {onPage === null ? null : <Page subPath={onPage} />}
+        </>
+      ),
+    } as never,
+    { activeThreadId, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
     { rpc: handlers({ snapshot: () => fixtureSnapshot(agents) }), sidebarThreads: sidebarThreads() },
   );
   await slot.findByTestId("oats-tree");
   const threadless = () => slot.queryAllByTestId("oats-agent-row-threadless").map((row) => row.getAttribute("data-instance"));
+  const toggles = () => slot.getAllByTestId("oats-row-toggle").map((toggle) => [toggle.getAttribute("data-instance"), toggle.getAttribute("aria-expanded"), (toggle as HTMLButtonElement).disabled]);
+  return { slot, threadless, toggles };
+}
+
+test("the page of an agent with no bb thread is on screen: the parents of its row are open as the page loads, by chevrons that are off; nothing below it is opened", async () => {
+  // The plugin's own page of that agent, as bb mounts it: it says whose it is (app/panel AgentPage, app/roster/open-agent.ts).
+  const { slot, threadless, toggles } = await besidePage(nested(), "tmux-grandchild");
   // No chevron was pressed: its two parents are open, held open by the row on screen (their chevrons are off), and its row is drawn.
   await waitFor(() => expect(threadless()).toEqual(["kernel-fix-developer", "tmux-grandchild"]));
-  const toggles = () => slot.getAllByTestId("oats-row-toggle").map((toggle) => [toggle.getAttribute("data-instance"), toggle.getAttribute("aria-expanded"), (toggle as HTMLButtonElement).disabled]);
   expect(toggles()).toEqual([
     ["redesign-ui-lead", "true", true],
     ["kernel-fix-developer", "true", true],
     ["tmux-grandchild", "false", false], // what is BELOW the row on screen stays as the person left it: closed
   ]);
   expect(slot.queryAllByTestId("oats-agent-row").some((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")).toBe(false);
+});
+
+test("with no agent's page on screen nothing is held open; and an open THREAD is the row on screen, whatever page last said its agent", async () => {
+  // No page: every parent is closed as the page loads.
+  const none = await besidePage(nested(), null);
+  expect([none.threadless(), none.toggles()]).toEqual([[], [["redesign-ui-lead", "false", false]]]);
+  resetApp();
+  // A thread is open (a child of the lead, on its thread) while a page of another agent is still mounted: the thread is
+  // the row on screen. Its parent is held open; the tmux child beside it is drawn, closed, and nothing under it.
+  const both = await besidePage(nested(), "tmux-grandchild", "thr_mockups");
+  await both.slot.findByTestId("oats-panel");
+  expect(both.threadless()).toEqual(["kernel-fix-developer"]);
+  expect(both.toggles()).toEqual([
+    ["redesign-ui-lead", "true", true],
+    ["kernel-fix-developer", "false", false],
+  ]);
+});
+
+test("two pages in turn: the one that is drawn is the one on screen, and a page that leaves takes away only its own word", async () => {
+  const { useOpenAgent, useSayOpenAgent } = await import("../../app/roster/open-agent");
+  const Says = ({ instance }: { instance: string | null }) => (useSayOpenAgent(instance), null);
+  const Reads = () => <span data-testid="on-screen">{useOpenAgent() ?? "none"}</span>;
+  const Both = ({ first, second }: { first: string | null | undefined; second: string | null | undefined }) => (
+    <>
+      <Reads />
+      {first === undefined ? null : <Says key="first" instance={first} />}
+      {second === undefined ? null : <Says key="second" instance={second} />}
+    </>
+  );
+  const drawn = render(<Both first="a" second={undefined} />);
+  const onScreen = () => drawn.getByTestId("on-screen").textContent;
+  expect(onScreen()).toBe("a");
+  // The next page is drawn BEFORE the first leaves (bb may mount one route before it unmounts the other): the next is on screen…
+  drawn.rerender(<Both first="a" second="b" />);
+  expect(onScreen()).toBe("b");
+  // …and stays so when the first leaves: a page takes away only what it said itself.
+  drawn.rerender(<Both first={undefined} second="b" />);
+  expect(onScreen()).toBe("b");
+  // A page that names no agent says none; the last page gone, nothing is on screen.
+  drawn.rerender(<Both first={undefined} second={null} />);
+  expect(onScreen()).toBe("none");
+  drawn.rerender(<Both first="c" second={undefined} />);
+  expect(onScreen()).toBe("c");
+  drawn.rerender(<Both first={undefined} second={undefined} />);
+  expect(onScreen()).toBe("none");
+  drawn.unmount();
 });
 
 // One rule for a state (model/view.ts `state`), read by the sidebar's row and by the agent's panel:

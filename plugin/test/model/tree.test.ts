@@ -134,8 +134,8 @@ describe("one tree, whatever the backend of a parent or of its child", () => {
     const { rows } = view(agents, []);
     expect(flatten(rows)).toHaveLength(3);
     expect(rows.map((row) => [row.agent.instance, row.state, row.children.length])).toEqual([
-      ["twin", "stopped", 0], // the second: a stable sort keeps a name's rows as they were made, the odd one first
-      ["twin", "working", 1],
+      ["twin", "working", 1], // of one rank, in the kernel's order: the first, which holds the child
+      ["twin", "stopped", 0], // then the second, alone
     ]);
   });
 });

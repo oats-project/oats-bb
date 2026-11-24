@@ -99,8 +99,9 @@ export type Node = {
  * ("detached") is a row under its parent where the parent is a row, and a root otherwise.
  * - `thread`: bb's thread the row is on; null for a row with none (it opens the agent's page).
  * - `state`: the agent's own. `urgent`: the most urgent state in the row's own SUBTREE, itself
- *   included (what orders it, and what a folded parent is marked with): its own state unless a
- *   row under it has a lower rank.
+ *   included: its own state unless a row under it has a lower rank. It is what ORDERS the row.
+ *   (What a folded parent is MARKED with is another reading, `insideOf`: the rows it hides alone,
+ *   and the ones that warn among them.)
  * - `depth`: deeper than 2 is drawn at 2.
  */
 export type Row = {

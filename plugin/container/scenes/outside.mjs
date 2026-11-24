@@ -252,6 +252,8 @@ const ACT = '[data-testid="oats-status-act"], [data-testid^="oats-agent-act-"]';
 /** One row of the sidebar by its instance (a row with no thread to open) or by its thread: → `{ facts, state, tone, lines }`: its second line's words, its mark's state and tone, and how many lines that second line takes. */
 const rowOf = (selector) =>
   `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(selector)}); if (!row) return null; const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const mark = row.querySelector("[data-mark][data-state]"); return { facts: facts?.getAttribute("title") ?? "" /* (the line's title: it says all of it, the reason too where the row is too narrow to hold it, and "tmux" for bb's terminal glyph) */, state: mark?.getAttribute("data-state") ?? null, tone: mark?.getAttribute("data-tone") ?? null, lines: facts ? Math.round(facts.getBoundingClientRect().height / parseFloat(getComputedStyle(facts).lineHeight)) : 0 }; })()`;
+/** What a row DRAWS on its second line (its words in view, the soul cut or not), beside its title, which says all of it. */
+const drawnOf = (selector) => `(document.querySelector(${JSON.stringify(`${selector} ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
 const threadless = (instance) => `${testId("oats-agent-row-threadless")}[data-instance="${instance}"]`;
 const onThread = (id) => `${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"]`;
 
@@ -325,7 +327,9 @@ export default [
       const digestOpens = await page.until(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.getAttribute("data-opens") === "thread"`, 15);
       check(same(rows.digest, { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 }) && Boolean(digestOpens), `${at} stopped, its thread archived in bb: "Stopped" and its soul, no reason, in the plain tone, and the row opens the archived thread`, JSON.stringify(rows.digest));
       check(same(rows.outside, { facts: "Running outside OATS · knowledge-harvester", state: "outside", tone: null, lines: 1 }) && rows.outsides === 1, `${at} the kernel's outsideOats: the state IS "Running outside OATS", with its mark, then its soul, on that row alone; no "Stopped" beside it`, JSON.stringify([rows.outside, rows.outsides]));
-      check(same(rows.ranker, { facts: "Stopped · research-expert · may still run", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: its row says "may still run" in the reason's place: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
+      // In view, in the reason's place: "may still run" (never "archived in bb", which says where its thread is and not what a person must not miss); its title says the whole sentence.
+      const rankerDrawn = await page.evaluate(drawnOf(threadless("ranker-v3-probe")));
+      check(same(rows.ranker, { facts: "Stopped · research-expert · Archived in bb while running: it may still run.", state: "stopped", tone: "warning", lines: 1 }) && /^Stopped\b.*\bmay still run$/.test(rankerDrawn) && !/archived in bb/i.test(rankerDrawn), `${at} a session lost, its thread archived in bb: its row draws "Stopped", then "may still run" in the reason's place, with its mark in the warning tone, on one line; its title says the whole ("Archived in bb while running: it may still run.")`, `${JSON.stringify(rows.ranker)} drawn: ${rankerDrawn}`);
       check(same(rows.flaky, { facts: "Stopped · oats-developer · deleted in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));
       // Every row's state word is one of the set: "Archived in bb" and "Deleted in bb" are reasons after a state, never states.
       const SET = ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"];
@@ -499,7 +503,7 @@ export default [
         );
         const drawn = read ? JSON.parse(read) : null;
         check(
-          drawn !== null && drawn.state === "Running outside OATS" && drawn.kind === "outside" && drawn.folds === 1 && drawn.folded === true && drawn.block === false && same(drawn.headed, ["Stop…", "Start…", "Retire…"]) && /Details$/.test(drawn.notice) && drawn.boxed === false && drawn.title.top >= drawn.stateBox.bottom - 1 && drawn.title.bottom <= drawn.header.bottom && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window,
+          drawn !== null && drawn.state === "Running outside OATS" && drawn.kind === "outside" && drawn.folds === 1 && drawn.folded === true && drawn.block === false && same(drawn.headed, ["Stop…", "Start…", "Retire…"]) && /Details$/.test(drawn.notice) && drawn.boxed === false && drawn.title.top > drawn.stateBox.top && drawn.title.bottom > drawn.stateBox.bottom && drawn.title.bottom <= drawn.header.bottom && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window,
           `${at} the header says "Running outside OATS" with ONE fold, Details, right under that state (closed, no box, no title), and ends ${drawn === null ? "?" : drawn.header.bottom} px down (the upper half of the window); the tabs are whole; nothing of the report is under them (Stop, Start and Retire are the header's)`,
           read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
         );
@@ -620,12 +624,15 @@ export default [
         Boolean(answered) &&
           same(rows, [
             { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 },
-            { facts: "Stopped · research-expert · may still run", state: "stopped", tone: "warning", lines: 1 },
-            { facts: "Idle · oats-maintainer · may still run", state: "idle", tone: "warning", lines: 1 },
+            { facts: "Stopped · research-expert · Archived in bb while running: it may still run.", state: "stopped", tone: "warning", lines: 1 },
+            { facts: "Idle · oats-maintainer · Archived in bb while running: it may still run.", state: "idle", tone: "warning", lines: 1 },
           ]),
-        `${at} the three rows (each with its soul after these words): "Stopped" with no reason, plain (an operator's stop); "Stopped · may still run" with the warning mark (a session lost); "Idle · may still run" with the warning mark (it still runs); each opens its archived thread`,
+        `${at} the three rows (each with its soul after these words): "Stopped" with no reason, plain (an operator's stop); in their titles, whole, "Stopped · … · Archived in bb while running: it may still run." with the warning mark (a session lost) and "Idle · … · Archived in bb while running: it may still run." with the warning mark (it still runs); each opens its archived thread`,
         JSON.stringify(rows),
       );
+      // What the two rows DRAW in the reason's place: "may still run", never "archived in bb" (the soul gives way first; the warning reason never leaves the row).
+      const drawnTwo = JSON.parse(await page.evaluate(`JSON.stringify([${[instances[1], instances[2]].map((instance) => drawnOf(threadless(instance))).join(", ")}])`));
+      check(/^Stopped\b.*\bmay still run$/.test(drawnTwo[0]) && /^Idle\b.*\bmay still run$/.test(drawnTwo[1]) && !drawnTwo.some((words) => /archived in bb/i.test(words)), `${at} in view the two rows read "Stopped … may still run" and "Idle … may still run", in the reason's place`, JSON.stringify(drawnTwo));
       const stoppedTmux = JSON.parse(await page.evaluate(`JSON.stringify(${rowOf(threadless("kernel-fix-developer"))})`));
       check(same(stoppedTmux, { facts: "Stopped · oats-developer · tmux", state: "stopped", tone: null, lines: 1 }), `${at} an agent on tmux that OATS stopped (its row says "shell" beside an operator's stop) reads "Stopped" and where it is, never "Failed"`, JSON.stringify(stoppedTmux));
       await page.shot(`outside-${viewport.name}-archived-three-sidebar`, { targets: true });

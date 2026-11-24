@@ -713,7 +713,7 @@ async function loadedWhileReading(asInstance, { instance, threadId }) {
   if (missed.length > 0) say(`NOTE loaded while reading: ${missed.join("; ")}`);
   if (held === null) {
     // No try put the load inside the read: nothing is asserted of the window, and nothing fails (a slow host, not the plugin).
-    say(`NOTE loaded while reading: NOT SHOWN in this run: in none of the ${HOLDS_MS.length} tries (held ${HOLDS_MS.join(", ")} ms) was the window loaded and drawn while the plugin's read still ran`);
+    say(`NOTE loaded while reading: NOT SHOWN in this run: none of the ${HOLDS_MS.length} tries (held ${HOLDS_MS.join(", ")} ms) counted, each for the reason said above`);
     return;
   }
   check(true, `${at}: a window was loaded while the plugin read a change (the read, held ${held.ms} ms, was still running when the window had drawn the roster from before it: "${held.drawn}")`);

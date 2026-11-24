@@ -456,10 +456,12 @@ export default [
       await page.evaluate(click(testId("oats-new-agent")));
       const opened = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: ${FIRST}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
       check(opened === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", shown: true }), `${at} it opens the form's own page, the soul field first: the form is not one of the pages a release leaves out`, opened ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
-      // At a phone's width bb's sidebar is in its drawer, and the form opened from it is the picture the form's own
-      // stage takes there (spawn-390x800-empty): the two were the same image in some runs and not in others (a drawer
-      // still closing), and the run refuses two images that are the same. The checks above hold it; the image is the
-      // desktop's, where the sidebar stands beside the form.
+      // The form is settled before its image: the focus lands on the soul a moment after the form shows.
+      check((await page.until(`${FOCUSED} === "oats-spawn-soul"`, 10)) === true, `${at} the focus starts on the first field, the soul`, await page.evaluate(FOCUSED));
+      // At a phone's width bb's sidebar is in its drawer, and the form opened from it is then the very picture the
+      // form's own stage takes there (spawn-390x800-empty), and the run refuses two images that are the same. (It
+      // passed only while this image was taken before the focus had landed: a different file by chance.) The checks
+      // above hold the scene at both widths; the image is the desktop's, where the sidebar stands beside the form.
       if (!viewport.mobile) await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
       // And on the home, which is what a person sees at a phone's width (bb's sidebar is in a drawer there): New agent is in
       // the home's heading, can be pressed, and opens the same page. The checks hold it in the page; no image is taken here

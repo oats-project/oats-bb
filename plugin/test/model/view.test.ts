@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Agent, BbThread, Node } from "../../model/types";
+import { messageResumes } from "../../model/rest";
 import { claimOf, flatten, state, view } from "../../model/view";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 
@@ -212,19 +213,33 @@ describe("A2 state(): first match wins", () => {
   test("where a message is the way on and bb says the thread works, bb's word stands: Working, not the row's Stopped or Failed; at rest, and after an operator's stop, the row decides as before", () => {
     const rows = {
       lost: { running: false, runtimeState: "stopped", sessionEnd: "lost" },
-      exited: { running: false, runtimeState: null, sessionEnd: "exited" },
-      shell: { running: false, runtimeState: "shell" },
+      "no harness loaded": { running: false, runtimeState: "unknown" },
       "operator's stop": { running: false, runtimeState: "stopped", sessionEnd: "stopped" },
       "stopped, no word how": { running: false, runtimeState: "stopped" },
     } as const;
     const read = (over: Partial<Agent>, status: string, queuedWork = "none") => state(agent("a", over), thread("t", { status, queuedWork } as Partial<BbThread>));
     expect(Object.entries(rows).map(([name, row]) => [name, read(row, "active"), read(row, "idle")])).toEqual([
       ["lost", "working", "stopped"],
-      ["exited", "working", "error"],
-      ["shell", "working", "error"],
+      ["no harness loaded", "working", "idle"],
       ["operator's stop", "stopped", "stopped"], // the kernel's report ("Running outside OATS") or the warning says the rest
       ["stopped, no word how", "stopped", "stopped"],
     ]);
+    // WHICH rows a message carries on is the outside feature's ONE answer (model/rest.ts `messageResumes`), and this rule
+    // reads it: it names none itself. So for every row that does not run, on a thread in a turn: Working exactly where
+    // that answer is yes, and where it is no the state is the one the same row has on a thread at rest (bb's turn changes
+    // nothing). (A harness that ended by itself is the case that answer is ruled on elsewhere: whatever it says, this holds.)
+    const every: Partial<Agent>[] = [
+      ...Object.values(rows),
+      { running: false, runtimeState: null, sessionEnd: "exited" },
+      { running: false, runtimeState: "shell" },
+      { running: false, runtimeState: "shell", sessionEnd: "exited" },
+      { running: false, runtimeState: null },
+    ];
+    for (const row of every) {
+      const turn = thread("t", { status: "active" });
+      const resumes = messageResumes(agent("a", row), turn);
+      expect([row, read(row, "active")]).toEqual([row, resumes ? "working" : read(row, "idle")]);
+    }
     // A turn bb holds in line is work too (the same rule as a thread at rest with a message waiting to start).
     expect(read(rows.lost, "idle", "waiting")).toBe(state(agent("a", { running: null }), thread("t", { status: "idle", queuedWork: "waiting" } as Partial<BbThread>)));
     // Never on tmux (bb cannot write to it), never with no thread listed, never over what comes first: a claim, an unreachable session, a thread that failed at its start.

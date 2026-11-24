@@ -47,7 +47,9 @@ jobs:
   # inside that container and no port is published.
   contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # About 28 minutes: the pi model check's tests wait, three times, the minute and a half
+    # after a change of pi's configuration in which the check refuses nothing.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

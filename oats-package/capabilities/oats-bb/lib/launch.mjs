@@ -5,9 +5,12 @@ import { sandboxDeny } from "./deny.mjs";
 import { bbClient, nothingHappened } from "./bb.mjs";
 import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
-import { InDoubt, ProviderError, fail, isObject, someOf } from "./errors.mjs";
+import { InDoubt, ProviderError, bounded, fail, isObject, someOf } from "./errors.mjs";
 import { piLaunchEnv, piPathRefusal, removePiEnv, sharedProjectRefusal, writeProjectEnv } from "./project-env.mjs";
+import { piListMayBeOld, piListMayBePartial } from "./pi-config.mjs";
+import { isModelId, piModelFinding } from "./pi-model.mjs";
 import { backendProblems } from "./readiness.mjs";
+import { noteThread, stateRoot } from "./record.mjs";
 import { archivedOf, confirmStop, relistOf, stopArchived } from "./halt.mjs";
 import { hasQueuedWork, isBbId, isSettled, liveInHome, liveThreadsOfHome, projectsOfHome, samePath } from "./threads.mjs";
 import { threadTitle } from "./title.mjs";
@@ -20,6 +23,26 @@ const SPAWN_LOOK_MS = 1_000;
 // the kernel stopped the home before this start, so the thread is at rest already.
 const CLEANUP_GRACE_SECONDS = 5;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** What a launch must say beside its answer goes to the command's stderr, one line, as a
+ *  stop's does (lib/stop.mjs): that it could not note its thread in the home's record, or
+ *  that the model of a pi launch could not be checked. The launch's answer is its endpoint
+ *  and nothing else. */
+const warnOnStderr = (message) => { process.stderr.write(`oats bb: warning: ${bounded(message)}\n`); };
+
+/** Note the thread a launch made in the provider's record of the home's threads
+ *  (lib/record.mjs; contract r32, A17): what lets the home's retire delete its bb
+ *  environment. A record that cannot be written never fails the launch: the thread runs,
+ *  it is then unmarked, and the retire archives the home's threads and deletes nothing. */
+function noted(home, endpoint, env, warn) {
+  try { noteThread(home, endpoint.threadId, { env }); }
+  // Whatever went wrong, a bug of the record's included: the thread exists, and a launch
+  // that failed here would tell the kernel that nothing was started.
+  catch (error) {
+    warn(`bb thread ${endpoint.threadId} runs, and could not be noted in this home's thread record (${error?.message ?? error}): the home's retire will archive its bb threads and not delete its bb environment`);
+  }
+  return { endpoint };
+}
 function readInput(input) {
   if (!isObject(input)) throw fail("E_SESSION_START_FAILED", "the launch input is not an object");
   const { home, instance, harness, model, promptFile, previous } = input;
@@ -29,7 +52,7 @@ function readInput(input) {
   // The name becomes bb's project name, and as words its thread's title (lib/title.mjs):
   // arguments, never options. (The words of a name that starts so start with a letter or digit too.)
   if (typeof instance !== "string" || !/^[A-Za-z0-9][^\0\n\r]*$/.test(instance)) throw fail("E_SESSION_START_FAILED", "the launch input has no instance name (one line, starting with a letter or digit)");
-  if (model !== undefined && model !== null && (typeof model !== "string" || !model || model.startsWith("-"))) throw fail("E_SESSION_START_FAILED", "the launch input's model must be a model id");
+  if (model !== undefined && model !== null && !isModelId(model)) throw fail("E_SESSION_START_FAILED", "the launch input's model must be a model id");
   if (typeof promptFile !== "string" || !isAbsolute(promptFile)) throw fail("E_SESSION_START_FAILED", "the launch input's promptFile must be an absolute path");
   if (previous !== undefined && previous !== null && !isObject(previous)) throw fail("E_SESSION_START_FAILED", "the launch input's previous endpoint is not an object");
   // A bb thread is resumed by an input into its own conversation, never by a launch.
@@ -44,7 +67,7 @@ function readInput(input) {
  *  A pi launch (`harness` "pi") is the same launch with bb's pi provider, and nothing of
  *  Claude's: no launch argument is carried, the mode is full, and the home's `.claude` is
  *  neither read nor written. */
-export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false } = {}) {
+export async function launch(input, settings, { deadline, env = process.env, spawnTimeoutMs, sandboxedModes = false, warn = warnOnStderr, now = Date.now } = {}) {
   const { home, instance, harness, model, promptFile, previous } = readInput(input);
   const pi = harness === "pi";
   const mode = permissionMode(input.args, input.yolo, harness);
@@ -77,18 +100,26 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // A sandboxed launch also writes the deny rules that keep the agent's tools off what is
   // run, or read as configuration, outside its sandbox (D16 rule 1). They are built from
   // what the kernel says (the home, its trees, what it keeps outside the home) and from this host (the user's Claude
-  // configuration, bb's data directory): never from anything the home holds.
-  const deny = mode === "full" ? null : sandboxDeny({ mode, home, trees: input.trees, protected: input.protected, dataDir: settings.dataDir });
+  // configuration, bb's data directory, the provider's own state directory): never from anything the home holds.
+  const deny = mode === "full" ? null : sandboxDeny({ mode, home, trees: input.trees, protected: input.protected, dataDir: settings.dataDir, stateDir: stateRoot(env) });
   // Claude's local settings must be writable as they are (a file that is not JSON, a
   // .claude that is a link): found now, before anything in bb changes.
   // (A pi launch writes nothing of Claude's, and does not look at it.)
   const settingsToWrite = { env: launchEnv, unset, sandbox, deny };
   if (!pi) writeLaunchSettings(home, { ...settingsToWrite, dryRun: true });
 
-  const { problems, server } = await backendProblems(settings, { deadline, env, harness });
+  const { problems, server, bb: reader } = await backendProblems(settings, { deadline, env, harness });
   if (problems.length > 0) {
     const [first, ...rest] = problems;
     throw fail(first.code, rest.length ? `${first.message} (and ${rest.length} more: ${rest.map((problem) => problem.code).join(", ")}; see oats readiness)` : first.message);
+  }
+  // bb takes any model id at the spawn and resolves it only when the thread starts: one
+  // its pi cannot resolve is refused here, with nothing started (lib/pi-model.mjs). Where
+  // bb's list of pi's models cannot settle it, the launch goes on as it always did.
+  if (pi && model !== null) {
+    const finding = await piModelFinding(model, reader, { partial: piListMayBePartial(settings.piAgentDir, { dataDir: settings.dataDir, server, home }), old: piListMayBeOld(settings.piAgentDir, now()) });
+    if (finding?.problem) throw fail(finding.problem.code, finding.problem.message);
+    if (finding?.warning) warn(finding.warning.message);
   }
   const bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server, deadline, env, fallbackCode: "E_SESSION_START_FAILED" });
 
@@ -217,7 +248,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // launch then looks, as for any spawn whose fate it cannot tell.
   const fresh = spawned.ok && isObject(thread) && isBbId(thread.id) && !known.has(thread.id)
     && (thread.projectId === undefined || thread.projectId === null || thread.projectId === project.id);
-  if (fresh) return { endpoint: { server, projectId: project.id, threadId: thread.id } };
+  if (fresh) return noted(home, { server, projectId: project.id, threadId: thread.id }, env, warn);
   // bb said no, or the request never reached it: no thread was created. With nothing else
   // changed, the launch's own settings file is put back as it was, and this is a refusal.
   if (nothingHappened(spawned)) {
@@ -253,7 +284,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
     if (!(error instanceof ProviderError)) throw error;
     throw new InDoubt(`${what}, and the home's threads could not be read (${error.message}): a thread may be running in ${home}`);
   }
-  if (found.length === 1 && isBbId(found[0].id) && found[0].projectId === project.id) return { endpoint: { server, projectId: project.id, threadId: found[0].id } };
+  if (found.length === 1 && isBbId(found[0].id) && found[0].projectId === project.id) return noted(home, { server, projectId: project.id, threadId: found[0].id }, env, warn);
   if (found.length > 0) throw new InDoubt(`${what}, and ${found.map((candidate) => candidate.id).join(", ")} newly run${found.length > 1 ? "" : "s"} in ${home}: whether that is this launch's thread cannot be told`);
   throw new InDoubt(`${what}, and no new thread shows in ${home} yet: one may still appear`);
 }

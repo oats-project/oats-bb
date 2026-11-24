@@ -14,8 +14,10 @@ function layout(t) {
   const root = mkdtempSync(join(tmpdir(), "oats-bb-deny-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const home = join(root, "deploy/agents/dev/instances/dev-a"), userHome = join(root, "user"), dataDir = join(root, "user/.bb"), tmp = join(root, "tmp");
+  // The provider's state directory (XDG_STATE_HOME/oats-bb): not there until a first launch makes it.
+  const stateDir = join(root, "user/.local/state/oats-bb");
   for (const dir of [join(home, "work"), userHome, join(dataDir, "thread-storage"), tmp]) mkdirSync(dir, { recursive: true });
-  return { root, home, userHome, dataDir, tmp, rules: (extra = {}) => denyRules({ home, dataDir, userHome, tmp, trees: [], protected: [], ...extra }) };
+  return { root, home, userHome, dataDir, tmp, stateDir, rules: (extra = {}) => denyRules({ home, dataDir, userHome, tmp, stateDir, trees: [], protected: [], ...extra }) };
 }
 const paths = (rules) => rules.map((rule) => { assert.match(rule, /^Edit\(\/\/.*\)$/); return rule.slice("Edit(/".length, -1); });
 
@@ -46,6 +48,29 @@ test("the user's Claude configuration, Claude's managed settings, bb's thread st
     assert.ok(got.includes(path), path);
   }
   assert.equal(got.some((path) => path.startsWith(join(dataDir, "bb.db"))), false, "bb's own files are bb's to protect");
+});
+
+const ofState = (path) => /\/oats-bb(\/\*\*)?$/.test(path);
+test("the provider's own state directory, whole: its record of each home's threads decides what a retire deletes, and is outside every home", (t) => {
+  const { root, stateDir, rules } = layout(t);
+  // Before the first launch made it: covered under the name it will have.
+  assert.deepEqual(paths(rules()).filter(ofState), [stateDir, join(stateDir, "**")]);
+  mkdirSync(join(stateDir, "homes"), { recursive: true });
+  assert.deepEqual(paths(rules()).filter(ofState), [stateDir, join(stateDir, "**")]);
+  // A state directory behind a link (XDG_STATE_HOME on another disk): both names, whether or not the directory is there yet.
+  mkdirSync(join(root, "disk/state"), { recursive: true });
+  symlinkSync(join(root, "disk/state"), join(root, "linked-state"));
+  const linked = join(root, "linked-state/oats-bb"), real = join(root, "disk/state/oats-bb");
+  assert.deepEqual(paths(rules({ stateDir: linked })).filter(ofState), [linked, join(linked, "**"), real, join(real, "**")]);
+  mkdirSync(real);
+  assert.deepEqual(paths(rules({ stateDir: linked })).filter(ofState), [linked, join(linked, "**"), real, join(real, "**")]);
+  // Where nothing above it exists either, up to a directory that does.
+  const deep = join(root, "disk/state/not/yet/oats-bb");
+  assert.deepEqual(paths(rules({ stateDir: join(root, "linked-state/not/yet/oats-bb") })).filter(ofState), [join(root, "linked-state/not/yet/oats-bb"), join(root, "linked-state/not/yet/oats-bb/**"), deep, join(deep, "**")]);
+  // A path a rule cannot carry refuses the launch, never a rule silently missing.
+  for (const bad of [join(root, "state (old)/oats-bb"), join(root, "st*te/oats-bb"), "relative/oats-bb", `${root}/a/../oats-bb`]) {
+    assert.throws(() => rules({ stateDir: bad }), (error) => error.code === "E_BACKEND_SANDBOX_PATH" && /XDG_STATE_HOME/.test(error.message) && /full mode \(--yolo\)/.test(error.message) && error.message.length < 480, bad);
+  }
 });
 
 test("a launch that names no trees is refused: only the kernel knows a home's trees, and git runs their config and hooks outside the sandbox", (t) => {

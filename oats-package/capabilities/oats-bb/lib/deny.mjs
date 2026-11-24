@@ -11,8 +11,9 @@
 // sandbox, and an unsandboxed command writes past them (the README says so).
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, normalize } from "node:path";
+import { basename, dirname, isAbsolute, join, normalize } from "node:path";
 import { fail } from "./errors.mjs";
+import { stateRoot } from "./record.mjs";
 
 // In the home: OATS's module copies and its record of the instance, Claude's project
 // configuration, the skills, the MCP servers, the messaging identity (the key stays
@@ -76,6 +77,24 @@ function realOf(path) {
 function withReal(path) {
   const real = realOf(path);
   return real === null || real === path ? [path] : [path, real];
+}
+
+/** The names a directory that may not be there yet will have once it is made: the path
+ *  itself, and the same path below the real path of the nearest directory above it that
+ *  exists (a state directory whose parent is a link, before the first record is written). */
+function withRealAbove(path) {
+  const real = realOf(path);
+  if (real !== null) return real === path ? [path] : [path, real];
+  const rest = [];
+  for (let at = path; at !== dirname(at); at = dirname(at)) {
+    rest.unshift(basename(at));
+    const above = realOf(dirname(at));
+    if (above !== null) {
+      const planned = join(above, ...rest);
+      return planned === path ? [path] : [path, planned];
+    }
+  }
+  return [path];
 }
 
 /** What a small regular file names, read as git reads a `.git` pointer and a
@@ -176,7 +195,7 @@ export function protectedRefusal(protectedPaths) {
  *  that names none is refused (treesRefusal).
  *  A path a rule cannot carry refuses the launch (E_BACKEND_SANDBOX_PATH): a rule that is
  *  silently missing would leave that path writable. → [rule]. */
-export function denyRules({ home, trees, protected: protectedPaths, dataDir, userHome = homedir(), tmp = tmpdir() }) {
+export function denyRules({ home, trees, protected: protectedPaths, dataDir, stateDir = stateRoot(), userHome = homedir(), tmp = tmpdir() }) {
   const paths = [];
   // The home is the kernel's word; a rule still needs it plain (a ".." step after a link
   // would put the rules on another directory than the home is).
@@ -219,6 +238,13 @@ export function denyRules({ home, trees, protected: protectedPaths, dataDir, use
   // storage moved to another disk and linked from the data directory).
   for (const base of withReal(dataDir)) for (const root of withReal(join(base, "thread-storage"))) for (const entry of CONFIG_ENTRIES) paths.push(join(root, entry));
   for (const root of withReal(tmp)) paths.push(join(root, PLUGIN_DIRS));
+  // The provider's own state directory, whole: its record of the threads it made for each
+  // home, which decides whether a retire deletes a home's bb environment (lib/record.mjs;
+  // contract r32, A17, on A8's list). It is outside every home and the agent runs as the
+  // same user, so only a rule keeps its tools off it. The first launch on a host makes the
+  // directory after these rules are written: it is covered under the names it will have.
+  if (!carriable(stateDir)) throw unwritable(`the provider's state directory ${shown(stateDir)} (XDG_STATE_HOME) is not one exact absolute path with no wildcard, parenthesis, backslash or control character`);
+  for (const root of withRealAbove(stateDir)) paths.push(root, join(root, "**"));
 
   const rules = [];
   for (const path of paths) {
@@ -236,9 +262,9 @@ export function denyRules({ home, trees, protected: protectedPaths, dataDir, use
  *  need first: bb's data directory must be the one bb uses, or its thread storage would go
  *  uncovered. The launch and the check of a planned launch share it. → rules. Throws
  *  E_BACKEND_SETTINGS, E_BACKEND_SANDBOX_TREES, E_BACKEND_SANDBOX_PATH. */
-export function sandboxDeny({ mode, home, trees, protected: protectedPaths, dataDir }) {
+export function sandboxDeny({ mode, home, trees, protected: protectedPaths, dataDir, stateDir }) {
   checkDataDir(mode, dataDir);
-  return denyRules({ home, trees, protected: protectedPaths, dataDir });
+  return denyRules({ home, trees, protected: protectedPaths, dataDir, stateDir });
 }
 
 /** bb does not say where its data directory is: a wrong setting would leave bb's thread

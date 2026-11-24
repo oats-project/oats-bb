@@ -78,6 +78,19 @@ async function menu(threadId: string, over: Partial<Handlers> = {}, agents?: Age
 const calls = (slot: Awaited<ReturnType<typeof menu>>["slot"], ...methods: string[]) =>
   slot.inspection.rpcCalls.filter((call) => methods.includes(call.method));
 
+/** Picks a harness in the Start or Restart dialog's own choice, with two clicks, as a person does. */
+function chooseHarness(slot: { getByTestId: (id: string) => HTMLElement; getAllByTestId: (id: string) => HTMLElement[] }, value: string) {
+  fireEvent.click(slot.getByTestId("oats-start-harness"));
+  fireEvent.click(slot.getAllByTestId("oats-start-harness-option").find((option) => option.getAttribute("data-value") === value)!);
+}
+/** Opens that choice and reads its options as a person reads them; then closes it. */
+function harnessOptions(slot: { getByTestId: (id: string) => HTMLElement; getAllByTestId: (id: string) => HTMLElement[] }): (string | null)[] {
+  fireEvent.click(slot.getByTestId("oats-start-harness"));
+  const read = slot.getAllByTestId("oats-start-harness-option").map((option) => option.querySelector("span")!.textContent);
+  fireEvent.keyDown(slot.getByTestId("oats-start-harness-options"), { key: "Escape" });
+  return read;
+}
+
 test("Stop shows on a working agent's thread, and not on a thread that is no agent", async () => {
   const working = await menu("thr_redesign");
   expect(working.shown()).toEqual(["stop", "restart", "retire"]);
@@ -662,9 +675,12 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   expect(slot.queryByTestId("oats-start-refresh")).toBeNull();
   expect(button(slot, "oats-confirm-act").disabled).toBe(false);
   // The harness field starts on the recorded harness; the focus on the form's first field.
-  const harness = slot.getByTestId("oats-start-harness") as HTMLSelectElement;
-  expect(harness.value).toBe("");
-  expect(texts(harness, "option")).toEqual(["Keep the recorded harness: Claude Code", "Claude Code", "pi"]);
+  // The plugin's own choice, never the browser's select: a button that shows what is chosen and opens its list.
+  const harness = slot.getByTestId("oats-start-harness");
+  expect(harness.tagName).toBe("BUTTON");
+  expect(harness.getAttribute("data-value")).toBe("");
+  expect(harness.textContent).toBe("Keep the recorded harness: Claude Code▾");
+  expect(harnessOptions(slot)).toEqual(["Keep the recorded harness: Claude Code", "Claude Code", "pi"]);
   // Under the model field: that the choice outlives this start, and no more.
   expect(slot.getByTestId("oats-start").textContent).toContain("Saved for later starts too.");
   expect(slot.getByTestId("oats-start").textContent).not.toMatch(/Leave blank|No model suggestions/);
@@ -687,7 +703,7 @@ test("a chosen harness and a typed model are passed; a model that is no model na
   const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
   await pick("start");
   await ready(slot);
-  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "pi" } });
+  chooseHarness(slot, "pi");
   const model = slot.getByTestId("oats-start-model") as HTMLInputElement;
   fireEvent.change(model, { target: { value: "--yolo" } });
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
@@ -961,7 +977,7 @@ test("the model field suggests bb's own models for the harness that will run, an
   await ready(slot);
   const options = () => Array.from(slot.getByRole("dialog").querySelectorAll("datalist option")).map((option) => option.getAttribute("value"));
   await waitFor(() => expect(options()).toEqual(["opus"])); // the recorded harness's (Claude Code)
-  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "pi" } });
+  chooseHarness(slot, "pi");
   await waitFor(() => expect(options()).toEqual(["anthropic/claude-opus-5-5"]));
   // Asked of the machine that holds the deployment, with no project: never a listing that starts a harness in an agent's home.
   expect(asked).toEqual([{ hostId: "host_falcon", providerId: "claude-code", preferCached: true }, { hostId: "host_falcon", providerId: "pi", preferCached: true }]);
@@ -1319,7 +1335,7 @@ test("a start the lock blocks says so in a sentence that points at Details, wher
 
 // ---- a start begins a new conversation
 
-test("Restart ALWAYS says that it starts a new conversation (it never resumes); that it stops what the agent is doing ONLY of an agent that works now: never of an idle one", async () => {
+test("Restart ALWAYS says that it starts a new conversation (it never resumes); that it stops what the agent is doing ONLY of an agent that works now, where the focus starts on Cancel: never of an idle one", async () => {
   // Working: bb says its thread runs a turn.
   const { slot, pick } = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "working" }) });
   await pick("restart");
@@ -1327,12 +1343,17 @@ test("Restart ALWAYS says that it starts a new conversation (it never resumes); 
   expect(says(slot)).toEqual(["Stops what it is doing now.", "Starts a new conversation."]);
   expect(under(slot, "oats-start-details", "p")).toEqual(["Runs in bb's full mode: no sandbox."]);
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
+  // It cuts a turn: the focus STARTS on Cancel, as in a Stop; and the button keeps its plain look (it deletes nothing).
+  await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-cancel")));
+  expect(slot.getByTestId("oats-start-harness").hasAttribute("data-autofocus")).toBe(false);
   resetApp();
   // Idle: its harness is loaded and bb's thread is at rest: nothing is being done, and nothing is said to be stopped.
   const idle = await menu("thr_harvest", { startCheck: ({ instance }) => startCheckOf(instance, { running: true, runtimeState: "unknown", sessionEnd: null }) });
   await idle.pick("restart");
   await ready(idle.slot);
   expect(says(idle.slot)).toEqual(["Starts a new conversation."]);
+  // Nothing is cut: the focus starts on the form's first field, as before.
+  await waitFor(() => expect(document.activeElement).toBe(idle.slot.getByTestId("oats-start-harness")));
   resetApp();
   // bb's thread says a turn runs, and the kernel says the agent does not run: the kernel's word decides, nothing is being done.
   const ended = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: false, runtimeState: "shell", sessionEnd: null }) });
@@ -1753,7 +1774,7 @@ test("Show result keeps the harness and the model of a start that was refused: t
   const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => held });
   await pick("start");
   await ready(slot);
-  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "pi" } });
+  chooseHarness(slot, "pi");
   fireEvent.change(slot.getByTestId("oats-start-model"), { target: { value: "no-such-model" } });
   const before = await leave(slot);
   refuse(new Error("E_MODEL_UNKNOWN: pi has no model no-such-model"));
@@ -1763,7 +1784,7 @@ test("Show result keeps the harness and the model of a start that was refused: t
   expect(slot.getByTestId("oats-result").textContent).toContain("Change it under “Model”, or leave the field blank.");
   fireEvent.click(button(slot, "oats-start-refresh"));
   await ready(slot);
-  expect((slot.getByTestId("oats-start-harness") as HTMLSelectElement).value).toBe("pi");
+  expect(slot.getByTestId("oats-start-harness").getAttribute("data-value")).toBe("pi");
   expect((slot.getByTestId("oats-start-model") as HTMLInputElement).value).toBe("no-such-model");
 });
 
@@ -2413,7 +2434,7 @@ test("THE HARM ITSELF: a Restart whose changed model is held sends NOTHING to th
     ["my-model", null, "Not found"], // bb lists it with no provider (a person's own addition): pi resolves among its own models only
   ] as const) {
     const slot = await restartDialog(listsSdk({ pi: [...PI_LIST, "!my-model"], "claude-code": ["opus"] }));
-    if (harness !== null) fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: harness } });
+    if (harness !== null) chooseHarness(slot, harness);
     if (typed !== "") type(slot, typed);
     // The word, on the Model field and beside the button; the button is off.
     await waitFor(() => expect(modelError(slot), word).toBe(word));
@@ -2519,7 +2540,7 @@ test("a harness changed to one bb cannot run here is NOT held: the kernel refuse
       throw Object.assign(new Error("E_BACKEND_NOT_READY: restart-pi was not started: oats.bb's session provider bb is not ready (unavailable): E_BACKEND_NOT_READY: bb did not report its claude-code provider's status (no claude-code entry); nothing was stopped or started"), { code: "conflict" });
     },
   });
-  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "claude" } });
+  chooseHarness(slot, "claude");
   type(slot, "opus");
   await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
   expect(slot.getByRole("dialog").textContent).not.toContain("not signed in in bb");

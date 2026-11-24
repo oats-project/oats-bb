@@ -38,6 +38,11 @@ export type ConfirmProps = {
   /** The primary button, named for the act: "Retire", "Stop". `destructive`: the focus starts on Cancel. */
   confirmLabel: string;
   destructive?: boolean;
+  /**
+   * The act interrupts something that is going on now (a restart of an agent that works on a turn):
+   * the focus starts on Cancel, as for a destructive act, and the primary button keeps its plain look.
+   */
+  interrupts?: boolean;
   /** Why the primary button is off, in words, beside it; null when it can be pressed. */
   blocked?: string | null;
   /** The primary button is off and the dialog already says why, in view (a notice with its own act): no words beside the button. */
@@ -68,7 +73,7 @@ export type ConfirmProps = {
   returnFocus?: () => HTMLElement | null;
 };
 
-export function Confirm({ title, about, shownFor, says = [], saysWarns = false, happens = [], kept = [], notice, children, confirmLabel, destructive = false, blocked = null, held = false, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
+export function Confirm({ title, about, shownFor, says = [], saysWarns = false, happens = [], kept = [], notice, children, confirmLabel, destructive = false, interrupts = false, blocked = null, held = false, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
   const running = phase.kind === "running";
   const settled = phase.kind === "done" || phase.kind === "failed";
   const mismatch = shownFor !== null && shownFor !== about;
@@ -130,11 +135,11 @@ export function Confirm({ title, about, shownFor, says = [], saysWarns = false, 
                 Close
               </Button>
             ) : (
-              <Button data-testid="oats-confirm-cancel" disabled={running} {...(destructive ? { "data-autofocus": "" } : {})} onClick={close}>
+              <Button data-testid="oats-confirm-cancel" disabled={running} {...(destructive || interrupts ? { "data-autofocus": "" } : {})} onClick={close}>
                 Cancel
               </Button>
             )}
-            <Button data-testid="oats-confirm-act" variant={destructive ? "destructive" : "primary"} disabled={off} {...(destructive ? {} : { "data-autofocus": "" })} onClick={onConfirm}>
+            <Button data-testid="oats-confirm-act" variant={destructive ? "destructive" : "primary"} disabled={off} {...(destructive || interrupts ? {} : { "data-autofocus": "" })} onClick={onConfirm}>
               {confirmLabel}
             </Button>
           </>

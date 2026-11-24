@@ -17,7 +17,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { showSidebar } from "../../browser.mjs";
-import { click, closed, dialog, menuTexts, openRowMenu, openThreadMenu, phaseIs, pick, folded, saysNow } from "../../scenes/lifecycle.mjs";
+import { click, closed, dialog, menuTexts, openRowMenu, openThreadMenu, phaseIs, pick, folded, saysNow, HARNESS_CHOICE } from "../../scenes/lifecycle.mjs";
 
 /** An instance name as the plugin's words (app/ui/words.ts `agentName`). */
 const words = (instance) => {
@@ -186,7 +186,8 @@ export default async (run) => {
     // that leaves a stopped agent's thread open and the one that archives it at the stop, the conversation stays
     // readable in bb, archived.
     check(said.title === `Start ${called}` && said.about === name && !said.body.includes("Ready to start.") && (await foldOf(page, "oats-start-details")).includes("Runs in bb's full mode: no sandbox.") && JSON.stringify(await saysOf(page)) === JSON.stringify(["Starts a new conversation."]) && said.act === "Start" && said.off === false, `${at} the Start dialog names the agent as the kernel has it now, says that it starts a new conversation, and starts nothing by itself`, JSON.stringify(said));
-    const offered = JSON.parse(await page.evaluate(`JSON.stringify([...(document.querySelector('[data-testid="oats-start-harness"]')?.options ?? [])].map((option) => option.text))`));
+    // (The Harness field is the plugin's own choice: opened, read, and closed with Escape. None is drawn where the provider declares one harness.)
+    const offered = JSON.parse(await page.evaluate(HARNESS_CHOICE)).harness;
     show("the harnesses the Start dialog offers", offered);
     check(offered.length === 0 || offered[0].startsWith("Keep the recorded harness"), `${at} the harness starts on the recorded one`, JSON.stringify(offered));
     await shot("start-before");

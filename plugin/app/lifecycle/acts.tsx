@@ -30,6 +30,7 @@ import { refusalCode, shown } from "../ui/text";
 import { agentName, readAge, showingRead } from "../ui/words";
 import { notify } from "../ui";
 import { restartModel } from "../../model/restart-model";
+import { Choice } from "../spawn/Choice";
 import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "../spawn/models";
 import {
   applyRefused,
@@ -754,6 +755,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   // tmux nobody knows, and nothing is said.
   const itsNode = oats.phase === "ready" ? oats.nodeByInstance.get(instance) : undefined;
   const working = known !== null && known.backend === "bb" && known.running !== false && itsNode !== undefined && itsNode.thread !== null && threadWorks(itsNode.thread);
+  const interrupts = verb === "restart" && working;
   const lost = verb === "start" && known !== null && resumable(known);
   const resumes = lost && !fresh;
 
@@ -861,6 +863,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
       // And once the start has an answer, none of it either: a refusal is not read under what it would have done.
       says={known === null || state.phase === "settled" ? [] : startSays(verb, { resumes, working })}
+      // A restart of an agent that works on a turn now cuts it: the focus starts on Cancel, and on no field.
+      interrupts={interrupts}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       // Why Start is off is said ONCE, on the status line under the fields (with Refresh status, or the way to its
       // thread): the button is off (`held`) with no second copy of the sentence beside it. Beside the button stands
@@ -926,14 +930,17 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           ) : null}
           {onBb && known.harnesses.length > 1 ? (
             <Field label={START.harness}>
-              <select data-testid="oats-start-harness" className={INPUT} value={harness} disabled={!editable} {...(editable ? { "data-autofocus": "" } : {})} onChange={(event) => setHarness(event.currentTarget.value)}>
-                <option value="">{shown(resolvedLabel(KEEP_HARNESS, recorded))}</option>
-                {known.harnesses.map((id) => (
-                  <option key={id} value={id}>
-                    {shown(harnessLabel(id))}
-                  </option>
-                ))}
-              </select>
+              {/* The plugin's own choice (the New agent form's), in the look of a field on bb's tokens: never the browser's select. */}
+              <Choice
+                testId="oats-start-harness"
+                value={harness}
+                disabled={!editable}
+                autofocus={editable && !interrupts}
+                placeholder={shown(resolvedLabel(KEEP_HARNESS, recorded))}
+                filterLabel={START.harness}
+                options={[{ id: "", label: shown(resolvedLabel(KEEP_HARNESS, recorded)) }, ...known.harnesses.map((id) => ({ id, label: shown(harnessLabel(id)) }))]}
+                onChange={setHarness}
+              />
             </Field>
           ) : null}
           {/* A home on tmux starts with the launch it recorded: bb's harnesses and their models are no choice of its start. */}
@@ -952,7 +959,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
               spellCheck={false}
               value={model}
               disabled={!editable}
-              {...(editable && known.harnesses.length <= 1 ? { "data-autofocus": "" } : {})}
+              {...(editable && !interrupts && known.harnesses.length <= 1 ? { "data-autofocus": "" } : {})}
               placeholder={running !== null && running === recorded && known.model !== null ? shown(known.model) : "Harness default"}
               onChange={(event) => setModel(event.currentTarget.value)}
             />

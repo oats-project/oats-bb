@@ -23,6 +23,7 @@ export function Choice({
   disabled = false,
   testId,
   field,
+  autofocus = false,
   ...described
 }: {
   /** The chosen option's id; an id no option has shows the placeholder. */
@@ -36,6 +37,8 @@ export function Choice({
   testId: string;
   /** The form's name for the field, for the form to find it. */
   field?: string;
+  /** In a dialog: the control the focus starts on (`data-autofocus`, which the dialog looks for). */
+  autofocus?: boolean;
   /** What `Field` gives its control. */
   id?: string;
   "aria-label"?: string;
@@ -140,6 +143,7 @@ export function Choice({
         disabled={disabled}
         data-testid={testId}
         data-field={field}
+        {...(autofocus ? { "data-autofocus": "" } : {})}
         data-value={chosen === undefined ? "" : value}
         {...described}
         className={`${INPUT} flex items-center justify-between gap-2 text-left`}

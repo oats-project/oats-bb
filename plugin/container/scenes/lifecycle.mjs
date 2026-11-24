@@ -96,6 +96,8 @@ export const dialog = async (page) =>
 /** What is under a fold of the dialog (its Details): whether it is open, and its words. A closed fold's words are not in the dialog's `body` (innerText reads what is drawn). */
 export const folded = (id) => `(() => { const fold = document.querySelector(${JSON.stringify(testId(id))}); return JSON.stringify(fold === null ? null : { open: fold.open, summary: fold.querySelector("summary")?.innerText.trim() ?? null, text: fold.textContent.replace(/\\s+/g, " ").trim() }); })()`;
 /** The dialog's lines before the act, in view: its one consequence line, and at most one more. */
+/** Open the Start or Restart dialog's Harness choice, read what it offers and what is chosen, and close it again with Escape. */
+export const HARNESS_CHOICE = `(async () => { const field = document.querySelector('[data-testid="oats-start-harness"]'); if (!field) return JSON.stringify({ harness: [], chosen: null, tag: null }); const tag = field.tagName; const chosen = field.getAttribute("data-value"); field.click(); let options = []; for (let i = 0; i < 40 && options.length === 0; i += 1) { await new Promise((done) => requestAnimationFrame(done)); options = [...document.querySelectorAll('[data-testid="oats-start-harness-option"]')]; } const harness = options.map((option) => option.querySelector("span")?.innerText.trim() ?? ""); document.querySelector('[data-testid="oats-start-harness-options"]')?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); return JSON.stringify({ harness, chosen, tag }); })()`;
 export const saysNow = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-confirm-says")} li`)})].map((line) => line.innerText.trim()))`;
 /** No section heading of the four the cut removed, and one fold at most, in the dialog. */
 export const plainNow = `(() => { const dialog = document.querySelector(${JSON.stringify(confirm)}); return JSON.stringify({ headings: [...dialog.querySelectorAll("h3")].map((each) => each.innerText.trim()).filter((text) => /^(what will happen|what is kept|before you confirm|current state)$/i.test(text)), folds: dialog.querySelectorAll("details").length }); })()`;
@@ -496,8 +498,18 @@ export default [
         const startSaid = await page.evaluate(saysNow);
         const startPlain = await page.evaluate(plainNow);
         check(startSaid === JSON.stringify(["Starts a new conversation."]) && startPlain === JSON.stringify({ headings: [], folds: 1 }), `${at} in view, under no heading: its ONE consequence line; and ONE fold`, `${startSaid} ${startPlain}`);
-        const fields = JSON.parse(await page.evaluate(`JSON.stringify({ harness: [...document.querySelector(${JSON.stringify(testId("oats-start-harness"))}).options].map((option) => option.text), chosen: document.querySelector(${JSON.stringify(testId("oats-start-harness"))}).value, model: document.querySelector(${JSON.stringify(testId("oats-start-model"))}).value })`));
-        check(fields.chosen === "" && fields.harness[0].startsWith("Keep the recorded harness") && same(fields.harness.slice(1), ["Claude Code", "pi"]) && fields.model === "", `${at} the harness starts on "Keep the recorded harness", with the ones the provider declares after it; the model is blank`, JSON.stringify(fields));
+        // The Harness field is the plugin's own choice (a button that opens a list), never the browser's select: it is
+        // opened, read as a person reads it, and closed with Escape (which closes the list alone, not the dialog).
+        const fields = { ...JSON.parse(await page.evaluate(HARNESS_CHOICE)), model: await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-model"))}).value`) };
+        check(fields.tag === "BUTTON" && fields.chosen === "" && fields.harness[0].startsWith("Keep the recorded harness") && same(fields.harness.slice(1), ["Claude Code", "pi"]) && fields.model === "", `${at} the harness starts on "Keep the recorded harness", with the ones the provider declares after it, in the plugin's own choice; the model is blank`, JSON.stringify(fields));
+        check(await page.evaluate(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-harness-options"))}) === null`), `${at} Escape in the open list closes the list, and the dialog stays`);
+        // Its list, open: what a person chooses from, in the look of the plugin's fields.
+        await page.evaluate(click("oats-start-harness"));
+        const listed = await page.until(`document.querySelectorAll(${JSON.stringify(testId("oats-start-harness-option"))}).length === 3 && (() => { const box = document.querySelector(${JSON.stringify(testId("oats-start-harness-options"))}).getBoundingClientRect(); return box.height > 0 && box.top >= 0 && box.bottom <= innerHeight; })()`, 10);
+        check(Boolean(listed), `${at} the open list of harnesses is whole in view, inside the dialog`);
+        await page.shot(`lifecycle-${viewport.name}-start-harness-open`);
+        await page.press("Escape");
+        check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-harness-options"))}) === null`, 10)), `${at} Escape closes the list again, and the dialog stays`);
         check(before.act === "Start" && before.off === false && before.focus === "oats-start-harness", `${at} the focus starts on the form's first field`, JSON.stringify(before));
         const startFold = JSON.parse(await page.evaluate(folded("oats-start-details")));
         check(startFold !== null && startFold.open === false && startFold.text.includes("Runs in bb's full mode: no sandbox.") && startFold.text.includes("Machine") && startFold.text.includes("Home"), `${at} under Details, closed: that the agent runs in bb's full mode, with no sandbox, its machine and its home`, JSON.stringify(startFold));

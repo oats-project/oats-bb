@@ -12,7 +12,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { readPiPackages } from "../../oats-package/capabilities/oats-bb/lib/pi-config.mjs";
-import { UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, runBin, scratch } from "../fixtures/harness.mjs";
+import { UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, piModelRow, projectRow, runBin, scratch } from "../fixtures/harness.mjs";
 
 const envList = (names) => ({ builtInGit: { status: "not logged in" }, variables: names.map((name) => ({ name, value: null, secret: true, note: null })), inheritedVariables: [] });
 const PI_LAUNCH = { harness: "pi", yolo: true, args: [] };
@@ -30,6 +30,7 @@ async function setup(t, script = {}, backendOverrides = {}) {
     "machine env list": { stdout: envList([]) },
     "machine env set": { stdout: envList([]) },
     "machine env unset": { stdout: envList([]) },
+    "provider models pi": { stdout: [piModelRow("mock", "echo")] },
     ...script,
   });
   const launch = (extra = {}, settings = {}) => call("launch", { home, instance: "dev-a", harness: "pi", model: "mock/echo", yolo: true, env: [{ name: "OATS_INSTANCE", value: "dev-a", source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel" }], unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra }, { settings: backend.settings(settings), bb });

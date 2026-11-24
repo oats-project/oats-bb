@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { piPathRefusal } from "../../oats-package/capabilities/oats-bb/lib/project-env.mjs";
-import { PATH_WITHOUT_BWRAP, UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { PATH_WITHOUT_BWRAP, UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, piModelRow, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 // bb-app 0.50.1's answer to every `bb machine env` command: the names, never a value.
 const envList = (names) => ({ builtInGit: { status: "not logged in" }, variables: names.map((name) => ({ name, value: null, secret: true, note: null })), inheritedVariables: [] });
@@ -27,6 +27,7 @@ async function setup(t, script = {}) {
     "machine env list": { stdout: envList([]) },
     "machine env set": { stdout: envList([]) },
     "machine env unset": { stdout: envList([]) },
+    "provider models pi": { stdout: [piModelRow("mock", "echo")] },
     ...(typeof script === "function" ? script(home) : script),
   });
   // A directory that holds a `pi`, and one that holds none: the PATH a launch names.

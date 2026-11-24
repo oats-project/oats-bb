@@ -649,15 +649,16 @@ const soon = async (seen, seconds = 15) => {
  * arranged in test/app/window-loads.test.tsx, and nowhere else: this step is no evidence for that
  * fix. It is here so that the load-inside-a-read path is held on the real kernel once.
  *
- * No bound on elapsed time. The hold grows with each try (a window on a slow host takes longer to
+ * No bound on elapsed time. The hold grows with each try (6, 10, 14 s) (a window on a slow host takes longer to
  * load and draw than a short hold leaves); a try whose load missed the read is made again; and
  * where every try missed it, the step says NOT SHOWN in a NOTE and fails nothing, as the pacing
  * step does for a slow kernel. What it asserts is the order: the window shows the claim with ONE
  * status read of the plugin's since the claim (the one that carried it, not a later poll's).
  */
 async function loadedWhileReading(asInstance, { instance, threadId }) {
-  // The hold of each try, longer each time: under the 20 s after which the plugin gives a status up.
-  const HOLDS_MS = [6000, 12000, 17000];
+  // The hold of each try, longer each time, and well under the 20 s after which a status is given up: the kernel's
+  // own status runs after the hold, inside that limit.
+  const HOLDS_MS = [6000, 10000, 14000];
   const view = VIEWS[0];
   const at = `A5b3 ${view.theme} ${view.viewport.name}`;
   const facts = `(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
@@ -670,7 +671,8 @@ async function loadedWhileReading(asInstance, { instance, threadId }) {
       wrapper({ delays: { status: HELD_MS } });
       // Quiet first: no status of the plugin's is RUNNING (a poll's, held, would be taken for the claim's and have less
       // of its hold left) and none ended in the last 3 s: the claim's event then starts a read with no wait.
-      await until("no oats status of the plugin's running, and none in the last 3 s", () => !statusRunning() && statusReads().every((read) => Date.now() - ended(read) > 3000), 90);
+      // (And the server's pause after a read is that read's own length: a read held by the try before must be that long past.)
+      await until("no oats status of the plugin's running, and none within its own length, or 3 s, of now", () => !statusRunning() && statusReads().every((read) => Date.now() - ended(read) > Math.max(3000, read.ms)), 120);
       const before = records().length;
       const page = await viewPage(browser, view, at);
       try {
@@ -686,7 +688,11 @@ async function loadedWhileReading(asInstance, { instance, threadId }) {
         } else {
           // Nothing else changes from here. The read ends, the server publishes, and the window must show the claim.
           const shown = await page.until(`/^Needs you/.test(${facts}) ? ${facts} : ""`, 60);
-          held = { drawn, shown, reads: statusReads(before).length, ms: HELD_MS };
+          // A status of the plugin's that did not answer since the claim (the kernel's own read ran over what the hold
+          // left of its limit) carried nothing to the window: the try says nothing of the plugin.
+          const unanswered = statusCalls(before).filter((call) => call.exit !== 0).length;
+          if (shown === null && unanswered > 0) missed.push(`try ${attempt} (held ${HELD_MS} ms): ${unanswered} oats status of the plugin's since the claim did not answer`);
+          else held = { drawn, shown, reads: statusReads(before).length, ms: HELD_MS };
         }
       } finally {
         await page.close();

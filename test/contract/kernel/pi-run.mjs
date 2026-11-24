@@ -12,6 +12,9 @@
 //   input` to it is the kernel's resume: counted once against the home's resume cap, and
 //   then the provider's tell, on which bb starts the harness again in the same thread for
 //   one turn. For pi and for Claude.
+// - that a pi spawn whose model bb's pi would not resolve is refused by the kernel's spawn
+//   and undone whole (no home, no instance, no bb project, no thread), and that a bare model
+//   id one pi provider serves launches (the pi model check).
 //
 // Not part of `npm test` or `npm run test:contract`: it needs the network (the
 // oats.framework package the workspace pins).
@@ -24,7 +27,7 @@ import { execFileSync } from "node:child_process";
 import { after, before, test } from "node:test";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BB_VERSION, repo, rig, waitFor } from "../rig.mjs";
+import { BB_VERSION, repo, rig, sleep, waitFor } from "../rig.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RUN = "/home/node/pi-kernel-run";
@@ -75,6 +78,42 @@ before(async () => {
   await sh("echo 'PI-KERNEL-RUN say hi.' > task.md");
 }, { timeout: 1_500_000 });
 after(() => box.stop());
+
+// The pi model check under the kernel (lib/pi-model.mjs). The kernel of this image hands
+// the provider's check no model, so the refusal is the launch's: the kernel takes a
+// launch refused with an E_BACKEND_ code for a spawn that started nothing, and undoes it.
+test("a pi spawn whose model bb's pi does not have is refused by the kernel's own spawn, and leaves nothing: no home, no instance, no bb project, no thread", async () => {
+  const holds = async () => ({ projects: (await bbJson("project list")).map((project) => project.id).sort(), threads: (await bbJson("thread list --include-hidden")).map((thread) => thread.id).sort(),
+    // The provider's records of its homes' threads (lib/record.mjs): a refused launch notes none.
+    records: await sh("find ~/.local/state/oats-bb -type f -exec sha256sum {} + 2>/dev/null | sort || true") });
+  // Right after pi's configuration changed the check refuses nothing (bb serves the list it
+  // fetched for a minute as it is), and this container's pi wrote its auth.json when bb
+  // first started it: wait until the check refuses again.
+  await waitFor("the model check to refuse, pi's configuration being older than bb's list can be", async () => (await box.provider("check", { home: null, soul: null, launch: { harness: "pi", yolo: true, args: [], model: "claude-fable-9" } })).result.problems.length === 1, { timeoutMs: 180_000, everyMs: 3_000 });
+  const before = await holds();
+  for (const [instance, model, sentence] of [
+    ["pi-model-none", "claude-fable-9", 'pi has no model "claude-fable-9" (if you just added it to pi, try again in a minute)'],
+    ["pi-model-twin", "twin", 'pi model "twin" is served by mock and mock-b: use mock/twin or mock-b/twin (if you just changed that in pi, try again in a minute)'],
+  ]) {
+    const refused = JSON.parse(await oats(`spawn piworker --name ${instance} --backend bb --model ${model} --task-file ~/task.md --json`, { ok: false }));
+    assert.equal(refused.ok, false, JSON.stringify(refused));
+    assert.equal(refused.error.code, "E_BACKEND_LAUNCH_ARG", JSON.stringify(refused));
+    assert.ok(refused.error.message.includes(sentence), refused.error.message);
+    assert.equal((await sh(`ls -d ${homeOf("piworker", instance)} 2>/dev/null || true`)).trim(), "", "the home is gone");
+    assert.ok(!(await oats("status --json")).includes(instance), "the kernel lists no such instance");
+  }
+  assert.deepEqual(await holds(), before, "bb holds no new project and no new thread, and the provider noted no thread");
+});
+
+test("a pi spawn on a bare model id that one pi provider serves, as a soul declares it (claude-fable-5.1), launches and runs its first turn", async () => {
+  const since = (await HARNESS.pi.turns()).length;
+  const spawned = await oats("spawn piworker --name pi-model-bare --backend bb --model claude-fable-5.1 --task-file ~/task.md 2>&1");
+  assert.match(spawned, /Spawned pi-model-bare .* bb session/, spawned);
+  const { threadId } = (await json(oats(`session inspect --home ${homeOf("piworker", "pi-model-bare")} --json`))).result.session.endpoint;
+  await waitFor("the first turn", async () => (await HARNESS.pi.turns()).length > since, { timeoutMs: 120_000 });
+  await idle(threadId);
+  await oats("retire pi-model-bare --force 2>&1");
+});
 
 for (const harness of ["pi", "claude"]) {
   const { soul, providerId, failFile, turns, opened, sawSkill } = HARNESS[harness];
@@ -208,5 +247,39 @@ for (const harness of ["pi", "claude"]) {
     assert.ok((await bbJson("thread list --include-archived --include-hidden")).find((row) => row.id === threadId)?.archivedAt, "the home's thread is archived after the retire");
     assert.deepEqual((await bbJson(`machine env list --project ${projectId}`)).variables, [], "and removed the project's env");
     assert.equal(await landed(`MARK-${harness}-AFTER-STOP`), 0);
+  });
+
+  // Contract r32, A17, under the kernel: a retire that keeps the home. The kernel's stop
+  // archives the thread and the provider's retire hook then deletes the home's bb
+  // environment, from the record the kernel's own launch of the provider left. So the
+  // thread, unarchived in bb, takes no message, and nothing starts in the kept home.
+  test(`a ${harness} home retired with --keep-dir under the kernel: the home stays, its bb environment is destroyed, and its thread, unarchived in bb, takes no message and starts nothing`, async () => {
+    const kept = `${harness}-kept`;
+    const since = (await turns()).length;
+    const spawned = await oats(`spawn ${soul} --name ${kept} --backend bb --task-file ~/task.md 2>&1`);
+    assert.match(spawned, new RegExp(`Spawned ${kept} .* bb session`), spawned);
+    const home = homeOf(soul, kept);
+    const { threadId } = (await inspect(home)).session.endpoint;
+    await waitFor("the first turn", async () => (await turns()).length > since, { timeoutMs: 120_000 });
+    await idle(threadId);
+    const environment = (await bbJson(`thread show ${threadId}`)).thread.environmentId;
+    assert.equal((await bbJson(`environment show ${environment}`)).path, home);
+    const retired = await oats(`retire ${kept} --keep-dir --force 2>&1`);
+    assert.doesNotMatch(retired, /bb environment was not deleted/, retired);
+    assert.equal((await sh(`test -d ${home} && test -e ${home}/TASK.md && echo kept || echo gone`)).trim(), "kept", "--keep-dir keeps the home");
+    assert.notEqual((await bbJson(`thread show ${threadId}`)).thread.archivedAt ?? null, null, "the home's thread is archived after the retire");
+    await waitFor("bb to have destroyed the home's environment", async () => (await bbJson(`environment show ${environment}`)).status === "destroyed", { timeoutMs: 60_000, everyMs: 500 });
+    await waitFor("no process in the kept home", async () => (await processesIn(home)) === 0, { timeoutMs: 30_000 });
+    // A person unarchives it in bb and sends a message.
+    const turnsBefore = (await turns()).length;
+    await sh(`bb thread unarchive ${threadId} --json`);
+    const told = JSON.parse(await sh(`bb thread tell ${threadId} 'MARK-${harness}-KEPT a word after the retire' --json`, { ok: false }));
+    assert.equal(told.ok, false, JSON.stringify(told));
+    assert.equal(told.error.code, "thread_environment_unavailable", JSON.stringify(told));
+    await sleep(6_000);
+    assert.equal(await landed(`MARK-${harness}-KEPT`), 0, "a retired agent took a message");
+    assert.equal((await turns()).length, turnsBefore);
+    assert.equal(await processesIn(home), 0, "a harness started in the kept home");
+    assert.equal((await carriers(threadId)).length, 0);
   });
 }

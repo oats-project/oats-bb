@@ -3,7 +3,7 @@
 // reason the plugin says after it (app/outside/say.ts), from the kernel's row as recorded and bb's
 // answer for its thread.
 import { describe, expect, it } from "vitest";
-import { rowWarns } from "../../app/outside/parts";
+import { lineParts, rowWarns } from "../../app/outside/parts";
 import { said, type Said } from "../../app/outside/say";
 import { agentStatus } from "../../app/roster/status";
 import { STATE } from "../../app/ui/words";
@@ -269,3 +269,47 @@ describe("failed, unreachable, and what is not this feature's", () => {
     expect(WHERES.map((where) => said(recorded("working"), where, false)?.note ?? null)).toEqual(["thread not shown in bb", "may still run", "deleted in bb", "no bb thread", null]); // (it runs, and bb has its thread archived: its row says that it may still run)
   });
 });
+
+describe("\"message to continue\": said only where a message carries the agent on under OATS, never where it would start it outside OATS", () => {
+  /** What the thread's line says after the state, and whether it has an act of the lifecycle's own (null: the roster's act stands). */
+  const line = (agent: Agent, where: ThreadWhere, attached: boolean, thread: object | null = null) => {
+    const on = said(agent, where, attached, thread);
+    const status = agentStatus(agent, null, NOW);
+    const parts = lineParts(on, { state: status.state, since: status.since, detail: status.detail });
+    return { words: [parts.since, parts.detail].filter((part) => part !== null).join(" · "), message: on?.message ?? false, acts: on?.acts ?? null };
+  };
+  it("said: a lost session and no harness loaded (recorded rows) and a harness that ended by itself, on the agent's own listed bb thread", () => {
+    expect(line(lost, "open", true)).toEqual({ words: "session lost · message to continue", message: true, acts: [] });
+    expect(line(unloaded, "open", true)).toEqual({ words: "not loaded · message to continue", message: true, acts: [] });
+    expect(line(failed, "open", true)).toEqual({ words: "session ended · message to continue", message: true, acts: [] });
+  });
+  // A message in bb to any of these starts a harness OATS does not expect (the kernel then reports it "running outside OATS"), or reaches nothing.
+  const NEVER: [string, Agent, ThreadWhere, boolean, (object | null)?][] = [
+    ["an operator's stop (sessionEnd \"stopped\")", operator, "open", true],
+    ["a stop that does not say how its session ended", { ...operator, sessionEnd: undefined }, "open", true],
+    ["a stop whose sessionEnd is null", { ...operator, sessionEnd: null }, "open", true],
+    ["a stop with a word of the session's end this plugin does not know", { ...operator, sessionEnd: "something-new" }, "open", true],
+    ["the word \"stopped\" with no word that the row does not run, beside \"lost\"", { ...lost, running: null, runtimeState: "stopped" }, "open", true],
+    ["an agent that runs outside OATS (the kernel's report)", reported, "open", true],
+    ["a thread that failed at its start (it never ran)", lost, "open", true, { status: "error", startFailure: { message: "Command thread.start failed", detail: null } }],
+    ["a session the kernel cannot reach", unreachable, "open", true],
+    ["a failed row that does not say that it does not run", { ...failed, running: null }, "open", true],
+    ["an agent that runs", recorded("working"), "open", true],
+    ["a lost session whose thread bb has archived", lost, "archived", false],
+    ["a lost session whose thread bb no longer has", lost, "missing", false],
+    ["a lost session bb has not answered for", lost, "unknown", false],
+    ["a lost session on a thread the roster does not draw it on", lost, "open", false],
+    ["a lost session on tmux", tmuxRow("tmux-row-lost.json"), "none", false],
+    ["a tmux agent stopped with OATS", tmuxRow("tmux-row-stopped.json"), "none", false],
+  ];
+  for (const [name, agent, where, attached, thread] of NEVER) {
+    it(`never: ${name}`, () => {
+      const read = line(agent, where, attached, thread ?? null);
+      expect(read.message).toBe(false);
+      expect(read.words).not.toMatch(/message to continue/);
+      // And the act is never taken off the line for it: this feature's own (Start, Stop), or the roster's.
+      expect(read.acts === null || read.acts.length > 0).toBe(true);
+    });
+  }
+});
+

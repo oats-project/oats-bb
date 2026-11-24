@@ -182,7 +182,7 @@ describe("the kernel's outsideOats", () => {
   it("says that OATS recorded it stopped, as a fact after the state, with the report for its notice and its two acts; its row says the state alone", () => {
     for (const where of WHERES) {
       for (const attached of [true, false]) {
-        expect(said(reported, where, attached)).toEqual({ ...PLAIN, kind: "outside", sentence: "recorded stopped", tone: "warning", note: "", warning: REPORT, acts: ["stop", "start"], archived: where === "archived" });
+        expect(said(reported, where, attached)).toEqual({ ...PLAIN, kind: "outside", sentence: "stopped in OATS", tone: "warning", note: "", warning: REPORT, acts: ["stop", "start"], archived: where === "archived" });
       }
     }
   });

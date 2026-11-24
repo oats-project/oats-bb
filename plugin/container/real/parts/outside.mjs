@@ -34,8 +34,8 @@ const SAYS = {
   notLoaded: "not loaded",
   notLoadedRow: `Idle · ${SOUL} · not loaded`, // (the row's title, whole: state · soul · reason)
   outsideState: "Running outside OATS",
-  outsideRecorded: "recorded stopped",
-  outsideWhat: "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.",
+  outsideRecorded: "stopped in OATS",
+  outsideWhat: "Someone sent it a message in bb. Stop it to bring it back.",
   archivedWhileRunning: "Archived in bb while running: it may still run.",
   archivedRow: "archived in bb",
 };

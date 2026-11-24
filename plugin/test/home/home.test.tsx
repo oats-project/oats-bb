@@ -1037,6 +1037,10 @@ test("an agent that runs outside OATS is one of those that need you, in every pl
   expect(within(notice).getByTestId("oats-outside-details").querySelector("summary")!.textContent).toBe("▸Details");
   expect(notice.querySelectorAll("button")).toHaveLength(0);
   expect(Array.from(within(card).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop…", "Start…"]); // (the dots: each opens its dialog)
+  // The card is under "Needs you" and asks no question: it says, in the words of its line, what it needs; and Stop… is the primary act of the two.
+  expect(within(within(card).getByTestId("oats-status-line")).getByTestId("oats-status-part").textContent).toMatch(/stopped in OATS$/);
+  expect(within(card).getByTestId("oats-needs-outside").textContent).toBe("Stop it to bring it back.");
+  expect(Array.from(card.querySelectorAll("button[data-primary]")).map((button) => button.textContent)).toEqual(["Stop…"]);
   for (const id of ["oats-needs-choice", "oats-reply-send", "oats-needs-stopped", "oats-needs-message"]) expect(within(card).queryByTestId(id)).toBeNull();
   const { asked } = await import("../../app/lifecycle");
   fireEvent.click(within(card).getByRole("button", { name: "Stop…" }));

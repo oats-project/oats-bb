@@ -30,11 +30,11 @@ const BUTTON: Record<Act, string> = { stop: "Stop…", start: "Start…", retire
  * nothing runs on one press. Never a second path to `oats`. `held`: the roster is the last one
  * read, and the acts stay in their place, off (the Desktop's rule); the notice on the same screen says why.
  */
-export function OutsideActs({ instance, acts, held }: { instance: string; acts: readonly Act[]; held: boolean }) {
+export function OutsideActs({ instance, acts, held, primary }: { instance: string; acts: readonly Act[]; held: boolean; /** the one of them that is the primary act, where a place says which a person wants (the kernel's report: Stop) */ primary?: Act | undefined }) {
   return (
     <>
       {acts.map((act) => (
-        <Button key={act} data-testid="oats-status-act" data-act={act} disabled={held} onClick={() => openAct(act, instance)}>
+        <Button key={act} data-testid="oats-status-act" data-act={act} {...(act === primary ? { variant: "primary" as const, "data-primary": "" } : {})} disabled={held} onClick={() => openAct(act, instance)}>
           {BUTTON[act]}
         </Button>
       ))}
@@ -62,7 +62,7 @@ const follows = (said: Said, state: AgentState): boolean => AFTER[said.kind] ===
  */
 export function lineActs(said: Said | null, instance: string, held: boolean, state: AgentState): ReactNode | null | undefined {
   if (said === null || said.acts === null || !follows(said, state)) return undefined;
-  if (said.warning !== null) return <OutsideActs instance={instance} acts={reportActs(said)} held={held} />;
+  if (said.warning !== null) return <OutsideActs instance={instance} acts={reportActs(said)} held={held} primary={REPORT_PRIMARY} />;
   return <OutsideActs instance={instance} acts={said.acts} held={held} />;
 }
 
@@ -111,7 +111,7 @@ export function rowWords(word: string, state: AgentState, note: string | null): 
  * What a status line says after the state's word, where this feature has a reason for it: the
  * reason, or the sentence that keeps a person from harm, and whether the line warns. `status` is
  * the roster's own (`agentStatus`). When OATS recorded a stop is a fact of the instance panel.
- * - the kernel's report: "recorded stopped";
+ * - the kernel's report: "stopped in OATS";
  * - where a MESSAGE is the way on (`said.message`): the reason, then "message to continue";
  * - any other reason, on a line whose state is the one the reason follows: the reason;
  * - a line whose state is another (bb holds a question on the thread, so it says "Needs you"): the
@@ -150,19 +150,25 @@ export function DetachedActs({ said, instance, held }: { said: Said | null; inst
   return <AgentActs instance={instance} />;
 }
 
-/** The two acts the kernel's report names. */
+/** The two acts the kernel's report names, the primary one first. */
 const BOTH = ["stop", "start"] as const;
+/**
+ * Of the two, the one that brings the agent back under OATS: Stop (words.ts `OUTSIDE_NEEDS`: it
+ * always works; Start… begins a new conversation and is refused while the outside thread is in a
+ * turn). Drawn as the primary button wherever the two are side by side; Start… is the second.
+ */
+const REPORT_PRIMARY: Act = "stop";
 
 /** The acts the kernel's report names, for the agent's session provider: the lifecycle starts an agent on bb or on tmux, and the report is never a tmux agent's, so another provider's has Stop alone (nothing is named that cannot be pressed). */
 const reportActs = (said: Said): Act[] => (said.warning !== null && said.warning.backend === "bb" ? ["stop", "start"] : ["stop"]);
 
 /**
- * Under a line that says "Running outside OATS · recorded stopped" (the kernel's report that a
+ * Under a line that says "Running outside OATS · stopped in OATS" (the kernel's report that a
  * harness runs in a home OATS recorded stopped): no box and no title, which would repeat the line.
  * ONE fold, "Details", as under an Unreachable line: what happened and what to do in a person's
  * words, then the kernel's own code and sentence, through the display filter. No command is on
  * screen: Stop… and Start… do the same, and they are the LINE's own acts (`lineActs`). The mark
- * and "recorded stopped" keep the warning tone. (The text audit, T21 to T24, as ruled 23 Nov 2026.)
+ * and "stopped in OATS" keep the warning tone. (The text audit, T21 to T24, as ruled 23 Nov 2026.)
  * `own`: the acts this draws a button of its own for, over the fold, in a place whose line has no
  * acts of its own for them (the instance panel, while no roster is read and its header offers none).
  * Nothing where the kernel reports nothing.
@@ -178,7 +184,7 @@ export function OutsideWarning({ said, instance, held, own = [] }: { said: Said 
     <div data-testid="oats-outside-warning" data-instance={instance} className="flex min-w-0 flex-col gap-1.5">
       {acts.length === 0 ? null : (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <OutsideActs instance={instance} acts={acts} held={held} />
+          <OutsideActs instance={instance} acts={acts} held={held} primary={REPORT_PRIMARY} />
         </div>
       )}
       <Disclosure summary="Details" testId="oats-outside-details">
@@ -285,7 +291,7 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
   if (said === null || (said.warning === null && (attached || said.kind !== "lost-archived"))) return null;
   return (
     <div data-testid="oats-outside-agent-block" data-outside={said.kind} className="flex min-w-0 flex-col gap-2 text-sm text-foreground">
-      {/* (The kernel's report says what happened in its notice; its fact "recorded stopped" is the thread's line's.) */}
+      {/* (The kernel's report says what happened in its notice; its fact "stopped in OATS" is the thread's line's.) */}
       {/* The panel's header has the lifecycle's acts for the agent's state (`AgentActs`). One act is not among
           them: Stop for a session OATS lost (it reads stopped, and its process may run): it is here. */}
       {attached || said.kind !== "lost-archived" ? null : (

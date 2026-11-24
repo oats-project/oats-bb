@@ -77,9 +77,21 @@ export const MESSAGE_CONTINUES = "message to continue";
 
 // ---- the kernel's report: "Running outside OATS" is its state (app/ui/words.ts)
 
-/** The fact after the state on its line: what OATS recorded, which is no longer what the agent does. */
-export const OUTSIDE_RECORDED = "recorded stopped";
-export const OUTSIDE_WHAT = "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.";
+/**
+ * The fact after the state on its line, in a person's words: the agent is stopped in OATS, which
+ * is no longer what it does ("Running outside OATS · stopped in OATS"). (The kernel's phrase was
+ * "recorded stopped": the lead's ruling on the read of 24 Nov 2026, T7.)
+ */
+export const OUTSIDE_RECORDED = "stopped in OATS";
+/**
+ * What it needs, on the home's card under those words: STOP is the act that brings it back under
+ * OATS. It always works: the harness that runs is ended, its thread is archived, and the agent
+ * is what OATS has it: stopped, with Start… as for any stopped agent. Start… does not adopt what
+ * runs: it begins a NEW conversation, and while the outside thread is in a turn the provider
+ * refuses it ("stop it before starting again"). So Stop… is the primary act and Start… the second.
+ */
+export const OUTSIDE_NEEDS = "Stop it to bring it back.";
+export const OUTSIDE_WHAT = `Someone sent it a message in bb. ${OUTSIDE_NEEDS}`;
 /** The same, of an agent the lifecycle offers no Start for here (its session provider is neither bb nor tmux; the report is never a tmux agent's): the one remedy this plugin has is Stop. */
 export const OUTSIDE_WHAT_STOP = "Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.";
 

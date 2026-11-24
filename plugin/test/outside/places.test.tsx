@@ -168,8 +168,8 @@ test("the kernel's report on the open thread: one statement, \"Running outside O
   // The state, then what OATS recorded, as a fact with no time: never "Stopped" as the state of an agent that runs.
   await waitFor(() => expect(words(slot)).toEqual(["Running outside OATS", "stopped in OATS"]));
   const status = within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line");
-  // The warning tone is the line's: the state's mark, and "stopped in OATS".
-  expect([status.getAttribute("data-state"), within(status).getByTestId("oats-state").getAttribute("data-tone"), within(status).getByTestId("oats-status-part").getAttribute("data-tone")]).toEqual(["outside", "warning", "warning"]);
+  // "stopped in OATS" is in the warning tone; the mark is the state's own, as on its row in the sidebar (the state "outside" has the warning colour for its fill: no tone over it).
+  expect([status.getAttribute("data-state"), within(status).getByTestId("oats-state").getAttribute("data-tone"), within(status).getByTestId("oats-status-part").getAttribute("data-tone")]).toEqual(["outside", null, "warning"]);
   // No box and no title under the line: nothing repeats it.
   expect(within(slot.getByTestId("oats-identity-row")).queryByTestId("oats-notice")).toBeNull();
   expect(slot.getByTestId("oats-identity-row").textContent).not.toMatch(/is running in bb, but OATS recorded it as stopped|stops the harness|starts it from OATS, in a new conversation/);
@@ -283,9 +283,9 @@ test("a stopped agent on its open thread: that a message here starts it outside 
   await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a time to be drawn, if one were read)
   expect(words(slot)).toEqual(["Stopped", "A message here starts it outside OATS."]);
   expect(calls(slot, "panelEvents")).toEqual([]); // when it stopped is the instance panel's fact: the line reads no events
-  // The line warns: the state's mark and the sentence are in the warning tone.
+  // The SENTENCE warns, in the warning tone. The MARK is the state's own grey, the one colour of this agent's dot: the sidebar's row draws the same (the lead's P9).
   expect(within(slot.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual(["warning"]);
-  expect(within(slot.getByTestId("oats-status-line")).getByTestId("oats-state").getAttribute("data-tone")).toBe("warning");
+  expect(within(slot.getByTestId("oats-status-line")).getByTestId("oats-state").getAttribute("data-tone")).toBeNull();
   expect(acts(slot)).toEqual(["Start…"]);
   expect(slot.queryByTestId("oats-outside-warning")).toBeNull();
 });

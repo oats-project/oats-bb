@@ -412,7 +412,7 @@ export default [
       const primary = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}[data-primary]`)})].map((button) => button.innerText.trim()))`));
       check(same(primary, ["Stop…"]), `${at} of the two acts on the line, Stop… is the primary one (it brings the agent back under OATS)`, JSON.stringify(primary));
       check(
-        line !== null && line.state === "outside" && line.stateTone === "warning" && OUTSIDE_LINE.test(line.words) && same(line.tones, ["warning"]) && same(line.acts, ["Stop…", "Start…"]) && warned !== null && warned.boxed === false && /^.?\s*Details$/.test(warned.inView) && warned.folds === 1 && warned.folded === true && warned.kernel.includes("Someone sent it a message in bb. Stop, then Start.") && warned.kernel.includes(MESSAGE) && warned.kernel.includes("running-outside-oats") && same(warned.acts, []),
+        line !== null && line.state === "outside" && line.stateTone === null && OUTSIDE_LINE.test(line.words) && same(line.tones, ["warning"]) && same(line.acts, ["Stop…", "Start…"]) && warned !== null && warned.boxed === false && /^.?\s*Details$/.test(warned.inView) && warned.folds === 1 && warned.folded === true && warned.kernel.includes("Someone sent it a message in bb. Stop, then Start.") && warned.kernel.includes(MESSAGE) && warned.kernel.includes("running-outside-oats") && same(warned.acts, []),
         `${at} outsideOats: ONE state, "Running outside OATS", in the warning tone, then "stopped in OATS", with Stop… and Start… as the line's own acts; under it no box and no title: ONE fold, Details, closed, holding what happened in a person's words, then the kernel's code and sentence (no command and no backtick in view)`,
         line === null ? await shown() : JSON.stringify(line),
       );
@@ -544,7 +544,7 @@ export default [
       await page.goto(`/projects/${operator.projectId}/threads/${operator.id}`);
       const OPERATOR = new RegExp(`^Stopped${SINCE} · A message here starts it outside OATS\\.$`);
       const one = await lineOf(page, OPERATOR);
-      check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && one.stateTone === "warning" && same(one.tones, ["warning"]) && same(one.acts, ["Start…"]), `${at} (1) an operator's stop: "Stopped", the warning in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
+      check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && one.stateTone === null && same(one.tones, ["warning"]) && same(one.acts, ["Start…"]), `${at} (1) an operator's stop: "Stopped" with its own grey mark (the colour of its dot in the sidebar), the warning sentence in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
       await page.shot(`outside-${viewport.name}-three-1-operator-stop`, { targets: true });
 
       // (2) its session lost: "Stopped · session lost · message to continue": the reason, then the way on; no Start on the line, no time, no cause, no warning

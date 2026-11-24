@@ -121,19 +121,23 @@ export function rowWords(word: string, state: AgentState, note: string | null): 
  *   first what OATS recorded;
  * - none: the roster's own.
  */
-export function lineParts(said: Said | null, status: { state: AgentState; since: string | null; detail: string | null }): { since: string | null; detail: string | null; tone: "warning" | undefined } {
+export function lineParts(said: Said | null, status: { state: AgentState; since: string | null; detail: string | null }): { since: string | null; detail: string | null; tone: "warning" | undefined; markTone?: "warning" | null } {
   const own = { since: status.since, detail: status.detail, tone: undefined };
   if (said === null || said.sentence === null) return own;
   const tone = said.tone === "warning" ? "warning" : undefined;
-  if (said.kind === "stopped-open" && status.state !== "stopped") return { since: null, detail: STOPPED_OPEN_ASKING, tone };
+  // The MARK has one colour for an agent: the one its row in the sidebar draws (`rowParts`). A
+  // stopped agent whose live composer warns has the state's own grey mark on its line as on its
+  // row, and the SENTENCE beside it keeps the warning tone (the lead's P9, 24 Nov 2026).
+  const markTone = rowParts(said, status.state).tone ?? null;
+  if (said.kind === "stopped-open" && status.state !== "stopped") return { since: null, detail: STOPPED_OPEN_ASKING, tone, markTone };
   if (!follows(said, status.state)) return own;
   // Where a message is the way on: the reason, then "message to continue", each a part of the
   // line with its own separator ("Stopped · session lost · message to continue"). No time before
   // them: none of the three says since when.
-  if (said.message) return { since: said.sentence, detail: MESSAGE_CONTINUES, tone };
+  if (said.message) return { since: said.sentence, detail: MESSAGE_CONTINUES, tone, markTone };
   // A lost session has no time: the kernel records none of the loss (never "lost since").
-  if (said.kind === "lost-open" || said.kind === "lost-tmux") return { since: null, detail: said.sentence, tone };
-  return { since: status.since, detail: said.sentence, tone };
+  if (said.kind === "lost-open" || said.kind === "lost-tmux") return { since: null, detail: said.sentence, tone, markTone };
+  return { since: status.since, detail: said.sentence, tone, markTone };
 }
 
 /**
@@ -270,7 +274,7 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
         {agentName(agent.instance)}
       </span>
       {/* Behind a lifecycle result that says the agent changed, until the roster is read again: "Reading…", never the old state. */}
-      {reading ? <ReadingLine action={buttons} /> : <StatusLine state={status.state} since={parts.since} detail={parts.detail} tone={parts.tone} action={buttons} />}
+      {reading ? <ReadingLine action={buttons} /> : <StatusLine state={status.state} since={parts.since} detail={parts.detail} tone={parts.tone} markTone={parts.markTone} action={buttons} />}
       <OutsideWarning said={said} instance={agent.instance} held={held} />
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
     </div>
@@ -291,7 +295,7 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
  * the specialist's word of 24 Nov 2026). `reason`: that reason alone, for a line that says another
  * thing in the detail's place. `kind`: which case this feature read, for the place's `data-outside` (null: none).
  */
-export function pageParts(agent: Agent, roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere }, status: { state: AgentState; since: string | null; detail: string | null }): { since: string | null; detail: string | null; tone: "warning" | undefined; reason: string | null; kind: Said["kind"] | null } {
+export function pageParts(agent: Agent, roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere }, status: { state: AgentState; since: string | null; detail: string | null }): { since: string | null; detail: string | null; tone: "warning" | undefined; markTone?: "warning" | null; reason: string | null; kind: Said["kind"] | null } {
   const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
   const said = attached ? null : sayOf(agent, roster.whereOf(agent), attached);
   // (The kernel's report is this feature's case on its thread too: its Details is under this line, `OutsideAgentDetails`.)
@@ -300,7 +304,7 @@ export function pageParts(agent: Agent, roster: { nodeByInstance: ReadonlyMap<st
   // A reason with no sentence: where the thread is, as the row says it (the same function), after the roster's own words.
   const row = said !== null && said.warning === null && said.sentence === null ? rowParts(said, status.state) : null;
   if (row === null || row.note === null || row.note === "") return { ...parts, reason: null, kind };
-  return { since: parts.since, detail: [parts.detail, row.note].filter((part) => part !== null && part !== "").join(" · "), tone: row.tone ?? parts.tone, reason: row.note, kind };
+  return { since: parts.since, detail: [parts.detail, row.note].filter((part) => part !== null && part !== "").join(" · "), tone: row.tone ?? parts.tone, markTone: row.tone ?? null, reason: row.note, kind };
 }
 
 /**

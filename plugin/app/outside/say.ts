@@ -63,7 +63,7 @@ export type Said = {
   kind: Kind;
   /** The reason after the state word on the thread's line: one sentence, one remedy; null: the roster's own. */
   sentence: string | null;
-  /** "warning": the line is said in the warning tone (the state's mark and the sentence): a remedy is needed, or a person may do the wrong thing; "plain": it says how things are. */
+  /** "warning": the line's sentence is said in the warning tone (the MARK follows the row's, `rowTone`: one colour for an agent's dot): a remedy is needed, or a person may do the wrong thing; "plain": it says how things are. */
   tone: "warning" | "plain";
   /** The reason on the sidebar's row, in the soul's place (a row is never three lines); "": nothing after the state's word; null: the soul. */
   note: string | null;
@@ -92,7 +92,6 @@ export type Said = {
 const base = { sentence: null, tone: "plain", note: null, rowTone: "plain", warning: null, acts: null, archived: false, message: false } as const;
 /** No act of the line's own: where a message is the way on. */
 const NO_ACTS: readonly Act[] = [];
-
 
 /** The reason of a row whose thread cannot be opened from the tree, by where bb says the thread is. */
 function whereNote(where: ThreadWhere): string | null {

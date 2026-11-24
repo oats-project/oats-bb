@@ -3,7 +3,7 @@
 // reason the plugin says after it (app/outside/say.ts), from the kernel's row as recorded and bb's
 // answer for its thread.
 import { describe, expect, it } from "vitest";
-import { lineParts, outsideNeeds, rowWarns } from "../../app/outside/parts";
+import { lineParts, outsideNeeds, rowParts, rowWarns } from "../../app/outside/parts";
 import { said, type Said } from "../../app/outside/say";
 import { agentStatus } from "../../app/roster/status";
 import { STATE } from "../../app/ui/words";
@@ -276,6 +276,28 @@ describe("the home card's sentence of an agent that runs outside OATS", () => {
     expect(outsideNeeds(said(other, "open", true))).toBeNull();
     expect(outsideNeeds(said(operator, "open", true))).toBeNull();
     expect(outsideNeeds(null)).toBeNull();
+  });
+});
+
+describe("an agent's dot has ONE colour: the line's mark takes the tone its row in the sidebar draws (the lead's P9)", () => {
+  const mark = (agent: Agent, where: ThreadWhere, attached: boolean) => {
+    const on = said(agent, where, attached, AT_REST);
+    const status = agentStatus(agent, null, NOW);
+    const parts = lineParts(on, { state: status.state, since: status.since, detail: status.detail });
+    return { line: parts.markTone, row: rowParts(on, status.state).tone ?? null, sentence: parts.tone };
+  };
+  it("a stopped agent whose live composer warns: a grey mark on the line as on the row, and the sentence in the warning tone", () => {
+    expect(mark(operator, "open", true)).toEqual({ line: null, row: null, sentence: "warning" });
+  });
+  it("a row that warns (its process may still run, its thread deleted): the warning mark in both places", () => {
+    expect(mark(lost, "archived", false)).toEqual({ line: "warning", row: "warning", sentence: "warning" });
+    expect(mark(operator, "missing", false)).toEqual({ line: "warning", row: "warning", sentence: "warning" });
+  });
+  it("in every case this feature says a sentence for, the line's mark is the row's", () => {
+    for (const [agent, where, attached] of [[operator, "open", true], [operator, "archived", false], [operator, "missing", false], [lost, "open", true], [lost, "archived", false], [lost, "missing", false], [unloaded, "open", true]] as const) {
+      const both = mark(agent, where, attached);
+      if (both.line !== undefined) expect(both.line, `${JSON.stringify(agent)} ${where}`).toBe(both.row);
+    }
   });
 });
 

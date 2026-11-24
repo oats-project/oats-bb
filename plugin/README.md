@@ -602,7 +602,8 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   app/outside/threads.ts: `sdk.threads.get`, then the rule of "A thread that failed at its start").
   Where the thread failed at its start the result is **<Name> did not start**, in the failed tone,
   with bb's own reason under Details and one button, **Open** (the agent's own page, whose Start
-  offers the harness and the model); the form stays held (an instance exists), nothing navigates,
+  offers the harness and the model); the form stays held (an instance exists) and its submit is
+  not drawn (the result has nothing that is off: its title, Details, Open, and Close), nothing navigates,
   and nothing says "Created". A person who left the form is told the same by a notification that
   stays, with Open. Nothing is said of the model: the form does not guess. A thread still starting
   after 10 s, and one bb cannot answer for, are "Created" as before (the agent's row then says

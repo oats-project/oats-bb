@@ -82,9 +82,17 @@ test("the thread fails at its start: the form says \"<Name> did not start\", bb'
   expect(result.textContent!.replace(REASON, "")).not.toMatch(/model/i);
   expect(slot.inspection.navigateCalls).toEqual([]);
   expect(titles()).toEqual([]);
-  // An instance exists: the form stays held, and Spawn is off.
-  expect(submit(slot).disabled).toBe(true);
-  expect(slot.getByTestId("oats-spawn-cancel").textContent).toBe("Close");
+  // An instance exists: the fields stay held. Nothing that is off is drawn: no submit (never "Spawn incomplete",
+  // never a disabled "Spawn"), no reason for one; the foot's one button is Close.
+  expect((slot.getByTestId("oats-spawn-form").querySelector("fieldset") as HTMLFieldSetElement).disabled).toBe(true);
+  expect(slot.queryByTestId("oats-spawn-submit")).toBeNull();
+  expect(slot.queryByTestId("oats-disabled-reason")).toBeNull();
+  expect(slot.queryByTestId("oats-spawn-key")).toBeNull(); // nor the hint of the key that would press it
+  expect(slot.getByTestId("oats-spawn-foot").textContent).not.toMatch(/Spawn/);
+  expect(Array.from(slot.getByTestId("oats-spawn-foot").querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Open", "Close"]);
+  // Ctrl+Enter starts nothing.
+  fireEvent.keyDown(slot.getByTestId("oats-spawn-task"), { key: "Enter", ctrlKey: true });
+  expect(slot.inspection.rpcCalls.filter((call) => call.method === "spawn")).toHaveLength(1);
   // bb was asked for its events by type only.
   expect(asked.events.map((args) => JSON.stringify(args.types)).sort()).toEqual(['["system/error"]', '["turn/started"]']);
   fireEvent.click(slot.getByTestId("oats-spawn-open"));

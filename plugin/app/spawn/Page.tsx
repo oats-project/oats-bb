@@ -725,22 +725,26 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               <Button data-testid="oats-spawn-cancel" onClick={cancel} disabled={phase === "spawning"}>
                 {phase === "created" || phase === "incomplete" ? W.CLOSE : W.CANCEL}
               </Button>
-              <Button
-                variant="primary"
-                data-testid="oats-spawn-submit"
-                aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`}
-                aria-busy={phase === "spawning"}
-                disabled={!(canSpawn || (phase === "unknown" && !held))}
-                onClick={press}
-              >
-                {spawnWord}
-              </Button>
+              {/* A thread that failed at its start: the result has its title, Details, Open and Close, and nothing
+                  that is off. The submit is not drawn there (a control that cannot be used and tells nothing new). */}
+              {unstarted !== null ? null : (
+                <Button
+                  variant="primary"
+                  data-testid="oats-spawn-submit"
+                  aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`}
+                  aria-busy={phase === "spawning"}
+                  disabled={!(canSpawn || (phase === "unknown" && !held))}
+                  onClick={press}
+                >
+                  {spawnWord}
+                </Button>
+              )}
               {phase === "idle" || phase === "unknown" ? (
                 <kbd data-testid="oats-spawn-key" aria-hidden="true" className="rounded border border-border px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
                   {mac ? "⌘ Enter" : "Ctrl+Enter"}
                 </kbd>
               ) : null}
-              {reason === null ? null : <DisabledReason>{reason}</DisabledReason>}
+              {reason === null || unstarted !== null ? null : <DisabledReason>{reason}</DisabledReason>}
             </div>
             {/* What a person waits on, announced once: the read, the spawn. */}
             <span role="status" data-testid="oats-spawn-status" className="sr-only">

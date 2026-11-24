@@ -543,14 +543,24 @@ export default [
       // for this agent's name). The result says what the kernel answered, with the command that attaches; no thread opens.
       const resumed = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "lifecycle", "tmux-start-resume.json"), "utf8").replaceAll("lost-tmux-developer", LOST);
       try {
-        fake({ status: { stdout: tmuxStatus() }, "session start --resume": { stdout: resumed, sleepMs: 1500 } });
+        // From the press on OATS says it runs; its status takes a few seconds to read, as a real roster does after an act:
+        // the result is on screen before the window's roster is one read after the act.
+        fake({ status: { stdout: tmuxStatus({ [LOST]: "running" }), sleepMs: 5000 }, "session start --resume": { stdout: resumed, sleepMs: 1500 } });
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("done"), 30);
+        // BEHIND THE RESULT (the lead's L13): the page's header does not say the old state plainly ("Stopped · session lost",
+        // beside "is back in its last conversation"): it says "Reading…", and offers no act, until the roster is read again.
+        const header = `(() => { const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const state = head?.querySelector(${JSON.stringify(testId("oats-panel-state"))}); return JSON.stringify({ reading: state?.querySelector(${JSON.stringify(testId("oats-reading"))})?.innerText.trim() ?? null, state: state?.querySelector(${JSON.stringify(testId("oats-state"))})?.innerText.trim() ?? null, acts: [...(head?.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)}) ?? [])].map((b) => b.disabled) }); })()`;
+        const behind = await page.evaluate(header);
+        check(behind === JSON.stringify({ reading: "Reading…", state: null, acts: [true, true] }), `${at} behind the result the page's header says "Reading…" in the state's place, never "Stopped · session lost", and its acts are off`, behind);
         const done = await dialog(page);
         const where = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-where"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""`);
         check(done.body.includes("Overnight sweep developer is back in its last conversation.") && !done.body.includes("started fresh") && where.startsWith("Attach:") && where.includes("oats session attach --home ") && where.includes(LOST) && done.focus === "oats-confirm-close", `${at} after the press the result says that it is back in its last conversation, with the command that attaches to it; the focus is on Close`, JSON.stringify({ done, where }));
         await page.shot(`tmux-roster-${viewport.name}-lost-start-done`, { targets: true });
-        // OATS now says it runs: its row says so, at its kernel place, with no reason.
+        // The roster is read again (within the ten seconds "Reading…" can stand): the header says what it says now.
+        const settled = await page.until(`(() => { const now = ${header}; return JSON.parse(now).reading === null ? now : ""; })()`, 20);
+        check(settled !== null && JSON.parse(settled).state === "Working" && JSON.parse(settled).acts.every((off) => off === false), `${at} once the roster is read again the header says "Working", with its acts on`, settled ?? (await page.evaluate(header)));
+        // OATS says it runs: its row says so, at its kernel place, with no reason.
         fake({ status: { stdout: tmuxStatus({ [LOST]: "running" }) } });
         await page.evaluate(click("oats-confirm-close"));
         check(Boolean(await page.until(closed, 10)), `${at} Close closes the dialog`);

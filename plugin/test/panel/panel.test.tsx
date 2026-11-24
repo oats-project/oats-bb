@@ -1029,3 +1029,35 @@ test("the header's soul is the matching soul's key once the souls are read, else
   await plain.findByTestId("oats-panel-work");
   expect(text(plain.getByTestId("oats-panel-soul-link"))).toBe("oats-expert");
 });
+
+// ---- behind a lifecycle result (the lead's L13; app/roster/reading.tsx, whose own tests are test/roster/reading.test.tsx):
+// the agent's header, on its panel and on its page, says "Reading…" in the state's place and offers no act, until the
+// roster is read again. A RETIRE's result too: the agent is gone, and the page that still draws it says the same.
+
+test("behind a result that says the agent changed, its header says \"Reading…\" in the state's place and every act of its is off; a roster read after the act says the state again", async () => {
+  const { noteActed } = await import("../../app/roster/reading");
+  let agents = panelAgents();
+  let at = panelSnapshot().at;
+  const slot = renderSlot<{ threadId?: string; instance?: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, {
+    rpc: handlers({ snapshot: () => ({ ...panelSnapshot(agents), at }), panelInstance: ({ instance }) => instanceAnswer(instance) }),
+    sidebarThreads: panelThreads(agents),
+  });
+  const state = await slot.findByTestId("oats-panel-state");
+  await waitFor(() => expect(within(state).queryByTestId("oats-state")).not.toBeNull());
+  const word = within(state).getByTestId("oats-state").textContent;
+  const acts = () => Array.from(slot.getByTestId("oats-agent-acts").querySelectorAll("button")).map((button) => button.disabled);
+  expect(acts().length).toBeGreaterThan(0);
+  expect(acts().every((off) => off === false)).toBe(true);
+  // The result says it stopped (or was retired: the same for the page that still draws it).
+  act(() => noteActed([CHILD], at));
+  expect(within(state).getByTestId("oats-reading").textContent).toBe("Reading…");
+  expect(within(state).queryByTestId("oats-state")).toBeNull(); // never the old state stated plainly
+  expect(state.textContent).not.toContain(word!);
+  expect(acts().every((off) => off === true)).toBe(true); // nothing offers an act
+  // The roster is read again, after the act: the state is what it says.
+  agents = panelAgents().map((agent) => (agent.instance === CHILD ? { ...agent, waiting: null, running: false, runtimeState: "stopped", sessionEnd: "stopped" } : agent));
+  at = new Date(Date.parse(at) + 4_000).toISOString();
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at }));
+  await waitFor(() => expect(within(state).queryByTestId("oats-reading")).toBeNull());
+  expect(within(state).getByTestId("oats-state").textContent).toBe("Stopped");
+});

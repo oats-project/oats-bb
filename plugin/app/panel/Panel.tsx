@@ -12,6 +12,7 @@ import { isKernelCode } from "../../kernel/result";
 import type { Agent, AgentState, BbThread, Node, ThreadWhere } from "../../model/types";
 import { claimOf, isListed } from "../../model/view";
 import { AgentActs } from "../lifecycle";
+import { ReadingLine, useReading } from "../roster/reading";
 import { agentStatus, stoppedAt } from "../roster/status";
 import { HELD, Unreadable, failureWords, useSettingsHref } from "../roster/unreadable";
 import { failureLine, useOats } from "../oats";
@@ -179,6 +180,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
   const status = agentStatus(agent, thread, now);
   const drift = read.data === undefined ? null : driftLines(read.data.facts.drift);
   const line = pageParts(agent, oats, status);
+  const reading = useReading(agent.instance);
   const soul = shown(oats.soulOf(agent));
   return (
     <>
@@ -193,8 +195,15 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
         <div data-testid="oats-panel-state" data-outside={line.kind ?? undefined}>
           {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here.
               For an agent the roster draws on no thread, what happened to it outside OATS follows the state's word, as on its row ("Stopped · session lost"). */}
-          <StatusLine state={status.state} since={line.since} tone={line.tone} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : line.detail} />
-          <KernelSays text={status.kernel} />
+          {/* Behind a lifecycle result that says the agent changed, until the roster is read again: "Reading…", never the old state stated plainly. */}
+          {reading ? (
+            <ReadingLine />
+          ) : (
+            <>
+              <StatusLine state={status.state} since={line.since} tone={line.tone} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : line.detail} />
+              <KernelSays text={status.kernel} />
+            </>
+          )}
         </div>
         {/* What a person can do with the agent, where its state is said: the lifecycle's own acts (each opens its dialog; nothing runs on the press), the ones that apply to its state, held with the reason while the roster is the last one read. Here an agent with no thread in bb has them too: its row opens this panel on its own page. */}
         <AgentActs instance={agent.instance} />
@@ -221,7 +230,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
         <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
+        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
       </div>
     </>
   );

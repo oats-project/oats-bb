@@ -10,6 +10,7 @@ import { useOats } from "../oats";
 import type { Oats } from "../oats";
 import { useNow } from "../roster/now";
 import { agentStatus } from "../roster/status";
+import { ReadingLine, useReading } from "../roster/reading";
 import { Unreadable } from "../roster/unreadable";
 import { Button, Disclosure, StatusLine } from "../ui";
 import { shown } from "../ui/text";
@@ -182,35 +183,33 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
   const navigate = useBbNavigate();
   const now = useNow();
   const agent = outside.agentOn(threadId);
+  const reading = useReading(agent?.instance ?? null);
   const status = agent === undefined || oats.phase !== "ready" ? null : agentStatus(agent, null, now);
   const said = agent === undefined ? null : outside.of(agent);
   if (oats.phase !== "ready" || agent === undefined || status === null) return null;
-  const held = oats.stale !== null;
+  // (And behind a lifecycle result that says the agent changed, until the roster is read again: app/roster/reading.tsx.)
+  const held = oats.stale !== null || reading;
   // The thread's menu is bb's, and the lifecycle's entries in it are for a thread the roster draws
   // an agent on: this thread is none, so the agent's acts are here, Retire among them.
   const acts = <DetachedActs said={said} instance={agent.instance} held={held} />;
   const parts = lineParts(said, { state: status.state, since: status.since, detail: status.detail });
+  const buttons = (
+    <>
+      {acts}
+      {hasAgentPage() ? (
+        <Button data-testid="oats-open-panel" title="Open this agent's instance panel" onClick={() => void openAgentPage(navigate, agent.instance)}>
+          Instance panel
+        </Button>
+      ) : null}
+    </>
+  );
   return (
     <div data-testid="oats-identity-row" data-outside={said?.kind ?? ""} className={FRAME}>
       <span data-testid="oats-outside-agent" className="min-w-0 break-words font-semibold">
         {agentName(agent.instance)}
       </span>
-      <StatusLine
-        state={status.state}
-        since={parts.since}
-        detail={parts.detail}
-        tone={parts.tone}
-        action={
-          <>
-            {acts}
-            {hasAgentPage() ? (
-              <Button data-testid="oats-open-panel" title="Open this agent's instance panel" onClick={() => void openAgentPage(navigate, agent.instance)}>
-                Instance panel
-              </Button>
-            ) : null}
-          </>
-        }
-      />
+      {/* Behind a lifecycle result that says the agent changed, until the roster is read again: "Reading…", never the old state. */}
+      {reading ? <ReadingLine action={buttons} /> : <StatusLine state={status.state} since={parts.since} detail={parts.detail} tone={parts.tone} action={buttons} />}
       <OutsideWarning said={said} instance={agent.instance} held={held} />
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
     </div>

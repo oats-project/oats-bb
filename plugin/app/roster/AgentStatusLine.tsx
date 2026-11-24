@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import type { Agent, AgentState, BbThread } from "../../model/types";
 import { KernelSays, StatusLine } from "../ui";
 import { readAge } from "../ui/words";
+import { ReadingLine } from "./reading";
 import { agentStatus, rowState } from "./status";
 
 export type AgentStatusLineProps = {
@@ -24,17 +25,20 @@ export type AgentStatusLineProps = {
   parts?: (own: { state: AgentState; since: string | null; detail: string | null }) => { since: string | null; detail: string | null; tone?: "warning" | undefined };
   /** The kernel has since refused this agent as one it does not know: the line says that, and nothing of its state. */
   gone?: boolean;
+  /** A lifecycle result says the agent changed and the roster is not read again yet: the line says "Reading…", never the old state (./reading.tsx). */
+  reading?: boolean;
   /** The act that applies, and the place's own buttons: buttons only (the line's frame clips a list). */
   action?: ReactNode;
 };
 
-export function AgentStatusLine({ agent, thread, now, staleAt = null, parts, gone = false, action }: AgentStatusLineProps) {
+export function AgentStatusLine({ agent, thread, now, staleAt = null, parts, gone = false, reading = false, action }: AgentStatusLineProps) {
   const status = agentStatus(agent, thread, now);
   const said = parts === undefined ? { since: status.since, detail: status.detail, tone: undefined } : parts(status);
   const age = staleAt === null ? null : readAge(staleAt, now);
   const asOf = age === null ? null : `as of ${age}`;
   // ("Not in OATS any more" in the state's place says it all.)
   if (gone) return <StatusLine {...rowState(status, true)} action={action} />;
+  if (reading) return <ReadingLine action={action} />;
   return (
     <>
       <StatusLine state={status.state} since={said.since} detail={said.detail} tone={said.tone} asOf={asOf} action={action} />

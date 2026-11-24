@@ -2330,3 +2330,92 @@ test("a resume left while it runs that the kernel refuses because the session is
   expect(unknown.toast).toMatchObject({ tone: "unknown", title: "OATS could not confirm that Kernel fix developer finished starting" });
   expect(unknown.slot.getByTestId("oats-start-where").textContent).toContain("oats session attach --home");
 });
+
+// ---- behind a result (the lead's L13): a result that says the agents changed marks them, with the stamp of the roster the
+// window held when the act was SENT; the places that say their state then say "Reading…" until the roster is read again
+// (test/roster/reading.test.tsx). A result that says nothing changed marks nothing.
+
+test("a result that says the agents stopped marks every agent of the plan, with the roster's stamp from when the act was sent; nothing before the result", async () => {
+  const { actedAt } = await import("../../app/roster/reading");
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held.then(() => stopReceiptOf()) });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "running");
+  const TARGETS = ["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"];
+  expect(TARGETS.map(actedAt)).toEqual([null, null, null]); // the act runs: nothing is said of its end yet
+  release();
+  await phase(slot, "done");
+  expect(TARGETS.map(actedAt)).toEqual([fixtureSnapshot().at, fixtureSnapshot().at, fixtureSnapshot().at]); // the server's stamp of the roster, never the window's clock
+  expect(actedAt("weekly-digest-helper")).toBeNull(); // no agent the plan did not stop
+});
+
+test("a start and a retire that are done mark their agent; a refused apply marks nothing", async () => {
+  const { actedAt } = await import("../../app/roster/reading");
+  const start = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
+  await start.pick("start");
+  await ready(start.slot);
+  expect(actedAt("weekly-digest-helper")).toBeNull();
+  fireEvent.click(button(start.slot, "oats-confirm-act"));
+  await phase(start.slot, "done");
+  expect(actedAt("weekly-digest-helper")).toBe(fixtureSnapshot().at);
+  resetApp();
+  expect(actedAt("weekly-digest-helper")).toBeNull();
+  const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => retireReceiptOf() });
+  await retire.pick("retire");
+  await ready(retire.slot);
+  fireEvent.click(button(retire.slot, "oats-confirm-act"));
+  await phase(retire.slot, "done");
+  expect(actedAt("weekly-digest-helper")).toBe(fixtureSnapshot().at);
+  resetApp();
+  const refused = await menu("thr_digest", {
+    retirePlan: () => retirePlanOf(),
+    retireApply: () => {
+      throw new Error("E_CHILDREN_RUNNING: 1 child still runs: digest-links-helper\n  stop it first");
+    },
+  });
+  await refused.pick("retire");
+  await ready(refused.slot);
+  fireEvent.click(button(refused.slot, "oats-confirm-act"));
+  await phase(refused.slot, "failed");
+  expect(actedAt("weekly-digest-helper")).toBeNull();
+});
+
+// ---- a plan is of the moment it was read (the pass for what reads as present, 24 Nov 2026): its age is said under
+// Details, before the way to read it again, in the plugin's one form for content read earlier.
+
+test("a Stop and a Retire plan say how old they are under Details, before Check again: \"Read <age>.\"; nothing of it on the dialog's face", async () => {
+  for (const [verb, over] of [["stop", { stopPlan: () => stopPlanOf() }], ["retire", { retirePlan: () => retirePlanOf() }]] as const) {
+    const { slot, pick } = await menu(verb === "stop" ? "thr_redesign" : "thr_digest", over);
+    await pick(verb);
+    await ready(slot);
+    const details = slot.getByTestId("oats-plan-details");
+    const read = within(details).getByTestId("oats-plan-read");
+    expect(read.textContent).toBe("Read less than a minute ago.");
+    expect(read.nextElementSibling).toBe(within(details).getByTestId("oats-plan-check"));
+    expect(within(details).getByTestId("oats-plan-check").textContent).toBe("Check again");
+    expect(slot.getAllByTestId("oats-plan-read")).toHaveLength(1);
+    expect(texts(slot.getByTestId("oats-confirm"), "span, p, li").join(" ")).not.toMatch(/Read /); // the face is as it was
+    resetApp();
+  }
+});
+
+test("the plan's age follows the window's clock from the moment the plan was read, and starts again when it is read again", async () => {
+  // (The clock and its ticks alone are the test's: the waits of the test run on the real timers.)
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+  try {
+    const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf() });
+    await pick("stop");
+    await ready(slot);
+    const read = () => slot.getByTestId("oats-plan-read").textContent;
+    expect(read()).toBe("Read less than a minute ago.");
+    act(() => void vi.advanceTimersByTime(3 * 60_000));
+    expect(read()).toBe("Read 3 min ago.");
+    fireEvent.click(button(slot, "oats-plan-check"));
+    await waitFor(() => expect(read()).toBe("Read less than a minute ago."));
+  } finally {
+    vi.useRealTimers();
+  }
+});

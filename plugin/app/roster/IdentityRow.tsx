@@ -19,6 +19,7 @@ import type { Contract } from "../store";
 import { Button } from "../ui";
 import { useNow } from "./now";
 import { AgentStatusLine } from "./AgentStatusLine";
+import { useReading } from "./reading";
 import { agentStatus } from "./status";
 import { failureWords, Unreadable } from "./unreadable";
 
@@ -58,6 +59,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const rpc = useRpc<Contract>();
   const now = useNow();
   const outside = outsideOf(oats);
+  // Behind a lifecycle result that says this thread's agent changed, until the roster is read again: "Reading…" (./reading.tsx).
+  const reading = useReading(oats.phase === "ready" ? (oats.nodeByThread.get(threadId)?.agent.instance ?? null) : null);
   if (oats.phase === "loading") return null; // nothing is known yet; the sidebar says that OATS is being read
   if (oats.phase === "failed") {
     // Whether this thread is an agent's is not known: say that OATS cannot be read, never nothing.
@@ -86,7 +89,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   };
   // While the roster is the last one read the OATS acts are held (the Desktop's rule): the act
   // stays in its place, off; the notice under the line says that the acts are off, and has Retry.
-  const held = oats.stale !== null;
+  // (And behind a lifecycle result that says the agent changed, until the roster is read again: app/roster/reading.tsx.)
+  const held = oats.stale !== null || reading;
   // The act that applies to the state, through OATS: a stopped agent is started, one whose session
   // ended is restarted, one the kernel cannot reach is read again.
   const verb = status.state === "stopped" ? (["start", "Start…"] as const) : status.state === "error" ? (["restart", "Restart…"] as const) : null; // (the dots: each opens its dialog, and nothing runs on the press)
@@ -149,6 +153,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         thread={node.thread}
         now={now}
         gone={gone}
+        reading={reading}
         parts={(own) => lineParts(said, own)}
         action={
           gone ? (

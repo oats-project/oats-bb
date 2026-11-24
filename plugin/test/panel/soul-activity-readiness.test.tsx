@@ -461,6 +461,34 @@ test("readiness read again that fails keeps what was read, with its age, the Des
   expect(slot.queryByTestId("oats-panel-readiness-status")).toBeNull();
 });
 
+// Readiness is read ONCE for the window, and again only on Refresh: "Ready" of two hours ago is not "Ready" now. Once what is
+// shown is older than a minute its age is said beside Refresh, in the plugin's one form for content read earlier (the
+// pass for what reads as present, 24 Nov 2026). On both tabs.
+test.each(["instance", "soul"] as const)("the %s's readiness says how old it is beside Refresh once it is older than a minute: nothing while fresh, \"Read <age>.\" after, and nothing again once it is read again", async (of) => {
+  // (The clock and its ticks are the test's; the test's own waits run on the real timers.)
+  vi.useFakeTimers({ now: NOW, toFake: ["Date", "setInterval", "clearInterval"] });
+  const slot = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, { rpc: handlers({ snapshot: () => panelSnapshot() }), sidebarThreads: panelThreads() });
+  await slot.findByTestId("oats-panel");
+  if (of === "soul") act(() => showPanelTab("soul"));
+  const block = await slot.findByTestId(`oats-panel-readiness-${of}`);
+  expect(text(await within(block).findByTestId("oats-panel-readiness-summary"))).toBe("Ready");
+  const age = () => within(block).queryByTestId("oats-panel-readiness-read")?.textContent ?? null;
+  expect(age()).toBeNull(); // fresh: nothing
+  act(() => void vi.advanceTimersByTime(30_000));
+  expect(age()).toBeNull(); // under a minute: nothing
+  act(() => void vi.advanceTimersByTime(2 * 60_000 + 30_000));
+  expect(age()).toBe("Read 3 min ago.");
+  // It stands beside Refresh, after it.
+  expect(within(block).getByTestId("oats-panel-readiness-read").previousElementSibling).toBe(within(block).getByTestId("oats-panel-readiness-refresh"));
+  expect(text(within(block).getByTestId("oats-panel-readiness-summary"))).toBe("Ready"); // the face is as it was
+  // Read again: fresh, and nothing is said.
+  const before = calls(slot, "panelReadiness").length;
+  fireEvent.click(within(block).getByTestId("oats-panel-readiness-refresh"));
+  await waitFor(() => expect(calls(slot, "panelReadiness").length).toBe(before + 1));
+  await waitFor(() => expect(within(block).queryByTestId("oats-panel-readiness-status")).toBeNull());
+  expect(age()).toBeNull();
+});
+
 test("readiness' capability warnings are drawn as the Soul tab draws them", async () => {
   const slot = panel({ panelReadiness: () => ({ ...recordedReadiness("instance"), warnings: [{ code: "hook-event-unsupported", capability: "vault.api-key", path: "oats.json", message: "one declared hook never runs here" }] }) });
   await slot.findByTestId("oats-panel-readiness-summary");

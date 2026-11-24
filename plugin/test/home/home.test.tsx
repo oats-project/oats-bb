@@ -1493,6 +1493,33 @@ test("an agent nobody stopped (its session ended in a shell, was lost, or no har
   }
 });
 
+// THE MOMENT BEHIND A STOP (the lead's question on the small PR): the act ended, and the read it asked for has not: the
+// server's roster, which the press asks, is still the one from before, so the guard passes and the message goes to bb.
+// What bb does with a message to a thread the Stop archived is bb's (not shown here: the real run's to show); where it
+// refuses, the card says so with bb's words, once, and the plugin asks nothing more. With "Reading…" the window that
+// pressed Stop has the field off in that moment (the test above); this is a window that did not.
+test("a reply sent while the server's roster is still the one from before a Stop goes to bb; where bb refuses it the card says it was not sent, with bb's words, and nothing more is asked", async () => {
+  const sent: unknown[] = [];
+  const sdk = {
+    threads: {
+      send: async (input: unknown) => {
+        sent.push(input);
+        throw new Error("thread is archived");
+      },
+    },
+  } as never;
+  const slot = await homePage({ rpc: handlers({ snapshot: () => fixtureSnapshot(fixtureAgents()) }), sdk });
+  const writes = await cardOf(slot, "ranker-v3-probe");
+  fireEvent.change(within(writes).getByTestId("oats-reply-text"), { target: { value: "keep depth 6" } });
+  fireEvent.click(within(writes).getByTestId("oats-reply-send"));
+  const unsent = await within(writes).findByRole("alert");
+  expect(unsent.querySelector("h3")!.textContent).toBe("The message was not sent");
+  expect(unsent.textContent).toContain("thread is archived");
+  expect(sent).toHaveLength(1);
+  expect(slot.inspection.rpcCalls.map((call) => call.method).filter((method) => ["start", "restart", "stopApply", "retireApply", "spawn"].includes(method))).toEqual([]); // no act of OATS's: nothing is started by the plugin
+  expect((within(writes).getByTestId("oats-reply-text") as HTMLTextAreaElement).value).toBe("keep depth 6");
+});
+
 test("a press on an agent OATS stopped since its card was drawn sends nothing: the roster the server holds is asked at the press", async () => {
   // The card is drawn from a roster in which the agent runs. OATS then stops it, and nothing has told
   // this window yet (no change event, no redraw): the choice and the reply are still on the card.

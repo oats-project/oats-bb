@@ -1,8 +1,8 @@
 // The outside feature's live scenes: what the sidebar's row and the thread's line
 // say when something happened to an OATS agent outside OATS (container/live-ui.mjs says what a
 // scene is). Stages of its own: `outside`, every row of the feature's table that is a stop of OATS's
-// or an act in bb, at once on one roster; `outside-host`, the two rows that are neither (stopped
-// with the machine, idle with no harness loaded); `outside-archived`, three agents whose thread bb has archived; and `outside-question`, the first roster while bb
+// or an act in bb, at once on one roster; `outside-host`, the rows that are neither (a session
+// lost, on bb and on tmux; idle with no harness loaded); `outside-archived`, three agents whose thread bb has archived; and `outside-question`, the first roster while bb
 // holds a question on the thread of the agent OATS recorded stopped. What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
 // says of each thread is bb's own answer, made true in bb itself: the threads said archived ARE
 // archived in bb for the length of the stage (and unarchived when it ends).
@@ -75,13 +75,15 @@ const EVENTS = join(homedir(), "deployment", ".agents", "events", "live-ui.jsonl
  *   harvest-knowledge-helper   stopped by an operator (sessionEnd "stopped"), its thread open Shaped as the kernel's contract says (docs/desktop-cli-api.md
  * at v0.70.5, "A status row of a provider home"), not recorded: `running: false` for an idle bb
  * thread exists only from the provider's next release.
- *   release-070-maintainer     stopped with the host (sessionEnd "lost"), its thread open
+ *   release-070-maintainer     its session lost (sessionEnd "lost"), its thread open
+ *   kernel-fix-developer       on tmux, its session lost (the recorded row: running false, sessionEnd "lost", no runtimeState)
  *   desktop-mockups-developer  idle, no harness loaded (running false, runtimeState "unknown", no sessionEnd)
  */
 const HOST_ROWS = {
   "harvest-knowledge-helper": STOPPED,
   "release-070-maintainer": LOST,
   "desktop-mockups-developer": { running: false, runtimeState: "unknown", waitingOnYou: null },
+  "kernel-fix-developer": { running: false, runtimeState: null, sessionEnd: "lost", waitingOnYou: null },
 };
 
 /** The stage's roster: the threads said archived are archived in bb, and the fake answers ROWS on a kernel that lists the feature. */
@@ -132,6 +134,8 @@ const ARCHIVED_ROWS = {
   "weekly-digest-helper": STOPPED,
   "ranker-v3-probe": LOST,
   [RUNS]: { running: true, runtimeState: "running", sessionEnd: null, open: null, waitingOnYou: null },
+  // An agent on tmux that OATS stopped (the recorded row: its window is left at a shell): Stopped, never Failed.
+  "kernel-fix-developer": { running: false, runtimeState: "shell", sessionEnd: "stopped", waitingOnYou: null },
 };
 const ARCHIVED_THREE = ["thr_digest", "thr_research", "thr_release"];
 
@@ -231,7 +235,7 @@ export default [
       const all = `JSON.stringify({ digest: ${rowOf(threadless("weekly-digest-helper"))}, ranker: ${rowOf(threadless("ranker-v3-probe"))}, flaky: ${rowOf(threadless("flaky-ci-developer"))}, outside: ${rowOf(onThread(threads.get("thr_harvest").id))}, failed: ${rowOf(onThread(threads.get("thr_mockups").id))}, unreachable: ${rowOf(onThread(threads.get("thr_redesign").id))}, open: ${rowOf(onThread(threads.get("thr_release").id))}, tree: ${textOf(testId("oats-tree"))}, outsides: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark][data-state="outside"]`)}).length, words: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
       const settled = await page.until(`(() => { const now = ${all}; return /archived in bb/.test(now) && /deleted in bb/.test(now) && /Running outside OATS/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
-      // The reason takes the soul's place on a row: each of these rows' second line is ONE line, never two.
+      // A reason takes the soul's place on a row (an operator's stop with an archived thread has none: its soul stays): each of these rows' second line is ONE line, never two.
       const digestOpens = await page.until(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.getAttribute("data-opens") === "thread"`, 15);
       check(same(rows.digest, { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 }) && Boolean(digestOpens), `${at} stopped, its thread archived in bb: "Stopped" and its soul, in the plain tone, and the row opens the archived thread`, JSON.stringify(rows.digest));
       check(same(rows.outside, { facts: "Running outside OATS", state: "outside", tone: null, lines: 1 }) && rows.outsides === 1, `${at} the kernel's outsideOats: the state IS "Running outside OATS", with its mark, alone on its line, on that row alone; no "Stopped" beside it`, JSON.stringify([rows.outside, rows.outsides]));
@@ -417,7 +421,7 @@ export default [
   },
   {
     stage: "outside-host",
-    name: "the three rows that read \"not running\" are never confused: an operator's stop, stopped with the machine, not loaded; on the sidebar's rows and on each thread's line",
+    name: "the three rows that read \"not running\" are never confused: an operator's stop, a session lost (on bb and on tmux: one reason word), not loaded; on the sidebar's rows and on each thread's line",
     run: async ({ page, at, viewport, threads, check }) => {
       const shown = () => page.evaluate(textOf(testId("oats-identity-row")));
       const [operator, host, idle] = [threads.get("thr_harvest"), threads.get("thr_release"), threads.get("thr_mockups")];
@@ -425,16 +429,17 @@ export default [
       // The sidebar's three rows, side by side: two words of state, and what tells the two stopped ones apart.
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      const all = `JSON.stringify({ operator: ${rowOf(onThread(operator.id))}, host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, words: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
-      const settled = await page.until(`(() => { const now = ${all}; return /with the machine/.test(now) && /not loaded/.test(now) ? now : ""; })()`, 30);
+      const all = `JSON.stringify({ operator: ${rowOf(onThread(operator.id))}, host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, tmux: ${rowOf(threadless("kernel-fix-developer"))}, words: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
+      const settled = await page.until(`(() => { const now = ${all}; return /session lost · tmux/.test(now) && /not loaded/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       check(
-        same([rows.operator, rows.host, rows.idle], [
+        same([rows.operator, rows.host, rows.idle, rows.tmux], [
           { facts: "Stopped · knowledge-harvester", state: "stopped", tone: null, lines: 1 },
-          { facts: "Stopped · with the machine", state: "stopped", tone: null, lines: 1 },
+          { facts: "Stopped · session lost", state: "stopped", tone: null, lines: 1 },
           { facts: "Idle · not loaded", state: "idle", tone: null, lines: 1 },
+          { facts: "Stopped · session lost · tmux", state: "stopped", tone: null, lines: 1 },
         ]) && rows.words.every((word) => ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"].includes(word)),
-        `${at} the three rows: "Stopped · <soul>" (an operator's stop), "Stopped · with the machine", "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every state word is one of the set`,
+        `${at} the rows: "Stopped · <soul>" (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every state word is one of the set`,
         JSON.stringify(rows),
       );
       await page.shot(`outside-${viewport.name}-three-sidebar`);
@@ -446,12 +451,12 @@ export default [
       check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && one.stateTone === "warning" && same(one.tones, ["warning"]) && same(one.acts, ["Start"]), `${at} (1) an operator's stop: "Stopped", the warning in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
       await page.shot(`outside-${viewport.name}-three-1-operator-stop`, { targets: true });
 
-      // (2) stopped with the machine: "Stopped · with the machine …", no warning
+      // (2) its session lost: "Stopped", that nobody stopped it and a message carries it on; no time, no cause, no warning
       await page.goto(`/projects/${host.projectId}/threads/${host.id}`);
-      const HOST = new RegExp(`^Stopped${SINCE} · with the machine\\. OATS starts it again when the machine is back\\.$`);
+      const HOST = /^Stopped · Its session ended without OATS stopping it\. Nobody stopped it\. To carry on, send it a message here\. Start begins a new conversation\.$/;
       const two = await lineOf(page, HOST);
-      check(two !== null && two.state === "stopped" && HOST.test(two.words) && two.stateTone === null && same(two.tones, []) && same(two.acts, ["Start"]) && two.warning === null && !/without OATS/.test(two.words), `${at} (2) stopped with the machine: "Stopped · with the machine", that OATS starts it again; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
-      await page.shot(`outside-${viewport.name}-three-2-stopped-with-machine`, { targets: true });
+      check(two !== null && two.state === "stopped" && HOST.test(two.words) && two.stateTone === null && same(two.tones, []) && same(two.acts, ["Start"]) && two.warning === null && !/starts it again without OATS|machine|since/.test(two.words), `${at} (2) a session lost: "Stopped", that nobody stopped it and a message here carries it on; no time and no cause; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
+      await page.shot(`outside-${viewport.name}-three-2-session-lost`, { targets: true });
 
       // (3) its session is there, not loaded: "Idle · not loaded …", no warning
       await page.goto(`/projects/${idle.projectId}/threads/${idle.id}`);
@@ -524,6 +529,8 @@ export default [
         `${at} the three rows: "Stopped" and the soul, plain (an operator's stop); "Stopped · archived in bb" with the warning mark (a session lost); "Idle · archived in bb" with the warning mark (it still runs); each opens its archived thread`,
         JSON.stringify(rows),
       );
+      const stoppedTmux = JSON.parse(await page.evaluate(`JSON.stringify(${rowOf(threadless("kernel-fix-developer"))})`));
+      check(same(stoppedTmux, { facts: "Stopped · oats-developer · tmux", state: "stopped", tone: null, lines: 1 }), `${at} an agent on tmux that OATS stopped (its row says "shell" beside an operator's stop) reads "Stopped" and its soul, never "Failed"`, JSON.stringify(stoppedTmux));
       await page.shot(`outside-${viewport.name}-archived-three-sidebar`, { targets: true });
 
       // The one that still runs: its row opens the archived thread, whose own row says the remedy, with Stop.

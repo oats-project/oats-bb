@@ -87,6 +87,39 @@ test("Stop shows on a working agent's thread, and not on a thread that is no age
   expect(plain.shown()).toEqual([]);
 });
 
+test("an agent the kernel calls stopped beside another word (the stale stop; a tmux-like \"shell\" beside an operator's stop) is offered Start while bb holds a question on its thread", async () => {
+  // It counts as needing you (bb's question), so the kernel's own reading of the row is asked: `recordedStopped`.
+  for (const change of [{ running: false as const, runtimeState: "unknown", sessionEnd: "stopped" }, { running: false as const, runtimeState: "shell", sessionEnd: "stopped" }]) {
+    const agents = fixtureAgents().map((agent): Agent => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change } : agent));
+    const { shown } = await menu("thr_ci", {}, agents);
+    expect(shown(), JSON.stringify(change)).toContain("start");
+    resetApp();
+  }
+});
+
+test("an agent with no harness loaded that also carries a claim (it is drawn \"Needs you\") is offered Start, and its Start key opens Start: the rule reads the kernel's row, not the drawn state", async () => {
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false, runtimeState: "unknown" } : agent));
+  expect(agents.find((agent) => agent.instance === "flaky-ci-developer")!.waiting).not.toBeNull();
+  const { slot, shown } = await menu("thr_ci", {}, agents);
+  expect(shown()).toContain("start");
+  const { asked, commands } = await import("../../app/lifecycle");
+  await commands.find((each) => each.id === "agent-start")!.run({ threadId: "thr_ci", projectId: null, experimental_panel: {} as never });
+  expect(asked()).toEqual({ verb: "start", instance: "flaky-ci-developer" });
+  expect(notified().map((said) => said.title).join(" ")).not.toMatch(/already running/);
+  expect(slot).toBeTruthy();
+});
+
+test("an agent whose session ended by itself and that still asks (it is drawn \"Needs you\") is offered Start, and its Start key opens Start", async () => {
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false, runtimeState: "shell" } : agent));
+  expect(agents.find((agent) => agent.instance === "flaky-ci-developer")!.waiting).not.toBeNull();
+  const { shown } = await menu("thr_ci", {}, agents);
+  expect(shown()).toContain("start");
+  const { asked, commands } = await import("../../app/lifecycle");
+  await commands.find((each) => each.id === "agent-start")!.run({ threadId: "thr_ci", projectId: null, experimental_panel: {} as never });
+  expect(asked()).toEqual({ verb: "start", instance: "flaky-ci-developer" });
+  expect(notified().map((said) => said.title).join(" ")).not.toMatch(/already running/);
+});
+
 test("each action shows only in the states it applies to", async () => {
   const by = async (threadId: string, agents?: Agent[]) => {
     const shown = (await menu(threadId, {}, agents)).shown();
@@ -792,6 +825,13 @@ test("a command on an agent that runs outside OATS: Stop and Start open their di
   expect(slot.queryByRole("dialog")).toBeNull();
   await press("agent-stop");
   expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
+  resetApp();
+  // Whatever else its row says (no kernel prints a report beside a session that ended by itself): never "is stopped" of an agent that runs outside OATS.
+  const ended = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, running: false, runtimeState: "shell", outsideOats: report } : agent));
+  await menu("thr_digest", {}, ended);
+  const before = notified().length;
+  await (await import("../../app/lifecycle")).commands.find((each) => each.id === "agent-restart")!.run({ threadId: "thr_digest", projectId: null, experimental_panel: {} as never });
+  expect(notified().slice(before).map((said) => said.title)).toEqual(["Weekly digest helper can't be restarted now."]);
 });
 
 test("a command pressed while the roster is the last one read is held, and says when the acts come back", async () => {
@@ -1291,7 +1331,7 @@ test.each([
   expect(calls(slot, "start", "restart")).toEqual([]);
 });
 
-test("a cut-off agent whose thread cannot take a message gets no line: bb says its thread is in error, or shows none", async () => {
+test("a cut-off agent whose thread cannot take a message gets no line: bb does not list it (archived). A listed thread whose last turn bb calls failed takes a message, and gets the line", async () => {
   const withThreads = async (threads: ReturnType<typeof fixtureThreads>) => {
     const app = await loadApp();
     const Overlay = app.appOverlays[0]!.component;
@@ -1306,7 +1346,8 @@ test("a cut-off agent whose thread cannot take a message gets no line: bb says i
     return said;
   };
   const inError = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, status: "error" as const } : thread)));
-  expect(inError.line).toBe(false);
+  // bb's last turn failed and the session is there (a harness killed in a turn is how a session is lost): bb's composer is live on it.
+  expect(inError.line).toBe(true);
   // Its thread is still there for bb: a start archives it, and the dialog says so.
   expect(inError.text).toContain("Starts a new conversation. The current one stays readable in bb, archived.");
   const archived = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, isArchived: true } : thread)));

@@ -434,10 +434,26 @@ export default [
         // drawer as a person left it (a scene before this one, or the press before, may have left it open): it is
         // closed first, with bb's own toggle, so that what follows proves the toggle OPENS it from the plugin's page.
         const HIDDEN = `(() => { const side = document.querySelector(${JSON.stringify(SIDE)}); if (!side) return true; const box = side.getBoundingClientRect(); return box.width === 0 || box.right <= 0 || box.left >= innerWidth; })()`;
-        const TOGGLE = `(() => { const b = [...document.querySelectorAll("button")].find((b) => /sidebar|menu|navigation/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0); b?.click(); return b?.getAttribute("aria-label") ?? null; })()`;
-        if ((await page.evaluate(HIDDEN)) !== true) await page.evaluate(TOGGLE);
-        const hidden = await page.until(`${HIDDEN} === true`, 10);
-        check(Boolean(hidden), `${at} ${what}: with bb's drawer closed the sidebar is not on screen beside the home at this width`, String(await page.evaluate(HIDDEN)));
+        // How bb closes it: Escape, or one of its own buttons (its toggle; which one closed it is printed).
+        const candidates = `[...document.querySelectorAll("button")].filter((b) => /sidebar|menu|navigation|close/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0 && !b.closest('[data-testid="oats-home-page"]'))`;
+        let closedBy = "it was closed";
+        if ((await page.evaluate(HIDDEN)) !== true) {
+          await page.press("Escape");
+          closedBy = "Escape";
+          if (!(await page.until(`${HIDDEN} === true`, 2))) {
+            const labels = JSON.parse(await page.evaluate(`JSON.stringify(${candidates}.map((b) => b.getAttribute("aria-label")))`));
+            closedBy = `none of ${JSON.stringify(labels)}`;
+            for (let index = 0; index < labels.length; index += 1) {
+              await page.evaluate(`${candidates}[${index}]?.click()`);
+              if (await page.until(`${HIDDEN} === true`, 2)) {
+                closedBy = `bb's button "${labels[index]}"`;
+                break;
+              }
+            }
+          }
+        }
+        const hidden = await page.until(`${HIDDEN} === true`, 5);
+        check(Boolean(hidden), `${at} ${what}: with bb's drawer closed (${closedBy}) the sidebar is not on screen beside the home at this width`, String(await page.evaluate(HIDDEN)));
         check(await showSidebar(page, viewport), `${at} ${what}: bb's own toggle opens its drawer over the plugin's home, and the roster is in it`, await page.evaluate(`JSON.stringify([...document.querySelectorAll("button")].filter((b) => b.getBoundingClientRect().width > 0).map((b) => b.getAttribute("aria-label") ?? b.innerText.trim()).slice(0, 12))`));
         return page.until(`(() => { const rows = ${roster}; return rows !== "" && JSON.parse(rows).length >= 8 ? rows : ""; })()`, 20);
       };

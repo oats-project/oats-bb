@@ -1045,6 +1045,35 @@ test("an agent that runs outside OATS is one of those that need you, in every pl
   expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
 });
 
+// Behind a lifecycle result that says the agent changed, the home's cards read the same rule as its thread's line (ruled
+// with L13's form, from the fourth review round): "Reading…" in the state's place and the card's acts off, until the
+// window holds a roster read after the act ended.
+test("behind a result the home's card of an agent that runs outside OATS says \"Reading…\" in its state's place, with Stop… and Start… off", async () => {
+  const { noteActed } = await import("../../app/roster/reading");
+  const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in weekly-digest-helper on bb, and OATS recorded this instance stopped" };
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, sessionEnd: "stopped", outsideOats: report } : agent));
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  const card = await cardOf(slot, "weekly-digest-helper");
+  const acts = () => Array.from(within(card).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => [button.textContent, (button as HTMLButtonElement).disabled]);
+  expect([within(card).queryByTestId("oats-reading"), acts()]).toEqual([null, [["Stop…", false], ["Start…", false]]]);
+  act(() => noteActed(["weekly-digest-helper"], fixtureSnapshot(agents).at));
+  expect([within(card).getByTestId("oats-reading").textContent, acts()]).toEqual(["Reading…", [["Stop…", true], ["Start…", true]]]);
+  expect(within(card).getByTestId("oats-status-line").textContent).not.toMatch(/Running outside OATS/); // never the state of before, stated plainly
+});
+
+test("behind a result the home's card of a stopped agent that asks says \"Reading…\" where it said \"Not running.\", with its Start… off", async () => {
+  const { noteActed } = await import("../../app/roster/reading");
+  const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false as const, runtimeState: "stopped" } : agent));
+  const slot = await homePage({ rpc: handlers({}, agents), sdk: BB_ASKS });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  const start = () => within(card).getByTestId("oats-needs-start") as HTMLButtonElement;
+  const said = within(card).getByTestId("oats-needs-stopped").querySelector("p")!.textContent;
+  expect([start().disabled, within(card).queryByTestId("oats-needs-reading")]).toEqual([false, null]);
+  act(() => noteActed(["flaky-ci-developer"], fixtureSnapshot(agents).at));
+  expect([start().disabled, within(card).getByTestId("oats-needs-reading").textContent]).toEqual([true, "Reading…"]);
+  expect(within(card).getByTestId("oats-needs-stopped").textContent).not.toContain(said!);
+});
+
 /** The one count line of the home, on Home › Agents ("2 working · 4 need you · …"), for a roster. */
 async function agentsLine(agents: Agent[]): Promise<string> {
   const app = await loadApp();

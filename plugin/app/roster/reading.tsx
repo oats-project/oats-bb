@@ -18,6 +18,9 @@
 // the agent's own events (#74) on an older roster is still "before" until the status read the act
 // itself asks for has come back (a second or two: "Reading…" leaves a moment LATE over a row that
 // is already right: the safe side).
+// WHERE: every place of the pilot's screens that says one agent's state or offers its acts: its thread's line and
+// menu, its page and panel, a command's key, and the home's cards of an agent that runs outside OATS and of a stopped
+// agent that asks. NOT the Souls page's detached agents (Start…, Retire…): not a pilot screen, left as it is.
 // And it is bounded: after BOUND_MS the roster's own state is drawn whatever it says (a watch that
 // died must not leave "Reading…" on a page). The window's memory only.
 import { useSyncExternalStore } from "react";

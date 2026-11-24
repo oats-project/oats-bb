@@ -137,25 +137,36 @@ sleep 1
 fake
 sleep 5.5 # well past the pause between two reads (1 s after a quick or a failed one)
 rpc refresh > /dev/null
+# A read asked for while that one was in flight (the poll's tick, with a client connected again)
+# starts AT ONCE when it ends (server/core.ts FOLLOW_UP_WITHIN_MS): it must not be the read that
+# meets the slow oats below, or L3's own read would wait behind its 20 s. So: no oats alive first.
+none_yet() { [ -z "$(oats_processes)" ]; }
+sleep 0.5
+wait_until 10 none_yet || { fail "L3 precondition: an oats is still running before the slow one"; oats_processes; }
 
 # ---- L3: a status slower than the kernel's 20 s limit. bb sends a retryable host call again at half
 # its transport timeout: the limit must be reached before that, in one process.
+# The time is counted from the START OF THE READ that timed out, which `refresh` answers (`at`),
+# not from this script's call: a read the server had in front of it (the poll's tick, landing in
+# the second after the read above) is then not counted, and what is asserted is what the README
+# says: the typed timeout about 20 s after the read starts.
 fake '{"status":{"sleepMs":600000}}'
 : > "$FAKE_LOG"
-l3_start=$SECONDS
-rpc refresh > /dev/null
-l3_took=$((SECONDS - l3_start))
+l3_read=$(rpc refresh)
+l3_done=$(date +%s%3N)
+l3_at=$(field at <<<"$l3_read")
+l3_ms=$((l3_done - $(date -d "$l3_at" +%s%3N)))
+l3_took=$(((l3_ms + 500) / 1000))
 slow=$(rpc snapshot)
 first_two=$(grep -c '"verb":"status"' "$FAKE_LOG" || true)
-if [ "$(field code <<<"$slow")" = OATS_TIMEOUT ] && [ "$l3_took" -ge 19 ] && [ "$l3_took" -le 27 ]; then
-  pass "L3 a status that never answers is OATS_TIMEOUT after ${l3_took} s ($first_two status process(es) logged by then)"
+if [ "$(field code <<<"$slow")" = OATS_TIMEOUT ] && [ "$(field at <<<"$slow")" = "$l3_at" ] && [ "$l3_ms" -ge 19000 ] && [ "$l3_ms" -le 27000 ]; then
+  pass "L3 a status that never answers is OATS_TIMEOUT ${l3_took} s after its read started ($first_two status process(es) logged by then)"
 else
-  fail "L3 slow status: code $(field code <<<"$slow") after ${l3_took} s"; say "$slow" | head -c 300
+  fail "L3 slow status: code $(field code <<<"$slow") ${l3_ms} ms after the read that refresh answered started ($l3_at)"; say "$slow" | head -c 300
 fi
 fake
 sleep 5.5
 rpc refresh > /dev/null
-none_yet() { [ -z "$(oats_processes)" ]; }
 wait_until 10 none_yet || { fail "L3 a slow oats is still running"; oats_processes; }
 
 # ---- A14, the backend's part: no oats.
@@ -172,7 +183,7 @@ rpc refresh > /dev/null
 [ "$(field ok <<<"$(rpc snapshot)")" = true ] && pass "A14 the snapshot is back once oats is back" || fail "A14 recovery"
 
 # ---- A15: a reload in the middle of a slow oats.
-[ -z "$(oats_processes)" ] || { fail "A15 precondition: oats processes before the test"; oats_processes; }
+wait_until 10 none_yet || { fail "A15 precondition: oats processes before the test"; oats_processes; } # (a quick read of the poll's may be alive for a moment)
 fake '{"status":{"sleepMs":600000,"grandchild":true}}'
 : > "$FAKE_LOG"
 (rpc refresh > "$OUT/a15-refresh.txt" 2>&1 || true) &

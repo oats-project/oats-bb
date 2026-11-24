@@ -903,7 +903,33 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   before the apply; asked again with the same key, it replays the same spawn. A spawn or a retire that runs
   capability hooks can take minutes: if the client stops waiting, the act still finishes and the
   tree shows it.
-- **Freshness.** The server keeps one snapshot (`oats status --json`). It rereads on the host
+- **Freshness: two roads.** What OATS itself records of ONE agent, a waiting claim set or
+  cleared and a stop, reaches the screen by that agent's EVENTS; everything else (a start or a
+  restart, a new or a retired agent, Failed, Unreachable, a tmux agent working or idle) by the
+  status read, which also confirms what the events showed.
+  **The events' road** (`server/core.ts`, "between two status reads"; `model/events.ts`). The
+  watch's `changed` signal names the files of the event log that changed
+  (`<agent>--<instance>.jsonl`, eight at most in one signal), and waits 75 ms (500 ms at most)
+  before it tells. For each file that is ONE agent of the snapshot the server runs `oats instance
+  events <instance> --home <abs> --since <the snapshot's read> --limit 50 --json` (about a tenth of
+  a status read), moves that agent's row to what the answer says, and publishes: the claim from
+  the answer's own `waitingOnYou` and `waitingClaims` (set only where `oats status` itself would
+  name one; cleared only when the answer is whole, knows its incarnation and no producer's claim
+  waits), and a stop from the newest lifecycle row the kernel wrote in this incarnation since the
+  snapshot's read. Nothing else is moved: a start names no thread, and is the status read's.
+  Every answer is ranked by when its read STARTED: an events answer older than the snapshot's
+  status read is dropped; a status answer older than a patch keeps the patch over it; the first
+  status read that started after is the truth, whole. An events read that fails, times out (5 s),
+  answers a shape the plugin does not know, or is for no one agent of the snapshot changes
+  nothing, and the status read carries the change. One events read per agent at a time and two
+  for all agents together; the others wait in line, and a line of more than eight is dropped
+  (the status read carries them). A stop by the host's own shutdown is written as any stop, so
+  for the moment until the status read answers it reads "Stopped" without "session lost". The
+  server says each patch and each drop in its log at debug level (the agent, what changed, the
+  read's time). In the real run a claim was on the screen 277 to 344 ms after the kernel recorded
+  it, and a stop 378 ms (OATS 0.70.5, in the run's container); by the status read alone the same
+  three took 0.9 to 1.6 s there.
+  **The status read's road.** The server keeps one snapshot (`oats status --json`). It rereads on the host
   entry's `changed` signal (a watch on `<deployment>/.agents/events`, where the kernel appends one
   line per spawn, launch, stop, retire and waiting claim, set or cleared), after each of the
   plugin's own acts, on bb's thread created and deleted events, and every 15 s while a client

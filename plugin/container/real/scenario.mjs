@@ -344,6 +344,10 @@ function snapshotRow(instance) {
  * than the first one started after the record, a NOTE says how many of the plugin's `oats status`
  * calls (the wrapper's records) started between, since the poll cannot tell a snapshot it missed
  * from one that was never shown.
+ * WHICH ROAD showed the change is told the same way, and printed: a snapshot that has the
+ * change and whose `at` is BEFORE the kernel's record is a status read's answer that the event
+ * path moved (the instance's events, read when the watch named its file); the status read that
+ * started after the record is then waited for, and must confirm it (its delay is printed beside).
  * The delays are still measured and PRINTED, with the kernel's own `oats status` time beside
  * them, and a NOTE reports either one over 3 s (the UX standard's bar): a slow runner is then
  * seen, and fails nothing. What the order cannot hold: HOW SOON the first read after the record
@@ -373,9 +377,27 @@ async function fresh(what, { instance, home, kind, since }, matches) {
     await sleep(100);
   }
   const { at: recorded, why } = recordedAt(instance, home, kind, since);
+  // WHICH ROAD showed it, told by order and not by the clock: a snapshot that has the change and
+  // is still the answer of a status read that started BEFORE the kernel's record was moved there
+  // by the event path (server/core.ts: that instance's events, read when the watch named its
+  // file); one of a status read that started after the record is the status read's own.
+  const by = seenAt === null || recorded === null ? null : shownBy < recorded ? "events" : "status";
+  // Where the events showed it, the status read that started after the record CONFIRMS it: waited
+  // for, and a snapshot of such a read without the change counts against the order below.
+  let confirmedAt = by === "status" ? seenAt : null;
+  if (by === "events") {
+    for (const end = Date.now() + 30_000; confirmedAt === null && Date.now() < end; await sleep(100)) {
+      const snapshot = rpc("snapshot");
+      if (!(snapshot.ok && snapshot.value.ok) || Date.parse(snapshot.value.at) <= recorded) continue;
+      const agent = snapshot.value.agents.find((candidate) => candidate.instance === instance);
+      if (agent !== undefined && matches(agent)) confirmedAt = Date.now();
+      else without.push(Date.parse(snapshot.value.at));
+    }
+  }
   // Both delays are said: from the kernel's record, and from before the command (which holds the command's own run too).
   const fromRecord = seenAt === null || recorded === null ? null : seenAt - recorded;
   const fromCommand = seenAt === null ? null : seenAt - since;
+  const confirmed = confirmedAt === null || recorded === null ? null : confirmedAt - recorded;
   const before = Date.now();
   oats("status", "--json");
   const statusMs = Date.now() - before;
@@ -384,8 +406,14 @@ async function fresh(what, { instance, home, kind, since }, matches) {
     recorded === null
       ? `${ms(fromCommand)} after the moment before the command`
       : `${ms(fromRecord)} after the kernel recorded it (its "${kind}" event at ${new Date(recorded).toISOString()}), ${ms(fromCommand)} after the moment before the command`;
-  const timed = `${counted}; the kernel's own oats status took ${statusMs} ms`;
-  freshness.push({ what, fromRecordMs: fromRecord, fromCommandMs: fromCommand, statusMs });
+  const road =
+    by === "events"
+      ? `; shown by ITS EVENTS (the snapshot was still a status read from before the record), and confirmed by the status read that started after it ${confirmed === null ? "NEVER in 30 s" : `${confirmed} ms after the record`}`
+      : by === "status"
+        ? "; shown by a STATUS READ that started after the record (not by its events)"
+        : "";
+  const timed = `${counted}${road}; the kernel's own oats status took ${statusMs} ms`;
+  freshness.push({ what, by, fromRecordMs: fromRecord, confirmedByStatusMs: by === "events" ? confirmed : null, fromCommandMs: fromCommand, statusMs });
   if (seenAt === null) {
     fail(`freshness: the plugin's snapshot never had ${what} in 60 s`, timed);
   } else if (recorded === null) {
@@ -394,7 +422,7 @@ async function fresh(what, { instance, home, kind, since }, matches) {
     // A snapshot of a read that started at or after the kernel's record, seen without the change: an answer older than its read.
     const stale = [...new Set(without.filter((at) => at > recorded))]; // (strictly after: the two clocks say milliseconds)
     check(
-      stale.length === 0,
+      stale.length === 0 && (by !== "events" || confirmedAt !== null),
       `freshness: the plugin's snapshot has ${what}, and no snapshot of a read started after the kernel recorded it was without it (${timed})`,
       `${stale.length} snapshot(s) of a read started at or after the kernel's record (${new Date(recorded).toISOString()}) did not have the change: read(s) started ${stale.map((at) => new Date(at).toISOString()).join(", ")}`,
     );
@@ -605,11 +633,14 @@ const evidence = new Fixtures({ out: join(OUT, "answers"), substitutions: [] });
  *   claim again: it lands in the read at once, and the read IT asks for must wait the pause (a gap
  *   of 1 s or more to the plugin's next status call, whatever its exit): never two reads at once
  *   in a row.
- * Why the first form of this step failed a run by chance: the host's watch is debounced (250 ms),
- * and `oats instance attention` is quick; with the clear run straight after the set, the two events
- * were about one debounce apart: under it they reached the server as ONE signal, before any read
- * had started, and no change landed in a read. The clear was too EARLY, never too late: hence the
- * wait on a status seen running.
+ * Why the first form of this step failed a run by chance: the host's watch waits before it tells
+ * (250 ms then; 75 ms since the event path), and `oats instance attention` is quick; with the
+ * clear run straight after the set, the two events were about one such wait apart: under it they
+ * reached the server as ONE signal, before any read had started, and no change landed in a read.
+ * The clear was too EARLY, never too late: hence the wait on a status seen running, which holds
+ * whatever the watch's wait is. (The event path reads the instance's events on each of these
+ * signals too: those calls are the wrapper's `instance …` records, not `status`, are not held,
+ * and are not counted here.)
  * The three changes are tried up to four times, and every try is printed with its reads and their
  * times. What the run cannot show it says, and does not pass or fail on: a kernel so slow here
  * that the first read of every try took the server's limit or more, the host call around it
@@ -1194,7 +1225,17 @@ for (const line of evidence.write()) say(`     answers/${line}`);
 // red (a run that throws prints neither this nor its verdict line): the delays are measured
 // and fail nothing here (fresh(), above, asserts the order of reads), so a drift has to be SEEN. The
 // 3 s bar of the UX standard is asserted on a real host by the release's QA, not by this run.
-const delay = ({ fromRecordMs, fromCommandMs }) => (fromRecordMs !== null ? `${fromRecordMs} ms` : fromCommandMs !== null ? `${fromCommandMs} ms from before the command (no event of the kernel's to count from)` : "never seen");
+const delay = ({ by, fromRecordMs, confirmedByStatusMs, fromCommandMs }) =>
+  fromRecordMs !== null
+    ? `${fromRecordMs} ms${by === "events" ? ` by its events (the status read confirmed it at ${confirmedByStatusMs === null ? "no time in 30 s" : `${confirmedByStatusMs} ms`})` : " by a status read"}`
+    : fromCommandMs !== null
+      ? `${fromCommandMs} ms from before the command (no event of the kernel's to count from)`
+      : "never seen";
+// The event path against the REAL kernel (its argument form, the watch's file name, the kernel's
+// own answer): at least one of the changes above was on the screen from its events, before any
+// status read that started after the kernel's record had answered. Which ones is printed; a
+// change that a status read showed first is the fail-safe road, and no failure by itself.
+check(freshness.some((one) => one.by === "events"), `the event path showed ${freshness.filter((one) => one.by === "events").length} of the ${freshness.length} changes measured before a status read did`, JSON.stringify(freshness));
 writeFileSync(join(OUT, "freshness.json"), `${JSON.stringify(freshness, null, 1)}\n`);
 say(`\n== freshness, measured from the kernel's record to the plugin's snapshot (printed, not asserted: the run asserts the order of reads): ${freshness.length === 0 ? "nothing measured" : freshness.map((one) => `${one.what} ${delay(one)}`).join(", ")}`);
 

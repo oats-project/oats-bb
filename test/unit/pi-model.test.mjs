@@ -2,11 +2,11 @@
 // anything is started, at the launch and at the check of a planned launch that names its
 // model; where bb's list of pi's models cannot settle it, the launch goes on with a warning.
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { piModelVerdict } from "../../oats-package/capabilities/oats-bb/lib/pi-model.mjs";
-import { VERSION, call, callSeen, fakeBackend, fakeBbIn, laterBin, piModelRow, projectRow, scratch } from "../fixtures/harness.mjs";
+import { STATE_HOME, VERSION, call, callSeen, fakeBackend, fakeBbIn, laterBin, piModelRow, projectRow, scratch } from "../fixtures/harness.mjs";
 
 const envList = (names) => ({ builtInGit: { status: "not logged in" }, variables: names.map((name) => ({ name, value: null, secret: true, note: null })), inheritedVariables: [] });
 // What a deployment's pi serves here: one model twice, one with a date in its id (bb lists
@@ -17,6 +17,8 @@ const LIST = [
 ];
 const UNCHECKED = "session-provider-pi-model-unchecked";
 const listReads = (bb) => bb.calls().filter((c) => c.argv[0] === "provider");
+/** The provider's records of its homes' threads (lib/record.mjs), each file with what it holds. */
+const records = () => { const dir = join(STATE_HOME, "oats-bb/homes"); return existsSync(dir) ? readdirSync(dir).sort().map((name) => [name, readFileSync(join(dir, name), "utf8")]) : []; };
 
 async function setup(t, { models = { stdout: LIST }, script = {}, piSettings, at = "later" } = {}) {
   const { dir, home } = scratch(t);
@@ -47,10 +49,11 @@ async function setup(t, { models = { stdout: LIST }, script = {}, piSettings, at
   const spawned = () => spawns().length > 0;
   /** Refused at the launch and at the check, with this sentence and nothing started. */
   const refusedBoth = async (model, sentence) => {
-    const before = bb.calls().length;
+    const before = bb.calls().length, recorded = records();
     const { doc, stderr } = await launch(model);
     assert.deepEqual(doc.error, { code: "E_BACKEND_LAUNCH_ARG", message: sentence });
     assert.equal(stderr, "");
+    assert.deepEqual(records(), recorded, "no thread was noted in the home's record");
     assert.deepEqual(bb.calls().slice(before).filter((c) => !["--version", "host", "provider"].includes(c.argv[0])), [], "nothing was started, and bb was only read: its version, its hosts, its pi models");
     const planned = await check(model);
     assert.equal(planned.status, "needs-configuration");

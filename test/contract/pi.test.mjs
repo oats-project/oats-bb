@@ -190,11 +190,13 @@ const NO_FABLE_9 = 'pi has no model "claude-fable-9" (if you just added it to pi
  *  fetched for a minute as it is): wait until it refuses a model pi does not have again.
  *  The image's own files are that young where the image was built for this run. */
 const refusesAgain = () => waitFor("the model check to refuse again, pi's configuration being older than bb's list can be", async () => JSON.stringify((await checkModel("claude-fable-9")).problems) === JSON.stringify([{ code: "E_BACKEND_LAUNCH_ARG", message: NO_FABLE_9 }]), { timeoutMs: 180_000, everyMs: 3_000 });
-/** What bb holds: its projects, and its threads, hidden and archived ones included. */
+/** What bb holds: its projects, and its threads, hidden and archived ones included; and
+ *  what the provider holds of its homes' threads (its records: lib/record.mjs). */
 const bbHolds = async () => {
+  const records = await sh("find ~/.local/state/oats-bb -type f -exec sha256sum {} + 2>/dev/null | sort || true");
   const projects = await bbJson("project list");
   const archived = (await Promise.all(projects.map((project) => bbJson(`thread list --project ${project.id} --archived --include-hidden`)))).flat();
-  return { projects: projects.map((project) => project.id).sort(), threads: [...await bbJson("thread list --include-hidden"), ...archived].map((thread) => thread.id).sort() };
+  return { projects: projects.map((project) => project.id).sort(), threads: [...await bbJson("thread list --include-hidden"), ...archived].map((thread) => thread.id).sort(), records };
 };
 /** bb's own spawn of a pi thread on `model` in a fresh home, with no provider between. → the status the thread settles in. */
 async function bbSpawn(name, model) {
@@ -259,7 +261,7 @@ test("a model pi does not have is refused at the check of the planned launch and
     const answer = await provider("launch", launchInput(home, "model-unknown", { model }));
     assert.deepEqual(answer.error, { code: "E_BACKEND_LAUNCH_ARG", message: sentence });
   }
-  assert.deepEqual(await bbHolds(), before, "no project, no thread");
+  assert.deepEqual(await bbHolds(), before, "no project, no thread, and no line in a home's thread record");
   // What the refusal spares: bb takes the id, answers a thread, and the thread fails as it starts.
   assert.equal(await bbSpawn("model-unknown-bb", "claude-fable-9"), "error");
 });
@@ -282,7 +284,7 @@ test("a bare model id two pi providers serve is refused, naming both and the ful
   const sentence = 'pi model "twin" is served by mock and mock-b: use mock/twin or mock-b/twin (if you just changed that in pi, try again in a minute)';
   assert.deepEqual((await checkModel("twin")).problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: sentence }]);
   assert.deepEqual((await provider("launch", launchInput(home, "model-twin", { model: "twin" }))).error, { code: "E_BACKEND_LAUNCH_ARG", message: sentence });
-  assert.deepEqual(await bbHolds(), before, "no project, no thread");
+  assert.deepEqual(await bbHolds(), before, "no project, no thread, and no line in a home's thread record");
   assert.equal(await bbSpawn("model-twin-bb", "twin"), "error");
   for (const model of ["mock/twin", "mock-b/twin"]) assert.deepEqual((await checkModel(model)).problems, [], model);
   const { endpoint } = await launched("model-twin-b", { model: "mock-b/twin" });

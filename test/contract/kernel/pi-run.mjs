@@ -83,7 +83,9 @@ after(() => box.stop());
 // the provider's check no model, so the refusal is the launch's: the kernel takes a
 // launch refused with an E_BACKEND_ code for a spawn that started nothing, and undoes it.
 test("a pi spawn whose model bb's pi does not have is refused by the kernel's own spawn, and leaves nothing: no home, no instance, no bb project, no thread", async () => {
-  const holds = async () => ({ projects: (await bbJson("project list")).map((project) => project.id).sort(), threads: (await bbJson("thread list --include-hidden")).map((thread) => thread.id).sort() });
+  const holds = async () => ({ projects: (await bbJson("project list")).map((project) => project.id).sort(), threads: (await bbJson("thread list --include-hidden")).map((thread) => thread.id).sort(),
+    // The provider's records of its homes' threads (lib/record.mjs): a refused launch notes none.
+    records: await sh("find ~/.local/state/oats-bb -type f -exec sha256sum {} + 2>/dev/null | sort || true") });
   // Right after pi's configuration changed the check refuses nothing (bb serves the list it
   // fetched for a minute as it is), and this container's pi wrote its auth.json when bb
   // first started it: wait until the check refuses again.
@@ -100,7 +102,7 @@ test("a pi spawn whose model bb's pi does not have is refused by the kernel's ow
     assert.equal((await sh(`ls -d ${homeOf("piworker", instance)} 2>/dev/null || true`)).trim(), "", "the home is gone");
     assert.ok(!(await oats("status --json")).includes(instance), "the kernel lists no such instance");
   }
-  assert.deepEqual(await holds(), before, "bb holds no new project and no new thread");
+  assert.deepEqual(await holds(), before, "bb holds no new project and no new thread, and the provider noted no thread");
 });
 
 test("a pi spawn on a bare model id that one pi provider serves, as a soul declares it (claude-fable-5.1), launches and runs its first turn", async () => {

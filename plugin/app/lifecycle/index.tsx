@@ -9,6 +9,7 @@ import { rest } from "../../model/rest";
 import { recordedStopped, state } from "../../model/view";
 import { useOats } from "../oats";
 import { onWindowReset } from "../store";
+import { useReading } from "../roster/reading";
 import { failureWords } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import { Button } from "../ui";
@@ -111,12 +112,14 @@ export function actsFor(oats: Oats, instance: string): { verb: Verb; label: stri
  */
 export function AgentActs({ instance }: { instance: string }) {
   const oats = useOats();
+  // Behind a result that says the agent changed, until the roster is read again: the acts are off (app/roster/reading.tsx).
+  const reading = useReading(instance);
   const acts = actsFor(oats, instance);
   if (acts.length === 0) return null;
   return (
     <div data-testid="oats-agent-acts" className="flex min-w-0 flex-wrap items-center gap-2">
       {acts.map((act) => (
-        <Button key={act.verb} data-testid={`oats-agent-act-${act.verb}`} disabled={act.held} onClick={() => openAct(act.verb, instance)}>
+        <Button key={act.verb} data-testid={`oats-agent-act-${act.verb}`} disabled={act.held || reading} onClick={() => openAct(act.verb, instance)}>
           {act.label}
         </Button>
       ))}

@@ -44,6 +44,8 @@ export type Oats = {
        * Every place then draws the roster as last read, marked with its age.
        */
       stale: { code: string; message: string; at: string } | null;
+      /** The server's stamp of the roster the window holds (the snapshot's `at`): rosters are compared by it, never by the window's clock. */
+      at: string;
       deployment: Deployment;
       agents: readonly Agent[];
       view: View;
@@ -105,7 +107,7 @@ export function useOats(): Oats {
     return { ...base, phase: "failed", code: THREADS_FAILED, message: "bb could not list its threads, so the OATS agents cannot be matched to them.", machine: null };
   }
   if (sidebar.status !== "ready" || joined === null) return { ...base, phase: "loading" };
-  return { ...base, phase: "ready", stale: failure === null ? null : { ...failure, at: roster.at }, deployment: roster.deployment, agents: roster.agents, gone, whereOf, ...joined };
+  return { ...base, phase: "ready", stale: failure === null ? null : { ...failure, at: roster.at }, at: roster.at, deployment: roster.deployment, agents: roster.agents, gone, whereOf, ...joined };
 }
 
 /** The first line of a message: what the sidebar's one status line has room for. */

@@ -21,11 +21,13 @@ import { errorMessage, onWindowReset } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { RPC_FAILED, useOats } from "../oats";
 import { markGone, planSaysGone } from "../roster/gone";
+import { useNow } from "../roster/now";
+import { noteActed } from "../roster/reading";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, Code, Confirm, CopyButton, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
 import type { ConfirmProps } from "../ui";
 import { refusalCode, shown } from "../ui/text";
-import { agentName } from "../ui/words";
+import { agentName, readAge, showingRead } from "../ui/words";
 import { notify } from "../ui";
 import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "../spawn/models";
 import {
@@ -325,7 +327,14 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const sdk = useSdk();
   const navigate = useBbNavigate();
   const oats = useOats();
+  const rosterAt = useRef<string | null>(null);
+  useEffect(() => {
+    rosterAt.current = oats.phase === "ready" ? oats.at : null;
+  });
   const { verb, instance } = request;
+  // When the plan on screen was read, by the window's clock; and the clock (the age is said under Details).
+  const [readAt, setReadAt] = useState<number | null>(null);
+  const now = useNow();
   const threadId = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
   const returnFocus = useRowFocus(threadId);
   // Opened again on a result (the toaster's "Show result"): that result, and nothing is read.
@@ -352,6 +361,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       asked.then(
         (plan) => {
           // A new plan is a new intent: it gets its own idempotency key.
+          if (live.current && mine === ticket.current) setReadAt(Date.now());
           if (live.current && mine === ticket.current) setState({ phase: "ready", plan, key: newKey(), changed: changedFrom === null ? null : planChanges(changedFrom, plan, stopArchivesThread(versionOf(plan)), stopArchivesThread(versionOf(changedFrom))) });
         },
         (cause: unknown) => {
@@ -375,7 +385,11 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const send = (plan: Plan, key: string, again = false) => {
     setState({ phase: "applying", plan, key });
     const sent = { plan, key };
+    // The roster the window holds as the act is sent: a result that says the agents changed is true of them
+    // before that roster is read again, and the places that say their state say "Reading…" until it is (app/roster/reading.tsx).
+    const sentAt = rosterAt.current;
     const settle = (outcome: Outcome, refusal: Refusal | null) => {
+      if (outcome.tone === "done") noteActed(plan.action === "stop" ? plan.targets.map((target) => target.instance) : [plan.instance ?? instance], sentAt);
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
       // The person moved on (they left the dialog, or another act's took its place): the result reaches them
       // where they are, and what a toast cannot hold is one press away ("Show result").
@@ -535,7 +549,13 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
               </Facts>
               {/* The plan as it is now, read again: one press away (a plan that changed under the confirmation comes back by itself). */}
               {state.phase === "ready" ? (
-                <span data-testid="oats-plan-observed" className="flex">
+                // The plan is of the moment it was read (the state rows above, and the facts on the face): how old it is, in
+                // the plugin's one form for content read earlier, before the way to read it again. (The window's own
+                // clock at the read and now: never the server's stamp beside the window's clock.)
+                <span data-testid="oats-plan-observed" className="flex flex-wrap items-center gap-2">
+                  <span data-testid="oats-plan-read" className="text-xs text-muted-foreground">
+                    {showingRead(readAt === null ? null : readAge(readAt, Math.max(now, readAt)))}
+                  </span>
                   <Button variant="ghost" data-testid="oats-plan-check" onClick={again}>
                     Check again
                   </Button>
@@ -598,6 +618,10 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const rpc = useRpc<Contract>();
   const navigate = useBbNavigate();
   const oats = useOats();
+  const rosterAt = useRef<string | null>(null);
+  useEffect(() => {
+    rosterAt.current = oats.phase === "ready" ? oats.at : null;
+  });
   const { verb, instance } = request;
   const rowThread = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
   const returnFocus = useRowFocus(rowThread);
@@ -687,10 +711,13 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     const { check: checked } = state;
     setChanged(false);
     setState({ phase: "running", check: checked });
+    // (As for a stop: the roster held as the act is sent; app/roster/reading.tsx.)
+    const sentAt = rosterAt.current;
     const asked = verb === "start" && resumes ? { instance, resume: true as const } : { instance, ...(onBb && harness !== "" ? { harness } : {}), ...(onBb && typed !== "" ? { model: typed } : {}) };
     rpc.call(verb, asked).then(
       (started) => {
         const outcome = startOutcome(verb, started.instance ?? checked.instance, started);
+        if (outcome.tone === "done") noteActed([checked.instance], sentAt);
         const threadId = started.threadId;
         // A home that is not on bb has no thread to open: its result says where it is.
         const open = threadId === null ? null : { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(threadId) };

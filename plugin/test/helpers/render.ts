@@ -6,6 +6,7 @@ import type { PluginRpcTestHandlers } from "@get-bb/plugin-sdk/testing/app";
 import type { rpcContract } from "../../contract";
 import { resetWindow } from "../../app/store";
 import { forgetOpened } from "../../app/roster/fold";
+import { forgetActed } from "../../app/roster/reading";
 import { PAGE_IDS, showEveryPageWhenUnset } from "../../app/workspace/pages";
 import type { Agent } from "../../model/types";
 import * as automations from "../automations/handlers";
@@ -33,6 +34,7 @@ export function resetApp(): void {
   cleanup();
   resetWindow();
   forgetOpened();
+  forgetActed();
 }
 
 export { SOULS } from "../workspace/handlers";

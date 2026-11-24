@@ -211,6 +211,21 @@ header, under the agent's state: on the thread's OATS tab and on the agent's own
 (`app/panel/Panel.tsx`). The outside feature draws it on the archived thread's own row of an agent
 the roster draws on no thread ([Outside OATS](#outside-oats)).
 
+**Behind a result** (`app/roster/reading.tsx`). A result that says an agent started, restarted,
+stopped or was retired is true of the agent before the roster the window holds is read again. Until
+it is, the places that say that agent's state (its page, its panel, its thread's line) say
+**Reading…** in the state's place and its acts are off: never the old state stated plainly beside
+"… started.". Rosters are compared, never clocks: the dialog notes the server's stamp of the roster
+the window held when the act was SENT, and "Reading…" stands while the window's roster is still
+that one or an older one. It is bounded: after ten seconds the roster's own state is drawn whatever
+it says. Nothing of it while OATS cannot be read (the last roster's notice says that).
+
+**What is of an earlier moment says so.** A Stop or Retire plan is of the moment it was read: under
+its Details, before **Check again**, "Read <age>." (the form of every content read earlier, by the
+window's own clock from the read). Readiness is read once for the window: beside **Refresh**,
+"Read <age>." once it is older than a minute, on both tabs. The activity's one line says **Last:**
+before the newest recorded event.
+
 ## Outside OATS
 
 bb's own acts reach an OATS agent without OATS: a message typed in bb's composer starts an agent

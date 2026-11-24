@@ -15,6 +15,9 @@ import type { KeyboardEvent } from "react";
  * in the place of the row's own indent), and the chevron in the gutter of its own depth.
  */
 export const GUTTERED = ["pl-6", "pl-10", "pl-14"] as const;
+/** The chevron's two marks: a closed parent's points right, an open one's points down. */
+export const CHEVRON_CLOSED = "▸";
+export const CHEVRON_OPEN = "▾";
 const CHEVRON_AT = ["left-0", "left-4", "left-8"] as const;
 
 let opened: ReadonlySet<string> = new Set();
@@ -50,8 +53,8 @@ export function forgetOpened(): void {
 /**
  * A parent's chevron: ONE button, before the row's mark, not part of the row's link (it is drawn
  * over the row's gutter, and its `li` is `relative`); as high as the row, so as a control is. It
- * says whose agents it shows or hides, and whether they are shown (`aria-expanded`). The mark is
- * the pattern book's for something that opens (ui `Disclosure`), turned while it is open.
+ * says whose agents it shows or hides, and whether they are shown (`aria-expanded`). Its mark
+ * points right while it is closed and down while it is open.
  * `pinned`: the parent holds the row that is open on screen, so it is never closed over it: the
  * chevron is drawn open and OFF (a button that swallows a press is a flaw): disabled, in the
  * pattern book's form for an off control, out of the tab order, and its name says that the agents
@@ -70,8 +73,11 @@ export function FoldToggle({ instance, name, open, pinned = false, depth }: { in
       className={`absolute top-0 z-10 flex h-full w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-muted-foreground ${CHEVRON_AT[depth]}`}
       onClick={() => setOpened(instance, !open)}
     >
-      <span aria-hidden="true" className={`inline-block transition-transform ${open ? "rotate-90" : ""}`}>
-        ▸
+      {/* Two marks, never one turned: closed points RIGHT, open points DOWN (the off one is drawn as open). No rotation
+          and no transition (a turned glyph was caught mid-turn, pointing left, and sat askew at a phone's width); one
+          box of one size at every width, the mark centred in it. */}
+      <span aria-hidden="true" data-testid="oats-row-toggle-mark" data-open={open ? "true" : "false"} className="inline-flex size-4 items-center justify-center text-xs leading-none">
+        {open ? CHEVRON_OPEN : CHEVRON_CLOSED}
       </span>
     </button>
   );

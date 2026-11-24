@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PanelReadiness } from "../../kernel/panel-readiness";
 import { Button, Disclosure, Fact, Facts, Section, Toned } from "../ui";
+import { readAge, showingRead } from "../ui/words";
 import { shown } from "../ui/text";
 import { usePanelReadiness } from "./read";
 import {
@@ -154,6 +155,14 @@ export function Readiness({ instance, of, context, now }: { instance: string; of
         {!refreshing || read.data === undefined ? null : (
           <span role="status" data-testid="oats-panel-readiness-status" className="text-xs text-muted-foreground">
             {REFRESHING}
+          </span>
+        )}
+        {/* It is read once for the window, and again only on Refresh: once what is shown is older than a minute, how old it
+            is, in the plugin's one form for content read earlier ("Ready" of two hours ago is not "Ready" now). Nothing
+            while it is fresh, while it is read again, or under the notice of a read that failed (which says the age). */}
+        {refreshing || read.fetching || read.status !== "ready" || read.readAt === null || now - read.readAt < 60_000 ? null : (
+          <span data-testid="oats-panel-readiness-read" className="text-xs text-muted-foreground">
+            {showingRead(readAge(read.readAt, now))}
           </span>
         )}
       </div>

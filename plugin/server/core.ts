@@ -143,6 +143,14 @@ export function createCore(bb: BbPluginApi) {
    * not take the change off the screen again. Dropped by the first status read that started after it.
    */
   const patches = new Map<string, { said: EventsSaid; startedAt: number }>();
+  /**
+   * The agents of the status read the snapshot is of, as that read answered them (no patch): a
+   * patch is always computed from these, never from a row that is patched already, so that a later
+   * events answer can take an earlier one's change off again. Null while the snapshot is no roster.
+   */
+  let statusAgents: Agent[] | null = null;
+  /** The last token published (epoch ms): every publish carries one that is later than every one before it. */
+  let lastToken = 0;
   /** The instances whose events are being read now; `again`: a signal named it meanwhile, and one more read follows. */
   const eventsReads = new Map<string, { again: boolean }>();
   let watchers = 0;
@@ -291,9 +299,10 @@ export function createCore(bb: BbPluginApi) {
     }
     // The event path's patches that are NEWER than this read (their events read started after this
     // status read did) still stand over it; the others are older than it, and this read is the truth.
-    if (next.ok) next = { ...next, agents: withPatches(next.agents, next.at, lastStart) };
-    else patchesOlderThan(lastStart);
-    const key = JSON.stringify({ ...next, at: null, last: next.ok ? null : (next.last?.at ?? null), root, rows: rows === null ? null : [...rows] });
+    patchesOlderThan(lastStart);
+    statusAgents = next.ok ? next.agents : null;
+    if (next.ok) next = { ...next, agents: withPatches(next.agents, next.at) };
+    const key = keyOf(next, root, rows);
     const changed = key !== comparable;
     cached = next;
     comparable = key;
@@ -302,7 +311,7 @@ export function createCore(bb: BbPluginApi) {
     // slowly. After a read that failed (a timeout, an unreachable machine, no oats) the next one
     // waits the floor, so Retry and the watch are not held back by the failure's own length.
     lastTook = next.ok ? lastEnd - lastStart : 0;
-    if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at });
+    if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: token(lastStart) });
     return next;
   }
 
@@ -328,13 +337,25 @@ export function createCore(bb: BbPluginApi) {
   //   kernel's own row and goes to the kernel, as it does on any roster that is a moment old.
   // - The snapshot's `at` stays the status read's start: it is how old the roster is.
 
+  /** What tells one shown snapshot from another: everything of it but when it was read, and what the kernel printed beside it. */
+  const keyOf = (snapshot: Snapshot, root: string, rows: ReadonlyMap<string, RawRow> | null): string =>
+    JSON.stringify({ ...snapshot, at: null, last: snapshot.ok ? null : (snapshot.last?.at ?? null), root, rows: rows === null ? null : [...rows] });
+  /**
+   * The token of a publish: `wanted` (the start of the read behind it, epoch ms), or the first
+   * millisecond after the last token where that is not later. A client acts once per token
+   * (app/store.ts), and two reads can start in one millisecond (two instances named by one
+   * signal; a status read asked for by the signal that named them): each publish gets its own.
+   */
+  function token(wanted: number): string {
+    lastToken = Math.max(wanted, lastToken + 1);
+    return new Date(lastToken).toISOString();
+  }
   /** Drops the kept answers a status read that started at `statusStart` is newer than. */
   function patchesOlderThan(statusStart: number): void {
     for (const [instance, kept] of patches) if (kept.startedAt <= statusStart) patches.delete(instance);
   }
-  /** A status answer's agents, with the kept answers that are newer than that read applied again. */
-  function withPatches(agents: Agent[], readAt: string, statusStart: number): Agent[] {
-    patchesOlderThan(statusStart);
+  /** A status read's own agents, with every kept answer applied (each is newer than that read: the older ones were dropped). */
+  function withPatches(agents: Agent[], readAt: string): Agent[] {
     if (patches.size === 0) return agents;
     return agents.map((agent) => {
       const kept = patches.get(agent.instance);
@@ -346,8 +367,9 @@ export function createCore(bb: BbPluginApi) {
     [
       before.waiting === null && after.waiting !== null ? "a claim set" : null,
       before.waiting !== null && after.waiting === null ? "the claim cleared" : null,
-      before.waiting !== null && after.waiting !== null && before.waiting !== after.waiting ? "the claim changed" : null,
+      before.waiting !== null && after.waiting !== null && JSON.stringify(before.waiting) !== JSON.stringify(after.waiting) ? "the claim changed" : null,
       before.running !== false && after.running === false ? "stopped" : null,
+      before.running === false && after.running !== false ? "not stopped after all (its events say it started again): as the status read said" : null,
     ]
       .filter((part) => part !== null)
       .join(", ") || "the row";
@@ -398,16 +420,22 @@ export function createCore(bb: BbPluginApi) {
     if (now === null || !now.ok) return dropped("OATS cannot be read now: the roster shown is the last one read");
     // A status read that started after this events read did is newer than it: it is the truth.
     if (Date.parse(now.at) >= startedAt) return dropped(`a status read that started after its events read (${took} ms) has answered`);
-    const row = now.agents.find((candidate) => candidate.instance === instance);
-    if (row === undefined) return dropped("the snapshot holds no such agent now");
+    const shown = now.agents.find((candidate) => candidate.instance === instance);
+    if (shown === undefined || statusAgents === null) return dropped("the snapshot holds no such agent now");
+    // The row is computed from what the STATUS read said of it, with this answer in the place of any
+    // earlier one: never from a row that is patched already (an answer that says "stopped, then
+    // started again" must take an earlier answer's "stopped" off).
     patches.set(instance, { said: answer.value, startedAt });
-    const next = withEvents(row, answer.value, now.at);
-    if (next === row) return dropped(`its events say what the row says (read in ${took} ms)`);
-    cached = { ...now, agents: now.agents.map((candidate) => (candidate === row ? next : candidate)) };
-    comparable = JSON.stringify({ ...cached, at: null, last: null, root: rawRows?.root ?? "", rows: rawRows === null ? null : [...rawRows.rows] });
-    bb.log.debug(`the event path: ${instance}: ${patchSaid(row, next)}, from its events read in ${took} ms`);
-    // The token is this read's start, not the snapshot's `at` (which stays the status read's): a client acts once per token.
-    if (!lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: new Date(startedAt).toISOString() });
+    const agents = withPatches(statusAgents, now.at);
+    const next = agents.find((candidate) => candidate.instance === instance);
+    const patchedSnapshot: Snapshot = { ...now, agents };
+    const key = keyOf(patchedSnapshot, rawRows?.root ?? "", rawRows?.rows ?? null);
+    if (next === undefined || key === comparable) return dropped(`its events say what is shown (read in ${took} ms)`);
+    cached = patchedSnapshot;
+    comparable = key;
+    bb.log.debug(`the event path: ${instance}: ${patchSaid(shown, next)}, from its events read in ${took} ms`);
+    // The token is this read's start (or the next free one), not the snapshot's `at`, which stays the status read's.
+    if (!lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: token(startedAt) });
   }
   /** The agent of the snapshot whose event file is `file` (`<agent>--<instance>.jsonl`), when exactly one is. */
   function agentOfFile(file: string): string | null {
@@ -610,6 +638,7 @@ export function createCore(bb: BbPluginApi) {
       cached = null;
       comparable = "";
       patches.clear();
+      statusAgents = null;
       lastRoster = null;
       rawRows = null;
       target = null;

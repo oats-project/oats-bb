@@ -16,8 +16,8 @@ export type EventsSaid = {
   waitingOnYou: { since: string; reason: string | null; message: string | null } | null;
   /** The answer's `waitingClaims`: one per producer of the incarnation, cleared ones included. */
   waitingClaims: readonly { waiting: boolean }[];
-  /** The answer's rows, oldest first: their kind, when, and the incarnation they were written in. */
-  events: readonly { kind: string; at: string; incarnation: string | null }[];
+  /** The answer's rows, oldest first: their kind, when, the incarnation they were written in, and who wrote them (null: the kernel, in a row that names none). */
+  events: readonly { kind: string; at: string; incarnation: string | null; producer: string | null }[];
 };
 
 /** The kinds that say where a session is. `launched` and `restarted` say that one began, and nothing this function can place (below). */
@@ -28,14 +28,21 @@ const LIFECYCLE: ReadonlySet<string> = new Set(["stopped", "launched", "restarte
  *
  * THE CLAIM is read from the answer's top level, never from one `waiting` row (a producer's later
  * row, another producer's claim and the session's boundary all decide, and the kernel has decided):
- * - `waitingOnYou` is a claim: the row waits, with its reason (the row's own rule: "attention"
- *   where the kernel names none), its message and since when;
+ * - `waitingOnYou` is a claim, on a row the kernel does not say is not running: the row waits,
+ *   with its reason (the row's own rule: "attention" where the kernel names none), its message
+ *   and since when. On a row that does not run (`running: false`) a claim is NOT set: `oats
+ *   status` names a claim only of a home that may be there to wait (a harness that died while it
+ *   waited keeps its claim in the log, and the status read shows none), and this must not show
+ *   what the status read withholds;
  * - `waitingOnYou` is null, no producer's claim is live (`waitingClaims` holds none with
- *   `waiting: true`) and the answer is whole (`truncated` false): the row does not wait;
- * - anything else (null beside a live claim, or a cut answer): not known; the row's claim stays.
+ *   `waiting: true`), the answer is whole (`truncated` false) and it knows its incarnation: the
+ *   row does not wait. (An answer with `incarnation: null` could not read the home's
+ *   `instance.json`: the kernel then admits no claim at all, which is "unknown".);
+ * - anything else (null beside a live claim, a cut answer, no incarnation): not known; the row's claim stays.
  *
- * STOPPED: the newest event of a kind that says where the session is, written in the answer's
- * incarnation and after `readAt` (the start of the status read the row came from: an older event
+ * STOPPED: the newest event of a kind that says where the session is, WRITTEN BY THE KERNEL (a
+ * home's log is the agent's to write too: a row of another producer says nothing of the
+ * session), in the answer's incarnation and after `readAt` (the start of the status read the row came from: an older event
  * is in that read already), is `stopped`: the row does not run and its session ended by an
  * operator's stop. A provider's row then carries the kernel's word "stopped"; a tmux row keeps
  * the word it has (the kernel prints "shell" for it: its window is left at a shell), and
@@ -54,16 +61,18 @@ export function withEvents(agent: Agent, said: EventsSaid, readAt: string): Agen
 
   // The claim.
   if (said.waitingOnYou !== null) {
-    const waiting = { reason: said.waitingOnYou.reason ?? "attention", message: said.waitingOnYou.message, since: said.waitingOnYou.since };
-    if (agent.waiting === null || agent.waiting.reason !== waiting.reason || agent.waiting.message !== waiting.message || agent.waiting.since !== waiting.since) change({ waiting });
-  } else if (!said.truncated && !said.waitingClaims.some((claim) => claim.waiting) && agent.waiting !== null) {
+    if (agent.running !== false) {
+      const waiting = { reason: said.waitingOnYou.reason ?? "attention", message: said.waitingOnYou.message, since: said.waitingOnYou.since };
+      if (agent.waiting === null || agent.waiting.reason !== waiting.reason || agent.waiting.message !== waiting.message || agent.waiting.since !== waiting.since) change({ waiting });
+    }
+  } else if (!said.truncated && said.incarnation !== null && !said.waitingClaims.some((claim) => claim.waiting) && agent.waiting !== null) {
     change({ waiting: null });
   }
 
-  // Where the session is: the newest event that says, of this incarnation, newer than the row's read.
+  // Where the session is: the newest event of the kernel's that says, of this incarnation, newer than the row's read.
   const since = Date.parse(readAt);
   const newest = said.events
-    .filter((event) => LIFECYCLE.has(event.kind) && (said.incarnation === null || event.incarnation === null || event.incarnation === said.incarnation))
+    .filter((event) => LIFECYCLE.has(event.kind) && (event.producer === null || event.producer === "kernel") && (said.incarnation === null || event.incarnation === null || event.incarnation === said.incarnation))
     .map((event) => ({ kind: event.kind, at: Date.parse(event.at) }))
     .filter((event) => Number.isFinite(event.at) && Number.isFinite(since) && event.at > since)
     .reduce<{ kind: string; at: number } | null>((last, event) => (last === null || event.at >= last.at ? event : last), null);

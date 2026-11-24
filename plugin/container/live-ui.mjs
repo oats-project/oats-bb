@@ -496,7 +496,7 @@ function record(threads, changes = {}) {
  * → the instant the change was recorded.
  */
 function recordFor(threads, { agent, instance }, { changes = {}, said = {}, statusHeldMs = 0 } = {}) {
-  const answer = { schemaVersion: 1, ok: true, result: { eventsApi: 2, instance, incarnation: null, count: 0, returned: 0, truncated: false, events: [], lastEvent: null, waitingOnYou: null, waitingClaims: [], ...said } };
+  const answer = { schemaVersion: 1, ok: true, result: { eventsApi: 2, instance, incarnation: "2026-11-23T09:00:00.000Z", count: 0, returned: 0, truncated: false, events: [], lastEvent: null, waitingOnYou: null, waitingClaims: [], ...said } };
   fake({ status: { stdout: statusWithRealIds(threads, changes), ...(statusHeldMs > 0 ? { sleepMs: statusHeldMs } : {}) }, "instance events --since": { stdout: JSON.stringify(answer) } });
   const at = Date.now();
   appendFileSync(join(homedir(), "deployment", ".agents", "events", `${agent}--${instance}.jsonl`), `${JSON.stringify({ kind: "live-ui", at: new Date(at).toISOString() })}\n`);

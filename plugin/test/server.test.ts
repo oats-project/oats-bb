@@ -289,6 +289,8 @@ describe("the event path", () => {
   const LEAD = "redesign-ui-lead"; // an agent of the fixtures' roster that runs and does not wait
   const FILE = `oats-product-expert--${LEAD}.jsonl`;
   const EVENTS = "instance events --since";
+  /** How long the fake holds an events read that a status read is to overtake: far longer than a status read takes, on any host. */
+  const ROSTER_EVENTS_HELD_MS = 4_000;
   const CLAIM = { since: "2026-11-23T10:00:00.000Z", producer: "agent", reason: "attention", message: "Keep the retry, or fail the job?" };
   /** An `oats instance events --json` answer, shaped to the kernel's documented one (not recorded: six fields are read). */
   const eventsAnswer = (over: Record<string, unknown> = {}) =>
@@ -297,7 +299,8 @@ describe("the event path", () => {
   const named = (files: string[] = [FILE]) => server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed", files });
   type Shown = { ok: boolean; at: string; agents: { instance: string; running: boolean | null; runtimeState: string | null; waiting: { message: string | null } | null }[] };
   const lead = (snapshot: Shown) => snapshot.agents.find((agent) => agent.instance === LEAD)!;
-  const calls = async (verb: string) => (await fake.calls()).filter((call) => call.verb === verb);
+  // (An events read is told by its words, not by the fake's verb: with no answer set for it the fake names it by the panel's verb.)
+  const calls = async (verb: string) => (await fake.calls()).filter((call) => (verb === EVENTS ? call.argv[0] === "instance" && call.argv[1] === "events" && call.argv.includes("--since") : call.verb === verb));
   const eventPath = () => server.harness.logEntries.filter((entry) => entry.level === "debug" && entry.message.startsWith("the event path:")).map((entry) => entry.message);
   /** Waits (no time bound asserted) until `seen()` holds. */
   const until = async (seen: () => boolean | Promise<boolean>, what: string) => {
@@ -312,7 +315,7 @@ describe("the event path", () => {
     const first = await rpc<Shown>("snapshot");
     expect(lead(first).waiting).toBeNull();
     // The status read that the signal asks for is HELD: only the events read can show the claim meanwhile.
-    await fake.behave({ status: { sleepMs: 2_500 }, [EVENTS]: { stdout: claimed() } });
+    await fake.behave({ status: { sleepMs: 4_000 }, [EVENTS]: { stdout: claimed() } });
     const published = server.harness.realtimeSignals.length;
     await named();
     await until(() => server.harness.realtimeSignals.length > published, "the patch is published");
@@ -339,7 +342,7 @@ describe("the event path", () => {
   // `at` as it is, so each publish must carry a token the app has not seen.
   it("two patches and the status read between them publish three different tokens: the app acts on each", async () => {
     const first = await rpc<Shown>("snapshot");
-    await fake.behave({ status: { sleepMs: 1_200 }, [EVENTS]: { stdout: claimed() } });
+    await fake.behave({ status: { sleepMs: 4_000 }, [EVENTS]: { stdout: claimed() } });
     const published = server.harness.realtimeSignals.length;
     const tokens = () => server.harness.realtimeSignals.slice(published).map((signal) => (signal.payload as { at: string }).at);
     await named(); // patch 1: the claim, over the first status read
@@ -351,14 +354,47 @@ describe("the event path", () => {
     await until(() => tokens().length === 3, "the second patch is published");
     const [one, two, three] = tokens() as [string, string, string];
     expect(new Set([first.at, one, two, three]).size).toBe(4); // each a token no client has acted on
-    expect(two).toBe(between.at); // a status read's token is its snapshot's `at`, as before
+    expect([Date.parse(one) < Date.parse(two), Date.parse(two) < Date.parse(three)]).toEqual([true, true]); // and each later than the one before
     const patched = await rpc<Shown>("snapshot");
     expect([patched.at, lead(patched).waiting !== null]).toEqual([between.at, true]); // a patch's token is not the snapshot's `at`
   }, 60_000);
 
+  it("two instances named by ONE signal each publish a token of their own: both patches reach the app", async () => {
+    const MOCKUPS = "desktop-mockups-developer";
+    const first = await rpc<Shown>("snapshot");
+    await fake.behave({ status: { sleepMs: 8_000 }, [EVENTS]: { stdout: claimed() } });
+    const published = server.harness.realtimeSignals.length;
+    // Both events reads start in the same turn, in the same millisecond more often than not.
+    await named([FILE, `oats-desktop-developer--${MOCKUPS}.jsonl`]);
+    await until(() => server.harness.realtimeSignals.length >= published + 2, "both patches are published");
+    const [one, two] = server.harness.realtimeSignals.slice(published).map((signal) => (signal.payload as { at: string }).at) as [string, string];
+    expect(one).not.toBe(two);
+    expect(new Set([first.at, one, two]).size).toBe(3);
+    const patched = await rpc<Shown>("snapshot");
+    expect(patched.at).toBe(first.at); // still the first status read's: the next one is held
+    expect([lead(patched).waiting !== null, patched.agents.find((agent) => agent.instance === MOCKUPS)!.waiting !== null]).toEqual([true, true]);
+  }, 60_000);
+
+  it("a patch is computed from what the status read said, never from a patched row: events that say \"stopped, then started again\" take an earlier \"stopped\" off", async () => {
+    const first = await rpc<Shown>("snapshot");
+    const at = (ms: number) => new Date(Date.parse(first.at) + ms).toISOString();
+    const row = (kind: string, ms: number) => ({ eventsApi: 2, kind, at: at(ms), incarnation: "2026-11-23T09:00:00.000Z", producer: "kernel", data: {} });
+    await fake.behave({ status: { sleepMs: 8_000 }, [EVENTS]: { stdout: eventsAnswer({ events: [row("stopped", 1)] }) } });
+    await named();
+    await until(async () => lead(await rpc<Shown>("snapshot")).running === false, "the stop is shown");
+    // The agent was started again: its events now say so. The status read is still held.
+    await fake.behave({ status: { sleepMs: 8_000 }, [EVENTS]: { stdout: eventsAnswer({ events: [row("stopped", 1), row("launched", 2)] }) } });
+    await named();
+    await until(async () => lead(await rpc<Shown>("snapshot")).running !== false, "the stop is taken off");
+    const after = await rpc<Shown>("snapshot");
+    expect(after.at).toBe(first.at);
+    expect(after.agents).toEqual(first.agents); // as the status read said: a start is the status read's to place
+    expect(eventPath().at(-1)).toContain(`the event path: ${LEAD}: not stopped after all`);
+  }, 60_000);
+
   it("a status answer OLDER than the patch never removes it: the read that was in flight when the events were read keeps the claim", async () => {
     const first = await rpc<Shown>("snapshot");
-    await fake.behave({ status: { sleepMs: 1_500 }, [EVENTS]: { stdout: claimed() } });
+    await fake.behave({ status: { sleepMs: 4_000 }, [EVENTS]: { stdout: claimed() } });
     // A status read is in flight (it started before the events read will), and it will answer with no claim.
     const inFlight = rpc<{ at: string }>("refresh");
     await until(async () => (await calls("status")).length === 2, "the second status read started");
@@ -377,7 +413,7 @@ describe("the event path", () => {
   it("an events answer OLDER than the snapshot's status read is dropped", async () => {
     const first = await rpc<Shown>("snapshot");
     // The events read is slow; a status read starts after it did and answers first.
-    await fake.behave({ [EVENTS]: { stdout: claimed(), sleepMs: 2_500 } });
+    await fake.behave({ [EVENTS]: { stdout: claimed(), sleepMs: ROSTER_EVENTS_HELD_MS } });
     await named();
     await until(async () => (await calls(EVENTS)).length === 1, "the events read started");
     await until(async () => (await rpc<Shown>("snapshot")).at !== first.at, "a status read that started after it answers");
@@ -414,6 +450,19 @@ describe("the event path", () => {
     expect((await rpc<Shown>("snapshot")).agents).toEqual(first.agents);
   }, 120_000);
 
+  it("fail safe: a file that two rows of the snapshot answer to reads no events", async () => {
+    // A roster with the same agent twice (two rows of one name under one soul): the file selects no ONE row.
+    const status = JSON.parse(await readFile(join(FIXTURES, "roster", "status.json"), "utf8")) as { agents: { name: string; instances: { instance: string }[] }[] };
+    const group = status.agents.find((candidate) => candidate.instances.some((instance) => instance.instance === LEAD))!;
+    group.instances.push(structuredClone(group.instances.find((instance) => instance.instance === LEAD)!));
+    await fake.behave({ status: { stdout: JSON.stringify(status) } });
+    const twice = await rpc<Shown>("snapshot");
+    expect(twice.agents.filter((agent) => agent.instance === LEAD)).toHaveLength(2);
+    await named();
+    await expect.poll(async () => (await calls("status")).length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
+    expect(await calls(EVENTS)).toEqual([]);
+  }, 20_000);
+
   it("fail safe: a file that names no agent of the snapshot, or no file at all, reads no events; the status read is asked for as before", async () => {
     await rpc("snapshot");
     await named(["oats-developer--someone-new-developer.jsonl"]); // an agent spawned since: the status read brings it
@@ -439,7 +488,7 @@ describe("the event path", () => {
     expect(Date.parse(reads[1]!.at) - Date.parse(reads[0]!.at)).toBeGreaterThanOrEqual(700 - 50);
   }, 40_000);
 
-  it("stopped: the row reads stopped at once; the kernel's own row is untouched, and an act for that agent goes to the kernel as before", async () => {
+  it("stopped: the row reads stopped at once, and an act for that agent goes to the kernel as before (nothing of the lifecycle reads the patch)", async () => {
     const first = await rpc<Shown>("snapshot");
     const stopped = new Date(Date.parse(first.at) + 1).toISOString(); // after the snapshot's read started
     await fake.behave({ status: { sleepMs: 4_000 }, [EVENTS]: { stdout: eventsAnswer({ events: [{ eventsApi: 2, kind: "stopped", at: stopped, incarnation: "2026-11-23T09:00:00.000Z", producer: "kernel", data: { state: "stopped" } }] }) } });

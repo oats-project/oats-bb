@@ -5,7 +5,7 @@
 // A narrow reader, beside the instance panel's (kernel/panel-events.ts), on purpose: the panel
 // draws every row and fails the whole answer on one it cannot shape; this one reads six fields
 // and must not fail on an event of a kind it has never heard of. Anything else of the answer is
-// not read, and an answer that does not have these six in their documented shapes is refused
+// not read, and an answer that does not have these in their documented shapes is refused
 // whole (the server then changes nothing: the status read carries the change).
 import { z } from "zod";
 import { shaped } from "./envelope.js";
@@ -23,7 +23,7 @@ export const rosterEvents = z.object({
   incarnation: z.string().nullable(),
   waitingOnYou: z.object({ since: z.string(), reason: z.string().nullable(), message: z.string().nullable() }).nullable(),
   waitingClaims: z.array(z.object({ waiting: z.boolean() })),
-  events: z.array(z.object({ kind: z.string(), at: z.string(), incarnation: z.string().nullable() })),
+  events: z.array(z.object({ kind: z.string(), at: z.string(), incarnation: z.string().nullable(), producer: z.string().nullable() })),
 });
 export type RosterEvents = z.output<typeof rosterEvents>;
 
@@ -44,8 +44,8 @@ const answer = z.looseObject({
   eventsApi: z.literal(2),
   incarnation: z.string().nullable(),
   truncated: z.boolean(),
-  // A row of any kind: only its kind, its time and its incarnation are read.
-  events: z.array(z.looseObject({ kind: z.string().min(1), at: stamp, incarnation: z.string().nullish() })),
+  // A row of any kind: only its kind, its time, its incarnation and who wrote it are read.
+  events: z.array(z.looseObject({ kind: z.string().min(1), at: stamp, incarnation: z.string().nullish(), producer: z.string().nullish() })),
   waitingOnYou: z.looseObject({ since: stamp, reason: z.string().nullish(), message: z.string().nullish() }).nullable(),
   waitingClaims: z.array(z.looseObject({ waiting: z.boolean() })),
 });
@@ -59,6 +59,6 @@ export function parseRosterEvents(document: unknown): Result<RosterEvents> {
     incarnation: value.incarnation,
     waitingOnYou: value.waitingOnYou === null ? null : { since: value.waitingOnYou.since, reason: value.waitingOnYou.reason ?? null, message: value.waitingOnYou.message ?? null },
     waitingClaims: value.waitingClaims.map(({ waiting }) => ({ waiting })),
-    events: value.events.map(({ kind, at, incarnation }) => ({ kind, at, incarnation: incarnation ?? null })),
+    events: value.events.map(({ kind, at, incarnation, producer }) => ({ kind, at, incarnation: incarnation ?? null, producer: producer ?? null })),
   });
 }

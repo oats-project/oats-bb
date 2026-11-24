@@ -33,7 +33,7 @@ const agent = (over: Partial<Agent> = {}): Agent => ({
   ...over,
 });
 const said = (over: Partial<EventsSaid> = {}): EventsSaid => ({ truncated: false, incarnation: INCARNATION, waitingOnYou: null, waitingClaims: [], events: [], ...over });
-const event = (kind: string, at: string, incarnation: string | null = INCARNATION) => ({ kind, at, incarnation });
+const event = (kind: string, at: string, incarnation: string | null = INCARNATION, producer: string | null = "kernel") => ({ kind, at, incarnation, producer });
 const claim = { since: after, reason: "attention", message: "Keep the retry, or fail the job?" };
 
 describe("what an instance's events say of its row", () => {
@@ -46,6 +46,15 @@ describe("what an instance's events say of its row", () => {
     expect(withEvents(row, said({ waitingOnYou: { since: after, reason: null, message: null }, waitingClaims: [{ waiting: true }] }), READ_AT).waiting).toEqual({ reason: "attention", message: null, since: after });
   });
 
+  it("a claim on a row that does not run is not set: the status read names a claim only of a home that may be there to wait", () => {
+    // A harness that died while it waited: its claim is still in the log, and `oats status` shows none.
+    const dead = agent({ running: false, runtimeState: "unknown" });
+    expect(withEvents(dead, said({ waitingOnYou: claim, waitingClaims: [{ waiting: true }] }), READ_AT)).toBe(dead);
+    expect(state(withEvents(dead, said({ waitingOnYou: claim, waitingClaims: [{ waiting: true }] }), READ_AT), null)).toBe(state(dead, null));
+    // One the kernel says runs, or says nothing of, may wait.
+    expect(withEvents(agent({ running: null }), said({ waitingOnYou: claim, waitingClaims: [{ waiting: true }] }), READ_AT).waiting).not.toBeNull();
+  });
+
   it("a claim cleared: no claim, when the answer is whole and no producer's claim is live", () => {
     const row = agent({ waiting: { reason: "attention", message: "Keep the retry?", since: before } });
     const next = withEvents(row, said({ waitingClaims: [{ waiting: false }] }), READ_AT);
@@ -53,6 +62,8 @@ describe("what an instance's events say of its row", () => {
     expect(claimOf(next)).toBeNull();
     // With no claim row at all in the incarnation: the same (nobody ever asked).
     expect(withEvents(row, said(), READ_AT).waiting).toBeNull();
+    // An answer that does not know its incarnation (the home's instance.json could not be read) admits no claim at all: that is "unknown", and the row's claim stays.
+    expect(withEvents(row, said({ incarnation: null }), READ_AT)).toBe(row);
   });
 
   it("two producers: one cleared and one live is a claim still; null beside a live claim is unknown, and the row's claim stays", () => {
@@ -103,6 +114,11 @@ describe("what an instance's events say of its row", () => {
     expect(withEvents(row, said({ events: [event("stopped", READ_AT)] }), READ_AT)).toBe(row); // at that moment: the read has it or the next has
     expect(withEvents(row, said({ events: [event("stopped", after, "2026-11-01T00:00:00.000Z")] }), READ_AT)).toBe(row); // a home of this name before this one
     expect(withEvents(row, said({ events: [event("stop-refused", after), event("worktree-added", after), event("some-kind-of-2027", later)] }), READ_AT)).toBe(row);
+    // A row that is not the kernel's says nothing of the session (a home's log is the agent's to write too); one that names no producer is the kernel's.
+    expect(withEvents(row, said({ events: [event("stopped", after, INCARNATION, "agent")] }), READ_AT)).toBe(row);
+    expect(withEvents(row, said({ events: [event("stopped", after, INCARNATION, null)] }), READ_AT).running).toBe(false);
+    // ... and a start written by another producer does not keep the kernel's stop from being applied.
+    expect(withEvents(row, said({ events: [event("stopped", after), event("launched", later, INCARNATION, "agent")] }), READ_AT).running).toBe(false);
     expect(withEvents(row, said({ events: [event("stopped", "not a time")] }), READ_AT)).toBe(row);
     expect(withEvents(row, said({ events: [event("stopped", after)] }), "not a time")).toBe(row);
   });

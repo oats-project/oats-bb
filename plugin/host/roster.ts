@@ -20,9 +20,9 @@ const EVENTS = [".agents", "events"] as const;
 /**
  * The watch's wait before it delivers a batch: bb's own defaults (75 ms of quiet, 500 ms at most).
  * The event path reads one instance's events on the signal, so the wait is part of how soon a
- * claim or a stop is on the screen; a longer one (it was 250 ms and 2 s) bought fewer signals in a
- * burst, which the server's own rules now bound (one events read per instance at a time, one
- * `oats status` at a time with its pause).
+ * claim or a stop is on the screen; a longer one would only buy fewer signals in a burst, which
+ * the server's own rules bound (one events read per instance at a time, one `oats status` at a
+ * time with its pause).
  */
 const WATCH = { debounceMs: 75, maxWaitMs: 500 } as const;
 

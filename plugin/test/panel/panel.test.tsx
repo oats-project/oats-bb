@@ -970,6 +970,26 @@ test("events read before the session's start hold no time for this stop: the Ses
   expect(stoppedFact(slot)).toBeNull();
 });
 
+// A session OATS LOST: nobody stopped it, and the kernel records no time of a loss. The last
+// "stopped" its events hold is an EARLIER stop's (here the recorded one, of 21 Nov 18:23; the
+// roster names no start for the row, so nothing tells the card that it is older): no date stands
+// beside "Stopped" for it (the specialist's ruling of 24 Nov 2026 on the lost tmux agent's page).
+test("a session OATS lost has no Stopped row: an earlier stop's time is never put beside it, and its events are not read for one", async () => {
+  const row = (sessionEnd: "lost" | "stopped") => (agent: Agent): Agent => ({ ...agent, waiting: null, running: false, runtimeState: null, sessionEnd, startedAt: null });
+  const lost = panel({ threadId: CHILD_THREAD }, { agent: row("lost") });
+  await lost.findByTestId("oats-panel-session");
+  await act(async () => {});
+  await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a read to be asked, if one were)
+  expect(within(lost.getByTestId("oats-panel-state")).getByTestId("oats-state").textContent).toBe("Stopped");
+  expect([stoppedFact(lost), eventReads(lost)]).toEqual([null, 0]);
+  expect(lost.getByTestId("oats-panel-session").textContent).not.toMatch(/Stopped|18:23/);
+  resetApp();
+  // The same row as an operator's stop: the card says when (the read and the row are there for a stop).
+  const stopped = panel({ threadId: CHILD_THREAD }, { agent: row("stopped") });
+  await waitFor(() => expect(stoppedFact(stopped)).toBe(`Stopped${waitingClock("2026-11-21T18:23:24.196Z", NOW)}`));
+  expect(eventReads(stopped)).toBe(1);
+});
+
 // The time of a stop is an extra: when the read of the events fails, the Session says none, and
 // nothing of the failure is drawn on the card or in the header (the Activity, read on a press, has its own notice).
 test("a stopped agent whose events cannot be read has no Stopped row, and no error in its header or its Session", async () => {

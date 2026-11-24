@@ -198,11 +198,25 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
 }
 
 /**
+ * What the status line of the place that shows ONE agent and is not its thread (the instance
+ * panel's header) says after the state's word, for an agent the roster draws on no thread (on
+ * tmux, or its thread archived or deleted in bb): the reason, ON the state's line, as the thread's
+ * line and the sidebar's row say it ("Stopped · session lost"); never a line of its own further
+ * down the page. An agent on its thread, and one the kernel reports (its notice says it), keep the
+ * roster's own words. `kind`: which case this feature read, for the place's `data-outside` (null: none).
+ */
+export function pageParts(agent: Agent, roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere }, status: { state: AgentState; since: string | null; detail: string | null }): { since: string | null; detail: string | null; tone: "warning" | undefined; kind: Said["kind"] | null } {
+  const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
+  const said = attached ? null : sayOf(agent, roster.whereOf(agent), attached);
+  return { ...lineParts(said !== null && said.warning === null ? said : null, status), kind: said === null ? null : said.kind };
+}
+
+/**
  * For the place that shows ONE agent and is not its thread (the instance panel: first on its
  * Instance tab's page, under the header that says its state):
- * - of an agent the roster draws on no thread (its thread archived or deleted in bb): what
- *   happened in one sentence (its acts are the header's, the lifecycle's own; Stop for a session
- *   OATS lost is here, since the header offers none for an agent that reads stopped);
+ * - of an agent the roster draws on no thread whose session OATS lost with its thread archived:
+ *   Stop, since the header offers none for an agent that reads stopped (what happened is said on
+ *   the header's status line: `pageParts`);
  * - of any agent: the kernel's report. The acts it names are the header's, act by act: one the
  *   header has, the notice says what it does; one the header lacks (no roster is read just now,
  *   so the lifecycle offers nothing), the notice keeps its own button for: a person never reads
@@ -217,19 +231,14 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
   const said = sayOf(agent, where, attached);
   // The header's own acts for this agent now (`AgentActs` draws exactly these).
   const headed = actsFor(useOats(), agent.instance).map((act) => act.verb);
-  // Nothing to draw: an agent on its thread with no report; and one with no sentence and no report
-  // (a row that says only where its thread is: that is the sidebar's, and the acts are the header's).
-  if (said === null || (attached && said.warning === null) || (said.sentence === null && said.warning === null)) return null;
+  // Nothing to draw: an agent with no report, but for the one act the header lacks (what happened
+  // to it is on the header's status line, and the other acts are the header's).
+  if (said === null || (said.warning === null && (attached || said.kind !== "lost-archived"))) return null;
   return (
     <div data-testid="oats-outside-agent-block" data-outside={said.kind} className="flex min-w-0 flex-col gap-2 text-sm text-foreground">
       {/* (The kernel's report says what happened in its notice; its fact "recorded stopped" is the thread's line's.) */}
-      {attached || said.sentence === null || said.warning !== null ? null : (
-        <p data-testid="oats-outside-reason" data-tone={said.tone === "warning" ? "warning" : undefined} className={`m-0 min-w-0 break-words ${said.tone === "warning" ? "text-warning-text" : "text-muted-foreground"}`}>
-          {said.sentence}
-        </p>
-      )}
       {/* The panel's header has the lifecycle's acts for the agent's state (`AgentActs`). One act is not among
-          them: Stop for a session OATS lost (it reads stopped, and its process may run): it is here, under its sentence. */}
+          them: Stop for a session OATS lost (it reads stopped, and its process may run): it is here. */}
       {attached || said.kind !== "lost-archived" ? null : (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <OutsideActs instance={agent.instance} acts={["stop"]} held={held} />

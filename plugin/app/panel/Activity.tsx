@@ -117,7 +117,9 @@ export function Activity({ instance, claimSince, onNewerClaim, now }: { instance
   };
   return (
     <Section title={ACTIVITY} testId="oats-panel-activity">
-      {/* Nothing is read until a person asks: the kernel reads two logs for it. */}
+      {/* Nothing is read until a person asks (the kernel reads two logs for it), but for an agent OATS stopped, whose
+          stop's time the Session reads from the same events: what that read brought is drawn here with no press.
+          (A session OATS lost has no such time, and no such read.) */}
       {asked ? <CommandState read={read} of="activity" reading={READING} failed="The recorded activity could not be read" now={now} /> : null}
       {read.data === undefined ? null : <Events events={read.data} now={now} />}
       {/* OATS keeps no activity for this kind of agent: the press is answered with what is so, and nothing is left to press. */}

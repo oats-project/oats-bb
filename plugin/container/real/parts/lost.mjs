@@ -52,8 +52,8 @@ const EXPECTED = {
   stopped: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · tmux` },
   lost: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: "Stopped · session lost · tmux" },
 };
-/** The lost tmux agent's page, under its state (app/outside/words.ts LOST_TMUX). */
-const LOST_SAYS = "Its session ended without OATS stopping it. Nobody stopped it.";
+/** The lost tmux agent's page, under its state (app/outside/words.ts LOST_TMUX, and LOST_TMUX_START where Start is offered): the whole of it. */
+const LOST_SAYS = "Its session ended without OATS stopping it. Nobody stopped it. Start tries to continue its last conversation.";
 const SAYS = {
   start: "This starts a new conversation using the saved briefing and state.",
   restart: "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.",
@@ -100,7 +100,9 @@ export default async (run) => {
       const started = sh("tmux", ["-L", "oats", "new-session", "-d", "-s", session, "-n", "hq", "-x", "160", "-y", "50"], { env: { ...process.env, ANTHROPIC_API_KEY: KEY, DISABLE_AUTOUPDATER: "1" } });
       check(started.exit === 0, `the OATS tmux server is started by hand, as the kernel's docs say (tmux -L oats new-session -d -s ${session} -n hq), with this run's PATH and the placeholder key`, started.stderr);
     }
-    return there();
+    const up = there();
+    check(up, `the OATS tmux server holds the session ${session}`, sh("tmux", ["-L", "oats", "list-sessions"]).stderr);
+    return up;
   };
 
   // ---- the kernel's row, and the pane
@@ -194,7 +196,7 @@ export default async (run) => {
     const read = said ? JSON.parse(said) : null;
     check(read !== null && read.name === CALLED, `${at} the agent's own page opens for it and says its state`, said ?? (await page.evaluate(pageNow)));
     check(JSON.stringify(read?.acts) === JSON.stringify(acts), `${at} the page offers ${acts.join(" and ")}`, JSON.stringify(read?.acts));
-    if (state === "lost") check(read?.block === "lost-tmux" && read.reason.startsWith(LOST_SAYS) && /^Last started /.test(read.lastStarted), `${at} the lost agent's page says what happened under its state: "${LOST_SAYS}", and when it was last started`, JSON.stringify(read));
+    if (state === "lost") check(read?.block === "lost-tmux" && read.reason === LOST_SAYS && /^Last started /.test(read.lastStarted), `${at} the lost agent's page says what happened under its state: "${LOST_SAYS}", and when it was last started`, JSON.stringify(read));
     if (state === "stopped") check(read?.block === null, `${at} the page of an agent stopped with OATS says nothing more than "Stopped": no block of what happened outside OATS`, JSON.stringify(read));
     await shot(`${state}-page`);
     return { at, row: inRow ?? null, ...read };
@@ -224,7 +226,7 @@ export default async (run) => {
   step(`C lost, the end: ${NAME} is retired`);
   const gone = oats("retire", NAME, "--json");
   check(gone.exit === 0, `oats retire ${NAME}`, gone.stdout.slice(0, 400) || gone.stderr.slice(0, 400));
-  await until(`${NAME} to be gone from oats status`, () => (row() === undefined ? true : undefined));
+  check((await until(`${NAME} to be gone from oats status`, () => (row() === undefined ? true : undefined))) === true, `oats status has no ${NAME} any more`, brief(row()));
 
   // =============================================================================================
   // In each view (bb's light and dark themes, at each width) the agent goes round once:

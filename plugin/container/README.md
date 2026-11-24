@@ -153,13 +153,13 @@ open, a confirmation before its act, in progress, done, refused and with another
   ended", and what brings it back, Restart); and the agent whose bb thread is gone, which stays in the
   roster and says that its conversation was deleted in bb.
   With A13's rows, all six states are drawn, each with its word.
-- **OUT**, **OUTH**, **OUTA**, **OUTQ** (`scenes/outside.mjs`, stages of its own) every row of the table of
+- **OUTA**, **OUT**, **OUTH**, **OUTQ** (`scenes/outside.mjs`, in the order they run; stages of its own) every row of the table of
   "Outside OATS" (`../README.md`) on the sidebar's rows, on each thread's line and on the agent's
   own page. OUT, one roster: stopped with its thread archived, stopped on an open thread, the
   kernel's `outsideOats`, a session lost with its thread archived and with its thread deleted,
   failed, unreachable; and the home's card of the agent that runs outside OATS, counted as the
   roster's foot counts it. OUTH: the three rows that read "not running" side by side (an operator's
-  stop, stopped with the machine, idle with no harness loaded), asserting the state word and the
+  stop, a session lost, idle with no harness loaded), asserting the state word and the
   tone of each, and that Start on the line of the one that is not loaded opens the lifecycle's
   Start dialog, which says first that a message in the thread carries the conversation on. OUTA:
   the three agents whose thread bb has archived, side by side (an operator's stop: plain, with its

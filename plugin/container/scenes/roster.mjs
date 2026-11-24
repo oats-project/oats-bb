@@ -97,7 +97,7 @@ export default [
       const whole = await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-identity-row"))})?.innerText ?? "").replace(/\\s+/g, "")`);
       const facts = await page.evaluate(`document.querySelectorAll(${JSON.stringify(`${testId("oats-identity-facts")}, ${testId("oats-identity-row")} [data-testid^="oats-fact-"], ${testId("oats-identity-row")} a`)}).length`);
       check(
-        line !== null && line.line === "Working" && line.act === "Stop" && line.panel === "Instance panel" && whole === "WorkingStopInstancepanel" && facts === 0,
+        line !== null && line.line === "Working" && line.act === "Stop…" && line.panel === "Instance panel" && whole === "WorkingStop…Instancepanel" && facts === 0,
         `${at} the row: the state in a word, the act that applies (Stop) and the way to the instance panel, and no fact and no link under it`,
         JSON.stringify({ line, whole, facts }),
       );
@@ -117,7 +117,7 @@ export default [
       const lead = threads.get("thr_redesign");
       await page.goto(`/projects/${lead.projectId}/threads/${lead.id}`);
       const leadLine = await statusOf(page, "working");
-      check(leadLine !== null && leadLine.act === "Stop", `${at} a working agent's line offers Stop`, JSON.stringify(leadLine));
+      check(leadLine !== null && leadLine.act === "Stop…", `${at} a working agent's line offers Stop…`, JSON.stringify(leadLine));
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-status-act")}`)}).click()`);
       // The dialog is titled with the agent the kernel's plan names, once the plan is read ("Stop an agent" until then).
       const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return /^Stop .+\\?$/.test(t) ? t : ""; })()`, 20);
@@ -278,7 +278,7 @@ export default [
       );
       // Holding is SHOWN: the act that applies to this agent (Stop: it works) stays on its line, off; the notice under it says why.
       const heldAct = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}`)}); return b ? JSON.stringify({ text: b.innerText.trim(), off: b.disabled, why: b.title }) : "none"; })()`);
-      check(heldAct === JSON.stringify({ text: "Stop", off: true, why: "" }), `${at} the act on the thread's line (Stop) is held: in its place, off, over the one-line notice that says why`, heldAct);
+      check(heldAct === JSON.stringify({ text: "Stop…", off: true, why: "" }), `${at} the act on the thread's line (Stop…) is held: in its place, off, over the one-line notice that says why`, heldAct);
       await page.shot(`a14-${viewport.name}-thread`, { targets: true });
 
       // The home keeps what it showed, under the same notice.
@@ -303,18 +303,18 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default: only the home is a page; no link, no mark, no route and no dangling link to another",
+    name: "the release's default, with the setting left as installed (unset): only the home is a page; no link, no mark, no route and no dangling link to another",
     run: async ({ page, at, viewport, threads, check }) => {
       const mockups = threads.get("thr_mockups");
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       // The sidebar: the roster; no line that counts who waits, no list of pages, no link to one, no mark of one.
       const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(testId("oats-tree"))})) return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: [...s.querySelectorAll('[data-testid^="oats-page-link-"]')].map((e) => e.getAttribute("data-testid")), needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))})?.tagName ?? "" }); })()`, 30);
-      check(side === JSON.stringify({ pages: false, links: [], needs: "" }), `${at} the sidebar has the roster, and no page link and no line that counts who waits`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(side === JSON.stringify({ pages: false, links: [], needs: "" }), `${at} with the setting left as installed the sidebar has the roster, and no page link and no line that counts who waits`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // The thread's own row: no soul on it and no link at all (who the agent is is the instance panel's): nothing leads to a page that is not shown.
       // Read AFTER the sidebar: bb gives the settings a moment after the roster.
       const soul = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); return e && e.querySelector(${JSON.stringify(testId("oats-status-line"))}) ? JSON.stringify({ text: e.innerText.replace(/\\s+/g, ""), links: e.querySelectorAll("a").length }) : ""; })()`, 30);
-      check(soul === JSON.stringify({ text: "WorkingStopInstancepanel", links: 0 }), `${at} the thread's row is its line alone: no soul and no link to a page that is not shown`, soul ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
+      check(soul === JSON.stringify({ text: "WorkingStop…Instancepanel", links: 0 }), `${at} the thread's row is its line alone: no soul and no link to a page that is not shown`, soul ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
       await page.shot(`pages-default-${viewport.name}-sidebar`, { targets: true });
       // A page that is not shown has no route: its path answers one line and the way back.
       for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) {
@@ -381,7 +381,7 @@ export default [
     // By hand only (LIVE_UI_STATUS_FILE): a real deployment's roster, for a look at it. Nothing of it
     // is printed but counts; its images stay with whoever ran it.
     stage: "local-roster",
-    name: "a real deployment's roster, drawn from its own oats status, with the release's default pages",
+    name: "a real deployment's roster, drawn from its own oats status, with the release's default pages (the setting left as installed)",
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);

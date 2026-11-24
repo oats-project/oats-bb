@@ -18,7 +18,8 @@ import type {
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
 import type { Agent, Node } from "../../model/types";
-import { flatten } from "../../model/view";
+import { flatten, isListed } from "../../model/view";
+import { count } from "../format";
 import { useOats } from "../oats";
 import { outsideOf, rowParts } from "../outside";
 import type { Said } from "../outside";
@@ -252,7 +253,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     // No roster to draw (none was ever read, or the first read is in flight): bb stays fully
     // usable. What is missing is said in a person's words, and bb's threads are listed as bb has them.
     const listed = oats.threads
-      .filter((thread) => !thread.isArchived && !thread.isHidden)
+      .filter(isListed)
       .sort((a, b) => b.updatedAt - a.updatedAt);
     return (
       <div data-testid="oats-sidebar" className="flex flex-col gap-1 p-1">

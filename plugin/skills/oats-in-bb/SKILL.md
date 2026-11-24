@@ -11,7 +11,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
 
 ## Rules
 
-- **Stop an OATS agent with "Stop (OATS)"** in the thread's menu, or with **Stop** on the
+- **Stop an OATS agent with "Stop (OATS)"** in the thread's menu, or with **Stop…** on the
   OATS status line under the thread's header (both open the same dialog), never with bb's own Stop
   (the composer's, which ends a turn), Archive or Delete. Only the OATS stop records the agent as stopped, so it stays stopped; bb's own
   buttons leave OATS thinking the agent should run.

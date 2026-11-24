@@ -76,7 +76,7 @@ const fake = (verbs = {}) =>
 
 /**
  * By hand only, never in CI: LIVE_PILOT_IMAGES=1 takes the image set of the pilot's six screens as
- * a fresh install shows them: the plugin's `pages` stays at its DEFAULT (the home alone) through
+ * a fresh install shows them: the plugin's `pages` stays UNSET, its default (the home alone), through
  * every stage, so no image holds the "Workspace" block of the five other pages, and only the
  * scenes of the six screens' features run (`PILOT_FEATURES`). A scene is told (`pilot: true`) and
  * reaches its screen as a person does then (an agent with no bb thread from its row in the
@@ -88,7 +88,14 @@ const PILOT = process.env.LIVE_PILOT_IMAGES === "1";
 const PILOT_FEATURES = ["roster", "outside", "panel", "home", "lifecycle", "spawn"];
 /** Every page's id, as live.sh sets them for the checks (the default alone in the pilot's image pass); and how a stage or a scene sets the plugin's `pages`. */
 const ALL_PAGES = PILOT ? "home" : "home, automations, souls, capabilities, teams, machines";
-const pages = (value) => void bb("plugin", "config", "oats", "set", "pages", value);
+// (In the pilot's image pass "every page" is the setting as a fresh install has it: UNSET, by bb's own unset, never set to "home".)
+const pages = (value) => void (PILOT && value === ALL_PAGES ? bb("plugin", "config", "oats", "unset", "pages") : bb("plugin", "config", "oats", "set", "pages", value));
+/**
+ * The setting `pages` as a fresh install has it: UNSET (bb's own `plugin config <id> unset <key>`),
+ * not set to its default's value. A stage that shows the release's default leaves it so, and so
+ * proves that an unset setting hides the five other pages, not only that "home" does.
+ */
+const pagesAsInstalled = () => void bb("plugin", "config", "oats", "unset", "pages");
 
 const fixtureStatus = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/status.json"), "utf8"));
 /**
@@ -407,8 +414,9 @@ const BUILT_IN = {
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.threadId === "thr_digest"));
     },
   },
-  // The release's default: only the home is a page that is shown. Every other stage runs with all
-  // pages shown (live.sh); the scenes of this one assert what is absent. `pages(value)` is for a
+  // The release's default: only the home is a page that is shown, with the setting left as
+  // installed (unset: `pagesAsInstalled`). Every other stage runs with all pages shown (live.sh,
+  // which sets all six; this stage sets them again when it leaves); the scenes of this one assert what is absent. `pages(value)` is for a
   // scene that needs another set: it changes the setting; the scene then opens its page and waits on what it reads.
   // A deployment that is mostly tmux agents (tmuxRoster, above): what a person who ran OATS on tmux sees first.
   "tmux-roster": {
@@ -438,7 +446,7 @@ const BUILT_IN = {
         archivedForLocal.push(thread.id);
       }
       fake({ status: { stdout: status } });
-      pages("home");
+      pagesAsInstalled();
       const deadline = Date.now() + 60_000;
       let seen = "no answer";
       for (;;) {
@@ -464,7 +472,7 @@ const BUILT_IN = {
     label: "PG",
     enter: async ({ threads }) => {
       fake({ status: { stdout: statusWithRealIds(threads) } });
-      pages("home");
+      pagesAsInstalled(); // the setting left as installed: unset
       // The fixtures' roster is WAITED for: the stage before this one drew another (found by a run whose
       // image of this stage was the tmux roster's).
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper") && snapshot.agents.length === 8);

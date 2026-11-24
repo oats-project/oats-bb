@@ -58,7 +58,7 @@ The live checks of the backend:
 
 - **L1** the installed plugin reads the deployment through the host entry (`bb plugin rpc call oats snapshot`).
 - **L2** with the poll off (no RPC for 50 s), one line appended to `<deployment>/.agents/events/` makes the server run `oats status`: the host watch, the `changed` signal, the reread. The proof is the fake's call log.
-- **L3** an `oats status` slower than the kernel's 20 s limit is the typed `OATS_TIMEOUT` in the snapshot, about 20 s after the read starts (the check allows the pause between two reads, and one read of the poll, before it): bb's retry of a retryable host call does not cut it short. The check asserts the code and the time; a second `status` in the fake's log is the server's next reread, started after the first ended.
+- **L3** an `oats status` slower than the kernel's 20 s limit is the typed `OATS_TIMEOUT` in the snapshot, about 20 s after the read starts (counted from the start of the read that `refresh` answers, its `at`, so a read the server had in front of it is not in the time): bb's retry of a retryable host call does not cut it short. The check asserts the code and the time; a second `status` in the fake's log is the server's next reread, started after the first ended. Before it sets the slow `oats`, the check waits until no `oats` is alive: a read asked for during the read before it (the poll's tick) starts at once when that one ends, and would otherwise meet the slow `oats` first and put 20 s in front of the check's own read.
 - **A14** (the backend's part) with `oats` removed, the snapshot says what is missing and bb's own lists answer; with `oats` back, the snapshot is back.
 - **A15** `bb plugin reload oats` while a fake `oats` sleeps and holds a child of its own: neither process is left.
 - **G1** the README's install route: `bb plugin install git:<repository>@<ref> --subdirectory plugin`, from a local repository that holds this tree as `plugin/`. A git install gets the manifest's `dependencies` only, so this fails when something the build needs is left in `devDependencies`.
@@ -140,7 +140,10 @@ open, a confirmation before its act, in progress, done, refused and with another
   its agent's own page.
 - **LR**, by hand only, never in CI: `LOCAL_STATUS=<path> container/ci.sh live` draws ONE stage,
   `local-roster`, from an `oats status --json` answer of a real deployment, with the release's
-  default pages, and nothing else of the live run's scenes. The file is copied to the
+  default pages (the setting `pages` left as a fresh install has it, unset with bb's own `plugin
+  config oats unset pages`, as in the stage `pages-default` and the real run's default-pages
+  images: an unset setting is what is proven to hide the other pages, not the value "home"), and
+  nothing else of the live run's scenes. The file is copied to the
   container's `/tmp`, never into the tree; the stage archives the run's own bb threads first
   (and puts them back), so that what stands under the roster is what that deployment's bb would
   show; the log holds counts only, on every path (a file that is no JSON, a roster that does not

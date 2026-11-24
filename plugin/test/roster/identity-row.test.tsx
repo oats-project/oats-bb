@@ -69,9 +69,9 @@ test("the status line is the whole row and says where the agent is in words: a w
   const block = await slot.findByTestId("oats-identity-row");
   expect(block.firstElementChild).toBe(slot.getByTestId("oats-status-line"));
   expect(block.children).toHaveLength(1);
-  expect(block.textContent).toBe("WorkingStopInstance panel"); // the state, then the one row of buttons: the act that applies, and the panel
+  expect(block.textContent).toBe("WorkingStop…Instance panel"); // the state, then the one row of buttons: the act that applies, and the panel
   const stop = slot.getByTestId("oats-status-act") as HTMLButtonElement;
-  expect([stop.textContent, stop.disabled, stop.title]).toEqual(["Stop", false, "Stop this agent through OATS"]);
+  expect([stop.textContent, stop.disabled, stop.title]).toEqual(["Stop…", false, "Stop this agent through OATS"]);
   // Its soul, its parent and its messaging ID are not on the row, as words or as links: the
   // instance panel holds them, one press away.
   noFacts(slot);
@@ -208,11 +208,11 @@ test("the block wraps and nothing in it scrolls out of sight or is cut", async (
 test("on the last roster read, while OATS cannot be read: the line as last read, its act off, and under it the one drawing of why: the age, that the acts are off, Retry", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
-  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingStopInstance panel");
+  expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingStop…Instance panel");
   // SAFETY: the act that applies is held: in its place, off, and a press does nothing. No reason of its
   // own, in words or in a title: the one-line notice under it, in the same row, says why, with Retry.
   const held = slot.getByTestId("oats-status-act") as HTMLButtonElement;
-  expect([held.textContent, held.disabled, held.title]).toEqual(["Stop", true, ""]);
+  expect([held.textContent, held.disabled, held.title]).toEqual(["Stop…", true, ""]);
   fireEvent.click(held);
   expect(asked()).toBeNull();
   expect(slot.getByTestId("oats-identity-row").textContent).not.toContain("Comes back when OATS is read again");
@@ -338,7 +338,7 @@ test("Stop on an idle agent's line too: an agent at rest on its thread runs, and
   const slot = await withThread("thr_mockups", { status: "idle", queuedWork: "none", hasPendingInteraction: false });
   const line = await slot.findByTestId("oats-status-line");
   expect(line.getAttribute("data-state")).toBe("idle");
-  expect(line.textContent).toBe("IdleStopInstance panel");
+  expect(line.textContent).toBe("IdleStop…Instance panel");
   fireEvent.click(slot.getByTestId("oats-status-act"));
   expect(asked()).toEqual({ verb: "stop", instance: "desktop-mockups-developer" });
   expect(slot.inspection.rpcCalls.some((call) => call.method === "stopApply")).toBe(false);

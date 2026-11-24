@@ -187,6 +187,25 @@ const bbSays = (id, status = statusNow(id)) => `status ${status}; its log's end:
 // "local-roster" from that file; without it that stage is skipped. The file is never part of the
 // repository, and its scene prints counts only, never a name (container/README.md).
 const LOCAL_STATUS = process.env.LIVE_UI_STATUS_FILE ?? "";
+/**
+ * The run's own bb threads (the fixtures'), for a scene of the pilot's image pass that draws a
+ * roster with no agent on a bb thread: archived, nothing of the test container stands under that
+ * roster ("Other threads"), as on a deployment whose bb has no such threads; `back()` puts back
+ * exactly what `away()` archived. (By hand only, with LIVE_PILOT_IMAGES: an archived thread holds
+ * no turn, so the scenes after it in that pass may read another state of those agents.)
+ */
+const awayThreads = [];
+const ownThreads = {
+  away: (threads) => {
+    for (const thread of threads.values()) {
+      bb("thread", "archive", thread.id);
+      awayThreads.push(thread.id);
+    }
+  },
+  back: () => {
+    for (const id of awayThreads.splice(0)) bb("thread", "unarchive", id);
+  },
+};
 /** The bb threads the local stage archived for its image, to put back when it leaves. */
 const archivedForLocal = [];
 const START_SECONDS = Number(process.env.LIVE_UI_START_SECONDS) || 120; // unset, empty or no number: 120
@@ -593,7 +612,7 @@ try {
           const page = await themedPage(browser, viewport, theme, at);
           try {
             for (const scene of mine) {
-              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster) };
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads };
               if (!PILOT) await scene.run(given);
               else {
                 // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.

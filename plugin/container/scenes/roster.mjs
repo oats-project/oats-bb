@@ -658,7 +658,7 @@ export default [
     // child of another. Before the one tree every one of the eight was a flat root, and a fold had nothing to fold.
     stage: "tmux-roster",
     name: "the pilot's own roster shape: eight agents on tmux, one a child of another: seven rows as the page loads, its one parent closed; opened, the child under it; a child that waits marks its closed parent and carries it to the top",
-    run: async ({ page, at, viewport, check, fake, tmuxStatus }) => {
+    run: async ({ page, at, viewport, check, fake, tmuxStatus, pilot, threads, ownThreads }) => {
       const names = PILOT_ROSTER.tmux.map(([instance]) => instance);
       const [CHILD, , PARENT] = PILOT_ROSTER.tmux.find(([, , parent]) => parent !== null);
       const rowsOf = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})]`;
@@ -666,6 +666,9 @@ export default [
       const factsOf = (instance) => `(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${instance}"] ${testId("oats-row-facts")}`)})?.getAttribute("title") ?? "")`;
       try {
         fake({ status: { stdout: tmuxStatus({}, PILOT_ROSTER) } });
+        // In the pilot's image pass (by hand) the test container's own bb threads are archived for this scene: this roster
+        // has no agent on a thread, so they would all stand under it as "Other threads", which is nothing of the pilot's.
+        if (pilot) ownThreads.away(threads);
         await page.goto("/");
         check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
         // Waited for: the roster is the pilot's, and nobody else (the stage's own agents are gone from it). As the page
@@ -673,6 +676,7 @@ export default [
         const roots = names.filter((name) => name !== CHILD);
         const seven = await page.until(`(() => { const rows = ${rowsOf}; const who = rows.map((row) => row.getAttribute("data-instance")); return JSON.stringify([...who].sort()) === ${JSON.stringify(JSON.stringify([...roots].sort()))} ? JSON.stringify(who) : ""; })()`, 60);
         check(Boolean(seven), `${at} as the page loads the roster is seven rows: the pilot's eight agents less the child, whose parent is closed`, seven ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        if (pilot) check(Boolean(await page.until(`document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-other-row")}`)}).length === 0 ? "1" : ""`, 30)), `${at} (image pass) no thread of the test container's own stands under the roster`, await page.evaluate(textOf(testId("oats-sidebar"))));
         const closed = JSON.parse(await folds(page));
         check(JSON.stringify(closed) === JSON.stringify({ parents: 1, closed: 1, inside: [] }), `${at} ${PARENT} alone has a chevron, closed, and carries no mark of what it hides (its child does not wait)`, JSON.stringify(closed));
         await page.shot(`pilot-roster-${viewport.name}-closed`, { targets: true });
@@ -705,7 +709,8 @@ export default [
         check(waits === JSON.stringify([PARENT, CHILD]) && after.inside.length === 0, `${at} opened, ${CHILD} is the second row and says "Needs you"; its parent no longer carries its mark (the row itself is there)`, `${waits}; ${JSON.stringify(after)}`);
         await page.shot(`pilot-roster-${viewport.name}-child-waits-opened`, { targets: true });
       } finally {
-        // The stage's own roster again, for the next theme and width.
+        // The stage's own roster again, for the next theme and width (and, in the image pass, the threads it archived).
+        if (pilot) ownThreads.back();
         fake({ status: { stdout: tmuxStatus() } });
         await page.until(`${rowsOf}.some((row) => row.getAttribute("data-instance") === ${JSON.stringify(TMUX_ROSTER.tmux[0][0])}) ? "1" : ""`, 60);
       }

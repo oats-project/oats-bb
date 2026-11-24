@@ -208,8 +208,8 @@ export default [
         check(before.body.includes("Redesign ui lead has uncommitted work.") && !before.body.includes("in the middle of a task"), `${at} it says who has uncommitted work: the fact that is a reason not to confirm, set apart`, before.body);
         check(before.act === "Stop" && before.off === false && before.focus === "oats-confirm-cancel", `${at} the button is named for the act; the focus STARTS on Cancel`, JSON.stringify(before));
         await shot("before");
-        const order = await walk(page, 4);
-        check(same(order, ["oats-confirm-act", "oats-switch", "oats-plan-check", "oats-confirm-cancel"]), `${at} Tab walks Stop, the choice, Check again, Cancel and round again: the focus stays in the dialog`, JSON.stringify(order));
+        const order = await walk(page, 5);
+        check(order.length === 5 && order[0] === "oats-confirm-act" && order[1].endsWith("Details") && same(order.slice(2), ["oats-switch", "oats-plan-check", "oats-confirm-cancel"]), `${at} Tab walks Stop, Details, the choice, Check again, Cancel and round again: the focus stays in the dialog`, JSON.stringify(order));
 
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
@@ -408,8 +408,8 @@ export default [
         check(!before.body.includes("SIGTERM") && !before.body.includes("the ADE") && !before.body.includes("/abs/"), `${at} none of the kernel's own notes and no path is pasted into the plan`, before.body);
         check(before.act === "Retire" && before.off === false && before.focus === "oats-confirm-cancel", `${at} Retire is destructive: the focus starts on Cancel`, JSON.stringify(before));
         await shot("before");
-        const order = await walk(page, 4);
-        check(same(order, ["oats-confirm-act", "oats-switch", "oats-plan-check", "oats-confirm-cancel"]), `${at} Tab walks Retire, the choice, Check again, Cancel and round again`, JSON.stringify(order));
+        const order = await walk(page, 5);
+        check(order.length === 5 && order[0] === "oats-confirm-act" && order[1].endsWith("Details") && same(order.slice(2), ["oats-switch", "oats-plan-check", "oats-confirm-cancel"]), `${at} Tab walks Retire, Details, the choice, Check again, Cancel and round again`, JSON.stringify(order));
 
         // Also delete the worktree: what goes and what stays change, and what would be lost is said in words.
         await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-plan-choice")} [role="switch"]`)}).click()`);
@@ -496,7 +496,7 @@ export default [
         check(startFold !== null && startFold.open === false && startFold.text.includes("Runs in bb's full mode: no sandbox.") && startFold.text.includes("Machine") && startFold.text.includes("Home"), `${at} under Details, closed: that the agent runs in bb's full mode, with no sandbox, its machine and its home`, JSON.stringify(startFold));
         await shot("before");
         const order = await walk(page, 5);
-        check(same(order, ["oats-start-model", "oats-start-refresh", "oats-confirm-cancel", "oats-confirm-act", "oats-start-harness"]), `${at} Tab walks the model, Refresh status, Cancel, Start and round again`, JSON.stringify(order));
+        check(order.length === 5 && same(order.slice(0, 3), ["oats-start-model", "oats-confirm-cancel", "oats-confirm-act"]) && order[3].endsWith("Details") && order[4] === "oats-start-harness", `${at} Tab walks the model, Cancel, Start, Details and round again (no Refresh status: it is for a Start that is off)`, JSON.stringify(order));
 
         // From here the kernel answers a start as it does: its recorded answer, on a thread this run's bb has, and a roster in which the agent runs.
         changes = { "weekly-digest-helper": { running: true, runtimeState: "unknown", sessionEnd: null } };
@@ -595,7 +595,7 @@ export default [
         await page.until(`${phaseIs("done")} && document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)})?.getAttribute("data-tone") === "unknown"`, 30);
         const accepted = await dialog(page);
         check(
-          accepted.body.includes("Retirement accepted") && accepted.body.includes("Retirement was accepted and will finish in the background.") && accepted.body.includes("Its row in the sidebar shows the result.") && !accepted.body.includes("retired."),
+          accepted.body.includes("Retirement accepted") && !accepted.body.includes("will finish in the background") && accepted.body.includes("Its row in the sidebar shows the result.") && !accepted.body.includes("retired."),
           `${at} a retire the kernel accepted and finishes later is told as accepted, never as done`,
           JSON.stringify(accepted),
         );
@@ -744,7 +744,7 @@ export default [
         check(before.focus === "oats-start-harness", `${at} the focus STARTS on the form's first field`, before.focus);
         await shot("before");
         const order = await walk(page, 5);
-        check(same(order, ["oats-start-model", "oats-start-refresh", "oats-confirm-cancel", "oats-confirm-act", "oats-start-harness"]), `${at} Tab walks the model, Refresh status, Cancel, Restart and round again`, JSON.stringify(order));
+        check(order.length === 5 && same(order.slice(0, 3), ["oats-start-model", "oats-confirm-cancel", "oats-confirm-act"]) && order[3].endsWith("Details") && order[4] === "oats-start-harness", `${at} Tab walks the model, Cancel, Restart, Details and round again (no Refresh status: it is for a Restart that is off)`, JSON.stringify(order));
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         check((await dialog(page)).body.includes("Restarting…"), `${at} while it restarts the dialog says so`);

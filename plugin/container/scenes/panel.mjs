@@ -1053,8 +1053,8 @@ const more = [
         // Waited for: the notice of the read that was refused, once that read has ended (its act says Retry, not "Reading…").
         const stale = await noticeAtRest(page, "oats-panel-page-instance", { wants: ["OATS could not read this deployment", "Read "], seconds: 40 });
         check(
-          /^OATS could not read this deployment \| alert \| OATS could not read this deployment Read (less than a minute|\d+ (min|h|d)) ago\. ▸ ?Details Retry$/.test(stale ?? ""),
-          `${at} when OATS cannot be read again the panel says it as the sidebar does (the titled notice, the same title), how old what it shows is, Details and Retry`,
+          /^OATS could not read this deployment \| alert \| OATS could not read this deployment Read (less than a minute|\d+ (min|h|d)) ago\. Acts are off\. ▸ ?Details Retry$/.test(stale ?? ""),
+          `${at} when OATS cannot be read again the panel says it as the sidebar does (the titled notice, the same title), how old what it shows is, that the acts are off, Details and Retry`,
           stale,
         );
         {
@@ -1081,8 +1081,8 @@ const more = [
         const named = await page.evaluate(textOf(inPanel("oats-panel-name")));
         check(
           // The server answers the agent's facts from the last roster it read, so the settled notice says how old they are.
-          /^OATS could not read this deployment \| alert \| OATS could not read this deployment Read (less than a minute|\d+ (min|h|d)) ago\. ▸ ?Details Retry$/.test(opened ?? "") && named === "Panel worktree helper",
-          `${at} a page opened while OATS cannot be read: the agent as last read, how old that is and why, with Retry`,
+          /^OATS could not read this deployment \| alert \| OATS could not read this deployment Read (less than a minute|\d+ (min|h|d)) ago\. Acts are off\. ▸ ?Details Retry$/.test(opened ?? "") && named === "Panel worktree helper",
+          `${at} a page opened while OATS cannot be read: the agent as last read, how old that is, that the acts are off, and why, with Retry`,
           `the notice: ${JSON.stringify(opened)}; the name: ${JSON.stringify(named)}`,
         );
         // No image here: it is the picture `stale` is (the same page, the same notice). The page with no roster ever

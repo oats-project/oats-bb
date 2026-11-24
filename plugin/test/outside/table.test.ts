@@ -67,12 +67,13 @@ test("the table of every row, from the one function", () => {
     ["bb · the stale stop beside \"unknown\"", "stopped", "Stopped", "(the stop's warning)", "refuses (stopped)", "—"],
     ["bb · the word \"stopped\" beside \"lost\", and no word that it does not run", "stopped", "Stopped", "(the stop's warning)", "refuses (stopped)", "—"],
     ["bb · session lost", "lost", "Stopped", "session lost", "answers", "a message carries it on"],
-    ["bb · its harness ended by itself", "ended", "Failed", "failed-open", "answers", "a message carries it on"],
-    ["bb · ended in a shell", "ended", "Failed", "failed-open", "answers", "a message carries it on"],
+    // A harness that ended by itself: no provider prints it on a bb thread, and no fact shows a message carrying it on: no place invites one (the lead's condition of 24 Nov 2026).
+    ["bb · its harness ended by itself", "ended", "Failed", "failed-open", "refuses (stopped)", "—"],
+    ["bb · ended in a shell", "ended", "Failed", "failed-open", "refuses (stopped)", "—"],
     ["bb · no harness loaded", "unloaded", "Idle", "not loaded", "answers", "a message carries it on"],
     // A thread bb lists whose last turn failed takes a message as any other: the three places still say one thing.
     ["bb · session lost, on a thread whose last turn failed", "lost", "Stopped", "session lost", "answers", "a message carries it on"],
-    ["bb · ended in a shell, on a thread whose last turn failed", "ended", "Failed", "failed-open", "answers", "a message carries it on"],
+    ["bb · ended in a shell, on a thread whose last turn failed", "ended", "Failed", "failed-open", "refuses (stopped)", "—"],
     ["bb · an operator's stop, on a thread whose last turn failed", "stopped", "Stopped", "(the stop's warning)", "refuses (stopped)", "—"],
     // bb has not answered for the thread's events: it may never have started, so no message is invited anywhere (fail closed).
     ["bb · session lost, on a thread in \"error\" bb has not answered for", "lost", "Stopped", "session lost", "refuses (stopped)", "—"],

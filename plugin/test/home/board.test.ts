@@ -102,16 +102,17 @@ describe("what the home may send to an agent's thread", () => {
     }
     // The kernel cannot reach its session (the row the kernel prints: `running: null` beside "unreachable"): refused, for another reason.
     for (const running of [null, false, true]) expect([refusal({ running, runtimeState: "unreachable", backend: "bb" }, listed), mayAnswer({ running, runtimeState: "unreachable", backend: "bb" }, listed, false)], String(running)).toEqual(["unreachable", false]);
-    // Nobody stopped it: a message in its thread is how it comes back. Answered, on a thread bb lists, one whose last turn bb calls failed included.
+    // Nobody stopped it, and a fact shows that a message carries it on (its session lost; no harness loaded): answered, on a thread bb lists, one whose last turn bb calls failed included.
     for (const resumable of [
       { running: false as const, runtimeState: "stopped", sessionEnd: "lost", backend: "bb" },
       { running: false as const, runtimeState: "unknown", backend: "bb" },
-      { running: false as const, runtimeState: "shell", backend: "bb" },
     ]) {
       // (A thread in "error" takes an answer once bb has said that a turn started there, `startFailure: null`; before that it may be a thread that never started, and the card refuses.)
       expect([refusal(resumable, listed), refusal(resumable, { status: "error", startFailure: null }), refusal(resumable, { status: "error" }), mayAnswer(resumable, listed, false), mayAnswer(resumable, listed, true)], JSON.stringify(resumable)).toEqual([null, null, "stopped", true, false]);
       expect(refusal(resumable, null), JSON.stringify(resumable)).toBe("stopped"); // bb lists no thread of it: nothing to write in
     }
+    // A harness that ended by itself (a shell, "exited"): no fact shows a message carrying it on, so the card does not answer into its thread (the one rule, model/rest.ts).
+    for (const ended of [{ running: false as const, runtimeState: "shell", backend: "bb" }, { running: false as const, runtimeState: "stopped", sessionEnd: "exited", backend: "bb" }]) expect([refusal(ended, listed), mayAnswer(ended, listed, false)], JSON.stringify(ended)).toEqual(["stopped", false]);
     // An agent on tmux is never written to from bb.
     expect(refusal({ running: false, runtimeState: null, sessionEnd: "lost", backend: "tmux" }, listed)).toBe("stopped");
   });

@@ -1436,13 +1436,25 @@ test("an agent whose bb thread was deleted that needs the person: the reason and
   expect(within(card).getByTestId("oats-needs-open").getAttribute("aria-label")).toBe("Open its page: Release 070 maintainer");
 });
 
-test("an agent nobody stopped (its session ended in a shell, was lost, or no harness is loaded) is answered from its card, on a thread bb lists: a message there is how it comes back", async () => {
-  // The one reading of "a message carries it on" (model/rest.ts), which the Start dialog's first line reads too. It
-  // narrows what the card refused before (every agent the kernel says does not run): only a STOP is refused, and an
-  // agent the kernel cannot reach.
+test("an agent nobody stopped whose way on is a message (no harness is loaded) is answered from its card, on a thread bb lists; one whose harness ended by itself is not", async () => {
+  // The one reading of "a message carries it on" (model/rest.ts), which the Start dialog's first line and the thread's
+  // line read too: said only where a fact shows it. A harness that ended by itself (a shell, "exited") has none: its
+  // card does not answer into the thread, and offers Start.
   for (const [what, change] of [
     ["its session ended in a shell", { running: false as const, runtimeState: "shell" }],
     ["its harness ended by itself", { running: false as const, runtimeState: "stopped", sessionEnd: "exited" }],
+  ] as const) {
+    const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change, waiting: { reason: "attention", message: "Which branch do I use?", since: "2026-11-19T12:00:00.000Z" } } : agent));
+    const slot = await homePage({ rpc: handlers({}, agents), sidebarThreads: calm() });
+    const card = await cardOf(slot, "flaky-ci-developer");
+    expect(card.dataset.offer, what).toBe("stopped");
+    expect(within(card).queryByTestId("oats-reply-send"), what).toBeNull();
+    expect(within(card).getByTestId("oats-needs-stopped"), what).toBeTruthy();
+    slot.unmount();
+    resetApp();
+  }
+  for (const [what, change] of [
+    // (A lost session's claim is not shown, the claim's gate: its card is the one of bb's own question, above.)
     ["no harness is loaded", { running: false as const, runtimeState: "unknown" }],
   ] as const) {
     const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change, waiting: { reason: "attention", message: "Which branch do I use?", since: "2026-11-19T12:00:00.000Z" } } : agent));

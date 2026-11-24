@@ -59,8 +59,9 @@ describe("rest(): how an agent that does not run is at rest", () => {
 });
 
 describe("messageResumes(): a message in the thread is the designed way to carry the agent on", () => {
-  test("yes for a session that was lost, one that ended by itself, and one with no harness loaded, on a thread bb lists", () => {
-    for (const agent of [row(false, "stopped", "lost"), row(false, "unknown"), row(false, "shell"), row(false, "stopped", "exited")]) expect(messageResumes(agent, listed), JSON.stringify(agent)).toBe(true);
+  test("yes for a session that was lost and for one with no harness loaded, on a thread bb lists; NOT for a harness that ended by itself (no fact shows a message carrying it on)", () => {
+    for (const agent of [row(false, "stopped", "lost"), row(false, "unknown")]) expect(messageResumes(agent, listed), JSON.stringify(agent)).toBe(true);
+    for (const agent of [row(false, "shell"), row(false, "stopped", "exited")]) expect([rest(agent), messageResumes(agent, listed)], JSON.stringify(agent)).toEqual(["ended", false]);
   });
   test("never for a stop: an operator's (beside any word), one that does not say how it ended, a row with no word", () => {
     for (const agent of [row(false, "stopped", "stopped"), row(false, "shell", "stopped"), row(false, "unknown", "stopped"), row(false, "stopped"), row(false, null)]) expect(messageResumes(agent, listed), JSON.stringify(agent)).toBe(false);
@@ -71,7 +72,7 @@ describe("messageResumes(): a message in the thread is the designed way to carry
   });
   test("a listed thread whose LATER turn bb calls failed takes a message as any other, once bb has said that a turn started there; before its answer, none (it may never have started)", () => {
     const turnFailed = { status: "error", startFailure: null };
-    for (const agent of [row(false, "stopped", "lost"), row(false, "unknown"), row(false, "shell")]) {
+    for (const agent of [row(false, "stopped", "lost"), row(false, "unknown")]) {
       expect(messageResumes(agent, turnFailed), JSON.stringify(agent)).toBe(true);
       // FAIL CLOSED: no answer of bb's on the thread (no `startFailure` at all).
       expect(messageResumes(agent, { status: "error" }), JSON.stringify(agent)).toBe(false);

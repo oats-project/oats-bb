@@ -92,10 +92,15 @@ export function stopArchivesThread(providerVersion: string | null, from: string 
   return have[4] === undefined;
 }
 
-export const STOP_CHOICE = "Include child instances";
+/**
+ * The Stop dialog's one choice: its children, by name, ONCE: the choice itself says who else is
+ * stopped ("Also stop Desktop mockups developer, Harvest knowledge helper", On or Off), and no
+ * line beside it says them again. Agents, in the plugin's one word for them.
+ */
+export const stopChoice = (children: readonly string[]): string => `Also stop ${names(children)}`;
 export const RETIRE_CHOICE = "Also delete the worktree";
 /** The reason beside Retire when the tick is set for a tree that is not the agent's own (the Desktop's E_OPTION_UNAVAILABLE, naming the tick). */
-export const DISCARD_NOT_OWN = `Only an instance with its own worktree can delete it. Untick “${RETIRE_CHOICE}”.`;
+export const DISCARD_NOT_OWN = `Only an agent with its own worktree can delete it. Untick “${RETIRE_CHOICE}”.`;
 
 /**
  * The ONE fact that is a reason not to stop an agent, as a word after its name, one line per agent:
@@ -117,21 +122,23 @@ export const alsoStops = (instances: readonly string[]): string => `Also stops: 
 export const NOTHING_DELETED = "Nothing is deleted.";
 export function stopPlanView(plan: StopPlan, archives = false, working: ReadonlySet<string> = new Set()): PlanView {
   const targets = plan.targets;
-  // Who else it stops: the plan's sessions but the agent's own (the title names that one).
+  // Who else it stops: the plan's sessions but the agent's own (the title names that one); with the children left
+  // out, the ones the plan skipped: they are named ONCE, by the choice.
   const others = targets.filter((target) => target.instance !== plan.instance).map((target) => target.instance);
+  const children = others.length > 0 ? others : plan.skipped;
   // An agent on bb has a thread, and a stop does something to it; one with none (tmux) has no line: the title says what Stop does.
   const onBb = targets.some((target) => target.backend === "bb");
   // The tick is offered when the agent has children to include or to leave: a plan with neither has nothing to choose.
   const hasChildren = targets.length > 1 || plan.skipped.length > 0;
   return {
-    says: [...(onBb ? [stopThreadLine(archives)] : []), ...(plan.recursive && others.length > 0 ? [alsoStops(others)] : [])],
+    says: onBb ? [stopThreadLine(archives)] : [],
     warns: onBb && !archives,
     attention: targets.flatMap((target) => stopFacts(target.instance, { turn: working.has(target.instance) }) ?? []),
     details: [NOTHING_DELETED, ...plan.ambiguous.map(ambiguous)],
     // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
     // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.
     state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION_OF[target.session] })),
-    choice: hasChildren ? { label: STOP_CHOICE, checked: plan.recursive, deletes: null } : null,
+    choice: hasChildren ? { label: stopChoice(children), checked: plan.recursive, deletes: null } : null,
     blocked: null,
     confirm: "Stop",
   };
@@ -350,12 +357,18 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   const complete = receipt.removedDir && receipt.incomplete.length === 0;
   // The result's lines are the facts a person needs LATER (where the work that was kept is): a step that only says what was asked is not one.
   const lines: string[] = [];
-  if (receipt.children.length > 0) lines.push(`${plural(receipt.children.length, "child instance")} stopped and kept.`);
-  // A path stands on a line of its own, as the Desktop sets it apart: no full stop is glued to it, and it can be selected whole.
-  const at = (sentence: string, path: string | null) => (path ? [`${sentence}, at:`, path] : [`${sentence}.`]);
-  if (!receipt.removedDir) lines.push(...at("Home folder kept", receipt.retainedHome));
-  if (receipt.worktree === "retained") lines.push(...at("Worktree kept", receipt.movedTo));
-  if (receipt.recoveryPath !== null) lines.push("Recovery copy saved at:", receipt.recoveryPath);
+  if (receipt.children.length > 0) lines.push(`${plural(receipt.children.length, "child agent")} stopped and kept.`);
+  // In view: WHAT was kept, in a few words each. WHERE it is (a whole path) is under the result's Details: a path
+  // on the face is long, and breaks in the middle of a word at a phone's width; under Details it stands on a line
+  // of its own, with no full stop glued to it, and can be selected whole.
+  const where: string[] = [];
+  const kept = (what: string, path: string | null) => {
+    lines.push(`${what}.`);
+    if (path) where.push(`${what}, at:`, path);
+  };
+  if (!receipt.removedDir) kept("Home folder kept", receipt.retainedHome);
+  if (receipt.worktree === "retained") kept("Worktree kept", receipt.movedTo);
+  if (receipt.recoveryPath !== null) kept("Recovery copy saved", receipt.recoveryPath);
   // The home is gone: nothing can start the agent again, and its conversation is where it was, archived.
   if (receipt.removedDir && receipt.threadsArchived > 0) lines.push(RETIRE_ARCHIVED);
   // The home was kept (the kernel's answer says so: `removedDir` false): on bb its thread can be unarchived, and a message there starts it.
@@ -363,13 +376,13 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   const keptOnBb = !receipt.removedDir && plan.backend === "bb";
   // Under Details: a branch an interrupted spawn left, and what the kernel, or a capability's retire hook, warns of.
   const compensation = receipt.compensation === null ? null : receipt.compensation.deleted ? `Branch ${receipt.compensation.branch} deleted: an interrupted spawn left it, and it held no work.` : `Branch ${receipt.compensation.branch} kept: ${receipt.compensation.reason ?? "no reason given"}`;
-  if (complete) return { tone: "done", title: `${name} retired.`, lines, code: null, details: under(compensation, ...receipt.warnings, receipt.replayed && REPLAYED), offers: [] };
+  if (complete) return { tone: "done", title: `${name} retired.`, lines, code: null, details: under(...where, compensation, ...receipt.warnings, receipt.replayed && REPLAYED), offers: [] };
   return {
     tone: "failed",
     title: "Retirement didn't finish",
     lines: [...lines, "Check what was kept before trying again."],
     code: "RETIRE_INCOMPLETE",
-    details: under(compensation, ...receipt.incomplete, ...receipt.warnings, receipt.replayed && REPLAYED),
+    details: under(...where, compensation, ...receipt.incomplete, ...receipt.warnings, receipt.replayed && REPLAYED),
     offers: ["review"],
     ...(keptOnBb ? { warning: { title: HOME_KEPT, details: HOME_KEPT_DETAILS } } : {}),
   };
@@ -383,8 +396,8 @@ const LIFECYCLE: Readonly<Record<string, string>> = {
   // On an apply the code has two meanings (the kernel no longer has the name; a session's state cannot be established): the sentence claims neither.
   E_SESSION_UNKNOWN: "OATS no longer knows this agent, or cannot tell the state of its session. Review again to see which.",
   E_PLAN_STALE: PLAN_STALE,
-  E_INSTANCE_RETIRING: "An instance in this plan is already being retired.",
-  E_CHILDREN_RUNNING: "A child instance wouldn't stop, so nothing was retired. Other children may already have stopped.",
+  E_INSTANCE_RETIRING: "An agent in this plan is already being retired.",
+  E_CHILDREN_RUNNING: "A child agent wouldn't stop, so nothing was retired. Other children may already have stopped.",
   E_SESSION_STOP_FAILED: "The session didn't stop in time. Nothing was forced.",
   E_WORK_PRESERVATION_FAILED: "Its work couldn't be saved safely, so the home folder is kept. Earlier retirement steps may have run.",
   E_WORK_INSPECTION_FAILED: "Refused: OATS couldn't inspect its home. The home is kept; its session may have stopped.",
@@ -412,7 +425,7 @@ const sentenceOf = (code: string | null, table: Readonly<Record<string, string>>
 const unidentified = (verb: Verb) =>
   verb === "retire"
     ? "Nothing was removed: OATS can't run this home's cleanup. See Details."
-    : "OATS couldn't find or read what it needs in this instance's home folder, so nothing was done.";
+    : "OATS couldn't find or read what it needs in this agent's home folder, so nothing was done.";
 
 /** `unconfirmed`: the kernel's own marker that it could not confirm what its act left (`error.details.unconfirmed`). */
 export type Refusal = { code: string | null; message: string; unconfirmed?: boolean };
@@ -532,7 +545,7 @@ export const START = {
   refresh: "Refresh status",
   starting: "Starting…",
   restarting: "Restarting…",
-  alreadyRunning: "This instance is already running.",
+  alreadyRunning: "This agent is already running.",
   /**
    * A RESTART is held on a model the person changed unless bb's list for the harness serves it
    * exactly once (model/restart-model.ts: the kernel stops the running session before the provider
@@ -543,7 +556,7 @@ export const START = {
   required: "Required",
   /** Under the field's Details, only while it says "Not found": the way to a model bb does not list. */
   unlisted: "To use a model bb does not list: stop it, then start it with that model.",
-  unknownState: "Could not verify whether this instance is running. Refresh its status before starting.",
+  unknownState: "Could not verify whether this agent is running. Refresh its status before starting.",
 } as const;
 /**
  * Whether the Start and the Restart dialog say first that a message in the agent's thread carries its
@@ -633,7 +646,7 @@ const STARTED_NOTHING: Readonly<Record<string, string>> = {
   E_SESSION_START_BUSY: "OATS refused this start as busy. Nothing was started.",
   E_SESSION_START_LOCK_STUCK:
     "A start lock from an earlier OATS blocks this. Remove it (Details names it).",
-  E_SESSION_RUNNING: "This instance is already running. Nothing was started.",
+  E_SESSION_RUNNING: "This agent is already running. Nothing was started.",
 };
 
 /** A start or a restart that was refused, that stopped at a launch prompt, or whose answer was lost. */
@@ -661,7 +674,7 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal, 
   if (code === "E_LAUNCH_ENV_CHANGED") return of("failed", `${name} wasn't started`, [RESUME.envChanged]); // (OATS's own line is under Details)
   if (code !== null && LOST.has(code)) return of("unknown", "OATS didn't confirm the start", ["It may be running: check its row first."]);
   if (code !== null && STARTED_NOTHING[code] !== undefined) return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [STARTED_NOTHING[code]!]); // (what blocks is named by OATS's message, under Details)
-  if (code === "E_INSTANCE_RETIRING") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`This instance is being retired, or has cleanup to finish. ${nothing}`]);
+  if (code === "E_INSTANCE_RETIRING") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`This agent is being retired, or has cleanup to finish. ${nothing}`]);
   if (code === "E_LIFECYCLE_BUSY") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`OATS refused this ${act} as busy. ${nothing}`]);
   if (code === "E_UNIDENTIFIED_INSTANCE_HOME") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [unidentified(verb)]);
   if (code === "E_BACKEND_HARNESS" || code === "E_UNSUPPORTED_HARNESS") return of("failed", `OATS refused to ${act} ${name} on this harness`, ["Choose another under Harness, or keep the recorded one."]);

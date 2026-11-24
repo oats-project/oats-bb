@@ -66,7 +66,7 @@ export type ConfirmProps = {
      */
     | { kind: "done"; tone?: "done" | "unknown"; title: string; lines?: readonly string[]; /** the first line is a warning: drawn in the warning tone, as the dialog's one line is (`saysWarns`) */ warns?: boolean; code?: string | null; actions?: ReactNode }
     /** A refusal or a failure: a person's words (`title`, `refusal`), then the kernel's code (`code`, or leading `refusal`), and the next step. */
-    | { kind: "failed"; title: string; refusal: string; code?: string | null; actions?: ReactNode };
+    | { kind: "failed"; title: string; refusal: string; /** the first line of `refusal` is a warning: drawn in the warning tone, under the headline (as a done result's `warns`) */ warns?: boolean; code?: string | null; actions?: ReactNode };
   onConfirm: () => void;
   /** Cancel before the act, Close after it. Not called while the act runs, unless the running phase has `leave`. */
   onClose: () => void;
@@ -192,8 +192,14 @@ export function Confirm({ title, about, shownFor, says = [], saysWarns = false, 
         ) : null}
         {phase.kind === "failed" ? (
           <Result title={phase.title} tone="failed" code={phase.code} actions={phase.actions}>
+            {phase.warns === true ? (
+              // The headline, then what a person must read first, in the warning tone; then the rest.
+              <p data-testid="oats-result-warning" data-tone="warning" className="font-semibold text-warning-text">
+                {shown(phase.refusal.split("\n")[0] ?? "")}
+              </p>
+            ) : null}
             <p className="text-muted-foreground">
-              <Lines text={phase.refusal} />
+              <Lines text={phase.warns === true ? phase.refusal.split("\n").slice(1).join("\n") : phase.refusal} />
             </p>
           </Result>
         ) : null}

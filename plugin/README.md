@@ -161,8 +161,8 @@ while its Terminal tab has the focus.
   thread."; Retire "This cannot be undone."; Start "Starts a new conversation." (an agent on tmux
   whose session was lost: "Tries to continue its last conversation; else starts fresh."); Restart
   "Starts a new conversation." too (a restart never resumes, on bb or on tmux), and before it,
-  only where bb says the agent works on a turn now, "Stops what it is doing now.". Where others are stopped too, "Also stops: <names>." is the
-  second and last line.
+  only where bb says the agent works on a turn now, "Stops what it is doing now.". Where a Retire stops others too, "Also stops: <names>." is the
+  second and last line; a Stop names its children once, in its choice (below).
 - **Every dialog's title names the agent that was asked for**, in every state: while its plan is
   read, where it cannot be read, where the agent is gone, and over the result ("Stop Redesign ui
   lead?", a question until the dialog has settled). What the dialog SHOWS is the kernel's: a plan
@@ -180,8 +180,8 @@ while its Terminal tab has the focus.
   not said of a stop (nothing is deleted); a retire says it, at its tick.
   Under Details: what is kept and deleted ("Nothing is deleted."; "Deletes its home.", "Keeps its
   worktree, moved aside, on branch <b>."), who is left out, and the state of each session and of
-  its uncommitted work. Stop has the switch **Include child instances** (on: the kernel's default;
-  off reads the plan again for the agent alone). Retire has **Also delete the worktree** for an
+  its uncommitted work. Stop has the switch **Also stop <names>**, which names the agent's children, once (on: the
+  kernel's default; off reads the plan again for the agent alone, and still names them). Retire has **Also delete the worktree** for an
   agent with a worktree of its own: while it is on, what would be lost is said at the tick, under its
   label ("Deletes 2 uncommitted changes too (a copy is saved)."), once; without it the worktree is
   kept, moved aside. Both dialogs open with the focus on Cancel. Stop's line is what the stop
@@ -199,8 +199,9 @@ while its Terminal tab has the focus.
   the dialog says why and offers its thread and **Refresh status**.
 - **While the act runs** the dialog says so in a word ("Stopping…"), with Close in Cancel's
   place. **Its result** is said in the same dialog: its title ("3 sessions stopped."), the facts a
-  person needs later ("Worktree kept, at:" and
-  the path on its own line); a start opens the agent's new thread behind it. When the dialog is
+  person needs later ("Worktree kept."; where it is, the path on a line of its own, is under the
+  result's Details, never on its face); a warning (a home that was kept) is the result's first
+  line, under its headline, in the warning tone; a start opens the agent's new thread behind it. When the dialog is
   gone by then (the person closed it, or opened another act's), the result reaches them through
   bb's toaster. A stop, a start or a restart that is done is told whole, with **Open <agent>**,
   and leaves by itself. Anything else (a refusal, a result that is not confirmed, a retire,

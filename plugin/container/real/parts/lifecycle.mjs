@@ -9,8 +9,8 @@
 //   Restart  from the thread's own menu: restarted on a new thread
 //   Retire   from the thread's own menu: the plan, confirmed; the kernel has no such agent after it
 // A state is the same in both themes, so that each is real in light and in dark: at 1280 the agent
-// has a child (its Stop plan is read with and without the children, the choice "Include child
-// instances", and the kernel's answer for the plan without them is kept as a fixture; its Retire
+// has a child (its Stop plan is read with and without the children, the choice "Also stop
+// <names>", and the kernel's answer for the plan without them is kept as a fixture; its Retire
 // stops the child first and keeps the worktree); at 390 it has none, and its Retire also deletes
 // the worktree ("Also delete the worktree").
 // After each act the kernel is asked what it holds (`oats status`), never the plugin.
@@ -133,12 +133,12 @@ export default async (run) => {
     check(said.title === `Stop ${called}?` && said.about === name && !/what will happen|what is kept|nothing is forced/i.test(said.body) && (await foldOf(page, "oats-plan-details")).includes("Nothing is deleted.") && said.focus === "oats-confirm-cancel", `${at} the Stop dialog is the kernel's plan for ${name}: no section heading, that nothing is deleted under Details, the focus on Cancel`, JSON.stringify(said));
     check((await saysOf(page))[0] === stopLine(saysArchives) && !said.body.includes(stopLine(!saysArchives)), `${at} before the stop its ONE consequence line says what a provider of this version does to the agent's thread: "${stopLine(saysArchives)}"`, said.body);
     if (child !== null) {
-      check(JSON.stringify(await saysOf(page)) === JSON.stringify([stopLine(saysArchives), `Also stops: ${words(child)}.`]) && said.body.includes("Include child instances On"), `${at} with a child, the second and last line says who else is stopped, and the choice is offered`, said.body);
+      check(JSON.stringify(await saysOf(page)) === JSON.stringify([stopLine(saysArchives)]) && said.body.includes(`Also stop ${words(child)} On`) && said.body.split(words(child)).length === 2, `${at} with a child, the choice names it, on, and nothing else in the dialog does: who else is stopped is said once`, said.body);
       // Without the children: the kernel is asked again, for the agent alone.
       await page.evaluate(`document.querySelector('[data-testid="oats-plan-choice"] [role="switch"]').click()`);
-      await page.until(`document.querySelector('[data-testid="oats-confirm"]')?.innerText.includes("Include child instances Off") && !document.querySelector('[data-testid="oats-confirm"]')?.innerText.includes("Also stops") && ${phaseIs("ready")} && !document.querySelector('[data-testid="oats-confirm-act"]').disabled`, 60);
+      await page.until(`document.querySelector('[data-testid="oats-confirm"]')?.innerText.includes(${JSON.stringify(`Also stop ${words(child)} Off`)}) && ${phaseIs("ready")} && !document.querySelector('[data-testid="oats-confirm-act"]').disabled`, 60);
       said = await dialog(page);
-      check(JSON.stringify(await saysOf(page)) === JSON.stringify([stopLine(saysArchives)]) && !said.body.includes(words(child)) && said.body.includes("Include child instances Off"), `${at} without "Include child instances" the kernel's plan is for ${name} alone: its one line, nobody else named, and the choice says Off`, said.body);
+      check(JSON.stringify(await saysOf(page)) === JSON.stringify([stopLine(saysArchives)]) && said.body.includes(`Also stop ${words(child)} Off`) && said.body.split(words(child)).length === 2, `${at} with its choice off the kernel's plan is for ${name} alone: its one line, and the choice, Off, still names once the child it leaves out`, said.body);
       const alone = recorded(["instance", "stop", name], ["--plan", "--no-recursive"]);
       check(JSON.parse(alone.stdout).result?.recursive === false, "the plugin asked the kernel for the plan with --no-recursive", alone.stdout.slice(0, 300));
       if (theme === "light") fixtures.keep("lifecycle/stop-plan-no-recursive.json", alone.stdout);
@@ -253,7 +253,7 @@ export default async (run) => {
     await page.evaluate(click("oats-confirm-act"));
     await settledAs("done", 300);
     said = await dialog(page);
-    check(said.phase === "done" && said.body.includes(`${called} retired.`) && !said.body.includes("Home folder deleted.") && said.body.includes("Worktree kept, at:") === !discard && said.body.includes("Conversation archived in bb."), `${at} the dialog says what a person needs after the retire: ${discard ? "no worktree kept" : "where the worktree was kept"}, and the thread archived`, JSON.stringify(said));
+    check(said.phase === "done" && said.body.includes(`${called} retired.`) && !said.body.includes("Home folder deleted.") && said.body.includes("Worktree kept.") === !discard && !said.body.includes("Worktree kept, at:") && (await foldOf(page, "oats-act-details")).includes("Worktree kept, at:") === !discard && said.body.includes("Conversation archived in bb."), `${at} the dialog says what a person needs after the retire: ${discard ? "no worktree kept" : "that the worktree was kept (where, its path, is under Details and not on the face)"}, and the thread archived`, JSON.stringify(said));
     await until(`${name} to be gone from oats status`, () => (rowOf(name) === undefined ? true : undefined));
     const retire = recorded(["retire", name], ["--plan-revision"]);
     check(retire.argv.includes("--discard-worktree") === discard, `oats retire was asked ${discard ? "with" : "without"} --discard-worktree, under the plan's revision`, JSON.stringify(retire.argv));

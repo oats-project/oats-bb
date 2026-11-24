@@ -258,9 +258,11 @@ test("Stop opens a dialog titled with the act and the agent, says its one conseq
   await ready(slot);
   expect(dialog.querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
   // In view, under no heading: what a stop means for its thread (this provider does not archive it: the warning), then who else it stops.
-  expect(says(slot)).toEqual(["A message in its thread starts it outside OATS.", "Also stops: Desktop mockups developer, Harvest knowledge helper."]);
-  // The warning keeps the warning tone; who else it stops is plain.
-  expect(Array.from(slot.getByTestId("oats-confirm-says").querySelectorAll("li")).map((line) => line.getAttribute("data-tone"))).toEqual(["warning", null]);
+  // ONE line; who else is stopped is said ONCE, by the choice under it, with their names.
+  expect(says(slot)).toEqual(["A message in its thread starts it outside OATS."]);
+  expect(within(slot.getByTestId("oats-plan-choice")).getByRole("switch").textContent).toBe("Also stop Desktop mockups developer, Harvest knowledge helperOn");
+  // The warning keeps the warning tone.
+  expect(Array.from(slot.getByTestId("oats-confirm-says").querySelectorAll("li")).map((line) => line.getAttribute("data-tone"))).toEqual(["warning"]);
   plain(slot);
   // Who works on a turn now is said before the act, under no heading: ONE line per agent, in regular weight, the
   // fact as a word after its name: bb's own word on each one's thread (the fixture's two are in a turn). The third
@@ -315,7 +317,7 @@ test("Stop applies the plan with its revision, a key and its choice; the act in 
   expect(slot.queryByRole("dialog")).toBeNull();
 });
 
-test("Include child instances: unticking it reads the plan again for the agent alone, keeps the plan on screen meanwhile, and the apply names the choice", async () => {
+test("the choice of the children, who are named once and by it: turning it off reads the plan again for the agent alone, keeps the plan on screen meanwhile, and the apply names the choice", async () => {
   const whole = stopPlanOf();
   const alone = { ...whole, revision: "aaaaaaaaaaaaaaaaaaaaaaaa", recursive: false, targets: whole.targets.slice(0, 1), skipped: whole.targets.slice(1).map((target) => target.instance) };
   let release!: () => void;
@@ -327,18 +329,19 @@ test("Include child instances: unticking it reads the plan again for the agent a
   await pick("stop");
   await ready(slot);
   const tick = within(slot.getByTestId("oats-plan-choice")).getByRole("switch");
-  expect(tick.textContent).toBe("Include child instancesOn");
+  expect(tick.textContent).toBe("Also stop Desktop mockups developer, Harvest knowledge helperOn");
   expect(tick.getAttribute("aria-checked")).toBe("true");
   fireEvent.click(tick);
   // The plan under review stays; nothing can be confirmed until the new one is read, and the dialog says why.
-  expect(says(slot)).toContain("Also stops: Desktop mockups developer, Harvest knowledge helper.");
+  expect(says(slot)).toEqual(["A message in its thread starts it outside OATS."]);
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
   expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("Checking…");
   release();
-  // The plan for the agent alone: its one line, and nobody else named; the tick, off, says that children are left out.
-  await waitFor(() => expect(says(slot)).toEqual(["A message in its thread starts it outside OATS."]));
-  expect(within(slot.getByTestId("oats-plan-choice")).getByRole("switch").textContent).toBe("Include child instancesOff");
-  expect(slot.getByTestId("oats-confirm").textContent).not.toMatch(/Not stopped:|Desktop mockups developer/);
+  // The plan for the agent alone: its one line; the choice, off, still names the children it leaves out, once.
+  await waitFor(() => expect(within(slot.getByTestId("oats-plan-choice")).getByRole("switch").textContent).toBe("Also stop Desktop mockups developer, Harvest knowledge helperOff"));
+  expect(says(slot)).toEqual(["A message in its thread starts it outside OATS."]);
+  expect(slot.getByTestId("oats-confirm").textContent).not.toMatch(/Not stopped:|Also stops:|child instances/);
+  expect(slot.getByTestId("oats-confirm").textContent!.split("Desktop mockups developer")).toHaveLength(2); // named once
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "done");
   expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Redesign ui lead stopped.");
@@ -409,7 +412,7 @@ test("a plan that changed under the confirmation (E_PLAN_STALE) comes back for r
   expect(texts(notice, "p")).toEqual(["Harvest knowledge helper: its session was running, and is now not running."]);
   // The notice is the first thing in the dialog, above the plan as it is now.
   expect(slot.getByTestId("oats-confirm").firstElementChild).toBe(notice);
-  expect(says(slot)).toEqual(["A message in its thread starts it outside OATS.", "Also stops: Desktop mockups developer, Harvest knowledge helper."]); // the plan as it is now, under the notice
+  expect(says(slot)).toEqual(["A message in its thread starts it outside OATS."]); // the plan as it is now, under the notice
   // Not armed: a second Enter confirms nothing. No words beside the button: the notice over the plan says why, and has Review again.
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
   expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
@@ -458,7 +461,7 @@ test("a refused apply leads with a person's words; the kernel's message and its 
   const result = slot.getByTestId("oats-result");
   expect(result.getAttribute("role")).toBe("alert");
   expect(result.querySelector("h3")!.textContent).toBe("Weekly digest helper wasn't retired");
-  expect(texts(result, "p")).toEqual(["A child instance wouldn't stop, so nothing was retired. Other children may already have stopped."]);
+  expect(texts(result, "p")).toEqual(["A child agent wouldn't stop, so nothing was retired. Other children may already have stopped."]);
   // The kernel's own message is one press away, each of its lines a line; and its code with it: the result's ONE fold.
   const details = slot.getByTestId("oats-act-details");
   expect((details as HTMLDetailsElement).open).toBe(false);
@@ -618,13 +621,14 @@ test("Retire without the tick applies the plan and keeps the worktree; the resul
   expect(result.querySelector("h3")!.textContent).toBe("Weekly digest helper retired.");
   expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Retire Weekly digest helper"); // answered: the title asks nothing
   expect(texts(result, "p")).toEqual([
-    "1 child instance stopped and kept.",
-    "Worktree kept, at:",
-    "/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper",
-    "Recovery copy saved at:",
-    "/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW",
+    "1 child agent stopped and kept.",
+    "Worktree kept.",
+    "Recovery copy saved.",
     "Conversation archived in bb.",
   ]);
+  // WHERE they are, each path whole on a line of its own, is under the result's Details: no path on the face.
+  expect(result.querySelector("details")!.open).toBe(false);
+  expect(texts(slot.getByTestId("oats-act-details"), "p")).toEqual(["Worktree kept, at:/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helperRecovery copy saved, at:/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdW"]);
   expect(calls(slot, "retireApply")[0]!.input).toMatchObject({ discardWorktree: false });
 });
 
@@ -795,9 +799,9 @@ test("Start on an agent the kernel says runs is held: the dialog says so and off
   await ready(slot);
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
   // Why it is off is said ONCE in the dialog: on the status line, with the way to its thread; never a second time beside the button.
-  expect(slot.getByTestId("oats-start-status").querySelector("span")!.textContent).toBe("This instance is already running.");
+  expect(slot.getByTestId("oats-start-status").querySelector("span")!.textContent).toBe("This agent is already running.");
   expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
-  expect(slot.getByTestId("oats-confirm").textContent!.split("This instance is already running.")).toHaveLength(2);
+  expect(slot.getByTestId("oats-confirm").textContent!.split("This agent is already running.")).toHaveLength(2);
   fireEvent.click(within(slot.getByTestId("oats-start-status")).getByText("Open Weekly digest helper"));
   expect(slot.queryByRole("dialog")).toBeNull();
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest" }]);
@@ -809,7 +813,7 @@ test("Start on an agent whose state the kernel cannot tell is held until its sta
   const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => (known ? startCheckOf(instance) : startCheckOf(instance, { running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" })) });
   await pick("start");
   await ready(slot);
-  expect(slot.getByTestId("oats-start-status").querySelector("span")!.textContent).toBe("Could not verify whether this instance is running. Refresh its status before starting.");
+  expect(slot.getByTestId("oats-start-status").querySelector("span")!.textContent).toBe("Could not verify whether this agent is running. Refresh its status before starting.");
   expect([button(slot, "oats-confirm-act").disabled, slot.queryByTestId("oats-confirm-blocked")]).toEqual([true, null]); // off, and the reason said once
   known = true;
   fireEvent.click(button(slot, "oats-start-refresh"));
@@ -1160,8 +1164,8 @@ test("the Start gate is the Desktop's: running is already running; what is not k
     resetApp();
     return reason;
   };
-  const UNKNOWN = "Could not verify whether this instance is running. Refresh its status before starting.";
-  expect(await gated({ running: true, runtimeState: "unknown" })).toBe("This instance is already running.");
+  const UNKNOWN = "Could not verify whether this agent is running. Refresh its status before starting.";
+  expect(await gated({ running: true, runtimeState: "unknown" })).toBe("This agent is already running.");
   expect(await gated({ running: null, runtimeState: "unknown" })).toBe(UNKNOWN);
   expect(await gated({ running: null, runtimeState: null })).toBe(UNKNOWN);
   expect(await gated({ running: null, runtimeState: "a-later-word" })).toBe(UNKNOWN);
@@ -1190,22 +1194,27 @@ test("a retire that kept the home of an agent on bb warns first, in the warning 
   await ready(slot);
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "failed");
-  const warning = within(slot.getByTestId("oats-act-warning")).getByTestId("oats-notice");
+  // The headline first; then the warning, the result's first line, in the warning tone; then the facts. No box above the headline.
+  const result = slot.getByTestId("oats-result");
+  const warning = within(result).getByTestId("oats-result-warning");
   expect(warning.getAttribute("data-tone")).toBe("warning");
-  expect(warning.querySelector("h3")!.textContent).toBe("Its home was kept: a message in its thread would start it outside OATS.");
-  // The release lane's words are one press away: in the result's ONE Details (the warning has no fold of its own), first, before the kernel's lines and the code.
-  expect(within(warning).queryByTestId("oats-notice-details")).toBeNull();
+  expect(warning.textContent).toBe("Its home was kept: a message in its thread would start it outside OATS.");
+  expect(result.querySelector("h3")!.textContent).toBe("Retirement didn't finish");
+  expect(result.querySelector("h3")!.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(slot.queryByTestId("oats-act-warning")).toBeNull();
+  expect(slot.getByTestId("oats-confirm").querySelectorAll('[data-testid="oats-notice"]')).toHaveLength(0);
+  // (Each of a result's lines is drawn on a line of its own; a node's text holds no break between them. test/lifecycle/words.test.ts pins the lines.)
+  expect(texts(result, "p").slice(0, 2)).toEqual(["Its home was kept: a message in its thread would start it outside OATS.", "1 child agent stopped and kept.Home folder kept.Worktree kept.Check what was kept before trying again."]);
+  expect(texts(result, "p").join(" ")).not.toContain("/abs/"); // no path on the face
+  // The release lane's words are one press away: in the result's ONE Details, first, before where the home is, the kernel's lines and the code.
   expect(slot.getByTestId("oats-confirm").querySelectorAll("details")).toHaveLength(1);
   const more = slot.getByTestId("oats-act-details") as HTMLDetailsElement;
   expect(more.open).toBe(false);
   expect(texts(more, "p")).toEqual([
     "No status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not released (a team leave waiting for its controller, a retained seat, an alias held), it can send mail as the retired agent.",
-    "retire hook oats.aweb: the team certificate could not be removed (exit 1)",
+    "Home folder kept, at:/abs/deployment/agents/oats-expert/instances/weekly-digest-helperWorktree kept, at:/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helperretire hook oats.aweb: the team certificate could not be removed (exit 1)",
   ]);
   expect(texts(more, "code")).toEqual(["RETIRE_INCOMPLETE"]);
-  // The warning stands before the result's steps.
-  const result = slot.getByTestId("oats-result");
-  expect(warning.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(result.textContent).not.toContain("unarchived");
 });
 
@@ -1262,7 +1271,7 @@ test("a state the kernel cannot tell: Start is off and says why, with Refresh st
   await pick("start");
   await ready(slot);
   const status = slot.getByTestId("oats-start-status");
-  expect(status.textContent).toContain("Could not verify whether this instance is running. Refresh its status before starting.");
+  expect(status.textContent).toContain("Could not verify whether this agent is running. Refresh its status before starting.");
   // Start is off, and never alone: the reason is on the same screen, with the way to read its status again.
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
   expect(within(status).getByTestId("oats-start-refresh").textContent).toBe("Refresh status");
@@ -1668,8 +1677,9 @@ test("a retire that is left while it runs and keeps the home: the toast stays, s
   const asked = calls(slot, "retirePlan", "retireApply").length;
   act(() => toast.open!.run());
   await phase(slot, "failed");
-  expect(within(slot.getByTestId("oats-act-warning")).getByTestId("oats-notice").getAttribute("data-tone")).toBe("warning");
-  expect(slot.getByTestId("oats-result").textContent).toContain("Home folder kept, at:");
+  expect(within(slot.getByTestId("oats-result")).getByTestId("oats-result-warning").getAttribute("data-tone")).toBe("warning");
+  expect(texts(slot.getByTestId("oats-result"), "p").join(" ")).toContain("Home folder kept.");
+  expect(slot.getByTestId("oats-act-details").textContent).toContain("Home folder kept, at:");
   expect(slot.getByTestId("oats-act-details").textContent).toContain("the team certificate could not be removed");
   expect(calls(slot, "retirePlan", "retireApply")).toHaveLength(asked);
 });
@@ -1689,13 +1699,11 @@ test("a retire that finished after its dialog was left: the toast stays until di
   expect(toast.open!.label).toBe("Show result");
   act(() => toast.open!.run());
   await phase(slot, "done");
-  const result = slot.getByTestId("oats-result").textContent!;
-  expect(result).toContain("Worktree kept, at:");
-  expect(result).toContain("/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helper");
-  expect(result).toContain("Recovery copy saved at:");
-  // The kernel's warning is under the result's Details, whole.
-  expect(texts(slot.getByTestId("oats-result"), "p").join(" ")).not.toContain("could only be archived");
-  expect(texts(slot.getByTestId("oats-act-details"), "p")).toEqual(["the bb thread of weekly-digest-helper could only be archived"]);
+  // On its face, what was kept; where it is, and the kernel's warning, under the result's Details, whole.
+  const face = texts(slot.getByTestId("oats-result"), "p").join(" ");
+  expect(face).toContain("Worktree kept. Recovery copy saved.");
+  expect(face).not.toMatch(/could only be archived|\/abs\//);
+  expect(texts(slot.getByTestId("oats-act-details"), "p")).toEqual(["Worktree kept, at:/abs/deployment/.agents/worktrees/oats-real/agents-weekly-digest-helperRecovery copy saved, at:/abs/deployment/agents/oats-expert/instances/.oats-retirement/recovery/weekly-digest-helper-mVOWdWthe bb thread of weekly-digest-helper could only be archived"]);
 });
 
 test("a stop that is left and whose answer is lost: the toast says the result is not confirmed and names no button; Show result opens the dialog, where Check again asks for THAT apply", async () => {

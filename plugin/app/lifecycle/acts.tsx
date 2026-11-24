@@ -222,7 +222,7 @@ function useKeepFocus(): void {
  * line that says the act runs, the result or the refusal when it arrives; and a plan, or a notice
  * above it, is read from its top. `what` names the moment; it moves nothing while it stays the same.
  */
-function useReveal(what: "top" | "first" | "running" | "result" | "warning" | "kept" | null): void {
+function useReveal(what: "top" | "first" | "running" | "result" | "warning" | null): void {
   useEffect(() => {
     if (what === null) return;
     const reveal = () => {
@@ -230,7 +230,7 @@ function useReveal(what: "top" | "first" | "running" | "result" | "warning" | "k
       if (dialog === null) return;
       // "first": a notice that must be read first came with the plan; the focus that went to a field below it scrolled it away.
       if (what === "top" || what === "first") dialog.closest<HTMLElement>('[data-testid="oats-modal-body"]')?.scrollTo?.({ top: 0 });
-      else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-confirm-running" : what === "result" ? "oats-result" : what === "kept" ? "oats-act-warning" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
+      else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-confirm-running" : what === "result" ? "oats-result" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
     };
     reveal();
     // Once more when the dialog has said what is out of sight ("More above", "More below"): those lines take room of their own.
@@ -265,6 +265,9 @@ function settledPhase(outcome: Outcome, actions: ReactNode): ConfirmProps["phase
   // A result that is not confirmed is neither done nor failed: the pattern draws it as that.
   // (A done result whose title is a warning is drawn in the warning tone, which the pattern has for a result that is not confirmed.)
   if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, warns: outcome.warns === true, actions: next };
+  // A warning (a retire that kept the home): the headline first, then the warning as the result's first line, in
+  // the warning tone, then the facts. (Not a box above the headline.)
+  if (outcome.warning !== undefined) return { kind: "failed", title: outcome.title, refusal: [outcome.warning.title, ...outcome.lines].join("\n"), warns: true, actions: next };
   return { kind: "failed", title: outcome.title, refusal: outcome.lines.join("\n"), actions: next };
 }
 
@@ -445,7 +448,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   // A plan that changed under the confirmation is not armed: it comes back for review with the
   // focus on Cancel, and is confirmed only after "Review again" has read it once more.
   // A result with a warning of its own (a home that was kept) is read from that warning.
-  useReveal(state.phase === "applying" ? "running" : state.phase === "settled" ? (state.outcome.warning === undefined ? "result" : "kept") : "top");
+  useReveal(state.phase === "applying" ? "running" : state.phase === "settled" ? "result" : "top");
   // What a choice would lose is said under it the moment it is turned on: it is brought on screen with it.
   useReveal(state.phase === "ready" && view?.choice?.deletes ? "warning" : null);
   const changed = state.phase === "ready" ? state.changed : null;
@@ -518,12 +521,6 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       onClose={close}
       returnFocus={returnFocus}
     >
-      {state.phase === "settled" && state.outcome.warning !== undefined ? (
-        // What a person must read first, in the warning tone; the rest is under the result's one Details (a retire that kept the home).
-        <div data-testid="oats-act-warning">
-          <Notice title={state.outcome.warning.title} tone="warning" />
-        </div>
-      ) : null}
       {view === null || state.phase === "settled" ? null : (
         <div data-testid="oats-plan" className="flex min-w-0 flex-col gap-3">
           {view.attention.length === 0 ? null : (

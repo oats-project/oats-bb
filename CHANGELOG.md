@@ -4,6 +4,36 @@
 
 ### The session provider
 
+- **A pi launch whose model bb's pi would not resolve is refused.** bb takes any model
+  id when a thread is spawned and resolves it when the thread starts, so `oats spawn
+  <soul> --backend bb --harness pi --model <id>` with an id pi does not have, or a bare
+  id two of pi's providers serve, answered `launched: true` with a thread id over a
+  thread that had failed as it started (`oats status`: not running, session lost). The
+  launch now reads the models bb lists for its pi, once, and refuses before anything is
+  started (`E_BACKEND_LAUNCH_ARG`): `pi has no model "<id>"`, or `pi model "<id>" is
+  served by A and B: use A/<id> or B/<id>`, each ending with the way out of the one
+  wrong refusal that is possible (`try again in a minute`: below).
+  - The rule is bb's own, no stricter: an exact `<provider>/<id>`, or a bare id that
+    exactly one pi provider serves, passes. A soul that names a bare id
+    (`claude-fable-5.1`) keeps working while one provider serves it.
+  - Where bb's list cannot settle it, nothing is refused and the launch goes on as
+    before, with one warning (`could not check the model "<id>" against pi's model list:
+    <why>`): a list that cannot be read, an id that ends in a date and is not listed
+    (bb holds such models back from its list unless named by their exact full id), and any model that is not listed
+    where bb's pi configuration sets `enabledModels` (bb then lists only those), where
+    that configuration changed after bb started (bb lists by the settings its pi started
+    with: restart bb after changing them), where the home has a `.pi` of its own, or
+    where bb's pi configuration (`settings.json`, `models.json`, `auth.json`) changed in
+    the last minute and a half (bb serves the list it fetched for a minute).
+  - A wrong refusal is possible in two cases: after a refresh of pi's list that bb
+    failed AND a model added to pi since the list bb kept (until bb's next good
+    refresh); and, for the two-provider refusal, for a minute after one of those three
+    files was removed.
+  - The check of a planned launch says the same, at a spawn's preview too, where the
+    kernel hands it the launch's model (`launch.model`); with a kernel that does not,
+    the refusal comes at the launch, with nothing created in bb.
+  - One more bb call for a pi launch that names a model (`bb provider models pi`); none
+    for Claude or for a launch with no model. README, "pi".
 - **A retire deletes the home's bb environment: a retired agent's thread, unarchived in
   bb, takes no message.** The retire hook archives a retired agent's thread, and bb
   unarchives a thread at one press. Where the home was kept (`oats retire --keep-dir`,

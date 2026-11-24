@@ -279,8 +279,8 @@ new live thread in the home is the launch's, and its endpoint is the answer.
     stop did not stop it.
 - **check** is the readiness check. `status` is `ready`, `needs-configuration`,
   `authorization-required` or `unavailable`; `ready` has no problems. With the planned
-  launch (`launch: {harness, yolo, args, sandbox, trees?, protected?}`, there before every launch and absent on
-  a plain readiness read), it also answers what that launch would be refused for (its
+  launch (`launch: {harness, yolo, args, sandbox, trees?, protected?, model?}`, there before every launch and absent on
+  a plain readiness read; `model` only from a kernel that hands the check the launch's model: "pi" below), it also answers what that launch would be refused for (its
   harness, its arguments, its mode, the sandbox it needs, its trees where it carries them, bb's data directory), as a problem with the launch's own code, and lists optional rows, skipped
   capabilities and, for a full-mode launch, the gaps, as warnings (optional rows and skipped
   capabilities are named only here: the provider keeps no record of them after a launch). Without it, the check
@@ -307,7 +307,8 @@ The harness `pi` is the same wire, with these differences. All of it is pinned a
 the real bb and pi by `test/contract/pi.test.mjs`.
 
 - **launch** runs `bb thread spawn --provider pi --model <model>`, the launch input's
-  `model` as it is (`<pi provider>/<id>`; bb splits it). `args`: every entry is refused
+  `model` as it is (`<pi provider>/<id>`, which bb splits, or a bare `<id>`; the model
+  check below). `args`: every entry is refused
   (`E_BACKEND_LAUNCH_ARG`), `--permission-mode` included. `yolo` must be true
   (`E_BACKEND_SANDBOXED_MODE` otherwise, whatever the command takes for Claude: bb's pi
   has full mode only). Nothing of `.claude` is read or written, and `sandbox`, `trees`,
@@ -461,6 +462,64 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   are one warning, `session-provider-pi-not-ready`, and none where bb reports pi
   `not_installed` or reports no pi provider. A `piAgentDir` that is not an absolute path
   is `E_BACKEND_SETTINGS` for every launch and every check, whatever the harness.
+- **The model of a pi launch is checked before anything is started** (the pi model
+  check; `lib/pi-model.mjs`). bb takes any id at `bb thread spawn` and resolves it when
+  the thread starts (bb-app 0.50.1, provider-pi's `resolvePiModel`, over the models pi
+  reports, pi 1.5.2's `get_available_models`): the id that is exactly one model's
+  `<provider>/<id>`, else the bare id that is exactly one model's; none, or two or
+  more with that bare id, and the thread fails as it starts. A launch whose `model` is
+  not null reads bb's list once, after bb's own state was found fit and before the
+  launch's first effect (`bb provider models pi --selected-model <model> --json`, a bare
+  list of `{id, routeProviderId, …}`: `id` is `<provider>/<id>`, `routeProviderId` the
+  provider; through the same client as every bb call, so within one call's time and the
+  launch's, and told `hostDaemonPort`), and refuses with `E_BACKEND_LAUNCH_ARG`:
+  `pi has no model "<id>" (if you just added it to pi, try again in a minute)`, or `pi
+  model "<id>" is served by A and B: use A/<id> or B/<id> (if you just changed that in
+  pi, try again in a minute)`, every provider named.
+  - **Never stricter than bb.** bb lists fewer models than it resolves: a model whose id
+    ends in a date (`-YYYYMMDD`) only where the read names it exactly
+    (`--selected-model <provider>/<id>`), and, where pi's `enabledModels` is set, only
+    those models, and bb's pi keeps the setting it started with (a list stays narrowed
+    after the setting is removed, at least while bb's pi is in use). So "not listed" refuses only
+    where the list is whole for the id: the `settings.json` of
+    `settings.oats.bb.piAgentDir` sets no `enabledModels` (an empty list sets none) and
+    has not changed (content or place: its mtime and ctime) since this bb started
+    (`startedAt` in `<settings.oats.bb.dataDir>/bb-app-runtime.json`, bb-app's own record,
+    whose `serverUrl` must be this server's; a record that is missing or cannot be read
+    counts as "changed"); the home, where there is one, holds no `.pi` (bb resolves in
+    the thread's directory and lists from its own); and the id does not end in a date
+    (with a slash or without: a bare id may itself hold one, so an id that looks full
+    may be a held-back model's bare id). Two listed models with the bare
+    id are refused whatever is held back, unless the id holds a slash (it may be a
+    held-back model's exact `<provider>/<id>`, which bb takes first): then the warning. One listed and a second held back passes, and
+    bb refuses it at the thread's start, as before.
+  - **Nor on a list that may be older than pi's configuration.** bb's server serves the
+    list it fetched for 60 s as it is (bb-app 0.50.1), and the thread starts by what pi
+    has now. Where `settings.json`, `models.json` or `auth.json` of
+    `settings.oats.bb.piAgentDir` changed (mtime or ctime) less than 90 s ago, or one of
+    them cannot be looked at, neither refusal is given. (The directory's own time is not
+    read: every pi that starts moves it.) Not covered, and nothing shows it: where bb's
+    refresh of its list fails, bb serves the list it kept, of any age, so a model added
+    to pi since is refused until bb's next good refresh; and a file of the three that
+    was removed in the last minute has no time left to read, so the two-provider
+    refusal may name a provider pi no longer has. Each refusal ends with the way out.
+  - A row of bb's list with an id and no `routeProviderId` (a model a person added to
+    bb's own list, its `customModels`) is left out: bb's pi resolves among pi's own
+    models only.
+  - **A list that cannot settle it refuses nothing**: an error or no answer in time, an
+    answer that is not such a list (one row that cannot be read is enough), an empty
+    list, a list bb says it could not load (a line of its stderr), or one of the cases
+    above. The launch goes on and writes one line on the command's standard error
+    (`oats bb: warning: could not check the model "<id>" against pi's model list:
+    <why>`): the launch result is exactly `{endpoint}`.
+  - **check**: where `launch.model` is a model id (a non-empty string that does not
+    start with `-`) and the harness is pi, the check makes the same read, last and only
+    when nothing else is a problem, and answers the refusal as a problem
+    (`E_BACKEND_LAUNCH_ARG`, `needs-configuration`) or the warning
+    `session-provider-pi-model-unchecked`. With no `launch.model` it reads nothing new.
+  - Nothing is read for Claude, for a launch whose `model` is null, or for one refused
+    before. The read starts no pi in the home: bb lists with no project from its own
+    provider-maintenance directory.
 - **Hooks.** The retire hook unsets every name of the env of each bb project rooted at
   the home (`meta.env` is how many), after its threads are archived; from a project that
   is also rooted elsewhere, only the three names a pi launch writes. The launch hook

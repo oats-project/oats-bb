@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { PATH_WITHOUT_BWRAP, VERSION, call, fakeBackend, fakeBbIn, projectRow, scratch, threadRow } from "../fixtures/harness.mjs";
+import { PATH_WITHOUT_BWRAP, VERSION, call, fakeBackend, fakeBbIn, piModelRow, projectRow, scratch, threadRow } from "../fixtures/harness.mjs";
 
 const PI_MODEL = "github-copilot/claude-fable-5.2";
 // bb-app 0.50.1's answer to every `bb machine env` command: the names, never a value.
@@ -24,6 +24,8 @@ async function setup(t, script = {}, backendOverrides = {}) {
     "machine env list": { stdout: envList([]) },
     "machine env set": { stdout: envList([]) },
     "machine env unset": { stdout: envList([]) },
+    // bb's pi serves the launch's model (test/unit/pi-model.test.mjs is the check of it).
+    "provider models pi": { stdout: [piModelRow("github-copilot", "claude-fable-5.2")] },
     ...(typeof script === "function" ? script(home) : script),
   });
   const input = (extra = {}) => ({ home, instance: "dev-a", harness: "pi", model: PI_MODEL, yolo: true, env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home)], unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra });

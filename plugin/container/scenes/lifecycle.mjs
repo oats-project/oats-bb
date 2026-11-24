@@ -514,7 +514,20 @@ export default [
         await page.goto("/");
         check(await openRowMenu(page, viewport, helper.id), `${at} a right click on Weekly digest helper's row opens bb's menu of that thread`);
         check(await pick(page, "Start agent (OATS)"), `${at} Start agent (OATS) is pressed in the row's menu`);
-        check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30)), `${at} the Start dialog of an agent whose session was lost points at its thread`);
+        const pointed = await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-thread"))}) !== null`, 30);
+        if (!pointed) {
+          // What was there in its place, so that a failure says why: the dialog as it is (or that there is none), the
+          // kernel's row the dialog's check was answered with, and bb's own row of the agent's thread as the page has it.
+          const seen = await page.evaluate(
+            `JSON.stringify({ dialog: document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null ? null : { phase: document.querySelector(${JSON.stringify(confirm)})?.getAttribute("data-phase") ?? null, text: document.querySelector(${JSON.stringify(testId("oats-modal"))}).innerText.replace(/\\s+/g, " ").trim() }, path: location.pathname, statusLine: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.innerText ?? null })`,
+          );
+          const row = JSON.parse(tools.statusWithRealIds(tools.threads, changes)).agents?.flatMap((agent) => agent.instances ?? []).find((instance) => instance.instance === "weekly-digest-helper") ?? null;
+          check(false, `${at} the Start dialog of an agent whose session was lost points at its thread`, `the page: ${seen}; the kernel's row the check was answered with: ${JSON.stringify(row === null ? null : { running: row.running ?? null, runtimeState: row.runtimeState ?? null, sessionEnd: row.sessionEnd ?? null, backend: row.backend ?? null, endpoint: row.session?.endpoint ?? row.runtime ?? null })}; bb's thread of the agent: ${JSON.stringify({ id: helper.id, status: helper.status ?? null, archivedAt: helper.archivedAt ?? null })}`);
+          // Nothing more is read of a dialog that is not the one this scene is about.
+          if (await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) !== null && document.querySelector(${JSON.stringify(testId("oats-confirm-cancel"))}) !== null`)) await page.evaluate(click("oats-confirm-cancel"));
+          return;
+        }
+        check(true, `${at} the Start dialog of an agent whose session was lost points at its thread`);
         const said = JSON.parse(
           await page.evaluate(
             `(() => { const confirm = document.querySelector(${JSON.stringify(confirm)}); const notice = confirm.querySelector(${JSON.stringify(testId("oats-notice"))}); return JSON.stringify({ first: confirm.firstElementChild === notice, title: notice?.querySelector("h3")?.innerText ?? null, open: document.querySelector(${JSON.stringify(testId("oats-start-thread"))})?.innerText ?? null, next: notice?.nextElementSibling?.innerText ?? "" }); })()`,

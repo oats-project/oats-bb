@@ -191,7 +191,7 @@ export function useStartFailures(ids: readonly string[], token: string): Readonl
             if (turns.length > 0) started.add(threadId);
             return startFailureOf(turns, errors);
           });
-    // Each thread by itself: one bb cannot answer for is left out (nothing is claimed of it), and asked again at the next change.
+    // Each thread by itself: for one bb cannot answer for, what bb last said of it stands (nothing, if it never answered), and it is asked again at the next change.
     Promise.allSettled(wanted.map(ask)).then((answers) => {
       if (failuresAsked !== key) return; // a newer question is out
       const next = new Map<string, StartFailure | null>();
@@ -218,8 +218,9 @@ export function useStartFailures(ids: readonly string[], token: string): Readonl
 /**
  * bb's threads with what bb's events say of the ones in "error" that an agent's row names
  * (`BbThread.startFailure`), for `useOats()`: every place then reads ONE fact (the state, the
- * line, the acts, the home). Until bb has answered, and where it cannot, a thread is as bb's
- * sidebar gives it, and its row says what it says without this. Asked again at each roster read
+ * line, the acts, the home). Until bb has answered, a thread is as bb's sidebar gives it, and its
+ * row says what it says without this; where bb cannot answer, what it last said of the thread
+ * stands (nothing, if it never answered). Asked again at each roster read
  * (`at`) and each minute.
  */
 export function useStartedThreads<T extends BbThread>(agents: readonly Agent[] | undefined, threads: readonly T[], at: string): readonly T[] {

@@ -367,7 +367,9 @@ answer it, the Start dialog has no carry-on line), bb's reason (the event's `dat
   variables' values), which must not come into the page.
 - It is asked again at each roster read and each minute, as the archived threads are; a thread
   that has started a turn is not asked about again in the app window.
-- Until bb has answered, and where it cannot, the row says what it says without the answer.
+- Until bb has answered, the row says what it says without the answer. Where bb cannot answer,
+  what it last said of the thread stands (nothing, if it never answered): a row that said
+  "Failed" does not go back to "Stopped · session lost" for a read that failed.
 - Never of an agent the kernel says runs (one started again since), nor of an agent on tmux.
 
 ## The home

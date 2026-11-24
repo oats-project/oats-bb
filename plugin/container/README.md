@@ -46,7 +46,7 @@ of its own with the same limits, started after the first is gone, and its artefa
 
 | File | Runs | Does |
 |---|---|---|
-| `Dockerfile` | `docker build` | node 22, chromium (the live tests' browser) and procps; no bb and no npm package |
+| `Dockerfile` | `docker build` | node 22, chromium (the live tests' browser), procps and tmux (the real run's one agent on the tmux backend); no bb and no npm package |
 | `ci.sh` | on the host | builds the image, starts the container, copies the plugin's directory in, reads the repository's bb pin, runs the scripts below, copies `out/` back, removes the container |
 | `setup.sh` | in the container | `npm install -g bb-app@<the pinned version>`, `npm ci` |
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, the shell test of the real run's wait for a bb plugin's command, `bb plugin build` |
@@ -137,8 +137,8 @@ open, a confirmation before its act, in progress, done, refused and with another
   and their preview (Preview and Spawn enabled).
 - **TM** a deployment that is mostly tmux agents (stage `tmux-roster`, the agents in
   `tmux-roster.mjs`): three agents on bb threads and nineteen on tmux over seven souls, five of them
-  waiting, four stopped, some with a parent. The real run holds no tmux-backed agent, so the
-  nineteen rows are not recorded as a set: each is the one row the kernel printed for a tmux home
+  waiting, four stopped, some with a parent. The real run holds one tmux-backed agent (`real/parts/lost.mjs`), not a
+  deployment of them, so the nineteen rows are not recorded as a set: each is the one row the kernel printed for a tmux home
   (`test/fixtures/roster/status.json`, kernel-fix-developer) with its name, home, window, soul group
   and parent changed, the claim the kernel printed for another agent on the waiting ones, and
   `running` true or false with no `runtimeState`, as the kernel prints a tmux home today. The scene

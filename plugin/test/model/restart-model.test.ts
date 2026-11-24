@@ -1,10 +1,11 @@
 // The one reading of "may this restart be sent with the model the person changed": the table.
 // A restart whose model the provider refuses leaves a running agent stopped (the kernel stops the
-// session first), so a changed model is armed only when bb's list, READ, serves it exactly once,
-// by the provider's own rule (oats-package/capabilities/oats-bb/lib/pi-model.mjs piModelVerdict):
-// the last block holds the two side by side, on the cases a review found them apart.
+// session first), so a changed model is armed only when bb's list, READ, serves it exactly once.
+// WHICH listed models serve an id is the plugin's one function (model/served.ts), held against the
+// provider's own check by test/model/served.contract.test.ts; this table is what the RESTART makes
+// of its answer, and its own strictness: where the list cannot say, it holds.
 import { describe, expect, test } from "vitest";
-import { restartModel, serving, type ListedModel } from "../../model/restart-model";
+import { restartModel, type ListedModel } from "../../model/restart-model";
 
 /** pi's models as bb lists them: `<provider>/<id>`, routed by that provider. */
 const routed = (...ids: string[]): ListedModel[] => ids.map((id) => ({ id, provider: id.slice(0, id.indexOf("/")) }));
@@ -62,9 +63,11 @@ describe("a changed model is armed only when bb's list, read, serves it exactly 
   });
   test("for pi, a model bb lists with no provider (one a person added to bb's own list) serves nothing: pi resolves among its own models only", () => {
     expect(pi("my-model", [...unrouted("my-model"), ...PI])).toEqual(held("not-found"));
-    // And a row whose id does not begin with its provider is not one of pi's models either.
+    // A model whose id does not begin with its provider makes a list the provider's own check cannot read (it
+    // refuses nothing then): the list cannot say, and a restart does not go without it. Not found, whatever else it lists.
     expect(pi("odd", [{ id: "odd", provider: "openai" }])).toEqual(held("not-found"));
     expect(pi("openai/", [{ id: "openai/", provider: "openai" }])).toEqual(held("not-found"));
+    expect(pi("anthropic/claude-opus-5-5", [...PI, { id: "odd", provider: "openai" }])).toEqual(held("not-found"));
   });
   test("a list that names a model twice: its whole id is that model; its BARE id is served twice, as the provider counts rows", () => {
     expect(claude("opus", unrouted("opus", "opus"))).toEqual({ kind: "armed", model: "opus" });
@@ -87,43 +90,9 @@ describe("a harness that was changed", () => {
   });
 });
 
-test("which listed models serve an id: the one listed under it, else every ROW whose bare id it is, in the list's order", () => {
-  expect(serving("gpt-6", routed("openai/gpt-6", "x/y", "openrouter/gpt-6", "openai/gpt-6"), true)).toEqual(["openai/gpt-6", "openrouter/gpt-6", "openai/gpt-6"]);
-  expect(serving("openai/gpt-6", routed("openai/gpt-6", "openrouter/openai/gpt-6"), true)).toEqual(["openai/gpt-6"]);
-  expect(serving("", routed("a/b"), true)).toEqual([]);
-});
-
-// The rule this must never be looser than: the bb session provider's own check of a pi model
-// (pi-model.mjs `piModelVerdict`: an id that is exactly one model's `<provider>/<id>` is that
-// model; otherwise the one model with that bare id; two or more is refused, none is refused).
-// Restated here in its own words, since the plugin does not import the provider: where it REFUSES,
-// the Restart dialog must HOLD. (Where it cannot check an id the list does not show, a dated id or an
-// empty list, the launch goes on and bb judges at the thread's start: the dialog holds those, since it arms
-// only what the list shows. One case apart, not seen from bb: a list with a row the provider cannot read,
-// which it does not check at all, and whose readable rows arm here.)
+// The cases on which this dialog's first rule and the provider's check differed (found by review): they are
+// held against the provider's REAL check in test/model/served.contract.test.ts; here, what the Restart does.
 describe("never armed where the provider's check would refuse", () => {
-  const provider = (model: string, list: { id: string; routeProviderId?: string }[]): "ok" | "refused" => {
-    const rows = list.filter((row) => row.routeProviderId !== undefined).map((row) => ({ id: row.id, bare: row.id.slice(`${row.routeProviderId}/`.length) }));
-    if (rows.some((row) => row.id === model)) return "ok";
-    return rows.filter((row) => row.bare === model).length === 1 ? "ok" : "refused";
-  };
-  const lists: { id: string; routeProviderId?: string }[][] = [
-    [{ id: "openrouter/openai/gpt-6", routeProviderId: "openrouter" }, { id: "anthropic/claude-haiku-5", routeProviderId: "anthropic" }],
-    [{ id: "openai/gpt-6", routeProviderId: "openai" }, { id: "openrouter/openai/gpt-6", routeProviderId: "openrouter" }],
-    [{ id: "my-model" }, { id: "mock/echo", routeProviderId: "mock" }],
-    [{ id: "anthropic/claude-opus-5-5", routeProviderId: "anthropic" }, { id: "openrouter/claude-opus-5-5", routeProviderId: "openrouter" }],
-    // One model listed twice: the provider counts rows.
-    [{ id: "openai/gpt-6", routeProviderId: "openai" }, { id: "openai/gpt-6", routeProviderId: "openai" }, { id: "mock/echo", routeProviderId: "mock" }],
-    [],
-  ];
-  const typed = ["gpt-6", "openai/gpt-6", "openrouter/openai/gpt-6", "my-model", "echo", "mock/echo", "claude-opus-5-5", "claude-haiku-5", "haiku-5", "nosuchmodel", "openrouter", "openai"];
-  test.each(lists.map((list, index) => [index, list] as const))("list %i", (_, list) => {
-    for (const model of typed) {
-      const here = restartModel({ typed: model, harnessChanged: false, byProvider: true, listed: ready(list.map((row) => ({ id: row.id, provider: row.routeProviderId ?? null }))) });
-      // The same answer, both ways: armed exactly where the provider passes it.
-      expect(here.kind === "armed" ? "ok" : "refused", `${model} in ${JSON.stringify(list.map((row) => row.id))}`).toBe(provider(model, list));
-    }
-  });
   test("the three a review ran against the provider's own file", () => {
     // A bare id that a listed id merely ENDS in: pi has no such model.
     expect(pi("gpt-6", routed("openrouter/openai/gpt-6", "anthropic/claude-haiku-5"))).toEqual(held("not-found"));

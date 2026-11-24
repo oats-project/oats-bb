@@ -938,7 +938,9 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   provider then refuses leaves the agent stopped, its thread archived and nothing started
   (recorded on OATS 0.70.5 for a model pi does not have; a kernel gap). A refused start or spawn
   harms nothing, so only the RESTART dialog holds, for an agent on bb, by one rule
-  (`model/restart-model.ts`, its table in `test/model/restart-model.test.ts`): the model left
+  (`model/restart-model.ts`, its table in `test/model/restart-model.test.ts`; which listed models
+  serve an id is the plugin's one function, `model/served.ts`, which the New agent form reads too
+  and `test/model/served.contract.test.ts` holds against the provider's own check): the model left
   blank is the agent's own and is sent as before; a model the person CHANGED arms Restart only
   when bb's list for the harness the restart would run on has been read and serves that id
   exactly once, by the bb session provider's own rule for a pi model (its `piModelVerdict`): the

@@ -242,9 +242,9 @@ export default [
       check(head === JSON.stringify({ text: "New agent", off: false, first: true }), `${at} New agent is first on a home with agents, over what needs the person, and can be pressed`, head);
       const needs = await page.until(`${heading("oats-home-needs", "needs you 3")} ? ${headingOf("oats-home-needs")} : ""`, 15);
       check(Boolean(needs), `${at} three agents need the person`, await page.evaluate(headingOf("oats-home-needs")));
-      // every card: the agent's name as words (no soul and no machine), what it asks, and the answer its request takes
+      // every card: the agent's name as words (its soul under it, no machine), what it asks, and the answer its request takes
       const cards = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(within("oats-needs-card"))})].map((card) => ({ instance: card.dataset.instance, offer: card.dataset.offer, name: card.querySelector('[data-testid="oats-needs-name"]')?.innerText.trim(), state: card.querySelector('[data-testid="oats-state"]')?.innerText.replace(/\\s+/g, " ").trim(), mark: card.querySelector('[data-testid="oats-state"] [data-mark][role="img"]')?.getAttribute("aria-label") ?? null, open: card.querySelector('[data-testid="oats-needs-open"]')?.innerText.trim(), replyShown: [...card.querySelectorAll('[data-testid="oats-reply-text"]')].some((box) => box.checkVisibility()), reply: card.querySelector('[data-testid="oats-reply-text"]')?.getAttribute("aria-label") ?? null, text: card.innerText.replace(/\\s+/g, " ").trim() })))`));
-      check(cards.length === 3 && cards.every((each) => each.reply === `Reply to ${each.name}` && each.state === "!" && each.mark === "Needs input" && !/\bNeeds you\b/.test(each.text) && !each.name.includes("-") && each.open === (each.offer === "in-thread" ? "Answer" : "Open") && !/oats-|${MACHINE}/.test(each.text)), `${at} each card names its agent in words, keeps the mark (named for a screen reader) with no "Needs you" of its own (the heading says it), has Open, or Answer where its request is answered in its thread, and says no soul and no machine`, JSON.stringify(cards));
+      check(cards.length === 3 && cards.every((each) => each.reply === `Reply to ${each.name}` && each.state === "!" && each.mark === "Needs input" && !/\bNeeds you\b/.test(each.text) && !each.name.includes("-") && each.open === (each.offer === "in-thread" ? "Answer" : "Open") && /\boats-[a-z-]+\b/.test(each.text) && !new RegExp(MACHINE).test(each.text)), `${at} each card names its agent in words, keeps the mark (named for a screen reader) with no "Needs you" of its own (the heading says it), has Open, or Answer where its request is answered in its thread, and says its soul and no machine`, JSON.stringify(cards));
       check(cards.some((each) => each.instance === "release-070-maintainer" && each.name === "Release 070 maintainer" && each.text.includes("Green light at 9f2e1c? Second reader done.")), `${at} a card says what its agent asks, in the agent's words`, JSON.stringify(cards));
       // an agent that asks in its own words is answered by the reply on its card; one that waits for an approval is not offered a message as its answer
       const byOffer = Object.fromEntries(cards.map((each) => [each.instance, [each.offer, each.replyShown]]));
@@ -290,7 +290,7 @@ export default [
       check(mark === "Automations, a run failed", `${at} the Automations tile is marked while a run failed, as its row in the sidebar`, mark);
       const working = await page.evaluate(`JSON.stringify(${texts(within("oats-working-row"))})`);
       const repeats = await page.evaluate(`document.querySelectorAll(${JSON.stringify(`${within("oats-working-row")} ${testId("oats-state")}, ${within("oats-finished-row")} ${testId("oats-state")}`)}).length`);
-      check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => !/Working$/.test(row)) && repeats === 0, `${at} every agent at work is a row under the heading "Working": no row repeats the state's word`, working);
+      check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => !/Working$/.test(row) && /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(row)) && repeats === 0, `${at} every agent at work is a row under the heading "Working", with its soul beside its name: no row repeats the state's word`, working);
       await shown(page, check, at, within("oats-home-tiles"), "the tiles and who works");
       await sound(page, viewport, check, at, "the tiles and who works");
       await page.shot(`home-${viewport.name}-working`);
@@ -308,7 +308,7 @@ export default [
       check(Boolean(title) && (await page.evaluate("location.pathname")).endsWith("/home/agents"), `${at} Home › Agents, at its own address, has every agent`, `${await page.evaluate(headingOf("oats-home-agents"))} at ${await page.evaluate("location.pathname")}`);
       // ("tmux" is read by the glyph's name: on a row it is bb's terminal glyph, named "tmux".)
       const rows = JSON.parse(await page.evaluate(`JSON.stringify(${textsNamed(within("oats-home-agent-row"))})`));
-      check(rows.length === 8 && rows.some((row) => /\btmux\b/.test(row) && !/runs in/.test(row)) && rows.some((row) => /Stopped$/.test(row)) && rows.every((row) => !/started by|${MACHINE}|oats-/.test(row)), `${at} the stopped agent and the one on tmux are in the list, each row with its state, the reason alone ("tmux"), and no soul, machine or who started it`, JSON.stringify(rows));
+      check(rows.length === 8 && rows.some((row) => /\btmux\b/.test(row) && !/runs in/.test(row)) && rows.some((row) => /Stopped$/.test(row)) && rows.every((row) => /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(row) && !new RegExp(`started by|${MACHINE}`).test(row)), `${at} the stopped agent and the one on tmux are in the list, each row with its soul and its state, where it is ("tmux"), and no machine or who started it`, JSON.stringify(rows));
       // The one count line of the home is here: by state, each agent once; how many there are is the heading's count.
       const summary = await page.evaluate(textOf(within("oats-home-summary")));
       const counted = summary.split(" · ").map((part) => Number(part.split(" ")[0]));
@@ -445,7 +445,7 @@ export default [
       };
       const first = await drawer("first");
       const rows = Object.fromEntries(JSON.parse(first || (await page.evaluate(roster)) || "[]"));
-      check(Object.keys(rows).length === 8 && rows[idle.id] === "Idle" && rows[stopped.id] === "Stopped" && rows[TMUX] === "Working · tmux", `${at} the drawer holds every agent of the roster, each with its state: an idle one, a stopped one and the one on tmux among the eight`, JSON.stringify(rows));
+      check(Object.keys(rows).length === 8 && rows[idle.id] === "Idle · knowledge-harvester" && rows[stopped.id] === "Stopped · oats-expert" && rows[TMUX] === "Working · oats-developer · tmux", `${at} the drawer holds every agent of the roster, each with its state: an idle one, a stopped one and the one on tmux among the eight`, JSON.stringify(rows));
       await page.shot(`home-${viewport.name}-drawer`);
       // An idle agent's row opens its thread.
       await page.evaluate(`document.querySelector(${JSON.stringify(`${SIDE} ${testId("oats-agent-row")}[data-sidebar-thread-id="${idle.id}"]`)}).click()`);
@@ -567,7 +567,7 @@ export default [
       const tmuxCard = card(`sweep-${MANY}-helper`);
       const tmux = await page.evaluate(`(() => { const card = document.querySelector(${JSON.stringify(tmuxCard)}); return JSON.stringify({ text: card.innerText.replace(/\\s+/g, " ").trim(), glyph: card.querySelector('[data-testid="oats-needs-where"] [data-tmux="glyph"][role="img"][aria-label="tmux"] [aria-hidden="true"] > *') !== null, reply: card.querySelector('[data-testid="oats-reply"]') !== null, command: card.querySelector("code")?.innerText ?? null, copy: card.querySelector('[data-testid="oats-copy"]') !== null, open: card.querySelector('[data-testid="oats-needs-open"]').innerText.trim() }); })()`);
       const read = JSON.parse(tmux);
-      check(read.reply === false && /^Sweep \d+ helper Open\b/.test(read.text) && read.glyph === true && read.text.endsWith("Answer it in its terminal.") && !/runs in tmux|It runs in tmux on|oats session attach|shows who it is/.test(read.text) && read.command === null && read.copy === false && read.open === "Open" && read.text.includes(`Sweep ${MANY} is done: keep its checkpoint?`), `${at} an agent on tmux says what it asks, bb's terminal glyph named "tmux" under its name, and "Answer it in its terminal."; it has Open, no command and no reply box`, tmux);
+      check(read.reply === false && /^Sweep \d+ helper [a-z][a-z0-9.\/-]* ·( tmux)? Open\b/.test(read.text) && read.glyph === true && read.text.endsWith("Answer it in its terminal.") && !/runs in tmux|It runs in tmux on|oats session attach|shows who it is/.test(read.text) && read.command === null && read.copy === false && read.open === "Open" && read.text.includes(`Sweep ${MANY} is done: keep its checkpoint?`), `${at} an agent on tmux says what it asks, its soul and bb's terminal glyph named "tmux" under its name, and "Answer it in its terminal."; it has Open, no command and no reply box`, tmux);
       await shown(page, check, at, tmuxCard, "the card of an agent on tmux");
       await sound(page, viewport, check, at, "the home with a card of an agent on tmux");
       await page.shot(`home-${viewport.name}-card-tmux`);

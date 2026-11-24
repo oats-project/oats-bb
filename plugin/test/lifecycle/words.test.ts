@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRetireApply, parseRetirePlan, parseSessionStart, parseStopApply, parseStopPlan } from "../../kernel/lifecycle.js";
 import type { RetirePlan, StopPlan } from "../../kernel/lifecycle.js";
-import { applyRefused, cannotAct, carriesOn, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startDetails, startSays, startRefused, ARCHIVES_AT_STOP_FROM, PLAN_CHANGED, stopArchivesThread, stopOutcome, stopPlanView, stopThreadLine, titleOf } from "../../app/lifecycle/words";
+import type { Agent } from "../../model/types";
+import { applyRefused, cannotAct, carriesOn, failedAct, checkAgainRefused, piOnBb, resumable, toasted, planChanges, planRefused, retireOutcome, retirePlanView, startOutcome, startDetails, startSays, startRefused, ARCHIVES_AT_STOP_FROM, PLAN_CHANGED, stopArchivesThread, stopOutcome, stopPlanView, stopThreadLine, titleOf } from "../../app/lifecycle/words";
 import { FIXTURES } from "../support/fake-oats.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(FIXTURES, "lifecycle", name), "utf8"));
@@ -754,5 +755,19 @@ describe("what a start says before the press, and a tmux start that did not fini
     const kept = { code: "E_SPAWN_INCOMPLETE", message: "launch requires inspection" };
     expect(startRefused("start", "dev-1", kept).lines).toEqual(["Open its thread to read what it shows before starting again."]);
     expect(startRefused("start", "dev-1", kept, true)).toMatchObject({ tone: "unknown", title: "OATS could not confirm that Dev 1 finished starting", lines: ["Its session was kept. Refresh status before another try."], offers: ["refresh"] });
+  });
+});
+
+describe("the ONE act of an agent that failed", () => {
+  const row = (change: Partial<Agent>): Agent => ({ ...({ instance: "dev-1", backend: "bb", running: false, runtimeState: "shell", sessionEnd: null } as unknown as Agent), ...change });
+  it("Start where nothing runs: its session ended, or bb says its thread failed at its start", () => {
+    expect(failedAct(row({ running: false, runtimeState: "shell" }), null)).toBe("start");
+    expect(failedAct(row({ running: false, runtimeState: "unknown", sessionEnd: "exited" }), null)).toBe("start");
+    expect(failedAct(row({ running: false, runtimeState: "stopped", sessionEnd: "lost" }), { startFailure: { message: "Failed to resolve Pi model" } })).toBe("start");
+  });
+  it("Restart where its harness still runs, or nobody can tell", () => {
+    expect(failedAct(row({ running: true, runtimeState: "shell" }), null)).toBe("restart");
+    expect(failedAct(row({ running: null, runtimeState: "shell" }), null)).toBe("restart");
+    expect(failedAct(row({ running: null, runtimeState: "unreachable" }), null)).toBe("restart");
   });
 });

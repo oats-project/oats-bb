@@ -12,7 +12,7 @@ import {
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import { openAgentPage } from "../home/agent-tab";
 import { askPlan, run } from "../lifecycle/acts";
-import { failedAct } from "../lifecycle";
+import { failedAct } from "../lifecycle/words";
 import { claimOf } from "../../model/view";
 import { lineActs, lineParts, outsideOf, OutsideThreadRow, OutsideWarning } from "../outside";
 import { useOats } from "../oats";

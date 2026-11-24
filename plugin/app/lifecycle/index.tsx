@@ -16,7 +16,7 @@ import { Button } from "../ui";
 import { ActsOverlay, openAct } from "./acts";
 import { notify } from "../ui";
 import { agentName, STATE } from "../ui/words";
-import { cannotAct, NO_TARGET } from "./words";
+import { cannotAct, failedAct, NO_TARGET } from "./words";
 import type { Verb } from "./words";
 
 export { askPlan, asked, openAct, run } from "./acts";
@@ -41,24 +41,6 @@ const unloaded = (agent: Agent): boolean => rest(agent) === "unloaded";
  * never "already running", whatever it is drawn as (with a claim, or bb's question: "Needs you").
  */
 const atRest = (agent: Agent): boolean => unloaded(agent) || rest(agent) === "ended";
-
-/**
- * The ONE act for an agent that FAILED, in every place that offers one (the acts, the panel, the
- * thread's menu and line, the keys): never two acts for one need. It ASKS the plugin's one reading
- * of how an agent is at rest (`rest`, model/rest.ts: what the home's card and the dialogs read too),
- * and reads no row of its own:
- * - START where nothing runs: its thread failed at its start ("never-started": it never ran), or
- *   its session ended, was lost, or is stopped. A restart there is a start with a warning about
- *   stopping what is not there; and the Start dialog's own gate takes exactly such a row.
- * - RESTART where it runs, or where nobody can tell ("runs", "unreachable"): the Start dialog's
- *   gate refuses such a row ("already running", or not known).
- * `thread`: bb's own row of the agent's thread where the place has it (it carries bb's word that
- * the thread failed at its start); null where it has none.
- */
-export function failedAct(agent: Agent, thread: object | null): "start" | "restart" {
-  const how = rest(agent, thread);
-  return how === "runs" || how === "unreachable" ? "restart" : "start";
-}
 
 /**
  * The four acts, in the order every place lists them: the name on a button (the Desktop's, with

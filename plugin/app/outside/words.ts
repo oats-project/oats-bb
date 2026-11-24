@@ -4,7 +4,6 @@
 // REASON after it: two or three words, on the thread's line and on the sidebar's row; a sentence
 // only where a person would otherwise do harm (a message that starts an agent outside OATS, a
 // process that may still run), and never the remedy: that is the button beside it.
-import { agentName } from "../ui/words";
 
 // ---- a stopped agent
 
@@ -35,18 +34,21 @@ export const STOPPED_OPEN_ASKING = "Stopped. An answer here starts it outside OA
  */
 export const LOST_NOTE = "session lost";
 
-/** Stopped (its session not lost), and bb has its thread archived (what a stop leaves once the provider archives at stop): the fact, and the row opens the conversation to read. */
-/** The reason, on a row and on a line, for every agent whose thread bb has archived (what Start does is the Start dialog's one line). */
+/**
+ * The reason, on a row and on a line, for every agent whose thread bb has archived (what Start does is the Start
+ * dialog's one line). Of an agent that is stopped with its session not lost it is the fact alone (what a stop leaves
+ * once the provider archives at stop), and its row opens the conversation to read.
+ */
 export const ARCHIVED_NOTE = "archived in bb";
-export const ARCHIVED_FACT = ARCHIVED_NOTE;
 
 /** OATS lost its session, and bb has the thread archived: bb's Archive never ends the harness. */
 export const LOST_ARCHIVED = "Archived in bb while running: it may still run.";
 
-/** bb has no thread of its id (deleted in bb), whether OATS stopped it or lost its session: bb's Delete ends the harness. */
-/** The reason, on a row and on its page, for every agent whose thread bb no longer has (Start is the button). */
+/**
+ * The reason, on a row and on its page, for every agent whose thread bb no longer has (deleted in bb), whether OATS
+ * stopped it or lost its session: bb's Delete ends the harness. Start is the button.
+ */
 export const DELETED_NOTE = "deleted in bb";
-export const DELETED = DELETED_NOTE;
 
 // ---- an agent that is not stopped
 
@@ -57,10 +59,6 @@ export const DELETED = DELETED_NOTE;
  * first. No warning.
  */
 export const NOT_LOADED_NOTE = "not loaded";
-export const NOT_LOADED = NOT_LOADED_NOTE;
-
-/** A failed agent (its session ended) on a thread that is open: the reason alone, as on every failed agent's line (Restart is the line's button). */
-export const FAILED_OPEN = "session ended";
 
 // ---- the kernel's report: "Running outside OATS" is its state (app/ui/words.ts)
 

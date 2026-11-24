@@ -1,5 +1,6 @@
 // What the page says about a row, in the Desktop's words, over the rows the real kernel printed.
 import { describe, expect, it } from "vitest";
+import { displayLine } from "../../app/ui/text";
 import type { AutomationRow } from "../../contract/automations";
 import { automationRowOf } from "../../kernel/automations";
 import {
@@ -11,13 +12,15 @@ import {
   groupRows,
   harnessName,
   hostLogin,
-  HOST_UNNAMED,
+  hostUnnamed,
   hostUnnamedDetail,
   lastNext,
   lastRunFailed,
   listBanners,
   onSummary,
   ownerParts,
+  dueWords,
+  pastTime,
   placementText,
   reconcileCommand,
   relativeTime,
@@ -31,6 +34,13 @@ import {
   summaryLine,
   taskParts,
   templateProvenance,
+  HERE,
+  hereOf,
+  schedulerOff,
+  notRunHere,
+  hostNameHow,
+  emptyHow,
+  switchTitle,
 } from "../../app/automations/words";
 import { rowOf, schedules, triggers } from "./fixtures";
 
@@ -116,11 +126,18 @@ describe("when it runs", () => {
     expect(schedules().rows.map((entry) => cronInWords(entry.cron))).toEqual(["Weekdays at 09:00", "Every hour", "Daily at 06:00", "Daily at 23:00", "Every 15 minutes", "Every 30 minutes", "Fridays at 18:00", "Daily at 07:00", "Every 30 minutes", "Weekdays at 08:30", "Mondays at 09:00"]);
   });
 
+  it("what has happened is never said to lie ahead, whatever the two clocks say", () => {
+    const at = (ms: number) => pastTime(new Date(NOW + ms).toISOString(), NOW)?.label;
+    expect([at(30e3), at(5 * 60e3), at(-30e3), at(-5 * 60e3)]).toEqual(["less than a minute ago", "less than a minute ago", "less than a minute ago", "5 min ago"]);
+    expect(pastTime(null, NOW)).toBeNull();
+    expect(pastTime("soon", NOW)).toBeNull();
+  });
+
   it("a time relative to now, with the whole time for its title", () => {
     const at = (ms: number) => relativeTime(new Date(NOW + ms).toISOString(), NOW)?.label;
     expect([at(30e3), at(-30e3), at(5 * 60e3), at(-5 * 60e3), at(2 * 3600e3), at(-2 * 3600e3), at(3 * 86400e3), at(-3 * 86400e3)]).toEqual([
       "in under a minute",
-      "just now",
+      "less than a minute ago",
       "in 5 min",
       "5 min ago",
       "in 2 h",
@@ -185,17 +202,34 @@ describe("when it runs", () => {
 });
 
 describe("where it runs", () => {
+  it("the machine is named by bb's name for it, never as the computer the person sits at; unnamed, it is this computer", () => {
+    const falcon = hereOf("falcon");
+    expect([falcon, hereOf(null), hereOf(undefined), hereOf("")]).toEqual([{ on: "falcon", name: "falcon" }, HERE, HERE, HERE]);
+    expect(HERE).toEqual({ on: "this computer", name: "This computer" });
+    // bb's name is free text: it is drawn as a display line.
+    expect(hereOf("fal\u202Econ\nx").on).toBe(displayLine("fal\u202Econ\nx"));
+    const list = schedules();
+    expect(groupRows(list.rows, true, falcon).map((group) => group.title)).toEqual(["Runs on falcon", "Needs attention here", "Runs elsewhere"]);
+    expect(groupRows(list.rows, false, falcon)[0]!.title).toBe("Set to run on falcon");
+    expect(placementText(rowOf(list, "local/daily-review"), list.host, true, falcon)).toEqual({ label: "falcon", tone: "ok", detail: "Local: runs on falcon as its own gh login" });
+    expect(placementText(rowOf(list, "oats-real/nightly-digest"), list.host, true, falcon)).toEqual({ label: "falcon", tone: "ok", detail: "falcon's host name is bb-box" });
+    expect(placementText(rowOf(list, "local/daily-review"), list.host, false, falcon).detail).toBe("The scheduler is not running on falcon");
+    expect([schedulerOff(falcon).title, hostUnnamed(falcon).title, notRunHere(falcon)]).toEqual(["The scheduler is not running on falcon", "falcon has no host name in OATS", "Does not run on falcon"]);
+    expect(hostNameHow(falcon)).toBe("In the deployment's oats-local.yaml on falcon, set host: name: to the name it goes by in the workspace, then press Refresh.");
+    expect(emptyHow("schedule", falcon)).toContain("or add a local one on falcon with oats schedule add.");
+    expect(switchTitle(rowOf(list, "local/daily-review"), falcon)).toBe("On here: click to turn it off on falcon");
+  });
   it("each placement in words, with its tone and the kernel's detail", () => {
     const list = schedules();
     const placed = (id: string) => placementText(rowOf(list, id), list.host);
     expect(placed("local/daily-review")).toEqual({ label: "This computer", tone: "ok", detail: "Local: runs on this computer as its own gh login" });
     expect(placed("local/weekly-cleanup")).toMatchObject({ label: "This computer", tone: "muted" });
-    expect(placed("oats-real/nightly-digest")).toEqual({ label: "This computer", tone: "ok", detail: "This computer is bb-box" });
+    expect(placed("oats-real/nightly-digest")).toEqual({ label: "This computer", tone: "ok", detail: "This computer's host name is bb-box" });
     expect(placed("oats-real/reconcile")).toEqual({ label: "Wrong account here", tone: "bad", detail: "acts as github.com/acme-billing-bot; this host's gh is logged in as github.com/ana" });
     expect(placed("oats-real/release-check")).toMatchObject({ label: "Not trusted here", tone: "bad", detail: expect.stringContaining("oats-local.yaml") });
     expect(placed("oats-real/weekly-report")).toEqual({ label: "report-server", tone: "muted", detail: "runs on report-server; this host is bb-box" });
     const unnamed = schedules("schedule-list-host-unnamed.json");
-    expect(placementText(rowOf(unnamed, "oats-real/weekly-report"), unnamed.host)).toEqual({ label: "report-server", tone: "muted", detail: "This computer has no host name" });
+    expect(placementText(rowOf(unnamed, "oats-real/weekly-report"), unnamed.host)).toEqual({ label: "report-server", tone: "muted", detail: "This computer has no host name in OATS" });
   });
 
   it("a placement the kernel leaves bare, and a reason this plugin does not know", () => {
@@ -241,7 +275,7 @@ describe("the host scheduler and the list's notices", () => {
   it("the banner for a host with no name shows when the workspace has rows it cannot place", () => {
     expect(listBanners(schedules("schedule-list-host-unnamed.json")).hostUnnamed).toBe(true);
     expect(listBanners(triggers("trigger-list-host-unnamed.json")).hostUnnamed).toBe(true);
-    expect([HOST_UNNAMED.title, hostUnnamedDetail("schedule")]).toEqual(["This computer has no host name", "It runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it."]);
+    expect([hostUnnamed().title, hostUnnamedDetail("schedule")]).toEqual(["This computer has no host name in OATS", "It runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it."]);
     expect(hostUnnamedDetail("trigger")).toContain("none of the workspace's triggers");
   });
 
@@ -261,9 +295,9 @@ describe("last and next", () => {
       const entry = rowOf(list, id);
       return lastNext(entry, Date.parse(entry.lastRun?.startedAt ?? entry.createdAt!) + 2 * 3600e3);
     };
-    expect(cell("local/daily-review")).toMatchObject({ next: expect.stringMatching(/^Next in \d+ (h|d)$/), last: expect.stringMatching(/^Last 2 h ago · agent (launched|active)$/) });
-    expect(cell("local/hourly-check")).toMatchObject({ last: "Last 2 h ago · launch failed" });
-    expect(cell("local/status-check")).toMatchObject({ last: "Last 2 h ago · launch state unknown" });
+    expect(cell("local/daily-review")).toMatchObject({ next: expect.stringMatching(/^Next in \d+ (h|d)$/), last: "Last 2 h ago", lastOutcome: expect.stringMatching(/^agent (launched|active)$/), lastTone: null });
+    expect(cell("local/hourly-check")).toMatchObject({ last: "Last 2 h ago", lastOutcome: "launch failed", lastTone: "bad" });
+    expect(cell("local/status-check")).toMatchObject({ last: "Last 2 h ago", lastOutcome: "launch state unknown", lastTone: "warn" });
     expect(cell("local/weekly-cleanup")).toMatchObject({ next: "Off here", last: "Not run yet", lastTitle: null });
     expect(cell("oats-real/nightly-digest")).toMatchObject({ last: "Not run yet" });
     // Another computer runs it: runs are recorded there.
@@ -277,15 +311,36 @@ describe("last and next", () => {
       const entry = rowOf(list, id);
       return lastNext(entry, Date.parse(entry.lastRun?.at ?? entry.createdAt ?? "2026-11-21T00:00:00Z") + 5 * 60e3);
     };
-    expect(cell("oats-real/proposal-review")).toMatchObject({ last: "Last 5 min ago · #41" });
-    expect(cell("oats-real/harvest-review")).toMatchObject({ last: "Last 5 min ago · harvest/a" });
+    expect(cell("oats-real/proposal-review")).toMatchObject({ last: "Last 5 min ago", lastOutcome: "#41", lastTone: null });
+    expect(cell("oats-real/harvest-review")).toMatchObject({ last: "Last 5 min ago", lastOutcome: "harvest/a" });
     expect(cell("local/old-prs")).toMatchObject({ next: "Off here", last: "Not run yet" });
     expect(cell("oats-real/docs-review")).toBeNull();
     expect(lastNext(row({ runsHere: true }, "trigger"), NOW)).toMatchObject({ next: "Polls at the next tick", last: "Not run yet" });
     expect(lastNext(row({ runsHere: true }), NOW)).toMatchObject({ next: "Next not reported" });
-    expect(lastNext(row({ runsHere: true, lastRun: { startedAt: new Date(NOW - 60e3).toISOString(), outcome: "newly-named" } }), NOW)).toMatchObject({ last: "Last 1 min ago · newly-named" });
+    // What is so: a time that has passed was due, and under a scheduler that is off nothing is next.
+    expect(lastNext(row({ runsHere: true, nextDue: new Date(NOW - 9 * 3600e3).toISOString() }), NOW)).toMatchObject({ next: "Was due 9 h ago" });
+    expect(lastNext(row({ runsHere: true, nextDue: new Date(NOW + 9 * 3600e3).toISOString() }), NOW)).toMatchObject({ next: "Next in 9 h" });
+    expect(lastNext(row({ runsHere: true, nextDue: new Date(NOW + 9 * 3600e3).toISOString() }), NOW, false)).toMatchObject({ next: "Scheduler off" });
+    // The whole time is the title only where the text is that time: never behind "Scheduler off" or "Off here".
+    const ahead = { runsHere: true, nextDue: new Date(NOW + 9 * 3600e3).toISOString() };
+    expect(lastNext(row(ahead), NOW)!.nextTitle).toBe(new Date(NOW + 9 * 3600e3).toLocaleString());
+    expect(lastNext(row(ahead), NOW, false)).toMatchObject({ next: "Scheduler off", nextTitle: "Scheduler off" });
+    expect(lastNext(row({ ...ahead, enabledHere: false, origin: { kind: "local" }, enabled: false }), NOW)).toMatchObject({ next: "Off here", nextTitle: "Off here" });
+    // One rule for a due time, wherever it is said: ahead it is next, at or after its time it was due.
+    const due = (ms: number) => dueWords(new Date(NOW + ms).toISOString(), NOW);
+    expect([due(9 * 3600e3), due(-3 * 60e3), due(0), dueWords(null, NOW)]).toMatchObject([{ word: "Next", label: "in 9 h" }, { word: "Was due", label: "3 min ago" }, { word: "Was due" }, null]);
+    // A row that does not run on the machine (it needs attention there) still shows the run it had there, and says it does not run in place of a next one.
+    const ran = row({ runsHere: false, group: "attention", reason: "owner-mismatch", origin: { kind: "workspace" }, nextDue: new Date(NOW + 3600e3).toISOString(), lastRun: { startedAt: new Date(NOW - 86400e3).toISOString(), outcome: "agent-launched" } });
+    expect(ran.group).not.toBe("here");
+    expect(lastNext(ran, NOW, true, hereOf("falcon"))).toMatchObject({ next: "Does not run on falcon", last: "Last 1 d ago" });
+    expect(lastNext(row({ runsHere: false, reason: "assigned-elsewhere", origin: { kind: "workspace" } }), NOW)).toBeNull();
+    // A run that has happened is never said to lie ahead, whatever the browser's clock says; nor is the scheduler's last tick.
+    expect(lastNext(row({ runsHere: true, lastRun: { startedAt: new Date(NOW + 30e3).toISOString(), outcome: "agent-launched" } }), NOW)).toMatchObject({ last: "Last less than a minute ago" });
+    expect(schedulerLine({ installed: true, active: true, registered: true, lastTick: new Date(NOW + 30e3).toISOString(), maxConcurrent: 5 }, NOW)).toBe("Scheduler on · checked less than a minute ago · up to 5 at once");
+    expect(lastNext(row({ runsHere: true, enabledHere: false, nextDue: new Date(NOW + 9 * 3600e3).toISOString() }), NOW, false)).toMatchObject({ next: "Off here" });
+    expect(lastNext(row({ runsHere: true, lastRun: { startedAt: new Date(NOW - 60e3).toISOString(), outcome: "newly-named" } }), NOW)).toMatchObject({ last: "Last 1 min ago", lastOutcome: "newly-named", lastTone: null });
     // A subject that is withheld is not dressed as a pull request's number.
-    expect(lastNext(row({ runsHere: true, on: { source: "github.pull_request" }, lastRun: { at: new Date(NOW - 60e3).toISOString(), subject: "token=abcdef0123456789" } }, "trigger"), NOW)).toMatchObject({ last: "Last 1 min ago · [withheld]" });
+    expect(lastNext(row({ runsHere: true, on: { source: "github.pull_request" }, lastRun: { at: new Date(NOW - 60e3).toISOString(), subject: "token=abcdef0123456789" } }, "trigger"), NOW)).toMatchObject({ last: "Last 1 min ago", lastOutcome: "[withheld]" });
   });
 });
 

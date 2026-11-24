@@ -296,6 +296,8 @@ export type Outcome = {
    * warning tone, and told by the toaster as one that is opened again, never as a plain success.
    */
   attention?: true;
+  /** The result's first line is a warning (a stop that left the agent's thread open): that line is drawn in the warning tone; the result stays done. */
+  warns?: true;
   /** What the dialog offers beside Close: read a new plan (Review again), ask for the answer to what was sent (Check again), read the agent's status again (Refresh status). */
   offers: readonly ("review" | "check" | "refresh")[];
   /**
@@ -329,8 +331,11 @@ export function stopOutcome(receipt: StopReceipt, instance: string, onBb = false
   const details = under(...quotes(receipt.results), receipt.replayed && REPLAYED);
   if (receipt.ok) {
     const title = receipt.results.length > 1 ? `${receipt.results.length} sessions stopped` : `${agentName(instance)} stopped`;
-    // The title is the result. One line more only where the thread was NOT archived: a message there would start it outside OATS.
-    return { tone: "done", title: `${title}.`, lines: onBb && !archives ? [STOP_LEAVES_THREAD] : [], code: null, details, offers: [] };
+    // The title is the result. One line more only where the thread was NOT archived: a message there would start it
+    // outside OATS. That line is a warning and is drawn in the warning tone, as the dialog's one line was (the
+    // specialist's ruling 4 on the dialogs: "dialog's and result's one line; warning tone"); the result itself is done.
+    const left = onBb && !archives;
+    return { tone: "done", title: `${title}.`, lines: left ? [STOP_LEAVES_THREAD] : [], code: null, details, offers: [], ...(left ? { warns: true } : {}) };
   }
   return { tone: "failed", title: "Not every session stopped", lines: rowLines(receipt.results), code: "E_SESSION_STOP_FAILED", details, offers: ["review"] };
 }
@@ -523,6 +528,16 @@ export const START = {
   starting: "Starting…",
   restarting: "Restarting…",
   alreadyRunning: "This instance is already running.",
+  /**
+   * A RESTART is held on a model the person changed unless bb's list for the harness serves it
+   * exactly once (model/restart-model.ts: the kernel stops the running session before the provider
+   * judges the model). The word on the Model field and beside the button.
+   */
+  notFound: "Not found",
+  pickProvider: "Pick provider",
+  required: "Required",
+  /** Under the field's Details, only while it says "Not found": the way to a model bb does not list. */
+  unlisted: "To use a model bb does not list: stop it, then start it with that model.",
   unknownState: "Could not verify whether this instance is running. Refresh its status before starting.",
 } as const;
 /**
@@ -577,7 +592,8 @@ export function startSays(verb: RunVerb, { resumes }: { resumes: boolean }): str
  * New agent form, and here one press away).
  */
 export function startDetails(verb: RunVerb, { onBb }: { onBb: boolean }): string[] {
-  return [...(verb === "restart" ? [START.begins] : []), ...(onBb ? [FULL_MODE] : [])];
+  // (On bb the dialog has a Model field: that its choice outlives this start is said here, not under the field: the lead's L9.)
+  return [...(verb === "restart" ? [START.begins] : []), ...(onBb ? [START.modelSaved, FULL_MODE] : [])];
 }
 /** Why a resume started fresh, in words, for each reason the kernel names (docs/desktop-cli-api.md, "Resume a lost session"). */
 const FRESH_BECAUSE: Readonly<Record<string, string>> = {

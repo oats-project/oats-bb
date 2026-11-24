@@ -7,7 +7,7 @@
    "kind": "soul",
    "soul": "oats-expert",
    "repoKey": "local//abs/real/src/oats-real",
-   "commit": "56a9e15963da80c72eaec3b6623cd83ddd331e5a"
+   "commit": "bd67121a08cf55224dd4053449dd7220e54ba643"
   },
   "selector": {
    "kind": "soul",
@@ -15,7 +15,7 @@
    "agentsRoot": null,
    "dir": null
   },
-  "at": "2026-11-21T18:25:22.386Z",
+  "at": "2026-11-23T18:01:13.703Z",
   "checks": {
    "installed": {
     "status": "pass",
@@ -30,9 +30,9 @@
        "from": {
         "kind": "package",
         "package": "oats.bb",
-        "version": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "commit": "a3cca8511461e92c25d86f693365ec250b7c4684",
-        "integrity": "sha256-8baf5a27f878ae13472ba184949a9021de43dba43da4d93154eb51cdd29b30a7",
+        "version": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+        "commit": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+        "integrity": "sha256-d07c9b40f1c8b24e8f3ec9834902fb424ac1057e01d9b2b45bba3905c404a2c7",
         "repoKey": "local//abs/real/oats-bb.git"
        }
       },
@@ -94,7 +94,7 @@
       "evidence": {
        "repoKey": "local//abs/real/src/oats-real",
        "workspace": "local//abs/real/src/oats-real",
-       "commit": "56a9e15963da80c72eaec3b6623cd83ddd331e5a"
+       "commit": "bd67121a08cf55224dd4053449dd7220e54ba643"
       },
       "remedy": null
      }

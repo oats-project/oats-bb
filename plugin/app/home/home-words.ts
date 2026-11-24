@@ -8,7 +8,7 @@ export const NEEDS_YOU = "Needs you";
 export const NOTHING_NEEDS_YOU = "Nothing needs you.";
 export const WORKING = "Working";
 export const FINISHED = "Unread";
-/** Home › Agents: every agent OATS has, under the word of the tile that opens it. */
+/** Home › Agents: every agent OATS has, under this word (no tile opens it: it is reached by its address). */
 export const EVERY_AGENT = "Agents";
 export const BACK_TO_HOME = "Home";
 export const READING = "Reading…";
@@ -21,14 +21,14 @@ export const SHOW_FEWER = "Show fewer";
 /** The states the summary names, in its order; the first two always, the others only when they have agents. */
 const SUMMARY: readonly Exclude<AgentState, "outside">[] = ["working", "needs-you", "idle", "stopped", "error", "unreachable"];
 const ALWAYS: ReadonlySet<AgentState> = new Set<AgentState>(["working", "needs-you"]);
-/** A state as the summary counts it: "2 working"; "3 need you" as the sidebar's foot says it, whatever the number (the Desktop's line). */
+/** A state as the count line counts it: "2 working"; "3 need you", whatever the number (the Desktop's line). */
 function counted(state: AgentState, n: number): string {
   if (state === "needs-you") return `${n} need you`;
   return `${n} ${STATE[state].word.toLowerCase()}`;
 }
 /** "2 working · 1 need you · 3 idle · 1 stopped · 1 failed": every agent is counted once. How many there are in all is the heading's count, over the line. */
 export function summaryLine(counts: Record<AgentState, number>): string {
-  // "N need you" is the sidebar's foot and the home's heading: an agent that runs outside OATS is one of them
+  // "N need you" is the home's heading and its badge too: an agent that runs outside OATS is one of them
   // (`view.needing`), so it is counted there and has no count of its own. Every agent is still counted once.
   const of = (state: Exclude<AgentState, "outside">): number => (state === "needs-you" ? counts["needs-you"] + counts.outside : counts[state]);
   return SUMMARY.filter((state) => ALWAYS.has(state) || of(state) > 0).map((state) => counted(state, of(state))).join(" · ");

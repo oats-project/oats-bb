@@ -123,12 +123,17 @@ open, a confirmation before its act, in progress, done, refused and with another
   and their preview (Preview and Spawn enabled).
 - **TM** a deployment that is mostly tmux agents (stage `tmux-roster`, the agents in
   `tmux-roster.mjs`): three agents on bb threads and nineteen on tmux over seven souls, five of them
-  waiting, four stopped, some with a parent. The real run holds no tmux-backed agent, so the
+  waiting, two stopped with OATS, two whose session was lost, some with a parent. The real run holds no tmux-backed agent, so the
   nineteen rows are not recorded as a set: each is the one row the kernel printed for a tmux home
   (`test/fixtures/roster/status.json`, kernel-fix-developer) with its name, home, window, soul group
   and parent changed, the claim the kernel printed for another agent on the waiting ones, and
-  `running` true or false with no `runtimeState`, as the kernel prints a tmux home today. The scene
-  holds: every one is a row that says its state, its soul and "tmux"; the foot counts every
+  what the kernel says of the session (`running`, `runtimeState`, `sessionEnd`) taken from the
+  RECORDED tmux row of its kind (`test/fixtures/lifecycle/tmux-row-{running,stopped,lost}.json`,
+  OATS 0.70.5): one that runs has `running: true` and no word; one stopped with OATS `running:
+  false`, the word "shell" and `sessionEnd: "stopped"`; one whose session was lost `running:
+  false`, no word and `sessionEnd: "lost"`. These rows are DERIVED, not recorded. The scene
+  holds: every one is a row that says its state, its soul and "tmux", and one whose session was
+  lost says "session lost" in the soul's place; the foot counts every
   agent that waits; no row is over three lines (the name on one or two, cut only after the
   second; the second block on one line, where only the soul gives way, with its "…"); the
   selected row of a bb-thread agent with a name longer than two lines holds it cut after the

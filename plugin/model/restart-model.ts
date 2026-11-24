@@ -40,7 +40,8 @@ export type RestartModel =
  * - else every model whose BARE id is `id`: its id minus `<provider>/`, the provider being the one
  *   bb routes it by. A bare id may itself hold a slash (`openrouter/openai/gpt-6` is the provider
  *   `openrouter` and the bare id `openai/gpt-6`), so nothing is matched by what an id ends in.
- * Nothing is matched loosely: no prefix, no suffix, no other case.
+ * Nothing is matched loosely: no prefix, no suffix, no other case. What is returned is one id per
+ * ROW that serves it (a list that repeats a row repeats it here: two rows are two, for a bare id).
  * A model bb lists with NO provider (one a person added to bb's own list) has no bare id. For a
  * harness whose models are resolved by provider (`byProvider`: pi) the provider's check does not
  * count it at all, so it serves nothing here either; for any other harness (Claude Code's bare
@@ -48,15 +49,18 @@ export type RestartModel =
  */
 export function serving(id: string, models: readonly ListedModel[], byProvider: boolean): string[] {
   if (id === "") return [];
-  const rows = new Map<string, string | null>(); // id -> its bare id (null: none)
+  const rows: { id: string; bare: string | null }[] = [];
   for (const { id: listed, provider } of models) {
     const prefix = provider === null || provider === "" ? null : `${provider}/`;
     const routed = prefix !== null && listed.startsWith(prefix) && listed.length > prefix.length;
     if (byProvider && !routed) continue;
-    if (!rows.has(listed)) rows.set(listed, routed ? listed.slice(prefix.length) : null);
+    rows.push({ id: listed, bare: routed ? listed.slice(prefix.length) : null });
   }
-  if (rows.has(id)) return [id];
-  return [...rows].filter(([, bare]) => bare === id).map(([listed]) => listed);
+  if (rows.some((row) => row.id === id)) return [id];
+  // ROWS are counted, as the provider counts them (and bb's own resolution: "Ambiguous"): a list that names one
+  // `<provider>/<id>` twice serves its bare id twice. (bb is not known to list one twice, and the app's reading of
+  // the list, app/spawn/models.ts `modelOptions`, keeps each id once before this is asked: said in the table.)
+  return rows.filter((row) => row.bare === id).map((row) => row.id);
 }
 
 /**

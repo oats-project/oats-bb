@@ -707,7 +707,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const notReady = restarts && harnessChanged ? stateOf(harness) : null;
   // A list bb is still reading says nothing yet; one still unread after LIST_WAIT_MS reads as no list, which holds.
   const listPending = restarts && typed !== "" && suggestions.status === "loading";
-  const overdue = useOverdue(listPending ? `${running ?? ""}` : null, LIST_WAIT_MS);
+  const overdue = useOverdue(listPending ? (running ?? "") : null, LIST_WAIT_MS);
   const hold = !restarts
     ? null
     : restartModel({

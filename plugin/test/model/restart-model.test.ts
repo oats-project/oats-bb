@@ -66,9 +66,13 @@ describe("a changed model is armed only when bb's list, read, serves it exactly 
     expect(pi("odd", [{ id: "odd", provider: "openai" }])).toEqual(held("not-found"));
     expect(pi("openai/", [{ id: "openai/", provider: "openai" }])).toEqual(held("not-found"));
   });
-  test("a list that names a model twice serves it once", () => {
+  test("a list that names a model twice: its whole id is that model; its BARE id is served twice, as the provider counts rows", () => {
     expect(claude("opus", unrouted("opus", "opus"))).toEqual({ kind: "armed", model: "opus" });
-    expect(pi("gpt-6", routed("openai/gpt-6", "openai/gpt-6"))).toEqual({ kind: "armed", model: "gpt-6" });
+    expect(pi("openai/gpt-6", routed("openai/gpt-6", "openai/gpt-6"))).toEqual({ kind: "armed", model: "openai/gpt-6" });
+    // The provider refuses this ("served by openai and openai"), and so does bb's own resolution: held.
+    // (KNOWINGLY APART in the app only: its reading of bb's list, app/spawn/models.ts modelOptions, keeps each id
+    // once before the rule is asked, so the dialog would arm it. bb is not known to list a model twice.)
+    expect(pi("gpt-6", routed("openai/gpt-6", "openai/gpt-6"))).toEqual(held("pick-provider", ["openai/gpt-6", "openai/gpt-6"]));
   });
 });
 
@@ -97,8 +101,8 @@ describe("a harness changed to one whose bb provider is not ready (the same harm
   });
 });
 
-test("which listed models serve an id: the one listed under it, else those whose bare id it is; in the list's order, each once", () => {
-  expect(serving("gpt-6", routed("openai/gpt-6", "x/y", "openrouter/gpt-6", "openai/gpt-6"), true)).toEqual(["openai/gpt-6", "openrouter/gpt-6"]);
+test("which listed models serve an id: the one listed under it, else every ROW whose bare id it is, in the list's order", () => {
+  expect(serving("gpt-6", routed("openai/gpt-6", "x/y", "openrouter/gpt-6", "openai/gpt-6"), true)).toEqual(["openai/gpt-6", "openrouter/gpt-6", "openai/gpt-6"]);
   expect(serving("openai/gpt-6", routed("openai/gpt-6", "openrouter/openai/gpt-6"), true)).toEqual(["openai/gpt-6"]);
   expect(serving("", routed("a/b"), true)).toEqual([]);
 });
@@ -120,6 +124,8 @@ describe("never armed where the provider's check would refuse", () => {
     [{ id: "openai/gpt-6", routeProviderId: "openai" }, { id: "openrouter/openai/gpt-6", routeProviderId: "openrouter" }],
     [{ id: "my-model" }, { id: "mock/echo", routeProviderId: "mock" }],
     [{ id: "anthropic/claude-opus-5-5", routeProviderId: "anthropic" }, { id: "openrouter/claude-opus-5-5", routeProviderId: "openrouter" }],
+    // One model listed twice: the provider counts rows.
+    [{ id: "openai/gpt-6", routeProviderId: "openai" }, { id: "openai/gpt-6", routeProviderId: "openai" }, { id: "mock/echo", routeProviderId: "mock" }],
     [],
   ];
   const typed = ["gpt-6", "openai/gpt-6", "openrouter/openai/gpt-6", "my-model", "echo", "mock/echo", "claude-opus-5-5", "claude-haiku-5", "haiku-5", "nosuchmodel", "openrouter", "openai"];

@@ -86,7 +86,7 @@ export default [
       const line = await statusOf(page, "working");
       const facts = await page.evaluate(texts(`${testId("oats-identity-facts")} > *`));
       check(
-        line !== null && /^Working( · started .+)?$/.test(line.line) && line.act === "Stop" && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
+        line !== null && /^Working( · started .+)?$/.test(line.line) && line.act === "Stop…" && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
         `${at} the row: the state in words, the act that applies (Stop) and the way to the instance panel, then the soul, the parent and the messaging id, each with the Desktop's label`,
         JSON.stringify({ line, facts }),
       );
@@ -106,7 +106,7 @@ export default [
       const lead = threads.get("thr_redesign");
       await page.goto(`/projects/${lead.projectId}/threads/${lead.id}`);
       const leadLine = await statusOf(page, "working");
-      check(leadLine !== null && leadLine.act === "Stop", `${at} a working agent's line offers Stop`, JSON.stringify(leadLine));
+      check(leadLine !== null && leadLine.act === "Stop…", `${at} a working agent's line offers Stop…`, JSON.stringify(leadLine));
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-status-act")}`)}).click()`);
       // The dialog is titled with the agent the kernel's plan names, once the plan is read ("Stop an agent" until then).
       const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return /^Stop .+\\?$/.test(t) ? t : ""; })()`, 20);
@@ -262,7 +262,7 @@ export default [
       );
       // Holding is SHOWN: the act that applies to this agent (Stop: it works) stays on its line, off, with the reason.
       const heldAct = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}`)}); return b ? JSON.stringify({ text: b.innerText.trim(), off: b.disabled, why: b.title }) : "none"; })()`);
-      check(heldAct === JSON.stringify({ text: "Stop", off: true, why: "Comes back when OATS is read again" }), `${at} the act on the thread's line (Stop) is held: in its place, off, with the reason`, heldAct);
+      check(heldAct === JSON.stringify({ text: "Stop…", off: true, why: "Comes back when OATS is read again" }), `${at} the act on the thread's line (Stop…) is held: in its place, off, with the reason`, heldAct);
       await page.shot(`a14-${viewport.name}-thread`, { targets: true });
 
       // The home keeps what it showed, under the same notice.
@@ -287,14 +287,14 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default: only the home is a page; no link, no mark, no route and no dangling link to another",
+    name: "the release's default, with the setting left as installed (unset): only the home is a page; no link, no mark, no route and no dangling link to another",
     run: async ({ page, at, viewport, threads, check }) => {
       const mockups = threads.get("thr_mockups");
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       // The sidebar: the roster and who waits; no list of pages, no link to one, no mark of one.
       const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(testId("oats-tree"))})) return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: [...s.querySelectorAll('[data-testid^="oats-page-link-"]')].map((e) => e.getAttribute("data-testid")), needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))})?.tagName ?? "" }); })()`, 30);
-      check(side === JSON.stringify({ pages: false, links: [], needs: "BUTTON" }), `${at} the sidebar has the roster and who waits (which opens the home), and no page link`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(side === JSON.stringify({ pages: false, links: [], needs: "BUTTON" }), `${at} with the setting left as installed the sidebar has the roster and who waits (which opens the home), and no page link`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // The thread's own row: the soul by its name alone (its page is not shown: no link leads nowhere).
       // Read AFTER the sidebar: the needs line is a button only once bb has given the settings, and
       // until then no page is known shown under any value, so an earlier read would prove nothing.
@@ -363,7 +363,7 @@ export default [
     // By hand only (LIVE_UI_STATUS_FILE): a real deployment's roster, for a look at it. Nothing of it
     // is printed but counts; its images stay with whoever ran it.
     stage: "local-roster",
-    name: "a real deployment's roster, drawn from its own oats status, with the release's default pages",
+    name: "a real deployment's roster, drawn from its own oats status, with the release's default pages (the setting left as installed)",
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);

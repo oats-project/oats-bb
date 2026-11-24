@@ -138,7 +138,7 @@ export function DetachedActs({ said, instance, held }: { said: Said | null; inst
 /** The two acts the kernel's report names. */
 const BOTH = ["stop", "start"] as const;
 
-/** The acts the kernel's report names, for the agent's session provider: the lifecycle starts an agent on bb only, so another's has Stop alone (nothing is named that cannot be pressed). */
+/** The acts the kernel's report names, for the agent's session provider: the lifecycle starts an agent on bb or on tmux, and the report is never a tmux agent's, so another provider's has Stop alone (nothing is named that cannot be pressed). */
 const reportActs = (said: Said): Act[] => (said.warning !== null && said.warning.backend === "bb" ? ["stop", "start"] : ["stop"]);
 
 /**

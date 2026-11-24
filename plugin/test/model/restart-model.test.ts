@@ -5,7 +5,8 @@
 // provider's own check by test/model/served.contract.test.ts; this table is what the RESTART makes
 // of its answer, and its own strictness: where the list cannot say, it holds.
 import { describe, expect, test } from "vitest";
-import { restartModel, type ListedModel } from "../../model/restart-model";
+import { restartModel } from "../../model/restart-model";
+import type { ListedModel } from "../../model/served";
 
 /** pi's models as bb lists them: `<provider>/<id>`, routed by that provider. */
 const routed = (...ids: string[]): ListedModel[] => ids.map((id) => ({ id, provider: id.slice(0, id.indexOf("/")) }));
@@ -68,6 +69,7 @@ describe("a changed model is armed only when bb's list, read, serves it exactly 
     expect(pi("odd", [{ id: "odd", provider: "openai" }])).toEqual(held("not-found"));
     expect(pi("openai/", [{ id: "openai/", provider: "openai" }])).toEqual(held("not-found"));
     expect(pi("anthropic/claude-opus-5-5", [...PI, { id: "odd", provider: "openai" }])).toEqual(held("not-found"));
+    expect(pi("claude-opus-5-5", [...PI, { id: "odd", provider: "openai" }])).toEqual(held("not-found")); // not "Pick provider" either: the list cannot say
   });
   test("a list that names a model twice: its whole id is that model; its BARE id is served twice, as the provider counts rows", () => {
     expect(claude("opus", unrouted("opus", "opus"))).toEqual({ kind: "armed", model: "opus" });

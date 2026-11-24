@@ -15,7 +15,6 @@
 
 import { served, type ListedModel } from "./served";
 
-export type { ListedModel };
 /** bb's models for the harness the restart would run on: not read yet, or what it listed (none: bb gave no list, or an empty one). */
 export type ListedModels = { status: "loading" } | { status: "ready"; models: readonly ListedModel[] };
 
@@ -27,7 +26,8 @@ export type RestartModel =
   /**
    * Held. `required`: the harness was changed and no model picked (a start on bb's default for a
    * harness the soul never named can die at its start, after the stop). `not-found`: no listed
-   * model serves the id (and where bb lists none, it cannot be shown to start). `pick-provider`:
+   * model serves the id; and where bb lists none, or its list is one the provider's own check
+   * cannot read, no id can be shown to start, a listed one included. `pick-provider`:
    * several listed models serve the bare id; `serving` holds them, whole, for the field to offer.
    */
   | { kind: "held"; why: "required" | "not-found" | "pick-provider"; serving: string[] };

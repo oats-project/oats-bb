@@ -949,8 +949,9 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   ends in, and a model bb lists for pi with no provider serves nothing). For a harness whose list
   names no providers (Claude Code's bare ids) a changed model is armed only if listed whole.
   Otherwise it is held, the word on the Model field and beside the button: "Not found" (no listed
-  model serves it; and where bb gives no list, an empty one, or none within ten seconds: it cannot
-  be shown to start), "Pick provider" (several serve it: the field then offers only those),
+  model serves it; and where bb gives no list, an empty one, none within ten seconds, or a list
+  the provider's own check cannot read, a model whose id does not begin with its provider among
+  them: nothing can be shown to start, a listed model included), "Pick provider" (several serve it: the field then offers only those),
   "Required" (the harness was changed and no model picked). While the list is read the button is
   off with no word. A harness CHANGED to one whose bb provider is not ready on this machine is NOT
   held: the kernel runs the provider's readiness check before the stop and refuses with nothing

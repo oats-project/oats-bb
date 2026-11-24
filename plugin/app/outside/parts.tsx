@@ -77,6 +77,16 @@ export function rowParts(said: Said | null, state: AgentState): { note: string |
 }
 
 /**
+ * Whether the sidebar's row of an agent is drawn in the warning tone by this feature: a process
+ * may run with no thread a person can see (its thread archived in bb while it ran; its session
+ * lost with its thread archived), or its thread was deleted in bb. For the roster's fold: a
+ * closed parent carries a mark for such a row inside it. Never for an operator's stop with its
+ * thread archived (plain: nothing is wrong), nor an idle child. By the row's own rule (`rowParts`),
+ * so that the parent's mark and the row's never disagree.
+ */
+export const rowWarns = (said: Said | null, state: AgentState): boolean => rowParts(said, state).tone === "warning";
+
+/**
  * What a status line says after the state's word, where this feature has a reason for it: the
  * reason, or the sentence that keeps a person from harm, and whether the line warns. `status` is
  * the roster's own (`agentStatus`). When OATS recorded a stop is a fact of the instance panel.

@@ -689,7 +689,7 @@ async function loadedWhileReading(asInstance, { instance, threadId }) {
         const drawn = (await page.until(facts, 30)) ?? null; // (`page.until` answers undefined when its time is up)
         const inside = reading && statusRunning() && statusReads(before).length === 0; // the read had not ended when the window had drawn its roster
         if (!(shownSidebar && inside && drawn !== null && !/^Needs you/.test(drawn))) {
-          missed.push(`try ${attempt} (held ${HELD_MS} ms): ${!reading ? "no read was seen running" : !shownSidebar ? "the sidebar was not shown" : !inside ? "the read had ended before the window drew its roster" : `the window's first roster already said "${drawn}"`}`);
+          missed.push(`try ${attempt} (held ${HELD_MS} ms): ${!reading ? "no read was seen running" : !shownSidebar ? "the sidebar was not shown" : drawn === null ? "the window drew no row in 30 s" : !inside ? "the read had ended before the window drew its roster" : `the window's first roster already said "${drawn}"`}`);
         } else {
           // Nothing else changes from here. The read ends, the server publishes, and the window must show the claim.
           const shown = (await page.until(`/^Needs you/.test(${facts}) ? ${facts} : ""`, 60)) ?? null;

@@ -254,6 +254,7 @@ never states.
 |---|---|---|---|---|
 | stopped by an operator, or stopped with no word how its session ended (`sessionEnd` "stopped" or none) | open: bb's composer is live under it | "Stopped · A message here starts it outside OATS.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped" | Start |
 | its session lost (`sessionEnd: "lost"`: it ended without OATS stopping it) | open | "Stopped · session lost": the reason alone. No warning, no time (the kernel records none of the loss), no cause guessed, nothing promised, and no sentence: what to do is said where it is done (the Start dialog says first to message it instead). | "Stopped · session lost" | Start… (its dialog says first to message it instead: the lifecycle's) |
+| any row that does not run, where bb says the thread FAILED AT ITS START (below) | open, in "error" | "Failed", and nothing after it; bb's own reason under Details ("bb says: …") | "Failed · <soul>" | Start… on the line; Start… and Retire… on its page and in the thread's menu. No Restart, and the Start dialog has no carry-on line |
 | its session lost, on TMUX (no thread in bb) | none | on its page, under the header's "Stopped": "session lost", and no sentence (the Start dialog's one line says that Start tries to continue its last conversation, else starts fresh) | "Stopped · session lost", then bb's terminal glyph, named "tmux" | the header's (the lifecycle's) |
 | idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded". Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread, and its dialog says so first. | "Idle · not loaded" | Start (its dialog says first to send a message instead: the lifecycle's) |
 | stopped, its session not lost | archived | "Stopped · archived in bb" (the Start dialog's one line says that Start begins a new conversation). The row opens the archived thread, which bb shows to read (no composer). | "Stopped", in the plain tone (once the provider archives at stop, this is every stopped agent) | Start…, Retire… |
@@ -347,7 +348,8 @@ report has its Stop and Start in its notice, each with what it does there. On th
 no act is drawn twice, act by act: one the header has is the header's, and the notice there says
 what it does; one the header lacks keeps its own button in the notice (while no roster is read
 the header has none, and the notice has both: "Stop" and "Start" are never named with nothing to
-press). For an agent whose session provider is not bb the lifecycle has no Start, and the notice
+press). For an agent whose session provider is neither bb nor tmux the lifecycle has no Start (and the
+report is never a tmux agent's), and the notice
 names none: Stop alone, and its sentence does not say to start it. And this feature adds one act the header never offers: Stop for a session OATS lost,
 which reads stopped.
 
@@ -401,14 +403,42 @@ provider's own tests hold its side). A dash is a field the row does not carry, o
 | stopped with OATS, then started again by a message in bb | false | stopped | stopped | running-outside-oats | in a turn | Running outside OATS | `outside/status-outside.json` |
 | its thread archived in bb while it ran | false | stopped | lost | - | archived | Stopped | `outside/status-archived-while-running.json` |
 | its thread deleted in bb | false | stopped | lost | - | deleted | Stopped | `roster/status-recorded.json#threadDeleted` |
-| stopped with the machine (`oats host run`'s shutdown) | false | stopped | lost | - | at rest | Stopped | (no recording: the run stops no host) |
+| its session lost, its thread open | false | stopped | lost | - | at rest | Stopped | (no recording) |
 | its session ended in a shell | false | shell | - | - | at rest | Failed | (no recording) |
+| its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | (no recording of the kernel's row here; bb's events of such a thread are recorded: test/fixtures/outside/events/) |
 | the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
 
 What comes after the state's word (the reason, the tone, the acts) is the table at the head of
-this section; this one holds only what the two functions must agree on. An agent on tmux is not
+this section; this one holds only what the two functions must agree on. One row is the plugin's
+own reading: "its thread failed at its start in bb" has the kernel's four fields of "its session
+lost, its thread open", and is told apart from it by bb's events of the thread, not by the row. An agent on tmux is not
 in it: its row has no `runtimeState` while it runs, and the kernel's `running` is its own word
 for whether it works.
+
+### A thread that failed at its start
+
+A spawn whose thread fails at its start inside bb (a model the harness cannot resolve, a harness
+that is not installed) is refused by nobody: OATS reads the home `running: false`, `runtimeState:
+"stopped"`, `sessionEnd: "lost"`, which is the row of a session that ran and was lost, and bb's
+record of the thread and its sidebar say `status: "error"`, which is also what they say of a thread
+whose later turn failed. Only bb's EVENTS of the thread tell them apart, so for each agent whose
+listed thread is in "error" the plugin asks bb for them (`sdk.threads.events.list`, from the page;
+app/outside/threads.ts): **a `system/error` event and never a `turn/started`** is a thread that
+failed at its start (`startFailureOf`). The answer is joined on the thread (`BbThread.startFailure`,
+in `useOats()`), and every place reads that one fact: the state is "Failed" (`state`), how it is at
+rest is "never-started" (`rest(agent, thread)`: no message carries it on, the home's card does not
+answer it, the Start dialog has no carry-on line), bb's reason (the event's `data.detail`, else its
+`data.message`) is under Details, and the acts are Start and Retire, never Restart.
+
+- The read is ALWAYS by type, one type and one event at a time (whether a turn ever started; bb's
+  last error): the thread's whole log holds its environment (`provider.env-resolved`: its
+  variables' values), which must not come into the page.
+- It is asked again at each roster read and each minute, as the archived threads are; a thread
+  that has started a turn is not asked about again in the app window.
+- Until bb has answered, the row says what it says without the answer. Where bb cannot answer,
+  what it last said of the thread stands (nothing, if it never answered): a row that said
+  "Failed" does not go back to "Stopped · session lost" for a read that failed.
+- Never of an agent the kernel says runs (one started again since), nor of an agent on tmux.
 
 ## The home
 
@@ -643,6 +673,19 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   also told through bb's own toaster (`notify`, `app/ui/notify.ts`), with "Open <name>": it stays
   when the thread opens, and reaches a person who left the form while it spawned (a failure is
   told there the same way, and stays until dismissed).
+- "Created" is said once the new thread is past its start in bb, not when the kernel answers: the
+  kernel says "launched" before bb has started the thread, and a thread can fail at its start (a
+  model the harness cannot resolve). So the form stays busy ("Spawning…") until bb's own status of
+  the thread is no longer "starting" or "pending", for 10 s at most (`startOutcome`,
+  app/outside/threads.ts: `sdk.threads.get`, then the rule of "A thread that failed at its start").
+  Where the thread failed at its start the result is **<Name> did not start**, in the failed tone,
+  with bb's own reason under Details and one button, **Open** (the agent's own page, whose Start
+  offers the harness and the model); the form stays held (an instance exists) and its submit is
+  not drawn (the result has nothing that is off: its title, Details, Open, and Close), nothing navigates,
+  and nothing says "Created". A person who left the form is told the same by a notification that
+  stays, with Open. Nothing is said of the model: the form does not guess. A thread still starting
+  after 10 s, and one bb cannot answer for, are "Created" as before (the agent's row then says
+  "Failed" by the same rule if it failed).
 - After a press that did not answer "created", the form goes by what is KNOWN
   (`model/spawn.ts` `SpawnOutcome`). **Refused**, with the values free again, only where something
   says nothing was created: a refusal of the kernel's that the tables name, whose rollback the

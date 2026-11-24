@@ -43,7 +43,7 @@ export function AgentStatusLine({ agent, thread, now, staleAt = null, parts, gon
     <>
       <StatusLine state={status.state} since={said.since} detail={said.detail} tone={said.tone} asOf={asOf} action={action} />
       {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
-      <KernelSays text={status.kernel} />
+      <KernelSays text={status.kernel} bb={status.bb} />
     </>
   );
 }

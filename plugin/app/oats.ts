@@ -7,7 +7,7 @@ import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { isKernelCode } from "../kernel/result";
 import type { Agent, Node, ThreadWhere, View } from "../model/types";
 import { flatten, view } from "../model/view";
-import { useThreadWhere } from "./outside/threads";
+import { useStartedThreads, useThreadWhere } from "./outside/threads";
 import { useRead } from "./store";
 
 /**
@@ -68,12 +68,16 @@ export function useOats(): Oats {
   // Only for the souls' names: the Souls page keeps this read fresh, a status change does not.
   const souls = useRead("souls", { live: false }).data?.souls;
   const sidebar = useSidebarThreads();
-  const threads = sidebar.threads;
+  // bb's sidebar's threads, with what bb's events say of the ones in "error" (joined below, once the roster is known).
+  const listed = sidebar.threads;
   // What the server last answered; kept by the read when the call itself fails after it.
   const snapshot = read.data;
   // The roster to draw: the one just read, or the last one the server keeps while OATS cannot be read.
   const roster = snapshot === undefined ? undefined : snapshot.ok ? snapshot : (snapshot.last ?? undefined);
 
+  // A thread in "error" that an agent's row names: bb is asked whether it failed AT ITS START (its
+  // events), and the answer rides on the thread for every place that reads it.
+  const threads = useStartedThreads(roster?.agents, listed, roster?.at ?? "");
   const threadById = useMemo(() => new Map(threads.map((thread) => [thread.id, thread])), [threads]);
   // bb's sidebar lists active threads only: of the agents whose thread it does not list, bb is asked
   // by id which it has archived (one request; none when it lists every agent's thread).

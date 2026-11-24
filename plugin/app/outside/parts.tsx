@@ -151,6 +151,9 @@ const reportActs = (said: Said): Act[] => (said.warning !== null && said.warning
  * `own`: the acts this draws a button of its own for, over the fold, in a place whose line has no
  * acts of its own for them (the instance panel, while no roster is read and its header offers none).
  * Nothing where the kernel reports nothing.
+ * The lifecycle starts an agent on bb or on tmux, and the report is never a tmux agent's (the
+ * kernel reports it of a provider home): for an agent of another session provider the fold
+ * names Stop alone (`reportActs`), so that nothing is named that cannot be pressed.
  */
 export function OutsideWarning({ said, instance, held, own = [] }: { said: Said | null; instance: string; held: boolean; own?: readonly Act[] }) {
   if (said === null || said.warning === null) return null;
@@ -255,10 +258,11 @@ export function pageParts(agent: Agent, roster: { nodeByInstance: ReadonlyMap<st
  * Nothing for an agent this feature has nothing to say of. `roster` is what the place holds of the
  * roster (`Oats`' own `nodeByInstance` and `whereOf`); `held`: the roster is the last one read.
  */
-export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere }; held: boolean }) {
-  const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
+export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent; thread?: { startFailure?: unknown } }>; whereOf(agent: Agent): ThreadWhere }; held: boolean }) {
+  const node = roster.nodeByInstance.get(agent.instance);
+  const attached = node?.agent === agent;
   const where = roster.whereOf(agent);
-  const said = sayOf(agent, where, attached);
+  const said = sayOf(agent, where, attached, attached ? (node?.thread ?? null) : null);
   // The header's own acts for this agent now (`AgentActs` draws exactly these).
   const headed = actsFor(useOats(), agent.instance).map((act) => act.verb);
   // Nothing to draw: an agent with no report, but for the one act the header lacks (what happened
@@ -275,7 +279,7 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
         </div>
       )}
       {/* Act by act: one the header has is the header's (the notice says what it does); one it lacks is the notice's own
-          button. Start is the lifecycle's for an agent on bb only, so the notice draws none for another provider's. */}
+          button. Start is the lifecycle's for an agent on bb or on tmux, and the report is never a tmux agent's, so the notice draws none for another provider's. */}
       <OutsideWarning said={said} instance={agent.instance} held={held} own={BOTH.filter((act) => !headed.includes(act))} />
     </div>
   );

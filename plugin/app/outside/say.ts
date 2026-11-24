@@ -111,6 +111,8 @@ function whereNote(where: ThreadWhere): string | null {
  * By the agent's state, as the one state function gives it (without bb's own question on its
  * thread, which the roster says first):
  * - "outside" (the kernel's report): that OATS recorded it stopped; the notice has Stop and Start.
+ * - one that NEVER RAN (bb says its thread failed at its start, `thread.startFailure`): nothing of
+ *   this feature's; the roster's own words stand ("Failed", bb's reason under Details, Start).
  * - "error" on an open thread: that a message there starts it again.
  * - "stopped", by bb's answer and by how the kernel says the session ended:
  *   - bb has no such thread: that it was deleted; to start it for a new one. A warning.
@@ -129,7 +131,7 @@ function whereNote(where: ThreadWhere): string | null {
  *   "unknown"`: no harness is loaded), on an open thread: that a message there carries the
  *   conversation on, and that Start begins a new one. Start.
  */
-export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said | null {
+export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread: object | null = null): Said | null {
   // An agent on tmux has no thread in bb: this feature says one thing of it, that its session was
   // lost (the one reading of the row, model/rest.ts), so that it never reads as stopped by a person.
   if (agent.backend === "tmux") return rest(agent) === "lost" ? { ...base, kind: "lost-tmux", sentence: LOST_NOTE, note: LOST_NOTE } : null;
@@ -137,7 +139,10 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean): Said 
   const archived = where === "archived";
   const threadless: Said | null = note === null ? null : { ...base, kind: "threadless", note, archived };
   // How it is at rest: the one reading of the row (model/rest.ts), which the home's card and the Start dialog read too.
-  const how = rest(agent);
+  const how = rest(agent, thread);
+  // It never ran (bb says its thread failed at its start): the roster's own words stand ("Failed",
+  // bb's reason under Details, Start): no sentence of this feature's, and never that a message carries it on.
+  if (how === "never-started") return threadless;
   // Its state. A stop that still shows a claim (the word "stopped" with no word that the row does
   // not run: the claim's gate lets it through) is drawn "Needs you": this feature says of it what
   // it says of a stop, so that its line warns where the home's card refuses.

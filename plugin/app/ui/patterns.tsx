@@ -175,13 +175,18 @@ export function Disclosure({ summary, children, open, onToggle, row = false, tes
  * What the kernel itself says behind a status line's words (of a session it cannot reach: often a
  * raw URL or an errno): one press away, under Details, never the line's words. The one drawing, for
  * the thread's row and the instance panel's header. Nothing for no text.
+ * ONE text is drawn: the kernel's, or, where there is none, bb's own reason for a thread that
+ * failed at its start (`bb`). A row never has both (`agentStatus`, app/roster/status.ts: the
+ * kernel's text is of an agent it cannot reach, bb's reason of one that is failed); were both
+ * given, the kernel's is the one drawn.
  */
-export function KernelSays({ text }: { text: string | null }) {
+export function KernelSays({ text, bb }: { text: string | null; /** bb's own reason for a thread that failed at its start, in the kernel's text's place. */ bb?: string | undefined }) {
   const said = text === null ? "" : shown(text);
-  if (said === "") return null;
+  const bbSaid = bb === undefined ? "" : shown(bb);
+  if (said === "" && bbSaid === "") return null;
   return (
-    <Disclosure summary="Details" testId="oats-status-kernel">
-      <p className="text-xs text-muted-foreground">{`OATS says: ${said}`}</p>
+    <Disclosure summary="Details" testId={said === "" ? "oats-status-bb" : "oats-status-kernel"}>
+      <p className="text-xs text-muted-foreground">{said === "" ? `bb says: ${bbSaid}` : `OATS says: ${said}`}</p>
     </Disclosure>
   );
 }

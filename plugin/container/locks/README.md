@@ -82,7 +82,7 @@ only when its pin moves:
 One command writes a tool's lock again, from its `package.json`:
 
 ```sh
-plugin/container/relock.sh <tool>
+plugin/container/relock.sh <tool>      # bb-app, pi
 ```
 
 For a moved pin, change the version in `locks/<tool>/package.json` first; to renew a lock at the
@@ -93,9 +93,10 @@ same version, just run it. Commit both files with the pin that moved:
 - **bb-app**: `bb-version` and `plugin/package.json`'s `bb-app` (`../../../container/README.md`,
   "Changing bb's version"). If the new bb-app asks for other versions of its build toolchain (the
   unit test says so, with the versions), put them in `locks/bb-app/package.json` AND in
-  `plugin/package.json`'s dev dependencies, run `relock.sh bb-app`, and write the plugin's lock
-  again (in `plugin/`: `npm install --package-lock-only --ignore-scripts`, with npm 11, in a
-  container).
+  `plugin/package.json`'s dev dependencies, then run `plugin/container/relock.sh bb-app` and
+  `plugin/container/relock.sh plugin`. The second writes the plugin's own lock
+  (`plugin/package-lock.json`) with the lock that is there sent in beside `package.json`: npm keeps
+  every version it holds and adds only the new ones, so what a deployment installs does not move.
 
 The lock is written by npm 11, whatever npm the image has (npm 10 drops the `libc` field of
 platform packages, and `npm ci` then also installs their musl builds). It runs npm in a container of the tests'

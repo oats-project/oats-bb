@@ -23,11 +23,15 @@ interface Locked {
 
 /** A lock's tool (the package whose commands go on the PATH), what its package.json asks for, and its lock's packages. */
 function lockOf(tool: string): { name: string; asked: Record<string, string>; packages: Record<string, Locked> } {
-  const manifest = JSON.parse(readFileSync(join(LOCKS, tool, "package.json"), "utf8")) as { tool?: string; dependencies?: Record<string, string> };
+  const manifest = JSON.parse(readFileSync(join(LOCKS, tool, "package.json"), "utf8")) as { tool?: string; dependencies?: Record<string, string> } & Record<string, unknown>;
   const lock = JSON.parse(readFileSync(join(LOCKS, tool, "package-lock.json"), "utf8")) as { lockfileVersion: number; packages: Record<string, Locked> };
   const asked = manifest.dependencies ?? {};
   expect(typeof manifest.tool === "string" && asked[manifest.tool] !== undefined, `${tool}: its package.json names its tool, a package of its dependencies`).toBe(true);
   expect(lock.lockfileVersion, `${tool}: a lock npm ci reads`).toBeGreaterThanOrEqual(2);
+  // `dependencies` is all the lock is asked for: no other section can bring a package into the tree.
+  for (const section of ["devDependencies", "optionalDependencies", "peerDependencies", "bundleDependencies", "bundledDependencies", "overrides", "workspaces"]) {
+    expect(manifest[section], `${tool}: its package.json has no ${section}: what it installs is its dependencies and nothing else`).toBeUndefined();
+  }
   return { name: manifest.tool!, asked, packages: lock.packages };
 }
 

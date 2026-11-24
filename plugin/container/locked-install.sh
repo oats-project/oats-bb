@@ -11,13 +11,12 @@
 # ago, or one the registry does not serve yet, cannot change or fail a run. An install is given
 # five minutes and tried three times: for the network, which is all that is left to fail. (A fetch
 # from the registry was seen to stall for an hour with nothing moving.)
-# The tree goes to $TOOLS/<tool> (default ~/tools/<tool>), not into npm's global directory: a
-# global install takes no lock.
+# The tree goes to ~/tools/<tool>, not into npm's global directory: a global install takes no lock.
 set -eu
 TOOL=${1:?usage: locked-install.sh <tool>   (a directory of plugin/container/locks/)}
 HERE=$(cd "$(dirname "$0")" && pwd)
 LOCK=$HERE/locks/$TOOL
-DEST=${TOOLS:-$HOME/tools}/$TOOL
+DEST=$HOME/tools/$TOOL
 BIN=${NPM_CONFIG_PREFIX:-$HOME/.npm-global}/bin
 [ -f "$LOCK/package.json" ] && [ -f "$LOCK/package-lock.json" ] || { echo "locked install: $LOCK has no package.json with its package-lock.json" >&2; exit 2; }
 # The package the lock is for (its `tool`): the one whose commands go on the PATH.

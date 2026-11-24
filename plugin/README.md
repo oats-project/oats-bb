@@ -1132,7 +1132,11 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   app then reads once more when the first answer is here (`app/store.ts` `useRead`), so the window
   never keeps the roster from before the change. (bb does not start again a read that has no
   answer yet; before this the event was taken as served, and the window showed the old roster
-  until another agent changed.) A harness that exits by
+  until another agent changed.)
+  One reread is published also when it says nothing new: the one a stop, a start, a restart or a
+  retire asks for as it ends (`rereadAfterAct`), because the window holds "Reading…" over the
+  agent until it has a roster read after the act's end (`app/roster/reading.tsx`): the app reads the
+  snapshot again on `oats/changed` and takes the new roster's `at`. A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read
   that finds it gone.

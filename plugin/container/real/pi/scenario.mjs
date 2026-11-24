@@ -20,9 +20,15 @@
 //       the kernel stops the session before the provider judges the model), sends nothing, and
 //       the agent still runs;
 //   P5  the plugin stops and retires the pi agent.
+//   P6  a pi agent whose thread FAILS AT ITS START (a model id that ends in a date, typed in the
+//       form: the one the provider cannot check and lets go): the form says "<Name> did not
+//       start", the kernel's real row is a lost session's, bb's events say the start failed,
+//       and the plugin says "Failed" on the row, the line and the page; it is retired.
 // Every check prints what it read. The images are taken in bb's light and dark themes, at both
 // widths. What the kernel printed for the plugin's calls is kept in $OUT/answers/, as evidence:
-// this run records no fixture (the fixtures are the main run's, ../scenario.mjs).
+// this run records no fixture (the fixtures are the main run's, ../scenario.mjs). One answer of
+// P6 (`oats status --json` of the agent whose thread failed at its start) is kept there and is the
+// source of a fixture that is copied from it by hand (README.md beside this file).
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -525,6 +531,151 @@ try {
   }
   check(rowOf(NAME) === undefined && !existsSync(HOME), "oats status: no row is left, and the home is removed");
   check(bbThread(threadId)?.archivedAt != null, "bb: the agent's thread is archived", JSON.stringify(bbThread(threadId)));
+
+  step("P6 a pi agent whose thread FAILS AT ITS START: a model id that ends in a date, typed in the form; the kernel's real row; \"Failed\" in every view");
+  // Since the provider checks a pi launch's model (lib/pi-model.mjs), a model pi does not have is
+  // refused before anything starts. One door is left on a real kernel: an id the provider CANNOT
+  // check and lets go, of which this step takes the one that holds whatever else is so: an id that
+  // ENDS IN A DATE (-YYYYMMDD), which bb holds back from its list. The spawn passes, the kernel
+  // says "launched", and bb's pi cannot resolve the id when the thread starts.
+  const DATED = "mock/echo-20261122";
+  const UNSTARTED = "pi-unstarted-developer";
+  const UNSTARTED_HOME = join(DEPLOY, "agents", SOUL, "instances", UNSTARTED);
+  const asWords = "Pi unstarted developer"; // the name as the plugin says it
+  // The model is not one bb lists now, asked as the provider asks it (the id named exactly).
+  const listedNow = bbJson("provider", "models", "pi", "--selected-model", DATED);
+  const serving = listedNow.filter((model) => model.id === DATED || model.id === `${model.routeProviderId}/${DATED}`);
+  check(Array.isArray(listedNow) && listedNow.length > 0 && serving.length === 0, `bb's list of pi's models (${listedNow.length}) holds no model ${DATED}: the id the step types is not one bb lists`, JSON.stringify(serving));
+  let result = null;
+  await views("real-pi-unstarted-form", async ({ page, at, viewport, first: firstView, shot }) => {
+    // The form is filled and spawned ONCE, in the first view: its result is that page's own.
+    if (!firstView) return;
+    await page.goto("/");
+    check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
+    await page.until(visible(testId("oats-new-agent")), 30);
+    await page.evaluate(`document.querySelector(${q("oats-new-agent")})?.click()`);
+    const ready = await page.until(`${visible(testId("oats-spawn-form"))} && document.querySelector(${q("oats-spawn-soul")})?.disabled === false && document.querySelector(${q("oats-spawn-harness")})?.disabled === false && location.pathname`, 30);
+    check(ready === "/plugins/oats/new-agent", `${at}: New agent opens the form`, String(ready));
+    if (ready !== "/plugins/oats/new-agent") return;
+    check(await page.evaluate(choose("oats-spawn-soul", SOUL)), `${at}: the soul ${SOUL} is chosen`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+    check(await page.evaluate(choose("oats-spawn-harness", "pi")), `${at}: the harness pi is chosen`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+    // The model is TYPED: bb's list does not offer it.
+    const custom = await page.until(choose("oats-spawn-model", "__custom__"), 30);
+    check(Boolean(custom), `${at}: Custom… is picked in the model's list`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+    await page.until(`document.querySelector(${q("oats-spawn-model-id")}) !== null`, 10);
+    await page.evaluate(fill(testId("oats-spawn-model-id"), DATED));
+    await page.evaluate(fill(testId("oats-spawn-task"), TASK));
+    await page.evaluate(fill(testId("oats-spawn-name"), UNSTARTED));
+    const read = await page.until(`(() => { const c = document.querySelector(${q("oats-spawn-preview")}); const name = c?.querySelector("dd")?.innerText; return name === ${JSON.stringify(UNSTARTED)} && !c.querySelector(${q("oats-spawn-updating")}) && document.querySelector(${q("oats-spawn-submit")})?.disabled === false ? c.innerText.replace(/\\s+/g, " ").trim() : ""; })()`, 60);
+    check(Boolean(read) && (read ?? "").includes(`Harness pi · ${DATED}`), `${at}: the kernel's preview answers for the typed model, and Spawn can be pressed: nothing refuses it`, read ?? (await page.evaluate(textOf(testId("oats-new-agent-page")))));
+    await page.evaluate(`document.querySelector(${q("oats-spawn-submit")}).click()`);
+    // The form stays busy until bb's own status of the thread is past its start, then says what became of it.
+    const RESULT = `(() => { const r = document.querySelector(${q("oats-result")}); if (!r) return ""; const foot = document.querySelector(${q("oats-spawn-foot")}); return JSON.stringify({ tone: r.getAttribute("data-tone"), title: r.querySelector("h3")?.innerText ?? "", buttons: [...r.querySelectorAll("button")].map((b) => b.innerText.trim()), foot: [...foot.querySelectorAll("button")].map((b) => b.innerText.trim()), submit: document.querySelector(${q("oats-spawn-submit")}) !== null, details: r.querySelector(${q("oats-spawn-start-details")}) !== null, text: foot.innerText.replace(/\\s+/g, " ").trim(), path: location.pathname }); })()`;
+    result = JSON.parse((await page.until(RESULT, 180)) || "null");
+    check(result !== null && result.tone === "failed" && result.title === `${asWords} did not start` && JSON.stringify(result.buttons) === JSON.stringify(["Open"]) && JSON.stringify(result.foot) === JSON.stringify(["Open", "Close"]) && result.submit === false && result.details === true && result.path === "/plugins/oats/new-agent", `${at}: the form says "${asWords} did not start", with Details, Open and Close: no submit, and the form did not leave for the thread`, JSON.stringify(result));
+    check(result !== null && !/Created/.test(result.text) && !/Created/.test(await page.evaluate("document.body.innerText")), `${at}: nothing on the page says "Created"`, result?.text ?? "");
+    await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-spawn-start-details")} summary`)})?.click()`);
+    const why = await page.until(`(() => { const d = document.querySelector(${q("oats-spawn-start-details")}); return d?.open ? (d.querySelector("p")?.innerText ?? "").trim() : ""; })()`, 10);
+    check(why === `Failed to resolve Pi model "${DATED}"`, `${at}: Details holds bb's own reason`, String(why));
+    show("the form's result", result);
+    await page.evaluate(`document.querySelector(${q("oats-result")}).scrollIntoView({ block: "center" })`);
+    await shot("result");
+    // Open: the agent's own page.
+    await page.evaluate(`document.querySelector(${q("oats-spawn-open")}).click()`);
+    const led = await page.until(`location.pathname.endsWith(${JSON.stringify(`/plugins/oats/agent/${UNSTARTED}`)}) ? location.pathname : ""`, 15);
+    check(Boolean(led), `${at}: Open leads to the agent's own page`, led ?? (await page.evaluate("location.pathname")));
+  });
+  const unstartedSpawn = recorded(["spawn", SOUL], ["--idempotency-key", UNSTARTED]);
+  if (unstartedSpawn === undefined) throw new Error("the form's spawn of the agent that fails at its start made no oats call: nothing to go on with");
+  evidence.keep("spawn-pi-unstarted.json", unstartedSpawn.stdout);
+  const unstarted = JSON.parse(unstartedSpawn.stdout);
+  check(valueAfter(unstartedSpawn.argv, "--harness") === "pi" && valueAfter(unstartedSpawn.argv, "--model") === DATED, "the form's spawn passed --harness pi and the typed model", JSON.stringify(unstartedSpawn.argv));
+  check(unstarted.ok === true && unstarted.result.launched === true, "the kernel spawned it and says \"launched\": nothing refused the model", unstartedSpawn.stdout.slice(0, 600));
+  check(Array.isArray(unstarted.result?.warnings) && unstarted.result.warnings.length === 0 && !/could not check the model/.test(unstartedSpawn.stdout) && !/could not check the model/.test(recorded(["spawn", SOUL], ["--preview", UNSTARTED])?.stdout ?? ""), "and nothing told a person: the spawn's warnings are empty, and neither the spawn's answer nor the preview's holds the provider's word that it could not check the model", JSON.stringify(unstarted.result?.warnings));
+  // WHY the id passes WHATEVER THE LIST: the provider's own rule (the home's copy of its module,
+  // the same as the one that ran: the row's `moduleCopy`), asked with bb's list taken as WHOLE:
+  // this id is let go for its date alone, and an unlisted id with no date is refused. (At this
+  // launch the provider's own word was another: after P0b changed pi's settings bb's list may be
+  // partial, and it then lets any unlisted id go. The step does not rest on that: with the date's
+  // rule taken out of the provider this check fails.) The provider's function is called by its
+  // name: where it is not there, the check says so.
+  let rule;
+  try {
+    const { piModelVerdict } = await import(join(UNSTARTED_HOME, ".oats", "modules", "oats.bb", "lib", "pi-model.mjs"));
+    rule = { dated: piModelVerdict(DATED, listedNow), undated: piModelVerdict("mock/echo-undated", listedNow) };
+  } catch (cause) {
+    rule = { error: String(cause?.stack ?? cause) };
+  }
+  check(rule.error === undefined, "the provider's rule could be asked (piModelVerdict, lib/pi-model.mjs in the home's copy of the provider)", rule.error);
+  check(rule.error === undefined && typeof rule.dated.unchecked === "string" && /ends in a date/.test(rule.dated.unchecked) && typeof rule.undated.refused === "string", "the provider's rule lets this id go for its date ALONE (on bb's list taken as whole), and refuses an unlisted id with no date", JSON.stringify(rule));
+  show("the provider's rule", rule.error === undefined ? { [DATED]: rule.dated, "mock/echo-undated": rule.undated } : "not asked");
+
+  // The kernel's REAL row of a home whose thread failed at its start: read from ONE answer of
+  // `oats status --json`, which is also the answer kept (whole, as printed: this agent is the only
+  // one left, P5 retired the other). It is evidence, and the source of
+  // test/fixtures/outside/status-failed-at-start.json, which is copied from it BY HAND (this run
+  // writes no fixture; README.md, "The fixture P6 is the source of").
+  await untilRow(UNSTARTED, "not running, stopped, its session lost", (r) => r.running === false && r.runtimeState === "stopped" && r.sessionEnd === "lost", 60);
+  const printed = oats("status", "--json");
+  const printedRows = printed.exit === 0 ? JSON.parse(printed.stdout).agents.flatMap((group) => group.instances) : [];
+  const lostRow = printedRows.find((each) => each.instance === UNSTARTED);
+  check(lostRow !== undefined && lostRow.backend === "bb" && lostRow.harness === "pi" && lostRow.launched === true && lostRow.running === false && lostRow.runtimeState === "stopped" && lostRow.sessionEnd === "lost" && (lostRow.waitingOnYou ?? null) === null && (lostRow.outsideOats ?? null) === null, "oats status: the kernel's row is the row of a LOST session (launched, not running, \"stopped\", sessionEnd \"lost\", no claim, no report): nothing in it says that the agent never ran", JSON.stringify(lostRow && { launched: lostRow.launched, running: lostRow.running, runtimeState: lostRow.runtimeState, sessionEnd: lostRow.sessionEnd, waitingOnYou: lostRow.waitingOnYou, outsideOats: lostRow.outsideOats }));
+  show("oats status", `${brief(lostRow)}, sessionEnd ${lostRow?.sessionEnd}, launched ${lostRow?.launched}`);
+  check(lostRow !== undefined && printedRows.length === 1, "and that answer holds this agent's row and no other: it is kept whole, as printed", printed.stderr || JSON.stringify(printedRows.map((each) => each.instance)));
+  if (lostRow !== undefined && printedRows.length === 1) evidence.keep("status-failed-at-start.json", printed.stdout);
+  const unstartedThreadId = lostRow?.session?.threadId;
+  const unstartedThread = bbThread(unstartedThreadId);
+  const unstartedEvents = unstartedThreadId === undefined ? [] : bbJson("thread", "messages", unstartedThreadId);
+  const kinds = unstartedEvents.map((event) => event.type);
+  const errors = unstartedEvents.filter((event) => event.type === "system/error");
+  check(unstartedThread?.providerId === "pi" && unstartedThread.status === "error" && unstartedThread.archivedAt == null, "bb: its thread is one of the pi provider's, in \"error\", and listed", JSON.stringify(unstartedThread && { id: unstartedThread.id, providerId: unstartedThread.providerId, status: unstartedThread.status, archivedAt: unstartedThread.archivedAt }));
+  check(errors.length === 1 && errors[0].data?.code === "thread_command_failed" && errors[0].data.message === "Command thread.start failed" && errors[0].data.detail === `Failed to resolve Pi model "${DATED}"` && !kinds.includes("turn/started") && !kinds.includes("thread/identity"), "bb: its events hold ONE system/error (the start's: code thread_command_failed, \"Command thread.start failed\", bb's reason) and never a turn/started nor a thread/identity: the thread failed at its start", JSON.stringify({ kinds, errors: errors.map((event) => event.data) }));
+  show("bb's events", kinds.join(", "));
+  // (The error's own data, and nothing else of the log.)
+  show("bb's error", errors[0]?.data ?? "none");
+  check(piTurns().every((request) => !String(request.model ?? "").includes("20261122")), "and the model was never asked: no request of the mock names the dated id");
+  const unstartedProject = unstartedThread?.projectId;
+
+  // What the plugin says of it, at every view: the sidebar's row, the thread's line with Details open, the agent's page, the home.
+  const ROW_FACTS = `(document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${unstartedThreadId}"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
+  // The line's words: the state's word, then each part after it (none here); its buttons are read apart.
+  const LINE = `JSON.stringify({ state: document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") ?? null, words: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-state")}, ${testId("oats-status-line")} ${testId("oats-status-part")}`)})].map((e) => e.innerText.replace(/\\s+/g, " ").trim()), acts: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}`)})].map((b) => b.innerText.trim()), row: ${textOf(testId("oats-identity-row"))} })`;
+  const HEAD = `(() => { const head = document.querySelector(${q("oats-panel-header")}); if (!head) return ""; const acts = [...head.querySelectorAll('[data-testid^="oats-agent-act-"]')].map((b) => b.innerText.trim()); return acts.length === 0 ? "" : JSON.stringify({ state: (head.querySelector(${q("oats-state")})?.innerText ?? "").trim(), details: head.querySelector(${q("oats-status-bb")}) !== null, acts, block: document.querySelector(${q("oats-outside-agent-block")}) !== null }); })()`;
+  await views("real-pi-unstarted", async ({ page, at, viewport, shot }) => {
+    await page.goto("/");
+    check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
+    const facts = (await page.until(`(() => { const now = ${ROW_FACTS}; return /^Failed/.test(now) ? now : ""; })()`, 40)) || (await page.evaluate(ROW_FACTS));
+    check(facts === `Failed · ${SOUL}`, `${at}: the sidebar's row says "Failed" and its soul, never "session lost"`, String(facts));
+    await page.goto(`/projects/${unstartedProject}/threads/${unstartedThreadId}`);
+    const line = JSON.parse((await page.until(`document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") === "error" && ${LINE}`, 40)) || (await page.evaluate(LINE)));
+    check(line.state === "error" && JSON.stringify(line.words) === JSON.stringify(["Failed"]), `${at}: the thread's line says "Failed" and nothing after it`, JSON.stringify(line));
+    check(JSON.stringify(line.acts) === JSON.stringify(["Start"]) && !/session lost|send it a message|Nobody stopped it|Restart/.test(line.row), `${at}: its one act is Start; nothing of a lost session, of a message, or of Restart`, JSON.stringify(line));
+    await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-bb")} summary`)})?.click()`);
+    const says = await page.until(`(() => { const d = document.querySelector(${q("oats-status-bb")}); return d?.open ? (d.querySelector("p")?.innerText ?? "").trim() : ""; })()`, 10);
+    check(says === `bb says: Failed to resolve Pi model "${DATED}"`, `${at}: Details opens on bb's own reason`, String(says));
+    show("the thread's line", line.row);
+    await shot("thread");
+    await page.goto(`/plugins/oats/agent/${UNSTARTED}`);
+    const head = JSON.parse((await page.until(`(() => { const now = ${HEAD}; return /"state":"Failed"/.test(now) ? now : ""; })()`, 40)) || (await page.evaluate(HEAD)) || "null");
+    check(head !== null && head.state === "Failed" && head.details === true && JSON.stringify(head.acts) === JSON.stringify(["Start…", "Retire…"]) && head.block === false, `${at}: its own page says "Failed", with Details, Start… and Retire… (no Restart), and no sentence of a lost session`, JSON.stringify(head));
+    await shot("page");
+    await page.goto("/plugins/oats/home");
+    const summary = await page.until(`(() => { const now = ${textOf(testId("oats-home-summary"))}; return /failed/i.test(now) ? now : ""; })()`, 40);
+    check(/\b1 failed\b/i.test(summary ?? "") && !/stopped/i.test(summary ?? ""), `${at}: the home counts it failed, not stopped`, summary ?? (await page.evaluate(textOf(testId("oats-home-summary")))));
+  });
+
+  // It is retired through the plugin, from its plan. A thread that failed at its start has no pi of
+  // its own; P5's wait is kept all the same (bb's own pi can work in a home whose thread was opened).
+  const inUnstarted = () => execFileSync("sh", ["-c", `for p in /proc/[0-9]*; do [ "$(readlink $p/cwd 2>/dev/null)" = "$1" ] && cat $p/comm; done; true`, "sh", UNSTARTED_HOME], { encoding: "utf8" }).split("\n").filter(Boolean);
+  const quiet = await until("no process to work in the home of the agent that never started", () => inUnstarted().length === 0, 150);
+  check(Boolean(quiet), "no process works in its home", JSON.stringify(inUnstarted()));
+  const lastPlan = rpc("retirePlan", { instance: UNSTARTED });
+  check(lastPlan.ok && lastPlan.value.instance === UNSTARTED && lastPlan.value.home === UNSTARTED_HOME && lastPlan.value.backend === "bb", "the retire plan is for the agent that never started: its home, on bb", JSON.stringify(lastPlan));
+  show("the retire plan", lastPlan.ok ? lastPlan.value : lastPlan.message);
+  act("retire apply", "retireApply", { instance: UNSTARTED, revision: lastPlan.ok ? lastPlan.value.revision : undefined, key: "retire-6f5e4d3c2b1a" });
+  check(rowOf(UNSTARTED) === undefined && !existsSync(UNSTARTED_HOME), "oats status: no row is left, and the home is removed");
+  const left = bbThread(unstartedThreadId);
+  check(left === undefined || left.archivedAt != null, `bb: its thread is ${left === undefined ? "gone" : "archived"}`, JSON.stringify(left && { id: left.id, status: left.status, archivedAt: left.archivedAt }));
 
   check(browser.errors.length === 0, "no uncaught exception in the page", browser.errors.slice(0, 3).join(" | "));
 } finally {

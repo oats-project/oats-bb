@@ -7,6 +7,7 @@
 // (`urgent`: what a folded parent is marked with).
 import { describe, expect, test } from "vitest";
 import type { Agent, BbThread, Row } from "../../model/types";
+import { board } from "../../app/home/board";
 import { flatten, view } from "../../model/view";
 
 const agent = (instance: string, over: Partial<Agent> = {}): Agent => ({
@@ -166,5 +167,21 @@ describe("the one order, over the one tree", () => {
     const agents = [tmux("lead"), agent("outside-child", { parent: "lead", running: false, runtimeState: "stopped", sessionEnd: "stopped", outsideOats: { code: "running-outside-oats", backend: "bb", message: "a harness runs in outside-child on bb" } }), tmux("failed-child", { parent: "lead", running: false, sessionEnd: "exited", runtimeState: "shell" })];
     const { rows } = view(agents, threadsOf(agents));
     expect(drawn(rows)).toBe("lead!outside[outside-child failed-child]");
+  });
+});
+
+describe("the home's list of every agent is the tree with every row shown", () => {
+  test("an agent with no bb thread comes right after its parent's rows, where the sidebar draws it (before the one tree: at its own place among the roots)", () => {
+    const agents = [tmux("early-tmux-child", { parent: "lead" }), agent("first"), agent("lead"), agent("lead-child", { parent: "lead" }), tmux("under-tmux", { parent: "early-tmux-child" }), agent("last")];
+    const drawnNow = view(agents, threadsOf(agents));
+    expect(drawn(drawnNow.rows)).toBe("first lead[early-tmux-child[under-tmux] lead-child] last");
+    expect(board(drawnNow, Date.parse("2026-11-24T12:00:00.000Z")).all.map((entry) => [entry.agent.instance, entry.thread === null])).toEqual([
+      ["first", false],
+      ["lead", false],
+      ["early-tmux-child", true],
+      ["under-tmux", true],
+      ["lead-child", false],
+      ["last", false],
+    ]);
   });
 });

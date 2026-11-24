@@ -26,7 +26,8 @@ import type { ConfirmProps } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { agentName, readAge } from "../ui/words";
 import { notify } from "../ui";
-import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "../spawn/models";
+import { restartModel } from "../../model/restart-model";
+import { harnessLabel, KEEP_HARNESS, resolvedLabel, useHarnessStates, useModelSuggestions } from "../spawn/models";
 import {
   applyRefused,
   applying,
@@ -573,6 +574,18 @@ type StartState =
   | { phase: "settled"; check: Check | null; outcome: Outcome; refusal: Refusal | null; threadId: string | null };
 
 /** What a model field may hold: one line that cannot be read as an option (kernel/spawn.ts `checkModel` holds the rule; this says it before any call). */
+/** How long bb's model list may be read before a Restart reads it as no list (the New agent form's bound for the same read). */
+const LIST_WAIT_MS = 10_000;
+/** Whether `of` (null: nothing is waited for) has stayed the same for `ms`. A wait that ends, or changes, starts over. */
+function useOverdue(of: string | null, ms: number): boolean {
+  const [late, setLate] = useState<string | null>(null);
+  useEffect(() => {
+    if (of === null) return;
+    const timer = setTimeout(() => setLate(of), ms);
+    return () => clearTimeout(timer);
+  }, [of, ms]);
+  return of !== null && late === of;
+}
 const isModel = (model: string): boolean => model.length <= 256 && !model.startsWith("-") && !/[\0\n\r]/.test(model);
 
 /** Why the agent cannot be started now, by the kernel's own row (the Desktop's start gate); null when it can. */
@@ -684,6 +697,28 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const suggestions = useModelSuggestions(known === null || known.backend !== "bb" ? null : running);
   const held = state.phase === "ready" ? gate(verb, state.check) : null;
 
+  // A RESTART stops the running session before the provider judges what was asked of it: the kernel's order. So
+  // what was CHANGED is sent only when it can be shown to start (model/restart-model.ts): a model bb's list for the
+  // harness serves exactly once, on a harness bb can run here. Held here, in the app: nothing is sent to the plugin's
+  // server. (A start that is refused harms nothing: the Start dialog holds none of this.)
+  const restarts = verb === "restart" && known !== null && known.backend === "bb";
+  const harnessChanged = known !== null && harness !== "" && harness !== known.harness;
+  const stateOf = useHarnessStates();
+  const notReady = restarts && harnessChanged ? stateOf(harness) : null;
+  // A list bb is still reading says nothing yet; one still unread after LIST_WAIT_MS reads as no list, which holds.
+  const listPending = restarts && typed !== "" && suggestions.status === "loading";
+  const overdue = useOverdue(listPending ? `${running ?? ""}` : null, LIST_WAIT_MS);
+  const hold = !restarts
+    ? null
+    : restartModel({ typed, harnessChanged, harnessReady: notReady === null, listed: suggestions.status === "loading" && !overdue ? { status: "loading" } : { status: "ready", ids: suggestions.models.map((each) => each.id) } });
+  const heldModel = hold !== null && hold.kind === "held" ? hold : null;
+  /** The word on the Model field and beside the button; for a harness bb cannot run, the form's own sentence under the Harness field. */
+  const modelWord = heldModel === null || heldModel.why === "harness-not-ready" ? null : heldModel.why === "required" ? START.required : heldModel.why === "not-found" ? START.notFound : START.pickProvider;
+  const harnessWord = heldModel !== null && heldModel.why === "harness-not-ready" && notReady !== null ? notReady.sentence : null;
+  // Beside the button: the held word (for a harness bb cannot run, the form's own mark of it; its sentence is under
+  // the Harness field); while the list is read, off with no word (it answers at once from bb's cache).
+  const notArmed = hold === null || hold.kind === "armed" ? null : hold.kind === "reading" ? "" : heldModel !== null && heldModel.why === "harness-not-ready" ? (notReady?.mark ?? "") : modelWord;
+
   // What this start is, from the kernel's row as the check read it. On bb: a new thread, with a harness and a
   // model to choose. On tmux: no thread and no choice; and where its session was LOST, a resume, unless the
   // person turned on the plain start.
@@ -692,7 +727,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const resumes = lost && !fresh;
 
   const start = () => {
-    if (state.phase !== "ready" || held !== null || (onBb && badModel)) return;
+    if (state.phase !== "ready" || held !== null || (onBb && badModel) || notArmed !== null) return;
     const { check: checked } = state;
     setChanged(false);
     setState({ phase: "running", check: checked });
@@ -793,7 +828,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       happens={known === null || state.phase === "settled" ? [] : startSays(verb, { onBb, resumes, harness: known.harness, begins })}
       kept={known === null || state.phase === "settled" ? [] : [START.continues]}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
-      blocked={held?.reason ?? (onBb && badModel ? START.badModel : null)}
+      blocked={held?.reason ?? (onBb && badModel ? START.badModel : notArmed)}
       notice={
         changed ? (
           // A resume the kernel refused because the row changed: said first, as a plan that changed is.
@@ -840,7 +875,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             </div>
           ) : null}
           {onBb && known.harnesses.length > 1 ? (
-            <Field label={START.harness}>
+            <Field label={START.harness} error={harnessWord}>
               <select data-testid="oats-start-harness" className={INPUT} value={harness} disabled={!editable} {...(editable ? { "data-autofocus": "" } : {})} onChange={(event) => setHarness(event.currentTarget.value)}>
                 <option value="">{shown(resolvedLabel(KEEP_HARNESS, recorded))}</option>
                 {known.harnesses.map((id) => (
@@ -856,8 +891,9 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           <Field
             label={START.model}
             optional
-            hint={shown(`${modelHelp(running !== null && running === recorded ? known.model : null)}${suggestions.note === null ? "" : ` ${suggestions.note}`}`)}
-            error={badModel ? START.badModel : null}
+            // (In a Restart the note that any model ID can be typed is not drawn: a typed id bb does not list is held there.)
+            hint={shown(`${modelHelp(running !== null && running === recorded ? known.model : null)}${suggestions.note === null || restarts ? "" : ` ${suggestions.note}`}`)}
+            error={badModel ? START.badModel : modelWord}
           >
             <input
               data-testid="oats-start-model"
@@ -873,9 +909,16 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             />
           </Field>
           )}
+          {heldModel !== null && heldModel.why === "not-found" && !badModel ? (
+            // The one way to a model bb does not list, a press away, only while the field says so.
+            <Disclosure summary="Details" testId="oats-start-unlisted">
+              <p className="text-xs text-muted-foreground">{START.unlisted}</p>
+            </Disclosure>
+          ) : null}
           {!onBb ? null : (
           <datalist id={`oats-start-models-${request.id}`}>
-            {suggestions.models.map((each) => (
+            {/* Several listed models serve the id that was typed: the field offers only those. */}
+            {suggestions.models.filter((each) => heldModel === null || heldModel.why !== "pick-provider" || heldModel.serving.includes(each.id)).map((each) => (
               <option key={each.id} value={each.id} label={shown(each.label)} />
             ))}
           </datalist>

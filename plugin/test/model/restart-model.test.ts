@@ -10,7 +10,7 @@ const loading = { status: "loading" as const };
 const pi = ready("anthropic/claude-opus-5-5", "openrouter/claude-opus-5-5", "anthropic/claude-haiku-5", "openai/gpt-6", "openrouter/openai/gpt-6");
 /** Claude Code's list: bare ids, no providers. */
 const claude = ready("claude-opus-5-5", "claude-haiku-5", "opus");
-const held = (why: "required" | "not-found" | "pick-provider", by: string[] = []) => ({ kind: "held", why, serving: by });
+const held = (why: "harness-not-ready" | "required" | "not-found" | "pick-provider", by: string[] = []) => ({ kind: "held", why, serving: by });
 
 describe("a restart with the model unchanged is sent as today, whatever bb lists", () => {
   test.each([["a list", pi], ["an empty list", ready()], ["a list not read yet", loading]])("the field blank, the harness the agent's own, %s", (_, listed) => {
@@ -65,6 +65,20 @@ describe("a harness that was changed", () => {
     expect(restartModel({ typed: "openai/gpt-6", harnessChanged: true, listed: pi })).toEqual({ kind: "armed", model: "openai/gpt-6" });
     expect(restartModel({ typed: "gpt-9", harnessChanged: true, listed: pi })).toEqual(held("not-found"));
     expect(restartModel({ typed: "gpt-6", harnessChanged: true, listed: loading })).toEqual({ kind: "reading" });
+  });
+});
+
+describe("a harness changed to one whose bb provider is not ready (the same harm by another door)", () => {
+  test("held whatever the model and the list: no model makes it start", () => {
+    for (const typed of ["", "openai/gpt-6", "gpt-9"]) for (const listed of [pi, ready(), loading]) expect(restartModel({ typed, harnessChanged: true, listed, harnessReady: false }), typed).toEqual(held("harness-not-ready"));
+  });
+  test("never for the agent's own harness, left unchanged: it runs on it", () => {
+    expect(restartModel({ typed: "", harnessChanged: false, listed: pi, harnessReady: false })).toEqual({ kind: "armed", model: null });
+    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: false, listed: pi, harnessReady: false })).toEqual({ kind: "armed", model: "openai/gpt-6" });
+  });
+  test("a changed harness bb says nothing against goes by the model's rule", () => {
+    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: true, listed: pi, harnessReady: true })).toEqual({ kind: "armed", model: "openai/gpt-6" });
+    expect(restartModel({ typed: "", harnessChanged: true, listed: pi, harnessReady: true })).toEqual(held("required"));
   });
 });
 

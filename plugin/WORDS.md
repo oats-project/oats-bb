@@ -443,7 +443,7 @@ its meaning now. A row above that was shortened says its new words there, and ke
 | "Continue in this instance’s existing home, with its identity, work and notes." | Start, Restart: what is kept | nothing |
 | "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing." | Restart | "Stops what it is doing now." |
 | "To carry on its conversation, send it a message in its thread instead." | Start, Restart of an agent that was cut off | "To continue its conversation, message it instead." |
-| "Model for this start" / "Leave blank to use the selected harness’s default model. This choice is saved for later starts of this instance. No model suggestions reported. Any model ID can be typed." | the model field | "Model · optional"; "Saved for later starts too." is under Details |
+| "Model for this start" / "Leave blank to use the selected harness’s default model. This choice is saved for later starts of this instance. No model suggestions reported. Any model ID can be typed." | the model field | "Model · optional"; "The model is saved for later starts too." is under Details (away from the field the line names what is saved) |
 | "Ready to start." | under the fields | nothing: the button is on |
 | "Checking configuration and restarting…" | while a restart runs | "Restarting…" |
 | "Something in this instance's home blocks starting, usually a start lock an earlier OATS left; OATS's message names it. Nothing was started. Remove it once no earlier OATS is running: waiting will not clear it." | a start refused | "A start lock from an earlier OATS blocks this. Remove it (Details names it)." |

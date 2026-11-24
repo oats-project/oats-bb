@@ -731,7 +731,9 @@ const scenes = [
     name: "Automations without oats",
     run: async ({ page, at, viewport, check }) => {
       const gate = await open(page, "", testId("oats-automations-gate"));
-      check(gate === `OATS is not installed on ${MACHINE} Install OATS there, or set the path to oats in the plugin's settings. OATS_NOT_FOUND ▸ Details Retry Open settings`, `${at} with oats gone the page shows the plugin's one notice for it: the machine by name, what to do, Retry and the way to the settings`, gate);
+      // (The plugin's one notice since the text cut: its title, Details, the acts; what to do and the code are one press away.)
+      const under = await page.evaluate(`(document.querySelector(${JSON.stringify(`${testId("oats-automations-gate")} ${testId("oats-notice-details")}`)})?.textContent ?? "")`);
+      check(gate === `OATS is not installed on ${MACHINE} ▸ Details Retry Open settings` && /Install OATS there, or set the path to oats in the plugin's settings\..*OATS_NOT_FOUND/.test(under), `${at} with oats gone the page shows the plugin's one notice for it: the machine by name, Retry and the way to the settings; what to do and the code under Details`, `${gate} | ${under}`);
       await page.shot(`automations-${viewport.name}-no-oats`, { targets: true });
     },
   },

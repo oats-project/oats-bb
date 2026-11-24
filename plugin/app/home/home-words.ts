@@ -6,7 +6,8 @@ import { STATE } from "../ui/words";
 
 export const NEEDS_YOU = "Needs you";
 export const NOTHING_NEEDS_YOU = "Nothing needs you.";
-export const WORKING = "Working";
+/** The heading of the home's list of agents that run: true of every row in it, a bb agent that works and a tmux agent that runs alike (the lead's T4, 24 Nov 2026: OATS cannot tell a tmux agent's work from its rest, and its row says "Running"). */
+export const WORKING = "Running";
 export const FINISHED = "Unread";
 /** Home › Agents: every agent OATS has, under this word (no tile opens it: it is reached by its address). */
 export const EVERY_AGENT = "Agents";

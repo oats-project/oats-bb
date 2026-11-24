@@ -53,7 +53,7 @@ test("what needs you first, then the tiles, who works and what is unread; no hea
   expect(slot.queryByTestId("oats-home-summary")).toBeNull();
   expect(slot.queryByTestId("oats-tile-agents")).toBeNull();
   const working = slot.getByTestId("oats-home-working");
-  expect(heading(working)).toBe(`Working${within(working).getAllByTestId("oats-working-row").length}`);
+  expect(heading(working)).toBe(`Running${within(working).getAllByTestId("oats-working-row").length}`); // (the heading is true of all its rows: a tmux agent that runs is among them; the lead's T4)
   // The heading says the state: no row under it repeats the word.
   for (const row of within(working).getAllByTestId("oats-working-row")) expect(within(row).queryByTestId("oats-state")).toBeNull();
   const finished = slot.getByTestId("oats-home-finished");
@@ -707,7 +707,7 @@ test("more than five at work show five, then all on a press", async () => {
   const many: Agent[] = Array.from({ length: 7 }, (_unused, index) => ({ ...base, instance: `works-${index}-helper`, backend: "tmux", threadId: null, running: true, runtimeState: "running", waiting: null }));
   const slot = await homePage({ rpc: handlers({}, many), sidebarThreads: calm() });
   const working = await slot.findByTestId("oats-home-working");
-  expect(heading(working)).toBe("Working7");
+  expect(heading(working)).toBe("Running7");
   expect(within(working).getAllByTestId("oats-working-row")).toHaveLength(5);
   fireEvent.click(within(working).getByTestId("oats-home-working-all"));
   expect(within(working).getAllByTestId("oats-working-row")).toHaveLength(7);

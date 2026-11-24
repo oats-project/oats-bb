@@ -177,10 +177,20 @@ many, and the remedy. Remove old archived threads of that project in bb: for eac
 > restore-environment <id>`, which bb's own refusal names), and send it a message. And
 > where the retire **archived only** (the cases under "Retires"), Unarchive and a
 > message are enough. A session revived that way runs with NO OATS around it: no status
-> row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not
-> released (a team leave waiting for its controller, a retained seat, an alias held), it
-> can send mail as the retired agent. Retire bb agents the ordinary way, which removes
-> the home: then nothing can start.
+> row, no hooks OATS runs for it, no stop by OATS. Retire bb agents the ordinary way,
+> which removes the home: then nothing can start.
+>
+> **Whether such a session can send mail as the retired agent** depends on the oats.aweb
+> that retired the home:
+> - **oats.aweb 1.49.0 or later:** not through `aw`'s ordinary lookup. A retire whose
+>   answer exits 0 removes the home's aweb keys, and one that fails holds them aside for
+>   the retry (`aw` then answers "not initialized"). That too is a step in the way, not
+>   a boundary: held keys stay in the home's `.oats-aweb/held/`, readable by the
+>   session's own user, and a retire that crashed leaves them in place (oats.aweb's
+>   README, "What retire does with the key material").
+> - **An older oats.aweb:** the home keeps its keys. Where its aweb identity was not
+>   released (a team leave waiting for its controller, a retained seat, an alias held), a
+>   revived session can send mail as the retired agent.
 
 bb has no "stopped" status: a stopped thread reads `idle`, like one that finished its
 turn. The kernel records its own stop and answers "stopped" itself, and the provider's
@@ -493,11 +503,11 @@ never a failed start.
 
 ## pi
 
-A soul whose harness is pi runs on bb as a thread of bb's own pi provider
-(`bb thread spawn --provider pi --model <the launch's model>`; a model is
-`<pi provider>/<id>`, which bb splits itself). Everything above holds for it, except what
-follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5
-(`test/contract/pi.test.mjs`).
+A soul whose harness is pi runs on bb as a thread of bb's own pi provider (`bb thread
+spawn --provider pi --model <the launch's model>`; a model is `<pi provider>/<id>`, which
+bb splits itself, or the bare `<id>` where one pi provider serves it: "The model",
+below). Everything above holds for it, except what follows. Checked against bb-app at
+`bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5 (`test/contract/pi.test.mjs`).
 
 **What a pi launch carries: three variables, and no argument.**
 
@@ -547,6 +557,89 @@ follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.
   pi. So a project-level `PATH` set by hand in an OATS home's bb project does not survive
   a launch, of either harness. bb shows no value of its env back, and no record of it
   is kept in the home.
+
+**The model must be one bb's pi resolves.** bb takes any model id when a thread is
+spawned and resolves it only when the thread starts. An id its pi cannot resolve used to
+leave a spawn that looked launched (a thread id, `launched: true`) over a thread that had
+failed as it started: `oats status` then read not running, session lost. So a pi launch
+that names a model reads the models bb lists for its pi (`bb provider models pi`, one
+call) and is **refused before anything is started**, with `E_BACKEND_LAUNCH_ARG`:
+
+| the launch's model | the refusal |
+|---|---|
+| a bare id no pi provider serves, or a `<provider>/<id>` pi does not have | `pi has no model "<id>" (if you just added it to pi, try again in a minute)` |
+| a bare id two or more pi providers serve | `pi model "<id>" is served by A and B: use A/<id> or B/<id> (if you just changed that in pi, try again in a minute)` |
+
+The rule is bb's own, and no stricter: the id is one model's `<provider>/<id>` exactly,
+or it is a bare id and exactly one model's. Nothing is matched loosely (no prefix, no
+pattern, no other case). So a soul may name a bare id, `claude-fable-5.1`, as long as
+one of pi's providers serves it; where a second one comes to serve it, name the one you
+want.
+
+**Where the list cannot settle it, nothing is refused**: the launch goes on as it did
+before this check, and says once `could not check the model "<id>" against pi's model
+list: <why>`. That is the case when bb's list cannot be read (bb does not answer in
+time, answers an error, an empty list or one the provider cannot read), and in three
+cases where bb lists fewer models than its pi resolves (the first two seen at bb-app
+0.50.1, pi 1.5.2):
+
+- a model whose id ends in a date (`-YYYYMMDD`) is held back from the list, and listed
+  only where it is named as its exact `<provider>/<id>`: so named, it is found. Any
+  other id that ends in a date and is not listed is not checked (a bare id may itself
+  hold a slash, so an id that looks full may be a held-back model's bare one);
+- where the pi configuration bb's server runs with sets `enabledModels`
+  (`settings.oats.bb.piAgentDir`, its `settings.json`), bb lists only those models, and
+  a thread still starts on any other model pi has. A model that is not listed is then
+  not checked. Two listed models with the id are still refused (a bare id with no
+  slash: one with a slash may be a held-back model's exact `<provider>/<id>`, and is
+  not checked). bb's pi keeps the
+  setting it started with: after `enabledModels` is removed, bb goes on listing only
+  those models, at least while its pi is in use. So a model that is not listed is refused only
+  where that `settings.json` sets no `enabledModels` **and has not changed since bb
+  started** (bb-app's own record of its start, `bb-app-runtime.json` in
+  `settings.oats.bb.dataDir`); where it has, or that record cannot be read, the model
+  is not checked. After a change to bb's pi settings, restart bb;
+- a home with a pi configuration of its own (`<home>/.pi`) may give its thread models
+  that bb, which lists from a directory of its own, does not show: its launch is not
+  refused for a model that is not listed.
+
+**bb's list may also be older than pi's configuration.** bb's server serves the list it
+fetched for a minute as it is, while a thread starts by what pi has now. So where the
+pi configuration bb's server runs with changed in the last minute and a half (its
+`settings.json`, `models.json` or `auth.json`: a model or a provider added or removed, a
+login), neither refusal is given: the launch goes on with the warning. pi writes
+`auth.json` itself when it renews a login, and that counts too.
+
+**A wrong refusal is possible in two cases, and only these:**
+
+- where bb's own refresh of pi's list has failed (bb then serves the list it kept, of
+  any age, and says nothing) AND a model was added to pi since that list was fetched
+  (or a provider removed). It lasts until bb's next good refresh;
+- where one of those three files was removed in the last minute (a provider or a login
+  taken away with its file): a removed file has no time left to read. Only the
+  two-provider refusal can be wrong then, naming a provider pi no longer has, for a
+  minute.
+
+That is why each refusal ends with the way out: try again in a minute.
+
+What this rule reads beside bb's list is bb-app's and pi's own layout (`startedAt` in
+`bb-app-runtime.json`, the three files' times), pinned against bb-app at `bb-version`
+by `test/contract/pi.test.mjs`; whatever cannot be read warns, and never refuses.
+
+One edge is left as it was: a bare id that bb lists once and that a second, held-back
+model also has (a dated one, or one outside `enabledModels`) passes here, and bb refuses
+it when the thread starts ("Ambiguous Pi model"). Name the one you want,
+`<provider>/<id>`.
+
+Then an id bb's pi cannot resolve ends as before: a thread that fails as it starts.
+
+The check of a planned launch (the spawn's preview, and the check before every launch)
+says the same, as a problem or as the warning `session-provider-pi-model-unchecked`,
+where the kernel hands it the launch's model (`launch.model`); a kernel that does not
+is refused at the launch itself, with nothing created in bb. The launch's own warning
+goes to the provider command's standard error (a launch result has no place for it).
+Nothing is asked of bb for a Claude launch, a pi launch with no model (bb then starts pi
+on its own default), or a launch that is refused for something else.
 
 **The home's skills load through @awebai/oats-pi**, the OATS bridge for pi, and only
 when `OATS_INSTANCE_HOME` names the home: that is what the project env is for (never
@@ -639,6 +732,7 @@ launch checks first:
 | bb's server or host daemon does not answer | `E_BACKEND_UNREACHABLE` |
 | the host daemon is not connected yet, or serves another server; with `hostDaemonPort` set, the daemon at that port is not a connected host of the server (it does not say which host it is, the server does not list it, or its hosts cannot be read); bb reports the provider of the launch's harness (claude-code, or pi) as `not_installed`, `unsupported_version`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read; for a pi launch, the pi configuration bb's server runs with does not list @awebai/oats-pi | `E_BACKEND_NOT_READY` |
 | for a pi launch, that configuration lists @awebai/pi, and `AWEB_DELIVERY` is not in bb's machine env | `E_BACKEND_PI_LISTENER` |
+| for a pi launch whose model the check is handed, bb's pi has no such model, or two of its providers serve that bare id ([pi](#pi), "The model") | `E_BACKEND_LAUNCH_ARG` |
 
 Which harness these speak for: with the launch the kernel plans, only that harness's
 facts are problems (a pi launch is not held up because bb's Claude is signed out, nor a

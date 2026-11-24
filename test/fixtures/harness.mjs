@@ -1,7 +1,7 @@
 // What the unit tests share: a fake bb on disk, a fake bb server and host daemon on
 // loopback, and the provider run as the kernel runs it (a process, JSON in, JSON out).
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -15,6 +15,9 @@ export const providerBin = join(capabilityDir, "bin/oats-bb.mjs");
 // The same session commands with bb's sandboxed modes taken, which the provider's own
 // command refuses, as they are not offered (test/fixtures/sandboxed-bin.mjs).
 export const sandboxedBin = join(repoRoot, "test/fixtures/sandboxed-bin.mjs");
+// The same session commands two minutes from now: for the pi model check, which refuses
+// nothing right after pi's configuration changed (test/fixtures/later-bin.mjs).
+export const laterBin = join(repoRoot, "test/fixtures/later-bin.mjs");
 const fakeBb = join(here, "fake-bb.mjs");
 
 // The PATH the provider runs with in the tests: a directory holding a `bwrap` (so the
@@ -57,6 +60,13 @@ export const tellQueued = (threadId, waitingOn = "interaction", id = "qmsg_3sgzt
 export const pendingInteraction = (threadId, id = "pint_m5byy7u9ux") => ({
   id, threadId, status: "pending", resolvedAt: null, providerId: "claude-code",
   payload: { kind: "approval", subject: { kind: "command", command: "echo SECRET-LOOKING-COMMAND" }, availableDecisions: ["allow_once", "deny"] },
+});
+/** One model of `bb provider models pi --json`, as bb-app 0.50.1 lists one (copied from a
+ *  real server's answer; test/contract/pi.test.mjs reads the real list): `id` and `model`
+ *  are `<pi provider>/<id>`, `routeProviderId` the pi provider. */
+export const piModelRow = (provider, id, extra = {}) => ({
+  id: `${provider}/${id}`, model: `${provider}/${id}`, displayName: id, routeProviderId: provider, description: "Non-reasoning model via Pi", reasoningDiscovery: "known",
+  supportedReasoningEfforts: [{ reasoningEffort: "none", description: "No extended thinking" }], defaultReasoningEffort: "none", isDefault: false, ...extra,
 });
 export const NOT_FOUND = { error: { code: "thread_not_found", message: "HTTP 404: Thread not found" } };
 export const QUEUE_GONE = { error: { code: "invalid_request", message: "HTTP 404: Queued message not found" } };
@@ -128,12 +138,24 @@ export async function fakeBackend(t, overrides = {}) {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "thread-storage"));
   // The pi configuration bb's server runs with, as `pi install npm:@awebai/oats-pi` leaves
-  // one: the bridge, and no aweb extension. `piSettings(doc)` rewrites its settings.json.
+  // one: the bridge, and no aweb extension. `piSettings(doc)` rewrites its settings.json,
+  // as before this bb started: bb-app's own record of its start in its data directory
+  // (bb-app-runtime.json, bb-app 0.50.1's keys) is written again, a moment later than the
+  // file. `piSettings(doc, { bbRestarted: false })` changes the file under a running bb.
   const piAgentDir = join(dataDir, "pi-agent");
   mkdirSync(piAgentDir);
-  const piSettings = (doc) => writeFileSync(join(piAgentDir, "settings.json"), typeof doc === "string" ? doc : JSON.stringify(doc, null, 2));
+  let startedAt = 0;
+  const bbStarted = (at) => { startedAt = at; writeFileSync(join(dataDir, "bb-app-runtime.json"), JSON.stringify({ entryPath: "/usr/local/bin/bb-app", pid: 15, serverUrl, startedAt: new Date(at).toISOString(), surface: "web", version: VERSION }, null, 2)); };
+  const piSettings = (doc, { bbRestarted = true } = {}) => {
+    const file = join(piAgentDir, "settings.json");
+    // (A change under a running bb is later than the start this fake recorded, to the millisecond.)
+    while (!bbRestarted && Date.now() <= startedAt + 1) { /* the clock moves on */ }
+    writeFileSync(file, typeof doc === "string" ? doc : JSON.stringify(doc, null, 2));
+    const stat = statSync(file);
+    if (bbRestarted) bbStarted(Math.ceil(Math.max(stat.mtimeMs, stat.ctimeMs)) + 1);
+  };
   piSettings({ packages: ["npm:@awebai/oats-pi@0.70.0"] });
-  return { state, requests, daemonRequests, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, dataDir, piAgentDir, piSettings, daemonPort: daemon.address().port,
+  return { state, requests, daemonRequests, bbStarted, server: serverUrl, daemon: daemonUrl, serverPort: server.address().port, dataDir, piAgentDir, piSettings, daemonPort: daemon.address().port,
     // As a deployment whose bb is not on bb's default ports sets them: the server, and the
     // host daemon's port (the daemon's address is given too, and agrees with it). A test
     // that gives a daemon address of its own gives no port with it, unless it says one.
@@ -200,9 +222,9 @@ export async function call(verb, input, options) {
 
 /** The same call, with what the command wrote beside its answer. → { doc, stderr }:
  *  the kernel does not read a provider's stderr, and a person running the command does. */
-export async function callSeen(verb, input, { settings = {}, bb, env = {}, sandboxedModes = false }) {
+export async function callSeen(verb, input, { settings = {}, bb, env = {}, sandboxedModes = false, bin = sandboxedModes ? sandboxedBin : providerBin }) {
   const request = requestFor(verb, input);
-  const run = await runBin(["session", verb], { bin: sandboxedModes ? sandboxedBin : providerBin, stdin: JSON.stringify(request), env: { ...bb.env, OATS_CAPABILITY: "oats.bb", OATS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...settings, cli: bb.cli }), ...env } });
+  const run = await runBin(["session", verb], { bin, stdin: JSON.stringify(request), env: { ...bb.env, OATS_CAPABILITY: "oats.bb", OATS_BACKEND: "bb", OATS_SETTINGS: JSON.stringify({ ...settings, cli: bb.cli }), ...env } });
   if (run.status !== 0 || run.doc === null) throw new Error(`the provider did not answer one JSON document (exit ${run.status}): ${run.stdout}\n${run.stderr}`);
   if (run.stdout.trim().split("\n").length !== 1) throw new Error(`more than one line on stdout: ${run.stdout}`);
   const expected = ["schemaVersion", "phase", "capability", "provider", "verb", "ok", run.doc.ok === true ? "result" : "error"];

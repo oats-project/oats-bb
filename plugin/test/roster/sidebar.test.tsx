@@ -153,7 +153,7 @@ test("children are collapsed by default: a parent has ONE chevron before its nam
   const lead = rowOn(slot, LEAD)!;
   expect([chevron.tagName, chevron.getAttribute("type"), chevron.getAttribute("data-instance")]).toEqual(["BUTTON", "button", "redesign-ui-lead"]);
   expect([chevron.getAttribute("aria-expanded"), chevron.getAttribute("aria-label")]).toEqual(["false", "Show Redesign ui lead's agents"]);
-  expect(chevron.textContent).toBe("▸"); // the pattern book's mark for something that opens, and nothing else: no number
+  expect(chevron.textContent).toBe("▸"); // closed: the mark that points right, and nothing else: no number
   // A button of its own: in the row's <li>, before the row's link (so before it in the tab order), never inside the link.
   expect(chevron.closest("li")).toBe(lead.closest("li"));
   expect(lead.contains(chevron)).toBe(false);
@@ -164,6 +164,7 @@ test("children are collapsed by default: a parent has ONE chevron before its nam
   fireEvent.click(chevron);
   expect(ids(slot.getAllByTestId("oats-agent-row"))).toEqual(["thr_release", "thr_ci", "thr_research", "thr_redesign", "thr_mockups", "thr_harvest", "thr_digest"]);
   expect([toggles(slot)[0]!.getAttribute("aria-expanded"), toggles(slot)[0]!.getAttribute("aria-label")]).toEqual(["true", "Hide Redesign ui lead's agents"]);
+  expect(toggles(slot)[0]!.textContent).toBe("▾"); // open: the mark that points down
   // The press is the chevron's own: it opens no thread.
   expect([slot.inspection.navigateCalls, navigated()]).toEqual([[], 0]);
   // One more closes it.
@@ -780,4 +781,33 @@ test("every roster row's name carries the whole instance name as its title, a bb
   expect(titles.every((title) => typeof title === "string" && title.length > 0)).toBe(true);
   const threadless = slot.getByTestId("oats-agent-row-threadless");
   expect(within(threadless).getByTestId("oats-row-name").getAttribute("title")).toBe("kernel-fix-developer");
+});
+
+// The chevron's mark, per state: closed points RIGHT, open points DOWN, and the off one (its parent holds the row on
+// screen) is drawn as the open one. Two marks, never one turned: no rotation and no transition (a turned glyph was
+// caught mid-turn in an image, pointing left); and one box of one size, whatever the width.
+test("the chevron's mark: right while closed, down while open, the off one as open; never a turned glyph, and the same box in every state", async () => {
+  const mark = (slot: { container: HTMLElement }) => {
+    const element = toggles(slot)[0]!.querySelector<HTMLElement>('[data-testid="oats-row-toggle-mark"]')!;
+    return { glyph: element.textContent, open: element.getAttribute("data-open"), hidden: element.getAttribute("aria-hidden"), classes: element.className.split(/\s+/).sort().join(" "), turned: /rotate|transition|transform/.test(`${element.className} ${toggles(slot)[0]!.className}`), styled: element.getAttribute("style") };
+  };
+  const BOX = "inline-flex items-center justify-center leading-none size-4 text-xs";
+  const { slot } = await sidebar();
+  await slot.findByTestId("oats-tree");
+  const closed = mark(slot);
+  expect(closed).toEqual({ glyph: "▸", open: "false", hidden: "true", classes: BOX, turned: false, styled: null });
+  fireEvent.click(toggles(slot)[0]!);
+  const open = mark(slot);
+  expect(open).toEqual({ glyph: "▾", open: "true", hidden: "true", classes: BOX, turned: false, styled: null });
+  fireEvent.click(toggles(slot)[0]!);
+  expect(mark(slot).glyph).toBe("▸");
+  cleanup();
+  resetApp();
+  // Off: the parent holds the thread on screen. Drawn as the open form, in the same box.
+  const pinned = await sidebar({}, "thr_mockups");
+  await pinned.slot.findByTestId("oats-tree");
+  expect((toggles(pinned.slot)[0] as HTMLButtonElement).disabled).toBe(true);
+  expect(mark(pinned.slot)).toEqual(open);
+  // No size of the mark or of its button depends on the width: no class of a breakpoint on either.
+  expect(`${toggles(pinned.slot)[0]!.className} ${open.classes}`).not.toMatch(/\b(sm|md|lg|xl):/);
 });

@@ -60,7 +60,7 @@ export default [
         const toggle = `${testId("oats-sidebar")} ${testId("oats-row-toggle")}`;
         const fold = `JSON.stringify({ rows: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}`)})].map((e) => e.getAttribute("data-sidebar-thread-id")), toggles: [...document.querySelectorAll(${JSON.stringify(toggle)})].map((b) => [b.tagName, b.getAttribute("data-instance"), b.getAttribute("aria-expanded"), b.getAttribute("aria-label"), b.innerText.trim()]) })`;
         const closedNow = { toggles: [["BUTTON", "redesign-ui-lead", "false", "Show Redesign ui lead's agents", "▸"]] };
-        const openNow = { toggles: [["BUTTON", "redesign-ui-lead", "true", "Hide Redesign ui lead's agents", "▸"]] };
+        const openNow = { toggles: [["BUTTON", "redesign-ui-lead", "true", "Hide Redesign ui lead's agents", "▾"]] }; // (open: the mark that points down; closed: right)
         const is = (read, want, kids) => JSON.stringify(read.toggles) === JSON.stringify(want.toggles) && read.rows.length === (kids ? 7 : 5) && KIDS.every((id) => read.rows.includes(id) === kids);
         const loaded = JSON.parse(await page.evaluate(fold));
         check(is(loaded, closedNow, false), `${at} on load every parent is closed: the five roots on bb are rows, the lead's two children are not, and the lead has ONE chevron, a button that says "Show Redesign ui lead's agents" (no count)`, JSON.stringify(loaded));
@@ -86,6 +86,14 @@ export default [
         await page.press("Enter");
         const byEnter = (await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === 7 ? now : ""; })()`, 10)) || (await page.evaluate(fold));
         check(focused === true && is(JSON.parse(byEnter), openNow, true), `${at} the chevron takes the keyboard's focus, and Enter on it opens the lead`, `${focused} ${byEnter}`);
+        // The mark as drawn, open: it points down (its own glyph, never the closed one turned), in a box of 16 px at every width.
+        const MARK = `(() => { const m = document.querySelector(${JSON.stringify(`${toggle} ${testId("oats-row-toggle-mark")}`)}); const r = m.getBoundingClientRect(); const b = m.parentElement.getBoundingClientRect(); return JSON.stringify({ glyph: m.innerText.trim(), turned: getComputedStyle(m).transform !== "none" || getComputedStyle(m.parentElement).transform !== "none", box: [Math.round(r.width), Math.round(r.height)], centred: Math.abs((r.left + r.width / 2) - (b.left + b.width / 2)) <= 1 && Math.abs((r.top + r.height / 2) - (b.top + b.height / 2)) <= 1 }); })()`;
+        const openMark = await page.evaluate(MARK);
+        check(openMark === JSON.stringify({ glyph: "▾", turned: false, box: [16, 16], centred: true }), `${at} the open parent's mark points DOWN: its own glyph, not turned, in a 16 px box centred in the button`, openMark);
+        await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
+        const closedMark = await page.evaluate(MARK);
+        check(closedMark === JSON.stringify({ glyph: "▸", turned: false, box: [16, 16], centred: true }), `${at} the closed parent's mark points RIGHT, in the same box`, closedMark);
+        await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
         const where = await page.evaluate(`location.pathname`);
         check(where === "/", `${at} opening and closing a parent opens no thread`, where);
         await page.shot(`a13-${viewport.name}-sidebar-opened`, { targets: true });

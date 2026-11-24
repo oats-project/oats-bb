@@ -22,7 +22,7 @@ import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
-import { READING as READING_WORD, useReading } from "../roster/reading";
+import { READING as READING_WORD, ReadingLine, readingNow, useActed } from "../roster/reading";
 import { LastObservation, RosterNotice, useLineShowsNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { TMUX } from "../ui";
@@ -189,6 +189,9 @@ function Reply({ name, text, onText, busy, held, said, onSend }: { name: string;
  * thread. No choice and no reply: a message is what put it outside OATS.
  */
 function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
+  // (Asked of the roster this card is drawn from, never by a read of its own: a card that mounts must not read OATS again.)
+  useActed();
+  const reading = readingNow(oats, entry.agent.instance);
   const open = useOpen(oats)(entry);
   const name = agentName(entry.agent.instance);
   const said = outsideOf(oats).of(entry.agent);
@@ -205,14 +208,18 @@ function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: b
           </Button>
         </div>
         {/* The same drawing as under the thread's line: Stop… and Start… are the line's own acts, and Details is under it. */}
-        <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} action={lineActs(said, entry.agent.instance, held, entry.status.state)} />
-        <OutsideWarning said={said} instance={entry.agent.instance} held={held} />
+        {/* Behind a lifecycle result that says this agent changed, until the roster is read again: "Reading…" in the state's place, its acts off (app/roster/reading.tsx: L13). */}
+        {reading ? <ReadingLine action={lineActs(said, entry.agent.instance, true, entry.status.state)} /> : <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} action={lineActs(said, entry.agent.instance, held, entry.status.state)} />}
+        <OutsideWarning said={said} instance={entry.agent.instance} held={held || reading} />
       </Card>
     </li>
   );
 }
 
 function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
+  // (Asked of the roster this card is drawn from, never by a read of its own: a card that mounts must not read OATS again.)
+  useActed();
+  const reading = readingNow(oats, entry.agent.instance);
   const sdk = useSdk();
   const rpc = useRpc<typeof rpcContract>();
   const open = useOpen(oats)(entry);
@@ -369,9 +376,12 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           </p>
         ) : offer === "stopped" ? (
           <div data-testid="oats-needs-stopped" className="flex min-w-0 flex-col gap-2">
-            <p className="m-0 text-xs text-muted-foreground">{STOPPED_WAITS}</p>
+            {/* Behind a result that says it started, until the roster is read again: never "Not running." stated plainly; "Reading…" in its place, Start… off (L13). */}
+            <p role={reading ? "status" : undefined} data-testid={reading ? "oats-needs-reading" : undefined} className="m-0 text-xs text-muted-foreground">
+              {reading ? READING_WORD : STOPPED_WAITS}
+            </p>
             <div className="flex flex-wrap items-center gap-2">
-              <Button data-testid="oats-needs-start" disabled={held} onClick={() => openAct("start", entry.agent.instance)}>
+              <Button data-testid="oats-needs-start" disabled={held || reading} onClick={() => openAct("start", entry.agent.instance)}>
                 {START}
               </Button>
             </div>
@@ -497,7 +507,9 @@ const isLost = (entry: Entry, oats: Ready): boolean => rowWords(entry.status.wor
 function LostRow({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
   const onTmux = entry.thread === null && entry.agent.backend === "tmux";
   // Behind a result that says it started, until the roster is read again (the row is still here, from the roster before): its act is off (L13's rule, app/roster/reading.tsx).
-  const reading = useReading(entry.agent.instance);
+  // (Asked of the roster this row is drawn from, never by a read of its own: a row that mounts must not read OATS again.)
+  useActed();
+  const reading = readingNow(oats, entry.agent.instance);
   // ONE rule with the thread's line: where a MESSAGE is the way on (an agent on bb whose thread bb lists: `messageResumes`),
   // the row's act is Open: it opens that thread, whose line says so. Start… there would begin a NEW conversation where
   // a message keeps the old one. Every other row (tmux; a bb agent whose thread is archived or gone) has Start….

@@ -183,6 +183,15 @@ export function createCore(bb: BbPluginApi) {
   let lastStartedAtOnce = false;
   let running: Promise<Snapshot> | null = null;
   let queued: Promise<Snapshot> | null = null;
+  /**
+   * An act that ENDED asked for a status read (`rereadAfterAct`): the first read that STARTS from
+   * now is published whether or not it differs. The window holds "Reading…" over an agent until it
+   * has a roster read after the act's end (app/roster/reading.tsx: the roster's `at` against the
+   * act's `endedAt`), and a read that says nothing new is not published otherwise: the kernel
+   * writes its event before the act's command returns, so a read that started before the act's end
+   * can already hold the final state, and the window would never learn that a later one was made.
+   */
+  let owedToActs = false;
   // ---- the event path (below, "between two status reads") ----
   /**
    * Per instance, the last events answer applied to its row, and when the read that brought it
@@ -198,6 +207,8 @@ export function createCore(bb: BbPluginApi) {
   let statusAgents: Agent[] | null = null;
   /** The last token published (epoch ms): every publish carries one that is later than every one before it. */
   let lastToken = 0;
+  /** The last stamp given (epoch ms): `stamp`. */
+  let lastStamp = 0;
   /** The instances whose events are being read now; `again`: a signal named it meanwhile, and one more read follows. */
   const eventsReads = new Map<string, { again: boolean }>();
   /** The instances that wait for their events to be read, in the order they were named (each once). */
@@ -285,7 +296,10 @@ export function createCore(bb: BbPluginApi) {
   async function read(): Promise<Snapshot> {
     // A read that began under other settings must not bring their roster back once they changed.
     const generation = settingsGeneration;
-    lastStart = Date.now();
+    // Taken as the read STARTS: a read in flight when the act ended has passed this line, and is not the one owed.
+    const forAct = owedToActs;
+    owedToActs = false;
+    lastStart = stamp(); // (not the bare clock: a read that starts in the millisecond an act ended is LATER than the act's end)
     const at = new Date(lastStart).toISOString();
     let next: Snapshot;
     let rows: Map<string, RawRow> | null = null;
@@ -344,6 +358,7 @@ export function createCore(bb: BbPluginApi) {
     if (generation !== settingsGeneration) {
       lastEnd = Date.now();
       lastAnsweredInMs = null;
+      if (forAct) owedToActs = true; // not this deployment's answer: the read the change queued owes the act its publish
       return next;
     }
     // The event path's patches that are NEWER than this read (their events read started after this
@@ -360,7 +375,8 @@ export function createCore(bb: BbPluginApi) {
     // slowly. After a read that failed (a timeout, an unreachable machine, no oats) the next one
     // waits the floor, so Retry and the watch are not held back by the failure's own length.
     lastAnsweredInMs = next.ok ? lastEnd - lastStart : null;
-    if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: token(lastStart) });
+    // Published when it differs; and, the same or not, when an act that ended is owed it (`owedToActs`).
+    if ((changed || forAct) && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: token(lastStart) });
     return next;
   }
 
@@ -399,6 +415,22 @@ export function createCore(bb: BbPluginApi) {
     lastToken = Math.max(wanted, lastToken + 1);
     return new Date(lastToken).toISOString();
   }
+  /**
+   * This server's clock for WHEN A STATUS READ STARTED (the roster's `at`) and WHEN AN ACT ENDED
+   * (`actEnded`): the time now, or the first millisecond after the last stamp where that is not
+   * later. The window compares the two ("Reading…" stands while the roster's `at` is not later
+   * than the act's end: app/roster/reading.tsx), and both are whole milliseconds: a read that
+   * starts in the very millisecond the act ended would be a tie, read as "before", with no later
+   * read owed. One strictly increasing stamp for both: of two events on this server the later has
+   * the later stamp, always. (It can run a millisecond ahead of the clock in such a tie; nothing
+   * reads it as a wall time but the roster's age, in minutes.)
+   */
+  function stamp(): number {
+    lastStamp = Math.max(Date.now(), lastStamp + 1);
+    return lastStamp;
+  }
+  /** When an act ended, for its answer's `endedAt`: taken as its `oats` command returned (server/lifecycle.ts). */
+  const actEnded = (): string => new Date(stamp()).toISOString();
   /** Drops the kept answers a status read that started at `statusStart` is newer than. */
   function patchesOlderThan(statusStart: number): void {
     for (const [instance, kept] of patches) if (kept.startedAt <= statusStart) patches.delete(instance);
@@ -558,6 +590,15 @@ export function createCore(bb: BbPluginApi) {
   }
   const rereadSoon = () => {
     if (!lifetime.signal.aborted) void reread();
+  };
+  /**
+   * For an ACT that has ended (a stop, a start, a restart, a retire): a status read that starts
+   * from now on, as `rereadSoon` asks (the queued one, or a new one behind the one in flight), and
+   * whose roster is PUBLISHED also when it says nothing new (`owedToActs`): the window waits for it.
+   */
+  const rereadAfterAct = () => {
+    owedToActs = true;
+    rereadSoon();
   };
 
   /**
@@ -767,6 +808,8 @@ export function createCore(bb: BbPluginApi) {
     page,
     reread,
     rereadSoon,
+    rereadAfterAct,
+    actEnded,
     agentOf,
     agentForAct,
     rowOf,

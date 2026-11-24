@@ -570,6 +570,17 @@ test("when the roster cannot be read again, an agent's page keeps what it read, 
   expect(slot.getByTestId("oats-panel-work")).not.toBeNull();
 });
 
+// Behind a lifecycle result that says the agent changed, the header says "Reading…": what the agent asked BEFORE the
+// act is not drawn under it (ruled with L13's form); it is back with the roster read after the act's end.
+test("behind a result the panel does not draw the claim from before the act under its \"Reading…\" header", async () => {
+  const { noteActed } = await import("../../app/roster/reading");
+  const slot = panel({ threadId: CHILD_THREAD });
+  await slot.findByTestId("oats-panel-waiting");
+  act(() => noteActed([CHILD], panelSnapshot().at));
+  await waitFor(() => expect(slot.queryByTestId("oats-panel-waiting")).toBeNull());
+  expect(slot.getByTestId("oats-panel").textContent).toContain("Reading…");
+});
+
 // ---- the panel as a page of its own
 async function agentPage(subPath: string, options: RenderSlotOptions<Contract> = {}) {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
@@ -1144,4 +1155,34 @@ test("behind a result that says the agent changed, its header says \"Reading…\
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at }));
   await waitFor(() => expect(within(state).queryByTestId("oats-reading")).toBeNull());
   expect(within(state).getByTestId("oats-state").textContent).toBe("Stopped");
+});
+
+// The panel's own live read is answered from the server's cache, as the roster's is: an event that
+// arrives while its FIRST answer is on its way is not served by that answer (app/store.ts `reread`;
+// the roster's side of it: test/app/window-loads.test.tsx). Without it a panel that is opened, or a
+// window that loads on a thread, while the server reads a change keeps the facts from before it.
+test("the panel's live read: the change is published while its first answer is on its way, and the panel ends on the facts after the change", async () => {
+  let calls = 0;
+  let deliver: (() => void) | undefined;
+  const first = new Promise<void>((resolve) => (deliver = resolve));
+  const slot = panel({ threadId: CHILD_THREAD }, {}, {
+    rpc: handlers({
+      snapshot: () => panelSnapshot(),
+      panelInstance: async ({ instance }) => {
+        calls += 1;
+        if (calls === 1) {
+          await first;
+          return instanceAnswer(instance, (facts) => ({ ...facts, model: "claude-opus-5-5" })); // made by the server before the change
+        }
+        return instanceAnswer(instance, (facts) => ({ ...facts, model: "claude-fable-5.2" }));
+      },
+    }),
+  });
+  await waitFor(() => expect(calls).toBe(1));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:31:00.000Z" }));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:31:00.300Z" })); // and a second: one read is owed for both
+  await act(async () => deliver!());
+  // (The first answer, from before the change, may be drawn for a moment or not at all: what is held is where the panel ENDS.)
+  await waitFor(() => expect(text(slot.getByTestId("oats-panel-model"))).toContain("claude-fable-5.2"));
+  expect(calls).toBe(2);
 });

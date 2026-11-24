@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { act } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
-import { BOUND_MS, READING, actedAt, actedWas, beforeAct, ended, fromBefore, keptState, noteActed } from "../../app/roster/reading";
+import { BOUND_MS, READING, actedAt, beforeEnd, noteActed } from "../../app/roster/reading";
 import { fixtureAgents, fixtureSnapshot } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract } from "../helpers/render";
@@ -19,99 +19,43 @@ afterEach(() => {
   resetApp();
 });
 
-describe("whether the window's roster is still from before an act (pure: two rosters' stamps, no clock)", () => {
-  const SENT = "2026-11-19T12:30:00.000Z"; // the stamp of the roster the window held when the act was sent
+// THE RULE IS ONE COMPARISON (the specialist's ruling of 24 Nov 2026, after four forms that answered the question by
+// proxy): "was this roster READ AFTER THE ACT ENDED?". The roster's `at` is the plugin server's clock at the START of
+// the status read that made it; the act's answer carries the same clock at the act's END (`endedAt`). Before: the
+// read started at or before the end. No state, no word, no row, no case per act. Each row below is a case one of the
+// four review rounds found against an earlier form, BY ITS NAME, so that the next reader finds its case already here.
+describe("whether the roster the window holds was read before the act ended (pure: two stamps of ONE clock, the server's; never the window's)", () => {
+  const ENDED = "2026-11-19T12:30:03.000Z"; // the act's command returned
   test.each<[string, string | null, boolean]>([
-    ["the same roster", SENT, true],
-    ["an older roster (one that arrives late)", "2026-11-19T12:29:59.000Z", true],
-    ["the same instant, written otherwise", "2026-11-19T12:30:00Z", true],
-    ["a roster read one millisecond after", "2026-11-19T12:30:00.001Z", false],
-    ["a roster read after", "2026-11-19T12:30:04.000Z", false],
-    ["no roster", null, false],
-    ["a stamp that is no time: nothing is left standing on a guess", "soon", false],
+    ["the roster of the send (read before the act began): before", "2026-11-19T12:30:00.000Z", true],
+    ["a roster READ DURING THE ACT (its read started before the act ended: a Start or a Restart on bb makes a thread, which asks for a read mid-act; a stop of three changes the roster at each): before, whatever it says", "2026-11-19T12:30:02.000Z", true],
+    ["a read that started in the very millisecond the act ended: before (it cannot be trusted to hold what the act did)", ENDED, true],
+    ["the same instant, written otherwise: before", "2026-11-19T12:30:03Z", true],
+    ["a roster whose read started one millisecond after the act ended: read", "2026-11-19T12:30:03.001Z", false],
+    ["a roster read after the act ended: read, at once, whatever it says (a Stop whose agent never comes to read Stopped is not held ten seconds)", "2026-11-19T12:30:05.000Z", false],
+    ["an OLDER roster that arrives late: before (its read started before the act ended)", "2026-11-19T12:29:59.000Z", true],
+    ["no roster read yet (a ready roster always carries its stamp; nothing of the agent is drawn then): not before, nothing is left standing on nothing", null, false],
+    ["a stamp that is no time: read (nothing is left standing on a guess; the bound would end it anyway)", "soon", false],
   ])("%s", (_name, rosterAt, before) => {
-    expect(beforeAct(SENT, rosterAt)).toBe(before);
-  });
-  test("an act sent over a stamp that is no time stands only while the roster is that very one", () => {
-    expect([beforeAct("t", "t"), beforeAct("t", "2026-11-19T12:30:00.000Z")]).toEqual([true, false]);
-  });
-});
-
-// A roster can reach the window DURING an act that takes seconds (a stop of three agents changes the roster at each
-// stop). Its stamp is after the send, and it can still say of an agent what the roster at the send said: the window
-// then still shows the agent as it was before the act (found by the first review round: "Working" stood behind
-// "3 sessions stopped."). So the agent's state at the send is kept too; a restart keeps none (the same word after).
-describe("whether the window still shows an agent as it was before an act (pure: two rosters, no clock)", () => {
-  const SENT = "2026-11-19T12:30:00.000Z";
-  const LATER = "2026-11-19T12:30:02.000Z";
-  const OLDER = "2026-11-19T12:29:59.000Z";
-  type Now = "working" | "stopped" | "idle" | "needs-you" | "error" | null;
-  test.each<[string, { was: "working" | "stopped" | "needs-you" | null; verb: "stop" | "start" | "retire" | "restart" | null }, string | null, Now, boolean]>([
-    // A state is kept: "before" lasts until the agent's state says that the ACT HAPPENED, whatever the roster's stamp.
-    ["a stop, the roster of the send, the state as at the send: before", { was: "working", verb: "stop" }, SENT, "working", true],
-    ["a stop, the roster of the send, the row patched to Stopped from the agent's own events (#74): read", { was: "working", verb: "stop" }, SENT, "stopped", false],
-    // THE SECOND REVIEW ROUND'S CASE: a bb agent that worked; the stop archives its thread, which leaves bb's list, so
-    // on the roster of the send (its row still says it runs) its state is already "idle": neither the kept word nor
-    // the stop's end. Behind "… stopped." that must not read "Idle" with its acts on.
-    ["a stop of a Working agent whose thread left bb's list: Idle on the roster of the send: STILL before", { was: "working", verb: "stop" }, SENT, "idle", true],
-    ["the same for an agent that read Needs you through a question bb held: still before", { was: "needs-you", verb: "stop" }, SENT, "idle", true],
-    ["and on a later roster that still says it runs (idle: its thread gone): still before", { was: "working", verb: "stop" }, LATER, "idle", true],
-    ["a stop, a later roster that still says what the send's said (it arrived mid-act): before", { was: "working", verb: "stop" }, LATER, "working", true],
-    ["a stop, a later roster that says Stopped: read", { was: "working", verb: "stop" }, LATER, "stopped", false],
-    ["a retire, the roster of the send, its thread gone (idle): still before", { was: "working", verb: "retire" }, SENT, "idle", true],
-    ["a retire, a roster in which it only reads Stopped (its stop, before it leaves): still before", { was: "working", verb: "retire" }, LATER, "stopped", true],
-    ["a retire, a roster with no such agent: read", { was: "working", verb: "retire" }, LATER, null, false],
-    ["a start: stopped at the send, still stopped in a later roster: before", { was: "stopped", verb: "start" }, LATER, "stopped", true],
-    ["a start: a roster that says Failed: still before (the result said it started: the next roster settles it, or the bound)", { was: "stopped", verb: "start" }, LATER, "error", true],
-    ["a start: a later roster says it is idle: read", { was: "stopped", verb: "start" }, LATER, "idle", false],
-    // EDGE 1 (the roster developer's): no roster in the window at all. That is only "no roster read yet" (a ready roster
-    // always carries its stamp: app/oats.ts; and `useReading` asks only of a ready one): nothing of the agent is drawn
-    // then, so nothing is left standing on nothing.
-    ["EDGE: no roster read yet, with a kept state: not before (nothing is drawn of the agent to stand over)", { was: "working", verb: "stop" }, null, null, false],
-    // EDGE 2: an OLDER roster that arrives late. It is judged like any roster: by what it says of the agent. Saying
-    // the act's end state ("read") it lets "Reading…" go a moment early, and the next roster corrects the word: a guard
-    // would need a second clock (ruled: not worth one). Saying anything else, "Reading…" stands.
-    ["EDGE: an older roster that arrives late and says Stopped after a stop: read (a moment early; the next roster corrects the word)", { was: "working", verb: "stop" }, OLDER, "stopped", false],
-    ["EDGE: an older roster that arrives late and says another state than the kept one, not the act's end: before", { was: "working", verb: "stop" }, OLDER, "idle", true],
-    // No state kept (a restart; a stop of a stopped target): the stamp alone decides.
-    ["no state kept (a restart): a later roster is read", { was: null, verb: null }, LATER, "working", false],
-    ["no state kept, the roster of the send: before", { was: null, verb: null }, SENT, "working", true],
-    ["no state kept, an older roster that arrives late: before", { was: null, verb: null }, OLDER, "working", true],
-    ["no state kept, no roster read yet: not before", { was: null, verb: null }, null, null, false],
-  ])("%s", (_name, acted, rosterAt, now, before) => {
-    expect(fromBefore({ sentAt: SENT, ...acted }, rosterAt, now)).toBe(before);
+    expect(beforeEnd(ENDED, rosterAt)).toBe(before);
   });
 
-  test.each<[Parameters<typeof ended>[0], Now, boolean]>([
-    ["stop", "stopped", true], ["stop", "idle", false], ["stop", "working", false], ["stop", null, false],
-    ["retire", null, true], ["retire", "stopped", false], ["retire", "idle", false],
-    ["start", "idle", true], ["start", "working", true], ["start", "needs-you", true], ["start", "stopped", false], ["start", "error", false], ["start", null, false],
-    ["restart", "working", false],
-  ])("whether a roster's row says that a %s happened to an agent that reads %s: %s", (verb, now, yes) => {
-    expect(ended(verb, now)).toBe(yes);
+  // The same, said of the cases by the agent's side: the rule never asks what the agent reads, so each of these is
+  // "before" exactly while the roster is one read before the end, and "read" from the first roster read after it.
+  test.each<[string]>([
+    ["a bb agent that reads Idle because its thread left bb's list after a Stop (the roster has not moved)"],
+    ["a Restart of a Failed agent: a mid-act roster still says Failed"],
+    ["a Restart of a running agent: a mid-act roster says Stopped (between its stop and its start)"],
+    ["a Start of an agent that reads Idle with no harness loaded: a mid-act roster says Idle"],
+    ["a Start of a stopped agent that reads Needs you through bb's question on its thread"],
+    ["a row the server PATCHED from the agent's own events (#74) on an older roster: still before, until the status read the act asks for has come back (a moment late over a row that is already right: the safe side)"],
+    ["a retire's child, and a session that did stop in a stop that did not stop them all: marked with the same end"],
+  ])("%s: before on a roster read before the end, read on the first one read after it", () => {
+    expect([beforeEnd(ENDED, "2026-11-19T12:30:02.500Z"), beforeEnd(ENDED, "2026-11-19T12:30:03.200Z")]).toEqual([true, false]);
   });
-});
 
-// The state is kept only where the act MUST change the word: else a later roster that says the same word would hold
-// "Reading…" for the whole ten seconds over a state that will not change (the delta read of the first review round).
-describe("the state kept for an agent of an act", () => {
-  test.each<[Parameters<typeof keptState>[0], Parameters<typeof keptState>[1], ReturnType<typeof keptState>]>([
-    ["stop", "working", "working"],
-    ["stop", "idle", "idle"],
-    ["stop", "needs-you", "needs-you"],
-    ["stop", "error", "error"],
-    ["stop", "stopped", null], // a target that was already stopped: the same word after
-    ["start", "stopped", "stopped"],
-    ["start", "error", "error"],
-    ["start", "idle", null], // not loaded: it can read Idle after too
-    ["start", "needs-you", null], // its claim kept: Needs you after too
-    ["restart", "working", null],
-    ["restart", "error", null],
-    ["retire", "working", "working"], // it leaves the roster
-    ["retire", "stopped", "stopped"],
-    ["stop", null, null],
-  ])("%s of an agent that read %s: %s", (verb, was, keeps) => {
-    expect(keptState(verb, was)).toBe(keeps);
+  test("an act whose end is no time marks nothing as before", () => {
+    expect([beforeEnd("soon", "2026-11-19T12:30:00.000Z"), beforeEnd("soon", "soon")]).toEqual([false, false]);
   });
 });
 
@@ -159,12 +103,12 @@ test("behind a result that says the agent changed, its thread's line says \"Read
   expect(read().state).not.toBe("Stopped");
 });
 
-test("a roster that reaches the window during the act and still says what the send's said does not end \"Reading…\": the roster that says another state does", async () => {
+test("a roster READ DURING THE ACT (its read started after the send and before the act ended) does not end \"Reading…\", whatever it says: the first roster read after the end does", async () => {
   const { slot, answer, read } = await line("thr_digest");
-  // The result of a start: the agent was stopped in the roster held at the send.
-  act(() => noteActed([DIGEST], AT, { verb: "start", was: new Map([[DIGEST, "stopped"]]) }));
-  expect([read().reading, actedWas(DIGEST)]).toEqual([READING, "stopped"]);
-  // A roster stamped AFTER the send, in which the agent is still stopped (another agent's change, or one of the act's own steps).
+  // The result of a start, whose command returned at 12:30:03 on the server's clock.
+  act(() => noteActed([DIGEST], "2026-11-19T12:30:03.000Z"));
+  expect(read().reading).toBe(READING);
+  // A roster whose read started at 12:30:02: after the send, before the end. The agent is still stopped in it.
   answer.now = { ...fixtureSnapshot(fixtureAgents()), at: "2026-11-19T12:30:02.000Z" };
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: answer.now.at }));
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -192,7 +136,7 @@ test("a Stop of a Working agent: bb no longer says its thread works and the rost
   const read = () => ({ reading: slot.queryByTestId("oats-reading")?.textContent ?? null, state: slot.getByTestId("oats-status-line").querySelector('[data-testid="oats-state"]')?.textContent ?? null, acts: Array.from(slot.getByTestId("oats-status-line").querySelectorAll<HTMLButtonElement>('[data-testid="oats-status-act"]')).map((button) => button.disabled) });
   expect(read()).toMatchObject({ reading: null, state: "Idle" }); // what the line would say with no mark: the fault
   // The stop's result: it worked in the roster held at the send.
-  act(() => noteActed([MOCKUPS], AT, { verb: "stop", was: new Map([[MOCKUPS, "working"]]) }));
+  act(() => noteActed([MOCKUPS], AT));
   expect(read()).toMatchObject({ reading: READING, state: null });
   expect(read().acts.every((off) => off === true)).toBe(true);
   // The same roster again (the same stamp): it stands.
@@ -203,6 +147,41 @@ test("a Stop of a Working agent: bb no longer says its thread works and the rost
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: LATER }));
   await vi.waitFor(() => expect(read().reading).toBeNull());
   expect(read().state).toBe("Stopped");
+});
+
+// THE RULE HAS TWO HALVES. The window's: "before" while the roster's `at` <= the act's `endedAt`, and the bound. The
+// SERVER's: the status read an act asks for as it ends is PUBLISHED whether or not it differs from the last one
+// (server/core.ts; the roster developer's mend and its server test). Without the second, this case stood ten seconds:
+// a read that STARTED mid-act (the kernel writes the agent's event before its command returns) already holds the final
+// state and is published; the act's own read, after the end, says the SAME, and a read that says nothing new was not
+// published: the window kept a roster stamped before the end, over a row that was right. Here, the window's side of it.
+test("the final state is already on a roster read BEFORE the act ended: \"Reading…\" stands (that read cannot be trusted); the act's own read says the SAME and is published: \"Reading…\" leaves with it", async () => {
+  const { slot, answer, read } = await line("thr_digest");
+  act(() => noteActed([DIGEST], "2026-11-19T12:30:03.000Z")); // a start whose command returned at 12:30:03
+  // A read that started at 12:30:02, mid-act, and already says the agent runs: published (it differs), and in the window.
+  answer.now = { ...fixtureSnapshot(started(fixtureAgents())), at: "2026-11-19T12:30:02.000Z" };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: answer.now.at }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(read()).toMatchObject({ reading: READING, state: null });
+  // The act's own read, started after its end: the SAME agents, a later stamp. Published all the same: the window takes it.
+  answer.now = { ...fixtureSnapshot(started(fixtureAgents())), at: "2026-11-19T12:30:03.200Z" };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: answer.now.at }));
+  await vi.waitFor(() => expect(read().reading).toBeNull());
+  expect(read().state).not.toBe("Stopped");
+});
+
+// Behind a result EVERY act of that agent is off (ruled with L13's form): also "Answer", which answers a claim from
+// BEFORE the act.
+test("behind a result the line's Answer is off too: the claim it answers is from before the act", async () => {
+  const claim = { reason: "attention" as const, message: "Which mockup?", since: "2026-11-19T12:00:00.000Z" };
+  const app = await loadApp();
+  const agents = fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, waiting: claim } : agent));
+  const slot = renderSlot<ExperimentalThreadHeaderRowProps, Contract>(app.threadHeaderRows[0]!, { threadId: "thr_mockups", projectId: "proj_x", environment: null }, { rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
+  await slot.findByTestId("oats-identity-row");
+  const answer = () => Array.from(slot.getByTestId("oats-status-line").querySelectorAll<HTMLButtonElement>('[data-testid="oats-status-act"]')).map((button) => [button.textContent, button.disabled]);
+  expect(answer()).toEqual([["Answer", false]]);
+  act(() => noteActed(["desktop-mockups-developer"], AT));
+  expect([slot.getByTestId("oats-reading").textContent, answer()]).toEqual([READING, [["Answer", true]]]);
 });
 
 test("it is that agent's alone: another agent's line says its state and keeps its act", async () => {
@@ -224,7 +203,7 @@ test("BOUNDED: after ten seconds the roster's own state is drawn whatever it say
   expect(actedAt(DIGEST)).toBeNull();
 });
 
-test("a second act on the same agent starts its own ten seconds; an act sent with no roster in the window marks nothing", async () => {
+test("a second act on the same agent starts its own ten seconds; a result that names no agent marks nothing", async () => {
   const { read } = await line("thr_digest");
   vi.useFakeTimers();
   act(() => noteActed([DIGEST], AT));
@@ -234,7 +213,7 @@ test("a second act on the same agent starts its own ten seconds; an act sent wit
   expect(read().reading).toBe(READING);
   act(() => void vi.advanceTimersByTime(4_000));
   expect(read().reading).toBeNull();
-  act(() => noteActed([DIGEST], null));
+  act(() => noteActed([], AT));
   expect([read().reading, actedAt(DIGEST)]).toEqual([null, null]);
 });
 

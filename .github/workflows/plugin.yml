@@ -9,7 +9,7 @@
 #   plugin-real       `ci.sh real`: the run against a real OATS kernel from npm and the bb session
 #                     provider of this checkout
 # (plugin/container/README.md; plugin/container/real/README.md). Each job installs and builds what
-# it needs by itself: none waits for another. The live stage is two jobs because it is the longest
+# it needs by itself: none waits for another. The live stage is two jobs because it was the longest
 # by far and every scene runs in both themes at both widths: as one job it took 41 min 36 s of its
 # limit of 60 (the two themes cost the same), as two each draws every scene in one theme. One comparison
 # is narrower for it: "no two images of this run are the same image" is within a theme, no longer
@@ -79,7 +79,10 @@ jobs:
           path: plugin/container/out/
   plugin-real:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The real run took 43 min on 24 Nov 2026 (24 the evening before: each feature adds a part to
+    # it, and most parts run in bb's two themes at both widths). A job the clock kills reads as a
+    # failure of the PR that happened to add the last part.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

@@ -17,7 +17,7 @@ import type {
   PluginThreadActionTarget,
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
-import type { Agent, Node } from "../../model/types";
+import type { Agent, Row } from "../../model/types";
 import { flatten, isListed } from "../../model/view";
 import { count } from "../format";
 import { useOats } from "../oats";
@@ -163,8 +163,15 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     );
   };
 
-  const agentRows = (nodes: readonly Node[]): ReactNode[] =>
+  /**
+   * The roster's ONE tree (model/view.ts `rows`): a row and, under it, its children, whatever the
+   * backend of either. A row on a bb thread is that thread's row; one with no thread (on tmux, or
+   * its thread is not listed) is a row of its own that opens the agent's page. Both are indented
+   * by their depth.
+   */
+  const agentRows = (nodes: readonly Row[]): ReactNode[] =>
     nodes.flatMap((node) => {
+      if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), node.depth), ...agentRows(node.children)];
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
@@ -197,7 +204,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * on tmux; `said` is what the outside feature says of it (app/outside): where its thread is, and
    * what happened to it.
    */
-  const threadlessRow = (agent: Agent, where: string | undefined, said: Said | null = null) => {
+  const threadlessRow = (agent: Agent, where: string | undefined, said: Said | null, depth: 0 | 1 | 2) => {
     const status = agentStatus(agent, null, now);
     const drawn = rowState(status, gone.has(agent.instance));
     const name = agentName(agent.instance);
@@ -211,7 +218,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           data-instance={agent.instance}
           data-opens={said?.archived === true && agent.threadId !== null ? "thread" : "page"}
           title={shown(agent.instance)}
-          className={`${ROW} w-full pl-2 text-left`}
+          className={`${ROW} w-full ${INDENT[depth]} text-left`}
           onClick={() => {
             // Its archived conversation, where bb keeps one: the thread's own row there says what happened, with the acts.
             if (said?.archived === true && agent.threadId !== null) navigate.toThread(agent.threadId);
@@ -293,11 +300,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         <p data-testid="oats-no-agents" className="px-2 py-1 text-xs text-muted-foreground">No agents yet.</p>
       ) : (
         <ul data-testid="oats-tree" className="flex flex-col">
-          {/* ONE order for every row, whatever its backend (model/view.ts): a root of the tree with its children, or an agent
-              with no bb thread, which is a root in that same order.
+          {/* ONE tree and ONE order for every row, whatever its backend (model/view.ts): a row with its children under it;
+              an agent with no bb thread is under its parent like any other, and a root where it has none that is drawn.
               - no thread bb lists: where its thread is, by bb's own answer, after the state's word; nothing until bb has answered;
               - on tmux: where it is; one whose session was lost says so first ("Stopped · session lost"): nobody stopped it. */}
-          {view.rows.map((top) => ("node" in top ? agentRows([top.node]) : threadlessRow(top.agent, top.where === "tmux" ? TMUX : undefined, outside.of(top.agent))))}
+          {agentRows(view.rows)}
         </ul>
       )}
       {/* No line counts who waits on a person: the rows that wait are marked, and bb's badge on the

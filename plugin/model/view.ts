@@ -1,5 +1,5 @@
 // Pure functions from (agents, bbThreads) to what each slot draws. No bb or React import.
-import type { Agent, AgentState, BbThread, Node, Top, View } from "./types";
+import type { Agent, AgentState, BbThread, Node, Row, View } from "./types";
 
 /**
  * Whether the kernel's row says the agent is STOPPED. The one predicate of the claim's gate and of
@@ -160,9 +160,9 @@ function cutLinks(parentOf: ReadonlyMap<string, string>): Set<string> {
 }
 
 /** Every node of a tree, parents before their children. */
-export function flatten(roots: readonly Node[]): Node[] {
-  const out: Node[] = [];
-  const walk = (nodes: readonly Node[]) => {
+export function flatten<T extends { children: T[] }>(roots: readonly T[]): T[] {
+  const out: T[] = [];
+  const walk = (nodes: readonly T[]) => {
     for (const node of nodes) {
       out.push(node);
       walk(node.children);
@@ -244,22 +244,57 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     }
   };
   settle(roots, 0);
-  // An agent with no bb thread is a root in that same order, not a block after the tree. (It is
-  // drawn flat, under no parent, whatever its `parent`: as before.)
-  const tops: { top: Top; rank: number; place: number }[] = [
-    ...roots.map((node) => ({ top: { node }, rank: rankOf(node), place: placeOf(node.agent) })),
-    ...detached.map((agent) => ({ top: { agent, where: "detached" as const }, rank: RANK[state(agent, null)], place: placeOf(agent) })),
-    ...elsewhere.map((agent) => ({ top: { agent, where: "tmux" as const }, rank: RANK[state(agent, null)], place: placeOf(agent) })),
-  ];
-  // (A stable sort: two rows of one agent name, which the kernel should never list, keep the order they were made in.)
-  tops.sort((a, b) => a.rank - b.rank || a.place - b.place);
+
+  // ---- The roster as it is drawn: ONE tree for every agent, whatever its backend. ----
+  // Every agent is a row. One with no bb thread (on tmux; or its thread is not listed) hangs under
+  // its parent like any other, where the parent is a row, whatever either's backend: the kernel's
+  // row names the parent. The rules of the tree are the same for all: a parent that is no row
+  // makes its child a root; a cycle is cut at one link (`cutLinks`); deeper than 2 is drawn at 2;
+  // and every level is in the one order, by the most urgent state of each row's own subtree.
+  const rowOf = new Map<string, Row>(); // by instance: the kernel's first row of a name
+  const twice: Row[] = []; // a second row of a name the kernel should never list twice: a root, under nobody and over nobody
+  for (const agent of agents) {
+    const node = drawn.get(agent.instance);
+    const onThread = node !== undefined && node.agent === agent;
+    const own = onThread ? node.state : state(agent, null);
+    const row: Row = { agent, thread: onThread ? node.thread : null, where: onThread ? "thread" : agent.backend === "tmux" ? "tmux" : "detached", state: own, urgent: own, depth: 0, children: [] };
+    if (rowOf.has(agent.instance)) twice.push(row);
+    else rowOf.set(agent.instance, row);
+  }
+  const rowParent = new Map<string, string>();
+  for (const row of rowOf.values()) {
+    const parent = row.agent.parent;
+    if (parent !== null && parent !== row.agent.instance && rowOf.has(parent)) rowParent.set(row.agent.instance, parent);
+  }
+  const rowCut = cutLinks(rowParent);
+  const rows: Row[] = [...twice];
+  for (const row of rowOf.values()) {
+    const parent = rowCut.has(row.agent.instance) ? undefined : rowParent.get(row.agent.instance);
+    const over = parent === undefined ? undefined : rowOf.get(parent);
+    if (over === undefined) rows.push(row);
+    else over.children.push(row);
+  }
+  // Children first: a row's `urgent` is its own state, or that of the most urgent row under it
+  // (the first in the order, where two are of one rank), and each level is sorted by it.
+  const byUrgency = (a: Row, b: Row): number => RANK[a.urgent] - RANK[b.urgent] || placeOf(a.agent) - placeOf(b.agent);
+  const order = (level: Row[], depth: number) => {
+    for (const row of level) {
+      row.depth = depth >= 2 ? 2 : depth === 1 ? 1 : 0;
+      order(row.children, depth + 1);
+      const first = row.children[0];
+      if (first !== undefined && RANK[first.urgent] < RANK[row.state]) row.urgent = first.urgent;
+    }
+    // (A stable sort: two rows of one agent name keep the order they were made in.)
+    level.sort(byUrgency);
+  };
+  order(rows, 0);
 
   const all = flatten(roots);
   const newest = (a: Node, b: Node) => b.thread.updatedAt - a.thread.updatedAt;
   const pick = (keep: (node: Node) => boolean) => all.filter(keep).sort(newest);
 
   return {
-    rows: tops.map((each) => each.top),
+    rows,
     roots,
     others: threads
       .filter((thread) => !taken.has(thread.id) && isListed(thread))

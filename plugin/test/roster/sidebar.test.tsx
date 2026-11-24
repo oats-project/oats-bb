@@ -427,6 +427,46 @@ test("the row of the plugin's page that is shown is the selected one (D-037), an
   await waitFor(() => expect(current()).toEqual([]));
 });
 
+// ONE tree for every backend (model/view.ts `rows`; its table is test/model/tree.test.ts): an agent
+// with no bb thread is drawn under its parent, indented by its depth, whatever the parent's backend;
+// and a row on a bb thread is drawn under a parent that has none.
+test("an agent on tmux is drawn under its parent, on a thread or not, indented by its depth; a thread's row under a tmux parent too", async () => {
+  const lead = fixtureAgents().find((agent) => agent.instance === "kernel-fix-developer")!;
+  const agents = [
+    ...fixtureAgents().map((agent) =>
+      agent.instance === "kernel-fix-developer"
+        ? { ...agent, parent: "redesign-ui-lead" } // on tmux, a child of an agent on a bb thread
+        : agent.instance === "weekly-digest-helper"
+          ? { ...agent, parent: "tmux-grandchild" } // on a bb thread, a child of an agent on tmux
+          : agent,
+    ),
+    { ...lead, instance: "tmux-grandchild", home: lead.home.replace("kernel-fix-developer", "tmux-grandchild"), alias: "tmux-grandchild", parent: "kernel-fix-developer" },
+  ];
+  const { slot, navigated } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents }) });
+  await slot.findAllByTestId("oats-agent-row-threadless");
+  // The tree's rows as they are drawn, top to bottom: who, and how far in.
+  const INDENT = ["pl-2", "pl-6", "pl-10"];
+  const drawn = Array.from(slot.getByTestId("oats-tree").querySelectorAll('[data-testid="oats-agent-row"], [data-testid="oats-agent-row-threadless"]')).map((row) => [
+    row.getAttribute("data-instance") ?? row.getAttribute("data-sidebar-thread-id"),
+    INDENT.findIndex((indent) => row.className.split(" ").includes(indent)),
+  ]);
+  const at = (name: string) => drawn.findIndex(([who]) => who === name);
+  // redesign-ui-lead (thr_redesign) has its two children on threads and, after them in the kernel's order, the one on tmux; under that one its tmux child; under that one the agent on a thread.
+  expect(drawn.slice(at("thr_redesign"), at("thr_redesign") + 6)).toEqual([
+    ["thr_redesign", 0],
+    ["thr_mockups", 1],
+    ["thr_harvest", 1],
+    ["kernel-fix-developer", 1],
+    ["tmux-grandchild", 2],
+    ["thr_digest", 2],
+  ]);
+  expect(drawn).toHaveLength(9); // every agent once
+  // A thread-less row under a parent is what it was: it opens the agent's own page.
+  fireEvent.click(slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === "tmux-grandchild")!);
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: "tmux-grandchild" } }]);
+  expect(navigated()).toBe(1);
+});
+
 // One rule for a state (model/view.ts `state`), read by the sidebar's row and by the agent's panel:
 // a tmux agent that is stopped, as the kernel prints it (`{ running: false }`, no runtimeState;
 // awebai/oats lib/instance-listing.mjs at 95c7b43b3), says "Stopped" in both, rendered together.

@@ -23,14 +23,13 @@ function within<Answer>(ms: number, asked: Promise<Answer>): Promise<Answer | nu
   return Promise.race([asked, late]).finally(() => clearTimeout(timer));
 }
 
-/**
- * When an act ended: this server's clock at the instant its `oats` command returned. The roster's
- * `at` is the same clock at the start of a status read (core.ts), and every act asks for a read
- * when it ends (`rereadAfterAct`, which queues a new read behind one in flight and has its roster
- * published also when it says nothing new): so a roster whose `at` is later than this was read
- * after the act, it reaches the window, and the window compares the two (contract/lifecycle.ts `endedAt`).
- */
-const ended = (): string => new Date().toISOString();
+// When an act ended (`core.actEnded()`, an answer's `endedAt`): the server's one increasing stamp at
+// the instant the act's `oats` command returned. The roster's `at` is the same stamp at the start
+// of a status read (core.ts `stamp`), so of the two the later event has the later stamp, also in
+// one millisecond; and every act asks for a read when it ends (`rereadAfterAct`, which queues a new
+// read behind one in flight and has its roster published also when it says nothing new): so a
+// roster whose `at` is later than this was read after the act, it reaches the window, and the
+// window compares the two (contract/lifecycle.ts `endedAt`).
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
   /**
@@ -63,7 +62,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     try {
       started = verb === "start" ? await core.call("start", { home: agent.home, ...choice }, HOST_TIMEOUT.act, core.signal) : await core.call("restart", { home: agent.home, ...given({ harness: choice.harness, model: choice.model }) }, HOST_TIMEOUT.act, core.signal);
       // The act ended when its command returned (not after the wait for the new thread, below).
-      endedAt = ended();
+      endedAt = core.actEnded();
     } finally {
       core.rereadAfterAct();
     }
@@ -86,7 +85,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       await core.agentForAct(instance);
       try {
         const receipt = await core.call("stopApply", { instance, revision, key, ...given({ recursive }) }, HOST_TIMEOUT.act, core.signal);
-        return { ...receipt, endedAt: ended() };
+        return { ...receipt, endedAt: core.actEnded() };
       } finally {
         core.rereadAfterAct();
       }
@@ -135,7 +134,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       }
       try {
         const receipt = await core.call("retireApply", { instance, revision, key, ...given({ discardWorktree }) }, HOST_TIMEOUT.long, core.signal);
-        return { ...receipt, endedAt: ended() };
+        return { ...receipt, endedAt: core.actEnded() };
       } finally {
         core.rereadAfterAct();
       }

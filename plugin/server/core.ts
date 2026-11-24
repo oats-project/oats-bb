@@ -207,6 +207,8 @@ export function createCore(bb: BbPluginApi) {
   let statusAgents: Agent[] | null = null;
   /** The last token published (epoch ms): every publish carries one that is later than every one before it. */
   let lastToken = 0;
+  /** The last stamp given (epoch ms): `stamp`. */
+  let lastStamp = 0;
   /** The instances whose events are being read now; `again`: a signal named it meanwhile, and one more read follows. */
   const eventsReads = new Map<string, { again: boolean }>();
   /** The instances that wait for their events to be read, in the order they were named (each once). */
@@ -297,7 +299,7 @@ export function createCore(bb: BbPluginApi) {
     // Taken as the read STARTS: a read in flight when the act ended has passed this line, and is not the one owed.
     const forAct = owedToActs;
     owedToActs = false;
-    lastStart = Date.now();
+    lastStart = stamp(); // (not the bare clock: a read that starts in the millisecond an act ended is LATER than the act's end)
     const at = new Date(lastStart).toISOString();
     let next: Snapshot;
     let rows: Map<string, RawRow> | null = null;
@@ -413,6 +415,22 @@ export function createCore(bb: BbPluginApi) {
     lastToken = Math.max(wanted, lastToken + 1);
     return new Date(lastToken).toISOString();
   }
+  /**
+   * This server's clock for WHEN A STATUS READ STARTED (the roster's `at`) and WHEN AN ACT ENDED
+   * (`actEnded`): the time now, or the first millisecond after the last stamp where that is not
+   * later. The window compares the two ("Reading…" stands while the roster's `at` is not later
+   * than the act's end: app/roster/reading.tsx), and both are whole milliseconds: a read that
+   * starts in the very millisecond the act ended would be a tie, read as "before", with no later
+   * read owed. One strictly increasing stamp for both: of two events on this server the later has
+   * the later stamp, always. (It can run a millisecond ahead of the clock in such a tie; nothing
+   * reads it as a wall time but the roster's age, in minutes.)
+   */
+  function stamp(): number {
+    lastStamp = Math.max(Date.now(), lastStamp + 1);
+    return lastStamp;
+  }
+  /** When an act ended, for its answer's `endedAt`: taken as its `oats` command returned (server/lifecycle.ts). */
+  const actEnded = (): string => new Date(stamp()).toISOString();
   /** Drops the kept answers a status read that started at `statusStart` is newer than. */
   function patchesOlderThan(statusStart: number): void {
     for (const [instance, kept] of patches) if (kept.startedAt <= statusStart) patches.delete(instance);
@@ -791,6 +809,7 @@ export function createCore(bb: BbPluginApi) {
     reread,
     rereadSoon,
     rereadAfterAct,
+    actEnded,
     agentOf,
     agentForAct,
     rowOf,

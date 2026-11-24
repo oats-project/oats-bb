@@ -1054,6 +1054,25 @@ test("T3, an agent's thread is on screen: its own line says the notice (the age,
   await waitFor(() => expect(retries(slot.container)).toHaveLength(1));
 });
 
+// Where OATS was NEVER read (no roster, no age): the same rule. Beside a pane that shows the notice the sidebar says
+// ONE line, the notice's TITLE alone, with nothing to press; alone it keeps the whole notice with the Retry (ruled).
+test("T3, OATS never read: alone the sidebar's notice is whole with the one Retry; beside a page that shows it, the sidebar says its title alone and the ONE Retry is the page's", async () => {
+  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: null }) };
+  const { slot } = await sidebar(never);
+  await within(slot.container).findByTestId("oats-unreadable");
+  expect([retries(slot.container).length, within(slot.container).queryByTestId("oats-last-observation")]).toEqual([1, null]);
+  const app = await loadApp();
+  const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
+  const page = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(never), sidebarThreads: sidebarThreads() });
+  await within(page.container).findByTestId("oats-unreadable");
+  const line = await waitFor(() => within(slot.container).getByTestId("oats-last-observation"));
+  expect(line.textContent).toBe("OATS did not answer on falcon");
+  expect([line.querySelectorAll("button").length, line.querySelectorAll("a").length, within(slot.container).queryByTestId("oats-unreadable")]).toEqual([0, 0, null]);
+  expect([retries(slot.container).length, retries(page.container).length]).toEqual([0, 1]);
+  page.unmount();
+  await waitFor(() => expect(retries(slot.container)).toHaveLength(1));
+});
+
 // The first review round of this change: bb keeps the plugin's fixed tab MOUNTED while its side panel is closed (or
 // another tab is chosen). A notice in a place nobody sees is no pane's notice: it must not take the sidebar's Retry.
 test("T3, a thread that is no agent's, the home's tab HIDDEN (bb keeps it mounted): the tab says no notice and the sidebar keeps its own, whole, with the one Retry; shown, the tab says it and the sidebar says its line", async () => {

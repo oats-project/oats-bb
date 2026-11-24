@@ -508,8 +508,8 @@ export default [
       const kept = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const said = row?.querySelector(${JSON.stringify(`${testId("oats-unreadable")}[data-compact]`)}); return said ? JSON.stringify({ line: row.querySelector(${JSON.stringify(testId("oats-status-line"))}).getAttribute("data-state"), said: said.innerText.replace(/\\s+/g, " ").trim() }) : ""; })()`, 15);
       const row = kept ? JSON.parse(kept) : null;
       check(
-        row !== null && row.line === "working" && new RegExp(`^OATS is not installed on ${MACHINE} Read ${AGE}\\. Acts are off\\. Retry$`).test(row.said),
-        `${at} the open thread keeps its OATS row, from the last roster, with the one notice on a line: its age, that the acts are off, Retry`,
+        row !== null && row.line === "working" && new RegExp(`^OATS is not installed on ${MACHINE} Read ${AGE}\\. Acts are off\\. Retry Open settings$`).test(row.said),
+        `${at} the open thread keeps its OATS row, from the last roster, with the one notice on a line: its age, that the acts are off, Retry, and the way to the settings (the cause offers them)`,
         kept ?? (await page.evaluate(textOf(testId("oats-identity-row")))),
       );
       // The thread's line is the pane's notice: the sidebar beside it (where bb shows it: not a drawer) says its one line with nothing to press, and ONE Retry is on the screen.

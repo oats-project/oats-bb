@@ -21,6 +21,7 @@ import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
+import { messageResumes } from "../../model/rest";
 import { useReading } from "../roster/reading";
 import { RosterNotice, useLineShowsNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
@@ -497,6 +498,11 @@ function LostRow({ entry, oats, held }: { entry: Entry; oats: Ready; held: boole
   const onTmux = entry.thread === null && entry.agent.backend === "tmux";
   // Behind a result that says it started, until the roster is read again (the row is still here, from the roster before): its act is off (L13's rule, app/roster/reading.tsx).
   const reading = useReading(entry.agent.instance);
+  // ONE rule with the thread's line: where a MESSAGE is the way on (an agent on bb whose thread bb lists: `messageResumes`),
+  // the row's act is Open: it opens that thread, whose line says so. Start… there would begin a NEW conversation where
+  // a message keeps the old one. Every other row (tmux; a bb agent whose thread is archived or gone) has Start….
+  const byMessage = messageResumes(entry.agent, entry.thread);
+  const open = useOpen(oats)(entry);
   return (
     <li data-testid="oats-lost-row" data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
       <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
@@ -504,9 +510,15 @@ function LostRow({ entry, oats, held }: { entry: Entry; oats: Ready; held: boole
         {/* (No reason on the line: the heading says it.) */}
         <RowFacts testId="oats-home-agent-where" soul={shown(oats.soulOf(entry.agent))} where={onTmux ? TMUX : undefined} className="max-w-full flex-1 basis-40" />
       </span>
-      <Button data-testid="oats-lost-start" disabled={held || reading} onClick={() => openAct("start", entry.agent.instance)}>
-        {START}
-      </Button>
+      {byMessage ? (
+        <Button data-testid="oats-lost-open" onClick={open.onClick}>
+          {OPEN}
+        </Button>
+      ) : (
+        <Button data-testid="oats-lost-start" disabled={held || reading} onClick={() => openAct("start", entry.agent.instance)}>
+          {START}
+        </Button>
+      )}
     </li>
   );
 }

@@ -1067,6 +1067,27 @@ test("THE PILOT'S FIRST HOME: eight tmux agents whose sessions were lost, nobody
   expect(asked()).toEqual({ verb: "start", instance: "elm-developer" });
 });
 
+// ONE rule with the thread's line (ruled with the lead's T5): where a MESSAGE is the way on (a lost agent on bb whose
+// thread bb lists), the row's act is Open: it opens that thread. Start… there would begin a NEW conversation where a
+// message keeps the old one. Every other lost row has Start…: an agent on tmux (the pilot's eight).
+test("the Lost list's act, by kind: a lost agent on bb whose thread bb lists has Open, which opens its thread and starts nothing; a lost agent on tmux has Start…", async () => {
+  const lostOnBb = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, waiting: null, running: false as const, runtimeState: "stopped", sessionEnd: "lost" } : agent));
+  const lostOnTmux: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
+  const threads = sidebarThreads();
+  // (bb's row of its thread is at rest: the agent's word is the roster's, "Lost".)
+  const slot = await homePage({ rpc: handlers({}, [...lostOnBb, lostOnTmux]), sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, status: "idle" as const, hasPendingInteraction: false } : thread)) } });
+  const section = await slot.findByTestId("oats-home-lost");
+  const row = (instance: string) => within(section).getAllByTestId("oats-lost-row").find((each) => each.getAttribute("data-instance") === instance)!;
+  const acts = (instance: string) => Array.from(row(instance).querySelectorAll("button")).map((button) => button.textContent).slice(-1);
+  expect(within(section).getAllByTestId("oats-lost-row").map((each) => each.getAttribute("data-instance"))).toEqual(["flaky-ci-developer", lostOnTmux.instance]);
+  expect([acts("flaky-ci-developer"), acts(lostOnTmux.instance)]).toEqual([["Open"], ["Start…"]]);
+  expect([within(row("flaky-ci-developer")).queryByTestId("oats-lost-start"), within(row(lostOnTmux.instance)).queryByTestId("oats-lost-open")]).toEqual([null, null]);
+  const { asked } = await import("../../app/lifecycle");
+  fireEvent.click(within(row("flaky-ci-developer")).getByTestId("oats-lost-open"));
+  expect(asked()).toBeNull(); // no dialog: nothing is started
+  await waitFor(() => expect(slot.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "thr_ci" }));
+});
+
 test("the Lost section holds the agents whose roster row says \"Lost\", and no other: not one a person stopped; with none lost there is no section; over a roster that is the last one read its Start… is off", async () => {
   // The sample's roster: nobody's session was lost.
   const none = await homePage();

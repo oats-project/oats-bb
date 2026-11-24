@@ -78,10 +78,11 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
   // a soul's page, Teams; and the thread's own line or an agent's page, whose notice is the `compact`
   // one), so that the sidebar beside it says one line and not the same notice a second time (the
   // lead's T3: the notice ONCE, in the pane a person is looking at). The sidebar's own (`inSidebar`) does not count.
-  const fullOnPage = !inSidebar && at !== undefined;
+  // (Also where OATS was NEVER read, and there is no age to say: the same rule. The sidebar beside such a pane says the notice's title alone.)
+  const fullOnPage = !inSidebar;
   // A thread's own line that says it (`compact`) is counted apart too: the home in that thread's tab then draws no
   // notice of its own (it would be a second one, with a second Retry, on the same screen).
-  const onLine = compact && at !== undefined;
+  const onLine = compact;
   useEffect(() => {
     if (!fullOnPage) return;
     pagesWithNotice += 1;
@@ -98,14 +99,17 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
       <div role="alert" data-testid="oats-unreadable" data-code={failure.code} data-compact="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground">
         <span className="font-semibold text-destructive-text">{words.title}</span>
         {at === undefined ? null : <span className="min-w-0 text-muted-foreground">{`${showingRead(readAge(at, now))} ${HELD}`}</span>}
-        {words.retry ? (
-          <span className="ml-auto shrink-0">
-            <Button onClick={onRetry}>Retry</Button>
+        {/* The way out: Retry, and the settings where the cause offers them (the link alone: the line is the one notice
+            on an agent's thread, and the sidebar beside it has nothing to press). */}
+        {words.retry || words.settings ? (
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {words.retry ? <Button onClick={onRetry}>Retry</Button> : null}
+            {words.settings ? (
+              <a className={`${TARGET} ${LINK} inline-flex items-center`} href={settings}>
+                Open settings
+              </a>
+            ) : null}
           </span>
-        ) : words.settings ? (
-          <a className={`${TARGET} ${LINK} ml-auto inline-flex shrink-0 items-center`} href={settings}>
-            Open settings
-          </a>
         ) : null}
       </div>
     );
@@ -193,11 +197,11 @@ export function useLineShowsNotice(): boolean {
  * itself: at a phone's width the sidebar is bb's drawer, OVER the page, and New agent, off under this line, would
  * have only an age above it (an off control is never alone on a screen).
  */
-export function LastObservation({ failure, machine, at, now }: { failure: Failure; machine: string | null; at: string; now: number }) {
+export function LastObservation({ failure, machine, at, now }: { failure: Failure; machine: string | null; /** when the roster kept was read; absent where OATS was never read: the line then says the notice's TITLE alone (there is no age, and no act to call off) */ at?: string; now?: number }) {
   const words = failureWords(failure, machine);
   return (
-    <div role="status" data-testid="oats-last-observation" data-code={failure.code} title={words.title} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs text-muted-foreground">
-      <span className="min-w-0">{`${showingRead(readAge(at, now))} ${HELD}`}</span>
+    <div role="status" data-testid="oats-last-observation" data-code={failure.code} title={at === undefined ? undefined : words.title} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs text-muted-foreground">
+      <span className="min-w-0">{at === undefined ? words.title : `${showingRead(readAge(at, now))} ${HELD}`}</span>
     </div>
   );
 }

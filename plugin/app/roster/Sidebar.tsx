@@ -279,8 +279,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <div className="px-2">
             <Loading>Reading…</Loading>
           </div>
+        ) : pageShowsNotice ? (
+          // OATS was never read, and a pane beside this one says so, whole, with the Retry: one line here, the notice's title alone.
+          <LastObservation failure={oats} machine={oats.machine} />
         ) : (
-          <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />
+          <Unreadable inSidebar failure={oats} machine={oats.machine} onRetry={oats.retry} />
         )}
         <ul className="flex flex-col">{listed.map(plainRow)}</ul>
       </div>

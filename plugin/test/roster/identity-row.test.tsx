@@ -232,10 +232,11 @@ test("on the last roster read, while OATS cannot be read: the line as last read,
   expect(asked()).toBeNull();
 });
 
-test("with no roster ever read the row says that OATS cannot be read, with Retry: never nothing", async () => {
+test("with no roster ever read the row says that OATS cannot be read, with Retry and, where the cause offers them, the settings (the line is the one notice on that screen): never nothing", async () => {
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: "t", code: "OATS_NOT_FOUND", message: "oats: not found", last: null }) });
   const block = await slot.findByTestId("oats-identity-row");
-  expect(block.textContent).toBe("OATS is not installed on this machineRetry");
+  expect(block.textContent).toBe("OATS is not installed on this machineRetryOpen settings");
+  expect(within(block).getByRole("link", { name: "Open settings" }).getAttribute("href")).toBeTruthy();
   fireEvent.click(slot.getByRole("button", { name: "Retry" }));
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
 });

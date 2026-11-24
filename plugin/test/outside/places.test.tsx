@@ -176,7 +176,7 @@ test("the kernel's report on the open thread: one statement, \"Running outside O
   // ONE fold, closed: a person's words first, then the kernel's code and sentence. Nothing in view has a backtick or a command.
   const details = within(warning).getByTestId("oats-outside-details");
   expect(details.hasAttribute("open")).toBe(false);
-  expect(Array.from(details.querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop it to bring it back.", `running-outside-oats: ${MESSAGE}`]);
+  expect(Array.from(details.querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop, then Start.", `running-outside-oats: ${MESSAGE}`]);
   expect(warning.querySelectorAll("details")).toHaveLength(1);
   const inView = slot.getByTestId("oats-identity-row").cloneNode(true) as HTMLElement;
   inView.querySelector('[data-testid="oats-outside-details"]')!.remove();
@@ -641,7 +641,7 @@ test("while no roster is read the lifecycle offers no act: the block of an agent
   // An agent on bb has both in its header (the cases above), and its Details says to stop it or to start it from OATS.
   const onBb = await drawn(sidebarThreads(), false);
   await waitFor(() => expect(actsIn(onBb.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
-  expect(sentenceOf(onBb.getByTestId("header-details"))).toBe("Someone sent it a message in bb. Stop it to bring it back.");
+  expect(sentenceOf(onBb.getByTestId("header-details"))).toBe("Someone sent it a message in bb. Stop, then Start.");
   expect(onBb.getByTestId("header-details").textContent).not.toMatch(/stops the harness|in a new conversation|but OATS recorded it as stopped/);
 });
 
@@ -655,7 +655,7 @@ test("the panel's header of an agent on its thread carries the kernel's report, 
   expect(state.querySelector("h3")).toBeNull();
   expect(state.querySelectorAll("details")).toHaveLength(1);
   expect(reported.getByTestId("oats-agent-page").querySelectorAll('[data-testid="oats-outside-details"]')).toHaveLength(1);
-  expect(Array.from(within(state).getByTestId("oats-outside-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop it to bring it back.", `running-outside-oats: ${MESSAGE}`]);
+  expect(Array.from(within(state).getByTestId("oats-outside-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop, then Start.", `running-outside-oats: ${MESSAGE}`]);
   resetApp();
   const plain = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(plain)).toMatchObject({ state: "Stopped" })); // the page is drawn, in its state

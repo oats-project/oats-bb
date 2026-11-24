@@ -92,13 +92,15 @@ export const MESSAGE_CONTINUES = "message to continue";
  */
 export const OUTSIDE_RECORDED = "stopped in OATS";
 /**
- * What it needs, on the home's card under those words: STOP is the act that brings it back under
- * OATS. It always works: the harness that runs is ended, its thread is archived, and the agent
- * is what OATS has it: stopped, with Start… as for any stopped agent. Start… does not adopt what
- * runs: it begins a NEW conversation, and while the outside thread is in a turn the provider
- * refuses it ("stop it before starting again"). So Stop… is the primary act and Start… the second.
+ * What it needs, on the home's card under those words: the TWO steps, in three words. Stop alone
+ * does not bring it back running: it ends the harness that runs and archives its thread, and the
+ * agent is then what OATS has it, stopped (no message can reach an archived thread); Start…, a
+ * new conversation, is then the way on under OATS. Start… first does not do: it does not adopt
+ * what runs, and while the outside thread is in a turn the provider refuses it ("stop it before
+ * starting again"). So Stop… is the primary act and Start… the second. (The lead's ruling of 24
+ * Nov 2026 on T7's form: not "Stop it to bring it back.", which reads as a contradiction.)
  */
-export const OUTSIDE_NEEDS = "Stop it to bring it back.";
+export const OUTSIDE_NEEDS = "Stop, then Start.";
 export const OUTSIDE_WHAT = `Someone sent it a message in bb. ${OUTSIDE_NEEDS}`;
 /** The same, of an agent the lifecycle offers no Start for here (its session provider is neither bb nor tmux; the report is never a tmux agent's): the one remedy this plugin has is Stop. */
 export const OUTSIDE_WHAT_STOP = "Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.";

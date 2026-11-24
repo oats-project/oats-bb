@@ -408,7 +408,7 @@ export default [
       const primary = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}[data-primary]`)})].map((button) => button.innerText.trim()))`));
       check(same(primary, ["Stop…"]), `${at} of the two acts on the line, Stop… is the primary one (it brings the agent back under OATS)`, JSON.stringify(primary));
       check(
-        line !== null && line.state === "outside" && line.stateTone === "warning" && OUTSIDE_LINE.test(line.words) && same(line.tones, ["warning"]) && same(line.acts, ["Stop…", "Start…"]) && warned !== null && warned.boxed === false && /^.?\s*Details$/.test(warned.inView) && warned.folds === 1 && warned.folded === true && warned.kernel.includes("Someone sent it a message in bb. Stop it to bring it back.") && warned.kernel.includes(MESSAGE) && warned.kernel.includes("running-outside-oats") && same(warned.acts, []),
+        line !== null && line.state === "outside" && line.stateTone === "warning" && OUTSIDE_LINE.test(line.words) && same(line.tones, ["warning"]) && same(line.acts, ["Stop…", "Start…"]) && warned !== null && warned.boxed === false && /^.?\s*Details$/.test(warned.inView) && warned.folds === 1 && warned.folded === true && warned.kernel.includes("Someone sent it a message in bb. Stop, then Start.") && warned.kernel.includes(MESSAGE) && warned.kernel.includes("running-outside-oats") && same(warned.acts, []),
         `${at} outsideOats: ONE state, "Running outside OATS", in the warning tone, then "stopped in OATS", with Stop… and Start… as the line's own acts; under it no box and no title: ONE fold, Details, closed, holding what happened in a person's words, then the kernel's code and sentence (no command and no backtick in view)`,
         line === null ? await shown() : JSON.stringify(line),
       );
@@ -429,7 +429,7 @@ export default [
       );
       // What it needs, in the words of its line; and of the two acts Stop… is the primary one, on the card as on the thread's line.
       const needs = JSON.parse(await page.evaluate(`(() => { const card = document.querySelector(${JSON.stringify(cardSel)}); const flat = (node) => (node?.innerText ?? "").replace(/\\s+/g, " ").trim(); return JSON.stringify({ line: [...(card?.querySelectorAll(${JSON.stringify(testId("oats-status-part"))}) ?? [])].map(flat), needs: flat(card?.querySelector(${JSON.stringify(testId("oats-needs-outside"))})), primary: [...(card?.querySelectorAll("button[data-primary]") ?? [])].map(flat) }); })()`));
-      check(/stopped in OATS$/.test(needs.line.join(" ")) && needs.needs === "Stop it to bring it back." && same(needs.primary, ["Stop…"]), `${at} the card says what it needs in the words of its line ("stopped in OATS", then "Stop it to bring it back."), and Stop… is its primary act`, JSON.stringify(needs));
+      check(/stopped in OATS$/.test(needs.line.join(" ")) && needs.needs === "Stop, then Start." && same(needs.primary, ["Stop…"]), `${at} the card says what it needs in the words of its line ("stopped in OATS", then "Stop, then Start."), and Stop… is its primary act`, JSON.stringify(needs));
       check(home !== null && /^needs you ?1$/i.test(home.heading) && home.summary === "", `${at} the home counts it as the roster's foot does: "Needs you 1" over its card, with no count of its own and no summary line (the summary is Home › Agents')`, JSON.stringify(home));
       await page.shot(`outside-${viewport.name}-home-card`, { targets: true });
 

@@ -35,7 +35,7 @@ const SAYS = {
   notLoadedRow: `Idle · ${SOUL} · not loaded`, // (the row's title, whole: state · soul · reason)
   outsideState: "Running outside OATS",
   outsideRecorded: "stopped in OATS",
-  outsideWhat: "Someone sent it a message in bb. Stop it to bring it back.",
+  outsideWhat: "Someone sent it a message in bb. Stop, then Start.",
   archivedWhileRunning: "Archived in bb while running: it may still run.",
   archivedRow: "may still run", // (the row's reason, in the warning tone; its title and the line say the whole: archivedWhileRunning)
 };

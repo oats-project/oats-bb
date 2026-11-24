@@ -169,7 +169,8 @@ async function stopExtraBb(dir) {
  *  container beside the first bb: on CI its server once "failed to become healthy" and its host daemon once "failed to
  *  start", each time with no other bb process left over (2026-11-24, runs 45421291925 and 45429539876, both green on a
  *  rerun). So where bb-app EXITS before it is up, what it printed and its own logs are printed, its stale lock is
- *  cleared once nothing answers on its ports any more, and the START is tried once more. Only the start: what a test asserts
+ *  cleared once nothing answers on its ports any more (bb-app ends its server and daemon as it exits; the port wait,
+ *  not stopExtraBb, is what shows they are gone), and the START is tried once more. Only the start: what a test asserts
  *  of that bb runs once, after it is up. A bb that neither comes up nor exits in time fails as before, with what it
  *  printed, what it answered and every bb process.
  *  `out`: the file bb-app's output goes to; `prefix`: what runs before bb-app in the shell (env -u …); `env`: variables
@@ -198,7 +199,8 @@ async function startExtraBb({ dir, out, prefix = "", env = {}, args, ports, up, 
     if (attempt === 2) throw new Error(`${what}: bb-app exited before it was up, twice. ${why}. Its processes: ${await said(BB_PROCESSES)}`);
     console.error(`${what}: bb-app exited before it was up; its start is tried once more. ${why}`);
     await stopExtraBb(dir);
-    await waitFor(`nothing of ${dir}'s bb to answer on ${ports.join(" or ")}`, async () => !(await open()), { timeoutMs: 60_000, everyMs: 500 });
+    await waitFor(`nothing of ${dir}'s bb to answer on ${ports.join(" or ")}`, async () => !(await open()), { timeoutMs: 60_000, everyMs: 500 })
+      .catch(async (error) => { throw new Error(`${error.message}. Its processes: ${await said(BB_PROCESSES)}`, { cause: error }); });
     // bb's daemon lock (proper-lockfile): a directory beside a file.
     await sh(`rm -rf ~/${dir}/daemon.lock.lock && rm -f ~/${dir}/daemon.lock`);
   }

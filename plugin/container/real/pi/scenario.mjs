@@ -415,7 +415,7 @@ try {
       const ready = `document.querySelector(${q("oats-confirm")})?.getAttribute("data-phase") === "ready"`;
       check(Boolean(await page.until(ready, 60)), "the Restart dialog opens on the kernel's check of the agent");
       const says = `(document.querySelector(${q("oats-start-model")})?.closest(${q("oats-field")})?.querySelector('[role="alert"]')?.innerText ?? "")`;
-      const state = `JSON.stringify({ off: document.querySelector(${q("oats-confirm-act")})?.disabled ?? null, field: ${says}, beside: document.querySelector(${q("oats-confirm-blocked")})?.innerText ?? "" })`;
+      const state = `JSON.stringify({ off: document.querySelector(${q("oats-confirm-act")})?.disabled ?? null, field: ${says}, beside: document.querySelector(${q("oats-confirm-blocked")})?.innerText ?? null, why: document.getElementById(document.querySelector(${q("oats-confirm-act")})?.getAttribute("aria-describedby") ?? "")?.innerText ?? "" })`;
       /** Type a model, and wait for what the dialog makes of it once bb's list has answered (never a fixed time). */
       const typed = async (model, armed) => {
         await page.evaluate(fill(testId("oats-start-model"), model));
@@ -430,7 +430,7 @@ try {
       check(await typed("echo2", false), "HELD, Not found: `echo2`, which a listed id only ENDS in (mock/nested/echo2): pi has no such model, and the provider would refuse it after the stop");
       check(await typed("nosuchmodel", false), "HELD, Not found: `nosuchmodel`, a model pi does not have");
       const held = JSON.parse(await page.evaluate(state));
-      check(held.off === true && held.beside === "Not found", "Restart is off, with the word beside it", JSON.stringify(held));
+      check(held.off === true && held.beside === null && held.why === "Not found", "Restart is off, described by the field's mark, with no copy of the word beside it", JSON.stringify(held));
       await page.shot(`real-pi-restart-held-${VIEWPORTS[0].name}`);
       // Pressed all the same.
       await page.evaluate(`document.querySelector(${q("oats-confirm-act")})?.click()`);

@@ -592,7 +592,8 @@ export function startSays(verb: RunVerb, { resumes }: { resumes: boolean }): str
  * New agent form, and here one press away).
  */
 export function startDetails(verb: RunVerb, { onBb }: { onBb: boolean }): string[] {
-  return [...(verb === "restart" ? [START.begins] : []), ...(onBb ? [FULL_MODE] : [])];
+  // (On bb the dialog has a Model field: that its choice outlives this start is said here, not under the field: the lead's L9.)
+  return [...(verb === "restart" ? [START.begins] : []), ...(onBb ? [START.modelSaved, FULL_MODE] : [])];
 }
 /** Why a resume started fresh, in words, for each reason the kernel names (docs/desktop-cli-api.md, "Resume a lost session"). */
 const FRESH_BECAUSE: Readonly<Record<string, string>> = {

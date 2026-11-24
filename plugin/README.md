@@ -168,7 +168,8 @@ while its Terminal tab has the focus.
   mode: no sandbox." (neither act names a mode: the home's recorded choice stands). **Harness**
   starts on "Keep the recorded harness" and passes nothing; one the bb session provider declares
   is passed as `--harness`. With one harness declared there is no choice. **Model** is blank for
-  the recorded or default model, or a model id ("Saved for later starts too."). A start that can
+  the recorded or default model, or a model id (that it is "Saved for later starts too." is under
+  Details). A start that can
   run says nothing more; an agent the kernel says is running is not started again: Start is off,
   the dialog says why and offers its thread and **Refresh status**.
 - **While the act runs** the dialog says so in a word ("Stopping…"), with Close in Cancel's
@@ -1026,7 +1027,8 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   provider bb routes it by; a bare id may itself hold a slash, so nothing is matched by what an id
   ends in, and a model bb lists for pi with no provider serves nothing). For a harness whose list
   names no providers (Claude Code's bare ids) a changed model is armed only if listed whole.
-  Otherwise it is held, the word on the Model field and beside the button: "Not found" (no listed
+  Otherwise it is held, the word said once, as the Model field's mark (the off button is described
+  by it, `aria-describedby`, with no copy beside it): "Not found" (no listed
   model serves it; and where bb gives no list, an empty one, or none within ten seconds: it cannot
   be shown to start), "Pick provider" (several serve it: the field then offers only those),
   "Required" (the harness was changed and no model picked). While the list is read the button is

@@ -345,11 +345,12 @@ export const INPUT = `${TARGET} w-full rounded-md border border-border bg-backgr
  * it (`aria-describedby`), and a refusal marks it invalid and is announced. `children` is the one
  * control (an input, a textarea, a select): the field gives it its id.
  */
-export function Field({ label, optional = false, hint, error, children }: { label: string; optional?: boolean; hint?: ReactNode; error?: string | null; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean | "true" | "false" }> }) {
+export function Field({ label, optional = false, hint, error, errorId, children }: { label: string; optional?: boolean; hint?: ReactNode; error?: string | null; /** the id of the field's mark (its error), for a control elsewhere that the mark explains (a button it holds off): `aria-describedby` there */ errorId?: string; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean | "true" | "false" }> }) {
   const id = useId();
   const hasHint = hint !== undefined && hint !== null;
   const hasError = error !== undefined && error !== null;
-  const describedBy = [hasHint ? `${id}-hint` : null, hasError ? `${id}-error` : null].filter((part) => part !== null).join(" ");
+  const mark = errorId ?? `${id}-error`;
+  const describedBy = [hasHint ? `${id}-hint` : null, hasError ? mark : null].filter((part) => part !== null).join(" ");
   return (
     <div data-testid="oats-field" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
       <label htmlFor={id}>
@@ -359,7 +360,7 @@ export function Field({ label, optional = false, hint, error, children }: { labe
       {cloneElement(children, { id, ...(describedBy === "" ? {} : { "aria-describedby": describedBy }), ...(hasError ? { "aria-invalid": true } : {}) })}
       {hasHint ? <span id={`${id}-hint`}>{hint}</span> : null}
       {hasError ? (
-        <span id={`${id}-error`} role="alert" className="text-destructive-text">
+        <span id={mark} role="alert" className="text-destructive-text">
           {error}
         </span>
       ) : null}

@@ -647,7 +647,7 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   // Not cut off (the kernel says stopped): nothing points at its thread.
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
   // One press away, under the dialog's one Details: a start from bb runs in bb's full mode (there is no control for it), and the agent's facts.
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Saved for later starts too.", "Runs in bb's full mode: no sandbox."]); // (that the model is saved is under Details, not under the field: L9)
   expect(under(slot, "oats-start-details", "dt, dd")).toEqual(["Machine", "falcon", "Home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
   expect(dialog.textContent).not.toMatch(/existing home|saved briefing|stays readable/);
   // A start that can run says nothing more: no status line, and no "Refresh status" (it is for a Start that is off).
@@ -658,8 +658,10 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   const harness = slot.getByTestId("oats-start-harness") as HTMLSelectElement;
   expect(harness.value).toBe("");
   expect(texts(harness, "option")).toEqual(["Keep the recorded harness: Claude Code", "Claude Code", "pi"]);
-  // Under the model field: that the choice outlives this start, and no more.
-  expect(slot.getByTestId("oats-start").textContent).toContain("Saved for later starts too.");
+  // That the choice outlives this start is said once, under Details: nothing stands under the model field.
+  expect(slot.getByTestId("oats-start").textContent!.split("Saved for later starts too.")).toHaveLength(2);
+  expect(slot.getByTestId("oats-start-details").textContent).toContain("Saved for later starts too.");
+  expect(slot.getByTestId("oats-start-model").getAttribute("aria-describedby")).toBeNull();
   expect(slot.getByTestId("oats-start").textContent).not.toMatch(/Leave blank|No model suggestions/);
   await waitFor(() => expect(document.activeElement).toBe(harness));
   expect(button(slot, "oats-confirm-act").textContent).toBe("Start");
@@ -685,6 +687,9 @@ test("a chosen harness and a typed model are passed; a model that is no model na
   fireEvent.change(model, { target: { value: "--yolo" } });
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
   expect(slot.getByRole("alert").textContent).toBe("Enter a model name, not a command-line option.");
+  // Said once, as the field's mark: the off button is described by it, with no copy beside it.
+  expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
+  expect(document.getElementById(button(slot, "oats-confirm-act").getAttribute("aria-describedby")!)).toBe(slot.getByRole("alert"));
   fireEvent.change(model, { target: { value: " anthropic/claude-opus-5-5 " } });
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "done");
@@ -711,7 +716,7 @@ test("Restart opens its dialog with its one line, that it stops what the agent d
   expect(says(slot)).toEqual(["Stops what it is doing now."]);
   plain(slot);
   // Under Details: that it starts a new conversation too, and bb's full mode.
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
   expect(calls(slot, "restart")).toEqual([]);
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
@@ -1311,7 +1316,7 @@ test("Restart says in its one line that it stops what the agent does now; that i
   await pick("restart");
   await ready(slot);
   expect(says(slot)).toEqual(["Stops what it is doing now."]);
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
 });
 
@@ -1322,7 +1327,7 @@ test("an agent whose recorded thread bb does not have (deleted, or bb cannot be 
   openAct("start", "weekly-digest-helper");
   await ready(slot);
   expect(says(slot)).toEqual(["Starts a new conversation."]);
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Saved for later starts too.", "Runs in bb's full mode: no sandbox."]); // (that the model is saved is under Details, not under the field: L9)
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
 });
 
@@ -2388,8 +2393,11 @@ test("THE HARM ITSELF: a Restart whose changed model is held sends NOTHING to th
     if (typed !== "") type(slot, typed);
     // The word, on the Model field and beside the button; the button is off.
     await waitFor(() => expect(modelError(slot), word).toBe(word));
-    expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe(word);
+    // The word stands ONCE, as the Model field's mark; the button is off, described by that mark, with no copy beside it (L9).
+    expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
+    expect(slot.getByRole("dialog").textContent!.split(word)).toHaveLength(2);
     expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+    expect(document.getElementById(button(slot, "oats-confirm-act").getAttribute("aria-describedby")!)!.textContent).toBe(word);
     expect(slot.getByRole("dialog").textContent).not.toContain("Ready to start."); // it is not (and no status line is drawn for a hold on what was typed: the word says why)
     // Pressed all the same (a click on a disabled button, and the form's own Enter): nothing is sent.
     fireEvent.click(button(slot, "oats-confirm-act"));
@@ -2434,9 +2442,11 @@ test("Not found has one line, under Details, only while the field says so; Pick 
   expect(slot.queryByTestId("oats-start-unlisted")).toBeNull();
   type(slot, "claude-opus-9");
   await waitFor(() => expect(modelError(slot)).toBe("Not found"));
-  const details = slot.getByTestId("oats-start-unlisted") as HTMLDetailsElement;
-  expect(details.open).toBe(false); // closed until asked
-  expect(details.textContent).toContain("To use a model bb does not list: stop it, then start it with that model.");
+  // In the dialog's ONE fold (never a second "Details"), closed until asked.
+  const details = slot.getByTestId("oats-start-details") as HTMLDetailsElement;
+  expect(slot.getByRole("dialog").querySelectorAll("details")).toHaveLength(1);
+  expect(details.open).toBe(false);
+  expect(within(details).getByTestId("oats-start-unlisted").textContent).toBe("To use a model bb does not list: stop it, then start it with that model.");
   // Several serve it: the field offers those alone, and the line is gone.
   type(slot, "claude-opus-5-5");
   await waitFor(() => expect(modelError(slot)).toBe("Pick provider"));
@@ -2464,7 +2474,7 @@ test("while bb's list is read a changed model holds Restart with no word and no 
     type(slot, "anthropic/claude-opus-5-5");
     expect(button(slot, "oats-confirm-act").disabled).toBe(true);
     expect(modelError(slot)).toBeNull();
-    expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("");
+    expect([slot.queryByTestId("oats-confirm-blocked"), button(slot, "oats-confirm-act").getAttribute("aria-describedby")]).toEqual([null, null]); // off, with no word and nothing to point at yet
     fireEvent.click(button(slot, "oats-confirm-act"));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(9_000);
@@ -2474,7 +2484,8 @@ test("while bb's list is read a changed model holds Restart with no word and no 
       await vi.advanceTimersByTimeAsync(1_500);
     });
     expect(modelError(slot)).toBe("Not found");
-    expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("Not found");
+    expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
+    expect(document.getElementById(button(slot, "oats-confirm-act").getAttribute("aria-describedby")!)!.textContent).toBe("Not found");
     expect(button(slot, "oats-confirm-act").disabled).toBe(true);
     expect(acted(slot)).toEqual([]);
   } finally {

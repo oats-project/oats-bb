@@ -18,6 +18,10 @@ bb's light theme and `plugin-live-dark` in its dark one; `plugin-real`), and the
 (`plugin-pi`), so each line after the first installs and builds what it needs by itself.
 `LIVE_THEMES=light` (or `dark`) makes the live stage draw one theme, as each of CI's two live jobs
 does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a machine.
+`LIVE_WINDOW_LOADS=<n>` (by hand; passed into the container by name) makes the scene "a window that
+loads right after a change …" load n windows a view, where the gate loads two: a count of how
+often a window that loads while the server may still be reading a change ends on the roster with
+it (it must be all of them; which millisecond the load falls in is chance, so many loads say more).
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to

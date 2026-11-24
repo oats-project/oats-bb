@@ -41,8 +41,15 @@ export function attempt<T>(call: () => Promise<T>): Promise<T> {
  */
 const acted = new Map<ReadMethod, string>();
 
+/**
+ * The reads that owe one more read once their first answer is here (see `useRead`): an event came
+ * while it was on its way. One per read however many events came meanwhile, and for the window's
+ * one shared copy of the read, whichever slot heard them.
+ */
+const owed = new Set<ReadMethod>();
+
 /** What a feature keeps for the length of an app window, outside React: forgotten between tests. */
-const windowState: (() => void)[] = [() => acted.clear()];
+const windowState: (() => void)[] = [() => acted.clear(), () => owed.clear()];
 
 /** A feature with state of its own for the app window names how to forget it. */
 export function onWindowReset(forget: () => void): void {
@@ -73,9 +80,11 @@ function tokenOf(payload: unknown): string | undefined {
  * before the change). So once the first answer is here, the read is made ONCE more: that one
  * starts after the event, and is given what the event announced. Without it a window that loads
  * while the server reads a change holds the roster from before the change until some other agent
- * changes. (A read that already has an answer needs none of this: bb drops a reread in flight and
- * starts another for a new event. test/app/window-loads.test.tsx holds both.) It costs one more
- * answer from the server's cache, and no `oats status`.
+ * changes. However many events come while the first answer is on its way, ONE read is owed, not
+ * one each. (A read that already has an answer needs none of this: for a new event bb drops the
+ * reread in flight and starts another, so there is never more than one on its way and the last
+ * event's is the one that answers. test/app/window-loads.test.tsx holds all of it.) It costs one
+ * more answer from the server's cache, and no `oats status`.
  */
 export function useRead<Method extends ReadMethod>(
   method: Method,
@@ -104,9 +113,15 @@ export function useRead<Method extends ReadMethod>(
       void refetch.current();
       return;
     }
-    // The first answer is on its way, made from before this event: when it is here, read again.
+    // The first answer is on its way, made from before this event: when it is here, read again,
+    // once for all the events that came meanwhile.
     // (A read that fails says so in the read's own state, as every read does: both ends go on.)
-    const again = () => void refetch.current();
+    if (owed.has(method)) return;
+    owed.add(method);
+    const again = () => {
+      owed.delete(method);
+      void refetch.current();
+    };
     attempt(() => refetch.current()).then(again, again);
   });
 

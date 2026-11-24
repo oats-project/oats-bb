@@ -106,3 +106,52 @@ test("an event with no read on its way is one read, as before: nothing is read t
   await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
   expect(calls).toBe(2);
 });
+
+test("three events while the first answer is on its way: ONE read is owed, not three", async () => {
+  let calls = 0;
+  let deliver: (() => void) | undefined;
+  const first = new Promise<void>((resolve) => (deliver = resolve));
+  const { slot, facts } = await sidebarOver(async () => {
+    calls += 1;
+    if (calls === 1) {
+      await first;
+      return fixtureSnapshot(before());
+    }
+    return fixtureSnapshot(after());
+  });
+  await waitFor(() => expect(calls).toBe(1));
+  for (const at of ["2026-11-24T12:00:00.000Z", "2026-11-24T12:00:00.300Z", "2026-11-24T12:00:00.600Z"]) await act(async () => slot.behavior.emitRealtime("oats/changed", { at }));
+  expect(calls).toBe(1); // nothing is started beside the read on its way
+  await act(async () => deliver!());
+  await slot.findByTestId("oats-tree");
+  await waitFor(() => expect(facts()).not.toMatch(/^Needs you/));
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+  expect(calls).toBe(2); // the first answer, and one read for the three events
+});
+
+test("three events in a row once the window has its roster, each while the reread before it is on its way: the window ends on the last roster, and no read is made that no event asked for", async () => {
+  // Answers: 1 the load; 2 and 3 are rereads held on their way, made by the server before the last change; 4 the roster after it.
+  let calls = 0;
+  const held: (() => void)[] = [];
+  const { slot, facts } = await sidebarOver(async () => {
+    calls += 1;
+    if (calls === 1) return fixtureSnapshot(before());
+    if (calls <= 3) {
+      await new Promise<void>((resolve) => held.push(resolve));
+      return fixtureSnapshot(before());
+    }
+    return fixtureSnapshot(after());
+  });
+  await slot.findByTestId("oats-tree");
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.000Z" }));
+  await waitFor(() => expect(calls).toBe(2));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.300Z" }));
+  await waitFor(() => expect(calls).toBe(3));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.600Z" }));
+  await waitFor(() => expect(facts()).not.toMatch(/^Needs you/)); // the last event's read answers, whatever became of the two before it
+  // The rereads that were dropped answer late, with the roster from before: they change nothing.
+  await act(async () => held.forEach((answer) => answer()));
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+  expect(facts()).not.toMatch(/^Needs you/);
+  expect(calls).toBe(4); // one read per event after the load: none more
+});

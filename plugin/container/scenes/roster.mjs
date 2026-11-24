@@ -193,6 +193,45 @@ export default [
     },
   },
   {
+    // A window that LOADS right after a change: the server may still be reading it, and answers the window's first
+    // read from its cache, from before the change; the change is published when that read ends. The window must end
+    // on the roster WITH the change, and nothing else changes meanwhile (app/store.ts `useRead`; the race arranged:
+    // test/app/window-loads.test.tsx). A window that kept the roster from before it would never show it: the poll
+    // publishes nothing when nothing differs. Twice a view in the gate; LIVE_WINDOW_LOADS=<n>, by hand, loads n times
+    // a view to COUNT (whether the page meets the server's read at the wrong millisecond is chance).
+    stage: "fixtures",
+    name: "a window that loads right after a change the kernel recorded ends on the roster with that change, with no other change made",
+    run: async ({ page, at, viewport, threads, check, record }) => {
+      const loads = Math.max(2, Number(process.env.LIVE_WINDOW_LOADS) || 2);
+      const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_harvest").id}"]`;
+      const stateNow = `(document.querySelector(${JSON.stringify(`${row} [data-state]`)})?.getAttribute("data-state") ?? "")`;
+      const CHANGES = [{ "harvest-knowledge-helper": { running: false, runtimeState: "stopped" } }, {}]; // stopped; then back to the fixtures (idle)
+      const WANTED = ["stopped", "idle"];
+      const wrong = [];
+      let right = 0;
+      try {
+        for (let load = 0; load < loads; load += 1) {
+          const wanted = WANTED[load % 2];
+          // The kernel records the change, and the window is loaded AT ONCE: nothing is waited for between the two.
+          record(CHANGES[load % 2]);
+          await page.goto("/");
+          const shownSidebar = await showSidebar(page, viewport);
+          const first = await page.until(`${stateNow} === "" ? "" : ${stateNow}`, 30); // what the window drew first: the roster from before the change, or already the new one
+          const ends = shownSidebar && Boolean(await page.until(`${stateNow} === ${JSON.stringify(wanted)}`, 30));
+          if (ends) right += 1;
+          else wrong.push(`load ${load + 1}: wanted ${wanted}; the window drew "${first ?? "nothing"}" first and holds "${await page.evaluate(stateNow)}" 30 s later`);
+        }
+      } finally {
+        // The fixtures again, for the scenes after this one: recorded, and waited for in this window.
+        record();
+        await page.goto("/");
+        await showSidebar(page, viewport);
+        await page.until(`${stateNow} === "idle"`, 30);
+      }
+      check(wrong.length === 0, `${at} ${right} of ${loads} windows loaded right after a recorded change ended on the roster with it (stopped, then idle again, in turn), nothing else having changed`, wrong.join("; "));
+    },
+  },
+  {
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {

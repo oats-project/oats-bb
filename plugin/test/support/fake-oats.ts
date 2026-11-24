@@ -11,6 +11,8 @@ const SCRIPT = join(here, "..", "..", "container", "fake-oats.mjs");
 
 export type Behaviour = { file?: string; stdout?: string; exit?: number; sleepMs?: number; grandchild?: boolean; stderr?: string };
 export type Call = {
+  /** When the fake started, as it stamped it. */
+  at: string;
   pid: number;
   verb: string;
   argv: string[];

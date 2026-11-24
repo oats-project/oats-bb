@@ -29,7 +29,7 @@ export function recordedFacts(instance: string, file = "status.json"): { facts: 
   throw new Error(`${file} has no instance ${instance}`);
 }
 
-export const PANEL_AT = "2026-11-21T18:30:00.000Z";
+export const PANEL_AT = "2026-11-23T18:17:26.000Z";
 
 /** The answer of `panelInstance` for one instance of the recorded roster, changed by `change`. */
 export function instanceAnswer(instance: string, change: (facts: PanelInstance) => PanelInstance = (facts) => facts, file?: string) {
@@ -74,12 +74,16 @@ export function panelAgents(file = "status.json"): Agent[] {
 }
 export const panelSnapshot = (agents: Agent[] = panelAgents()) => fixtureSnapshot(agents);
 
-/** One bb thread per recorded agent that names one, shaped as bb's sidebar threads are (the pinned recording's first row). */
-export function panelThreads(agents: Agent[] = panelAgents()): { status: "ready"; threads: PluginSidebarThread[] } {
+/**
+ * One bb thread per recorded agent that names one, shaped as bb's sidebar threads are (the pinned
+ * recording's first row). `works` names the instances on whose thread bb says a turn runs: that,
+ * and not the kernel's `running`, is what says an agent on bb works (the recorded agent's harness
+ * is loaded, `running: true`, and its thread is at rest: it is idle).
+ */
+export function panelThreads(agents: Agent[] = panelAgents(), works: readonly string[] = []): { status: "ready"; threads: PluginSidebarThread[] } {
   const template = fixtureThreads()[0]!;
   const threads = agents
     .filter((agent) => agent.threadId !== null)
-    // bb's own status of each thread: a turn runs on the thread of an agent the roster calls running (what says that it works).
-    .map((agent) => ({ ...template, status: agent.running === true ? ("active" as const) : ("idle" as const), id: agent.threadId!, title: agent.instance, displayTitle: agent.instance, href: `/projects/proj_panel/threads/${agent.threadId}`, projectId: "proj_panel", hasPendingInteraction: false }));
+    .map((agent) => ({ ...template, status: works.includes(agent.instance) ? ("active" as const) : ("idle" as const), id: agent.threadId!, title: agent.instance, displayTitle: agent.instance, href: `/projects/proj_panel/threads/${agent.threadId}`, projectId: "proj_panel", hasPendingInteraction: false }));
   return { status: "ready", threads };
 }

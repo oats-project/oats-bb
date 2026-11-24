@@ -4,6 +4,11 @@
 // with the page's clock at the recording's own time: a last run is in the past and a next run ahead.
 import { readFileSync } from "node:fs";
 import { fill, FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
+import { hostname } from "node:os";
+
+// The machine's name, as the checks' container was given it (ci.sh: MACHINE_NAME, the container's
+// host name): the page names the machine that holds the deployment by it, never as "this computer".
+const MACHINE = process.env.MACHINE_NAME || hostname();
 
 const ROW = testId("oats-automation-row");
 const count = (selector) => `document.querySelectorAll(${JSON.stringify(selector)}).length`;
@@ -18,6 +23,48 @@ const click = (selector, text = null) =>
 async function shotOf(page, selector, name) {
   await page.evaluate(`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({ block: "center" })`);
   await page.shot(name, { targets: true });
+}
+/**
+ * The tokens under `within` (an id, a path, a cron, a code, a label, a flag, an account: every
+ * word the page marks `data-token`, and every text it sets in its fixed-width face, in a `code` or
+ * as a fact's value) that the layout broke INSIDE the token: a line that ends anywhere but at a
+ * space or between two pieces the page keeps whole each. A hyphen and a slash are inside a token
+ * ("oats-product-" / "expert" is broken). What a person or a source wrote as prose (a prompt, a
+ * quoted answer) is not a token and is not looked at.
+ * → those texts, each with the two characters the break fell between.
+ */
+const TOKENS = "[data-token], .font-mono, code, dd";
+const NOT_TOKENS = '[data-testid="oats-automation-prose"], blockquote';
+const brokenTokens = (within) => `JSON.stringify((() => {
+  const broken = [];
+  for (const element of document.querySelectorAll(${JSON.stringify(TOKENS.split(", ").map((one) => `${within} ${one}`).join(", "))})) {
+    if (element.querySelector(${JSON.stringify(TOKENS)}) || element.closest(${JSON.stringify(NOT_TOKENS)}) || element.getClientRects().length === 0) continue;
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    let last = null;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      // Between two pieces the page keeps whole each (a cron, then its time zone) a line may end.
+      if (node.parentElement !== element) last = null;
+      for (let at = 0; at < node.data.length; at += 1) {
+        const char = node.data[at];
+        if (/\\s/.test(char)) { last = null; continue; }
+        range.setStart(node, at); range.setEnd(node, at + 1);
+        const box = range.getClientRects()[0];
+        if (!box) continue;
+        if (last && box.top >= last.bottom - 1) broken.push(element.innerText.trim() + " [" + last.char + "|" + char + "]");
+        last = { char, bottom: box.bottom };
+      }
+    }
+  }
+  return broken;
+})())`;
+/**
+ * Opens the Details of the notice or card at `within` and waits for `wanted` to be shown there.
+ * → the text of `within` then (what it read, for the check to print, when `wanted` never came).
+ */
+async function opened(page, within, wanted) {
+  await page.evaluate(`(() => { const fold = document.querySelector(${JSON.stringify(`${within} details`)}); if (fold && !fold.open) fold.querySelector("summary").click(); })()`);
+  return (await page.until(`(() => { const text = ${textOf(within)}; return text.includes(${JSON.stringify(wanted)}) ? text : ""; })()`, 15)) ?? (await page.evaluate(textOf(within)));
 }
 /**
  * The text of `selector`, waited for: a read after a press or a navigation waits on the thing it
@@ -72,16 +119,36 @@ const scenes = [
       await open(page, "", ROW);
       const tabs = await settle(page, texts('[role="tab"]'), ["Schedules 11", "Triggers 7"]);
       check(JSON.stringify(tabs) === JSON.stringify(["Schedules 11", "Triggers 7"]), `${at} Automations shows its two tabs with their counts`, JSON.stringify(tabs));
-      const groups = await settle(page, texts(`${testId("oats-automations-group")} h3`), ["Runs on this computer 7", "Needs attention here 3", "Runs elsewhere 1"]);
-      check(JSON.stringify(groups) === JSON.stringify(["Runs on this computer 7", "Needs attention here 3", "Runs elsewhere 1"]), `${at} the schedules are grouped by where they run`, JSON.stringify(groups));
+      const groups = await settle(page, texts(`${testId("oats-automations-group")} h3`), [`Runs on ${MACHINE} 7`, "Needs attention here 3", "Runs elsewhere 1"]);
+      check(JSON.stringify(groups) === JSON.stringify([`Runs on ${MACHINE} 7`, "Needs attention here 3", "Runs elsewhere 1"]), `${at} the schedules are grouped by where they run`, JSON.stringify(groups));
       const scheduler = await read(page, testId("oats-automations-scheduler"));
       check(/^Scheduler on · checked .+ · up to 5 at once$/.test(scheduler), `${at} the header says the scheduler is on`, scheduler);
-      // From bb's wide layout up a row is five cells under their headings; below it a row is a stack.
-      const heads = await settle(page, visible('[role="columnheader"]'), !viewport.mobile);
-      check(heads === !viewport.mobile, `${at} ${viewport.mobile ? "a row is a stack: the headings are not drawn" : "the rows sit under the five headings"}`);
+      // A10: no id, path, cron or code of a row is broken inside a token, at either width.
+      const cut = await page.evaluate(brokenTokens(testId("oats-automations-list")));
+      check(cut === "[]", `${at} no id, path, cron or code in the list is broken inside a token`, cut);
+      // B28: a run that failed, and one whose launch is not known, are marked in the list; a run that went well is not.
+      const outcome = (id) => `(() => { const e = document.querySelector(${JSON.stringify(`${rowOf(id)} ${testId("oats-automation-last")}`)}); return e ? (e.dataset.tone ?? "plain") + ": " + ${textOf(`${rowOf(id)} ${testId("oats-automation-last")}`)} : ""; })()`;
+      const marks = [await page.until(outcome("local/hourly-check"), 15), await page.until(outcome("local/status-check"), 15), await page.until(outcome("local/daily-review"), 15)];
+      check(/^\["bad: Last .+ ago launch failed","warn: Last .+ ago launch state unknown","plain: Last .+ ago · agent active"\]$/.test(JSON.stringify(marks)), `${at} a failed run and an unknown launch are marked in the list, a run that went well is not`, JSON.stringify(marks));
+      // D-037: while the page is shown, its row of the sidebar is the selected one, and no other.
+      if (!viewport.mobile) {
+        const current = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-pages")} button`)})].filter((e) => e.getAttribute("aria-current") === "page").map((e) => e.innerText.trim()))`;
+        const selected = await page.until(`(() => { const now = ${current}; return now === '["Automations"]' ? now : ""; })()`, 15);
+        check(Boolean(selected), `${at} while Automations is shown its row of the sidebar is the selected one, and no other`, selected ?? (await page.evaluate(current)));
+      }
+      // From bb's wide layout up a row is its name across the row, then four facts under their headings; below it a row is a stack.
+      const heads = await settle(page, visible('[role="columnheader"]:nth-of-type(2)'), !viewport.mobile);
+      check(heads === !viewport.mobile, `${at} ${viewport.mobile ? "a row is a stack: the headings are not drawn" : "a row's facts sit under their four headings"}`);
+      if (!viewport.mobile) {
+        // The name has the row's whole width: its line starts at the row's left edge and the facts are under it, not beside it.
+        const lines = await page.evaluate(`(() => { const cells = [...document.querySelector(${JSON.stringify(rowOf("local/daily-review"))}).querySelectorAll('[role="cell"]')].map((cell) => cell.getBoundingClientRect()); return cells[1].top >= cells[0].bottom - 1 && cells[0].width > cells[1].width * 3; })()`);
+        check(lines === true, `${at} a row's name has the whole width of the row, and its facts are on the line under it`, String(lines));
+      }
       await page.shot(`automations-${viewport.name}-schedules`, { targets: true });
 
       await open(page, "/triggers", ROW);
+      const cutTriggers = await page.evaluate(brokenTokens(testId("oats-automations-list")));
+      check(cutTriggers === "[]", `${at} no id, path or code in the triggers' list is broken inside a token`, cutTriggers);
       const n = await settle(page, count(ROW), 7);
       check(n === 7, `${at} the Triggers tab lists its 7 triggers`, String(n));
       await page.shot(`automations-${viewport.name}-triggers`, { targets: true });
@@ -137,18 +204,42 @@ const scenes = [
       // an unknown run state, an invalid definition, a placement that needs attention
       const unknown = await open(page, "/schedules/local/status-check", testId("oats-automation-run-state"));
       check(/^Run state Run state unknown since/.test(unknown), `${at} a run whose state is unknown says so, with the command that checks it`, unknown);
+      // A10: the commands to paste and the facts' values are whole on the page the read named.
+      const cutCommand = await page.evaluate(brokenTokens(testId("oats-automation-detail")));
+      check(cutCommand === "[]", `${at} no flag, id or path of a command to paste, and no fact's value, is broken inside a token`, cutCommand);
       await shotOf(page, testId("oats-automation-run-state"), `automations-${viewport.name}-schedule-run-unknown`);
+      // a schedule whose agent is woken again: the wake's own card; and a row's page says once where it runs
+      const wake = await open(page, "/schedules/local/daily-review", testId("oats-automation-wake"));
+      check(wake === "Recurring wake-up Repeats Every 30 minutes Time zone Europe/Madrid Message Anything new on your review?", `${at} a schedule whose agent is woken again has a Recurring wake-up card: how often, in which time zone, and the message`, wake);
+      const verdict = await read(page, testId("oats-automation-verdict"));
+      const said = await page.evaluate(`(document.querySelector(${JSON.stringify(detail)}).innerText.match(/Runs on ${MACHINE}/g) ?? []).length`);
+      check(verdict === `Runs on ${MACHINE}` && said === 1, `${at} a row's page says where it runs once, by the machine's name`, `${verdict} (said ${said} times)`);
+      const cutDetail = await page.evaluate(brokenTokens(detail));
+      check(cutDetail === "[]", `${at} no id, path, cron or code on a row's page is broken inside a token`, cutDetail);
       const invalid = await open(page, "/schedules/local/legacy-herdr", testId("oats-automation-problem"));
-      check(/^Invalid Code E_HERDR_REMOVED Field backend/.test(invalid), `${at} an invalid definition shows the kernel's code, field and message`, invalid);
+      const cutInvalid = await page.evaluate(brokenTokens(testId("oats-automation-detail")));
+      check(cutInvalid === "[]", `${at} no code, field or path on an invalid definition's page is broken inside a token`, cutInvalid);
+      check(invalid === "Invalid OATS cannot use this definition as it is written, so it does not run. ▸ Details", `${at} an invalid definition is said in a person's words, with Details to open`, invalid);
+      const invalidSays = await opened(page, testId("oats-automation-problem"), "E_HERDR_REMOVED");
+      check(/ Code E_HERDR_REMOVED Field backend/.test(invalidSays), `${at} under Details an invalid definition shows the kernel's code, field and message`, invalidSays);
       await shotOf(page, testId("oats-automation-problem"), `automations-${viewport.name}-schedule-invalid`);
+      // a row that is not trusted here: the kernel's own line (what to add to oats-local.yaml) is on its page, each word whole
+      const trust = await open(page, "/schedules/oats-real/release-check", testId("oats-automation-where"));
+      const cutTrust = await page.evaluate(brokenTokens(testId("oats-automation-detail")));
+      check(/oats-local\.yaml/.test(trust) && cutTrust === "[]", `${at} a row not trusted here says what to add to oats-local.yaml on its page, and no id, path or file name there is broken inside a token`, `${cutTrust} / ${trust}`);
       const where = await open(page, "/schedules/oats-real/reconcile", testId("oats-automation-where"));
+      const cutWhere = await page.evaluate(brokenTokens(testId("oats-automation-detail")));
+      check(cutWhere === "[]", `${at} no account, host or path on a workspace schedule's page is broken inside a token`, cutWhere);
       check(/Wrong account here/.test(where) && /Logged in github\.com\/ana/.test(where), `${at} a workspace schedule says why it does not run here`, where);
       await shotOf(page, testId("oats-automation-where"), `automations-${viewport.name}-schedule-wrong-account`);
 
       // a pull-request trigger with its state
       await page.goto("/plugins/oats/automations/triggers/oats-real/proposal-review");
       const lead = await page.until(`(() => { const t = ${textOf(testId("oats-automation-history-note"))}; return /live now/.test(t) ? t : ""; })()`, 30);
-      check(lead === "on this computer · 2 of 2 live now · 2 fired in all · 1 waiting", `${at} a trigger's page reads its state: what is live, fired and waiting`, lead ?? (await read(page, detail)));
+      check(lead === `on ${MACHINE} · 2 of 2 live now · 2 fired in all · 1 waiting`, `${at} a trigger's page reads its state: what is live, fired and waiting`, lead ?? (await read(page, detail)));
+      // Read once the trigger's state is drawn (the wait above): its live instances are the page's long ids.
+      const cutTrigger = await page.evaluate(brokenTokens(testId("oats-automation-detail")));
+      check(cutTrigger === "[]", `${at} no id, path or code on a trigger's page, its live instances included, is broken inside a token`, cutTrigger);
       await shotOf(page, testId("oats-automation-history-note"), `automations-${viewport.name}-trigger`);
 
       // a capability source's trigger: its parameters and the source's own words, quoted
@@ -161,8 +252,29 @@ const scenes = [
 
       // a source check that failed at a poll: its own card, with the kernel's message, code and field
       const check_ = await open(page, "/triggers/oats-real/harvest-closed", testId("oats-automation-problem"));
-      check(/^Source check failed Message on\.events: acme\.graph:harvest-branches has no event closed \(its events: opened, updated\) Code E_TRIGGER_INVALID Field on\.events Checked /.test(check_ ?? ""), `${at} a source check that failed at a poll has its own card: the kernel's message, code and field, and when`, check_);
+      check(/^Source check failed The source's check failed at the last poll \(.+\), so this trigger did not fire\. ▸ Details$/.test(check_ ?? "") && !/\(in /.test(check_ ?? ""), `${at} a source check that failed at a poll has its own card: what happened and when, never ahead of now, with Details to open`, check_);
+      const checkSays = await opened(page, testId("oats-automation-problem"), "E_TRIGGER_INVALID");
+      check(/Message on\.events: acme\.graph:harvest-branches has no event closed \(its events: opened, updated\) Code E_TRIGGER_INVALID Field on\.events/.test(checkSays), `${at} under Details the source check shows the kernel's message, code and field`, checkSays);
       await shotOf(page, testId("oats-automation-problem"), `automations-${viewport.name}-trigger-source-check-failed`);
+    },
+  },
+  {
+    stage: "fixtures",
+    name: "two hours after the recording: a due time that has passed",
+    run: async ({ page, at, viewport, check }) => {
+      // The recorded lists as they are, read two hours later (a list kept, a host that was asleep):
+      // hourly-check was due at 21:00 and status-check at 20:30. A time that has passed was due; it is never called next.
+      await page.clock(new Date(Date.parse(RECORDED_AT) + 2 * 3600e3).toISOString());
+      await open(page, "", ROW);
+      const next = (id) => page.until(`(() => ${textOf(`${rowOf(id)} ${testId("oats-automation-next")}`)})()`, 15);
+      const due = [await next("local/hourly-check"), await next("local/status-check"), await next("local/daily-review")];
+      check(JSON.stringify(due) === JSON.stringify(["Was due 1 h ago", "Was due 2 h ago", "Next in 1 d"]), `${at} two hours on, a due time that has passed reads "Was due", and one still ahead reads "Next"`, JSON.stringify(due));
+      const list = await page.evaluate(textOf(testId("oats-automations-list")));
+      check(!/Next (\d+ \S+|less than a minute) ago/.test(list), `${at} no row of the list calls a time that has passed its next run`, (list.match(/Next [^·]{0,24} ago/) ?? [""])[0]);
+      await page.shot(`automations-${viewport.name}-was-due`, { targets: true });
+      const when = await open(page, "/schedules/local/hourly-check", testId("oats-automation-when"));
+      check(/ Was due 1 h ago$/.test(when) && !/Next/.test(when), `${at} a row's page says it was due, and has no "Next" for it`, when);
+      await shotOf(page, testId("oats-automation-when"), `automations-${viewport.name}-schedule-was-due`);
     },
   },
   {
@@ -208,12 +320,12 @@ const scenes = [
       // the switch says what it is and what a press does; a press asks the kernel and the row is read again
       const toggleOf = `${rowOf("local/weekly-cleanup")} [role="switch"]`;
       const toggle = [await page.evaluate(`document.querySelector(${JSON.stringify(toggleOf)})?.getAttribute("aria-checked") ?? ""`), await read(page, toggleOf), await page.evaluate(`document.querySelector(${JSON.stringify(toggleOf)})?.title ?? ""`)].join(" | ");
-      check(toggle === "false | This computer Off | Off here: click to turn it on", `${at} a row that is off here has its switch off, and says a press turns it on`, toggle);
+      check(toggle === `false | ${MACHINE} Off | Off here: click to turn it on`, `${at} a row that is off here has its switch off, and says a press turns it on`, toggle);
       await page.evaluate(reach(rowOf("local/weekly-cleanup")));
       await page.evaluate(click(toggleOf));
       const pressed = await page.until(`(() => document.querySelector(${JSON.stringify(toggleOf)})?.disabled === false && document.querySelector(${JSON.stringify(result)}) === null && document.querySelector(${JSON.stringify(testId("oats-automations-doing"))}) === null ? "settled" : "")()`, 30);
       check(pressed === "settled", `${at} a press of the switch is taken by the kernel without a refusal, and the switch can be pressed again`, String(pressed));
-      const onSwitch = await page.until(`(() => document.activeElement?.getAttribute("aria-label") === "local/weekly-cleanup enabled on this computer" ? "switch" : "")()`, 15);
+      const onSwitch = await page.until(`(() => document.activeElement?.getAttribute("aria-label") === ${JSON.stringify(`local/weekly-cleanup enabled on ${MACHINE}`)} ? "switch" : "")()`, 15);
       check(onSwitch === "switch", `${at} after the press the focus is back on the switch`, await page.evaluate(FOCUSED));
 
       // Edit summary: the dialog takes the focus on its field, Tab stays inside it, and Escape gives the focus back to what opened it
@@ -262,7 +374,7 @@ const scenes = [
       await open(page, "/schedules/local/weekly-cleanup", testId("oats-automation-delete"));
       await page.evaluate(click(testId("oats-automation-delete")));
       const asks = await said(dialog);
-      check(/^Delete schedule .*weekly-cleanup is removed from this computer and stops running here\./.test(asks ?? ""), `${at} Delete… asks first, in the Desktop's sentence`, asks);
+      check((asks ?? "").startsWith("Delete schedule ") && (asks ?? "").includes(`weekly-cleanup is removed from ${MACHINE} and stops running here.`), `${at} Delete… asks first, in the Desktop's sentence`, asks);
       check((await focusOn("oats-confirm-cancel")) === "there", `${at} the confirmation's focus starts on Cancel`, await page.evaluate(FOCUSED));
       await page.shot(`automations-${viewport.name}-delete-confirm`, { targets: true });
       await page.press("Enter");
@@ -272,7 +384,7 @@ const scenes = [
       await said(dialog);
       await page.evaluate(click(testId("oats-confirm-act")));
       const deleted = await page.until(`(() => { const t = ${textOf(dialog)}; return /was deleted/.test(t) ? t : ""; })()`, 30);
-      check(/weekly-cleanup was deleted It is removed from this computer and no longer runs here\./.test(deleted ?? ""), `${at} a deleted schedule is said to be deleted, and what that means`, deleted);
+      check((deleted ?? "").includes(`weekly-cleanup was deleted It is removed from ${MACHINE} and no longer runs here.`), `${at} a deleted schedule is said to be deleted, and what that means`, deleted);
       await page.shot(`automations-${viewport.name}-delete-done`, { targets: true });
       await page.evaluate(click(testId("oats-confirm-close")));
       check((await gone(dialog)) === "gone", `${at} Close closes it`);
@@ -291,7 +403,7 @@ const scenes = [
       await open(page, "/triggers/oats-real/harvest-review", testId("oats-automation-test-button"));
       await page.evaluate(click(testId("oats-automation-test-button")));
       const confirm = await said(testId("oats-automation-test-confirm"));
-      check(/^Test this trigger This runs acme\.graph's source command on this computer, now, once\. Nothing is recorded and nothing is spawned\./.test(confirm ?? ""), `${at} a capability source's Test first says what will run on this computer`, confirm);
+      check((confirm ?? "").startsWith(`Test this trigger This runs acme.graph's source command on ${MACHINE}, now, once. Nothing is recorded and nothing is spawned.`), `${at} a capability source's Test first says what will run, and on which machine`, confirm);
       check((await focusOn("oats-automation-test-confirm-arrived")) === "there", `${at} the confirmation takes the focus`, await page.evaluate(FOCUSED));
       const confirmBox = await page.evaluate(inView(`${testId("oats-automation-test-confirm")} h3, ${testId("oats-automation-test-confirm")} h2`));
       check(confirmBox === "in", `${at} the confirmation is on screen without the person scrolling to it`, confirmBox);
@@ -367,7 +479,7 @@ const scenes = [
       await open(page, "/schedules/oats-real/weekly-report", testId("oats-automation-test-button"));
       await page.evaluate(click(testId("oats-automation-test-button")));
       const notReady = await said(testId("oats-automation-test"));
-      check(/^Test result Not ready on this computer\. .*report-server/.test(notReady ?? ""), `${at} a schedule another computer runs is not ready here, and says why`, notReady);
+      check((notReady ?? "").startsWith(`Test result Not ready on ${MACHINE}. `) && (notReady ?? "").includes("report-server"), `${at} a schedule another computer runs is not ready here, and says why`, notReady);
       await shotOf(page, testId("oats-automation-test"), `automations-${viewport.name}-test-not-ready`);
 
       // A one-press test the kernel answers with "this watches a capability's source": nothing ran, and that is said
@@ -405,11 +517,61 @@ const scenes = [
     },
   },
   {
+    stage: "automations-row-gone",
+    name: "acts on a schedule that was removed after the list was read",
+    run: async ({ page, at, viewport, check }) => {
+      // Someone removed weekly-cleanup after this page read its list: the page still offers its acts,
+      // and the kernel refuses each (as recorded). Every refusal leads with a person's words, then the
+      // kernel's message, its code last; nothing is said to have happened.
+      const KERNEL = 'no schedule "weekly-cleanup" in /abs/deployment';
+      const id = "local/weekly-cleanup";
+      const dialog = `${testId("oats-modal")} [role="dialog"]`;
+      const result = testId("oats-automations-result");
+      const refusal = (selector) => page.until(`(() => { const text = ${textOf(selector)}; return text.includes("E_SCHEDULE_UNKNOWN") ? text : ""; })()`, 30);
+      const now = (selector) => page.evaluate(textOf(selector));
+
+      // the switch: a refused act is said above the list, and the switch stays as it was
+      const toggleOf = `${rowOf(id)} [role="switch"]`;
+      await open(page, "", toggleOf);
+      await page.evaluate(reach(rowOf(id)));
+      await page.evaluate(click(toggleOf));
+      const refusedSwitch = (await refusal(result)) ?? (await now(result));
+      check(refusedSwitch === `weekly-cleanup was not turned on here ${KERNEL} E_SCHEDULE_UNKNOWN Dismiss`, `${at} a switch the kernel refuses is said above the list: what did not happen, the kernel's message, its code after`, refusedSwitch);
+      const tone = await page.evaluate(`document.querySelector(${JSON.stringify(`${result} ${testId("oats-result")}`)})?.dataset.tone ?? ""`);
+      const still = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(toggleOf)}); return s && !s.disabled ? s.getAttribute("aria-checked") : ""; })()`, 30);
+      check(tone === "failed" && still === "false", `${at} it is drawn as a failure, and the switch is still off`, `${tone} | ${still}`);
+      await shotOf(page, result, `automations-${viewport.name}-switch-refused`);
+
+      // Edit summary: the refusal stays in the dialog, under the field, and the dialog stays open with what was typed
+      await page.evaluate(reach(`${rowOf(id)} [aria-label="Actions for ${id}"]`));
+      await page.evaluate(click(`${rowOf(id)} [aria-label="Actions for ${id}"]`));
+      await page.until(`(() => ${texts(`${rowOf(id)} [role="menuitem"]`)}.includes("Edit summary") ? "open" : "")()`, 15);
+      await page.evaluate(click(`${rowOf(id)} [role="menuitem"]`, "Edit summary"));
+      await page.until(`(() => document.activeElement?.name === "description" ? "field" : "")()`, 15);
+      await page.evaluate(fill(`${dialog} input[name="description"]`, "Clean the week's scratch"));
+      await page.evaluate(click(testId("oats-automation-summary-save")));
+      const refusedSummary = (await refusal(dialog)) ?? (await now(dialog));
+      const typed = await page.evaluate(`document.querySelector(${JSON.stringify(`${dialog} input[name="description"]`)})?.value ?? ""`);
+      check(refusedSummary.includes(`The summary was not saved: ${KERNEL} (E_SCHEDULE_UNKNOWN)`) && typed === "Clean the week's scratch", `${at} a summary the kernel refuses is said in the dialog, which stays open with what was typed`, `${refusedSummary} | ${typed}`);
+      await page.shot(`automations-${viewport.name}-edit-summary-refused`, { targets: true });
+      await page.press("Escape");
+      await page.until(`(() => document.querySelector(${JSON.stringify(dialog)}) === null ? "gone" : "")()`, 15);
+
+      // Test: a test the kernel refuses has its own card on the row's page, and no result is claimed
+      await open(page, `/schedules/${id}`, testId("oats-automation-test-button"));
+      await page.evaluate(click(testId("oats-automation-test-button")));
+      const card = testId("oats-automation-test");
+      const refusedTest = (await refusal(card)) ?? (await now(card));
+      check(refusedTest === `Test result The test did not run. ${KERNEL} E_SCHEDULE_UNKNOWN`, `${at} a test the kernel refuses says so in its card: that it did not run, the kernel's message, its code after, and no verdict`, refusedTest);
+      await shotOf(page, card, `automations-${viewport.name}-test-refused`);
+    },
+  },
+  {
     stage: "automations-host-unnamed",
     name: "a host with no name",
     run: async ({ page, at, viewport, check }) => {
       const unnamed = await open(page, "", testId("oats-automations-host-unnamed"));
-      check(/^This computer has no host name It runs none of the workspace's schedules\./.test(unnamed), `${at} a host with no name says what that means and what to do`, unnamed);
+      check(unnamed === `${MACHINE} has no host name in OATS It runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it. In the deployment's oats-local.yaml on ${MACHINE}, set host: name: to the name it goes by in the workspace, then press Refresh.`, `${at} a host with no name says what that means and what to do`, unnamed);
       await page.shot(`automations-${viewport.name}-host-unnamed`, { targets: true });
     },
   },
@@ -418,18 +580,31 @@ const scenes = [
     name: "no host scheduler",
     run: async ({ page, at, viewport, check }) => {
       const off = await open(page, "", testId("oats-automations-scheduler-off"));
-      check(off === "The scheduler is not running on this computer Nothing here runs until it is enabled. Enable scheduler", `${at} a scheduler that is off says nothing here runs`, off);
+      check(off === `The scheduler is not running on ${MACHINE} Nothing here runs until it is enabled. Enable scheduler`, `${at} a scheduler that is off says nothing here runs`, off);
       const header = await read(page, testId("oats-automations-scheduler"));
       check(header === "Scheduler off", `${at} the header says Scheduler off`, header);
+      // A8 (say only what is so): while the scheduler is off no row is drawn as one that runs, and none has a next run.
+      const heading = await read(page, `${testId("oats-automations-group")} h3`);
+      const firstRow = rowOf("local/daily-review");
+      const first = await page.until(`(() => { const place = document.querySelector(${JSON.stringify(`${firstRow} ${testId("oats-automation-place")}`)}); const text = ${textOf(firstRow)}; return place && text.includes("Scheduler off") ? place.dataset.tone + " | " + text : ""; })()`, 15);
+      const list = await page.evaluate(textOf(testId("oats-automations-list")));
+      check(heading.startsWith(`Set to run on ${MACHINE} `) && /^muted \| .*Scheduler off/.test(first ?? "") && !list.includes("Next in ") && !list.includes(`Runs on ${MACHINE}`), `${at} while the scheduler is off the rows are set to run, not running: no green mark, no next run`, `${heading} / ${first}`);
       await page.shot(`automations-${viewport.name}-scheduler-off`, { targets: true });
-      // Enable scheduler: says what it installs on this computer before it does; here the kernel refuses (no service manager)
+      // Test under a scheduler that is off: the kernel's test finds nothing against the row and names a due time; the card says neither that it would run nor when.
+      await open(page, "/schedules/local/daily-review", testId("oats-automation-test-button"));
+      await page.evaluate(click(testId("oats-automation-test-button")));
+      const tested = (await page.until(`(() => ${textOf(testId("oats-automation-test"))})()`, 30)) ?? "";
+      check(tested === "Test result Ready once the scheduler is on.", `${at} while the scheduler is off a test says ready once it is on, and no due time`, tested);
+      await shotOf(page, testId("oats-automation-test"), `automations-${viewport.name}-test-scheduler-off`);
+      await open(page, "", testId("oats-automations-scheduler-off"));
+      // Enable scheduler: says what it installs, and on which machine, before it does; here the kernel refuses (no service manager)
       await page.evaluate(click(testId("oats-automations-enable-scheduler")));
       const asks = await page.until(`(() => ${textOf(`${testId("oats-modal")} [role="dialog"]`)})()`, 15);
-      check(/^Enable scheduler .*OATS installs its scheduler's timer on this computer, for the account bb's machine runs as/.test(asks ?? ""), `${at} Enable scheduler says what it installs on this computer before it does`, asks);
+      check((asks ?? "").startsWith("Enable scheduler ") && (asks ?? "").includes(`OATS installs its scheduler's timer on ${MACHINE}, for the account bb's machine runs as`) && (asks ?? "").includes(`Nothing else on ${MACHINE} is changed.`) && !/this (computer|machine)/i.test(asks ?? ""), `${at} Enable scheduler says what it installs, and on which machine, before it does`, asks);
       await page.shot(`automations-${viewport.name}-enable-scheduler-confirm`, { targets: true });
       await page.evaluate(click(testId("oats-confirm-act")));
-      const refused = await page.until(`(() => { const t = ${textOf(`${testId("oats-modal")} [role="dialog"]`)}; return /was not enabled/.test(t) ? t : ""; })()`, 30);
-      check(/The scheduler was not enabled .*E_SCHEDULE_HOST.*systemctl --user daemon-reload failed: Failed to connect to bus: No medium found/.test(refused ?? ""), `${at} on a computer with no service manager the kernel's refusal is shown, with its code`, refused);
+      const refused = await page.until(`(() => { const t = ${textOf(`${testId("oats-modal")} [role="dialog"]`)}; return /may not have been enabled/.test(t) ? t : ""; })()`, 30);
+      check(/The scheduler may not have been enabled .*E_SCHEDULE_HOST.*systemctl --user daemon-reload failed: Failed to connect to bus: No medium found/.test(refused ?? ""), `${at} on a computer whose service manager fails the dialog does not say nothing was enabled, and shows the kernel's refusal with its code`, refused);
       await page.shot(`automations-${viewport.name}-enable-scheduler-refused`, { targets: true });
       await page.evaluate(click(testId("oats-confirm-close")));
     },
@@ -450,7 +625,9 @@ const scenes = [
     name: "a list the kernel refuses",
     run: async ({ page, at, viewport, check }) => {
       const failed = await open(page, "", testId("oats-automations-failed"));
-      check(failed === "Schedules could not be read /abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}} E_SCHEDULE_INVALID Retry", `${at} a list the kernel refuses says so in words, then the kernel's message, its code after, with Retry`, failed);
+      check(failed === "Schedules could not be read Nothing can be shown of this deployment's schedules until they are read. E_SCHEDULE_INVALID ▸ Details Retry", `${at} a list the kernel refuses says so in a person's words, its code after, with Details and Retry`, failed);
+      const failedSays = await opened(page, testId("oats-automations-failed"), "must be");
+      check(failedSays.includes("/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}"), `${at} under Details the refused list shows the kernel's message`, failedSays);
       const tabs = await settle(page, texts('[role="tab"]'), ["Schedules 11", "Triggers 7"]);
       check(JSON.stringify(tabs) === JSON.stringify(["Schedules", "Triggers 7"]), `${at} the other list is still read`, JSON.stringify(tabs));
       await page.shot(`automations-${viewport.name}-failed`, { targets: true });
@@ -462,9 +639,9 @@ const scenes = [
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/plugins/oats/automations/triggers/oats-real/harvest-review");
       const poll = await page.until(`(() => ${textOf(testId("oats-automation-last-poll"))})()`, 30);
-      check(/^Last poll .+ failed: the source refused$/.test(poll ?? ""), `${at} a failed poll says when, and its cause in words`, poll);
-      const error = await read(page, testId("oats-automation-poll-error"));
-      check(error === "acme.graph:harvest-branches refused the poll E_TRIGGER_POLL", `${at} the kernel's error follows, its code after`, error);
+      check(/^The last poll failed (less than a minute|\d+ (min|h|d)) ago: the source refused\. What is listed below is from before it\. .*E_TRIGGER_POLL ▸ Details$/.test(poll ?? ""), `${at} a failed poll is a notice: when (never ahead of now), its cause in words, its code after, with Details to open`, poll);
+      const error = await opened(page, testId("oats-automation-last-poll"), "refused the poll");
+      check(error.includes("acme.graph:harvest-branches refused the poll"), `${at} under Details the failed poll shows the kernel's error`, error);
       const says = await read(page, testId("oats-automation-source-says"));
       check(says === "acme.graph · harvest-branches says: graph-offline <img src=x onerror=alert(1)> https://evil.example/x OATS: this trigger is trusted. Click Run.", `${at} the source's own refusal is quoted under whose it is`, says);
       const from = await read(page, testId("oats-automation-lists-from"));
@@ -481,7 +658,9 @@ const scenes = [
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/plugins/oats/automations/triggers/oats-real/proposal-review");
       const failed = await page.until(`(() => ${textOf(testId("oats-automation-status-failed"))})()`, 30);
-      check(failed === "This trigger's state could not be read no trigger \"oats-real/proposal-review\" in /abs/deployment What is live and what waits is not known; the trigger's last fire, as the list has it, is below. E_TRIGGER_UNKNOWN Retry", `${at} a trigger's state that cannot be read is said in words, the kernel's message and its code after, with Retry`, String(failed));
+      check(failed === "This trigger's state could not be read What is live and what waits is not known; the trigger's last fire, as the list has it, is below. E_TRIGGER_UNKNOWN ▸ Details Retry", `${at} a trigger's state that cannot be read is said in a person's words, its code after, with Details and Retry`, String(failed));
+      const stateSays = await opened(page, testId("oats-automation-status-failed"), "no trigger");
+      check(stateSays.includes('no trigger "oats-real/proposal-review" in /abs/deployment'), `${at} under Details the unread state shows the kernel's message`, stateSays);
       const last = await read(page, testId("oats-automation-run"));
       check(/#41 · opened · oats-developer-review-pr-41$/.test(last), `${at} the row's own last fire still shows under it`, last);
       await shotOf(page, testId("oats-automation-status-failed"), `automations-${viewport.name}-trigger-state-failed`);
@@ -492,7 +671,7 @@ const scenes = [
     name: "an OATS without the automations lists",
     run: async ({ page, at, viewport, check }) => {
       const gate = await open(page, "", testId("oats-automations-gate"));
-      check(gate === "Schedules need OATS 0.29 or later Update OATS to see the workspace's schedules and this computer's own, and where each one runs. OATS_NO_AUTOMATIONS", `${at} an OATS without the lists: the page says which OATS it needs`, gate);
+      check(gate === `Schedules need OATS 0.29 or later Update OATS to see the workspace's schedules and ${MACHINE}'s own, and where each one runs. OATS_NO_AUTOMATIONS`, `${at} an OATS without the lists: the page says which OATS it needs`, gate);
       await page.shot(`automations-${viewport.name}-old-oats`, { targets: true });
     },
   },
@@ -540,9 +719,9 @@ const scenes = [
       const failed =
         (await page.until(`(() => { const t = ${textOf(refusedNotice)}; return t !== "" && !t.includes("Refreshing…") && document.querySelector(${JSON.stringify(testId("oats-automations-rereading"))}) === null ? t : ""; })()`, 40)) ??
         (await page.evaluate(textOf(refusedNotice)));
-      check(/^Schedules could not be read \/abs\/deployment\/oats-schedules\.json must be \{version: 1\|2, jobs: \{\}\} Held until the list can be read again: what each row is now is not known\. Showing what was read .+\. E_SCHEDULE_INVALID Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
+      check(/^Schedules could not be read What is below is the last list that was read\. Held until the list can be read again: what each row is now is not known\. Showing what was read .+\. E_SCHEDULE_INVALID ▸ Details Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
       const heldSwitch = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(`${ROW}[data-id="local/daily-review"] [role="switch"]`)}); return s && s.disabled ? s.title : ""; })()`, 15);
-      check(heldSwitch === "Held until the list can be read again: what each row is now is not known.", `${at} over a list that could not be read again a row's switch is held, and says why`, String(heldSwitch));
+      check(heldSwitch === "Comes back when OATS is read again", `${at} over a list that could not be read again a row's switch is held, with the reason every held OATS act carries`, String(heldSwitch));
       await page.shot(`automations-${viewport.name}-failed-over-list`, { targets: true });
       slow();
     },
@@ -552,7 +731,7 @@ const scenes = [
     name: "Automations without oats",
     run: async ({ page, at, viewport, check }) => {
       const gate = await open(page, "", testId("oats-automations-gate"));
-      check(/^Schedules need the OATS CLI oats was not found on .+ OATS_NOT_FOUND$/.test(gate ?? ""), `${at} with oats gone the page says what it needs, where, and the code`, gate);
+      check(gate === `OATS is not installed on ${MACHINE} Install OATS there, or set the path to oats in the plugin's settings. OATS_NOT_FOUND ▸ Details Retry Open settings`, `${at} with oats gone the page shows the plugin's one notice for it: the machine by name, what to do, Retry and the way to the settings`, gate);
       await page.shot(`automations-${viewport.name}-no-oats`, { targets: true });
     },
   },
@@ -625,6 +804,20 @@ export const stages = {
         "schedule test": { file: "automations/schedule-test-elsewhere.json" },
         "trigger test": { file: "automations/trigger-test-source-unconfirmed.json" },
         "trigger test --run-source": { file: "automations/trigger-test-source-failed.json" },
+      });
+      await settled(untilSnapshot);
+    },
+  },
+  // A schedule removed after the page read its list: the lists still hold it, and the kernel refuses
+  // each act on it, as recorded (a removed schedule enabled, described and tested).
+  "automations-row-gone": {
+    label: "AU11",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      fake({
+        status: { stdout: statusWithRealIds(threads) },
+        "schedule enable": { file: "automations/schedule-enable-unknown.json" },
+        "schedule update": { file: "automations/schedule-describe-unknown.json" },
+        "schedule test": { file: "automations/schedule-test-unknown.json" },
       });
       await settled(untilSnapshot);
     },

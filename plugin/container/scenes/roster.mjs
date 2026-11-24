@@ -232,6 +232,46 @@ export default [
     },
   },
   {
+    stage: "fixtures",
+    name: "the event path: a claim the kernel records is in the tree while the status read is still held, and the status read then confirms it",
+    run: async ({ page, at, viewport, threads, check, sleep, record, recordFor, statusAnsweredSinceRecord, snapshot }) => {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_harvest").id}"]`;
+      const drawn = (state) => `document.querySelector(${JSON.stringify(`${row} [data-state="${state}"]`)}) !== null`;
+      check(Boolean(await page.until(drawn("idle"), 30)), `${at} before the change the agent is drawn idle`);
+      const waits = (shot) => shot.ok === true && shot.agents.some((agent) => agent.instance === "harvest-knowledge-helper" && agent.waiting !== null);
+      // The kernel records a claim of that agent: a line in ITS file of the event log, which the watch
+      // names; its events say the claim; and `oats status` is HELD, so no status read can answer yet.
+      const HELD_MS = 6000;
+      const claim = { since: new Date().toISOString(), producer: "agent", reason: "attention", message: "Keep the retry, or fail the job?" };
+      const recorded = recordFor(
+        { agent: "knowledge-harvester", instance: "harvest-knowledge-helper" },
+        { changes: { "harvest-knowledge-helper": { waitingOnYou: claim } }, said: { waitingOnYou: claim, waitingClaims: [{ producer: "agent", waiting: true, since: claim.since, reason: "attention", message: claim.message }] }, statusHeldMs: HELD_MS },
+      );
+      const shown = (await page.until(drawn("needs-you"), 15)) ? Date.now() - recorded : null;
+      // By the server's own order, not by the clock: the snapshot that has the claim is still the
+      // one of a status read that STARTED BEFORE the kernel recorded it. Only the events can have put it there.
+      // And no status read that could carry the claim has answered yet (the fake's own log): the status is still held.
+      const answered = statusAnsweredSinceRecord();
+      const during = snapshot();
+      check(
+        shown !== null && waits(during) && Date.parse(during.at) < recorded && answered === false,
+        `${at} the tree shows the agent waiting ${shown === null ? "never" : `${shown} ms`} after the kernel recorded it, from its events alone: the snapshot is still the status read from before the record (the status is held ${HELD_MS} ms)`,
+        JSON.stringify({ shown, ok: during.ok, at: during.at, recorded: new Date(recorded).toISOString(), waits: waits(during), aStatusReadAnswered: answered }),
+      );
+      await page.shot(`event-path-${viewport.name}-claim-before-status`);
+      // The status read that the same signal asked for answers, with the claim: it confirms, and the row stays.
+      let confirmed = during;
+      for (const deadline = Date.now() + 30_000; Date.now() < deadline && !(confirmed.ok === true && Date.parse(confirmed.at) >= recorded); await sleep(250)) confirmed = snapshot();
+      const still = await page.evaluate(drawn("needs-you"));
+      check(confirmed.ok === true && Date.parse(confirmed.at) >= recorded && waits(confirmed) && still === true, `${at} and the status read that started after the record confirms it: the agent still waits`, JSON.stringify({ ok: confirmed.ok, at: confirmed.at, waits: waits(confirmed), still }));
+      // And back, so the scenes after this one draw the fixtures.
+      record();
+      check(Boolean(await page.until(drawn("idle"), 30)), `${at} and idle again once the kernel's status says so`);
+    },
+  },
+  {
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {

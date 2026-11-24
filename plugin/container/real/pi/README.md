@@ -90,6 +90,18 @@ call the plugin's RPC, as its UI does. After each act it reads `oats status --js
   question with Yes and No, and the thread's status line says it. The last view presses Yes on the
   card: bb has no pending interaction left, pi's tool gets `true`, the claim is gone, the agent is
   idle.
+- **P4b Restart holds what it cannot start.** On the pi agent's own page, Restart… opens the
+  dialog; a model is typed in "Model for this start". bb lists pi's models as `<provider>/<id>`
+  (the mock's: `mock/echo`, and `mock/nested/echo2`, which is only listed). `echo` and
+  `nested/echo2` (bare ids: the id minus its provider) ARM Restart; `echo2` (which a listed id only
+  ends in) and `nosuchmodel` are HELD: "Not found" on the field and beside the button, Restart off.
+  Nothing is confirmed: the button is off and the dialog is still as it was after a press (that is
+  the proof); the wrapper has no `oats session restart` and no `oats instance stop` since the
+  dialog opened, and, since the wrapper writes a call's record when the call ENDS, its records are
+  read once more after P5's stop for a restart; the agent still runs on its thread. The hold rests
+  on bb's list as the app reads it, not on the kernel's refusal: the kernel stops the running
+  session before the provider judges the model (plugin/README.md, "Restart does not stop what it
+  cannot start").
 - **P5** The plugin stops the agent and retires it, each from its plan: the plan's facts (what the
   dialogs word) name the pi agent, its soul, its home and bb, and no other agent. The stop leaves
   the pi thread as the provider leaves one (archived, from the provider that archives at stop, or

@@ -70,7 +70,7 @@ describe("the lists", () => {
       automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: false as const, code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" }, trigger: { ok: true as const, list: triggers() } }),
     });
     const alert = await slot.findByRole("alert");
-    expect(alert.textContent).toBe("Schedules could not be read/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}E_SCHEDULE_INVALIDRetry");
+    expect(alert.textContent).toBe("Schedules could not be readNothing can be shown of this deployment's schedules until they are read.E_SCHEDULE_INVALID▸Details/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}Retry");
     expect(slot.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Schedules", "Triggers7"]);
     fireEvent.click(within(alert).getByText("Retry"));
     await waitFor(() => expect(calls(slot)).toEqual(["automations", "refresh", "automations"]));
@@ -80,7 +80,8 @@ describe("the lists", () => {
     const message = 'This bb server has 2 machines (falcon, osprey). Choose the one that holds the OATS homes: set "Machine" in the OATS plugin\'s settings.';
     const refused = { ok: false as const, code: "CHOOSE_HOST", message };
     const slot = await page("", { automations: () => ({ at: AT, hostId: null, oats: null, schedule: refused, trigger: refused }) });
-    expect((await slot.findByRole("alert")).textContent).toBe(`Schedules could not be read${message}CHOOSE_HOSTRetry`);
+    // The plugin's one notice for an OATS that cannot be read: a person's words, the server's own one press away, and the way to the settings.
+    expect((await slot.findByRole("alert")).textContent).toBe(`Choose the machine that holds your agentsThis bb server has more than one machine.CHOOSE_HOST▸Details${message}Open settings`);
   });
 
   it("a re-read that fails after one that answered says so over the list still shown, with Retry", async () => {
@@ -95,12 +96,12 @@ describe("the lists", () => {
     expect(await slot.findAllByTestId("oats-automation-row")).toHaveLength(11);
     fireEvent.click(slot.getByTestId("oats-automations-refresh"));
     const alert = await slot.findByRole("alert");
-    expect(alert.textContent).toMatch(/^Schedules could not be readthe plugin's server is restartingHeld until the list can be read again: what each row is now is not known\.Showing what was read .+\.Retry$/);
+    expect(alert.textContent).toMatch(/^Schedules could not be readWhat is below is the last list that was read\.Held until the list can be read again: what each row is now is not known\.Showing what was read .+\.▸Detailsthe plugin's server is restartingRetry$/);
     expect(slot.getAllByTestId("oats-automation-row")).toHaveLength(11);
     // What a row is now is not known: its acts are held (the switch, the menu's acts), and Open and Open file are not.
     const row = slot.getAllByTestId("oats-automation-row").find((entry) => entry.dataset.id === "local/daily-review")!;
     const toggle = within(row).getByRole("switch") as HTMLButtonElement;
-    expect([toggle.disabled, toggle.title]).toEqual([true, "Held until the list can be read again: what each row is now is not known."]);
+    expect([toggle.disabled, toggle.title]).toEqual([true, "Comes back when OATS is read again"]);
     fireEvent.click(within(row).getByRole("button", { name: "Actions for local/daily-review" }));
     const items = within(row).getAllByRole("menuitem") as HTMLButtonElement[];
     expect(items.map((item) => [item.textContent, item.disabled || item.getAttribute("aria-disabled") === "true"])).toEqual([["Open", false], ["Test", true], ["Run now", true], ["Turn off here", true], ["Open file", false], ["Edit summary", true], ["Delete…", true]]);
@@ -119,13 +120,13 @@ describe("the lists", () => {
     const alert = await slot.findByRole("alert");
     fireEvent.click(within(alert).getByText("Retry"));
     await waitFor(() => expect((slot.getByTestId("oats-automations-retry") as HTMLButtonElement).disabled).toBe(true));
-    expect(slot.getByRole("alert").textContent).toBe("Schedules could not be readthe plugin's server is restartingRefreshing…Retry");
+    expect(slot.getByRole("alert").textContent).toBe("Schedules could not be readNothing can be shown of this deployment's schedules until they are read.Refreshing…▸Detailsthe plugin's server is restartingRetry");
     expect((slot.getByTestId("oats-automations-refresh") as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect(release).toBeDefined());
     release!();
     // It failed the same way: the notice stands, and Retry can be pressed again.
     await waitFor(() => expect((slot.getByTestId("oats-automations-retry") as HTMLButtonElement).disabled).toBe(false));
-    expect(slot.getByRole("alert").textContent).toBe("Schedules could not be readthe plugin's server is restartingRetry");
+    expect(slot.getByRole("alert").textContent).toBe("Schedules could not be readNothing can be shown of this deployment's schedules until they are read.▸Detailsthe plugin's server is restartingRetry");
   });
 
   it("a server that does not answer says so, with Retry", async () => {
@@ -134,19 +135,28 @@ describe("the lists", () => {
         throw new Error("the plugin's server is restarting");
       },
     });
-    expect((await slot.findByRole("alert")).textContent).toBe("Schedules could not be readthe plugin's server is restartingRetry");
+    expect((await slot.findByRole("alert")).textContent).toBe("Schedules could not be readNothing can be shown of this deployment's schedules until they are read.▸Detailsthe plugin's server is restartingRetry");
   });
 });
 
 describe("what cannot be shown at all (D-285)", () => {
-  it("no oats on the machine: the page says the list needs the OATS CLI", async () => {
+  it("no oats on the machine: the notice every place of the plugin shows for it, naming the machine, with Retry and the way to the settings", async () => {
     const refused = { ok: false as const, code: "OATS_NOT_FOUND", message: "`oats` could not be run (ENOENT)" };
+    const named = await page("", { automations: () => ({ at: AT, hostId: null, machine: "falcon", oats: null, schedule: refused, trigger: refused }) });
+    const gate = await named.findByTestId("oats-automations-gate");
+    expect(gate.textContent).toBe("OATS is not installed on falconInstall OATS there, or set the path to oats in the plugin's settings.OATS_NOT_FOUND▸Details`oats` could not be run (ENOENT)RetryOpen settings");
+    expect(within(gate).getByTestId("oats-unreadable").dataset.code).toBe("OATS_NOT_FOUND");
+    expect(within(gate).getByRole("link", { name: "Open settings" }).getAttribute("href")).toMatch(/^\/settings\/plugins\//);
+    // Retry asks the server to read OATS again.
+    fireEvent.click(within(gate).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(named.inspection.rpcCalls.filter((call) => call.method === "refresh")).toHaveLength(1));
+    expect(named.getAllByRole("tab")).toHaveLength(2);
+    resetApp();
     const slot = await page("", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: refused, trigger: refused }) });
-    // The title is the Desktop's; the server's own words (which machine, what to do) and its code follow.
-    expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("Schedules need the OATS CLI`oats` could not be run (ENOENT)OATS_NOT_FOUND");
+    expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("OATS is not installed on this machineInstall OATS there, or set the path to oats in the plugin's settings.OATS_NOT_FOUND▸Details`oats` could not be run (ENOENT)RetryOpen settings");
     resetApp();
     const other = await page("triggers", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: refused, trigger: refused }) });
-    expect((await other.findByTestId("oats-automations-gate")).textContent).toBe("Triggers need the OATS CLI`oats` could not be run (ENOENT)OATS_NOT_FOUND");
+    expect((await other.findByTestId("oats-automations-gate")).textContent).toBe("OATS is not installed on this machineInstall OATS there, or set the path to oats in the plugin's settings.OATS_NOT_FOUND▸Details`oats` could not be run (ENOENT)RetryOpen settings");
   });
 
   it("an OATS without the automations lists, as the server answers for one", async () => {
@@ -160,7 +170,8 @@ describe("what cannot be shown at all (D-285)", () => {
     const none = { code: "OATS_NO_AUTOMATIONS", message: "OATS 0.28.0 has no automations lists: they need OATS 0.29 or later." };
     expect(gateOf("schedule", none)).toEqual({ title: "Schedules need OATS 0.29 or later", detail: "Update OATS to see the workspace's schedules and this computer's own, and where each one runs.", code: "OATS_NO_AUTOMATIONS" });
     expect(gateOf("trigger", none)).toMatchObject({ title: "Triggers need OATS 0.29 or later" });
-    expect(gateOf("trigger", { code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there." })).toEqual({ title: "Triggers need the OATS CLI", detail: "oats was not found on falcon: install OATS there.", code: "OATS_NOT_FOUND" });
+    // No `oats` at all is not this gate: it is the plugin's one notice for an OATS that cannot be read.
+    expect(gateOf("trigger", { code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there." })).toBeNull();
     expect(gateOf("schedule", { code: "E_SCHEDULE_INVALID", message: "x" })).toBeNull();
     expect(gateOf("schedule", null)).toBeNull();
   });
@@ -193,7 +204,7 @@ describe("a row's page", () => {
       },
     });
     const notice = await slot.findByTestId("oats-automation-status-failed");
-    expect(notice.textContent).toBe("This trigger's state could not be read`oats` did not answer within 20 s and was stoppedWhat is live and what waits is not known; the trigger's last fire, as the list has it, is below.OATS_TIMEOUTRetry");
+    expect(notice.textContent).toBe("This trigger's state could not be readWhat is live and what waits is not known; the trigger's last fire, as the list has it, is below.OATS_TIMEOUT▸Details`oats` did not answer within 20 s and was stoppedRetry");
     expect(within(notice).getByRole("alert")).toBeTruthy();
     expect(slot.getByTestId("oats-automation-history").textContent).toMatch(/#41 · opened · oats-developer-review-pr-41$/);
     // Retry reads it again.
@@ -219,7 +230,7 @@ describe("a row's page", () => {
     // OATS changed: the lists are read again, and with them the state.
     await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
     const notice = await slot.findByTestId("oats-automation-status-failed");
-    expect(notice.textContent).toBe("This trigger's state could not be readthe trigger state cannot be readShowing what was read less than a minute ago.E_TRIGGER_FAILEDRetry");
+    expect(notice.textContent).toBe("This trigger's state could not be readWhat is below is the state that was read before.Showing what was read less than a minute ago.E_TRIGGER_FAILED▸Detailsthe trigger state cannot be readRetry");
     expect(slot.getByTestId("oats-automation-history-note").textContent).toContain("2 of 2 live now");
   });
 

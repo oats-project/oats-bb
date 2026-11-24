@@ -561,7 +561,7 @@ leave out: whatever a release shows, an agent can be started.
 | **Soul** | the souls OATS lists, each with its description, with a filter over them from eight on. A soul that cannot be spawned is drawn apart in the list and says why under the field. |
 | **Opening instruction · optional** | what the agent should do. Empty, it starts and waits for its person. |
 | **Harness** | "The soul's default" (nothing is passed, and the entry says what the kernel resolved: "The soul's default: pi"), or one the bb session provider declares. A harness bb cannot run on this machine is marked at the choice ("pi · not installed in bb") and the field says what to do: bb's own state of its providers (`sdk.system.providerStates`), never a guess; it can still be chosen, and the kernel and the provider decide. With one harness declared there is no field; when the list cannot be read the field says so, with Retry, and a spawn uses the soul's default. |
-| **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…**, which opens a field for a typed model id. |
+| **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…**, which opens a field for a typed model id. Spawn is held for the model in two cases, each said in two words at most, on the field (its mark) and beside the button (`model/spawn.ts` `modelCheck`, one rule with its table in `test/spawn/model.test.ts`). **Required**: the person chose a harness that is not the soul's own (the one the kernel resolves when none is chosen: kept from that preview, or asked once where a harness was picked before the soul) and the kernel resolves no model for it (the soul's model is another harness's); the column then names the harness alone and the field's first entry reads "Default" alone: no default is promised. While bb's list of models for the harness is being read, Spawn is off with "Reading defaults…". A list bb has not given after 10 seconds reads as not read (Spawn goes on the kernel's answer, as where bb gives no list), and the rule is read on it if it answers later: a call of bb's that never settles does not hold the form. **Pick provider**: the model the spawn would send (picked or typed, else the one the kernel resolved from the soul) is a bare id that several of the models bb lists for the harness serve; exactly those are the ones offered, and they are the ids the bb session provider's own refusal names at the launch (the provider says the same there). Which listed models serve an id is ONE function, `model/served.ts` `served` (read by this form; written for the Restart dialog too), and it is the provider's own resolution: a model's bare id is its id minus the provider bb routes it by (so "openrouter/openai/gpt-6" has the bare id "openai/gpt-6", and "gpt-6" is served by nothing there), and a model bb lists for pi with no provider serves nothing. (That bb's list, as the plugin reads it through the SDK, names each pi model's provider was shown on the real kernel by the pi run of the Restart dialog's change, which lands after this one and keeps the step: a bare id is armed there by its provider, `echo` of `mock/echo`, and a nested one, `nested/echo2` of `mock/nested/echo2`, where its tail `echo2` is not. Where a row names none, nothing is held for it.) For a harness whose models are not resolved by provider (Claude Code) nothing is held for the list: the provider checks a model for pi alone. `test/model/served.contract.test.ts` runs one table through the provider's `piModelVerdict` (`oats-package/capabilities/oats-bb/lib/pi-model.mjs`) and through `served`, and fails on any difference. It is not held for an id that holds a slash (where bb's list is not whole such an id may be a held-back model's exact id, and the provider lets it go), nor while bb's list is not read or holds nothing: the kernel's answer then stands. One limit: for a minute after pi's configuration changed the provider does not refuse two listed models, and the form, which has the list alone, still asks for the provider. **That no listed model serves the id is not the form's to judge** ("Not found" is not said): bb's list leaves out models a thread still starts on (an id that ends in a date, a list pi's own configuration narrows, a list older than pi's configuration), and the form must never hold an agent the provider would start. Such a model is armed, the preview passes (a planned launch carries no model at this kernel), and the provider judges it at the launch: it refuses the spawn (`E_BACKEND_LAUNCH_ARG`: "pi has no model …", rolled back, nothing left behind), and the form says the kernel's whole message once under "The agent was not spawned", marks no field, holds nothing, and is editable again; or, where it cannot check the model, it lets the launch go with a warning that this kernel does not carry to the form: nothing is said, and the agent then starts, or its thread fails at its start and the form says it did not start. The soul's own harness with no model declared is not held: bb starts it on its own default, and the column says so. |
 | **Relationship** | Independent, Child of, Sibling of or Parent of, then **Which instance**: one of the roster's, by its name as words with its soul. |
 | **Name · optional** | exactly what is typed, in lower case. Empty, the kernel numbers the agent. A name that cannot be used says its fault under the field. |
 
@@ -685,18 +685,26 @@ front for them and never uses bb's own automations. The page is the OATS Desktop
 page, in its words.
 
 - **Two tabs, Schedules and Triggers**, each with its count. A list groups its rows by where they
-  run, because the first question is what this computer does: **Runs on this computer**, **Needs
-  attention here** (wrong account here, not trusted here, an invalid or unreadable definition) and
+  run, because the first question is what the machine that holds the deployment does: **Runs on
+  <machine>** (by bb's name for it, since the browser that draws the page may be anywhere; the
+  Desktop's "this computer" stands only while bb gives no name), **Needs attention here** (wrong account here, not trusted here, an invalid or unreadable definition) and
   **Runs elsewhere**. All / Workspace / Local filters by where the definition lives; the search
   reads the id, the soul, the task or wake message, the summary, the host and the account.
 - **A row** says its name and where it is from, its summary (or the first line of its prompt, in
   italics), its soul, when it runs in words, where it runs and as whom, and its last and next run.
+  A last run that failed is marked as a failure, one whose launch is not known as a warning, each
+  with its word. A next run whose time has passed reads "Was due <age>", and while the host
+  scheduler is off no row is drawn as one that runs: the group is "Set to run on <machine>", the
+  mark is muted and "Scheduler off" stands where the next run would be.
   The kernel places every row (`runsHere`, `reason`, `enabledHere`); the plugin reads those facts
   and derives none.
 - **A row's page** shows what it sends, whole (the prompt, the wake message, the command's argv,
   the operation), when it runs or what it watches, what it spawns, its recent runs or fires on
-  this computer, what is wrong with it, its run state, where it runs and where it comes from. A run
-  that did not happen says why in the kernel's words. **Open file** previews the definition from
+  that machine, what is wrong with it, its run state, where it runs and where it comes from, as
+  cards of equal width; a schedule whose agent is woken again has a **Recurring wake-up** card.
+  What is wrong (an invalid or unreadable definition, a source check that failed, an unknown run
+  state, a failed poll) is one sentence in a person's words, with the kernel's own message, code
+  and field under **Details**. A run that did not happen says why in the kernel's words. **Open file** previews the definition from
   the machine that holds the deployment, or opens its web page for a member with no clone here. A schedule's or a trigger's Prompt and a wake's message are
   the one exception to the display filter: they are drawn whole, as the Desktop draws them (their
   lines, blank lines and indentation kept, nothing withheld, nothing cut), because they are the
@@ -724,7 +732,7 @@ asked: the page says which OATS it needs.
 **Acting on a row** goes through the kernel's own verbs, for a row the current list names:
 
 - **The switch** (and Turn off here / Turn on here in the row's ⋯ menu) turns a row on or off on
-  this computer: a local item's own switch, a workspace item's entry in this host's opt-outs.
+  that machine: a local item's own switch, a workspace item's entry in this host's opt-outs.
 - **Run now** (a schedule that runs here) says what the run did in words: Agent launched, Launch
   failed with the kernel's reason, Launch state unknown. **Check run state** asks the kernel about
   a run whose state is unknown.
@@ -925,6 +933,35 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   harness list and model suggestions the dialog has are the bb session provider's, which say
   nothing of a tmux home, so the kernel starts it with the launch its home recorded. The
   sentences of a resume are this plugin's own (the Desktop resumes without a screen; WORDS.md).
+- **Restart does not stop what it cannot start.** The kernel's `session restart` stops the running
+  session BEFORE the provider judges the MODEL it was asked for: a restart the
+  provider then refuses leaves the agent stopped, its thread archived and nothing started
+  (recorded on OATS 0.70.5 for a model pi does not have; a kernel gap). A refused start or spawn
+  harms nothing, so only the RESTART dialog holds, for an agent on bb, by one rule
+  (`model/restart-model.ts`, its table in `test/model/restart-model.test.ts`; which listed models
+  serve an id is the plugin's one function, `model/served.ts`, which the New agent form reads too
+  and `test/model/served.contract.test.ts` holds against the provider's own check): the model left
+  blank is the agent's own and is sent as before; a model the person CHANGED arms Restart only
+  when bb's list for the harness the restart would run on has been read and serves that id
+  exactly once, by the bb session provider's own rule for a pi model (its `piModelVerdict`): the
+  model listed under exactly that id, else the one model whose BARE id it is (its id minus the
+  provider bb routes it by; a bare id may itself hold a slash, so nothing is matched by what an id
+  ends in, and a model bb lists for pi with no provider serves nothing). For a harness whose list
+  names no providers (Claude Code's bare ids) a changed model is armed only if listed whole.
+  Otherwise it is held, the word on the Model field and beside the button: "Not found" (no listed
+  model serves it; and where bb gives no list, an empty one, none within ten seconds, or a list
+  the provider's own check cannot read, a model whose id does not begin with its provider among
+  them: nothing can be shown to start, a listed model included), "Pick provider" (several serve it: the field then offers only those),
+  "Required" (the harness was changed and no model picked). While the list is read the button is
+  off with no word. A harness CHANGED to one whose bb provider is not ready on this machine is NOT
+  held: the kernel runs the provider's readiness check before the stop and refuses with nothing
+  stopped (`E_BACKEND_NOT_READY`, recorded on OATS 0.70.5: the agent still runs), so the dialog's
+  ordinary refusal is the answer; that check is handed no model, which is why a bad model still
+  stops first. "Shown to start" rests on bb's list as the app reads it (bb may serve one it kept): a model removed
+  from pi since is still listed, and the provider then judges. THE HOLD IS THE APP'S: the plugin's server
+  cannot read bb's model list (only the app's SDK can), so a caller past
+  the app (the plugin's rpc by hand) still reaches the kernel. An agent on tmux has no harness
+  and no model field, and the server refuses both for it: the trap cannot be reached there.
 - **A start begins a new conversation.** A Start, and a Restart, always make a NEW bb thread; the
   launch stops and archives the one the agent had (the bb session provider's
   `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs
@@ -946,7 +983,37 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   before the apply; asked again with the same key, it replays the same spawn. A spawn or a retire that runs
   capability hooks can take minutes: if the client stops waiting, the act still finishes and the
   tree shows it.
-- **Freshness.** The server keeps one snapshot (`oats status --json`). It rereads on the host
+- **Freshness: two roads.** What OATS itself records of ONE agent, a waiting claim set or
+  cleared and a stop, reaches the screen by that agent's EVENTS; everything else (a start or a
+  restart, a new or a retired agent, Failed, Unreachable, a tmux agent working or idle) by the
+  status read, which also confirms what the events showed.
+  **The events' road** (`server/core.ts`, "between two status reads"; `model/events.ts`). The
+  watch's `changed` signal names the files of the event log that changed
+  (`<agent>--<instance>.jsonl`, eight at most in one signal), and waits 75 ms (500 ms at most)
+  before it tells. For each file that is ONE agent of the snapshot the server runs `oats instance
+  events <instance> --home <abs> --since <the snapshot's read> --limit 50 --json` (about a tenth of
+  a status read), moves that agent's row to what the answer says, and publishes: the claim from
+  the answer's own `waitingOnYou` and `waitingClaims` (set only where `oats status` itself would
+  name one; cleared only when the answer is whole, knows its incarnation and no producer's claim
+  waits), and a stop from the newest lifecycle row the kernel wrote in this incarnation since the
+  snapshot's read. Nothing else is moved: a start names no thread, and is the status read's.
+  Every answer is ranked by when its read STARTED: an events answer older than the snapshot's
+  status read is dropped; a status answer older than a patch keeps the patch over it; the first
+  status read that started after is the truth, whole. An events read that fails, times out (5 s),
+  answers a shape the plugin does not know, or is for no one agent of the snapshot changes
+  nothing, and the status read carries the change. One events read per agent at a time and two
+  for all agents together; the others wait in line, and a line of more than eight is dropped
+  (the status read carries them). A stop by the host's own shutdown is written as any stop, so
+  for the moment until the status read answers it reads "Stopped" without "session lost". The
+  server says each patch and each drop in its log at debug level (the agent, what changed, the
+  read's time). In the real run a claim set and a claim cleared were on the screen 344 and 277 ms
+  after the kernel recorded them (OATS 0.70.5, in the run's container); by the status read alone
+  they took 0.9 to 2.0 s there (seven runs). (A stop's number does not say the road by itself: the
+  kernel's row says stopped from the start of the stop, seconds before it writes the "stopped"
+  event the delay is counted from, so a status read under way can hold it by itself: 0.3 to
+  1.4 s by the status read alone. The real run says of each change which road
+  showed it, or that it cannot tell: `container/real/README.md`.)
+  **The status read's road.** The server keeps one snapshot (`oats status --json`). It rereads on the host
   entry's `changed` signal (a watch on `<deployment>/.agents/events`, where the kernel appends one
   line per spawn, launch, stop, retire and waiting claim, set or cleared), after each of the
   plugin's own acts, on bb's thread created and deleted events, and every 15 s while a client

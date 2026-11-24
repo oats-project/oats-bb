@@ -20,7 +20,7 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import { isUnconfirmed } from "../../contract/shared";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
-import { bbDefaultModel, harnessLabel, PREVIEW_FOOT, spawnProblem } from "../../model/spawn";
+import { bbDefaultModel, harnessLabel, modelCheck, MODEL_HELD, PREVIEW_FOOT, spawnProblem, withoutDefault } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
 import { newKey } from "../keys";
 import { openAgentPage } from "../home/agent-tab";
@@ -34,7 +34,7 @@ import { Button, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading,
 import { refusalCode, refusalLines, shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { Choice } from "./Choice";
-import { MODEL_DEFAULT, resolvedLabel, SOUL_DEFAULT, useHarnesses, useHarnessStates, useModelSuggestions } from "./models";
+import { BB_PROVIDER, MODEL_DEFAULT, resolvedLabel, SOUL_DEFAULT, useHarnesses, useHarnessStates, useModelSuggestions } from "./models";
 import * as W from "./words";
 
 type Soul = Answer<"souls">["souls"][number];
@@ -97,7 +97,9 @@ function useFlight(): { soul: string } | null {
   return flight;
 }
 
-type Preview = { key: string; facts: SpawnFacts; revision: string };
+/** How long Spawn waits for bb's list of models before it goes without it (the wait a thread's start is given too). */
+const MODELS_WAIT_MS = 10_000;
+type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
 type Refused = { key: string; problem: SpawnProblem };
 
 /** A part of a line through the display filter, with the blank it leads or ends with kept: the parts are read as one line. */
@@ -307,7 +309,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           (answer) => {
             // An answer for values that are no longer on screen is dropped, never drawn under the new ones.
             if (serial.current !== ticket) return;
-            setSettled({ key, facts: answer.facts, revision: answer.revision });
+            setSettled({ key, input: asked.input!, facts: answer.facts, revision: answer.revision });
             setRefused(null);
             setReading(false);
           },
@@ -328,10 +330,65 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // What the kernel resolved, through the display filter like every text of the kernel's: a model is a soul's own text.
   const kernelResolved = preview?.facts.resolved ?? null;
   const resolved = kernelResolved === null ? null : { harness: shown(kernelResolved.harness) || null, model: shown(kernelResolved.model) || null };
-  const effectiveHarness = harness !== "" ? harness : (resolved?.harness ?? null);
+  // The answer the model is read on: the kernel's for the values on screen, and, while another field's change is
+  // read, the last one if it was for this soul, harness and model: the harness whose list bb gives, the mark and the
+  // column stay as they are until the new answer lands.
+  const modelAnswer = preview ?? (settled !== null && input !== null && settled.input.soul === input.soul && settled.input.harness === input.harness && settled.input.model === input.model ? settled : null);
+  const effectiveHarness = harness !== "" ? harness : shown(modelAnswer?.facts.resolved?.harness ?? "") || null;
   const suggestions = useModelSuggestions(effectiveHarness);
-  // The kernel resolved a harness and no model for it, and none is chosen: bb will start it on bb's own default.
-  const unsetModel = model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
+  // The soul's own harness: what the kernel resolves for this soul with no harness chosen. It is kept from the
+  // preview with none chosen; where none was asked for this soul (a harness picked before the soul, or kept while
+  // the soul changes), it is asked once, so that the same values hold or arm Spawn whatever the order of the clicks.
+  const [own, setOwn] = useState<{ soul: string; harness: string | null } | null>(null);
+  useEffect(() => {
+    if (kernelResolved !== null && harness === "" && soul !== "") setOwn({ soul, harness: kernelResolved.harness });
+  }, [kernelResolved, harness, soul]);
+  const ownKnown = own !== null && own.soul === soul;
+  // An ask the kernel refused is not an answer: it is asked again when the form's values change, or with Retry.
+  const ownTry = `${key}\n${again}`;
+  const [ownFailed, setOwnFailed] = useState<string | null>(null);
+  const ownTryNow = useRef(ownTry);
+  ownTryNow.current = ownTry;
+  const ownAsked = input !== null && !held && harness !== "" && harnesses.choice && !ownKnown && ownFailed !== ownTry;
+  useEffect(() => {
+    if (!ownAsked) return;
+    let current = true;
+    rpc.call("spawnPlan", { soul, task: "" }).then(
+      (answer) => {
+        if (current) setOwn({ soul, harness: answer.facts.resolved?.harness ?? null });
+      },
+      // The kernel did not answer for this soul on its own: its harness stays unknown, and a chosen one is held for a model.
+      () => {
+        if (current) setOwnFailed(ownTryNow.current);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [rpc, ownAsked, soul]);
+  const soulHarness = ownKnown ? own.harness : null;
+  // Whether a spawn may go with the model it would send (model/spawn.ts `modelCheck`): a model is required for a
+  // harness the person chose that is not the soul's own, and a bare id that several of bb's listed models serve needs
+  // its provider picked. That no listed model serves it is the provider's to judge, at the launch.
+  // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
+  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models : null, byProvider: effectiveHarness !== null && BB_PROVIDER[effectiveHarness] === "pi" });
+  // The "Required" mark waits for the soul's own harness to be known: until then Spawn is off as for any read.
+  const modelMark = ownAsked && modelHeld.held === MODEL_HELD.required ? null : modelHeld.held;
+  // bb's list for the harness is being read: until it answers, whether bb serves the model is not known.
+  // A list bb has not given after MODELS_WAIT_MS reads as not read: Spawn goes on the kernel's answer, as where bb
+  // gives no list, and the rule is read on the list if it answers later. A call of bb's that never settles does not
+  // hold the form.
+  const listLoading = suggestions.status === "loading";
+  const [listLate, setListLate] = useState(false);
+  useEffect(() => {
+    setListLate(false);
+    if (!listLoading) return;
+    const timer = setTimeout(() => setListLate(true), MODELS_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [listLoading, effectiveHarness]);
+  const modelsReading = listLoading && !listLate;
+  // The kernel resolved a harness and no model for it, and none is chosen: for the soul's own harness bb will start it on bb's own default.
+  const unsetModel = modelHeld.held !== MODEL_HELD.required && model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
   // What bb says of the harness this spawn would run on, when bb cannot run it here: said under the field, before any press.
   const notReady = harnessState(effectiveHarness);
 
@@ -448,9 +505,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               ? nameRefusal !== null
                 ? W.OFF.name
                 : W.OFF.refused
-              : preview === null
+              : preview === null || modelsReading || ownAsked
                 ? W.READING
-                : null;
+                : modelMark; // the Model field's own words: it is marked with them too
   const canSpawn = phase === "idle" && reason === null && preview !== null && input !== null;
   const press = () => {
     if (phase === "unknown") {
@@ -488,6 +545,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
 
   // ---- drawing ----
   const title = chosen === undefined ? W.TITLE : W.titleFor(shown(chosen.name), oats.phase === "ready" ? shown(oats.deployment.workspace) : null);
+  // A model is required of the person: the column promises no default for the harness.
+  const heldHarness = modelHeld.held === MODEL_HELD.required ? (modelAnswer?.facts.resolved?.harness ?? null) : null;
+  const withoutModelDefault = (facts: SpawnFacts): SpawnFacts => (heldHarness === null ? facts : { ...facts, facts: withoutDefault(facts.facts, heldHarness) });
   let column: ReactNode;
   if (chosen === undefined) column = <p className="text-sm text-muted-foreground">{W.COLUMN_NO_SOUL}</p>;
   // Held: only the facts of the values on screen stay; those of other values are not drawn as theirs.
@@ -499,9 +559,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
       </Notice>
     );
   else if (off !== null || nameRefusal !== null) column = <p className="text-sm text-muted-foreground">{W.COLUMN_FIX_FIRST}</p>;
-  else if (preview !== null) column = <Created facts={preview.facts} machine={machine} />;
+  else if (preview !== null) column = <Created facts={withoutModelDefault(preview.facts)} machine={machine} />;
   // Until the values on screen are answered for, the last facts stay, marked as being read again.
-  else if (settled !== null) column = <Created facts={settled.facts} machine={machine} />;
+  else if (settled !== null) column = <Created facts={modelAnswer === settled ? withoutModelDefault(settled.facts) : settled.facts} machine={machine} />;
   else column = <Loading>{W.READING}</Loading>;
   // Marked whenever something stays in the column while it is read again: the last facts, or a refusal after Retry.
   const updating = reading && chosen !== undefined && !held && (settled !== null || refusal !== null);
@@ -591,6 +651,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             )}
             <Field
               label={W.MODEL_LABEL}
+              error={modelAnswer === null ? null : modelMark}
               hint={
                 unsetModel === null && suggestions.note === null ? null : (
                   <>
@@ -607,8 +668,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 placeholder={MODEL_DEFAULT}
                 filterLabel={W.FILTER_MODELS}
                 options={[
-                  { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined) },
-                  ...suggestions.models.map((option) => ({ id: option.id, label: shown(option.label) })),
+                  // (Required of the person: the first entry promises nothing, "Default" alone.)
+                  { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null && modelHeld.held !== MODEL_HELD.required ? resolved.model : undefined) },
+                  // The ids that serve a bare model more than once are the ones offered: one of them is what to pick.
+                  ...suggestions.models.filter((option) => modelHeld.held !== MODEL_HELD.ambiguous || modelHeld.offers.includes(option.id)).map((option) => ({ id: option.id, label: shown(option.label) })),
                   // A model picked before the harness changed stays what is sent, and is said.
                   ...(modelPick !== "" && modelPick !== CUSTOM && !suggestions.models.some((option) => option.id === modelPick) ? [{ id: modelPick, label: shown(modelPick) }] : []),
                   { id: CUSTOM, label: W.MODEL_CUSTOM, detail: W.MODEL_CUSTOM_PLACEHOLDER },

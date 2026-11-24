@@ -287,7 +287,7 @@ function tmuxRoster(threads) {
     // row: running `running: true` and no word; stopped with OATS `running: false`, the word "shell"
     // and `sessionEnd: "stopped"`; lost `running: false`, no word and `sessionEnd: "lost"`.
     // (status.json's own tmux row carries "unknown", from the kernel it was recorded with.)
-    if (recorded[how] === undefined) throw new Error(`tmux-roster.mjs: ${instance} is "${how}", which is none of ${Object.keys(recorded).join(", ")}`);
+    if (!Object.hasOwn(recorded, how)) throw new Error(`tmux-roster.mjs: ${instance} is "${how}", which is none of ${Object.keys(recorded).join(", ")}`);
     for (const key of SESSION_KEYS) {
       if (key in recorded[how]) row[key] = recorded[how][key];
       else delete row[key];
@@ -417,7 +417,14 @@ const BUILT_IN = {
   "tmux-roster": {
     label: "TM",
     enter: async ({ threads }) => {
-      fake({ status: { stdout: tmuxRoster(threads) } });
+      const status = tmuxRoster(threads);
+      // Held here, with the three keys written out (not through the builder's list): what the screen
+      // draws cannot tell a leftover word of the model row from none.
+      const built = new Map(JSON.parse(status).agents.flatMap((group) => group.instances).map((row) => [row.instance, row]));
+      const sessionOf = (row) => JSON.stringify(["running", "runtimeState", "sessionEnd"].map((key) => (key in row ? row[key] : "ABSENT")));
+      const off = TMUX_ROSTER.tmux.filter(([instance, , , how]) => sessionOf(built.get(instance) ?? {}) !== sessionOf(recordedTmuxRow(how === "waiting" ? "running" : how))).map(([instance]) => instance);
+      check(off.length === 0, `TM each of the ${TMUX_ROSTER.tmux.length} tmux rows says of its session exactly what the recorded row of its kind says: running, runtimeState and sessionEnd, a key that row lacks absent`, off.join(", "));
+      fake({ status: { stdout: status } });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === TMUX_ROSTER.bb.length + TMUX_ROSTER.tmux.length);
     },
   },

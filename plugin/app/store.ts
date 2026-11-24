@@ -66,6 +66,16 @@ function tokenOf(payload: unknown): string | undefined {
  * One of the plugin's reads, kept fresh: loaded on first use and reread when the server publishes
  * `oats/changed`. bb itself rereads every plugin read when its realtime connection comes back.
  * `live: false` reads once and leaves the rereading to the slots that show the read itself.
+ *
+ * AN EVENT THAT ARRIVES WHILE THE FIRST ANSWER IS ON ITS WAY is not served by that answer. A read
+ * that has no answer yet is not started again by bb: the event's reread is handed the one in
+ * flight, and the server made THAT answer before it published the event (from its cache, from
+ * before the change). So once the first answer is here, the read is made ONCE more: that one
+ * starts after the event, and is given what the event announced. Without it a window that loads
+ * while the server reads a change holds the roster from before the change until some other agent
+ * changes. (A read that already has an answer needs none of this: bb drops a reread in flight and
+ * starts another for a new event. test/app/window-loads.test.tsx holds both.) It costs one more
+ * answer from the server's cache, and no `oats status`.
  */
 export function useRead<Method extends ReadMethod>(
   method: Method,
@@ -76,8 +86,11 @@ export function useRead<Method extends ReadMethod>(
   const rpc = useRpc<Contract>();
   const query = useRpcQuery({ contract: rpcContract, method, input: null, enabled });
   const refetch = useRef(query.refetch);
+  /** Whether the read's FIRST answer is on its way: bb is fetching it and it has none yet. */
+  const first = useRef(query.isFetching && query.data === undefined);
   useEffect(() => {
     refetch.current = query.refetch;
+    first.current = query.isFetching && query.data === undefined;
   });
 
   useRealtime(REALTIME_CHANGED, (payload) => {
@@ -87,7 +100,14 @@ export function useRead<Method extends ReadMethod>(
       if (acted.get(method) === token) return;
       acted.set(method, token);
     }
-    void refetch.current();
+    if (!first.current) {
+      void refetch.current();
+      return;
+    }
+    // The first answer is on its way, made from before this event: when it is here, read again.
+    // (A read that fails says so in the read's own state, as every read does: both ends go on.)
+    const again = () => void refetch.current();
+    attempt(() => refetch.current()).then(again, again);
   });
 
   const data = query.data as Result<Method> | undefined;

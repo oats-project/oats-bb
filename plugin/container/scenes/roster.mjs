@@ -541,7 +541,7 @@ export default [
         await page.goto("/");
         check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
         const titles = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")} ${testId("oats-row-facts")}`)})].map((e) => e.getAttribute("title"))`;
-        const lost = await page.until(`(() => { const now = ${titles}; return now.length === ${TMUX_ROSTER.tmux.length} && now.every((title) => / · session lost · tmux$/.test(title)) ? JSON.stringify(now) : ""; })()`, 30);
+        const lost = (await page.until(`(() => { const now = ${titles}; return now.length === ${TMUX_ROSTER.tmux.length} && now.every((title) => / · session lost · tmux$/.test(title)) ? JSON.stringify(now) : ""; })()`, 30)) ?? null; // (the harness's until answers undefined at its time's end: null, so that the check fails with what was read, never a throw)
         const wanted = TMUX_ROSTER.tmux.map(([, soul]) => `Stopped · ${soul} · session lost · tmux`).sort();
         check(lost !== null && JSON.stringify(JSON.parse(lost).sort()) === JSON.stringify(wanted), `${at} each of the ${TMUX_ROSTER.tmux.length} rows says, whole in its title, "Stopped · <soul> · session lost · tmux"`, lost ?? (await page.evaluate(`JSON.stringify(${titles})`)));
         const measured = await rowLines(page);
@@ -627,7 +627,7 @@ export default [
         check(done.body.includes("Overnight sweep developer is back in its last conversation.") && !done.body.includes("started fresh") && where.startsWith("Attach:") && where.includes("oats session attach --home ") && where.includes(LOST) && done.focus === "oats-confirm-close", `${at} after the press the result says that it is back in its last conversation, with the command that attaches to it; the focus is on Close`, JSON.stringify({ done, where }));
         await page.shot(`tmux-roster-${viewport.name}-lost-start-done`, { targets: true });
         // The roster is read again (within the ten seconds "Reading…" can stand): the header says what it says now.
-        const settled = await page.until(`(() => { const now = ${header}; return JSON.parse(now).reading === null ? now : ""; })()`, 20);
+        const settled = (await page.until(`(() => { const now = ${header}; return JSON.parse(now).reading === null ? now : ""; })()`, 20)) ?? null;
         check(settled !== null && JSON.parse(settled).state === "Working" && JSON.parse(settled).acts.every((off) => off === false), `${at} once the roster is read again the header says "Working", with its acts on`, settled ?? (await page.evaluate(header)));
         // OATS says it runs: its row says so, at its kernel place, with no reason.
         fake({ status: { stdout: tmuxStatus({ [LOST]: "running" }) } });

@@ -151,6 +151,35 @@ for (const [name, write] of [
   });
 }
 
+for (const [name, leave, restore] of [
+  ["settings.json.bak", (dir) => { writeFileSync(join(dir, "settings.json.bak"), JSON.stringify({ packages: [BRIDGE] })); writeFileSync(join(dir, "config.yml"), "packages:\n  - npm:@awebai/oats-pi\n"); }, /then copy settings\.json\.bak back to settings\.json\./],
+  ["config.yml", (dir) => writeFileSync(join(dir, "config.yml"), "packages:\n  - npm:@awebai/oats-pi\n"), /then put back its settings\.json, listing npm:@awebai\/oats-pi\./],
+]) {
+  test(`oh-my-pi moved bb's pi settings (${name} there, no settings.json): refused E_BACKEND_NOT_READY naming the cause and both remedies`, async (t) => {
+    const { backend, bb, launch, check } = await setup(t);
+    rmSync(join(backend.piAgentDir, "settings.json"));
+    leave(backend.piAgentDir);
+    const answer = await launch();
+    assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
+    assert.match(answer.error.message, new RegExp(`^bb's pi has no settings\\.json, and ${name.replace(".", "\\.")} is there instead: oh-my-pi moved it \\(bb runs it as its acp-omp provider, with this pi folder\\)\\. Turn that off \\(bb provider disable acp-omp\\), `));
+    assert.match(answer.error.message, restore);
+    assert.ok(answer.error.message.endsWith(`Read: ${join(backend.piAgentDir, "settings.json")}`), "the file read is named, last");
+    assert.ok(answer.error.message.length <= 480, String(answer.error.message.length));
+    assert.equal(spawned(bb), false);
+    const problems = (await check(PI_LAUNCH)).result.problems;
+    assert.deepEqual(problems.map((problem) => problem.code), ["E_BACKEND_NOT_READY"], "one problem: not also the missing bridge");
+    assert.equal(problems[0].message, answer.error.message);
+  });
+}
+
+test("readPiPackages: a settings.json there wins, whatever else sits beside it", (t) => {
+  const { dir } = scratch(t);
+  writeFileSync(join(dir, "settings.json"), JSON.stringify({ packages: [BRIDGE] }));
+  writeFileSync(join(dir, "settings.json.bak"), "{}");
+  writeFileSync(join(dir, "config.yml"), "x: 1\n");
+  assert.deepEqual(readPiPackages(dir), { bridge: true, listener: false });
+});
+
 test("both wrong: the bridge missing is named first, the listener counted, and the check lists both", async (t) => {
   const { backend, launch, check } = await setup(t);
   backend.piSettings({ packages: ["npm:@awebai/pi"] });

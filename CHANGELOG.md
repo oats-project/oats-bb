@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### The session provider
+
+- **A pi folder oh-my-pi moved is named.** bb-app runs oh-my-pi as its `acp-omp` provider
+  with its server's `PI_CODING_AGENT_DIR`, and oh-my-pi renames that folder's
+  `settings.json` to `settings.json.bak` and writes a `config.yml` pi does not read. pi
+  launches were then refused as "@awebai/oats-pi is not in bb's pi configuration", with
+  no word of why. Where settings.json is gone and a settings.json.bak or a config.yml is
+  there, readiness, `oats bb doctor` and a pi launch say so in one sentence: oh-my-pi
+  moved it; `bb provider disable acp-omp`, then copy settings.json.bak back. README,
+  "pi".
+
 ## 0.4.0
 
 A stop archives the agent's thread, so an agent OATS stopped stays stopped. A host stop is

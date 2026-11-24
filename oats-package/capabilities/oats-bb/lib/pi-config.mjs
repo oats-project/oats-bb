@@ -71,11 +71,18 @@ function readPiSettings(agentDir) {
 
 /** What `<agentDir>/settings.json` says of the two packages. → { bridge, listener } (each
  *  true when listed), or { unreadable: <why> } for a file that is there and cannot be
- *  read as pi's settings. A directory with no settings.json lists nothing. */
+ *  read as pi's settings. A directory with no settings.json lists nothing; where a
+ *  settings.json.bak or a config.yml sits there instead, `moved` says which: that is what
+ *  oh-my-pi does to a pi folder it is run on (bb's acp-omp provider, which bb starts with
+ *  its server's PI_CODING_AGENT_DIR; seen with bb-app 0.50.1 and oh-my-pi 19.1): it renames
+ *  settings.json to settings.json.bak and writes its own config.yml, which pi does not read. */
 export function readPiPackages(agentDir) {
   const { doc, unreadable } = readPiSettings(agentDir);
   if (unreadable !== undefined) return { unreadable };
-  if (doc === null) return { bridge: false, listener: false };
+  if (doc === null) {
+    const moved = existsSync(join(agentDir, "settings.json.bak")) ? "settings.json.bak" : existsSync(join(agentDir, "config.yml")) ? "config.yml" : null;
+    return { bridge: false, listener: false, ...(moved !== null ? { moved } : {}) };
+  }
   if (doc.packages !== undefined && !Array.isArray(doc.packages)) return { unreadable: "its packages is not a list" };
   const packages = doc.packages ?? [];
   return { bridge: packages.some((entry) => names(entry, PI_BRIDGE)), listener: packages.some((entry) => names(entry, PI_AWEB_EXTENSION)) };
@@ -172,7 +179,11 @@ export async function piConfigurationProblems(agentDir, globalEnvNames) {
     return [{ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `bb's pi configuration cannot be checked: its settings.json is there and ${found.unreadable}. A pi launch needs ${PI_BRIDGE} listed there and ${PI_AWEB_EXTENSION} not: fix the file, or point settings.oats.bb.piAgentDir at the directory bb's server uses. Read: ${join(agentDir, "settings.json")}` }];
   }
   const problems = [];
-  if (!found.bridge) {
+  if (found.moved !== undefined) {
+    // One sentence a person can act on: the cause, the two commands, and last the file read.
+    const restore = found.moved === "settings.json.bak" ? "then copy settings.json.bak back to settings.json" : "then put back its settings.json, listing npm:" + PI_BRIDGE;
+    problems.push({ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `bb's pi has no settings.json, and ${found.moved} is there instead: oh-my-pi moved it (bb runs it as its acp-omp provider, with this pi folder). Turn that off (bb provider disable acp-omp), ${restore}. Read: ${join(agentDir, "settings.json")}` });
+  } else if (!found.bridge) {
     problems.push({ code: "E_BACKEND_NOT_READY", status: "needs-configuration", message: `bb's pi would load none of the home's skills, and nothing would say so: ${PI_BRIDGE} is not in bb's pi configuration. Install it there (PI_CODING_AGENT_DIR=<that directory> pi install npm:${PI_BRIDGE}), or point settings.oats.bb.piAgentDir at the directory bb's server uses (in the team image for bb: /state/home/.bb-pi). Read: ${join(agentDir, "settings.json")}` });
   }
   if (found.listener && !(await globalEnvNames()).includes(DELIVERY_VARIABLE)) {

@@ -16,11 +16,11 @@ import type {
   PluginThreadActionTarget,
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
-import type { Agent, AgentState, Node } from "../../model/types";
+import type { Agent, AgentState, Row } from "../../model/types";
 import { flatten, isListed, treeRows } from "../../model/view";
 import type { TreeRow } from "../../model/view";
 import { useOats } from "../oats";
-import { outsideOf, rowParts, rowWords } from "../outside";
+import { outsideOf, rowParts, rowWarns, rowWords } from "../outside";
 import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET, TMUX } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
@@ -30,6 +30,7 @@ import type { PageLink } from "../workspace/pages";
 import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
+import { useOpenAgent } from "./open-agent";
 import { LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
 import { useNow } from "./now";
 import { FoldToggle, foldKeys, GUTTERED, useOpened } from "./fold";
@@ -83,6 +84,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const navigate = useBbNavigate();
   const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
   const openPath = useOpenPage();
+  const openAgent = useOpenAgent();
   const pageShowsNotice = usePageShowsNotice();
   // The pages this release shows (the plugin's setting `pages`): a page that is not shown has no
   // link here, and no mark.
@@ -151,19 +153,23 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   };
 
   /**
-   * The tree's rows (model/view.ts `treeRows`): a parent's children are drawn only while it is
-   * open, and it is closed when the page loads. A parent has ONE chevron before its mark, a button
+   * The rows of the roster's ONE tree (model/view.ts `rows`, drawn through `treeRows`): a parent's
+   * children are drawn only while it is open, and it is closed when the page loads. A row on a bb
+   * thread is that thread's row; one with no thread (on tmux, or its thread is not listed) is a
+   * row of its own that opens the agent's page; either is drawn under its parent, whatever the
+   * parent's backend, and either can be a parent. A parent has ONE chevron before its mark, a button
    * of its own (not part of the row's link) that says whose agents it shows or hides; Right on the
    * row opens it and Left closes it, as a tree's keys do. A closed parent's children are not in the
    * page at all: nothing of them takes the focus.
    */
-  const agentRows = (rows: readonly TreeRow<Node>[], guttered: boolean): ReactNode[] =>
+  const agentRows = (rows: readonly TreeRow<Row>[], guttered: boolean): ReactNode[] =>
     rows.flatMap(({ node, parent, open, pinned, inside, insideTone }) => {
-      const thread = oats.threadById.get(node.thread.id);
-      if (thread === undefined) return [];
       const called = agentName(node.agent.instance);
       const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} /> : null;
       const keys = parent ? foldKeys(node.agent.instance, open, pinned) : undefined;
+      if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), guttered, node.depth, toggle, keys, inside, insideTone)];
+      const thread = oats.threadById.get(node.thread.id);
+      if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
       const drawn = rowState(status, gone.has(node.agent.instance));
       // What happened to it outside OATS (app/outside): the reason follows the state's word on the
@@ -197,7 +203,18 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * on tmux; `said` is what the outside feature says of it (app/outside): where its thread is, and
    * what happened to it.
    */
-  const threadlessRow = (agent: Agent, where: string | undefined, said: Said | null = null, guttered = false) => {
+  const threadlessRow = (
+    agent: Agent,
+    where: string | undefined,
+    said: Said | null,
+    guttered: boolean,
+    depth: 0 | 1 | 2,
+    /** A parent's chevron and keys, and the state of the most urgent row it hides while it is closed: as on a thread's row. */
+    before: ReactNode = null,
+    onKeyDown?: (event: KeyboardEvent) => void,
+    inside?: AgentState | null,
+    insideTone?: "warning" | null,
+  ) => {
     const status = agentStatus(agent, null, now);
     const drawn = rowState(status, gone.has(agent.instance));
     const name = agentName(agent.instance);
@@ -205,14 +222,16 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     const reason = rowParts(said, status.state);
     const words = rowWords(drawn.word, drawn.state, reason.note);
     return (
-      <li key={agent.instance}>
+      <li key={agent.instance} className="relative">
+        {before}
         <button
           type="button"
           data-testid="oats-agent-row-threadless"
           data-instance={agent.instance}
           data-opens={said?.archived === true && agent.threadId !== null ? "thread" : "page"}
           title={shown(agent.instance)}
-          className={`${ROW} w-full ${guttered ? GUTTERED[0] : INDENT[0]} text-left`}
+          className={`${ROW} w-full ${(guttered ? GUTTERED : INDENT)[depth]} text-left`}
+          onKeyDown={onKeyDown}
           onClick={() => {
             // Its archived conversation, where bb keeps one: the thread's own row there says what happened, with the acts.
             if (said?.archived === true && agent.threadId !== null) navigate.toThread(agent.threadId);
@@ -222,7 +241,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           }}
         >
           <StateMark state={drawn.state} hidden tone={gone.has(agent.instance) ? undefined : reason.tone} />
-          {lines(name, status.state === "needs-you", { state: words.state, soul: shown(oats.soulOf(agent)), reason: words.reason, reasonTone: gone.has(agent.instance) ? undefined : reason.tone, where, said: words.title }, shown(agent.instance))}
+          {lines(name, status.state === "needs-you", { state: words.state, soul: shown(oats.soulOf(agent)), reason: words.reason, reasonTone: gone.has(agent.instance) ? undefined : reason.tone, where, inside, insideTone, said: words.title }, shown(agent.instance))}
         </button>
       </li>
     );
@@ -275,10 +294,17 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // Every agent OATS has is a row.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
   // The row that is open on screen, by its agent: its parents are open whatever the person left.
-  const selected = flatten(view.roots).find((node) => node.thread.id === activeThreadId)?.agent.instance ?? null;
-  const guttered = view.roots.some((node) => node.children.length > 0);
-  // A row whose own mark is drawn in the warning tone (app/outside: a stopped agent that needs a remedy): a closed parent carries it too.
-  const warns = (node: Node): boolean => !gone.has(node.agent.instance) && rowParts(outside.of(node.agent), agentStatus(node.agent, node.thread, now).state).tone === "warning";
+  // A thread that is open, by bb's word: the row that is drawn on it; else the row with no thread whose agent NAMES it (its
+  // thread is archived in bb: the row itself leads there, and must not be closed away by its parent once a person is on
+  // it). The row on the thread first: two agents may name one thread. With no thread open: the agent whose own page is on
+  // screen, by that page's word.
+  const drawnRows = flatten(view.rows);
+  const onThread = activeThreadId === null ? undefined : (drawnRows.find((row) => row.thread?.id === activeThreadId) ?? drawnRows.find((row) => row.thread === null && row.agent.threadId === activeThreadId));
+  const selected = activeThreadId === null ? openAgent : (onThread?.agent.instance ?? null);
+  const guttered = view.rows.some((row) => row.children.length > 0);
+  // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a
+  // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the row's own state, which is the one its line draws.
+  const warns = (row: Row): boolean => !gone.has(row.agent.instance) && rowWarns(outside.of(row.agent), row.state);
   return (
     // `data-pages`: whether bb has given the settings that say which pages are shown. With nobody
     // waiting the foot has no line, so nothing drawn says it: a live check that asserts an absence
@@ -299,11 +325,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         <p data-testid="oats-no-agents" className="px-2 py-1 text-xs text-muted-foreground">No agents yet.</p>
       ) : (
         <ul data-testid="oats-tree" className="flex flex-col">
-          {/* ONE order for every row, whatever its backend (model/view.ts): a root of the tree with its children, or an agent
-              with no bb thread, which is a root in that same order.
+          {/* ONE tree and ONE order for every row, whatever its backend (model/view.ts): a row with its children under it;
+              an agent with no bb thread is under its parent like any other, and a root where it has none that is drawn.
               - no thread bb lists: where its thread is, by bb's own answer, after the state's word; nothing until bb has answered;
               - on tmux: where it is; one whose session was lost says so first ("Stopped · session lost"): nobody stopped it. */}
-          {view.rows.map((top) => ("node" in top ? agentRows(treeRows([top.node], opened, selected, warns), guttered) : threadlessRow(top.agent, top.where === "tmux" ? TMUX : undefined, outside.of(top.agent), guttered)))}
+          {agentRows(treeRows(view.rows, opened, selected, warns), guttered)}
         </ul>
       )}
       {/* No line counts who waits on a person: the rows that wait are marked, and bb's badge on the

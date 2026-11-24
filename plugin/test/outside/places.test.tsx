@@ -231,6 +231,7 @@ test("three agents whose thread bb has archived, side by side: an operator's sto
   const threads = { status: "ready" as const, threads: fixtureThreads().filter((thread) => !gone.has(thread.id)) };
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, sessionEnd: "stopped" } : agent.instance === RANKER ? { ...agent, running: false, runtimeState: "stopped", sessionEnd: "lost", waiting: null } : agent.instance === HARVEST ? { ...agent, running: true, runtimeState: "unknown", waiting: null } : agent));
   const { slot } = await sidebar({ rpc: handlers({}, agents), sidebarThreads: threads, sdk: bb([...gone]).sdk });
+  await openParents(slot); // (one of the three has a parent: an agent with no bb thread is under its parent like any other, and a parent is closed as the page loads)
   const rowOf = (instance: string) => slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === instance)!;
   await waitFor(() => expect([DIGEST, RANKER, HARVEST].map((instance) => rowOf(instance).getAttribute("data-opens"))).toEqual(["thread", "thread", "thread"]));
   expect([DIGEST, RANKER, HARVEST].map((instance) => [rowFacts(rowOf(instance)), ...markOf(rowOf(instance))])).toEqual([

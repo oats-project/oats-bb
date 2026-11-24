@@ -3,6 +3,7 @@
 // reason the plugin says after it (app/outside/say.ts), from the kernel's row as recorded and bb's
 // answer for its thread.
 import { describe, expect, it } from "vitest";
+import { rowWarns } from "../../app/outside/parts";
 import { said, type Said } from "../../app/outside/say";
 import { agentStatus } from "../../app/roster/status";
 import { STATE } from "../../app/ui/words";
@@ -143,6 +144,27 @@ describe("a row that still says it runs, and bb has its thread archived", () => 
     expect(said(operator, "archived", false)?.kind).toBe("stopped-archived");
     const runs = sample("harvest-knowledge-helper", { running: true });
     expect([said(runs, "open", true), said(runs, "missing", false)?.kind, said(runs, "unknown", false)]).toEqual([null, "threadless", null]);
+  });
+});
+
+describe("the rows that warn (`rowWarns`): what a closed parent of the roster carries a mark for", () => {
+  // The row's own rule, asked with the state the row draws: true for exactly three kinds.
+  const warns = (agent: Agent, where: ThreadWhere) => rowWarns(said(agent, where, false), state(agent, null));
+  it("its thread archived in bb while it ran; its session lost with its thread archived; its thread deleted in bb", () => {
+    const runs = sample("harvest-knowledge-helper", { running: true });
+    expect([said(runs, "archived", false)?.kind, warns(runs, "archived")]).toEqual(["running-archived", true]);
+    expect([said(lost, "archived", false)?.kind, warns(lost, "archived")]).toEqual(["lost-archived", true]);
+    expect([said(operator, "missing", false)?.kind, warns(operator, "missing")]).toEqual(["deleted", true]);
+    expect([said(lost, "missing", false)?.kind, warns(lost, "missing")]).toEqual(["deleted", true]);
+  });
+  it("only with the state the reason follows: a lost session whose thread is archived, on a row that says another state (bb's own question makes it \"Needs you\"), draws no warning, so it warns nobody", () => {
+    const lostArchived = said(lost, "archived", false);
+    expect([lostArchived?.rowTone, rowWarns(lostArchived, "stopped"), rowWarns(lostArchived, "needs-you")]).toEqual(["warning", true, false]);
+  });
+  it("never an operator's stop with its thread archived, an idle agent bb has not answered for, or a row on tmux", () => {
+    expect([said(operator, "archived", false)?.kind, warns(operator, "archived")]).toEqual(["stopped-archived", false]);
+    expect(warns(unloaded, "unknown")).toBe(false);
+    for (const row of ["tmux-row-running.json", "tmux-row-stopped.json", "tmux-row-lost.json"] as const) expect(warns(tmuxRow(row), "none")).toBe(false);
   });
 });
 

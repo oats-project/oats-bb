@@ -27,3 +27,21 @@ export const TMUX_ROSTER = {
     ["overnight-sweep-developer", "oats-contrib-developer", null, "lost"], // (a long soul: the longest row there is, "Stopped · session lost · <soul> · <glyph>")
   ],
 };
+
+// The pilot's own roster SHAPE, for a scene of the stage "tmux-roster" (scenes/roster.mjs): eight
+// agents on tmux and none on a bb thread, every session lost (what a host that was restarted
+// prints), one of them a child of another. The names are made up: the shape alone is the pilot's.
+export const PILOT_ROSTER = {
+  bb: [],
+  renamed: {},
+  tmux: [
+    ["alder-lead", "oats-product-expert", null, "lost"],
+    ["birch-developer", "oats-developer", null, "lost"],
+    ["cedar-developer", "oats-developer", null, "lost"],
+    ["dogwood-maintainer", "oats-maintainer", null, "lost"],
+    ["elm-reviewer", "oats-developer", "cedar-developer", "lost"],
+    ["fir-helper", "knowledge-harvester", null, "lost"],
+    ["gorse-probe", "research-expert", null, "lost"],
+    ["hazel-developer", "oats-desktop-developer", null, "lost"],
+  ],
+};

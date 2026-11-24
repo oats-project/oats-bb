@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gapsIn, loose, MAX_GAP, showSidebar, testId, textOf, texts, tight, visible, textsNamed, tmuxMarks } from "../browser.mjs";
-import { TMUX_ROSTER } from "../tmux-roster.mjs";
+import { gapsIn, loose, MAX_GAP, openParents, showSidebar, testId, textOf, texts, tight, visible, textsNamed, tmuxMarks } from "../browser.mjs";
+import { PILOT_ROSTER, TMUX_ROSTER } from "../tmux-roster.mjs";
 import { click, closed, dialog, phaseIs, saysNow } from "./lifecycle.mjs";
 
 // The machine's name, as the checks' container was given it (ci.sh: MACHINE_NAME, the container's
@@ -38,6 +38,48 @@ const statusOf = async (page, state, want = null) => {
  * (`soulCut`: a soul cut with "…", which it may be; `soulGone`: a soul squeezed to nothing, which it never is; `whereCut`: the last phrase cut; `edgeCut`: something past the
  * row's edge, or the state's word cut; `untitled`: a name with no title holding it whole).
  */
+/**
+ * The roster's tree as it is drawn, top to bottom: each visible row of an agent, by its instance
+ * (a thread-less row) or its bb thread's id, with how far in it is (0, 1 or 2: the row's indent).
+ */
+const treeRows = (page) =>
+  page.evaluate(
+    `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})].filter((row) => row.getClientRects().length > 0).map((row) => { const left = parseFloat(getComputedStyle(row).paddingLeft); return { who: row.getAttribute("data-instance") ?? row.getAttribute("data-sidebar-thread-id"), left }; }))`,
+  );
+/** The roster's fold, as drawn: how many parents show a chevron, how many of them are closed, and which closed ones carry the mark of a row they hide (by instance or thread id, with that mark's state). */
+const folds = (page) =>
+  page.evaluate(
+    `JSON.stringify((() => { const tree = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")}`)}); const toggles = [...(tree?.querySelectorAll(${JSON.stringify(testId("oats-row-toggle"))}) ?? [])]; const inside = [...(tree?.querySelectorAll(${JSON.stringify(testId("oats-row-inside"))}) ?? [])].map((mark) => { const row = mark.closest(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)}); return [row?.getAttribute("data-instance") ?? row?.getAttribute("data-sidebar-thread-id") ?? null, mark.querySelector("[data-mark]")?.getAttribute("data-state") ?? null]; }); return { parents: toggles.length, closed: toggles.filter((toggle) => toggle.getAttribute("aria-expanded") === "false").length, inside }; })())`,
+  );
+/** Presses one parent's chevron (by its agent's instance). */
+const toggleOf = (instance) => `document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-row-toggle")}[data-instance="${instance}"]`)})?.click()`;
+/** `treeRows` with each row's depth: the indents drawn, smallest first, are depth 0, 1, 2. */
+const depths = (rows) => {
+  const lefts = [...new Set(rows.map((row) => row.left))].sort((a, b) => a - b);
+  return rows.map((row) => ({ who: row.who, depth: lefts.indexOf(row.left) }));
+};
+/**
+ * What is wrong in a drawn tree, against who is whose parent (`parentOf`: by instance; only the
+ * agents it names are looked at): a child that is not drawn one step in from its parent, or not
+ * in its parent's own block of rows (the rows after the parent that are further in than it).
+ */
+const misplaced = (drawn, parentOf, cap = 2) => {
+  const at = new Map(drawn.map((row, index) => [row.who, index]));
+  const off = [];
+  for (const [child, parent] of Object.entries(parentOf)) {
+    const c = at.get(child);
+    const p = at.get(parent);
+    if (c === undefined || p === undefined) {
+      off.push(`${child}: ${c === undefined ? "not drawn" : `its parent ${parent} is not drawn`}`);
+      continue;
+    }
+    const wanted = Math.min(drawn[p].depth + 1, cap);
+    if (drawn[c].depth !== wanted) off.push(`${child}: at depth ${drawn[c].depth}, not ${wanted}`);
+    if (c < p || drawn.slice(p + 1, c).some((row) => row.depth <= drawn[p].depth)) off.push(`${child}: not in the rows under ${parent}`);
+  }
+  return off;
+};
+
 const rowLines = (page) =>
   page.evaluate(
     `(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const rows = [...s.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})].filter((r) => r.getClientRects().length > 0); const linesOf = (e) => Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)); const cutOf = (e) => e.scrollWidth > e.clientWidth + 1; let over = 0, wrapped = 0, nameCut = 0, soulCut = 0, soulGone = 0, whereCut = 0, edgeCut = 0, untitled = 0, misordered = 0, reasonCut = 0, reasonLeft = 0; for (const row of rows) { const name = row.querySelector(${JSON.stringify(testId("oats-row-name"))}); const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const n = linesOf(name), f = linesOf(facts); if (n + f > 3 || n > 2) over += 1; if (f !== 1) wrapped += 1; if (name.scrollHeight > name.clientHeight + 1) nameCut += 1; if (!name.getAttribute("title")) untitled += 1; const soul = facts.querySelector('[data-phrase="soul"]'); if (soul && cutOf(soul)) soulCut += 1; if (soul && soul.getBoundingClientRect().width < 8) soulGone += 1; const reason = facts.querySelector('[data-phrase="reason"]'); if (reason && cutOf(reason)) reasonCut += 1; if (facts.getAttribute("data-reason") === "left") reasonLeft += 1; if (!/^state,soul(,reason)?(,where)?$/.test([...facts.querySelectorAll("[data-phrase]")].map((p) => p.getAttribute("data-phrase")).join(",")) || (soul && cutOf(soul) && reason && reason.getAttribute("data-tone") !== "warning") || (reason && reason.getAttribute("data-tone") === "warning" && cutOf(reason)) || !((facts.getAttribute("title") ?? "").startsWith(facts.querySelector('[data-phrase="state"]').innerText.trim() + " · ") || (facts.querySelector('[data-phrase="state"]').innerText.trim() === "Lost" && !reason && /^Stopped · .* · session lost( · tmux)?$/.test(facts.getAttribute("title") ?? "")))) misordered += 1; if ([...facts.querySelectorAll('[data-phrase="where"]')].some(cutOf)) whereCut += 1; const right = facts.getBoundingClientRect().right; if ([...facts.querySelectorAll("[data-phrase], [data-sep]")].some((p) => p.getBoundingClientRect().right > right + 1) || cutOf(facts.querySelector('[data-phrase="state"]'))) edgeCut += 1; } return JSON.stringify({ rows: rows.length, over, wrapped, nameCut, soulCut, soulGone, whereCut, edgeCut, untitled, misordered, reasonCut, reasonLeft }); })()`,
@@ -481,15 +523,33 @@ export default [
     name: "a deployment that is mostly tmux agents: every one a row that says where it runs, each one that waits marked, no phrase broken, the last row reachable, and a row opens its agent's page",
     run: async ({ page, at, viewport, threads, check }) => {
       await page.goto("/");
-      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
       const side = JSON.stringify(testId("oats-sidebar"));
       const tmux = TMUX_ROSTER.tmux;
+      // As the page loads every parent is CLOSED, whatever its backend: the roots alone are drawn. Two closed parents
+      // hide an agent that waits, and carry its mark after their own word.
+      const roots = tmux.filter(([, , parent]) => parent === null).length + 2; // and the two roots on bb threads (release-070-maintainer, redesign-ui-lead)
+      const rootParents = tmux.filter(([instance, , parent]) => parent === null && tmux.some(([, , of]) => of === instance)).map(([instance]) => instance);
+      const hidesWaiting = rootParents.filter((instance) => { const under = (name) => tmux.filter(([, , of]) => of === name).flatMap(([child, , , how]) => [how, ...under(child)]); return under(instance).includes("waiting"); });
+      const closedTree = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length === ${roots} ? "1" : ""; })()`, 30);
+      const foldsClosed = JSON.parse(await folds(page));
+      check(Boolean(closedTree) && foldsClosed.parents === rootParents.length + 1 && foldsClosed.closed === foldsClosed.parents, `${at} as the page loads the ${roots} roots alone are drawn, and each of the ${rootParents.length + 1} that has agents under it (${rootParents.length} of them on tmux) has its chevron, closed`, JSON.stringify(foldsClosed));
+      check(JSON.stringify(foldsClosed.inside.map(([who, state]) => `${who}:${state}`).sort()) === JSON.stringify(hidesWaiting.map((instance) => `${instance}:needs-you`).sort()), `${at} the ${hidesWaiting.length} closed tmux parents that hide an agent that waits carry its mark after their own word, and no other parent carries one`, JSON.stringify(foldsClosed.inside));
+      await page.shot(`tmux-roster-${viewport.name}-sidebar-closed`, { targets: true });
+      // Every parent opened: the rest of this scene reads every agent's row.
+      const openedNow = await openParents(page);
+      check(openedNow === tmux.filter(([instance]) => tmux.some(([, , of]) => of === instance)).length + 1, `${at} every parent opens by its chevron, a parent under a parent too: ${openedNow}`, String(openedNow));
       // Every tmux agent is a row, by its one name, and says its state, its soul and "tmux".
       const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), (row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.getAttribute("title") ?? "")])) : ""; })()`, 30);
       const read = rows === null ? [] : JSON.parse(rows);
       const wanted = tmux.map(([instance, soul, , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : how === "lost" ? "Stopped" : "Working"} · ${soul}${how === "lost" ? " · session lost" : ""} · tmux`]);
       const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
       check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, its soul, then "tmux"`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      // ONE tree: each tmux agent that has a parent is drawn under it, one step in (deeper than 2 at 2), in its parent's own block of rows.
+      const parents = Object.fromEntries(tmux.filter(([, , parent]) => parent !== null).map(([instance, , parent]) => [instance, parent]));
+      const tree = depths(JSON.parse(await treeRows(page)));
+      const off = misplaced(tree, parents);
+      check(off.length === 0 && tree.filter((row) => row.depth === 2).length >= 1, `${at} each of the ${Object.keys(parents).length} tmux agents that has a parent is drawn under it, one step in, a child's child two steps in`, off.join("; ") || JSON.stringify(tree));
       // ("tmux" in that reading is the glyph's name: every tmux row draws bb's terminal glyph, named, and no word.)
       const glyphs = JSON.parse(await page.evaluate(tmuxMarks));
       check(glyphs.marks === tmux.length && glyphs.glyphs === tmux.length && glyphs.named === tmux.length && glyphs.drawn === tmux.length, `${at} on each of the ${tmux.length} rows "tmux" is bb's terminal glyph, named "tmux"`, JSON.stringify(glyphs));
@@ -526,6 +586,23 @@ export default [
       check(Boolean(opened), `${at} the row of ${instance} opens that agent's own page`, opened ?? (await page.evaluate("location.pathname")));
       await page.until(visible(testId("oats-panel")), 30);
       await page.shot(`tmux-roster-${viewport.name}-agent-page`);
+      if (opened) {
+        // The page of an agent with no bb thread IS the row on screen: loaded anew on the page of a child's child (no chevron
+        // was pressed: the page loads with every parent closed), its two parents are open, by chevrons that are off, and its row is drawn.
+        const [deep, , over] = tmux.find(([, , parent]) => parent !== null && tmux.some(([instance, , above]) => instance === parent && above !== null));
+        const [, , top] = tmux.find(([instance]) => instance === over);
+        await page.goto(opened.replace(`/agent/${instance}`, `/agent/${deep}`));
+        await page.until(visible(testId("oats-panel")), 30);
+        check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the sidebar is shown beside the page of ${deep}`);
+        const held = await page.until(
+          `(() => { const side = document.querySelector(${side}); const row = side?.querySelector(${JSON.stringify(`${testId("oats-agent-row-threadless")}[data-instance="${deep}"]`)}); if (!row) return ""; const toggles = Object.fromEntries([...side.querySelectorAll(${JSON.stringify(testId("oats-row-toggle"))})].map((toggle) => [toggle.getAttribute("data-instance"), [toggle.getAttribute("aria-expanded"), toggle.disabled]])); return JSON.stringify([toggles[${JSON.stringify(top)}] ?? null, toggles[${JSON.stringify(over)}] ?? null]); })()`,
+          30,
+        );
+        check(held === JSON.stringify([["true", true], ["true", true]]), `${at} on the page of ${deep}, loaded anew, its row is drawn and its parents ${top} and ${over} are open, held by it: their chevrons are off`, held ?? (await folds(page)));
+        const others = JSON.parse(await folds(page));
+        check(others.parents - others.closed === 2, `${at} no other parent is open: every one but those two is as the page loaded it, closed`, JSON.stringify(others));
+        await page.shot(`tmux-roster-${viewport.name}-child-page-parents-open`, { targets: true });
+      }
     },
   },
   {
@@ -642,6 +719,69 @@ export default [
         // The stage's own roster again, for the next theme and width: the agent's session lost.
         fake({ status: { stdout: tmuxStatus() } });
         await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)}); return facts && /session lost/.test(facts.getAttribute("title") ?? "") ? "1" : ""; })()`, 60);
+      }
+    },
+  },
+  {
+    // The pilot's own roster shape (tmux-roster.mjs PILOT_ROSTER): eight agents on tmux, every session lost, one a
+    // child of another. Before the one tree every one of the eight was a flat root, and a fold had nothing to fold.
+    stage: "tmux-roster",
+    name: "the pilot's own roster shape: eight agents on tmux, one a child of another: seven rows as the page loads, its one parent closed; opened, the child under it; a child that waits marks its closed parent and carries it to the top",
+    run: async ({ page, at, viewport, check, fake, tmuxStatus, pilot, threads, ownThreads }) => {
+      const names = PILOT_ROSTER.tmux.map(([instance]) => instance);
+      const [CHILD, , PARENT] = PILOT_ROSTER.tmux.find(([, , parent]) => parent !== null);
+      const rowsOf = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})]`;
+      // A row's words are read from its line's TITLE, which always says all of them ("tmux" for the glyph included): a narrow row may not draw its reason.
+      const factsOf = (instance) => `(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${instance}"] ${testId("oats-row-facts")}`)})?.getAttribute("title") ?? "")`;
+      try {
+        fake({ status: { stdout: tmuxStatus({}, PILOT_ROSTER) } });
+        // In the pilot's image pass (by hand) the test container's own bb threads are archived for this scene: this roster
+        // has no agent on a thread, so they would all stand under it as "Other threads", which is nothing of the pilot's.
+        if (pilot) ownThreads.away(threads);
+        await page.goto("/");
+        check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
+        // Waited for: the roster is the pilot's, and nobody else (the stage's own agents are gone from it). As the page
+        // loads the parent is CLOSED: seven rows, one chevron, and no mark of a hidden row (the child does not wait).
+        const roots = names.filter((name) => name !== CHILD);
+        const seven = await page.until(`(() => { const rows = ${rowsOf}; const who = rows.map((row) => row.getAttribute("data-instance")); return JSON.stringify([...who].sort()) === ${JSON.stringify(JSON.stringify([...roots].sort()))} ? JSON.stringify(who) : ""; })()`, 60);
+        check(Boolean(seven), `${at} as the page loads the roster is seven rows: the pilot's eight agents less the child, whose parent is closed`, seven ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        if (pilot) check(Boolean(await page.until(`document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-other-row")}`)}).length === 0 ? "1" : ""`, 30)), `${at} (image pass) no thread of the test container's own stands under the roster`, await page.evaluate(textOf(testId("oats-sidebar"))));
+        const closed = JSON.parse(await folds(page));
+        check(JSON.stringify(closed) === JSON.stringify({ parents: 1, closed: 1, inside: [] }), `${at} ${PARENT} alone has a chevron, closed, and carries no mark of what it hides (its child does not wait)`, JSON.stringify(closed));
+        await page.shot(`pilot-roster-${viewport.name}-closed`, { targets: true });
+        // Opened by its chevron: the child is under its parent, one step in.
+        await page.evaluate(toggleOf(PARENT));
+        const eight = await page.until(`${rowsOf}.length === ${names.length} ? "1" : ""`, 15);
+        const tree = depths(JSON.parse(await treeRows(page)));
+        const before = JSON.parse(seven ?? "null");
+        const placed = tree.findIndex((row) => row.who === CHILD) === tree.findIndex((row) => row.who === PARENT) + 1 && misplaced(tree, { [CHILD]: PARENT }).length === 0;
+        check(Boolean(eight) && placed && tree.filter((row) => row.depth === 0).length === roots.length && JSON.stringify(tree.filter((row) => row.who !== CHILD).map((row) => row.who)) === JSON.stringify(before), `${at} opened, ${CHILD} is the row under ${PARENT}, one step in, and the seven roots stay where they were`, JSON.stringify(tree));
+        const said = JSON.parse(await page.evaluate(`JSON.stringify([${factsOf(PARENT)}, ${factsOf(CHILD)}])`));
+        const LOST = "Stopped · oats-developer · session lost · tmux";
+        check(said.every((line) => line === LOST), `${at} the parent and its child each say, whole in the line's title, "${LOST}"`, JSON.stringify(said));
+        const measured = JSON.parse(await rowLines(page));
+        check(measured.over === 0 && measured.wrapped === 0 && measured.edgeCut === 0 && measured.whereCut === 0 && measured.untitled === 0, `${at} a row under its parent keeps to its lines: nothing past its edge, its last phrase whole`, JSON.stringify(measured));
+        await page.shot(`pilot-roster-${viewport.name}-opened`, { targets: true });
+        // Closed again, and then the child WAITS on a person (its session runs again and carries a claim): its parent,
+        // itself still stopped, stands first and carries the child's mark after its own word.
+        await page.evaluate(toggleOf(PARENT));
+        await page.until(`${rowsOf}.length === ${roots.length} ? "1" : ""`, 15);
+        fake({ status: { stdout: tmuxStatus({ [CHILD]: "waiting" }, PILOT_ROSTER) } });
+        const marked = await page.until(`(() => { const rows = ${rowsOf}; const first = rows[0]; return first?.getAttribute("data-instance") === ${JSON.stringify(PARENT)} && first.querySelector(${JSON.stringify(`${testId("oats-row-inside")} [data-mark][data-state="needs-you"]`)}) !== null ? String(rows.length) : ""; })()`, 60);
+        const parentSaid = await page.evaluate(factsOf(PARENT));
+        // (The hidden row's mark stands after the parent's own word, in the line; the line's title stays the parent's own words.)
+        check(marked === String(roots.length) && parentSaid === "Stopped · oats-developer · session lost · tmux", `${at} with ${CHILD} waiting and its parent closed: ${PARENT} is the first of the seven rows, says what it is itself ("Stopped", "session lost") and carries the mark of the agent that waits under it after its own word`, `${marked}; ${parentSaid}`);
+        await page.shot(`pilot-roster-${viewport.name}-child-waits-closed`, { targets: true });
+        await page.evaluate(toggleOf(PARENT));
+        const waits = await page.until(`(() => ${factsOf(CHILD)}.startsWith("Needs you") ? JSON.stringify(${rowsOf}.slice(0, 2).map((row) => row.getAttribute("data-instance"))) : "")()`, 15);
+        const after = JSON.parse(await folds(page));
+        check(waits === JSON.stringify([PARENT, CHILD]) && after.inside.length === 0, `${at} opened, ${CHILD} is the second row and says "Needs you"; its parent no longer carries its mark (the row itself is there)`, `${waits}; ${JSON.stringify(after)}`);
+        await page.shot(`pilot-roster-${viewport.name}-child-waits-opened`, { targets: true });
+      } finally {
+        // The stage's own roster again, for the next theme and width (and, in the image pass, the threads it archived).
+        fake({ status: { stdout: tmuxStatus() } });
+        if (pilot) ownThreads.back();
+        await page.until(`${rowsOf}.some((row) => row.getAttribute("data-instance") === ${JSON.stringify(TMUX_ROSTER.tmux[0][0])}) ? "1" : ""`, 60);
       }
     },
   },

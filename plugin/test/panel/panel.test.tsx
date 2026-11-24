@@ -103,7 +103,7 @@ test("a failed or unreachable agent that still carries a claim says Needs you an
   }
 });
 
-test("what the agent asks stands first on the page, under no heading; how long it has waited is the header's, since when is with the question", async () => {
+test("what the agent asks stands first on the page, under no heading; how long it has waited is the header's, once; since when is that line's title", async () => {
   const slot = panel();
   const waiting = await slot.findByTestId("oats-panel-waiting");
   // The clock as the words module says it here: with the date where local midnight falls inside the wait.
@@ -114,7 +114,8 @@ test("what the agent asks stands first on the page, under no heading; how long i
   expect(waiting.getAttribute("aria-label")).toBe("Needs input");
   expect(slot.queryByTestId("oats-panel-waiting-head")).toBeNull();
   expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("How should I merge the pull request?");
-  expect(text(waiting)).toBe(`since ${clock}How should I merge the pull request?`); // since when first, muted; then what it asks
+  expect(text(waiting)).toBe("How should I merge the pull request?"); // what it asks, alone: the age is the header's, once
+  expect(slot.getByTestId("oats-panel-state").getAttribute("title")).toBe(`since ${clock}`); // since when, by the clock: that line's title
   expect(slot.getByTestId("oats-panel-page-instance").firstElementChild).toBe(waiting); // first on the page
   expect(stateOf(slot)).toBe("Needs you· 15 min");
 });
@@ -129,7 +130,7 @@ test("a claim with no message says the reason in a word where it says what is ne
   expect(text(await unsafe.findByTestId("oats-panel-waiting-message"))).toBe("[withheld]");
   // No instant from the kernel: no invented time. A question's reason says nothing "Needs you" does not: no word for it.
   expect(unsafe.queryByTestId("oats-panel-waiting-head")).toBeNull();
-  expect(unsafe.queryByTestId("oats-panel-waiting-since")).toBeNull();
+  expect(unsafe.getByTestId("oats-panel-state").getAttribute("title")).toBeNull();
   expect(text(unsafe.getByTestId("oats-panel-waiting"))).toBe("[withheld]");
 });
 
@@ -473,7 +474,10 @@ test("an agent with no thread that waits on a person says Needs you, as its Need
   const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
   await slot.findByTestId("oats-panel-waiting");
   expect(stateOf(slot)).toBe("Needs you· 15 min");
-  expect(text(slot.getByTestId("oats-panel-waiting-since"))).toBe(`since ${waitingClock("2026-11-21T18:14:12.916Z", NOW)}`);
+  // The age once: the header's. Since when, by the clock, is that line's title, and no line of the page.
+  expect(slot.getByTestId("oats-panel-state").getAttribute("title")).toBe(`since ${waitingClock("2026-11-21T18:14:12.916Z", NOW)}`);
+  expect(slot.queryByTestId("oats-panel-waiting-since")).toBeNull();
+  expect(text(slot.getByTestId("oats-panel-waiting"))).not.toMatch(/since/);
 });
 
 // One claim rule for bb and tmux (the spec's author, 2026-11-23): a claim is hidden only for an agent the kernel calls stopped.

@@ -692,9 +692,14 @@ test("the roster and the activity are read at two moments: an activity that name
   await waitFor(() => expect(refreshed).toBe(1));
   // what the person then sees: the header and Needs input say the claim the activity names
   await waitFor(() => expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("Which base branch?"));
-  // how long it has waited is the header's; since when (the clock time) is with what it asks
+  // how long it has waited is the header's, once; since when (the clock time) is that line's title
   expect(text(slot.getByTestId("oats-panel-state"))).toBe("!Needs you· 5 min");
-  expect(text(slot.getByTestId("oats-panel-waiting-since"))).toBe(`since ${waitingClock("2026-11-21T18:23:39.829Z", NOW)}`);
+  expect(slot.getByTestId("oats-panel-state").getAttribute("title")).toBe(`since ${waitingClock("2026-11-21T18:23:39.829Z", NOW)}`);
+  expect(slot.queryByTestId("oats-panel-waiting-since")).toBeNull();
+  // and the question once on the pane's face: in what it asks, not again in the header over the tabs
+  // (the activity's rows hold it as history, each under its own fold: the live scene reads what is drawn)
+  expect(text(slot.getByTestId("oats-panel-waiting"))).toBe("Which base branch?");
+  expect(text(slot.getByTestId("oats-panel-header"))).not.toContain("Which base branch?");
   // the same answer drawn again asks nothing more
   act(() => showPanelTab("soul"));
   act(() => showPanelTab("instance"));

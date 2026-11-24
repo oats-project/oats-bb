@@ -182,6 +182,8 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
   const line = pageParts(agent, oats, status);
   const reading = useReading(agent.instance);
   const soul = shown(oats.soulOf(agent));
+  const claimSince = status.state === "needs-you" ? (claimOf(agent)?.since ?? null) : null;
+  const waitedSince = claimSince === null ? undefined : `since ${waitingClock(claimSince, now)}`;
   return (
     <>
       {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}
@@ -192,7 +194,8 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
             {agentName(agent.instance)}
           </h2>
         </div>
-        <div data-testid="oats-panel-state" data-outside={line.kind ?? undefined}>
+        {/* How long it has waited is said ONCE, here ("Needs you · 5 d"); since when, by the clock, is this line's title, for whoever needs the instant. */}
+        <div data-testid="oats-panel-state" data-outside={line.kind ?? undefined} title={waitedSince}>
           {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here.
               For an agent the roster draws on no thread, what happened to it outside OATS follows the state's word, as on its row ("Stopped · session lost"). */}
           {/* Behind a lifecycle result that says the agent changed, until the roster is read again: "Reading…", never the old state stated plainly. */}
@@ -295,7 +298,6 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
   const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
   const message = claim === null || claim.message === null ? "" : shown(claim.message);
-  const since = claim === null || claim.since === null ? "" : waitingClock(claim.since, now);
   return (
     <>
       {/* What happened to it outside OATS (app/outside), first on the page and scrolling with it (the
@@ -305,13 +307,8 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
       <OutsideAgent agent={agent} roster={oats} held={held} />
       {claim === null ? null : (
         // What the agent asks, first on the page, under no heading: the header two lines up says
-        // "Needs you". How long it has waited is the header's; since when (the clock time) is here, first and muted.
+        // "Needs you" and how long it has waited, once (the clock time is that line's title).
         <section data-testid="oats-panel-waiting" aria-label="Needs input" className="flex min-w-0 flex-col gap-2">
-          {since === "" ? null : (
-            <p data-testid="oats-panel-waiting-since" className="m-0 text-xs text-muted-foreground">
-              {`since ${since}`}
-            </p>
-          )}
           {message !== "" ? (
             <p data-testid="oats-panel-waiting-message" dir="auto" className="m-0 break-words text-foreground">
               {message}

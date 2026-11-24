@@ -290,9 +290,13 @@ const first = [
       // Its soul stands under its acts by its name alone: no "instance of".
       const soulLine = await page.evaluate(`(document.querySelector(${JSON.stringify(inPanel("oats-panel-soul-link"))})?.parentElement?.innerText ?? "").replace(/\\s+/g, " ").trim()`);
       check(soulLine === "oats-expert", `${at} the header names the soul alone, as the way to the Soul tab`, soulLine);
-      // What it asks stands first on the page, under no heading: its message, then since when (the clock time left the header for here).
+      // What it asks stands first on the page, under no heading: its message alone. How long it has waited is said once, in the header; since when, by the clock, is that line's title.
       const asks = await page.evaluate(`(() => { const block = document.querySelector(${JSON.stringify(inPanel("oats-panel-waiting"))}); return block ? JSON.stringify({ text: block.innerText.replace(/\\s+/g, " ").trim(), headings: block.querySelectorAll("h1, h2, h3").length, head: block.querySelector(${JSON.stringify(testId("oats-panel-waiting-head"))}) !== null, first: block.parentElement.firstElementChild === block }) : ""; })()`);
-      check(/^\{"text":"since (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d Which base branch\?","headings":0,"head":false,"first":true\}$/.test(asks), `${at} what the agent asks is first on the page, under no heading: since when, then its message; no sentence for the reason`, asks);
+      check(asks === '{"text":"Which base branch?","headings":0,"head":false,"first":true}', `${at} what the agent asks is first on the page, under no heading: its message alone; no sentence for the reason, and no second age under the header's`, asks);
+      const sinceWhen = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-state"))})?.getAttribute("title") ?? ""`);
+      check(/^since (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d$/.test(sinceWhen), `${at} since when, by the clock, is the header's state line's title`, sinceWhen);
+      const asked = await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-panel"))})?.innerText ?? "").split("Which base branch?").length - 1`);
+      check(asked === 1, `${at} the question is said once in the pane`, String(asked));
       const work = await page.evaluate(textOf(inPanel("oats-panel-work-sentence")));
       check(work === "worktree · agents/panel-worktree-helper", `${at} Work: the mode as a fact, with its branch`, work);
       const session = await page.evaluate(textOf(inPanel("oats-panel-session"))); // (the heading is drawn in capitals: innerText reads what is drawn)

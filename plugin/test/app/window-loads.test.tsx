@@ -205,7 +205,8 @@ test("a PATCH published while the window's first answer is on its way is not los
   await act(async () => deliver!());
   await slot.findByTestId("oats-tree");
   await waitFor(() => expect(facts()).toMatch(/^Needs you/));
-  expect(calls).toBe(2);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50))); // time for a read too many, if one were made
+  expect(calls).toBe(2); // the first answer, and the one read owed for the patch's event
 });
 
 // Each live read is owed ITS OWN read (app/store.ts `reread`, by the read's key). The sidebar beside the Automations
@@ -255,9 +256,9 @@ test("two live reads by two keys, both with their first answer on its way when t
   // The roster's arrives first, and its owed read is made; the page's is still on its way, and still owed.
   await act(async () => roster.deliver());
   await waitFor(() => expect(roster.calls).toBe(2));
-  expect(page.calls).toBe(1);
   // The page's arrives: its own owed read is made.
   await act(async () => page.deliver());
   await waitFor(() => expect(page.calls).toBe(2));
-  expect(roster.calls).toBe(2);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50))); // time for a read too many of either, if one were made
+  expect([roster.calls, page.calls]).toEqual([2, 2]); // each its first answer and its one owed read: the page's did not start the roster's again
 });

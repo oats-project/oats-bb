@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createFakePluginHost, makeHostResponse, type FakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { experimental_createHostEntryHarness } from "@get-bb/plugin-sdk/testing/host";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hostContract, REALTIME_CHANGED } from "../contract/index.js";
 import { host as lifecycleHost } from "../contract/lifecycle.js";
 import { host as rosterHost } from "../contract/roster.js";
@@ -605,6 +605,34 @@ describe("the event path", () => {
     await rpc("refresh");
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(tokens()).toHaveLength(1);
+  }, 60_000);
+
+  // The roster's `at` and an act's `endedAt` are whole milliseconds of this server's clock. A status read that STARTS in
+  // the very millisecond the act ended is the read after the act, and the window reads a tie as "before" (`<=`), with no
+  // later read owed: "Reading…" to its bound. The server stamps both from ONE strictly increasing stamp: the later
+  // event has the later stamp, also when the clock has not moved.
+  it("a status read that starts in the millisecond an act ended is LATER than the act's end: one increasing stamp for both, also while the clock stands still", async () => {
+    const first = await rpc<Shown>("snapshot");
+    const plan = await rpc<{ revision: string }>("stopPlan", { instance: LEAD });
+    // The clock stands still from here: whatever starts or ends now does so "in the same millisecond".
+    const frozen = Date.now() + 2;
+    const clock = vi.spyOn(Date, "now").mockReturnValue(frozen);
+    try {
+      const receipt = await rpc<{ endedAt: string }>("stopApply", { instance: LEAD, revision: plan.revision, key: "stop-7f3a9c2e41b8" });
+      let after = first;
+      for (let tries = 0; tries < 600 && after.at === first.at; tries += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        after = await rpc<Shown>("snapshot");
+      }
+      expect(after.at).not.toBe(first.at); // the read the act asked for has answered
+      expect(Date.parse(receipt.endedAt)).toBeGreaterThanOrEqual(frozen); // the act ended at the frozen instant (or a stamp after it)
+      expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(receipt.endedAt)); // and the read after it is LATER, though the clock never moved
+      // A second act and its read, still in that millisecond: later again, each in turn.
+      const again = await rpc<{ endedAt: string }>("start", { instance: "weekly-digest-helper" });
+      expect(Date.parse(again.endedAt)).toBeGreaterThan(Date.parse(after.at));
+    } finally {
+      clock.mockRestore();
+    }
   }, 60_000);
 
   // With the event path: a patch published between the act's end and the act's own read keeps the OLDER read's `at`

@@ -71,7 +71,9 @@ export function rest(agent: Row, thread: Thread = null): Rest {
  * `thread` is bb's own row of the thread the roster draws the agent on, or null where bb lists none.
  */
 export function messageResumes(agent: Row, thread: Thread): boolean {
-  if (agent.running !== false || agent.backend === "tmux" || thread === null) return false;
+  // Only an agent on bb: the two facts are the bb session provider's. (A caller that holds the
+  // agent's bb thread and names no backend, the Start dialog, is asking of an agent on bb.)
+  if (agent.running !== false || thread === null || (typeof agent.backend === "string" && agent.backend !== "bb")) return false;
   // FAIL CLOSED: a thread bb lists in "error" is one whose later turn failed (it takes a message)
   // or one that FAILED AT ITS START (a message would be a first start outside OATS), and until bb
   // has answered for its events (`startFailure` absent) nobody knows which. No message is invited
@@ -79,5 +81,11 @@ export function messageResumes(agent: Row, thread: Thread): boolean {
   if ((thread as { status?: unknown }).status === "error" && startOf(thread)?.startFailure === undefined) return false;
   // (A thread that failed at its start is "never-started": there is no conversation to carry on.)
   const how = rest(agent, thread);
-  return how === "lost" || how === "unloaded";
+  if (how === "lost") return true;
+  // "No harness loaded" is a POSITIVE match of the row the provider prints (recorded:
+  // test/fixtures/outside/status-not-loaded.json): the word "unknown" and no word how its session
+  // ended. `rest` answers "unloaded" for every other row it does not know, too: none of those is
+  // invited a message (a word of the runtime's or of the session's end this plugin does not know
+  // has no fact behind it: fail closed).
+  return how === "unloaded" && agent.runtimeState === "unknown" && (agent.sessionEnd ?? null) === null;
 }

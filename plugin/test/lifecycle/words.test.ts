@@ -508,6 +508,9 @@ describe("whether a start says that a message in the thread carries the conversa
     expect(carriesOn({ running: false, runtimeState: null, sessionEnd: null }, thread)).toBe(false);
     // A harness that ended by itself is no stop (the agent failed), and no fact shows a message carrying it on: no carry-on line, as its thread's line says none (the one rule, model/rest.ts).
     expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: "exited" }, thread)).toBe(false);
+    // A row this plugin does not know: no carry-on line either (fail closed).
+    expect(carriesOn({ running: false, runtimeState: "unknown", sessionEnd: "something-new" }, thread)).toBe(false);
+    expect(carriesOn({ running: false, runtimeState: "something-new", sessionEnd: null }, thread)).toBe(false);
   });
   it("never of an agent that runs, or whose state is not known", () => {
     expect(carriesOn({ running: true, runtimeState: "unknown", sessionEnd: null }, thread)).toBe(false);

@@ -164,7 +164,9 @@ const BOTH = ["stop", "start"] as const;
 /**
  * Of the two, the one that brings the agent back under OATS: Stop (words.ts `OUTSIDE_NEEDS`: it
  * always works; Start… begins a new conversation and is refused while the outside thread is in a
- * turn). Drawn as the primary button wherever the two are side by side; Start… is the second.
+ * turn). Drawn as the primary button where THIS feature draws the two side by side: the thread's
+ * line, the home's card, and its own block while the header has none. (The agent's page and the
+ * panel draw them in their header, the lifecycle's `AgentActs`: plain buttons, no primary.)
  */
 const REPORT_PRIMARY: Act = "stop";
 

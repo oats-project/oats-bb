@@ -17,6 +17,8 @@ const PLAIN = { tone: "plain", rowTone: "plain", warning: null, acts: null, arch
 /** Where a MESSAGE is the way on (the agent's own listed thread; model/rest.ts `messageResumes`): the line says so, and has no act of its own. */
 const MESSAGE = { acts: [], message: true } as const;
 const word = (agent: Agent) => agentStatus(agent, null, NOW).word;
+/** bb's own row of a listed thread at rest: what a place that draws an agent on its thread passes (with no row, nothing is invited). */
+const AT_REST = { status: "idle" };
 
 /** The rows of the table, each with bb's answer for its thread and whether the tree draws it on its thread. */
 const operator = recorded("stoppedByOats"); // sessionEnd "stopped"
@@ -71,7 +73,7 @@ describe("stopped by an operator (sessionEnd \"stopped\")", () => {
     expect(said(exited, "open", true)).toEqual({ ...PLAIN, kind: "failed-open", sentence: "session ended", note: null });
   });
   it("sessionEnd \"lost\" (its session ended without OATS stopping it) is the one stop that is spared the warning", () => {
-    expect(said({ ...operator, sessionEnd: "lost" }, "open", true)).toMatchObject({ kind: "lost-open", tone: "plain", ...MESSAGE });
+    expect(said({ ...operator, sessionEnd: "lost" }, "open", true, AT_REST)).toMatchObject({ kind: "lost-open", tone: "plain", ...MESSAGE });
   });
   it("with its thread archived in bb: the reason on its line, nothing after the state's word on its row, and the way to it; no warning", () => {
     expect(said(operator, "archived", false)).toEqual({ ...PLAIN, kind: "stopped-archived", sentence: "archived in bb", note: null, archived: true }); // its row says "Stopped" alone
@@ -102,7 +104,7 @@ describe("a session OATS lost (sessionEnd \"lost\")", () => {
     expect([kinds(lost), kinds(operator)]).toEqual([["lost-archived", "deleted"], ["stopped-archived", "deleted"]]);
   });
   it("on a thread that is open: the reason \"session lost\", and that a message is the way on (no Start on the line); no cause guessed, nothing promised, no warning, and never the operator's sentence", () => {
-    expect(said(lost, "open", true)).toEqual({ ...PLAIN, ...MESSAGE, kind: "lost-open", sentence: "session lost", note: "session lost" });
+    expect(said(lost, "open", true, AT_REST)).toEqual({ ...PLAIN, ...MESSAGE, kind: "lost-open", sentence: "session lost", note: "session lost" });
     expect(said(lost, "open", true)!.sentence).not.toMatch(/outside OATS/);
     expect(said(lost, "open", true)!.sentence).not.toMatch(/machine|when|again by itself/);
     expect(said(lost, "unknown", false)).toBeNull();
@@ -201,7 +203,7 @@ describe("idle, no harness loaded (running false beside runtimeState \"unknown\"
     expect([unloaded.running, unloaded.runtimeState, unloaded.sessionEnd, state(unloaded, null), word(unloaded)]).toEqual([false, "unknown", undefined, "idle", "Idle"]);
   });
   it("on its open thread: the reason \"not loaded\", and that a message is the way on (no Start on the line: what Start does is its dialog's to say); no warning", () => {
-    expect(said(unloaded, "open", true)).toEqual({ ...PLAIN, ...MESSAGE, kind: "idle-unloaded", sentence: "not loaded", note: "not loaded" });
+    expect(said(unloaded, "open", true, AT_REST)).toEqual({ ...PLAIN, ...MESSAGE, kind: "idle-unloaded", sentence: "not loaded", note: "not loaded" });
   });
   it("an idle agent the kernel says nothing of (running null: today's idle bb thread) says none of it", () => {
     expect(said(recorded("idle"), "open", true)).toBeNull();
@@ -289,8 +291,11 @@ describe("\"message to continue\": said only where a message carries the agent o
   const TURN_FAILED = { status: "error", startFailure: null };
   const UNANSWERED = { status: "error" };
   it("said: a lost session and no harness loaded (recorded rows), on the agent's own listed bb thread; also on a thread whose LATER turn failed, once bb has said that a turn started", () => {
-    expect(line(lost, "open", true)).toEqual({ words: "session lost · message to continue", message: true, acts: [] });
-    expect(line(unloaded, "open", true)).toEqual({ words: "not loaded · message to continue", message: true, acts: [] });
+    expect(line(lost, "open", true, AT_REST)).toEqual({ words: "session lost · message to continue", message: true, acts: [] });
+    expect(line(unloaded, "open", true, AT_REST)).toEqual({ words: "not loaded · message to continue", message: true, acts: [] });
+    // With no row of the thread given, nothing is invited: the line says the reason alone and keeps Start….
+    expect(line(lost, "open", true)).toEqual({ words: "session lost", message: false, acts: ["start"] });
+    expect(line(unloaded, "open", true)).toEqual({ words: "not loaded", message: false, acts: ["start"] });
     expect(line(lost, "open", true, { status: "idle" })).toEqual({ words: "session lost · message to continue", message: true, acts: [] });
     expect(line(lost, "open", true, TURN_FAILED)).toEqual({ words: "session lost · message to continue", message: true, acts: [] });
   });
@@ -300,19 +305,25 @@ describe("\"message to continue\": said only where a message carries the agent o
   });
   // A message in bb to any of these starts a harness OATS does not expect (the kernel then reports it "running outside OATS"), or reaches nothing.
   const NEVER: [string, Agent, ThreadWhere, boolean, (object | null)?][] = [
-    ["an operator's stop (sessionEnd \"stopped\")", operator, "open", true],
-    ["a stop that does not say how its session ended", { ...operator, sessionEnd: undefined }, "open", true],
-    ["a stop whose sessionEnd is null", { ...operator, sessionEnd: null }, "open", true],
-    ["a stop with a word of the session's end this plugin does not know", { ...operator, sessionEnd: "something-new" }, "open", true],
-    ["the word \"stopped\" with no word that the row does not run, beside \"lost\"", { ...lost, running: null, runtimeState: "stopped" }, "open", true],
-    ["an agent that runs outside OATS (the kernel's report)", reported, "open", true],
+    ["an operator's stop (sessionEnd \"stopped\")", operator, "open", true, AT_REST],
+    // Rows this plugin does not know: a word of the session's end, or of the runtime's state, that it has no fact for.
+    ["not running beside \"unknown\", with a word of the session's end this plugin does not know", { ...unloaded, sessionEnd: "something-new" }, "open", true, AT_REST],
+    ["not running beside a word of the runtime's state this plugin does not know", { ...unloaded, runtimeState: "something-new" }, "open", true, AT_REST],
+    ["not running beside two words this plugin does not know", { ...unloaded, runtimeState: "paused", sessionEnd: "suspended" }, "open", true, AT_REST],
+    ["no harness loaded, on a session provider that is not bb", { ...unloaded, backend: "other" }, "open", true, AT_REST],
+    ["a lost session, on a session provider that is not bb", { ...lost, backend: "other" }, "open", true, AT_REST],
+    ["a stop that does not say how its session ended", { ...operator, sessionEnd: undefined }, "open", true, AT_REST],
+    ["a stop whose sessionEnd is null", { ...operator, sessionEnd: null }, "open", true, AT_REST],
+    ["a stop with a word of the session's end this plugin does not know", { ...operator, sessionEnd: "something-new" }, "open", true, AT_REST],
+    ["the word \"stopped\" with no word that the row does not run, beside \"lost\"", { ...lost, running: null, runtimeState: "stopped" }, "open", true, AT_REST],
+    ["an agent that runs outside OATS (the kernel's report)", reported, "open", true, AT_REST],
     ["a thread that failed at its start (it never ran)", lost, "open", true, { status: "error", startFailure: { message: "Command thread.start failed", detail: null } }],
-    ["a session the kernel cannot reach", unreachable, "open", true],
-    ["a failed agent whose session ended by itself (no fact shows a message carrying it on)", failed, "open", true],
-    ["a failed row that does not say that it does not run", { ...failed, running: null }, "open", true],
+    ["a session the kernel cannot reach", unreachable, "open", true, AT_REST],
+    ["a failed agent whose session ended by itself (no fact shows a message carrying it on)", failed, "open", true, AT_REST],
+    ["a failed row that does not say that it does not run", { ...failed, running: null }, "open", true, AT_REST],
     ["a lost session on a thread in \"error\" that bb has not answered for", lost, "open", true, { status: "error" }],
     ["no harness loaded, on a thread in \"error\" that bb has not answered for", unloaded, "open", true, { status: "error" }],
-    ["an agent that runs", recorded("working"), "open", true],
+    ["an agent that runs", recorded("working"), "open", true, AT_REST],
     ["a lost session whose thread bb has archived", lost, "archived", false],
     ["a lost session whose thread bb no longer has", lost, "missing", false],
     ["a lost session bb has not answered for", lost, "unknown", false],

@@ -92,8 +92,7 @@ export type Said = {
 const base = { sentence: null, tone: "plain", note: null, rowTone: "plain", warning: null, acts: null, archived: false, message: false } as const;
 /** No act of the line's own: where a message is the way on. */
 const NO_ACTS: readonly Act[] = [];
-/** bb lists the thread the roster draws the agent on (`where` "open", attached): what `messageResumes` asks of the thread, for a caller that holds no row of it. */
-const LISTED = {};
+
 
 /** The reason of a row whose thread cannot be opened from the tree, by where bb says the thread is. */
 function whereNote(where: ThreadWhere): string | null {
@@ -171,7 +170,8 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
   // so and offers no Start…: for a lost session and for no harness loaded. The predicate fails
   // closed on a thread in "error" that bb has not answered for (it may never have started): the
   // line then says the reason alone and keeps Start….
-  const message = where === "open" && attached && messageResumes(agent, thread ?? LISTED);
+  // (With no row of the thread given, nothing is invited: a caller that draws an agent on its thread passes it.)
+  const message = where === "open" && attached && thread !== null && messageResumes(agent, thread);
   // Archived while it RAN: bb's Archive never touches the harness, so the process goes on with no
   // thread a person can see. The row keeps its state's word, in the warning tone, and where it
   // leads says the remedy. "Still says it runs": the row is not stopped, failed, or unreachable

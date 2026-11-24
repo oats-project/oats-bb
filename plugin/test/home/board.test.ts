@@ -113,6 +113,14 @@ describe("what the home may send to an agent's thread", () => {
     }
     // A harness that ended by itself (a shell, "exited"): no fact shows a message carrying it on, so the card does not answer into its thread (the one rule, model/rest.ts).
     for (const ended of [{ running: false as const, runtimeState: "shell", backend: "bb" }, { running: false as const, runtimeState: "stopped", sessionEnd: "exited", backend: "bb" }]) expect([refusal(ended, listed), mayAnswer(ended, listed, false)], JSON.stringify(ended)).toEqual(["stopped", false]);
+    // A row this plugin does not know (a word of the runtime's state or of the session's end it has no fact for), or one of another session provider: not answered either (fail closed).
+    for (const unknown of [
+      { running: false as const, runtimeState: "unknown", sessionEnd: "something-new", backend: "bb" },
+      { running: false as const, runtimeState: "something-new", backend: "bb" },
+      { running: false as const, runtimeState: "paused", sessionEnd: "suspended", backend: "bb" },
+      { running: false as const, runtimeState: "unknown", backend: "other" },
+    ])
+      expect([refusal(unknown, listed), mayAnswer(unknown, listed, false)], JSON.stringify(unknown)).toEqual(["stopped", false]);
     // An agent on tmux is never written to from bb.
     expect(refusal({ running: false, runtimeState: null, sessionEnd: "lost", backend: "tmux" }, listed)).toBe("stopped");
   });

@@ -303,7 +303,8 @@ const first = [
       }
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "the Instance tab");
-      await page.shot(`panel-${viewport.name}-instance`);
+      // The Instance tab's cards, each as high as what it holds: Work, Session, Lineage, Readiness, Activity.
+      await page.shot(`panel-${viewport.name}-instance`, { gaps: ["oats-panel-work", "oats-panel-session", "oats-panel-lineage", "oats-panel-readiness-instance", "oats-panel-activity"].map(inPanel).join(", ") });
 
       // the older-build chip and the paths, open
       const moved = ["older build", "Its soul's repository has moved on since it was spawned."];

@@ -23,7 +23,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renam
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { launchBrowser, lowTargets } from "./browser.mjs";
+import { launchBrowser, lowTargets, gapsIn, tight, loose, MAX_GAP } from "./browser.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
 import { TMUX_ROSTER } from "./tmux-roster.mjs";
@@ -342,7 +342,13 @@ async function themedPage(browser, viewport, theme, at) {
   const shot = page.shot;
   // `plugin: false`: a scene in which the plugin may draw nothing (a thread while OATS cannot be read).
   // `targets: true`: every control of the plugin in the page is as high as a person can press (32 px, 44 at phone width).
-  page.shot = async (name, { plugin = true, targets = false } = {}) => {
+  // `gaps: "<selector>"`: every block the selector finds is as high as what it holds (browser.mjs `gapsIn`): no empty
+  // room over MAX_GAP px between two of its lines or at its edges.
+  page.shot = async (name, { plugin = true, targets = false, gaps = null } = {}) => {
+    if (gaps !== null) {
+      const measured = JSON.parse(await page.evaluate(gapsIn(gaps)));
+      check(tight(measured), `${at} ${name}: ${measured.length} block(s) as high as what they hold: no gap over ${MAX_GAP} px between two lines or at an edge (heights ${measured.map((block) => block.height).join(", ")} px)`, measured.length === 0 ? `nothing drawn matches ${gaps}` : loose(measured));
+    }
     if (targets) {
       const min = viewport.mobile ? 44 : 32;
       const low = JSON.parse(await page.evaluate(lowTargets(min)));

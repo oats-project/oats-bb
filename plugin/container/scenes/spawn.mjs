@@ -127,7 +127,7 @@ export default [
       );
       check((await page.until(`${FOCUSED} === "oats-spawn-soul"`, 10)) === true, `${at} the focus starts on the first field, the soul`, await page.evaluate(FOCUSED));
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
-      await page.shot(`spawn-${viewport.name}-empty`, { targets: true });
+      await page.shot(`spawn-${viewport.name}-empty`, { targets: true, gaps: testId("oats-spawn-form") });
     },
   },
   {

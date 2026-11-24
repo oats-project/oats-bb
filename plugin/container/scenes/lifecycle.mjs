@@ -156,7 +156,7 @@ async function dialogShot({ page, at, viewport, check }, verb, name, key = null)
   await page.until(`JSON.parse(${whole(key)}).ok`, 3);
   const seen = JSON.parse(await page.evaluate(whole(key)));
   check(seen.ok, `${at} ${verb}-${name}: what the act does and the dialog's buttons are on screen together, and where the dialog holds more than fits it says so`, JSON.stringify(seen));
-  await page.shot(`lifecycle-${viewport.name}-${verb}-${name}`, { targets: true });
+  await page.shot(`lifecycle-${viewport.name}-${verb}-${name}`, { targets: true, gaps: testId("oats-modal") });
 }
 /** Tab from where the focus is, `times` times: what holds it after each press. */
 async function walk(page, times) {

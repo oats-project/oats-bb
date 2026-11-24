@@ -26,8 +26,8 @@
     removes the record once it has decided. No other command reads it. A launch in a
     sandboxed mode denies the directory to the agent's tools.
   - **A launch in a sandboxed mode is refused where that directory's path cannot be
-    written as a deny rule** (`E_BACKEND_SANDBOX_PATH`): an `XDG_STATE_HOME` (or, with
-    it unset, a user home) whose path holds a wildcard, a parenthesis, a backslash or a
+    written as a deny rule** (`E_BACKEND_SANDBOX_PATH`): an `XDG_STATE_HOME` (or, where
+    it is unset or not absolute, a user home) whose path holds a wildcard, a parenthesis, a backslash or a
     control character. A rule silently missing would leave the record writable by the
     agent's tools. Move the state directory to a path without them, or launch in full
     mode (`--yolo`), which writes no deny rules. (The provider's command takes no
@@ -58,9 +58,12 @@
     archived only, by two. Such a session runs with NO OATS around it (no status row, no
     hooks, no stop by OATS). Retire bb agents the ordinary way, which removes the home.
   - Whether such a session can send mail as the retired agent depends on the oats.aweb
-    that retired the home. From oats.aweb 1.49.0 it cannot: a retire that succeeds
-    removes the home's aweb keys, and one that fails holds them aside for the retry
-    (`aw` then answers "not initialized"). A home retired with an older oats.aweb keeps
+    that retired the home. From oats.aweb 1.49.0 it cannot through `aw`'s ordinary
+    lookup: a retire whose answer exits 0 removes the home's aweb keys, and one that
+    fails holds them aside for the retry (`aw` then answers "not initialized"). That
+    too is a step in the way, not a boundary: held keys stay in the home's
+    `.oats-aweb/held/`, readable by the session's own user, and a retire that crashed
+    leaves them in place. A home retired with an older oats.aweb keeps
     its keys, and where its aweb identity was not released a revived session can send
     mail as the retired agent.
   - The retire's warning reaches CLI users only: the Desktop's Retire dialog shows no

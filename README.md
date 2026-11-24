@@ -182,9 +182,12 @@ many, and the remedy. Remove old archived threads of that project in bb: for eac
 >
 > **Whether such a session can send mail as the retired agent** depends on the oats.aweb
 > that retired the home:
-> - **oats.aweb 1.49.0 or later:** it cannot. A retire that succeeds removes the home's
->   aweb keys, and one that fails holds them aside for the retry (`aw` then answers "not
->   initialized").
+> - **oats.aweb 1.49.0 or later:** not through `aw`'s ordinary lookup. A retire whose
+>   answer exits 0 removes the home's aweb keys, and one that fails holds them aside for
+>   the retry (`aw` then answers "not initialized"). That too is a step in the way, not
+>   a boundary: held keys stay in the home's `.oats-aweb/held/`, readable by the
+>   session's own user, and a retire that crashed leaves them in place (oats.aweb's
+>   README, "What retire does with the key material").
 > - **An older oats.aweb:** the home keeps its keys. Where its aweb identity was not
 >   released (a team leave waiting for its controller, a retained seat, an alias held), a
 >   revived session can send mail as the retired agent.

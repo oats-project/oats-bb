@@ -2,7 +2,7 @@
 // say when something happened to an OATS agent outside OATS (container/live-ui.mjs says what a
 // scene is). Stages of its own: `outside`, every row of the feature's table that is a stop of OATS's
 // or an act in bb, at once on one roster; `outside-host`, the rows that are neither (a session
-// lost, on bb and on tmux; idle with no harness loaded); `outside-archived`, three agents whose thread bb has archived; and `outside-question`, the first roster while bb
+// lost, on bb and on tmux; idle with no harness loaded); `outside-start`, an agent whose thread failed at its start in bb; `outside-archived`, three agents whose thread bb has archived; and `outside-question`, the first roster while bb
 // holds a question on the thread of the agent OATS recorded stopped. What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
 // says of each thread is bb's own answer, made true in bb itself: the threads said archived ARE
 // archived in bb for the length of the stage (and unarchived when it ends).
@@ -139,7 +139,45 @@ const ARCHIVED_ROWS = {
 };
 const ARCHIVED_THREE = ["thr_digest", "thr_research", "thr_release"];
 
+/**
+ * The agent whose thread FAILED AT ITS START (the stage `outside-start`): a thread made in bb for
+ * a harness that cannot start (the provider `pi` with a model nobody serves: where pi is not
+ * installed bb cannot run it, where it is pi cannot resolve the model; either way bb records an
+ * error and never a turn). bb's own thread and bb's own events: nothing of bb's is faked. The
+ * kernel's row of such a home is the lost session's (shaped: the fake's status).
+ */
+const NEVER = "release-070-maintainer";
+/** bb's thread that failed at its start, while the stage runs. */
+let neverStarted;
+
 export const stages = {
+  "outside-start": {
+    label: "OUTS",
+    // It starts a thread of its own: the live run lifts its hold of the two working threads for
+    // it (a turn held open was seen to keep another thread from starting: it stayed "pending").
+    tellsAThread: true,
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      const own = threads.get("thr_release");
+      neverStarted = bbJson("thread", "spawn", "--provider", "pi", "--model", "no-such-model", "--prompt", "hello", "--project", own.projectId);
+      let status = neverStarted.status;
+      for (const deadline = Date.now() + 60_000; Date.now() < deadline && status !== "error"; await sleep(1000)) status = bbJson("thread", "show", neverStarted.id).thread?.status;
+      if (status !== "error") console.log(`NOTE outside: the thread made to fail at its start reads "${status}" after 60 s, not "error"`);
+      // The agent's own thread of the other stages is archived meanwhile, so that it is not listed as a thread of nobody's.
+      bb("thread", "archive", own.id);
+      const joined = new Map(threads).set("thr_release", { ...own, id: neverStarted.id });
+      fake({ status: { stdout: statusOf(statusWithRealIds, joined, { [NEVER]: LOST }) } });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === NEVER && agent.sessionEnd === "lost" && agent.threadId === neverStarted.id));
+    },
+    leave: async ({ fake, threads }) => {
+      try {
+        if (neverStarted !== undefined) bb("thread", "delete", neverStarted.id, "--yes");
+      } finally {
+        neverStarted = undefined;
+        bb("thread", "unarchive", threads.get("thr_release").id);
+        fake();
+      }
+    },
+  },
   "outside-archived": {
     label: "OUTA",
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
@@ -225,6 +263,41 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const SINCE = "( · since (\\w+ \\d+, )?\\d\\d:\\d\\d)?";
 
 export default [
+  {
+    stage: "outside-start",
+    name: "an agent whose thread failed at its start reads \"Failed\" on its row, its line and its page, with bb's reason under Details and Start, never \"session lost\"",
+    run: async ({ page, at, viewport, check }) => {
+      const thread = neverStarted;
+      // The sidebar's row: the state's word and the soul.
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const read = `JSON.stringify(${rowOf(onThread(thread.id))})`;
+      const settled = await page.until(`(() => { const now = ${read}; return /"facts":"Failed · /.test(now) ? now : ""; })()`, 30);
+      const row = JSON.parse(settled || (await page.evaluate(read)));
+      check(row !== null && /^Failed · /.test(row.facts) && !/session lost/.test(row.facts) && row.state === "error" && row.lines === 1, `${at} the row says "Failed" and the soul, on one line, never "session lost"`, JSON.stringify(row));
+      await page.shot(`outside-${viewport.name}-start-sidebar`);
+
+      // The thread's line: "Failed" alone, Start, and bb's own reason one press away.
+      await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
+      const line = await lineOf(page, /^Failed$/);
+      check(line !== null && line.state === "error" && line.words === "Failed" && same(line.acts, ["Start"]) && line.warning === null, `${at} the line: "Failed" and nothing after it, with Start`, JSON.stringify(line));
+      const details = testId("oats-status-bb");
+      await page.evaluate(`document.querySelector(${JSON.stringify(`${details} summary`)})?.click()`);
+      const reason = await page.until(`(() => { const fold = document.querySelector(${JSON.stringify(details)}); return fold?.open ? (fold.querySelector("p")?.innerText ?? "").trim() : ""; })()`, 10);
+      check(/^bb says: \S/.test(reason ?? ""), `${at} Details opens on bb's own reason`, String(reason));
+      const whole = await page.evaluate(textOf(testId("oats-identity-row")));
+      check(!/session lost|send it a message|Nobody stopped it|Restart/.test(whole), `${at} the line says nothing of a lost session, of a message, or of Restart`, whole);
+      await page.shot(`outside-${viewport.name}-start-thread-details`, { targets: true });
+
+      // The agent's own page: the same word, and the acts that apply.
+      await page.goto(`/plugins/oats/agent/${NEVER}`);
+      const head = `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); if (!head) return ""; const acts = [...head.querySelectorAll(${JSON.stringify(ACT)})].map(flat); return acts.length === 0 ? "" : JSON.stringify({ state: flat(head.querySelector(${JSON.stringify(testId("oats-state"))})), details: head.querySelector(${JSON.stringify(details)}) !== null, acts, block: document.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}) !== null }); })()`;
+      const found = await page.until(`(() => { const now = ${head}; return /"state":"Failed"/.test(now) ? now : ""; })()`, 30);
+      const header = JSON.parse(found || (await page.evaluate(head)) || "null");
+      check(header !== null && header.state === "Failed" && header.details && same(header.acts, ["Start…", "Retire…"]) && !header.block, `${at} its page: "Failed", Details, Start… and Retire… (no Restart), and no sentence under it`, JSON.stringify(header));
+      await page.shot(`outside-${viewport.name}-start-agent-page`, { targets: true });
+    },
+  },
   {
     stage: "outside",
     name: "the sidebar's rows: each says what happened, and none says \"its bb thread is gone\"",

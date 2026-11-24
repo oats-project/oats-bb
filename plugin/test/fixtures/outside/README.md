@@ -30,3 +30,27 @@ substitutions (the paths, the machine's name) and no other edit. The agent is
 
 The other rows the feature's tests read are recorded ones: `../roster/status-recorded.json`
 (`stoppedByOats`: an operator's stop; `threadDeleted`: a session OATS lost, `sessionEnd: "lost"`).
+
+**Recorded, then filtered: bb's events of three threads** (`events/*.json`: a directory of their own, since every `.json` beside this file is a status document of the case table, `test/model/cases.test.ts`), for the rule that
+tells a thread that failed at its start from one whose later turn failed (`../../../README.md`, "A
+thread that failed at its start"). Each is the answer of `bb thread messages <id> --json` for one
+thread of the pi run's probe (an array of `{id, scope, threadId, seq, createdAt, type, data}`;
+recorded by the pi run's developer on bb-app 0.50.1, the pi provider on the run's mock model, OATS
+0.70.5; the whole recordings are the probe's `A-`, `B-` and `C-thread-messages.json`, kept in its
+scratch directory `thread-state-probe/`, not in this repository), FILTERED to these two types
+from the recording: `system/error` and `turn/started`, the two the plugin asks bb for. The events
+kept are unchanged; the events of every other type are left out, as the typed read leaves them out
+(among them `provider.env-resolved`, which holds the thread's environment).
+- `events/never-started.json` (A, 9 events recorded): a spawn with a model pi could not resolve.
+  One `system/error` (`data.code` "thread_command_failed", `data.message` "Command thread.start
+  failed", `data.detail` the reason), no `turn/started`.
+- `events/ran-then-stopped.json` (B, 20 events recorded): a thread that ran one turn and was then
+  stopped in bb (`bb thread stop`, outside OATS; bb left its status "idle"). One `turn/started`,
+  no `system/error`. It is NOT a session the kernel calls lost: the probe holds none.
+- `events/later-turn-failed.json` (C, 35 events recorded): a thread whose later turn failed. Two
+  `turn/started` and no `system/error`: bb recorded that failure as four `provider/error` events,
+  which the filter leaves out, so the failure itself is not in this file.
+
+Limits of the probe: bb 0.50.1, the pi provider only, the pi run's mock. Whether another failed
+command of bb's also arrives as a `system/error` with the code "thread_command_failed" was not seen
+(the rule does not read the code or the message: an error and never a turn).

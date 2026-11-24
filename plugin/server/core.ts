@@ -17,12 +17,45 @@ export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly
 export const POLL_MS = 15_000;
 /**
  * The pause between the end of one `oats status` and the start of the next: this, or as long as
- * the last status took to answer, whichever is longer (a read that failed is followed by this floor). So a change the watch reports reaches the screen
- * within 3 s on a kernel that answers in under a second (the UX standard, section 6), and a slow
- * kernel spends at most half its time on status, however many events arrive. (The first spec's
- * "never within 5 s of the last" gave way to this.)
+ * the last status took to answer, whichever is longer (a read that failed is followed by this
+ * floor). One read is excepted, the read at once (FOLLOW_UP_WITHIN_MS, below, which also says what
+ * share of its time a kernel then spends on status). (The first spec's "never within 5 s of the
+ * last" gave way to this.)
  */
 export const MIN_INTERVAL_MS = 1_000;
+/**
+ * ONE read at once. A change that arrives while a read is in flight may be missed by that read, so
+ * another must follow; when the read in flight answered within this limit, the next one starts at
+ * once, with no pause, and once: a change that arrives during that second read waits the pause
+ * again (the pause after the pair is the rule above, counted from the second).
+ *
+ * What it buys, with t the time one status takes: a change that lands in the FIRST read of a pair
+ * is on the screen after about two reads (2t) instead of two reads and the pause. A change that
+ * lands in the SECOND read (the one started at once: the clear after a set, the second event of
+ * one act) still waits that read, the pause and the next: 2t + max(1 s, t), as before this rule.
+ * No read is later than it was; the worst case is not shorter, the common one is.
+ *
+ * Why 2 s and not the floor's 1 s: on the pilot's host one `oats status` took 1.05 to 1.52 s under
+ * load (measured 2026-11-23, eight agents, load 16), and with a limit of 1 s no read there would be
+ * followed at once: a change in the middle of a read stayed at two reads and the pause, 3.3 to
+ * 4.3 s, over the 3 s of the UX standard (section 6, amended by the specialist on 23 Nov to this
+ * condition). With 2 s it is two reads there: 2.1 to 3.04 s, before the host call's own overhead:
+ * at the slow end still at the bar's edge, not under it.
+ * The cost, in a sustained burst of changes: a kernel that answers in t spends 2t of every
+ * 2t + max(1 s, t) on status (63 % at 0.85 s, 67 % from 1 s to 2 s), not "at most half". A kernel
+ * slower than 2 s keeps the pause after every read (at most half its time on status): it is over
+ * the 3 s whatever the pacing.
+ */
+export const FOLLOW_UP_WITHIN_MS = 2_000;
+/**
+ * Whether a read that was asked for while another was in flight starts at once when that one ends
+ * (see FOLLOW_UP_WITHIN_MS): only after a read that ANSWERED (a failed one says nothing of the
+ * kernel's speed, and its retry waits the floor), within the limit, and that was not itself a read
+ * started at once.
+ */
+export function followsAtOnce(inFlight: { answeredInMs: number | null; startedAtOnce: boolean }): boolean {
+  return !inFlight.startedAtOnce && inFlight.answeredInMs !== null && inFlight.answeredInMs <= FOLLOW_UP_WITHIN_MS;
+}
 /** How long the answers behind the four pages are reused. */
 const PAGE_TTL_MS = 30_000;
 /** A client that asked for the snapshot this recently counts as connected, beside the watched reads. */
@@ -130,9 +163,16 @@ export function createCore(bb: BbPluginApi) {
   let lastRoster: Extract<Snapshot, { ok: true }> | null = null;
   let comparable = "";
   let lastStart = 0;
-  /** When the last read ended, and how long it took: what the pause before the next is counted from. */
+  /** When the last read ended: what the pause before the next is counted from. */
   let lastEnd = 0;
-  let lastTook = 0;
+  /**
+   * How long the last read took when it answered; null when it gave no answer to count: it failed
+   * (a timeout, an unreachable machine, no oats: its own length must not hold back Retry or the
+   * watch), or it answered for settings that changed under it. The pause after it is this, or the floor.
+   */
+  let lastAnsweredInMs: number | null = null;
+  /** Whether the last read to start was started at once after the one before it (FOLLOW_UP_WITHIN_MS). */
+  let lastStartedAtOnce = false;
   let running: Promise<Snapshot> | null = null;
   let queued: Promise<Snapshot> | null = null;
   let watchers = 0;
@@ -276,7 +316,7 @@ export function createCore(bb: BbPluginApi) {
     // no client is shown it and no act finds an agent, or a home, of the old deployment in it.
     if (generation !== settingsGeneration) {
       lastEnd = Date.now();
-      lastTook = 0;
+      lastAnsweredInMs = null;
       return next;
     }
     const key = JSON.stringify({ ...next, at: null, last: next.ok ? null : (next.last?.at ?? null), root, rows: rows === null ? null : [...rows] });
@@ -287,7 +327,7 @@ export function createCore(bb: BbPluginApi) {
     // Only a status that answered lengthens the pause: the guard is for a kernel that answers
     // slowly. After a read that failed (a timeout, an unreachable machine, no oats) the next one
     // waits the floor, so Retry and the watch are not held back by the failure's own length.
-    lastTook = next.ok ? lastEnd - lastStart : 0;
+    lastAnsweredInMs = next.ok ? lastEnd - lastStart : null;
     if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at });
     return next;
   }
@@ -295,14 +335,29 @@ export function createCore(bb: BbPluginApi) {
   /**
    * The next read that starts from now on: after the one in flight, and never sooner after the
    * last one ended than MIN_INTERVAL_MS or the time that one took to answer, whichever is longer. Callers
-   * asking meanwhile share it.
+   * asking meanwhile share it. The one exception is the read asked for WHILE another is in flight,
+   * which starts at once when that one ends, under `followsAtOnce`: what was asked for mid-read may
+   * be a change that read did not see.
    */
   function reread(): Promise<Snapshot> {
     if (queued) return queued;
+    const inFlight = running;
     const next = (async () => {
-      if (running) await running;
-      await sleep(Math.max(0, lastEnd + Math.max(MIN_INTERVAL_MS, lastTook) - Date.now()), lifetime.signal);
+      let atOnce = false;
+      if (inFlight) {
+        await inFlight;
+        // (No other read can have started meanwhile: this one is the queued one, and the only next.)
+        atOnce = followsAtOnce({ answeredInMs: lastAnsweredInMs, startedAtOnce: lastStartedAtOnce });
+        // Said in the log (debug), so that a slow screen can be told from a slow kernel: which rule the read after a read in flight took.
+        bb.log.debug(
+          atOnce
+            ? `oats status is read again at once: asked for while a read was in flight, which answered in ${lastAnsweredInMs} ms`
+            : `oats status is read again after the pause: asked for while a read was in flight, which ${lastStartedAtOnce ? "was itself read at once" : lastAnsweredInMs === null ? "gave no answer to count (it failed, or the settings changed under it)" : `answered in ${lastAnsweredInMs} ms, over ${FOLLOW_UP_WITHIN_MS} ms`}`,
+        );
+      }
+      if (!atOnce) await sleep(Math.max(0, lastEnd + Math.max(MIN_INTERVAL_MS, lastAnsweredInMs ?? 0) - Date.now()), lifetime.signal);
       queued = null;
+      lastStartedAtOnce = atOnce;
       const mine = read();
       running = mine;
       try {

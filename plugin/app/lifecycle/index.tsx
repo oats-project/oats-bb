@@ -44,15 +44,21 @@ const atRest = (agent: Agent): boolean => unloaded(agent) || rest(agent) === "en
 
 /**
  * The ONE act for an agent that FAILED, in every place that offers one (the acts, the panel, the
- * thread's menu and line, the keys): never two acts for one need.
- * - START where nothing runs: its thread failed at its start (`neverStarted`: it never ran), or the
- *   kernel's row says it does not run (`running: false`: its session ended). A restart there is a
- *   start with a warning about stopping what is not there; and the Start dialog's own gate takes
- *   exactly that row.
- * - RESTART where its harness still runs, or it is not known (`running` true, or not said): the
- *   Start dialog's gate refuses such a row ("already running", or not known).
+ * thread's menu and line, the keys): never two acts for one need. It ASKS the plugin's one reading
+ * of how an agent is at rest (`rest`, model/rest.ts: what the home's card and the dialogs read too),
+ * and reads no row of its own:
+ * - START where nothing runs: its thread failed at its start ("never-started": it never ran), or
+ *   its session ended, was lost, or is stopped. A restart there is a start with a warning about
+ *   stopping what is not there; and the Start dialog's own gate takes exactly such a row.
+ * - RESTART where it runs, or where nobody can tell ("runs", "unreachable"): the Start dialog's
+ *   gate refuses such a row ("already running", or not known).
+ * `thread`: bb's own row of the agent's thread where the place has it (it carries bb's word that
+ * the thread failed at its start); null where it has none.
  */
-export const failedAct = (agent: Pick<Agent, "running">, neverStarted: boolean): "start" | "restart" => (neverStarted || agent.running === false ? "start" : "restart");
+export function failedAct(agent: Agent, thread: object | null): "start" | "restart" {
+  const how = rest(agent, thread);
+  return how === "runs" || how === "unreachable" ? "restart" : "start";
+}
 
 /**
  * The four acts, in the order every place lists them: the name on a button (the Desktop's, with
@@ -93,13 +99,13 @@ export const ACTS: readonly {
     // run, so Start opens, and the dialog says that it begins a new conversation.
     // (`recordedStopped`: the kernel calls it stopped beside any word where the row says how its session ended.)
     // A FAILED agent has ONE act (`failedAct`): Start where the kernel's row says it does not run.
-    when: (state, agent, thread) => (state === "error" ? failedAct(agent, rest(agent, thread) === "never-started") === "start" : state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped" || atRest(agent)),
+    when: (state, agent, thread) => (state === "error" ? failedAct(agent, thread) === "start" : state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped" || atRest(agent)),
   },
   { verb: "restart", button: "Restart…", menu: "Restart (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, 
     // Not for a stopped agent, nor one that runs outside OATS; nor one that NEVER RAN (bb says its
     // thread failed at its start): nothing runs, and Start offers the harness and the model.
     // And of a FAILED agent, only one whose harness still runs, or of which that is not known (`failedAct`).
-    when: (state, agent, thread) => state !== "stopped" && state !== "outside" && rest(agent, thread) !== "never-started" && (state !== "error" || failedAct(agent, false) === "restart"),
+    when: (state, agent, thread) => state !== "stopped" && state !== "outside" && rest(agent, thread) !== "never-started" && (state !== "error" || failedAct(agent, thread) === "restart"),
   },
   { verb: "retire", button: "Retire…", menu: "Retire (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
 ];

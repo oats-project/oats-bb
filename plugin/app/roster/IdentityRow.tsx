@@ -94,9 +94,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const held = oats.stale !== null || reading;
   // The act that applies to the state, through OATS: a stopped agent is started; a FAILED one has the ONE act the
   // lifecycle gives it everywhere (`failedAct`): Start where nothing runs (it never ran: bb says its thread failed at
-  // its start, `status.bb`; or the kernel's row says its session ended), Restart where its harness still runs or
+  // its start; or the kernel's row says its session ended), Restart where its harness still runs or
   // that is not known; one the kernel cannot reach is read again.
-  const verb = status.state === "stopped" || (status.state === "error" && failedAct(agent, status.bb !== undefined) === "start") ? (["start", "Start…"] as const) : status.state === "error" ? (["restart", "Restart…"] as const) : null; // (the dots: each opens its dialog, and nothing runs on the press)
+  const verb = status.state === "stopped" || (status.state === "error" && failedAct(agent, node.thread) === "start") ? (["start", "Start…"] as const) : status.state === "error" ? (["restart", "Restart…"] as const) : null; // (the dots: each opens its dialog, and nothing runs on the press)
   const act =
     verb !== null ? (
       <Button data-testid="oats-status-act" disabled={held} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>

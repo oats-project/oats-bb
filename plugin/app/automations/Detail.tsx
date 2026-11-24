@@ -285,7 +285,6 @@ function SpawnsCard({ row }: { row: AutomationRow }) {
   );
 }
 
-/** One line of the history: when, then what. */
 /**
  * A line of a row's history: when, and what. In a narrow page (a phone) it is a stack, the time
  * over the text, so that the text has the page's whole line: an instance's id is some 35

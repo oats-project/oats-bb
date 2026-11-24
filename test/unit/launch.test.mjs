@@ -5,8 +5,9 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
 import { join } from "node:path";
 import { test } from "node:test";
 import { launch } from "../../oats-package/capabilities/oats-bb/lib/launch.mjs";
+import { readRecord } from "../../oats-package/capabilities/oats-bb/lib/record.mjs";
 import { readSettings } from "../../oats-package/capabilities/oats-bb/lib/settings.mjs";
-import { PATH_WITH_BWRAP, UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { PATH_WITH_BWRAP, STATE_HOME, UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, projectRow, requestFor, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 // A thread bb made after the launch asked for it: the fake's rows are written before the
 // launch runs, so "after" is a time well ahead.
@@ -50,6 +51,15 @@ test("launch spawns one thread in the home's project and answers its endpoint", 
   assert.equal(spawn.server, backend.server);
   assert.deepEqual(effects(bb), ["thread spawn"], "the home's existing project is reused");
   assert.ok(Buffer.byteLength(JSON.stringify(answer.result.endpoint)) < 4096);
+});
+
+test("a sandboxed launch keeps the agent's tools off the provider's state directory, the one of the environment it runs in (XDG_STATE_HOME)", async (t) => {
+  const { home, runSandboxed } = await setup(t);
+  assert.equal((await runSandboxed({ yolo: false })).ok, true);
+  const deny = localSettings(home).permissions.deny;
+  for (const path of [join(STATE_HOME, "oats-bb"), join(STATE_HOME, "oats-bb/**")]) assert.ok(deny.includes(`Edit(/${path})`), path);
+  // And the launch noted its thread there, in a file that is this home's.
+  assert.equal(readdirSync(join(STATE_HOME, "oats-bb/homes")).some((name) => readFileSync(join(STATE_HOME, "oats-bb/homes", name), "utf8").endsWith("\nthr_new\n")), true);
 });
 
 test("launch runs the readiness checks before it reads or changes anything in bb", async (t) => {
@@ -833,8 +843,11 @@ test("a spawn bb's server never got (connection refused) is a refusal: nothing w
 test("a spawn cut off by time that did make the thread: the launch finds it and answers its endpoint", async (t) => {
   const { backend, bb, input } = await setup(t, { "thread spawn": { delayMs: 8_000, ...spawned() }, "thread list": [{ stdout: [] }, { stdout: [] }, { stdout: [threadRow("thr_late", "proj_a", "starting", MADE)] }] });
   // In process, so the spawn's own time can be short: the provider's cap per bb call is 10 s.
-  const answer = await launch(input(), readSettings(backend.settings({ cli: bb.cli })), { deadline: Date.now() + 20_000, env: { ...process.env, ...bb.env }, spawnTimeoutMs: 500 });
+  const answer = await launch(input(), readSettings(backend.settings({ cli: bb.cli })), { deadline: Date.now() + 20_000, env: { ...process.env, ...bb.env, XDG_STATE_HOME: STATE_HOME }, spawnTimeoutMs: 500 });
   assert.deepEqual(answer, { endpoint: { server: backend.server, projectId: "proj_a", threadId: "thr_late" } });
+  // The thread the launch found is the one it noted in the home's record, as one it was answered.
+  const record = readRecord(input().home, { env: { XDG_STATE_HOME: STATE_HOME } });
+  assert.deepEqual([record.state, [...record.ids]], ["ok", ["thr_late"]]);
 });
 
 test("a spawn cut off by time with no thread to show: in doubt, never a refusal", async (t) => {

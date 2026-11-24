@@ -4,6 +4,101 @@
 
 ### The session provider
 
+- **A pi launch whose model bb's pi would not resolve is refused.** bb takes any model
+  id when a thread is spawned and resolves it when the thread starts, so `oats spawn
+  <soul> --backend bb --harness pi --model <id>` with an id pi does not have, or a bare
+  id two of pi's providers serve, answered `launched: true` with a thread id over a
+  thread that had failed as it started (`oats status`: not running, session lost). The
+  launch now reads the models bb lists for its pi, once, and refuses before anything is
+  started (`E_BACKEND_LAUNCH_ARG`): `pi has no model "<id>"`, or `pi model "<id>" is
+  served by A and B: use A/<id> or B/<id>`, each ending with the way out of the one
+  wrong refusal that is possible (`try again in a minute`: below).
+  - The rule is bb's own, no stricter: an exact `<provider>/<id>`, or a bare id that
+    exactly one pi provider serves, passes. A soul that names a bare id
+    (`claude-fable-5.1`) keeps working while one provider serves it.
+  - Where bb's list cannot settle it, nothing is refused and the launch goes on as
+    before, with one warning (`could not check the model "<id>" against pi's model list:
+    <why>`): a list that cannot be read, an id that ends in a date and is not listed
+    (bb holds such models back from its list unless named by their exact full id), and any model that is not listed
+    where bb's pi configuration sets `enabledModels` (bb then lists only those), where
+    that configuration changed after bb started (bb lists by the settings its pi started
+    with: restart bb after changing them), where the home has a `.pi` of its own, or
+    where bb's pi configuration (`settings.json`, `models.json`, `auth.json`) changed in
+    the last minute and a half (bb serves the list it fetched for a minute).
+  - A wrong refusal is possible in two cases: after a refresh of pi's list that bb
+    failed AND a model added to pi since the list bb kept (until bb's next good
+    refresh); and, for the two-provider refusal, for a minute after one of those three
+    files was removed.
+  - The check of a planned launch says the same, at a spawn's preview too, where the
+    kernel hands it the launch's model (`launch.model`); with a kernel that does not,
+    the refusal comes at the launch, with nothing created in bb.
+  - One more bb call for a pi launch that names a model (`bb provider models pi`); none
+    for Claude or for a launch with no model. README, "pi".
+- **A retire deletes the home's bb environment: a retired agent's thread, unarchived in
+  bb, takes no message.** The retire hook archives a retired agent's thread, and bb
+  unarchives a thread at one press. Where the home was kept (`oats retire --keep-dir`,
+  or a retire that ended quarantined), a message to it then started the agent in the
+  retired home, with no OATS around it. The hook now also asks bb to delete the home's
+  environment (`bb environment delete`), after the stop and the archive. bb marks it
+  destroyed, refuses every message to the thread, and starts nothing.
+  - The home directory is not touched, and the conversation stays readable in bb.
+  - bb keeps one environment per home, shared by a person's threads there. So the hook
+    deletes only an environment of the local-path kind (`project-checkout`), and only
+    where bb's list of the threads on it was read whole and every one of them is a
+    thread a launch of this home made. Otherwise it archives only, as before, and the
+    retire's warning says why.
+  - **The record.** To know its own threads, each launch notes the thread it made in
+    the provider's own record of the home: one file per home in
+    `$XDG_STATE_HOME/oats-bb/homes/` (by default `~/.local/state/oats-bb/homes/`, on
+    macOS too), directories `0700`, files `0600`, holding the home directory's identity
+    and thread ids only. A record that cannot be written never fails a launch: the
+    launch warns on its standard error, and that thread is unmarked. The retire hook
+    removes the record once it has decided. No other command reads it. A launch in a
+    sandboxed mode denies the directory to the agent's tools.
+  - **A launch in a sandboxed mode is refused where that directory's path cannot be
+    written as a deny rule** (`E_BACKEND_SANDBOX_PATH`): an `XDG_STATE_HOME` (or, where
+    it is unset or not absolute, a user home) whose path holds a wildcard, a parenthesis, a backslash or a
+    control character. A rule silently missing would leave the record writable by the
+    agent's tools. Move the state directory to a path without them, or launch in full
+    mode (`--yolo`), which writes no deny rules. (The provider's command takes no
+    sandboxed launch today; the check of a planned one says the same.)
+  - **A home spawned before this release has no record, and is archived only at its
+    retire.** That is not a failure: no record is made up afterwards. The warning says
+    so. A home started again with this release gets a record of its new threads only;
+    its older threads keep the environment, and the warning names them as threads not
+    in the home's record (a person's, one made before oats.bb kept a record, or one the
+    provider could not note).
+  - The retire never waits for bb's teardown, and a delete bb refuses or does not answer
+    fails no retire: the threads stay archived only, the warning says so, and bb's own
+    words are on the hook's standard error.
+  - The retire warns whenever a thread of the home is left without a deleted
+    environment. That includes a home retired before its first turn started: bb makes a
+    thread's environment at its first turn, so there is none to delete.
+  - Where the hook could not decide (bb could not be asked or read, or did not do the
+    delete), the record stays and a retire run again can still delete. So a record can
+    outlive a home whose retire never got through to bb. It is harmless, and the README
+    says how to remove leftovers.
+  - The receipt (`capabilityMeta` of oats.bb) gains `environments`, the environments bb
+    was asked to delete. Where the home's record is there, `archived` names only the
+    home's own threads (and those the hook itself archived): a home made at a path an
+    earlier home had no longer reports that home's threads.
+  - **WARNING: this is a step in the way, not a lock.** With the home kept, a person can
+    still start a retired agent from bb by three acts: Unarchive, Restore its
+    environment (`bb thread restore-environment`), and a message; where the retire
+    archived only, by two. Such a session runs with NO OATS around it (no status row, no
+    hooks, no stop by OATS). Retire bb agents the ordinary way, which removes the home.
+  - Whether such a session can send mail as the retired agent depends on the oats.aweb
+    that retired the home. From oats.aweb 1.49.0 it cannot through `aw`'s ordinary
+    lookup: a retire whose answer exits 0 removes the home's aweb keys, and one that
+    fails holds them aside for the retry (`aw` then answers "not initialized"). That
+    too is a step in the way, not a boundary: held keys stay in the home's
+    `.oats-aweb/held/`, readable by the session's own user, and a retire that crashed
+    leaves them in place. A home retired with an older oats.aweb keeps
+    its keys, and where its aweb identity was not released a revived session can send
+    mail as the retired agent.
+  - The retire's warning reaches CLI users only: the Desktop's Retire dialog shows no
+    plan warnings and no hook output (oats#2102).
+
 - **A stop archives the thread: an agent OATS stopped stays stopped.** bb starts a
   stopped thread's agent again at the next message to it, in the same conversation, so a
   message typed in bb's composer restarted an agent OATS had stopped, behind OATS's back.

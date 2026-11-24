@@ -28,7 +28,10 @@ let key = null;
 // apart, so a test's list of "thread list" answers stays the plain read's.
 const archivedRead = argv[0] === "thread" && argv[1] === "list" && argv.includes("--archived");
 if (archivedRead) key = Object.hasOwn(script, "thread list --archived") ? "thread list --archived" : null;
-for (let n = Math.min(words.length, 3); n > 0 && key === null && !archivedRead; n -= 1) {
+// So are the threads on one environment (the retire hook's read before it deletes one).
+const environmentRead = argv[0] === "thread" && argv[1] === "list" && argv.includes("--environment");
+if (environmentRead) key = Object.hasOwn(script, "thread list --environment") ? "thread list --environment" : null;
+for (let n = Math.min(words.length, 3); n > 0 && key === null && !archivedRead && !environmentRead; n -= 1) {
   const candidate = words.slice(0, n).join(" ");
   if (Object.hasOwn(script, candidate)) key = candidate;
 }
@@ -47,6 +50,12 @@ if (key === null && words.slice(0, 2).join(" ") === "host list") {
 // And the read every retire and every move off bb makes: a project bb holds no env for.
 if (key === null && words.slice(0, 3).join(" ") === "machine env list") {
   process.stdout.write(`${JSON.stringify({ variables: [], inheritedVariables: [] })}\n`);
+  process.exit(0);
+}
+// And the read a retire makes of the environment each of the home's threads is on: one
+// bb has destroyed already (its row at 0.50.1, trimmed), so there is nothing to delete.
+if (key === null && words.slice(0, 2).join(" ") === "environment show") {
+  process.stdout.write(`${JSON.stringify({ id: words[2], name: null, projectId: "proj_a", hostId: "host_1", path: null, status: "destroyed", environmentProviderId: "project-checkout", lifecycle: { phase: "destroyed", retireAt: null, teardown: { status: "removed", attempt: 1 } }, managed: false, workspaceProvisionType: "unmanaged" })}\n`);
   process.exit(0);
 }
 if (key === null) {

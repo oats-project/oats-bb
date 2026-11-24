@@ -53,7 +53,8 @@ export function useHarnesses(): Harnesses {
 }
 
 /** A model bb can launch: its id (what `--model` takes) and bb's name for it. */
-export type ModelOption = { id: string; label: string };
+/** `provider`: the bb provider's own provider of the model (bb's `routeProviderId`: for pi, the `<provider>` its id begins with); null where bb names none. */
+export type ModelOption = { id: string; label: string; provider: string | null };
 /** The first entry of the model field: selected at the start, and no `--model` is passed while it is. */
 export const MODEL_DEFAULT = "Default";
 /** Under the field when bb reports no model for the harness (the Desktop's sentence). */
@@ -67,10 +68,10 @@ export function modelOptions(answer: unknown): ModelOption[] {
   const options: ModelOption[] = [];
   for (const entry of listed) {
     if (typeof entry !== "object" || entry === null) continue;
-    const { model, displayName } = entry as { model?: unknown; displayName?: unknown };
+    const { model, displayName, routeProviderId } = entry as { model?: unknown; displayName?: unknown; routeProviderId?: unknown };
     if (typeof model !== "string" || model === "" || model.startsWith("-") || model.includes("\0") || seen.has(model)) continue;
     seen.add(model);
-    options.push({ id: model, label: typeof displayName === "string" && displayName !== "" && displayName !== model ? `${displayName} · ${model}` : model });
+    options.push({ id: model, label: typeof displayName === "string" && displayName !== "" && displayName !== model ? `${displayName} · ${model}` : model, provider: typeof routeProviderId === "string" && routeProviderId !== "" ? routeProviderId : null });
   }
   return options;
 }

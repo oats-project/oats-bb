@@ -227,6 +227,14 @@ header, under the agent's state: on the thread's OATS tab and on the agent's own
 (`app/panel/Panel.tsx`). The outside feature draws it on the archived thread's own row of an agent
 the roster draws on no thread ([Outside OATS](#outside-oats)).
 
+**Whose line it is.** The thread's line carries acts and, as a rule, no name: bb's title over it is
+the agent's name as words, which the provider gives the thread at every start. A person can move
+that title off the name (bb's own Rename and Regenerate title, which the plugin does not take
+away; a title bb wrote from a first message), and the acts would then sit under a name that is
+not the agent's. So the line starts with the agent's NAME whenever bb's title is not exactly it
+(`app/roster/IdentityRow.tsx`; the same name line the archived thread's row carries), and never
+when it is: no name twice.
+
 **Behind a result** (`app/roster/reading.tsx`). A result that says an agent started, restarted,
 stopped or was retired is true of the agent before the roster the window holds is read again. Until
 it is, the places that say that agent's state (its page, its panel, its thread's line) say

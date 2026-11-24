@@ -64,8 +64,35 @@ const render = async (threadId: string, agents: ReturnType<typeof fixtureAgents>
   return renderSlot<ExperimentalThreadHeaderRowProps, Contract>(app.threadHeaderRows[0]!, { threadId, projectId: "p", environment: null }, { rpc: handlers(over, agents), sidebarThreads: sidebarThreads() });
 };
 
+// WHOSE line it is (the lead's ruling S1 on its reader's report, 24 Nov 2026). bb's title over the row is the agent's
+// name at every start; a person can rename the thread or have bb write a title again, and bb's own title of a thread
+// that had none is its first message. The acts on the line must never sit under a name that is not the agent's.
+test("the thread's line starts with the agent's NAME whenever bb's title is not exactly that name, and never when it is: no name twice", async () => {
+  const nameOn = async (title: string) => {
+    const slot = await row("thr_mockups", { sidebarThreads: titled({ thr_mockups: title }) });
+    const block = await slot.findByTestId("oats-identity-row");
+    const name = slot.queryByTestId("oats-thread-agent");
+    const read = { name: name?.textContent ?? null, first: name !== null && block.firstElementChild === name, line: slot.getByTestId("oats-status-line").textContent };
+    resetApp();
+    return read;
+  };
+  // As the provider titled it: the name is over the row already, and the line does not say it again.
+  expect(await nameOn("Desktop mockups developer")).toEqual({ name: null, first: false, line: "WorkingStop…Instance panel" });
+  // A person RENAMED the thread: the line says whose it is, first, and its acts are the same.
+  expect(await nameOn("Try the new sidebar")).toEqual({ name: "Desktop mockups developer", first: true, line: "WorkingStop…Instance panel" });
+  // bb wrote the title from the first message, or again (Regenerate title); a title that only looks like the name is not it.
+  expect((await nameOn("hello")).name).toBe("Desktop mockups developer");
+  expect((await nameOn("Desktop mockups")).name).toBe("Desktop mockups developer");
+  expect((await nameOn("desktop-mockups-developer")).name).toBe("Desktop mockups developer");
+  expect((await nameOn("Desktop mockups developer ")).name).toBe("Desktop mockups developer");
+});
+
+/** bb's threads with some of them titled as given (by thread id): a title is what bb's header over the row says. */
+const titled = (titles: Record<string, string>) => ({ status: "ready" as const, threads: sidebarThreads().threads.map((thread) => (thread.id in titles ? { ...thread, title: titles[thread.id]!, displayTitle: titles[thread.id]! } : thread)) });
+
 test("the status line is the whole row and says where the agent is in words: a working child, with the way to its instance panel and no facts", async () => {
-  const slot = await row("thr_mockups", { experimental_panel: { openTab: () => true } });
+  // bb's title of the thread is the agent's name as words, as the provider gives it at every start: the row is the line alone.
+  const slot = await row("thr_mockups", { experimental_panel: { openTab: () => true }, sidebarThreads: titled({ thr_mockups: "Desktop mockups developer" }) });
   const block = await slot.findByTestId("oats-identity-row");
   expect(block.firstElementChild).toBe(slot.getByTestId("oats-status-line"));
   expect(block.children).toHaveLength(1);

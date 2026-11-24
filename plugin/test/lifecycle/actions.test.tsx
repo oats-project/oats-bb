@@ -244,14 +244,14 @@ test("Stop opens a dialog titled with the act and the agent, says its one conseq
   // The warning keeps the warning tone; who else it stops is plain.
   expect(Array.from(slot.getByTestId("oats-confirm-says").querySelectorAll("li")).map((line) => line.getAttribute("data-tone"))).toEqual(["warning", null]);
   plain(slot);
-  // An agent with uncommitted work is said before the act (the plan's own observation), under no heading.
-  // And who works on a turn now: bb's own word on each one's thread (the fixture's two are in a turn), after its work.
+  // An agent with uncommitted work is said before the act (the plan's own observation), under no heading: ONE line
+  // per agent, in regular weight, its facts as words after its name. And who works on a turn now: bb's own word on
+  // each one's thread (the fixture's two are in a turn), after its work. The third agent has neither: no line.
+  expect(Array.from(slot.getByTestId("oats-plan-attention").querySelectorAll("li")).some((line) => line.className.includes("font-semibold"))).toBe(false);
   expect(slot.getByTestId("oats-plan-attention").querySelector("h3")).toBeNull();
   expect(texts(slot.getByTestId("oats-plan-attention"), "li")).toEqual([
-    "Redesign ui lead has uncommitted work.",
-    "Redesign ui lead is mid-turn.",
-    "Desktop mockups developer has uncommitted work.",
-    "Desktop mockups developer is mid-turn.",
+    "Redesign ui lead · uncommitted work · mid-turn",
+    "Desktop mockups developer · uncommitted work · mid-turn",
   ]);
   // One press away, under the dialog's one Details: that nothing is deleted, and the state of each session.
   expect(under(slot, "oats-plan-details")).toEqual(["Nothing is deleted."]);
@@ -614,7 +614,7 @@ test("an agent with no worktree of its own is offered no tick", async () => {
   expect(under(slot, "oats-plan-details")).toContain("It has no worktree of its own, so no worktree is kept or deleted. A tree it links to is not touched.");
 });
 
-test("a retire the kernel would refuse is blocked, and the reason beside Retire says what to do first; Check again, beside it in the dialog, reads the plan again (the second UX read's A9)", async () => {
+test("a retire the kernel would refuse is blocked, and the reason beside Retire says what to do first; Check again, under the dialog's Details, reads the plan again (the second UX read's A9)", async () => {
   const blocked = { ...retirePlanOf(), extraTrees: [{ path: "/h/.work-docs", branch: "agents/x-docs", disposition: "refuse", reason: "its target exists" }] };
   let mended = false;
   const { slot, pick } = await menu("thr_digest", { retirePlan: () => (mended ? retirePlanOf() : blocked) });
@@ -623,6 +623,8 @@ test("a retire the kernel would refuse is blocked, and the reason beside Retire 
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
   expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("OATS would refuse: remove its extra worktree on agents/x-docs first.");
   mended = true;
+  // Check again is one press away, under Details: not on the dialog's face.
+  expect(slot.getByTestId("oats-plan-check").closest("details")).toBe(slot.getByTestId("oats-plan-details"));
   fireEvent.click(within(slot.getByTestId("oats-plan-observed")).getByText("Check again"));
   await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
   expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();

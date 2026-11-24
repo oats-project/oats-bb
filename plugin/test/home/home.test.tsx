@@ -67,7 +67,10 @@ test("a card says who (the name as words, and no soul or machine), what it asks 
   // Its soul and its machine are on its page, not on the card; an agent on its thread has no second line at all.
   expect(release.textContent).not.toMatch(/falcon|oats-maintainer/);
   expect(within(release).queryByTestId("oats-needs-where")).toBeNull();
-  expect(within(release).getByTestId("oats-state").textContent).toContain("Needs you");
+  // Under "Needs you" the heading says the word: the card keeps the mark, named for a screen reader, and the wait.
+  expect(within(release).getByTestId("oats-state").textContent).toBe("!");
+  expect(within(release).getByTestId("oats-state").querySelector('[data-mark][role="img"]')!.getAttribute("aria-label")).toBe("Needs input"); // (the mark's own name, as on every row)
+  expect(release.textContent).not.toMatch(/Needs you/i); // the heading over the cards says it, once
   expect(within(release).getByTestId("oats-needs-open").textContent).toBe("Open");
   expect(within(release).getByTestId("oats-needs-open").getAttribute("aria-label")).toBe("Open thread: Release 070 maintainer"); // one word; its name says where it leads
   expect(within(release).getByTestId("oats-needs-question").textContent).toBe("Green light at 9f2e1c? Second reader done.");
@@ -384,14 +387,14 @@ test("a claim's age follows the clock while the view stays open and nothing chan
   try {
     const slot = await homePage();
     const card = (await slot.findAllByTestId("oats-needs-card"))[0]!;
-    expect(within(card).getByTestId("oats-status-line").textContent).toBe("!Needs you· under a minute"); // how long, and no clock time
+    expect(within(card).getByTestId("oats-status-line").textContent).toBe("!under a minute"); // the mark, then how long: no word (the heading says it), no separator, and no clock time
     // The Automations tile's mark is the automations feature's own read, on that feature's own clock: not the home's.
     const homes = () => slot.inspection.rpcCalls.filter((call) => call.method !== "automations").length;
     const before = homes();
     await act(async () => {
       vi.advanceTimersByTime(18 * 60_000);
     });
-    expect(within(slot.getAllByTestId("oats-needs-card")[0]!).getByTestId("oats-status-line").textContent).toBe("!Needs you· 18 min");
+    expect(within(slot.getAllByTestId("oats-needs-card")[0]!).getByTestId("oats-status-line").textContent).toBe("!18 min");
     expect(homes()).toBe(before); // the clock alone: no reread of the home's
   } finally {
     vi.useRealTimers();
@@ -624,7 +627,7 @@ test("an agent with no bb thread that needs the person has its card: what it ask
     // kernel's command is not on the card: it is on the agent's page, where Open leads.
     expect(within(card).getByTestId("oats-needs-where").textContent).toBe("tmux");
     expect(within(card).getByTestId("oats-needs-elsewhere").textContent).toBe("Answer it in its terminal.");
-    expect(card.textContent).toBe("Night watch helpertmuxOpen!Needs you· 4 dWhich branch do I watch?Answer it in its terminal.");
+    expect(card.textContent).toBe("Night watch helpertmuxOpen!4 dWhich branch do I watch?Answer it in its terminal.");
     expect(card.textContent).not.toMatch(/oats session attach|falcon/);
     expect(within(card).queryByRole("button", { name: "Copy the command" })).toBeNull();
     expect(within(card).getByTestId("oats-needs-open").textContent).toBe("Open");
@@ -1018,7 +1021,10 @@ test("an agent that asks in its own words is answered by the reply, on its card;
   // The kernel says it waits for a tool approval, and bb lists no request to answer: the answer is in its thread.
   const permission = await cardOf(slot, "flaky-ci-developer");
   expect(offerOf(permission)).toBe("in-thread");
-  expect(within(permission).getByTestId("oats-needs-in-thread").textContent).toBe("Answer it in its thread."); // Open is the card's button
+  // Its button says "Answer" in the place of "Open" (the same press: it opens the thread; its name says whose); no sentence says so.
+  expect(within(permission).queryByTestId("oats-needs-in-thread")).toBeNull();
+  expect(permission.textContent).not.toContain("Answer it in its thread.");
+  expect([within(permission).getByTestId("oats-needs-open").textContent, within(permission).getByTestId("oats-needs-open").getAttribute("aria-label")]).toEqual(["Answer", "Answer in its thread: Flaky ci developer"]);
   // a message is not offered beside it as an equal: it is behind a fold, with what a message does not do
   const fold = within(permission).getByTestId("oats-needs-message");
   expect(fold.querySelector("summary")!.textContent).toBe("▸Message instead");
@@ -1055,15 +1061,17 @@ test("while bb lists choices the choices are the answer: the reply is behind the
   expect(Array.from(card.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Open"]);
 });
 
-test("a request bb shows in a form the card cannot draw is answered in the thread, and the card says so", async () => {
+test("a request bb shows in a form the card cannot draw is answered in the thread, and the card answers it", async () => {
   const slot = await homePage({
     sdk: { threads: { interactions: { list: async () => [{ id: "pint_4", threadId: "thr_ci", status: "pending", payload: { kind: "plugin", title: "A plugin's form", data: {} } }] as never } } },
   });
   const card = await cardOf(slot, "flaky-ci-developer");
   await waitFor(() => expect(slot.inspection.sdkCalls.length).toBeGreaterThan(0));
   expect(offerOf(card)).toBe("in-thread");
-  expect(within(card).getByTestId("oats-needs-in-thread").textContent).toBe("Answer it in its thread.");
-  expect(within(card).getByTestId("oats-needs-open").getAttribute("aria-label")).toBe("Open thread: Flaky ci developer"); // the card's button leads there
+  expect(within(card).queryByTestId("oats-needs-in-thread")).toBeNull();
+  expect([within(card).getByTestId("oats-needs-open").textContent, within(card).getByTestId("oats-needs-open").getAttribute("aria-label")]).toEqual(["Answer", "Answer in its thread: Flaky ci developer"]); // the card's button leads there
+  fireEvent.click(within(card).getByTestId("oats-needs-open"));
+  expect(slot.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "thr_ci" }); // the same press as Open: no send
 });
 
 test("those a person can answer here come first: an agent with no bb thread comes after, however new its claim", async () => {
@@ -1357,7 +1365,7 @@ test("an agent whose bb thread was deleted that needs the person: the reason on 
   const slot = await homePage({ sidebarThreads: { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_release") }, sdk });
   const card = await cardOf(slot, "release-070-maintainer");
   await waitFor(() => expect(within(card).getByTestId("oats-needs-where").textContent).toBe("deleted in bb"));
-  expect(card.textContent).toBe("Release 070 maintainerdeleted in bbOpen!Needs you· 4 dGreen light at 9f2e1c? Second reader done.");
+  expect(card.textContent).toBe("Release 070 maintainerdeleted in bbOpen!4 dGreen light at 9f2e1c? Second reader done.");
   expect(card.textContent).not.toContain("so nothing can be sent to it from here");
   expect(within(card).queryByTestId("oats-needs-elsewhere")).toBeNull();
   expect(within(card).queryByTestId("oats-reply")).toBeNull();

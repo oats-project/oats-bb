@@ -38,7 +38,7 @@ describe("a stop plan", () => {
       says: ["Archives its thread.", "Also stops: Desktop mockups developer, Harvest knowledge helper."],
       warns: false,
       // From the plan's facts: the two whose work tree holds uncommitted work (the recorded plan: 2 changed, 1 untracked each). Not from its midTask.
-      attention: ["Redesign ui lead has uncommitted work.", "Desktop mockups developer has uncommitted work."],
+      attention: ["Redesign ui lead · uncommitted work", "Desktop mockups developer · uncommitted work"], // one line per agent; the third has no fact, and no line
       details: ["Nothing is deleted."],
       state: [
         { label: "Redesign ui lead", value: "Session running" },
@@ -73,7 +73,7 @@ describe("a stop plan", () => {
     expect(view.choice).toBeNull();
     expect(view.state).toEqual([{ label: "Redesign ui lead", value: "Session unknown (couldn't be checked)" }]);
     // Its uncommitted work is said whatever is known of its session (the recorded plan observed its work tree).
-    expect(view.attention).toEqual(["Redesign ui lead has uncommitted work."]);
+    expect(view.attention).toEqual(["Redesign ui lead · uncommitted work"]);
     // Who is left out of the plan is under Details, by its name.
     expect(view.details).toEqual(["Nothing is deleted.", "Not included: Lost child."]);
   });
@@ -217,18 +217,18 @@ describe("what a stop says first, before the confirmation: from facts, never fro
   const clean = { observed: true, branch: "agents/redesign-ui-lead", detached: false, drift: false, changed: 0, untracked: 0 };
 
   it("uncommitted work: said, from the plan's own observation of the work tree (changed or untracked files)", () => {
-    expect(stopPlanView(one({ work: { ...clean, changed: 1 } })).attention).toEqual(["Redesign ui lead has uncommitted work."]);
-    expect(stopPlanView(one({ work: { ...clean, untracked: 3 } })).attention).toEqual(["Redesign ui lead has uncommitted work."]);
+    expect(stopPlanView(one({ work: { ...clean, changed: 1 } })).attention).toEqual(["Redesign ui lead · uncommitted work"]);
+    expect(stopPlanView(one({ work: { ...clean, untracked: 3 } })).attention).toEqual(["Redesign ui lead · uncommitted work"]);
     // Whatever midTask says of it.
-    expect(stopPlanView(one({ work: { ...clean, changed: 1 }, midTask: false })).attention).toEqual(["Redesign ui lead has uncommitted work."]);
+    expect(stopPlanView(one({ work: { ...clean, changed: 1 }, midTask: false })).attention).toEqual(["Redesign ui lead · uncommitted work"]);
     // A work tree that was not observed says nothing of work.
     expect(stopPlanView(one({ work: { ...clean, observed: false, changed: 4 } })).attention).toEqual([]);
   });
 
   it("a bb agent whose thread runs a turn: said, from bb's word on its thread (the caller's `working`)", () => {
-    expect(stopPlanView(one({ work: clean }), false, new Set(["redesign-ui-lead"])).attention).toEqual(["Redesign ui lead is mid-turn."]);
-    // Both facts: the work first.
-    expect(stopPlanView(one({ work: { ...clean, untracked: 1 } }), false, new Set(["redesign-ui-lead"])).attention).toEqual(["Redesign ui lead has uncommitted work.", "Redesign ui lead is mid-turn."]);
+    expect(stopPlanView(one({ work: clean }), false, new Set(["redesign-ui-lead"])).attention).toEqual(["Redesign ui lead · mid-turn"]);
+    // Both facts, on the agent's ONE line: the work first.
+    expect(stopPlanView(one({ work: { ...clean, untracked: 1 } }), false, new Set(["redesign-ui-lead"])).attention).toEqual(["Redesign ui lead · uncommitted work · mid-turn"]);
     // An agent that is not of the plan is not said.
     expect(stopPlanView(one({ work: clean }), false, new Set(["someone-else"])).attention).toEqual([]);
   });

@@ -4,8 +4,9 @@
 // The kernel's plan carries `midTask: true` for every session that runs (reported activity: a
 // harness is loaded), an idle agent's too, and the dialog said of each "reports it is in the
 // middle of a task". It now says two facts, and nothing where there is neither:
-//   - "<Name> has uncommitted work.": the plan's own observation of the work tree;
-//   - "<Name> is mid-turn.": bb's word on the agent's thread.
+//   - "uncommitted work": the plan's own observation of the work tree;
+//   - "mid-turn": bb's word on the agent's thread;
+//   as words after the agent's name, on its ONE line ("<Name> · uncommitted work · mid-turn").
 // In each view one agent of its own, on a worktree, is taken through the three cases, the dialog
 // opened from its row's menu each time:
 //   idle, its work tree clean     no box at all (the kernel's plan says midTask true all the same);
@@ -28,8 +29,8 @@ export default async (run) => {
     view += 1;
     const name = `stop-facts-${view}-helper`;
     const called = run.nameOf(name); // the instance name as the plugin draws it (scenario.mjs)
-    const WORK = `${called} has uncommitted work.`;
-    const TURN = `${called} is mid-turn.`;
+    const WORK = `${called} · uncommitted work`;
+    const BOTH = `${called} · uncommitted work · mid-turn`;
     step(`C stop-facts ${view}: ${name}, at ${at}: what the Stop dialog says before the confirmation, from facts`);
     const file = join(OUT, `task-${name}.md`);
     writeFileSync(file, "Wait for instructions.\n");
@@ -79,7 +80,7 @@ export default async (run) => {
     ({ said, attention } = await open(["Idle"]));
     target = planned();
     check(target?.work?.untracked === 1, "the kernel's plan observed one untracked file in its work tree", JSON.stringify(target?.work ?? null));
-    check(JSON.stringify(attention) === JSON.stringify([WORK]), `${at} UNCOMMITTED WORK: "Before you confirm" says "${WORK}", and nothing else`, JSON.stringify(attention));
+    check(JSON.stringify(attention) === JSON.stringify([WORK]), `${at} UNCOMMITTED WORK: the box says "${WORK}", and nothing else`, JSON.stringify(attention));
     await shot("work");
     await cancel();
 
@@ -90,7 +91,7 @@ export default async (run) => {
       const active = await until(`bb to have ${name}'s thread in a turn`, () => (run.bbThread(threadId)?.status === "active" ? run.bbThread(threadId) : undefined), 60);
       check(active?.status === "active", "bb: its thread is in a turn (the mock model holds the answer)", JSON.stringify(active ? { status: active.status } : null));
       ({ said, attention } = await open(["Working"]));
-      check(JSON.stringify(attention) === JSON.stringify([WORK, TURN]), `${at} IN A TURN, with uncommitted work: "Before you confirm" says "${WORK}" and "${TURN}"`, JSON.stringify(attention));
+      check(JSON.stringify(attention) === JSON.stringify([BOTH]), `${at} IN A TURN, with uncommitted work: the box says "${BOTH}", on the agent's one line`, JSON.stringify(attention));
       await shot("turn");
       await page.evaluate(click("oats-confirm-act"));
       await page.until(phaseIs("done"), 120);

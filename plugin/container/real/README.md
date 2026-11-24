@@ -273,8 +273,8 @@ Each is the kernel's or the provider's to decide; the plugin shows what they say
   runs (a harness is loaded: from the provider that scans its harness, oats-bb #40, an idle bb
   agent too; a tmux agent always) or for uncommitted work, and `"unknown"` from a provider that
   cannot tell (the bb provider before #40, for an idle thread). The plugin's confirmation says
-  nothing from it: it says "<Name> has uncommitted work." from the plan's `work`, and
-  "<Name> is mid-turn." from bb's own word on the thread.
+  nothing from it: it says "uncommitted work" from the plan's `work`, and "mid-turn" from bb's
+  own word on the thread, as words after the agent's name on its one line.
 - **A thread whose turn bb holds in line reads `running: true`** in `oats status --json`, like one
   in its turn.
 - **`oats status --json` names the agents root** (`<deployment>/agents`) as `root`, not the

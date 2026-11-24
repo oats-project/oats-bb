@@ -506,10 +506,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
         <div data-testid="oats-plan" className="flex min-w-0 flex-col gap-3">
           {view.attention.length === 0 ? null : (
             // The facts that are a reason not to confirm (uncommitted work, a turn in progress, a work tree elsewhere):
-            // set apart in the attention tone, under no heading, and only when true.
+            // set apart by a border in the attention tone, under no heading, in regular weight, one line per agent, and only when true.
             <ul data-testid="oats-plan-attention" className="flex flex-col gap-1 rounded-lg border border-warning-text bg-card p-3 text-foreground">
               {view.attention.map((line, index) => (
-                <li key={index} className="break-words font-semibold">
+                <li key={index} className="break-words">
                   <Lines text={line} />
                 </li>
               ))}
@@ -533,6 +533,14 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
                   </Fact>
                 ))}
               </Facts>
+              {/* The plan as it is now, read again: one press away (a plan that changed under the confirmation comes back by itself). */}
+              {state.phase === "ready" ? (
+                <span data-testid="oats-plan-observed" className="flex">
+                  <Button variant="ghost" data-testid="oats-plan-check" onClick={again}>
+                    Check again
+                  </Button>
+                </span>
+              ) : null}
             </div>
           </Disclosure>
           {view.choice === null ? null : (
@@ -549,13 +557,6 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
               )}
             </div>
           )}
-          {state.phase === "ready" ? (
-            <p data-testid="oats-plan-observed" className="flex">
-              <Button variant="ghost" data-testid="oats-plan-check" onClick={again}>
-                Check again
-              </Button>
-            </p>
-          ) : null}
         </div>
       )}
     </Confirm>

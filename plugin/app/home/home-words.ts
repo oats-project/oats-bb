@@ -60,7 +60,10 @@ export const answeredWith = (label: string): string => `Answered: ${label}.`;
  * form the card cannot draw, or the kernel says it waits for a tool approval and bb lists no
  * request to answer here.
  */
-export const IN_THREAD = "Answer it in its thread.";
+/** A card whose request can only be answered in its thread: its button, in the place of "Open" (the same press: it opens the thread). */
+export const ANSWER = "Answer";
+/** The same button's accessible name, before the agent's name. */
+export const ANSWER_IN_THREAD = "Answer in its thread";
 /** An agent that needs the person and that the kernel says does not run: an answer or a message to its thread would start it outside OATS, so the card offers neither, and Start. */
 export const STOPPED_WAITS = "Not running. Start it to answer.";
 /** A press on an agent that OATS stopped since its card was drawn: nothing went to bb. */

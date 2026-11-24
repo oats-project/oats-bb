@@ -98,10 +98,17 @@ export const DISCARD_NOT_OWN = `Only an instance with its own worktree can delet
 
 /** Whether the plan observed uncommitted work in a work tree: changed or untracked files. */
 const uncommitted = (work: StopPlan["targets"][number]["work"]): boolean => work.observed && work.changed + work.untracked > 0;
-/** What the Stop dialog says first of an agent with uncommitted work in its home (the plan's own observation of its work tree). */
-export const hasWork = (instance: string): string => `${agentName(instance)} has uncommitted work.`;
-/** And of an agent on bb whose thread runs a turn now (bb's own word on the thread: the model's `threadWorks`). */
-export const inATurn = (instance: string): string => `${agentName(instance)} is mid-turn.`;
+/**
+ * The facts that are a reason not to stop an agent, as words after its name, ONE line per agent:
+ * "Redesign ui lead · uncommitted work · mid-turn". Only the facts that hold; an agent with none
+ * has no line (null).
+ * - `work`: uncommitted work in its home (the plan's own observation of its work tree);
+ * - `turn`: its thread runs a turn now (bb's own word on the thread: the model's `threadWorks`).
+ */
+export const WORK_FACT = "uncommitted work";
+export const TURN_FACT = "mid-turn";
+export const stopFacts = (instance: string, { work, turn }: { work: boolean; turn: boolean }): string | null =>
+  work || turn ? [agentName(instance), ...(work ? [WORK_FACT] : []), ...(turn ? [TURN_FACT] : [])].join(" · ") : null;
 /**
  * `archives`: whether the provider archives the thread of a home it stops (`stopArchivesThread`).
  * `working`: the plan's agents whose bb thread runs a turn now. What a person should see before
@@ -122,7 +129,7 @@ export function stopPlanView(plan: StopPlan, archives = false, working: Readonly
   return {
     says: [...(onBb ? [stopThreadLine(archives)] : []), ...(plan.recursive && others.length > 0 ? [alsoStops(others)] : [])],
     warns: onBb && !archives,
-    attention: targets.flatMap((target) => [...(uncommitted(target.work) ? [hasWork(target.instance)] : []), ...(working.has(target.instance) ? [inATurn(target.instance)] : [])]),
+    attention: targets.flatMap((target) => stopFacts(target.instance, { work: uncommitted(target.work), turn: working.has(target.instance) }) ?? []),
     details: [NOTHING_DELETED, ...plan.ambiguous.map(ambiguous)],
     // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
     // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.

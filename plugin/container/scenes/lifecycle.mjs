@@ -205,11 +205,11 @@ export default [
         check(stopPlain === JSON.stringify({ headings: [], folds: 1 }), `${at} the dialog has none of the four section headings, and ONE fold`, stopPlain);
         const stopFold = JSON.parse(await page.evaluate(folded("oats-plan-details")));
         check(stopFold !== null && stopFold.open === false && /Details$/.test(stopFold.summary) && stopFold.text.includes("Nothing is deleted.") && stopFold.text.includes("Redesign ui lead") && stopFold.text.includes("Session running"), `${at} under Details, closed: that nothing is deleted, and each session's state`, JSON.stringify(stopFold));
-        check(before.body.includes("Redesign ui lead has uncommitted work.") && !before.body.includes("in the middle of a task"), `${at} it says who has uncommitted work: the fact that is a reason not to confirm, set apart`, before.body);
+        check(before.body.includes("Redesign ui lead · uncommitted work") && !before.body.includes("in the middle of a task") && !before.body.includes("Check again"), `${at} it says who has uncommitted work, one line per agent: the facts that are a reason not to confirm, set apart; Check again is not on the dialog's face`, before.body);
         check(before.act === "Stop" && before.off === false && before.focus === "oats-confirm-cancel", `${at} the button is named for the act; the focus STARTS on Cancel`, JSON.stringify(before));
         await shot("before");
-        const order = await walk(page, 5);
-        check(order.length === 5 && order[0] === "oats-confirm-act" && order[1].endsWith("Details") && same(order.slice(2), ["oats-switch", "oats-plan-check", "oats-confirm-cancel"]), `${at} Tab walks Stop, Details, the choice, Check again, Cancel and round again: the focus stays in the dialog`, JSON.stringify(order));
+        const order = await walk(page, 4);
+        check(order.length === 4 && order[0] === "oats-confirm-act" && order[1].endsWith("Details") && same(order.slice(2), ["oats-switch", "oats-confirm-cancel"]), `${at} Tab walks Stop, Details (closed: Check again is inside it), the choice, Cancel and round again: the focus stays in the dialog`, JSON.stringify(order));
 
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
@@ -408,8 +408,8 @@ export default [
         check(!before.body.includes("SIGTERM") && !before.body.includes("the ADE") && !before.body.includes("/abs/"), `${at} none of the kernel's own notes and no path is pasted into the plan`, before.body);
         check(before.act === "Retire" && before.off === false && before.focus === "oats-confirm-cancel", `${at} Retire is destructive: the focus starts on Cancel`, JSON.stringify(before));
         await shot("before");
-        const order = await walk(page, 5);
-        check(order.length === 5 && order[0] === "oats-confirm-act" && order[1].endsWith("Details") && same(order.slice(2), ["oats-switch", "oats-plan-check", "oats-confirm-cancel"]), `${at} Tab walks Retire, Details, the choice, Check again, Cancel and round again`, JSON.stringify(order));
+        const order = await walk(page, 4);
+        check(order.length === 4 && order[0] === "oats-confirm-act" && order[1].endsWith("Details") && same(order.slice(2), ["oats-switch", "oats-confirm-cancel"]), `${at} Tab walks Retire, Details (closed: Check again is inside it), the choice, Cancel and round again`, JSON.stringify(order));
 
         // Also delete the worktree: what goes and what stays change, and what would be lost is said in words.
         await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-plan-choice")} [role="switch"]`)}).click()`);

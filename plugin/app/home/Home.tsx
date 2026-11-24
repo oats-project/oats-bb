@@ -35,7 +35,7 @@ import { useCli } from "./cli";
 import type { Cli } from "./cli";
 import type { Board, Entry } from "./board";
 import {
-  BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, DETECTED, EVERY_AGENT, FINISHED, FIRST_RUN, IN_THREAD, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEWER_API_WHY,
+  BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, DETECTED, ANSWER, ANSWER_IN_THREAD, EVERY_AGENT, FINISHED, FIRST_RUN, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEWER_API_WHY,
   NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREACHABLE, NOT_NOW_UNREAD, UNREACHABLE_WAITS, NOT_SENT, OPEN, OPEN_PAGE, OPEN_THREAD, READING, REQUIRED, SEND, SENDING, SENT, SHOW_FEWER, STOPPED_WAITS, TMUX_ANSWER, WORKING, WORKING_SHOWN,
   answeredWith, detected, installCommand, replyLabel, replyPlaceholder, required, showAll, summaryLine, tileCount,
 } from "./home-words";
@@ -360,12 +360,14 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
               </span>
             )}
           </div>
-          {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page. */}
-          <Button data-testid="oats-needs-open" aria-label={`${open.leads === "page" ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
-            {OPEN}
+          {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page.
+              Where the request can only be answered in its thread the word is "Answer": the same press, the same place. */}
+          <Button data-testid="oats-needs-open" aria-label={`${offer === "in-thread" && answered === null ? ANSWER_IN_THREAD : open.leads === "page" ? OPEN_PAGE : OPEN_THREAD}: ${name}`} onClick={(event) => open.onClick(event)}>
+            {offer === "in-thread" && answered === null ? ANSWER : OPEN}
           </Button>
         </div>
-        <StatusLine state={entry.status.state} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
+        {/* Under "Needs you" the heading says the word: the card keeps the mark (named for a screen reader) and the wait. */}
+        <StatusLine state={entry.status.state} markOnly={entry.status.state === "needs-you"} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
         {message === null ? null : (
           <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
             {shown(message)}
@@ -407,12 +409,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             {instead}
           </>
         ) : offer === "in-thread" ? (
-          <>
-            <p data-testid="oats-needs-in-thread" className="m-0 text-xs text-muted-foreground">
-              {IN_THREAD}
-            </p>
-            {instead}
-          </>
+          // Answered in its thread: the card's button says "Answer" and leads there; a message is not an answer.
+          instead
         ) : offer === "reply" ? (
           reply
         ) : entry.agent.backend === "tmux" ? (

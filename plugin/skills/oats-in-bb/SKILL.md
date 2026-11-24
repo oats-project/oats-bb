@@ -59,8 +59,8 @@ agents, their homes, identities and mail are OATS's and aweb's.
   shows, **Working** and **Unread**.
   A card offers the answer the request takes: bb's choices as buttons (an approval, a question
   with options); a reply box that writes to that agent through bb's own send, for an agent that
-  asks in its own words; "Answer it in its thread." where the answer is in the thread (Open leads
-  there); for an agent on tmux, "Answer it in its terminal." (Open leads to its own page, which
+  asks in its own words; where the answer is in the thread, the card's button reads "Answer" and
+  leads there; for an agent on tmux, "Answer it in its terminal." (Open leads to its own page, which
   has the command that reaches it: `oats session attach --home <its home>`).
   A message never grants an approval: beside choices it is behind "Message instead".
   The card of an agent OATS STOPPED offers neither an answer nor a message (either would start it

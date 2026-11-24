@@ -89,7 +89,7 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
  * with a separator), and a list that opens from the line would be cut.
  */
-export function StatusLine({ state, word, since, detail, tone, asOf, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; asOf?: string | null; /** "warning": the line warns (a stopped agent's live composer, a stopped agent whose process may still run): the state's mark and the detail are drawn in bb's warning tone (the text token holds 4.5:1 on a page's surface; the line is never a row of a list). The words carry the meaning; the tone never does alone. */ tone?: "warning"; action?: ReactNode }) {
+export function StatusLine({ state, word, markOnly = false, since, detail, tone, asOf, action }: { state: AgentState; word?: string; /** the mark alone, with the state as its accessible name: for a place whose heading already says the state's word (a card under "Needs you") */ markOnly?: boolean; since?: string | null; detail?: string | null; asOf?: string | null; /** "warning": the line warns (a stopped agent's live composer, a stopped agent whose process may still run): the state's mark and the detail are drawn in bb's warning tone (the text token holds 4.5:1 on a page's surface; the line is never a row of a list). The words carry the meaning; the tone never does alone. */ tone?: "warning"; action?: ReactNode }) {
   const parts = [
     { text: shown(since), tone: undefined },
     { text: shown(detail), tone },
@@ -104,11 +104,18 @@ export function StatusLine({ state, word, since, detail, tone, asOf, action }: {
     <div data-testid="oats-status-line" data-state={state} className="-m-1 min-w-0 overflow-hidden p-1 text-sm text-foreground">
       <div className="-ml-4 flex min-w-0 flex-wrap items-center gap-y-1">
         <span className="pl-4 font-semibold">
-          <State state={state} word={word} tone={tone} />
+          {markOnly ? (
+            <span data-testid="oats-state" data-state={state} data-tone={tone} className="inline-flex shrink-0 items-center">
+              <StateMark state={state} tone={tone} />
+            </span>
+          ) : (
+            <State state={state} word={word} tone={tone} />
+          )}
         </span>
         {parts.map((part, index) => (
-          <span key={index} data-testid="oats-status-part" data-tone={part.tone} className={`relative min-w-0 break-words pl-4 ${part.tone === "warning" ? "text-warning-text" : "text-muted-foreground"}`}>
-            <span data-sep="" className="absolute left-0 top-0 w-4 text-center text-muted-foreground">{"· "}</span>
+          <span key={index} data-testid="oats-status-part" data-tone={part.tone} className={`relative min-w-0 break-words ${markOnly && index === 0 ? "pl-1.5" : "pl-4"} ${part.tone === "warning" ? "text-warning-text" : "text-muted-foreground"}`}>
+            {/* (After the mark alone the first part needs no separator: the mark is not a word.) */}
+            {markOnly && index === 0 ? null : <span data-sep="" className="absolute left-0 top-0 w-4 text-center text-muted-foreground">{"· "}</span>}
             {part.text}
           </span>
         ))}

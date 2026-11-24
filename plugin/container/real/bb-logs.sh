@@ -14,7 +14,9 @@
 #     version, platform, architecture and executable), whole, and only those of 1 MB at most.
 # Anything else there (a directory, a link, a file of another name, a report over 1 MB) is listed
 # and left where it is. Nothing outside that directory is read: not bb's data (its database, its
-# keys), not the pi agent directory, no login.
+# keys), not a plugin's own log (bb keeps those under its plugins' directories), not the pi agent
+# directory, no login. bb's logs name threads and environments by their ids and carry the text of
+# an error: what is kept is as private as the run's other artefacts.
 set -eu
 LOGS=${1:-$HOME/bbdata/logs}
 OUT=${2:-/home/node/out/real}/bb-logs

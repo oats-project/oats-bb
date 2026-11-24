@@ -8,6 +8,8 @@
 // For every kind of row: a thread's, and one with no bb thread.
 import { useSyncExternalStore } from "react";
 import type { KeyboardEvent } from "react";
+import type { AgentState } from "../../model/types";
+import { STATE } from "../ui/words";
 
 /**
  * A roster with a parent in it keeps a gutter before every row for the parent's chevron, so that
@@ -60,14 +62,49 @@ export function forgetOpened(): void {
  * pattern book's form for an off control, out of the tab order, and its name says that the agents
  * are shown, not an act. It is live again the moment another row is on screen.
  */
-export function FoldToggle({ instance, name, open, pinned = false, depth }: { instance: string; /** the agent's name as words */ name: string; open: boolean; pinned?: boolean; depth: 0 | 1 | 2 }) {
+/** The chevron's colour where a closed parent hides a row that carries a mark: that mark's own (the lead's T1: the mark is ON the chevron, never after the parent's state word, which says only the parent). */
+const INSIDE: Record<AgentState, string> = {
+  "needs-you": "text-warning-text",
+  outside: "text-warning-text",
+  error: "text-destructive-text",
+  unreachable: "text-destructive-text",
+  working: "text-success-foreground",
+  idle: "",
+  stopped: "",
+};
+
+export function FoldToggle({
+  instance,
+  name,
+  open,
+  pinned = false,
+  depth,
+  inside = null,
+  insideTone = null,
+}: {
+  instance: string;
+  /** the agent's name as words */ name: string;
+  open: boolean;
+  pinned?: boolean;
+  depth: 0 | 1 | 2;
+  /** A closed parent: the state of the most urgent row it hides (`insideOf`); null where every hidden row is quiet. */
+  inside?: AgentState | null;
+  /** "warning": that row's own mark is drawn in the warning tone. */
+  insideTone?: "warning" | null;
+}) {
+  // Only a CLOSED parent hides rows: open, each row carries its own mark.
+  const hides = open ? null : inside;
+  const says = pinned ? `${name}'s agents shown` : `${open ? "Hide" : "Show"} ${name}'s agents`;
+  // Named for a screen reader and a pointer with the state's own name ("Needs input"): a colour alone says nothing.
+  const label = hides === null ? says : `${says}: ${STATE[hides].name}`;
   return (
     <button
       type="button"
       data-testid="oats-row-toggle"
       data-instance={instance}
       aria-expanded={open}
-      aria-label={pinned ? `${name}'s agents shown` : `${open ? "Hide" : "Show"} ${name}'s agents`}
+      aria-label={label}
+      title={hides === null ? undefined : label}
       disabled={pinned}
       aria-disabled={pinned ? true : undefined}
       className={`absolute top-0 z-10 flex h-full w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-muted-foreground ${CHEVRON_AT[depth]}`}
@@ -76,7 +113,13 @@ export function FoldToggle({ instance, name, open, pinned = false, depth }: { in
       {/* Two marks, never one turned: closed points RIGHT, open points DOWN (the off one is drawn as open). No rotation
           and no transition (a turned glyph was caught mid-turn, pointing left, and sat askew at a phone's width); one
           box of one size at every width, the mark centred in it. */}
-      <span aria-hidden="true" data-testid="oats-row-toggle-mark" data-open={open ? "true" : "false"} className="inline-flex size-4 items-center justify-center text-xs leading-none">
+      <span
+        aria-hidden="true"
+        data-testid="oats-row-toggle-mark"
+        data-open={open ? "true" : "false"}
+        {...(hides === null ? {} : { "data-inside": hides, ...(insideTone === "warning" ? { "data-tone": "warning" } : {}) })}
+        className={["inline-flex size-4 items-center justify-center text-xs leading-none", ...(hides === null ? [] : ["font-bold", insideTone === "warning" ? "text-warning-text" : INSIDE[hides]])].filter((part) => part !== "").join(" ")}
+      >
         {open ? CHEVRON_OPEN : CHEVRON_CLOSED}
       </span>
     </button>

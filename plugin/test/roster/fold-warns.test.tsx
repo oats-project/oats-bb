@@ -37,8 +37,8 @@ async function sidebar(child: Partial<Agent>, archived: boolean) {
   const parent = () => slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === PARENT_THREAD)!;
   /** The mark the closed parent carries for a row it hides: its state and its tone; null when it carries none. */
   const inside = () => {
-    const mark = within(parent()).queryByTestId("oats-row-inside")?.querySelector("[data-mark]") ?? null;
-    return mark === null ? null : [mark.getAttribute("data-state"), mark.getAttribute("data-tone")];
+    const mark = slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "redesign-ui-lead")!.querySelector('[data-testid="oats-row-toggle-mark"]')!;
+    return mark.getAttribute("data-inside") === null ? null : [mark.getAttribute("data-inside"), mark.getAttribute("data-tone")];
   };
   const toggle = () => slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "redesign-ui-lead")!;
   return { slot, parent, inside, toggle };

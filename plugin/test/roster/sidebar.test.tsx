@@ -193,30 +193,33 @@ test("Right on a parent's row opens it and Left closes it, as a tree's keys do; 
   expect([open(), rowOn(slot, "thr_mockups")]).toEqual(["false", null]);
 });
 
-test("a closed parent whose subtree holds a row that needs a person carries that row's mark after its own state, which stays its own; open, or over quiet children, it carries none", async () => {
+test("a closed parent whose subtree holds a row that needs a person carries that row's mark ON ITS CHEVRON (the lead's T1), never on its line, which says only the parent; open, or over quiet children, it carries none", async () => {
   const claim = { reason: "attention" as const, message: "Which mockup?", since: "2026-11-19T12:00:00.000Z" };
   const agents = fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, waiting: claim } : agent));
   const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) });
   await slot.findByTestId("oats-tree");
   const lead = rowOn(slot, LEAD)!;
-  // Its own state, mark and word, unchanged: it works. Then the hidden row's mark, named.
+  // Its own state, mark and word, unchanged: it works. The hidden row's mark is the chevron's: its colour, and its name for a screen reader and a pointer.
   expect(within(lead).getByTestId("oats-row-facts").querySelector('[data-phrase="state"]')!.textContent).toBe("Working");
   expect(lead.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("working");
-  const inside = within(lead).getByTestId("oats-row-inside").querySelector("[data-mark]")!;
-  expect([inside.getAttribute("data-state"), inside.getAttribute("role"), inside.getAttribute("aria-label")]).toEqual(["needs-you", "img", "Needs input"]);
-  // It stands after the state's word and before the soul.
-  expect(within(lead).getByTestId("oats-row-inside").previousElementSibling!.getAttribute("data-phrase")).toBe("state");
-  expect(within(lead).getByTestId("oats-row-facts").textContent).toBe("Working! · oats-product-expert");
-  // Opened: the row itself is in sight with its own mark, and the parent carries none.
-  fireEvent.click(toggles(slot)[0]!);
-  expect(within(rowOn(slot, LEAD)!).queryByTestId("oats-row-inside")).toBeNull();
+  const chevron = () => toggles(slot)[0]!;
+  const mark = () => chevron().querySelector<HTMLElement>('[data-testid="oats-row-toggle-mark"]')!;
+  expect([mark().getAttribute("data-inside"), chevron().getAttribute("aria-label"), chevron().getAttribute("title")]).toEqual(["needs-you", "Show Redesign ui lead's agents: Needs input", "Show Redesign ui lead's agents: Needs input"]);
+  expect(mark().className).toContain("text-warning-text");
+  // The parent's line says only the parent: no mark after its state's word.
+  expect(within(lead).queryByTestId("oats-row-inside")).toBeNull();
+  expect(within(lead).getByTestId("oats-row-facts").querySelectorAll("[data-mark]")).toHaveLength(0);
+  expect(within(lead).getByTestId("oats-row-facts").textContent).toBe("Working · oats-product-expert");
+  // Opened: the row itself is in sight with its own mark, and the chevron carries none.
+  fireEvent.click(chevron());
+  expect([mark().getAttribute("data-inside"), chevron().getAttribute("aria-label"), chevron().getAttribute("title"), mark().className.includes("text-warning-text")]).toEqual([null, "Hide Redesign ui lead's agents", null, false]);
   expect(rowOn(slot, "thr_mockups")!.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("needs-you");
   cleanup();
   resetApp();
   // Quiet children (the sample's: one works, one is idle): no mark on the closed parent.
   const quiet = await sidebar();
   await quiet.slot.findByTestId("oats-tree");
-  expect(within(rowOn(quiet.slot, LEAD)!).queryByTestId("oats-row-inside")).toBeNull();
+  expect([toggles(quiet.slot)[0]!.querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside"), toggles(quiet.slot)[0]!.getAttribute("aria-label")]).toEqual([null, "Show Redesign ui lead's agents"]);
 });
 
 // The mark a closed parent carries is computed from the roster on screen at every draw: nothing of it is kept from an
@@ -228,7 +231,7 @@ test("a closed parent's mark follows the roster: it comes when a hidden child st
   let now = { ...fixtureSnapshot(waits(false)), at: "2026-11-19T12:30:00.000Z" };
   const { slot } = await sidebar({ snapshot: () => now });
   await slot.findByTestId("oats-tree");
-  const inside = () => within(rowOn(slot, LEAD)!).queryByTestId("oats-row-inside")?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null;
+  const inside = () => toggles(slot)[0]!.querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside");
   const closed = () => [toggles(slot)[0]!.getAttribute("aria-expanded"), rowOn(slot, "thr_mockups")];
   expect([inside(), ...closed()]).toEqual([null, "false", null]);
   // The child starts to wait: the next roster marks the closed parent.
@@ -679,9 +682,9 @@ test("a parent with no bb thread is a parent like any other: Left on its row clo
   await slot.findByTestId("oats-tree");
   const row = (instance: string) => slot.queryAllByTestId("oats-agent-row-threadless").find((each) => each.getAttribute("data-instance") === instance);
   const toggle = () => slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "kernel-fix-developer")!;
-  /** The mark the parent's line carries for a row it hides: its state; null when it carries none. */
-  const inside = () => within(row("kernel-fix-developer")!).queryByTestId("oats-row-inside")?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null;
-  // As the page loads it is closed: its child is not in the page, and its line says its own word, then the child's mark.
+  /** The mark the parent's chevron carries for a row it hides: its state; null when it carries none. */
+  const inside = () => toggle().querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside");
+  // As the page loads it is closed: its child is not in the page; its line says its own words, and its chevron carries the child's mark.
   expect([toggle().getAttribute("aria-expanded"), row("tmux-child")]).toEqual(["false", undefined]);
   expect(inside()).toBe("needs-you");
   expect(within(row("kernel-fix-developer")!).getByTestId("oats-row-facts").getAttribute("title")).toBe("Working · oats-developer · tmux"); // its own words, whole

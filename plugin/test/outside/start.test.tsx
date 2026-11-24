@@ -202,6 +202,14 @@ test("where bb cannot answer for the thread's events, the line invites NO messag
   expect(within(slot.getByTestId("oats-identity-row")).getAllByTestId("oats-status-act").map((act) => act.textContent)).toEqual(["Start…"]);
   expect(slot.queryByTestId("oats-status-bb")).toBeNull();
   resetApp();
+  // The same where bb ANSWERS and names neither a started turn nor an error: nothing is known of the thread's start, so nothing is invited.
+  const mute = bb([]);
+  const silent = await line({ rpc: handlers({}, agents()), sidebarThreads: threads(), sdk: mute.sdk });
+  await waitFor(() => expect(mute.asked.length).toBeGreaterThanOrEqual(2));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(words(silent)).toEqual(["Stopped", "session lost"]);
+  expect(within(silent.getByTestId("oats-identity-row")).getAllByTestId("oats-status-act").map((act) => act.textContent)).toEqual(["Start…"]);
+  resetApp();
   // The same while bb has not answered YET (its answer is held): the same line, and once it answers that a turn started, the way on is said.
   let answer: (value: Event[]) => void = () => undefined;
   const held = new Promise<Event[]>((resolve) => (answer = resolve));

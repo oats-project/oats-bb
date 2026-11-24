@@ -1045,6 +1045,15 @@ test("an agent that runs outside OATS is one of those that need you, in every pl
   const { asked } = await import("../../app/lifecycle");
   fireEvent.click(within(card).getByRole("button", { name: "Stop…" }));
   expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
+  resetApp();
+  // An agent of another session provider has Stop alone: its card says no "Stop, then Start." (nobody reads Start with nothing to press).
+  const others = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, backend: "other", sessionEnd: "stopped", outsideOats: { ...report, backend: "other" } } : agent));
+  const elsewhere = await homePage({ rpc: handlers({}, others) });
+  const otherCard = await cardOf(elsewhere, "weekly-digest-helper");
+  expect(offerOf(otherCard)).toBe("outside");
+  expect(Array.from(within(otherCard).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop…"]);
+  expect(within(otherCard).queryByTestId("oats-needs-outside")).toBeNull();
+  expect(otherCard.textContent).not.toMatch(/then Start/);
 });
 
 /** The one count line of the home, on Home › Agents ("2 working · 4 need you · …"), for a roster. */

@@ -79,7 +79,8 @@ export function useArchived(ids: readonly string[], token: string): ReadonlyMap<
  * Whether a thread FAILED AT ITS START, from bb's answers for its events: bb recorded an error
  * (`system/error`) and never the start of a turn (`turn/started`). The thread's record and bb's
  * sidebar say "error" alike for such a thread and for one whose later turn failed; only its events
- * tell them apart. null: a turn started, or bb recorded no error. Pure.
+ * tell them apart. null: a turn started, or bb recorded no error (the place that asks tells those
+ * two apart where it matters: `useStartFailures` publishes null only for a turn bb names). Pure.
  * (The error's own fields are under the event's `data`.)
  */
 export function startFailureOf(turns: readonly unknown[], errors: readonly { seq?: number; data?: unknown }[]): StartFailure | null {
@@ -184,25 +185,33 @@ export function useStartFailures(ids: readonly string[], token: string): Readonl
       for (const listener of [...failureListeners]) listener();
     };
     if (wanted.length === 0) return publish(NO_FAILURES);
-    const ask = (threadId: string) =>
+    // → the failure; null: bb SAID that a turn started there; undefined: bb answered and said
+    // NEITHER (no turn started, no error): nothing is known of the thread's start, as when bb
+    // cannot answer. `null` is published only for a turn bb names: it is what lets a message in.
+    const ask = (threadId: string): Promise<StartFailure | null | undefined> =>
       started.has(threadId)
         ? Promise.resolve(null)
         : readStart(sdk, threadId).then(([turns, errors]) => {
-            if (turns.length > 0) started.add(threadId);
-            return startFailureOf(turns, errors);
+            if (turns.length > 0) {
+              started.add(threadId);
+              return null;
+            }
+            return errors.length === 0 ? undefined : startFailureOf(turns, errors);
           });
     // Each thread by itself: for one bb cannot answer for, what bb last said of it stands (nothing, if it never answered), and it is asked again at the next change.
     Promise.allSettled(wanted.map(ask)).then((answers) => {
       if (failuresAsked !== key) return; // a newer question is out
       const next = new Map<string, StartFailure | null>();
+      const said = (answer: PromiseSettledResult<StartFailure | null | undefined>): answer is PromiseFulfilledResult<StartFailure | null> => answer.status === "fulfilled" && answer.value !== undefined;
       answers.forEach((answer, index) => {
         const id = wanted[index]!;
-        if (answer.status === "fulfilled") next.set(id, answer.value);
-        // bb could not say THIS time: what it last said of the thread stands (a thread it said
-        // failed at its start does not go back to "session lost" for a read that failed), and it is asked again.
+        if (said(answer)) next.set(id, answer.value);
+        // bb could not say THIS time (it refused, or it named neither a turn nor an error): what it
+        // last said of the thread stands (a thread it said failed at its start does not go back to
+        // "session lost" for a read that failed), and it is asked again.
         else if (failures.has(id)) next.set(id, failures.get(id)!);
       });
-      if (answers.some((answer) => answer.status === "rejected")) failuresAsked = "";
+      if (!answers.every(said)) failuresAsked = "";
       publish(next);
     });
   }, [sdk, idsKey, token]);

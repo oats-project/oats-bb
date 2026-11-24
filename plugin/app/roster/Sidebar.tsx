@@ -19,7 +19,6 @@ import type {
 } from "@get-bb/plugin-sdk/app";
 import type { Agent, Node } from "../../model/types";
 import { flatten } from "../../model/view";
-import { needsYouLabel } from "../format";
 import { useOats } from "../oats";
 import { outsideOf, rowParts } from "../outside";
 import type { Said } from "../outside";
@@ -87,7 +86,6 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // link here, and no mark.
   const pagesNow = usePagesShown();
   const links = pageLinks().filter((page) => pagesNow.has(page.path));
-  const homeShown = pagesNow.has("home");
   const newAgentShown = hasNewAgent(pagesNow.has("souls"));
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
@@ -272,7 +270,6 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
 
   const { view, deployment } = oats;
   // Every agent that waits, the ones with no bb thread included (`view.needing`: the home's badge and list count the same).
-  const needs = view.needing.length;
   // Every agent OATS has is a row.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
   return (
@@ -302,26 +299,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           {view.elsewhere.map((agent) => threadlessRow(agent, TMUX, outside.of(agent)))}
         </ul>
       )}
-      {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. With
-          nobody waiting there is no line: no count is the same news (the home says "Nothing needs you."). */}
-      {needs === 0 ? null : homeShown ? (
-        <button
-          type="button"
-          data-testid="oats-needs-line"
-          title={`${needsYouLabel(needs)}: open the OATS home`}
-          className={`${ROW} w-full pl-2 text-left font-semibold`}
-          onClick={() => openPage("home")}
-        >
-          <StateMark state="needs-you" hidden />
-          {`${needs} need you`}
-        </button>
-      ) : (
-        // The home is not shown in this release: the count is said, and opens nothing.
-        <p data-testid="oats-needs-line" className="flex items-center gap-2 px-2 py-1.5 text-sm font-semibold text-foreground">
-          <StateMark state="needs-you" hidden />
-          {`${needs} need you`}
-        </p>
-      )}
+      {/* No line counts who waits on a person: the rows that wait are marked, and bb's badge on the
+          plugin's entry says how many (the lead's ruling L6 on the text audit, 23 Nov 2026). */}
       {newAgentShown ? (
         <div className="px-2 py-1">
           {/* On the last roster read "New agent" is held with the OATS acts: in its place, off. Why is

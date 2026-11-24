@@ -293,6 +293,7 @@ its meaning now. A row above that was shortened says its new words there, and ke
 | "Agents", "Threads" | headings in the sidebar | the workspace's name heads the roster; bb's threads are bb's |
 | the soul ("Stopped · oats-expert · tmux") | a roster row's second line | the name tells agents apart; the instance panel's header says the soul |
 | "Nothing needs you." | the roster's foot | no line: no count is the same news. The home keeps the sentence |
+| "3 need you" | the roster's foot, a line that opened the home | the marked rows, and bb's badge on the plugin's entry, which opens the home (the lead's ruling L6, 23 Nov 2026) |
 | "Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again." / "Open settings: Stop, Start, …" | the notice over a roster kept as last read | "Acts are off.": every act is drawn off, and Retry (or Open settings) is the notice's button |
 | "Comes back when OATS is read again" | under the sidebar's New agent; the title of an act that is off on a thread's line | the act is drawn off, and the notice on the same screen says "Acts are off." |
 | "Showing what was read 2 min ago." / "Showing what was last read." | every notice over content read earlier | "Read 2 min ago." / "Last read." |

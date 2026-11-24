@@ -142,22 +142,22 @@ test('"Other threads" lists the thread that is no OATS agent, and it opens like 
   expect(navigated()).toBe(1);
 });
 
-test("the workspace's name, with no heading under it; at the roster's foot the needs line and New agent; then the pages under their heading", async () => {
+test("the workspace's name, with no heading under it; at the roster's foot New agent, and no line that counts who waits (the marked rows and bb's badge say it); then the pages under their heading", async () => {
   const { slot, navigated } = await sidebar();
   expect((await slot.findByTestId("oats-workspace-line")).textContent).toBe("oats");
   // No heading names the layout: the workspace's name heads the roster.
   expect(Array.from(slot.getByTestId("oats-sidebar").querySelectorAll("h2")).map((heading) => heading.textContent)).toEqual(["Workspace", "Other threads"]);
-  const needs = slot.getByTestId("oats-needs-line");
-  expect(needs.textContent).toBe("!3 need you");
-  // The order a person reads: the agents, who waits, the act that makes one, then the workspace's pages.
-  const order = ["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"].map((id) => slot.getByTestId(id));
+  // No foot line: who waits is said by the rows' own marks (three here), and counted by bb's badge (test/home/home.test.tsx).
+  expect(slot.queryByTestId("oats-needs-line")).toBeNull();
+  expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/need you/);
+  expect(Array.from(slot.getByTestId("oats-tree").querySelectorAll('[data-mark][data-state="needs-you"]')).length).toBe(3);
+  // The order a person reads: the agents, the act that makes one, then the workspace's pages.
+  const order = ["oats-tree", "oats-new-agent", "oats-pages"].map((id) => slot.getByTestId(id));
   for (let i = 1; i < order.length; i += 1) expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(slot.getByTestId("oats-new-agent").tagName).toBe("BUTTON");
   expect(slot.getByTestId("oats-new-agent").textContent).toBe("New agent");
-  fireEvent.click(needs);
   fireEvent.click(slot.getByTestId("oats-new-agent"));
   expect(slot.inspection.navigateCalls).toEqual([
-    { method: "toPluginPanel", path: "home" },
     { method: "toPluginPanel", path: "new-agent" }, // the form's own page (app/spawn)
   ]);
   expect(navigated()).toBe(2);
@@ -391,7 +391,8 @@ test("while OATS cannot be read after it was, the tree stays as last read under 
   expect(notice.compareDocumentPosition(newAgent) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(newAgent);
   expect(slot.inspection.navigateCalls).toEqual([]);
-  expect(slot.getByTestId("oats-needs-line").textContent).toBe("!3 need you");
+  expect(slot.queryByTestId("oats-needs-line")).toBeNull();
+  expect(Array.from(slot.getByTestId("oats-tree").querySelectorAll('[data-mark][data-state="needs-you"]')).length).toBe(3); // the rows as last read keep their marks
   expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
 });
 
@@ -456,7 +457,7 @@ test("a stopped tmux agent says Stopped in its sidebar row and in its own panel"
 // home alone). A page that is not shown has no link in the sidebar and no mark; the count of who
 // waits still opens the home; "New agent" stays, whatever pages are shown: the form is a page of its
 // own (app/spawn), not one a release leaves out.
-test("with the release's default (pages: home) the sidebar has the roster, who waits and no page link; with every page, all of them", async () => {
+test("with the release's default (pages: home) the sidebar has the roster, New agent and no page link; with every page, all of them", async () => {
   const withPages = async (pages: string) => {
     const app = await loadApp();
     return renderSlot<PluginThreadListProps, Contract>(
@@ -470,9 +471,10 @@ test("with the release's default (pages: home) the sidebar has the roster, who w
   expect(pilot.queryByTestId("oats-pages")).toBeNull();
   for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(pilot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
   expect(pilot.getByTestId("oats-new-agent").textContent).toBe("New agent"); // the way to start an agent survives the hidden pages
-  fireEvent.click(pilot.getByTestId("oats-needs-line"));
+  // (The home is reached from bb's own entry for the plugin, which carries the badge: the sidebar has no line that opens it.)
+  expect(pilot.queryByTestId("oats-needs-line")).toBeNull();
   fireEvent.click(pilot.getByTestId("oats-new-agent"));
-  expect(pilot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "home" }, { method: "toPluginPanel", path: "new-agent" }]);
+  expect(pilot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]);
   pilot.unmount();
   resetApp();
   const all = await withPages(ALL_PAGES);
@@ -481,10 +483,10 @@ test("with the release's default (pages: home) the sidebar has the roster, who w
   expect(all.getByTestId("oats-new-agent")).toBeTruthy();
   all.unmount();
   resetApp();
-  // With the home itself left out, the count is said and opens nothing.
+  // With the home itself left out: no count either.
   const none = await withPages("souls");
   await none.findByTestId("oats-tree");
-  expect(none.getByTestId("oats-needs-line").tagName).toBe("P");
+  expect(none.queryByTestId("oats-needs-line")).toBeNull();
   expect(none.getByTestId("oats-page-link-souls")).toBeTruthy();
 });
 
@@ -528,20 +530,21 @@ test("until a feature names the form's page, \"New agent\" opens the Souls page 
 
 // One count of who waits (model/view.ts `needing`), read by the sidebar's foot (the home follows in its owner's change):
 // an agent with no bb thread that waits on a person is counted, as its own row says it does.
-test("the foot counts every agent that waits, the ones with no bb thread included", async () => {
+test("every agent that waits is marked on its row, the ones with no bb thread included; no foot line counts them", async () => {
   const claim = { reason: "question", message: "Which branch?", since: "2026-11-19T12:00:00.000Z" };
   // The tmux agent runs and carries a claim; the stopped agent's thread is gone (it shows none).
   const agents = fixtureAgents().map((agent) => (agent.backend === "tmux" ? { ...agent, running: true, runtimeState: null, waiting: claim } : agent));
   const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) }, null, { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_digest") });
   await slot.findByTestId("oats-tree");
-  expect(slot.getByTestId("oats-needs-line").textContent).toBe("!4 need you"); // three in the tree, and the one on tmux
+  expect(slot.queryByTestId("oats-needs-line")).toBeNull();
+  expect(Array.from(slot.getByTestId("oats-tree").querySelectorAll('[data-mark][data-state="needs-you"]')).length).toBe(4); // three in the tree, and the one on tmux
   const tmux = slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === "kernel-fix-developer")!;
   expect(within(tmux).getByTestId("oats-row-facts").textContent).toBe("Needs you · tmux");
 });
 
-// Nobody waits: the foot has no line at all. No count is the same news, and "Nothing needs you."
-// is the home's empty state, said there once (Joan's direction of 23 Nov 2026).
-test("with nobody waiting the roster's foot says nothing: no needs line, and New agent stays", async () => {
+// Nobody waits: no row is marked, and no line says so. "Nothing needs you." is the home's empty
+// state, said there once (Joan's direction of 23 Nov 2026).
+test("with nobody waiting the roster says nothing of it: no needs line, no marked row, and New agent stays", async () => {
   const agents = fixtureAgents().map((agent) => ({ ...agent, waiting: null }));
   const threads = fixtureThreads().map((thread) => ({ ...thread, hasPendingInteraction: false }));
   const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) }, null, { status: "ready", threads });

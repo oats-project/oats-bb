@@ -247,8 +247,8 @@ export default [
       check(rows.failed?.facts === "Failed" && rows.unreachable?.facts === "Unreachable" && rows.open?.facts === "Stopped", `${at} failed, unreachable and stopped on an open thread: the roster's own words, the state alone`, JSON.stringify([rows.failed, rows.unreachable, rows.open]));
       check(!/its bb thread is gone/.test(rows.tree), `${at} no row says "its bb thread is gone"`, rows.tree);
       // The one the kernel reports running outside OATS is counted among those that need a person (no other agent of this roster waits).
-      const foot = await page.evaluate(textOf(testId("oats-needs-line")));
-      check(foot === "! 1 need you", `${at} the roster's foot counts the agent that runs outside OATS: "1 need you"`, foot);
+      const foot = await page.evaluate(`JSON.stringify({ foot: !(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}) === null), said: /need you/i.test(document.querySelector(${JSON.stringify(testId("oats-sidebar"))}).innerText) })`);
+      check(foot === JSON.stringify({ foot: false, said: false }), `${at} the roster has no line that counts who needs a person: the row's own state says it (bb's badge and the home count it)`, foot);
       // No row's second line is cut.
       const cut = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-row-facts")}`)})].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.innerText)`);
       check(cut.length === 0, `${at} no row's words are cut`, JSON.stringify(cut));

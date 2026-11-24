@@ -49,7 +49,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
 
 ## Where things are
 
-- Sidebar: the workspace line, Souls, Capabilities, Teams, Machines, Automations, "N need you", then the agents
+- Sidebar: the workspace line, Souls, Capabilities, Teams, Machines, Automations, then the agents (one that waits carries its mark; bb's badge counts them)
   as a tree (children under parents), then bb's other threads.
 - Under an agent's thread header, one line of chips: soul, instance, aweb alias, parent (a link
   when the parent runs in bb), number of children, home, and `OATS`, which opens the home.

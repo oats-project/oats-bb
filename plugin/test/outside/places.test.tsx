@@ -100,7 +100,8 @@ test("the kernel's report on a row: its state IS \"Running outside OATS\", in th
   expect(markOf(row())).toEqual(["outside", null]); // no grey "Stopped" dot for an agent that runs
   // No other row is in that state.
   expect(slot.container.querySelectorAll('[data-mark][data-state="outside"]')).toHaveLength(1);
-  expect(slot.getByTestId("oats-needs-line").textContent).toBe("!4 need you"); // the sample's three that wait, and this one
+  // It is counted among those that need a person (`view.needing`: bb's badge and the home's heading count it); the sidebar has no line of its own for the count.
+  expect(slot.queryByTestId("oats-needs-line")).toBeNull();
 });
 
 test("with nothing reported, the rows are the roster's own: no note, no mark, and bb is asked nothing", async () => {

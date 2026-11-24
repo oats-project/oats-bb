@@ -56,14 +56,15 @@ export default [
       check((await page.evaluate(textOf(testId("oats-workspace-line")))) === "oats", `${at} the workspace's name alone heads the roster: no machine and no count`, await page.evaluate(textOf(testId("oats-workspace-line"))));
       const headings = await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} h2`)})].map((e) => e.innerText.trim().toLowerCase()))`);
       check(headings === JSON.stringify(["workspace", "other threads"]), `${at} the sidebar's headings are "Workspace" and "Other threads": none names the roster`, headings);
-      check((await page.evaluate(textOf(testId("oats-needs-line")))) === "! 3 need you", `${at} "3 need you", with the mark of an agent that waits`, await page.evaluate(textOf(testId("oats-needs-line"))));
+      const waits = await page.evaluate(`JSON.stringify({ marked: document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} [data-mark][data-state="needs-you"]`)}).length, foot: !(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}) === null) })`);
+      check(waits === JSON.stringify({ marked: 3, foot: false }), `${at} three rows carry the mark of an agent that waits, and no line at the roster's foot counts them`, waits);
       // What the image's name says: every agent a row, each with its state in a word, and no soul; the
-      // one that runs in tmux among them; the roster first, then who waits, New agent, the pages.
+      // one that runs in tmux among them; the roster first, then New agent, the pages.
       const drawn = JSON.parse(await page.evaluate(`JSON.stringify({ facts: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}, order: [...document.querySelectorAll(${JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"].map(testId).join(", "))})].map((e) => e.getAttribute("data-testid")), marks: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark]`)}).length })`));
       const WORDS = /^(Needs you|Working|Idle|Stopped|Failed|Unreachable)( · tmux)?$/;
       check(
-        drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Working · tmux") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"]),
-        `${at} eight agents, eight rows: each its mark and its state in a word, and no soul; the one in tmux says "tmux"; then who waits, New agent and the pages`,
+        drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Working · tmux") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-new-agent", "oats-pages"]),
+        `${at} eight agents, eight rows: each its mark and its state in a word, and no soul; the one in tmux says "tmux"; then New agent and the pages`,
         JSON.stringify(drawn),
       );
       // "tmux" on the row is bb's own terminal glyph, named "tmux" (the plugin draws no icon of its own): the
@@ -307,11 +308,11 @@ export default [
       const mockups = threads.get("thr_mockups");
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      // The sidebar: the roster and who waits; no list of pages, no link to one, no mark of one.
+      // The sidebar: the roster; no line that counts who waits, no list of pages, no link to one, no mark of one.
       const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(testId("oats-tree"))})) return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: [...s.querySelectorAll('[data-testid^="oats-page-link-"]')].map((e) => e.getAttribute("data-testid")), needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))})?.tagName ?? "" }); })()`, 30);
-      check(side === JSON.stringify({ pages: false, links: [], needs: "BUTTON" }), `${at} the sidebar has the roster and who waits (which opens the home), and no page link`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(side === JSON.stringify({ pages: false, links: [], needs: "" }), `${at} the sidebar has the roster, and no page link and no line that counts who waits`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // The thread's own row: no soul on it and no link at all (who the agent is is the instance panel's): nothing leads to a page that is not shown.
-      // Read AFTER the sidebar: the needs line is a button only once bb has given the settings.
+      // Read AFTER the sidebar: bb gives the settings a moment after the roster.
       const soul = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); return e && e.querySelector(${JSON.stringify(testId("oats-status-line"))}) ? JSON.stringify({ text: e.innerText.replace(/\\s+/g, ""), links: e.querySelectorAll("a").length }) : ""; })()`, 30);
       check(soul === JSON.stringify({ text: "WorkingStopInstancepanel", links: 0 }), `${at} the thread's row is its line alone: no soul and no link to a page that is not shown`, soul ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
       await page.shot(`pages-default-${viewport.name}-sidebar`, { targets: true });
@@ -326,7 +327,7 @@ export default [
   },
   {
     stage: "tmux-roster",
-    name: "a deployment that is mostly tmux agents: every one a row that says where it runs, the count of who waits, no phrase broken, the last row reachable, and a row opens its agent's page",
+    name: "a deployment that is mostly tmux agents: every one a row that says where it runs, each one that waits marked, no phrase broken, the last row reachable, and a row opens its agent's page",
     run: async ({ page, at, viewport, threads, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
@@ -343,8 +344,8 @@ export default [
       check(glyphs.marks === tmux.length && glyphs.glyphs === tmux.length && glyphs.named === tmux.length && glyphs.drawn === tmux.length, `${at} on each of the ${tmux.length} rows "tmux" is bb's terminal glyph, named "tmux"`, JSON.stringify(glyphs));
       // Who waits: the three on tmux that wait... every one that waits, with a thread or not, in ONE number.
       const waiting = tmux.filter(([, , , how]) => how === "waiting").length + 1; // and release-070-maintainer, on bb
-      const needs = await page.until(`(() => { const t = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)})?.innerText.replace(/\\s+/g, " ").trim() ?? ""; return /need you/.test(t) ? t : ""; })()`, 15);
-      check(needs === `! ${waiting} need you` || needs === `${waiting} need you`, `${at} the foot counts every agent that waits, the ${waiting - 1} on tmux included: ${waiting}`, needs);
+      const needs = await page.until(`(() => { const n = document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} [data-mark][data-state="needs-you"]`)}).length; return n >= ${waiting} ? String(n) : ""; })()`, 15);
+      check(needs === String(waiting) && (await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}) === null`)) === true, `${at} every agent that waits carries the mark on its row, the ${waiting - 1} on tmux included: ${waiting}; no foot line counts them`, needs);
       // Every row is at most three lines: the name on one or two, the second block on ONE line; the
       // state's word and "tmux" are never cut.
       const measured = await rowLines(page);
@@ -353,8 +354,8 @@ export default [
       check(rowsRead.edgeCut === 0 && rowsRead.whereCut === 0 && rowsRead.soulGone === 0 && rowsRead.untitled === 0, `${at} the state's word and "tmux" are never cut, no row draws a soul (${rowsRead.soulCut} cut), and every name has the whole name as its title`, measured);
       await page.shot(`tmux-roster-${viewport.name}-sidebar`, { targets: true });
       // Scale: with twenty and more rows the list scrolls, and the last row and the foot can be brought into view.
-      const reach = await page.evaluate(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; const last = rows[rows.length - 1]; last.scrollIntoView({ block: "center" }); const r = last.getBoundingClientRect(); const lastIn = r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight; const foot = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}); foot.scrollIntoView({ block: "center" }); const f = foot.getBoundingClientRect(); return JSON.stringify({ last: lastIn, foot: f.top >= 0 && f.bottom <= window.innerHeight }); })()`);
-      check(reach === JSON.stringify({ last: true, foot: true }), `${at} with ${tmux.length + TMUX_ROSTER.bb.length} agents the last row and the count of who waits can be scrolled into view`, reach);
+      const reach = await page.evaluate(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; const last = rows[rows.length - 1]; last.scrollIntoView({ block: "center" }); const r = last.getBoundingClientRect(); const lastIn = r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight; const foot = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-new-agent")}`)}); foot.scrollIntoView({ block: "center" }); const f = foot.getBoundingClientRect(); return JSON.stringify({ last: lastIn, foot: f.top >= 0 && f.bottom <= window.innerHeight }); })()`);
+      check(reach === JSON.stringify({ last: true, foot: true }), `${at} with ${tmux.length + TMUX_ROSTER.bb.length} agents the last row and New agent under it can be scrolled into view`, reach);
       await page.shot(`tmux-roster-${viewport.name}-sidebar-end`);
       // A SELECTED row whose name takes two lines: the bb-thread agent with the long name, on its own thread.
       const long = threads.get("thr_mockups");

@@ -253,8 +253,8 @@ export default [
       check(!permission.text.includes("Answer it in its thread.") && permission.open === "Answer" && permission.text.includes("Message instead") && !permission.text.includes("It waits for an approval"), `${at} the approval's card says where its answer is by its button, "Answer", with no sentence, and keeps a message behind "Message instead"`, permission.text);
       // the heading's count agrees with the foot of the sidebar
       if (!viewport.mobile) {
-        const foot = await page.evaluate(textOf(testId("oats-needs-line")));
-        check(/^!?\s*3 need you$/.test(foot), `${at} and the sidebar's foot says the same number as the home`, foot);
+        const marked = await page.evaluate(`JSON.stringify({ marked: document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} [data-mark][data-state="needs-you"]`)}).length, foot: !(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}) === null) })`);
+        check(marked === JSON.stringify({ marked: 3, foot: false }), `${at} and the sidebar marks as many rows as the home counts, with no line of its own for the count`, marked);
       }
       await sound(page, viewport, check, at, "the home");
       await page.shot(`home-${viewport.name}-home`);

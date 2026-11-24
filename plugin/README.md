@@ -229,7 +229,7 @@ of who needs a person):
 - **"Running outside OATS"** is a state of its own, before every other: a row with the kernel's
   `outsideOats`. The row's other fields stay what OATS recorded (stopped, not running) and would
   say "Stopped" of an agent that runs: there is ONE statement about it. Such an agent is counted
-  among those that need a person (`view().needing`: the sidebar's "N need you"), since only a
+  among those that need a person (`view().needing`: bb's badge on the plugin's entry, and the home's heading), since only a
   person can stop or start it again. What OATS recorded is a fact after the state.
 - **Stopped is said of a row only when the kernel calls it stopped** (`recordedStopped`, for
   every backend; the claim's gate reads the same predicate): the row does not run, and says that

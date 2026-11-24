@@ -21,7 +21,7 @@ import { onWindowReset } from "../store";
 import { Button, Card, Chip, Code, CopyButton, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
-import { agentName, readAge, showingRead, waitingClock, waitingLabel } from "../ui/words";
+import { agentName, readAge, showingRead, waitingLabel } from "../ui/words";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { Activity } from "./Activity";
 import { AgentMark, CommandText, PathLine, SoulMark } from "./parts";
@@ -182,8 +182,6 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
   const line = pageParts(agent, oats, status);
   const reading = useReading(agent.instance);
   const soul = shown(oats.soulOf(agent));
-  const claimSince = status.state === "needs-you" ? (claimOf(agent)?.since ?? null) : null;
-  const waitedSince = claimSince === null ? undefined : `since ${waitingClock(claimSince, now)}`;
   return (
     <>
       {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}
@@ -194,8 +192,8 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
             {agentName(agent.instance)}
           </h2>
         </div>
-        {/* How long it has waited is said ONCE, here ("Needs you · 5 d"); since when, by the clock, is this line's title, for whoever needs the instant. */}
-        <div data-testid="oats-panel-state" data-outside={line.kind ?? undefined} title={waitedSince}>
+        {/* How long it has waited is said ONCE, here ("Needs you · 5 d"). Since when, by the clock, is the Activity's: its "Waiting claim" row, at its instant. */}
+        <div data-testid="oats-panel-state" data-outside={line.kind ?? undefined}>
           {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here.
               For an agent the roster draws on no thread, what happened to it outside OATS follows the state's word, as on its row ("Stopped · session lost"). */}
           {/* Behind a lifecycle result that says the agent changed, until the roster is read again: "Reading…", never the old state stated plainly. */}
@@ -307,7 +305,7 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
       <OutsideAgent agent={agent} roster={oats} held={held} />
       {claim === null ? null : (
         // What the agent asks, first on the page, under no heading: the header two lines up says
-        // "Needs you" and how long it has waited, once (the clock time is that line's title).
+        // "Needs you" and how long it has waited, once (the claim's instant is the Activity's, in its "Waiting claim" row).
         <section data-testid="oats-panel-waiting" aria-label="Needs input" className="flex min-w-0 flex-col gap-2">
           {message !== "" ? (
             <p data-testid="oats-panel-waiting-message" dir="auto" className="m-0 break-words text-foreground">
@@ -521,6 +519,7 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
       {facts.human === null && facts.parent === null && facts.sibling === null && oats.children.length === 0 && facts.messagingId === null ? null : (
         <Section title="Lineage" testId="oats-panel-lineage">
           {/* On the page's face: the agents it is related to. Who owns it and its address for the others are under a fold: asked for, not read on every page. */}
+          {facts.parent === null && facts.sibling === null && oats.children.length === 0 ? null : (
           <Facts>
             {facts.parent === null ? null : <Fact label="Parent">{instanceLink(facts.parent, "oats-panel-parent")}</Fact>}
             {facts.sibling === null ? null : <Fact label="Sibling">{instanceLink(facts.sibling, "oats-panel-sibling")}</Fact>}
@@ -535,6 +534,7 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
               </Fact>
             )}
           </Facts>
+          )}
           {facts.human === null && facts.messagingId === null ? null : (
             <Disclosure summary="Details" testId="oats-panel-lineage-details">
               <Facts>

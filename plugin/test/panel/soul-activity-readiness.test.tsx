@@ -10,7 +10,6 @@ import type { PanelSoul } from "../../kernel/panel-soul";
 import { handlers, resetApp } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import { whenText } from "../../app/panel/words";
-import { waitingClock } from "../../app/ui/words";
 import { instanceAnswer, panelAgents, panelSnapshot, panelThreads, recordedEvents, recordedNotReady, recordedReadiness, recordedSoul } from "./handlers";
 
 afterEach(() => {
@@ -435,6 +434,8 @@ test("the Soul tab reads the soul's readiness, by the soul; a soul OATS does not
   expect(text(within(readiness).getByRole("heading"))).toBe("Readiness"); // one heading: the tab says whose it is
   expect(text(await within(readiness).findByTestId("oats-panel-readiness-summary"))).toBe("Ready");
   expect(calls(slot, "panelReadiness").map((call) => call.input)).toContainEqual({ instance: CHILD, of: "soul" });
+  // What was observed, under Readiness's fold: the soul and the agents root. It is the one place of the Soul tab that says the agents root (no fold of its own at the tab's foot).
+  expect(text(within(within(readiness).getByTestId("oats-panel-readiness-checks")).getByTestId("oats-panel-readiness-context"))).toBe("Soul: oats-expert · /abs/deployment/agents");
   expect(text(within(readiness).getByTestId("oats-panel-policy"))).toContain("Child spawns: allowed · advisory, not enforced · default: no declaration: children allowed");
   slot.unmount();
   const unnamed = await soulTab({ panelInstance: ({ instance }) => ({ ...instanceAnswer(instance), soul: { key: null, description: null } }) });
@@ -692,10 +693,11 @@ test("the roster and the activity are read at two moments: an activity that name
   await waitFor(() => expect(refreshed).toBe(1));
   // what the person then sees: the header and Needs input say the claim the activity names
   await waitFor(() => expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("Which base branch?"));
-  // how long it has waited is the header's, once; since when (the clock time) is that line's title
+  // how long it has waited is the header's, once; since when (the clock time) is the activity's own row, never a second line nor a tooltip
   expect(text(slot.getByTestId("oats-panel-state"))).toBe("!Needs you· 5 min");
-  expect(slot.getByTestId("oats-panel-state").getAttribute("title")).toBe(`since ${waitingClock("2026-11-21T18:23:39.829Z", NOW)}`);
+  expect(slot.getByTestId("oats-panel-state").getAttribute("title")).toBeNull();
   expect(slot.queryByTestId("oats-panel-waiting-since")).toBeNull();
+  expect(text(slot.getByTestId("oats-panel-activity-summary"))).toBe(`Last: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
   // and the question once on the pane's face: in what it asks, not again in the header over the tabs
   // (the activity's rows hold it as history, each under its own fold: the live scene reads what is drawn)
   expect(text(slot.getByTestId("oats-panel-waiting"))).toBe("Which base branch?");

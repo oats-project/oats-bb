@@ -103,7 +103,7 @@ test("a failed or unreachable agent that still carries a claim says Needs you an
   }
 });
 
-test("what the agent asks stands first on the page, under no heading; how long it has waited is the header's, once; since when is that line's title", async () => {
+test("what the agent asks stands first on the page, under no heading; how long it has waited is the header's, once", async () => {
   const slot = panel();
   const waiting = await slot.findByTestId("oats-panel-waiting");
   // The clock as the words module says it here: with the date where local midnight falls inside the wait.
@@ -115,7 +115,7 @@ test("what the agent asks stands first on the page, under no heading; how long i
   expect(slot.queryByTestId("oats-panel-waiting-head")).toBeNull();
   expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("How should I merge the pull request?");
   expect(text(waiting)).toBe("How should I merge the pull request?"); // what it asks, alone: the age is the header's, once
-  expect(slot.getByTestId("oats-panel-state").getAttribute("title")).toBe(`since ${clock}`); // since when, by the clock: that line's title
+  expect(text(slot.getByTestId("oats-panel-page-instance"))).not.toContain(`since ${clock}`); // since when, by the clock, is not said twice: the Activity's row holds the claim's instant
   expect(slot.getByTestId("oats-panel-page-instance").firstElementChild).toBe(waiting); // first on the page
   expect(stateOf(slot)).toBe("Needs you· 15 min");
 });
@@ -488,8 +488,8 @@ test("an agent with no thread that waits on a person says Needs you, as its Need
   const slot = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(agents) }), sidebarThreads: panelThreads(agents) });
   await slot.findByTestId("oats-panel-waiting");
   expect(stateOf(slot)).toBe("Needs you· 15 min");
-  // The age once: the header's. Since when, by the clock, is that line's title, and no line of the page.
-  expect(slot.getByTestId("oats-panel-state").getAttribute("title")).toBe(`since ${waitingClock("2026-11-21T18:14:12.916Z", NOW)}`);
+  // The age once: the header's. The clock time is no line of the page and no tooltip (a phone has no hover).
+  expect(slot.getByTestId("oats-panel-state").getAttribute("title")).toBeNull();
   expect(slot.queryByTestId("oats-panel-waiting-since")).toBeNull();
   expect(text(slot.getByTestId("oats-panel-waiting"))).not.toMatch(/since/);
 });

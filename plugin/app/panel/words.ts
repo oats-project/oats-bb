@@ -121,11 +121,15 @@ export function markText(value: string): string {
   const cut = Math.max(slash < 0 ? 0 : slash + 1, dashes < 0 ? 0 : dashes + 2);
   let parts = wordsOf(value.slice(cut));
   if (parts.length >= 3) parts = parts.slice(1);
-  const chars = parts.length >= 2 ? [[...parts[0]!][0]!, [...parts[1]!][0]!] : parts.length === 1 ? [...parts[0]!].slice(0, 2) : [];
-  return twoGlyphs(chars) || "?";
+  return initials(parts) || "?";
 }
-/** Up to two characters as a mark: upper-cased. Upper case can grow ("ß" is "SS"): a mark is two glyphs at most, so then each character keeps its first. */
-function twoGlyphs(chars: string[]): string {
+/**
+ * Words as a mark: the initials of the first two, or a single word's first two characters,
+ * upper-cased, by code points; "" for no word. Upper case can grow ("ß" is "SS"): a mark is two
+ * glyphs at most, so then each character keeps its first.
+ */
+function initials(parts: string[]): string {
+  const chars = parts.length >= 2 ? [[...parts[0]!][0]!, [...parts[1]!][0]!] : parts.length === 1 ? [...parts[0]!].slice(0, 2) : [];
   const upper = [...chars.join("").toLocaleUpperCase("en")];
   return (upper.length <= 2 ? upper : chars.map((char) => [...char.toLocaleUpperCase("en")][0])).join("");
 }
@@ -137,9 +141,7 @@ function twoGlyphs(chars: string[]): string {
  * word: a name has none). null when the name has no letter or digit: no tile is drawn then.
  */
 export function nameMark(instance: string): string | null {
-  const parts = wordsOf(instance);
-  const chars = parts.length >= 2 ? [[...parts[0]!][0]!, [...parts[1]!][0]!] : parts.length === 1 ? [...parts[0]!].slice(0, 2) : [];
-  return twoGlyphs(chars) || null;
+  return initials(wordsOf(instance)) || null;
 }
 
 /**

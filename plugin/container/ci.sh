@@ -66,6 +66,9 @@ MACHINE_NAME=${MACHINE_NAME:-falcon}
 docker run -d --name "$NAME" --hostname "$MACHINE_NAME" -e "MACHINE_NAME=$MACHINE_NAME" --init --cpus 2 --memory 6g -e BB_TELEMETRY=false ${DOCKER_RUN_ARGS:-} "$IMAGE" sleep infinity > /dev/null
 cleanup() {
   status=$?
+  # A failed run keeps bb's own logs too (real/bb-logs.sh): a bb that did not start says why only
+  # there. A unit stage has no bb: the script then says that there is no log.
+  [ "$status" = 0 ] || docker exec -u node "$NAME" sh /home/node/plugin/container/real/bb-logs.sh /home/node/bbdata/logs /home/node/out || echo "ci: bb's logs could not be copied"
   rm -rf "$OUT"
   mkdir -p "$OUT"
   docker cp "$NAME:/home/node/out/." "$OUT/" > /dev/null 2>&1 || echo "ci: no artefacts to copy out"

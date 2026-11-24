@@ -18,7 +18,7 @@ are the images, `answers/` (what the kernel printed for the form's preview and s
 two refusals the run makes),
 `kernel.json`, `bridge.json` and `pi.json` (what npm says of the three tarballs), `doctor.txt`, `bb.out`,
 `pi-mock.out` and `pi-mock-requests.jsonl` (the model requests), and, when the run failed, `bb-logs/`
-(bb's own logs, cut short: `../bb-logs.sh`). A run takes about four minutes.
+(bb's own logs, cut short, and its crash reports: `../bb-logs.sh`). A run takes about four minutes.
 
 The run is of 2026-11-22: OATS 0.70.5 from npm (`@awebai/oats@0.70.5`, gitHead
 `e5e7a2a48db42140718948553e8272fb4e8e3ed4`), `@awebai/oats-pi@0.70.5`, pi 1.5.2

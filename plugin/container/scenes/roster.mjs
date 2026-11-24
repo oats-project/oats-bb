@@ -267,14 +267,41 @@ export default [
   {
     stage: "fixtures",
     name: "the fold: a closed parent whose child waits on a person carries the child's mark after its own state; the parent of the thread on screen is open",
-    run: async ({ page, at, viewport, threads, check, record }) => {
+    run: async ({ page, at, viewport, threads, check, record, snapshot, sleep }) => {
       const LEAD = threads.get("thr_redesign").id;
       const CHILD = threads.get("thr_mockups").id;
       const lead = `${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${LEAD}"]`;
       const child = `${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${CHILD}"]`;
       const toggle = `${testId("oats-sidebar")} ${testId("oats-row-toggle")}`;
+      // THE ROSTER THE PAGE LOADS. This scene loads the page anew after the kernel records a change, and a page that
+      // loads WHILE the server is reading that change can be given the roster from before it and then miss the event that
+      // says it changed (shown by this scene run ten times a view: logs of 24 Nov 2026; the window's read, not the
+      // fold: the child's own row said the same old thing). So the scene waits on the roster it needs: the SERVER's,
+      // as the app gets it, holds the change BEFORE the page is loaded; then the row is read.
+      const CHILD_NAME = "desktop-mockups-developer";
+      const claimOf = () => {
+        try {
+          const now = snapshot();
+          const agent = now?.agents?.find((each) => each.instance === CHILD_NAME);
+          return { at: now?.at ?? null, claim: agent === undefined ? "no such agent" : agent.waiting === null ? null : "waiting" };
+        } catch (error) {
+          return { at: null, claim: `snapshot failed: ${String(error?.message ?? error).split("\n")[0]}` };
+        }
+      };
+      /** Waits until the server's roster says `wanted` of the child's claim (60 s at most) → what it says, and after how long. */
+      const serverSays = async (wanted) => {
+        const from = Date.now();
+        let server = claimOf();
+        while (server.claim !== wanted && Date.now() - from < 60_000) {
+          await sleep(500);
+          server = claimOf();
+        }
+        return { ...server, seconds: Math.round((Date.now() - from) / 100) / 10 };
+      };
       // The kernel records that the lead's child waits on a person.
       record({ "desktop-mockups-developer": { waitingOnYou: { since: "2026-11-19T12:40:00.000Z", producer: "oats.core", reason: "attention", message: "Which mockup do I keep?" } } });
+      const held = await serverSays("waiting");
+      check(held.claim === "waiting", `${at} the server's roster holds the child's claim after the kernel records it (${held.seconds} s)`, JSON.stringify(held));
       await page.goto("/");
       check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
       const read = `(() => { const row = document.querySelector(${JSON.stringify(lead)}); if (!row) return ""; const inside = row.querySelector(${JSON.stringify(`${testId("oats-row-inside")} [data-mark]`)}); return JSON.stringify({ own: row.querySelector("[data-mark]").getAttribute("data-state"), word: row.querySelector('[data-phrase="state"]').innerText.trim(), inside: inside ? [inside.getAttribute("data-state"), inside.getAttribute("role"), inside.getAttribute("aria-label")] : null, after: row.querySelector(${JSON.stringify(testId("oats-row-inside"))})?.previousElementSibling?.getAttribute("data-phrase") ?? null, lines: Math.round(row.querySelector(${JSON.stringify(testId("oats-row-facts"))}).getBoundingClientRect().height / parseFloat(getComputedStyle(row.querySelector(${JSON.stringify(testId("oats-row-facts"))})).lineHeight)), open: document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, child: document.querySelector(${JSON.stringify(child)}) !== null, first: document.querySelector(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)}) === null ? null : [...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})].findIndex((r) => r === row) }); })()`;
@@ -298,21 +325,33 @@ export default [
       const off = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(toggle)}); b.focus(); const focused = document.activeElement === b; b.click(); return JSON.stringify({ disabled: b.disabled, aria: b.getAttribute("aria-disabled"), name: b.getAttribute("aria-label"), focused, open: document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, child: document.querySelector(${JSON.stringify(child)}) !== null, muted: Number(getComputedStyle(b).opacity) < 1 }); })()`);
       check(off === JSON.stringify({ disabled: true, aria: "true", name: "Redesign ui lead's agents shown", focused: false, open: "true", child: true, muted: true }), `${at} the chevron of the parent that holds the row on screen is drawn open and off (disabled, muted, no focus), named "Redesign ui lead's agents shown": a parent is never closed over the row on screen, and no button swallows a press`, off);
       await page.shot(`a13-${viewport.name}-sidebar-parent-of-open-thread`);
-      // And back, so the scenes after this one draw the fixtures.
+      // And back, so the scenes after this one draw the fixtures: the server's roster first, then the page.
       record();
+      const dropped = await serverSays(null);
+      check(dropped.claim === null, `${at} the server's roster drops the child's claim after the kernel records it (${dropped.seconds} s)`, JSON.stringify(dropped));
       await page.goto("/");
       // (At a phone's width bb may keep its drawer as it was over the reload: asked twice, the second press opens one the first closed.)
       if (!(await showSidebar(page, viewport, { fold: "asLoaded" }))) await showSidebar(page, viewport, { fold: "asLoaded" });
-      // (The status read that follows the kernel's record can be one that was already in flight, with the claim still
-      // in it; the read after it is the plugin's next poll. So: the wait of one poll, the record said once more, which
-      // asks for a read of its own, and the wait of two.)
+      const recordedAt = Date.now();
       const cleared = `(() => { const now = ${read}; return now !== "" && JSON.parse(now).inside === null && JSON.parse(now).open === "false" ? now : ""; })()`;
-      let back = await page.until(cleared, 20);
+      const back = await page.until(cleared, 15);
+      const rowAfter = Date.now() - recordedAt;
+      const titled = await page.evaluate(`document.querySelector(${JSON.stringify(`${lead} ${testId("oats-row-facts")}`)})?.getAttribute("title") ?? null`);
+      // What a failure is, said from the page itself (never guessed): the lead opened, does the CHILD's own row still say
+      // it waits (then the roster in the window is the old one: the mark follows it); does the window come right by itself
+      // within one more poll; and does a new load of the page.
+      let why = "";
       if (!back) {
-        record();
-        back = await page.until(cleared, 40);
+        await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
+        const childNow = await page.until(`document.querySelector(${JSON.stringify(`${child} [data-mark]`)})?.getAttribute("data-state") ?? ""`, 5);
+        await page.evaluate(`document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") === "true" && document.querySelector(${JSON.stringify(toggle)}).click()`);
+        const later = await page.until(cleared, 25);
+        await page.goto("/");
+        await showSidebar(page, viewport, { fold: "asLoaded" });
+        const reloaded = await page.until(cleared, 15);
+        why = `the row still carries a mark 15 s after the page was loaded, on a server's roster that had dropped the claim. The child's own row, the lead opened: ${JSON.stringify(childNow)} (needs-you: the window's roster is the old one, and the mark follows it; anything else: the mark is the fold's own fault). The window by itself within 25 s more: ${later ? "came right" : "did not"}. A new load of the page: ${reloaded ? "right" : "still marked"}. The server's roster now: ${JSON.stringify(claimOf())}; the lead's title at the failure: ${JSON.stringify(titled)}`;
       }
-      check(Boolean(back), `${at} once the child no longer waits the closed lead carries no mark`, back ?? `not within 30 s; the lead's row now: ${await page.evaluate(read)}; the sidebar: ${(await page.evaluate(textOf(testId("oats-sidebar")))).slice(0, 300)}`);
+      check(Boolean(back), `${at} once the child no longer waits the closed lead carries no mark (the row without the mark ${Math.round(rowAfter / 100) / 10} s after the page was loaded on the server's roster without the claim)`, back ?? why);
     },
   },
   {

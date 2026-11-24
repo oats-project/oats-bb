@@ -28,6 +28,10 @@ collapsed when the page loads), so a scene reads a child's row as a person who o
 own scenes, and the image of the sidebar as a fresh install shows it (`a13-<width>-sidebar`).
 `LIVE_ONLY_STAGES="tmux-roster"` (stage names, commas between), by hand only and never in CI, runs
 those stages alone: a look at one screen in minutes, never a gate.
+`LIVE_ONLY_SCENE="words of a scene's name"` runs the scenes whose name holds them, alone, and
+`LIVE_REPEAT=10` each that many times in every view: by hand only, to show whether a check that
+failed once is the scene's or the product's. A scene is given `snapshot()`: the server's roster as
+the app gets it now, so that it waits on the roster it needs and not on a number of seconds.
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to

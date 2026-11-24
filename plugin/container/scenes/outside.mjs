@@ -439,8 +439,8 @@ export default [
           { facts: "Stopped · oats-maintainer · session lost", state: "stopped", tone: null, lines: 1 },
           { facts: "Idle · oats-desktop-developer · not loaded", state: "idle", tone: null, lines: 1 },
           { facts: "Stopped · oats-developer · session lost · tmux", state: "stopped", tone: null, lines: 1 },
-        ]) && rows.words.every((word) => ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"].includes(word)),
-        `${at} the rows (each with its soul after these words): "Stopped" with no reason (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux, "tmux" its glyph's name: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every state word is one of the set`,
+        ]) && rows.words.every((word) => ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS", "Lost"].includes(word)) && rows.words.filter((word) => word === "Lost").length === 2,
+        `${at} the rows (each with its soul after these words): "Stopped" with no reason (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux, "tmux" its glyph's name: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every word drawn in the state's place is one of the set, with "Lost" (a row's own word for a lost session, whose title keeps "Stopped · … · session lost") on exactly the two lost rows`,
         JSON.stringify(rows),
       );
       await page.shot(`outside-${viewport.name}-three-sidebar`);

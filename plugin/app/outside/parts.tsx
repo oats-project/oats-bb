@@ -222,12 +222,23 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
  * tmux, or its thread archived or deleted in bb): the reason, ON the state's line, as the thread's
  * line and the sidebar's row say it ("Stopped · session lost"); never a line of its own further
  * down the page. An agent on its thread, and one the kernel reports (its notice says it), keep the
- * roster's own words. `kind`: which case this feature read, for the place's `data-outside` (null: none).
+ * roster's own words. EVERY reason a row can say is said here, whole: one with a sentence of its own
+ * (a lost session, a thread deleted or archived under a stopped agent) by `lineParts`; and one that
+ * is only where the thread is ("archived in bb", "deleted in bb", "no bb thread", "thread not shown
+ * in bb", of an agent that is not stopped) after the roster's own words ("Failed · session ended ·
+ * archived in bb"): a reason that left a narrow row is then whole on the page (the lead's rule;
+ * the specialist's word of 24 Nov 2026). `reason`: that reason alone, for a line that says another
+ * thing in the detail's place. `kind`: which case this feature read, for the place's `data-outside` (null: none).
  */
-export function pageParts(agent: Agent, roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere }, status: { state: AgentState; since: string | null; detail: string | null }): { since: string | null; detail: string | null; tone: "warning" | undefined; kind: Said["kind"] | null } {
+export function pageParts(agent: Agent, roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere }, status: { state: AgentState; since: string | null; detail: string | null }): { since: string | null; detail: string | null; tone: "warning" | undefined; reason: string | null; kind: Said["kind"] | null } {
   const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
   const said = attached ? null : sayOf(agent, roster.whereOf(agent), attached);
-  return { ...lineParts(said !== null && said.warning === null ? said : null, status), kind: said === null ? null : said.kind };
+  const kind = said === null ? null : said.kind;
+  const parts = lineParts(said !== null && said.warning === null ? said : null, status);
+  // A reason with no sentence: where the thread is, as the row says it (the same function), after the roster's own words.
+  const row = said !== null && said.warning === null && said.sentence === null ? rowParts(said, status.state) : null;
+  if (row === null || row.note === null || row.note === "") return { ...parts, reason: null, kind };
+  return { since: parts.since, detail: [parts.detail, row.note].filter((part) => part !== null && part !== "").join(" · "), tone: row.tone ?? parts.tone, reason: row.note, kind };
 }
 
 /**

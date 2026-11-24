@@ -467,6 +467,29 @@ test("a stopped agent whose thread bb has archived, or deleted: its own page say
   expect(header(deleted)).toMatchObject({ state: "Stopped", sentence: "deleted in bb", acts: [], headed: ["Start…", "Retire…"] });
 });
 
+// A reason that is only where the thread is has no sentence of its own; a narrow row may not draw it (it gives way
+// first). The agent's page says it whole, on its state's line, after the roster's own words (the specialist's word of
+// 24 Nov 2026): what left the row is never said nowhere.
+test("the agent's page says, on its state's line, the reason its row says for every kind: where the thread is, after the roster's own words", async () => {
+  const HARVEST = "harvest-knowledge-helper";
+  const without = (thread: string) => ({ status: "ready" as const, threads: fixtureThreads().filter((each) => each.id !== thread) });
+  // Failed, its thread archived in bb: the row says "Failed · <soul> · archived in bb"; the page, "Failed · session ended · archived in bb".
+  const failed = await agentPage(HARVEST, { rpc: handlers({}, fixtureAgents().map((agent): Agent => (agent.instance === HARVEST ? { ...agent, running: false, runtimeState: "shell", waiting: null } : agent))), sidebarThreads: without("thr_harvest"), sdk: bb(["thr_harvest"]).sdk });
+  await waitFor(() => expect(header(failed)).toMatchObject({ state: "Failed", sentence: "session ended · archived in bb", tone: null, alone: null }));
+  resetApp();
+  // The same, its thread deleted: plain (it is not stopped: nothing here warns).
+  const gone = await agentPage(HARVEST, { rpc: handlers({}, fixtureAgents().map((agent): Agent => (agent.instance === HARVEST ? { ...agent, running: false, runtimeState: "shell", waiting: null } : agent))), sidebarThreads: without("thr_harvest"), sdk: bb([]).sdk });
+  await waitFor(() => expect(header(gone)).toMatchObject({ state: "Failed", sentence: "session ended · deleted in bb", tone: null }));
+  resetApp();
+  // Stopped by an operator, its row names no thread at all: "Stopped · no bb thread".
+  const none = await agentPage(DIGEST, { rpc: handlers({}, fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, threadId: null, sessionEnd: "stopped" } : agent))), sidebarThreads: sidebarThreads(), sdk: bb([]).sdk });
+  await waitFor(() => expect(header(none)).toMatchObject({ state: "Stopped", sentence: "no bb thread", tone: null }));
+  resetApp();
+  // An agent that asks through OATS and has no thread: what it asks is said once, in Needs input; the line keeps the reason.
+  const asks = await agentPage("flaky-ci-developer", { rpc: handlers({}, fixtureAgents().map((agent): Agent => (agent.instance === "flaky-ci-developer" ? { ...agent, threadId: null } : agent))), sidebarThreads: sidebarThreads(), sdk: bb([]).sdk });
+  await waitFor(() => expect(header(asks)).toMatchObject({ state: "!Needs you", sentence: "no bb thread" })); // ("!": the mark of an agent that waits)
+});
+
 test("no act is drawn twice on the agent's page: the three agents whose thread bb has archived, and the one that runs outside OATS", async () => {
   const HARVEST = "harvest-knowledge-helper";
   const verbs = (slot: Awaited<ReturnType<typeof agentPage>>) => actsIn(slot.getByTestId("oats-agent-page")).map((label) => label!.replace("…", ""));

@@ -334,7 +334,10 @@ one press. The thread's menu offers Stop for an agent that runs outside OATS too
 roster draws on no thread has none of the menu's entries, so its row leads to its acts: to the
 ARCHIVED thread, whose own row (`OutsideThreadRow`) has them; or, for a thread that is deleted, to
 the agent's own page, whose header has them (the panel's `AgentActs`) under its state's line, which
-says what happened after the state's word, as the row does ("Stopped · session lost"; `pageParts`).
+says what happened after the state's word, as the row does ("Stopped · session lost"; `pageParts`),
+for every reason a row can say: one that is only where the thread is stands after the roster's own
+words ("Failed · session ended · archived in bb", "Stopped · no bb thread"), so a reason that left
+a narrow row is whole on the page.
 The kernel's report, and the one act the header lacks, stand first on the Instance tab
 (`OutsideAgent`; the header over the tabs does not scroll, so that block is on the page). They are the lifecycle's buttons for the agent's state
 (`AgentActs`: Start… and Retire… for a stopped agent), but where a process runs, or may, with no

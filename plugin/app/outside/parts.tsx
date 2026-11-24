@@ -18,7 +18,7 @@ import type { Agent, AgentState, ThreadWhere } from "../../model/types";
 import { said as sayOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
-import { OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, STOPPED_OPEN_ASKING } from "./words";
+import { LOST_NOTE, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, STOPPED_OPEN_ASKING } from "./words";
 
 /** On a button: with the dots, since each opens its dialog and nothing runs on the press. */
 const BUTTON: Record<Act, string> = { stop: "Stop…", start: "Start…", retire: "Retire…" };
@@ -85,6 +85,26 @@ export function rowParts(said: Said | null, state: AgentState): { note: string |
  * so that the parent's mark and the row's never disagree.
  */
 export const rowWarns = (said: Said | null, state: AgentState): boolean => rowParts(said, state).tone === "warning";
+
+/**
+ * What a ROW draws in the state's place and after it (the sidebar's row, bb's drawer, the home's
+ * rows), from the state's own word and the row's reason (`rowParts`' note). ONE case has a word of
+ * its own: a stopped agent whose reason is "session lost" reads **Lost** (the kernel's own word:
+ * `sessionEnd: "lost"`), with no reason after it: on a row "session lost" then needs no room, and
+ * is never the part that must fit or leave (the lead's L17, 24 Nov 2026: on a roster whose host
+ * was restarted every row is lost, and a row is too narrow for the reason). Nothing else gets a
+ * word in the state's place. The agent's STATE is untouched: it is stopped (its mark, Start, its
+ * place in the order); and the thread's line, the agent's page and the row's own title keep
+ * "Stopped · session lost" (`title`: the words the title says, whole).
+ * A lost session whose thread bb archived or deleted has another reason on its row ("archived in
+ * bb", "deleted in bb", in the warning tone): that is what needs a person, so its row reads
+ * "Stopped" and that reason, never "Lost".
+ */
+export const LOST_WORD = "Lost";
+export function rowWords(word: string, state: AgentState, note: string | null): { state: string; reason: string | null; title: { state: string; reason: string | null } } {
+  const title = { state: word, reason: note };
+  return state === "stopped" && note === LOST_NOTE ? { state: LOST_WORD, reason: null, title } : { state: word, reason: note, title };
+}
 
 /**
  * What a status line says after the state's word, where this feature has a reason for it: the

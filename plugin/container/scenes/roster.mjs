@@ -780,7 +780,7 @@ export default [
         await page.evaluate(click("oats-confirm-close"));
         check(Boolean(await page.until(closed, 10)), `${at} Close closes the dialog`);
         check(await showSidebar(page, viewport), `${at} the sidebar is shown again`);
-        const after = await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)}); const text = facts ? (facts.getAttribute("title") ?? "") : ""; return text === "Working · oats-contrib-developer · tmux" ? text : ""; })()`, 60);
+        const after = await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)}); const text = facts ? (facts.getAttribute("title") ?? "") : ""; return text === "Running · oats-contrib-developer · tmux" ? text : ""; })()`, 60);
         check(after === "Running · oats-contrib-developer · tmux", `${at} its row then says "Running", its soul and where it is: no "session lost" any more`, after ?? (await page.evaluate(textOf(row))));
         await page.evaluate(`document.querySelector(${JSON.stringify(row)})?.scrollIntoView({ block: "center" })`);
         await page.shot(`tmux-roster-${viewport.name}-lost-row-after`);

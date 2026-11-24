@@ -824,7 +824,7 @@ export default [
       await page.until(phaseIs("ready"), 30);
       const before = await dialog(page);
       // The image proves what its name says: the dialog is about the agent whose Retire was pressed, and so is the plan in it.
-      check(before.title === "Retire Weekly digest helper?" && before.about === "weekly-digest-helper" && before.body.includes("deletes its home folder") && before.focus === "oats-confirm-cancel", `${at} Retire of an agent with no bb thread opens the dialog of the kernel's plan for it, the focus on Cancel`, JSON.stringify(before));
+      check(before.title === "Retire Weekly digest helper?" && before.about === "weekly-digest-helper" && before.body.includes("This cannot be undone.") && before.focus === "oats-confirm-cancel", `${at} Retire of an agent with no bb thread opens the dialog of the kernel's plan for it, the focus on Cancel`, JSON.stringify(before));
       await page.shot(`a16-${viewport.name}-plan`); // (the page behind the dialog is the soul's: its controls are its scenes' to measure)
       await page.evaluate(click("oats-confirm-cancel"));
       check(Boolean(await page.until(closed, 10)), `${at} Cancel closes the dialog`);

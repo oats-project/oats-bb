@@ -22,6 +22,10 @@ does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a mac
 fresh install shows them: the plugin's `pages` stays at its default (the home alone) through every
 stage, and only those screens' scenes run. It is a pass for images: a check that asserts another
 page's link or tile does not hold in it, and the gate is the run without it.
+In a scene, `showSidebar(page, viewport)` opens every parent of the roster's tree (the children are
+collapsed when the page loads), so a scene reads a child's row as a person who opened it;
+`showSidebar(page, viewport, { fold: "asLoaded" })` leaves the tree as the page drew it: the fold's
+own scenes, and the image of the sidebar as a fresh install shows it (`a13-<width>-sidebar`).
 `LIVE_ONLY_STAGES="tmux-roster"` (stage names, commas between), by hand only and never in CI, runs
 those stages alone: a look at one screen in minutes, never a gate.
 

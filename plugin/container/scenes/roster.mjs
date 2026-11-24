@@ -45,10 +45,47 @@ export default [
     stage: "fixtures",
     name: "the sidebar, an agent's thread, a thread that is no agent",
     run: async ({ page, at, viewport, threads, fixtureThreads, check, sleep }) => {
-      // the sidebar with the tree
+      // the sidebar with the tree, as the page loads it: every parent closed (the fold)
       await page.goto("/");
-      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
       await page.until(visible(testId("oats-tree")), 30);
+      {
+        const LEAD = threads.get("thr_redesign").id; // redesign-ui-lead: the one parent, of desktop-mockups-developer and harvest-knowledge-helper
+        const KIDS = [threads.get("thr_mockups").id, threads.get("thr_harvest").id];
+        const lead = `${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${LEAD}"]`;
+        const toggle = `${testId("oats-sidebar")} ${testId("oats-row-toggle")}`;
+        const fold = `JSON.stringify({ rows: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}`)})].map((e) => e.getAttribute("data-sidebar-thread-id")), toggles: [...document.querySelectorAll(${JSON.stringify(toggle)})].map((b) => [b.tagName, b.getAttribute("data-instance"), b.getAttribute("aria-expanded"), b.getAttribute("aria-label"), b.innerText.trim()]) })`;
+        const closedNow = { toggles: [["BUTTON", "redesign-ui-lead", "false", "Show Redesign ui lead's agents", "▸"]] };
+        const openNow = { toggles: [["BUTTON", "redesign-ui-lead", "true", "Hide Redesign ui lead's agents", "▸"]] };
+        const is = (read, want, kids) => JSON.stringify(read.toggles) === JSON.stringify(want.toggles) && read.rows.length === (kids ? 7 : 5) && KIDS.every((id) => read.rows.includes(id) === kids);
+        const loaded = JSON.parse(await page.evaluate(fold));
+        check(is(loaded, closedNow, false), `${at} on load every parent is closed: the five roots on bb are rows, the lead's two children are not, and the lead has ONE chevron, a button that says "Show Redesign ui lead's agents" (no count)`, JSON.stringify(loaded));
+        // The chevron is before the row's mark, inside the row, not over it; and it is not part of the row's link.
+        const placed = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(toggle)}).getBoundingClientRect(); const row = document.querySelector(${JSON.stringify(lead)}); const r = row.getBoundingClientRect(); const m = row.querySelector("[data-mark]").getBoundingClientRect(); return JSON.stringify({ inRow: b.left >= r.left - 1 && b.top >= r.top - 1 && b.bottom <= r.bottom + 1, beforeMark: b.right <= m.left + 1, high: Math.round(b.height) >= ${viewport.mobile ? 44 : 32}, wide: Math.round(b.width) >= 24, apart: !row.contains(document.querySelector(${JSON.stringify(toggle)})) }); })()`);
+        check(placed === JSON.stringify({ inRow: true, beforeMark: true, high: true, wide: true, apart: true }), `${at} the chevron stands in the row, before its mark, as high as a control (${viewport.mobile ? 44 : 32} px) and 24 px wide, and is no part of the row's link`, placed);
+        // Every row's mark stands in one column: the gutter is every row's.
+        const column = await page.evaluate(`JSON.stringify([...new Set([...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} > li > [data-testid], ${testId("oats-tree")} > li a[data-testid]`)})].filter((row) => row.matches(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})).map((row) => Math.round(row.querySelector("[data-mark]").getBoundingClientRect().left + row.querySelector("[data-mark]").getBoundingClientRect().width / 2)))])`);
+        check(JSON.parse(column).length === 1, `${at} every root's mark stands in one column, the parent's among them`, column);
+        // The image of the sidebar as a fresh install shows it: the tree closed.
+        await page.shot(`a13-${viewport.name}-sidebar`, { targets: true });
+        // The keys, on the row: Right opens, Left closes.
+        await page.evaluate(`document.querySelector(${JSON.stringify(lead)}).focus()`);
+        await page.press("ArrowRight");
+        const byKey = (await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === 7 ? now : ""; })()`, 10)) || (await page.evaluate(fold));
+        check(is(JSON.parse(byKey), openNow, true), `${at} Right on the lead's row opens it: its two children are rows, and the chevron says "Hide Redesign ui lead's agents"`, byKey);
+        await page.evaluate(`document.querySelector(${JSON.stringify(lead)}).focus()`);
+        await page.press("ArrowLeft");
+        const closedByKey = (await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === 5 ? now : ""; })()`, 10)) || (await page.evaluate(fold));
+        check(is(JSON.parse(closedByKey), closedNow, false), `${at} Left closes it again`, closedByKey);
+        // The chevron by the keyboard: it takes the focus, and Enter presses it.
+        const focused = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(toggle)}); b.focus(); return document.activeElement === b && b.tabIndex === 0; })()`);
+        await page.press("Enter");
+        const byEnter = (await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === 7 ? now : ""; })()`, 10)) || (await page.evaluate(fold));
+        check(focused === true && is(JSON.parse(byEnter), openNow, true), `${at} the chevron takes the keyboard's focus, and Enter on it opens the lead`, `${focused} ${byEnter}`);
+        const where = await page.evaluate(`location.pathname`);
+        check(where === "/", `${at} opening and closing a parent opens no thread`, where);
+        await page.shot(`a13-${viewport.name}-sidebar-opened`, { targets: true });
+      }
       const rows = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-agent-row"))})].map((e) => e.getAttribute("data-sidebar-thread-id"))`);
       const expected = fixtureThreads.filter((thread) => thread.id !== "thr_plain").map((thread) => threads.get(thread.id).id);
       check(rows.length === 7 && expected.every((id) => rows.includes(id)), `${at} the tree draws the 7 bb agents, joined by bb's own thread ids`, JSON.stringify(rows));
@@ -80,7 +117,6 @@ export default [
       check(cut.length === 0, `${at} no row's second line is cut`, JSON.stringify(cut));
       const others = await page.evaluate(texts(testId("oats-other-row")));
       check(others.some((text) => text.includes("Plain bb thread")), `${at} the thread that is no agent is under Other threads`, JSON.stringify(others));
-      await page.shot(`a13-${viewport.name}-sidebar`);
 
       // the home's badge: bb's own navigation entry for the home (the rail on desktop, the drawer on a
       // phone), never the plugin's own "3 need you" line, carries the label and draws the count
@@ -205,6 +241,47 @@ export default [
       const back = record();
       const again = (await page.until(drawn("idle"), 15)) ? Date.now() - back : null;
       check(again !== null && again <= 3000, `${at} and idle again ${again === null ? "never" : `${again} ms`} after the kernel recorded that (3 s at most)`);
+    },
+  },
+  {
+    stage: "fixtures",
+    name: "the fold: a closed parent whose child waits on a person carries the child's mark after its own state; the parent of the thread on screen is open",
+    run: async ({ page, at, viewport, threads, check, record }) => {
+      const LEAD = threads.get("thr_redesign").id;
+      const CHILD = threads.get("thr_mockups").id;
+      const lead = `${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${LEAD}"]`;
+      const child = `${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${CHILD}"]`;
+      const toggle = `${testId("oats-sidebar")} ${testId("oats-row-toggle")}`;
+      // The kernel records that the lead's child waits on a person.
+      record({ "desktop-mockups-developer": { waitingOnYou: { since: "2026-11-19T12:40:00.000Z", producer: "oats.core", reason: "attention", message: "Which mockup do I keep?" } } });
+      await page.goto("/");
+      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
+      const read = `(() => { const row = document.querySelector(${JSON.stringify(lead)}); if (!row) return ""; const inside = row.querySelector(${JSON.stringify(`${testId("oats-row-inside")} [data-mark]`)}); return JSON.stringify({ own: row.querySelector("[data-mark]").getAttribute("data-state"), word: row.querySelector('[data-phrase="state"]').innerText.trim(), inside: inside ? [inside.getAttribute("data-state"), inside.getAttribute("role"), inside.getAttribute("aria-label")] : null, after: row.querySelector(${JSON.stringify(testId("oats-row-inside"))})?.previousElementSibling?.getAttribute("data-phrase") ?? null, lines: Math.round(row.querySelector(${JSON.stringify(testId("oats-row-facts"))}).getBoundingClientRect().height / parseFloat(getComputedStyle(row.querySelector(${JSON.stringify(testId("oats-row-facts"))})).lineHeight)), open: document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, child: document.querySelector(${JSON.stringify(child)}) !== null, first: document.querySelector(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)}) === null ? null : [...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})].findIndex((r) => r === row) }); })()`;
+      const marked = (await page.until(`(() => { const now = ${read}; return now !== "" && JSON.parse(now).inside !== null ? now : ""; })()`, 30)) || (await page.evaluate(read));
+      const m = marked === "" ? {} : JSON.parse(marked);
+      check(m.open === "false" && m.child === false && m.own === "working" && m.word === "Working" && JSON.stringify(m.inside) === JSON.stringify(["needs-you", "img", "Needs input"]) && m.after === "state" && m.lines === 1, `${at} the closed lead keeps its own state ("Working", its own mark), and carries after it the mark of the child that waits, named for a screen reader, on the same one line; the child's row is not drawn`, marked);
+      check(typeof m.first === "number" && m.first <= 2, `${at} the lead stands among the rows that need a person: its subtree's most urgent state brings it up`, marked);
+      await page.shot(`a13-${viewport.name}-sidebar-child-waits`, { targets: true });
+      // Opened: the child's own row says it, and the lead carries no mark.
+      await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
+      const opened = (await page.until(`(() => { const now = ${read}; return now !== "" && JSON.parse(now).child ? now : ""; })()`, 10)) || (await page.evaluate(read));
+      const childState = await page.evaluate(`document.querySelector(${JSON.stringify(`${child} [data-mark]`)})?.getAttribute("data-state") ?? null`);
+      check(opened !== "" && JSON.parse(opened).inside === null && JSON.parse(opened).open === "true" && childState === "needs-you", `${at} opened, the child's own row is marked and the lead carries no mark`, `${opened} ${childState}`);
+      await page.shot(`a13-${viewport.name}-sidebar-child-waits-opened`);
+      // The thread on screen is the child's: after a load its parent is open, and a press on the chevron does not hide the row.
+      await page.goto(`/projects/${threads.get("thr_mockups").projectId}/threads/${CHILD}`);
+      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is shown beside the child's thread`);
+      const onScreen = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(child)}); return row && row.getAttribute("aria-current") === "page" ? document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? "" : ""; })()`, 30);
+      check(onScreen === "true", `${at} with the child's thread on screen its parent is open on load`, String(onScreen));
+      await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
+      const kept = await page.evaluate(`JSON.stringify([document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, document.querySelector(${JSON.stringify(child)}) !== null])`);
+      check(kept === JSON.stringify(["true", true]), `${at} a parent is never closed over the row on screen`, kept);
+      // And back, so the scenes after this one draw the fixtures.
+      record();
+      await page.goto("/");
+      await showSidebar(page, viewport, { fold: "asLoaded" });
+      const back = await page.until(`(() => { const now = ${read}; return now !== "" && JSON.parse(now).inside === null && JSON.parse(now).open === "false" ? now : ""; })()`, 30);
+      check(Boolean(back), `${at} once the child no longer waits the closed lead carries no mark`, String(back));
     },
   },
   {

@@ -98,6 +98,19 @@ person reads it, unless an agent starts to need them (it rises) or is answered (
 its kernel place). The sidebar has no line that counts who waits: those rows are first and
 marked, and bb's badge on the plugin's entry says how many.
 
+**Children are collapsed by default** (`model/view.ts` `treeRows`, `insideOf`, `ancestorsOf`, whose
+table is `test/model/fold.test.ts`; `app/roster/fold.tsx`). A parent has ONE chevron before its
+mark, with no count: a button of its own, not part of the row's link, that says whose agents it
+shows or hides ("Show Redesign ui lead's agents", "Hide …") and whether they are shown
+(`aria-expanded`). Right on a parent's row opens it and Left closes it. Every parent is closed when
+the page loads, and stays as the person left it while the window lives: the open set is the
+window's memory (it outlives bb's drawer, which draws the sidebar anew), and nothing of it is
+stored. A closed parent's children are not in the page, so nothing of them takes the focus. A
+closed parent keeps its own state, mark and word, and where its subtree hides a row that needs a
+person, or one a person must look at, it carries that row's mark after its own word, named for a
+screen reader. The parents of the thread that is on screen are open, and are never closed over it.
+A roster with a parent in it keeps a gutter before every row, so every mark stands in one column.
+
 ## Stopping, starting, restarting and retiring an agent
 
 The four acts are OATS's own, each through the kernel, and each opens a dialog first: nothing runs

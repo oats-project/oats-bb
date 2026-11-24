@@ -1084,6 +1084,18 @@ test("the Lost section holds the agents whose roster row says \"Lost\", and no o
   expect((within(section).getByTestId("oats-lost-start") as HTMLButtonElement).disabled).toBe(false);
   slot.unmount();
   resetApp();
+  // Behind a result that says it started, until the roster is read again: the row is still in the list (the roster is
+  // from before), and its Start… is off: a second press would start what the result says is started (L13's rule).
+  const { noteActed, forgetActed } = await import("../../app/roster/reading");
+  const again = await homePage({ rpc: handlers({}, agents) });
+  const live = (await again.findByTestId("oats-lost-start")) as HTMLButtonElement;
+  expect(live.disabled).toBe(false);
+  const { act: settle } = await import("@testing-library/react");
+  settle(() => noteActed([lostOne.instance], fixtureSnapshot(agents).at, { verb: "start", was: new Map([[lostOne.instance, "stopped"]]) }));
+  expect((again.getByTestId("oats-lost-start") as HTMLButtonElement).disabled).toBe(true);
+  forgetActed();
+  again.unmount();
+  resetApp();
   // The roster shown is the last one read: the acts are off, this one too (the notice on the same screen says so).
   const last = { at: new Date(Date.now() - 120_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents };
   const stale = await homePage({ rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }) });

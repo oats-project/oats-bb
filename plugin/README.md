@@ -61,7 +61,10 @@ the New agent form), or an agent's thread, whose own line says it on one line. B
 the sidebar says one line, "Read <age>. Acts are off.", with nothing to press (a pane cannot know
 whether bb shows its sidebar, a drawer at a phone's width: so the Retry is the pane's, and there
 are never two on a screen and never none); where no pane shows the notice, the sidebar's own is
-the whole one, with the Retry. The panel in a thread's tab draws none: it holds its buttons. What a place still
+the whole one, with the Retry. A notice counts as a pane's only while it is SEEN: the home in a
+thread's tab says none while bb keeps that tab mounted out of sight, nor beside a thread whose own
+line says it. The panel in a thread's tab draws none: it holds its buttons. (Where OATS was NEVER
+read, the sidebar's and a pane's notice still stand side by side: the rule for that state is asked.) What a place still
 shows of an agent (its soul, its events, its readiness) can still be read. Where it never was,
 bb's threads are listed as usual under the notice. The notice's code:
 

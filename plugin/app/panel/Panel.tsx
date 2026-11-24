@@ -38,7 +38,7 @@ type Roster = Pick<Oats, "soulOf" | "threadById" | "retry"> & { /** the machine 
 type Shown = { key: string; agent: Agent; node: Node | undefined };
 const NO_NODES: ReadonlyMap<string, Node> = new Map();
 /** The roster could not be read again: what it said, and the way to ask again. */
-type RosterFailure = { code: string; message: string; machine: string | null; line: string; retry(): void };
+type RosterFailure = { code: string; message: string; machine: string | null; line: string; /** when the roster kept was read; null where none ever was */ at: string | null; retry(): void };
 
 /** The panel's tabs. */
 export type TabId = "instance" | "soul";
@@ -123,7 +123,7 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
   const thread = held.node?.thread ?? (remembered !== undefined && isListed(remembered) ? remembered : null);
   // OATS cannot be read: never (no roster), or not again (the roster is the last one read).
   const unread = oats.phase === "failed" ? oats : oats.phase === "ready" ? oats.stale : null;
-  const failure: RosterFailure | null = unread === null ? null : { code: unread.code, message: unread.message, machine: oats.phase === "failed" ? oats.machine : oats.phase === "ready" ? oats.deployment.machine : null, line: failureLine(unread), retry: oats.retry };
+  const failure: RosterFailure | null = unread === null ? null : { code: unread.code, message: unread.message, machine: oats.phase === "failed" ? oats.machine : oats.phase === "ready" ? oats.deployment.machine : null, line: failureLine(unread), at: oats.phase === "ready" ? oats.at : null, retry: oats.retry };
   return (
     <div ref={setRoot} data-testid="oats-panel" className="flex h-full min-h-0 flex-col text-sm text-foreground">
       {/* What the panel draws is as wide as the part of it that is in the window (`useVisibleWidth`). */}
@@ -251,8 +251,12 @@ function ReadState({ read, now, failure, page }: { read: InstanceRead; now: numb
     read.retry();
   };
   if (refusal === null) return read.status === "loading" ? <Loading>Reading…</Loading> : null;
-  // Nothing was ever read: the notice every place of the plugin shows when OATS cannot be read, whole.
-  if (failure !== null && read.data === undefined) return <Unreadable failure={failure} machine={failure.machine} onRetry={again} />;
+  // Nothing was read here, and no roster is kept (OATS was never read): the notice every place of the plugin shows
+  // when OATS cannot be read, whole.
+  if (failure !== null && read.data === undefined && failure.at === null) return <Unreadable failure={failure} machine={failure.machine} onRetry={again} />;
+  // The roster is the last one read and this panel has read nothing yet (an agent opened meanwhile): the same rule as
+  // below, before its first read lands: the page says the notice with the roster's age; the tab beside a thread draws none.
+  if (failure !== null && read.data === undefined) return page ? <Unreadable failure={failure} machine={failure.machine} at={failure.at ?? undefined} now={now} onRetry={again} /> : read.status === "loading" ? <Loading>Reading…</Loading> : null;
   // The ROSTER is the last one read, and the panel keeps what it read. The notice stands ONCE, in the pane a person
   // is looking at (the lead's T3). Beside a thread that is the thread's own line: the panel draws none and only holds
   // its buttons. On an agent's page the panel is that pane: the notice every place shows, whole, with the age of what

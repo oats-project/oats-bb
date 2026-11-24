@@ -79,15 +79,20 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
   // one), so that the sidebar beside it says one line and not the same notice a second time (the
   // lead's T3: the notice ONCE, in the pane a person is looking at). The sidebar's own (`inSidebar`) does not count.
   const fullOnPage = !inSidebar && at !== undefined;
+  // A thread's own line that says it (`compact`) is counted apart too: the home in that thread's tab then draws no
+  // notice of its own (it would be a second one, with a second Retry, on the same screen).
+  const onLine = compact && at !== undefined;
   useEffect(() => {
     if (!fullOnPage) return;
     pagesWithNotice += 1;
+    if (onLine) linesWithNotice += 1;
     tell();
     return () => {
       pagesWithNotice -= 1;
+      if (onLine) linesWithNotice -= 1;
       tell();
     };
-  }, [fullOnPage]);
+  }, [fullOnPage, onLine]);
   if (compact) {
     return (
       <div role="alert" data-testid="oats-unreadable" data-code={failure.code} data-compact="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground">
@@ -139,8 +144,9 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
  * the Notice when OATS cannot be read, with the age of what the place still shows when it is the
  * last roster read. The place draws it above what it keeps.
  */
-export function RosterNotice({ oats }: { oats: Oats }) {
+export function RosterNotice({ oats, seen = true }: { oats: Oats; /** false: the place is not in view (a tab bb keeps mounted while hidden), or a thread's line on the same screen says the notice: nothing is drawn, and nothing is counted as a pane's notice (the sidebar then keeps its own, whole, with the Retry) */ seen?: boolean }) {
   const now = useNow();
+  if (!seen) return null;
   if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
   if (oats.phase === "ready" && oats.stale !== null) return <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />;
   return null;
@@ -150,6 +156,7 @@ export function RosterNotice({ oats }: { oats: Oats }) {
 // The sidebar and a page are drawn side by side. While a page shows the full notice over what it
 // keeps, the sidebar says ONE line (how old the roster is, that the acts are off): `LastObservation`.
 let pagesWithNotice = 0;
+let linesWithNotice = 0;
 const noticeWatchers = new Set<() => void>();
 const tell = () => {
   for (const watcher of noticeWatchers) watcher();
@@ -164,6 +171,17 @@ export function usePageShowsNotice(): boolean {
       return () => noticeWatchers.delete(watcher);
     },
     () => pagesWithNotice > 0,
+  );
+}
+
+/** Whether a thread's own line drawn now says the notice (the compact one) over a roster kept as last read. */
+export function useLineShowsNotice(): boolean {
+  return useSyncExternalStore(
+    (watcher) => {
+      noticeWatchers.add(watcher);
+      return () => noticeWatchers.delete(watcher);
+    },
+    () => linesWithNotice > 0,
   );
 }
 

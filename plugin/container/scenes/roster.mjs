@@ -541,6 +541,20 @@ export default [
       const whole = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); return s?.querySelector(${JSON.stringify(testId("oats-held"))}) ? JSON.stringify({ line: s.querySelector(${JSON.stringify(testId("oats-last-observation"))}) !== null, why: s.querySelector(${JSON.stringify(testId("oats-new-agent-held"))}) !== null }) : ""; })()`, 15);
       check(whole === JSON.stringify({ line: false, why: false }), `${at} with the home left the sidebar's notice is whole again: no one line, and no reason under New agent`, whole ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       check((await page.evaluate(RETRIES)) === 1, `${at} and its Retry is again the ONE on the screen`, String(await page.evaluate(RETRIES)));
+      // A thread that is NO agent's, at a wide width: bb keeps the plugin's fixed tab mounted while its side panel is
+      // closed, and a notice in a tab nobody sees is no pane's: the sidebar keeps its own, whole, with the one Retry
+      // (the first review round of this change). (Only where bb lists such a thread under the roster.)
+      if (!viewport.mobile) {
+        const other = `${testId("oats-sidebar")} ${testId("oats-other-row")}`;
+        const has = await page.evaluate(`document.querySelector(${JSON.stringify(other)}) !== null`);
+        if (has) {
+          await page.evaluate(`document.querySelector(${JSON.stringify(other)}).click()`);
+          const onThread = await page.until(`/\\/threads\\//.test(location.pathname) ? "1" : ""`, 15);
+          const plain = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); return s ? JSON.stringify({ whole: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null, line: s.querySelector(${JSON.stringify(testId("oats-last-observation"))}) !== null, retries: ${RETRIES}, seen: [...document.querySelectorAll("button")].filter((b) => b.innerText.trim() === "Retry").map((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === b; }).filter(Boolean).length }) : ""; })()`, 15);
+          const read = plain ? JSON.parse(plain) : null;
+          check(Boolean(onThread) && read !== null && read.seen >= 1 && (read.whole === true || read.seen === 1), `${at} on a thread that is no agent's a Retry is IN VIEW: the sidebar's whole notice while the plugin's tab is out of sight, or the tab's own while it is shown`, plain ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        }
+      }
     },
   },
   {

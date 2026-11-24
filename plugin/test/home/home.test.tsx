@@ -81,14 +81,18 @@ test("a card says who (the name as words, its soul under it, and no machine), wh
   const workerFacts = within(worker).getByTestId("oats-home-agent-where");
   expect([workerFacts.textContent, workerFacts.getAttribute("title"), workerFacts.className.split(/\s+/).includes("whitespace-nowrap")]).toEqual(["oats-product-expert", "oats-product-expert", true]);
   expect(workerFacts.querySelector('[data-phrase="soul"]')!.className.split(/\s+/)).toEqual(expect.arrayContaining(["shrink", "truncate"])); // the soul is the part that gives way
-  // Its soul is under its name on the card (Joan, 24 Nov: "Keep the agent type"); its machine is on its page.
+  // Its soul is on the card, on its name's line (Joan, 24 Nov: "Keep the agent type"; the reader's P5: one line); its machine is on its page.
   expect(within(release).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer");
-  // That line is ONE line high on a card: under the name it stands in a column, where a flex base is a height (a base
-  // of ten rem once left an empty 150 px under the soul on every card). It takes the column's width and nothing else;
-  // beside a name, in a row of a list, it takes the rest of the row's width (the live scene measures the cards' boxes).
-  expect(within(release).getByTestId("oats-needs-where").className.split(/\s+/).filter((name) => /^(flex-1|grow|basis-|h-|min-h-)/.test(name))).toEqual([]);
-  expect(within(release).getByTestId("oats-needs-where").className.split(/\s+/)).toContain("w-full");
-  expect(workerFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["flex-1", "basis-40"]));
+  // That line is ONE line high on a card: it stands in a ROW, beside the name, where its flex base is a WIDTH. (In a
+  // column a flex base is a height: a base of ten rem once left an empty 150 px under the soul on every card; the live
+  // scene measures the cards' boxes.) On a card and in a list's row alike it takes what the name leaves, from nothing.
+  const cardFacts = within(release).getByTestId("oats-needs-where");
+  expect(cardFacts.parentElement!.className.split(/\s+/)).not.toContain("flex-col");
+  expect(cardFacts.parentElement!.contains(within(release).getByTestId("oats-needs-name"))).toBe(true); // the name's own line
+  expect(cardFacts.className.split(/\s+/).filter((name) => /^(h-|min-h-)/.test(name))).toEqual([]);
+  for (const facts of [cardFacts, workerFacts]) expect(facts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-0"]));
+  // The mark and the age stand at the end of that line (P5), not on a line of their own.
+  expect(cardFacts.parentElement!.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
   expect(release.textContent).not.toMatch(/falcon/);
   expect(within(release).getByTestId("oats-needs-where").querySelector('[data-phrase="reason"], [data-phrase="where"]')).toBeNull(); // on its thread: no reason, no glyph
   // Under "Needs you" the heading says the word: the card keeps the mark, named for a screen reader, and the wait.
@@ -665,7 +669,7 @@ test("an agent with no bb thread that needs the person has its card: what it ask
     // kernel's command is not on the card: it is on the agent's page, where Open leads.
     expect(within(card).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer · tmux");
     expect(within(card).getByTestId("oats-needs-elsewhere").textContent).toBe("Answer it in its terminal.");
-    expect(card.textContent).toBe("Night watch helperoats-maintainer · tmuxOpen!4 dWhich branch do I watch?Answer it in its terminal.");
+    expect(card.textContent).toBe("Night watch helperoats-maintainer · tmux!4 dOpenWhich branch do I watch?Answer it in its terminal.");
     expect(card.textContent).not.toMatch(/oats session attach|falcon/);
     expect(within(card).queryByRole("button", { name: "Copy the command" })).toBeNull();
     expect(within(card).getByTestId("oats-needs-open").textContent).toBe("Open");
@@ -1302,7 +1306,7 @@ test.each([
   expect(within(card).queryByTestId("oats-needs-message")).toBeNull();
   // SAFETY, carried by design: the card draws no answer and no reply at all (above); it says that the
   // agent does not run and what to do, and the one act under the sentence is Start, through OATS.
-  expect(within(card).getByTestId("oats-needs-stopped").textContent).toBe("Not running. Start it to answer.Start…");
+  expect(within(card).getByTestId("oats-needs-stopped").textContent).toBe("Not running.Start…");
   // the two things to press: its thread, and Start, which opens the lifecycle's dialog (nothing is started on the press)
   expect(Array.from(card.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Open", "Start…"]);
   fireEvent.click(within(card).getByTestId("oats-needs-start"));
@@ -1529,7 +1533,7 @@ test("an agent whose bb thread was deleted that needs the person: the reason and
   const slot = await homePage({ sidebarThreads: { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_release") }, sdk });
   const card = await cardOf(slot, "release-070-maintainer");
   await waitFor(() => expect(within(card).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer · deleted in bb"));
-  expect(card.textContent).toBe("Release 070 maintaineroats-maintainer · deleted in bbOpen!4 dGreen light at 9f2e1c? Second reader done.");
+  expect(card.textContent).toBe("Release 070 maintaineroats-maintainer · deleted in bb!4 dOpenGreen light at 9f2e1c? Second reader done.");
   expect(card.textContent).not.toContain("so nothing can be sent to it from here");
   expect(within(card).queryByTestId("oats-needs-elsewhere")).toBeNull();
   expect(within(card).queryByTestId("oats-reply")).toBeNull();

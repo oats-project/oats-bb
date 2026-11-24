@@ -68,7 +68,7 @@ export const ANSWER = "Answer";
 /** The same button's accessible name, before the agent's name. */
 export const ANSWER_IN_THREAD = "Answer in its thread";
 /** An agent that needs the person and that the kernel says does not run: an answer or a message to its thread would start it outside OATS, so the card offers neither, and Start. */
-export const STOPPED_WAITS = "Not running. Start it to answer.";
+export const STOPPED_WAITS = "Not running.";
 /** A press on an agent that OATS stopped since its card was drawn: nothing went to bb. */
 export const NOT_NOW_STOPPED = "OATS has stopped this agent since: nothing was sent. Start it to answer.";
 /** The same press, on an agent the kernel cannot reach now. */

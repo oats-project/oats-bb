@@ -331,6 +331,11 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const refused = refusal(entry.agent, entry.thread);
   const offer: Offer =
     thread === undefined ? "elsewhere" : refused !== null ? refused : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
+  // Under "Needs you" the heading says the word: the card keeps the mark (named for a screen reader) and the wait.
+  const waitSays = message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null;
+  const wait = <StatusLine state={entry.status.state} markOnly={entry.status.state === "needs-you"} since={entry.status.since} detail={waitSays} />;
+  /** The mark and the age alone: they stand at the end of the name's line. */
+  const waitInline = entry.status.state === "needs-you" && (waitSays ?? "") === "";
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
@@ -345,11 +350,14 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={offer === "stopped" || offer === "unreachable" || answered === null ? offer : "answered"}>
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 items-start justify-between gap-2">
-          {/* (The column takes the card's width, so that the line under the name can measure what fits; the name stays as wide as its words.) */}
-          <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+          {/* ONE line (the reader's P5: the card was five lines, name / soul / "! 5 d" / question / field): the name, then its
+              soul, the reason where there is one and where it is for an agent on tmux (they give way inside what is left:
+              `RowFacts`), then the mark and how long it waits. A wait that says more than its age (a kind of request in
+              words; a state that is not "needs you") keeps its own line, under this one. */}
+          <div className="flex min-w-0 flex-1 items-center gap-x-2">
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            {/* Under its name, one line: its soul, the reason where there is one, and where it is for an agent on tmux. */}
-            <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" under />
+            <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" />
+            {waitInline ? <span className="shrink-0">{wait}</span> : null}
           </div>
           {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page.
               Where the request can only be answered in its thread the word is "Answer": the same press, the same place. */}
@@ -357,8 +365,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             {offer === "in-thread" && answered === null ? ANSWER : OPEN}
           </Button>
         </div>
-        {/* Under "Needs you" the heading says the word: the card keeps the mark (named for a screen reader) and the wait. */}
-        <StatusLine state={entry.status.state} markOnly={entry.status.state === "needs-you"} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
+        {waitInline ? null : wait}
         {message === null ? null : (
           <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
             {shown(message)}
@@ -458,16 +465,17 @@ function reasonOf(entry: Entry, oats: Ready): { reason: string | null; tone: "wa
   return { reason, tone: said?.rowTone === "warning" ? "warning" : undefined, onTmux };
 }
 
-function AgentFacts({ entry, oats, testId, under = false }: { entry: Entry; oats: Ready; testId: string; /** under the name, in a column (a card): as wide as the column, and one line high. Beside the name, in a row: the rest of the row's width */ under?: boolean }) {
+function AgentFacts({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
   const { reason, tone, onTmux } = reasonOf(entry, oats);
   // A lost session is said in the state's place on a row ("Lost": app/outside `rowWords`), so its line has no reason to hold; its title keeps it.
   const words = rowWords(entry.status.word, entry.status.state, reason);
   const soul = shown(oats.soulOf(entry.agent));
   // The line measures what fits, so it needs a width that is not its own words': beside a name it takes the rest of
-  // the ROW's width (it grows, from a base of ten rem: `flex-1 basis-40`); under a name, in a COLUMN, it is as wide as
-  // the column and nothing else: there a flex base is a HEIGHT (it made every card's line ten rem tall: an empty gap
-  // of about 150 px under the soul; the specialist's finding on the image set of 24 Nov 2026).
-  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} className={under ? "w-full" : "max-w-full flex-1 basis-40"} />;
+  // the ROW's width, whatever is left (`flex-1 basis-0`: with a base of its own it wrapped under a long name at a
+  // phone's width). It always stands in a ROW, beside a name (a list's row, a card's first line): in a COLUMN a
+  // flex base is a HEIGHT (a base of ten rem once made every card's line ten rem tall: an empty gap of about 150 px
+  // under the soul; the specialist's finding on the image set of 24 Nov 2026).
+  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} className="min-w-0 flex-1 basis-0" />;
 }
 
 /**
@@ -479,7 +487,9 @@ function AgentFacts({ entry, oats, testId, under = false }: { entry: Entry; oats
 function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
   return (
     <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
-      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+      {/* ONE line at every width (the reader's P20: at 390 a long name sent its soul to a second line, its neighbours' stayed):
+          the name is whole, the facts take what is left and give way inside it (the reason, then the soul: `RowFacts`). */}
+      <span className="flex min-w-0 flex-1 items-baseline gap-x-2">
         <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
         <AgentFacts entry={entry} oats={oats} testId="oats-home-agent-where" />
       </span>

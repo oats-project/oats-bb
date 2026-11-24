@@ -672,7 +672,12 @@ async function loadedWhileReading(asInstance, { instance, threadId }) {
       // Quiet first: no status of the plugin's is RUNNING (a poll's, held, would be taken for the claim's and have less
       // of its hold left) and none ended in the last 3 s: the claim's event then starts a read with no wait.
       // (And the server's pause after a read is that read's own length: a read held by the try before must be that long past.)
-      await until("no oats status of the plugin's running, and none within its own length, or 3 s, of now", () => !statusRunning() && statusReads().every((read) => Date.now() - ended(read) > Math.max(3000, read.ms)), 120);
+      // (Waited for with `soon`, which fails nothing: on a host where it does not come the try is a miss, not a failure.)
+      if (!(await soon(() => !statusRunning() && statusReads().every((read) => Date.now() - ended(read) > Math.max(3000, read.ms)), 120))) {
+        missed.push(`try ${attempt} (held ${HELD_MS} ms): the plugin's status reads were not quiet within 120 s`);
+        wrapper({});
+        continue;
+      }
       const before = records().length;
       const page = await viewPage(browser, view, at);
       try {
@@ -681,13 +686,13 @@ async function loadedWhileReading(asInstance, { instance, threadId }) {
         // The window is loaded NOW, while that read runs: its first answer is the server's cache, from before the claim.
         await page.goto("/");
         const shownSidebar = await showSidebar(page, view.viewport);
-        const drawn = await page.until(facts, 30);
+        const drawn = (await page.until(facts, 30)) ?? null; // (`page.until` answers undefined when its time is up)
         const inside = reading && statusRunning() && statusReads(before).length === 0; // the read had not ended when the window had drawn its roster
         if (!(shownSidebar && inside && drawn !== null && !/^Needs you/.test(drawn))) {
           missed.push(`try ${attempt} (held ${HELD_MS} ms): ${!reading ? "no read was seen running" : !shownSidebar ? "the sidebar was not shown" : !inside ? "the read had ended before the window drew its roster" : `the window's first roster already said "${drawn}"`}`);
         } else {
           // Nothing else changes from here. The read ends, the server publishes, and the window must show the claim.
-          const shown = await page.until(`/^Needs you/.test(${facts}) ? ${facts} : ""`, 60);
+          const shown = (await page.until(`/^Needs you/.test(${facts}) ? ${facts} : ""`, 60)) ?? null;
           // A status of the plugin's that did not answer since the claim (the kernel's own read ran over what the hold
           // left of its limit) carried nothing to the window: the try says nothing of the plugin.
           const unanswered = statusCalls(before).filter((call) => call.exit !== 0).length;

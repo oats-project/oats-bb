@@ -42,11 +42,35 @@ export function attempt<T>(call: () => Promise<T>): Promise<T> {
 const acted = new Map<ReadMethod, string>();
 
 /**
- * The reads that owe one more read once their first answer is here (see `useRead`): an event came
+ * The reads that owe one more read once their first answer is here (see `reread`): an event came
  * while it was on its way. One per read however many events came meanwhile, and for the window's
- * one shared copy of the read, whichever slot heard them.
+ * one shared copy of the read, whichever slot heard them. By the read's key: its method, and for
+ * a read with an input (the panel's) the input with it.
  */
-const owed = new Set<ReadMethod>();
+const owed = new Set<string>();
+
+/**
+ * What a live read does when the server publishes `oats/changed`: it reads again. And where the
+ * read's FIRST answer is still on its way (`firstOnItsWay`), that answer is not taken as serving
+ * the event: bb does not start again a read that has no answer yet, so `refetch` is handed the one
+ * in flight, which the server answered from before the change. Once it is here the read is made
+ * ONCE more, for all the events that came meanwhile. Every live read of the plugin goes through
+ * this (`useRead` here; the panel's own read, app/panel/read.ts).
+ * (A read that fails says so in the read's own state, as every read does: both ends go on.)
+ */
+export function reread(key: string, firstOnItsWay: boolean, refetch: () => Promise<unknown>): void {
+  if (!firstOnItsWay) {
+    void refetch();
+    return;
+  }
+  if (owed.has(key)) return;
+  owed.add(key);
+  const again = () => {
+    owed.delete(key);
+    void refetch();
+  };
+  attempt(refetch).then(again, again);
+}
 
 /** What a feature keeps for the length of an app window, outside React: forgotten between tests. */
 const windowState: (() => void)[] = [() => acted.clear(), () => owed.clear()];
@@ -116,20 +140,7 @@ export function useRead<Method extends ReadMethod>(
       if (acted.get(method) === token) return;
       acted.set(method, token);
     }
-    if (!first.current) {
-      void refetch.current();
-      return;
-    }
-    // The first answer is on its way, made from before this event: when it is here, read again,
-    // once for all the events that came meanwhile.
-    // (A read that fails says so in the read's own state, as every read does: both ends go on.)
-    if (owed.has(method)) return;
-    owed.add(method);
-    const again = () => {
-      owed.delete(method);
-      void refetch.current();
-    };
-    attempt(() => refetch.current()).then(again, again);
+    reread(method, first.current, () => refetch.current());
   });
 
   const data = query.data as Result<Method> | undefined;

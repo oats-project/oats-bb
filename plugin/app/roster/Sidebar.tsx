@@ -311,9 +311,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const onThread = activeThreadId === null ? undefined : (drawnRows.find((row) => row.thread?.id === activeThreadId) ?? drawnRows.find((row) => row.thread === null && row.agent.threadId === activeThreadId));
   const selected = activeThreadId === null ? openAgent : (onThread?.agent.instance ?? null);
   // Whether a row is THE one on screen, for its mark: ONE row, never a second row of the same name. With a thread open,
-  // the row found for it; with none, the row of the agent whose own page is on screen: the first drawn of that name
-  // (the page is asked for by name, and the kernel's row of that name is the first).
-  const onPage = activeThreadId !== null || openAgent === null ? undefined : drawnRows.find((row) => row.agent.instance === openAgent);
+  // the row found for it; with none, the row of the agent whose own page is on screen: the page is asked for by NAME,
+  // and of two rows of one name it shows the one on a bb thread, else the first of the name (app/panel/Panel.tsx):
+  // the mark is on the row of the agent the page shows.
+  const paged = activeThreadId !== null || openAgent === null ? undefined : (oats.nodeByInstance.get(openAgent)?.agent ?? oats.agents.find((candidate) => candidate.instance === openAgent));
+  const onPage = paged === undefined ? undefined : (drawnRows.find((row) => row.agent === paged) ?? drawnRows.find((row) => row.agent.instance === openAgent));
   const onScreen = (agent: Agent): boolean => (activeThreadId === null ? onPage?.agent === agent : onThread?.agent === agent);
   const guttered = view.rows.some((row) => row.children.length > 0);
   // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a

@@ -34,7 +34,8 @@ export const forgetCli = (): void => say(undefined);
 /**
  * `cli`: the last answer, undefined before the first one and while none was ever read (a read that
  * failed keeps what an earlier one answered). `checking`: a check a person asked for is under way.
- * `failure`: why the last read failed, null when it answered. `unchecked`: no version was ever
+ * `failure`: why the last check A PERSON ASKED FOR failed, null when it answered or none was asked
+ * (a place's own reads that fail say nothing: `read`). `unchecked`: no version was ever
  * read, and the home's own second try failed too: the home then says so, with Check again.
  * `check()`: asks the server to read OATS again (it drops the version it keeps), then reads.
  *

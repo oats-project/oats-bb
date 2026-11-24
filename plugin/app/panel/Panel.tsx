@@ -520,12 +520,8 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
 
       {facts.human === null && facts.parent === null && facts.sibling === null && oats.children.length === 0 && facts.messagingId === null ? null : (
         <Section title="Lineage" testId="oats-panel-lineage">
+          {/* On the page's face: the agents it is related to. Who owns it and its address for the others are under a fold: asked for, not read on every page. */}
           <Facts>
-            {facts.human === null ? null : (
-              <Fact label="Owning human">
-                <span data-testid="oats-panel-human">{shown(facts.human)}</span>
-              </Fact>
-            )}
             {facts.parent === null ? null : <Fact label="Parent">{instanceLink(facts.parent, "oats-panel-parent")}</Fact>}
             {facts.sibling === null ? null : <Fact label="Sibling">{instanceLink(facts.sibling, "oats-panel-sibling")}</Fact>}
             {/* The agents it started, as the thread's row counts them ("1 child"): each by its name, a link where it has a thread. */}
@@ -538,13 +534,24 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
                 </span>
               </Fact>
             )}
-            {/* Who it is to the others: one fact, with the agents it is related to, under the one heading. */}
-            {facts.messagingId === null ? null : (
-              <Fact label="Messaging ID">
-                <PathLine path={facts.messagingId} copyName="Copy messaging ID" testId="oats-panel-messaging-id" />
-              </Fact>
-            )}
           </Facts>
+          {facts.human === null && facts.messagingId === null ? null : (
+            <Disclosure summary="Details" testId="oats-panel-lineage-details">
+              <Facts>
+                {facts.human === null ? null : (
+                  <Fact label="Owning human">
+                    <span data-testid="oats-panel-human">{shown(facts.human)}</span>
+                  </Fact>
+                )}
+                {/* Who it is to the others: one fact, under the one heading, with no heading of its own. */}
+                {facts.messagingId === null ? null : (
+                  <Fact label="Messaging ID">
+                    <PathLine path={facts.messagingId} copyName="Copy messaging ID" testId="oats-panel-messaging-id" />
+                  </Fact>
+                )}
+              </Facts>
+            </Disclosure>
+          )}
         </Section>
       )}
     </>

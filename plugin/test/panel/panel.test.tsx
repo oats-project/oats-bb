@@ -214,7 +214,7 @@ test("a home never started says when it was created; the row's runtime error is 
   expect(text(slot.getByTestId("oats-panel-session-line"))).toBe("bb thread");
 });
 
-test("the messaging id with its copy, only where the row has one: a fact of Lineage, under no heading of its own", async () => {
+test("the messaging id with its copy, only where the row has one: a fact of Lineage, under its fold and under no heading of its own", async () => {
   const without = panel();
   await without.findByTestId("oats-panel-session");
   expect(without.queryByTestId("oats-panel-messaging-id")).toBeNull();
@@ -225,11 +225,16 @@ test("the messaging id with its copy, only where the row has one: a fact of Line
   expect(slot.queryByTestId("oats-panel-messaging")).toBeNull();
   expect(text(slot.getByTestId("oats-panel"))).not.toContain("Messaging & Teams");
   expect(within(lineage).getAllByTestId("oats-fact").map((fact) => text(fact.querySelector("dt")!))).toEqual(["Parent", "Messaging ID"]);
+  // Not on the page's face: under Lineage's own fold, closed until it is asked for.
+  const fold = within(lineage).getByTestId("oats-panel-lineage-details");
+  expect([fold.tagName, fold.hasAttribute("open"), text(fold.querySelector("summary")!)]).toEqual(["DETAILS", false, "▸Details"]);
+  expect(fold.contains(slot.getByTestId("oats-panel-messaging-id"))).toBe(true);
+  expect(fold.contains(slot.getByTestId("oats-panel-parent"))).toBe(false);
   expect(text(slot.getByTestId("oats-panel-messaging-id"))).toBe("oats.aweb.ai/panel-worktree-helper");
   expect(copyOf(slot.getByTestId("oats-panel-messaging-id")).getAttribute("aria-label")).toBe("Copy messaging ID");
 });
 
-test("Lineage: the parent is a link to its thread; the owning human and a sibling are named where the row has them", async () => {
+test("Lineage: the parent is a link to its thread; a sibling is named where the row has one, and the owning human under the fold", async () => {
   const slot = panel();
   const lineage = await slot.findByTestId("oats-panel-lineage");
   // another agent by its name as words, as every place names one; the kernel's own name is the title
@@ -241,7 +246,10 @@ test("Lineage: the parent is a link to its thread; the owning human and a siblin
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: panelAgents().find((agent) => agent.instance === "redesign-ui-lead")!.threadId }]);
   slot.unmount();
   const more = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, human: "Ana", parent: null, sibling: "kernel-fix-developer" }) });
-  expect(text(await more.findByTestId("oats-panel-lineage"))).toBe("LineageOwning humanAnaSiblingKernel fix developer");
+  // The agents it is related to are on the page's face; who owns it is under the fold.
+  expect(text(await more.findByTestId("oats-panel-lineage"))).toBe("LineageSiblingKernel fix developer▸DetailsOwning humanAna");
+  const owner = more.getByTestId("oats-panel-lineage-details");
+  expect([owner.hasAttribute("open"), owner.contains(more.getByTestId("oats-panel-human")), owner.contains(more.getByTestId("oats-panel-sibling"))]).toEqual([false, true, false]);
   // an instance that has no thread in bb is named, without a link
   expect(more.getByTestId("oats-panel-sibling").tagName).toBe("SPAN");
 });
@@ -250,6 +258,10 @@ test("an agent with nothing to say about its lineage has no Lineage section", as
   const slot = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, parent: null }) });
   await slot.findByTestId("oats-panel-session");
   expect(slot.queryByTestId("oats-panel-lineage")).toBeNull();
+  slot.unmount();
+  // One with an owner and no relative: the section, with its fold alone.
+  const owned = panel({ threadId: CHILD_THREAD }, { facts: (facts) => ({ ...facts, parent: null, human: "Ana" }) });
+  expect(text(await owned.findByTestId("oats-panel-lineage"))).toBe("Lineage▸DetailsOwning humanAna");
 });
 
 test("older build: a chip that opens to what moved since the spawn", async () => {

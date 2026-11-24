@@ -203,12 +203,11 @@ function Identity({ fact }: { fact: SpawnFacts["identity"][number] }) {
 function Created({ facts, machine }: { facts: SpawnFacts; machine: string | null }) {
   // In view: what a person decides on (the name, where it works, the harness and its model, the access it runs
   // with, who it is started under). Everything else is one press away, under the column's ONE fold.
-  const decided = (label: string) => IN_VIEW.has(label);
   const [name, ...identity] = facts.identity;
-  const inView = facts.facts.filter((fact) => decided(fact.label)).map((fact) => ({ ...fact, parts: fact.parts.filter((part) => part.sub !== true) }));
+  const inView = facts.facts.filter((fact) => IN_VIEW.has(fact.label)).map((fact) => ({ ...fact, parts: fact.parts.filter((part) => part.sub !== true) }));
   // Where the harness came from is a second line of its row: under the fold, as the row's own.
-  const cameFrom = facts.facts.filter((fact) => decided(fact.label) && fact.parts.some((part) => part.sub === true)).map((fact) => ({ label: fact.label, parts: fact.parts.filter((part) => part.sub === true).map((part) => ({ ...part, sub: false })) }));
-  const others = facts.facts.filter((fact) => !decided(fact.label));
+  const cameFrom = facts.facts.filter((fact) => IN_VIEW.has(fact.label) && fact.parts.some((part) => part.sub === true)).map((fact) => ({ label: fact.label, parts: fact.parts.filter((part) => part.sub === true).map((part) => ({ ...part, sub: false })) }));
+  const others = facts.facts.filter((fact) => !IN_VIEW.has(fact.label));
   const soul = others.filter((fact) => fact.label === "Soul");
   const rest = others.filter((fact) => fact.label !== "Soul");
   const folded = [...soul, ...(machine === null ? [] : [{ label: W.RUNS_ON, parts: [{ text: machine }] }]), ...cameFrom, ...rest];
@@ -333,7 +332,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // ---- what will be created: the preview of exactly these values ----
   const [settled, setSettled] = useState<Preview | null>(null);
   const [refused, setRefused] = useState<Refused | null>(null);
-  const [asking, setReading] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [again, setAgain] = useState(0);
   const serial = useRef(0);
   const latest = useRef<{ key: string | null; input: Input | null; harnessField: boolean }>({ key, input, harnessField: harnesses.choice });
@@ -341,10 +340,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   useEffect(() => {
     const ticket = ++serial.current;
     if (key === null || held) {
-      setReading(false);
+      setAsking(false);
       return;
     }
-    setReading(true);
+    setAsking(true);
     const timer = setTimeout(() => {
       const asked = latest.current;
       if (asked.input === null || asked.key !== key) return;
@@ -356,12 +355,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             if (serial.current !== ticket) return;
             setSettled({ key, input: asked.input!, facts: answer.facts, revision: answer.revision });
             setRefused(null);
-            setReading(false);
+            setAsking(false);
           },
           (cause: unknown) => {
             if (serial.current !== ticket) return;
             setRefused({ key, problem: spawnProblem(reasonOf(cause), "preview", { harnessField: latest.current.harnessField }) });
-            setReading(false);
+            setAsking(false);
           },
         );
     }, PREVIEW_DEBOUNCE_MS);

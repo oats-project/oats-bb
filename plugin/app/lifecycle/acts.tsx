@@ -393,9 +393,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     const sentAt = rosterAt.current;
     const acted = plan.action === "stop" ? plan.targets.map((target) => target.instance) : [plan.instance ?? instance];
     // (And each agent's state in that roster: a roster that reaches the window during the act can still say it.)
-    const was = new Map(acted.map((each) => [each, keptState(plan.action === "stop" ? "stop" : "retire", stateIn(oatsNow.current, each))]));
+    const act = plan.action === "stop" ? ("stop" as const) : ("retire" as const);
+    const was = new Map(acted.map((each) => [each, keptState(act, stateIn(oatsNow.current, each))]));
     const settle = (outcome: Outcome, refusal: Refusal | null) => {
-      if (outcome.tone === "done") noteActed(acted, sentAt, was);
+      if (outcome.tone === "done") noteActed(acted, sentAt, { verb: act, was });
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
       // The person moved on (they left the dialog, or another act's took its place): the result reaches them
       // where they are, and what a toast cannot hold is one press away ("Show result").
@@ -741,7 +742,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const heldModel = hold !== null && hold.kind === "held" ? hold : null;
   /** The word, said once: the Model field's mark. */
   const modelWord = heldModel === null ? null : heldModel.why === "required" ? START.required : heldModel.why === "not-found" ? START.notFound : START.pickProvider;
-  // Beside the button: the held word; while the list is read, off with no word (it answers at once from bb's cache).
+  // The button is off and described by that mark (no word beside it); while the list is read, off with no word (it answers at once from bb's cache).
   /** The id of the Model field's mark: what the off button is described by. */
   const modelMark = `oats-start-model-mark-${request.id}`;
   const notArmed = hold === null || hold.kind === "armed" ? null : hold.kind === "reading" ? "" : modelWord;
@@ -766,7 +767,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     rpc.call(verb, asked).then(
       (started) => {
         const outcome = startOutcome(verb, started.instance ?? checked.instance, started);
-        if (outcome.tone === "done") noteActed([checked.instance], sentAt, was);
+        if (outcome.tone === "done") noteActed([checked.instance], sentAt, { verb, was });
         const threadId = started.threadId;
         // A home that is not on bb has no thread to open: its result says where it is.
         const open = threadId === null ? null : { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(threadId) };
@@ -858,8 +859,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       says={known === null || state.phase === "settled" ? [] : startSays(verb, { resumes })}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       // Why Start is off is said ONCE, on the status line under the fields (with Refresh status, or the way to its
-      // thread): the button is off (`held`) with no second copy of the sentence beside it. Beside the button stands
-      // only what the person typed wrong.
+      // thread): the button is off (`held`) with no second copy of the sentence beside it. Nothing stands
+      // beside the button: what the person typed wrong is the Model field's mark (below).
       // Held on what is in the Model field: a model name that is none, or in a Restart a changed model bb's list does
       // not serve (#77). The word stands ONCE, as the field's mark ("Enter a model name, …", "Not found", "Required",
       // "Pick provider"); the button is off and described by that mark, with no copy of the word beside it (the

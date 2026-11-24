@@ -688,8 +688,8 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   (its placeholder) or marked (the button is described by that mark), the column's refusal, the
   roster's notice ("Acts are off."). The same holds for its key. With no soul chosen, or a value
   that cannot be asked, the column is not drawn: no heading stands over nothing.
-- It applies the decision that preview showed (its revision goes with the call), so "Spawn refuses
-  if this changes before you confirm" is true: a decision that moved is refused by the kernel,
+- It applies the decision that preview showed (its revision goes with the call), so a spawn is
+  refused if the decision changes before the press: a decision that moved is refused by the kernel,
   nothing is created, the preview that was on screen can no longer be pressed, and the column is
   read again and says so.
 - On the press the button reads "Spawning…" and is held, with every field: one press makes one

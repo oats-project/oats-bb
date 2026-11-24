@@ -3,7 +3,9 @@
 ## 0.4.0
 
 A stop archives the agent's thread, so an agent OATS stopped stays stopped. A host stop is
-resumed. The OATS plugin for bb gains the lifecycle's acts (Stop, Start, Restart, Retire,
+resumed. A retire also deletes the home's bb environment where every thread on it is the
+home's own, and a pi launch whose model bb's pi would not resolve is refused before anything
+starts. The OATS plugin for bb gains the lifecycle's acts (Stop, Start, Restart, Retire,
 each behind a dialog), a home at parity with the Desktop's, New agent, Automations' acts,
 and what it says when something happened to an agent outside OATS. Package `oats.bb` 0.4.0.
 
@@ -15,9 +17,17 @@ and what it says when something happened to an agent outside OATS. Package `oats
 - Then close the homes that are already stopped, once: for each bb home, stop it if it
   runs (`oats instance stop <name>`), move its copy (`oats instance upgrade <name>`), and
   run `oats instance stop <name>` again, which archives its thread. The session
-  provider's first entry below says why.
+  provider's entry "A stop archives the thread" below says why.
+- From this release each launch keeps a small record of the threads it made, in
+  `$XDG_STATE_HOME/oats-bb/homes/` (by default `~/.local/state/oats-bb/homes/`, on macOS
+  too). A home spawned before it has no record, so its retire archives only, and says so.
+  The session provider's entry "A retire deletes the home's bb environment" says what the
+  record holds and how a sandboxed launch treats its directory.
 
 **Known in this release:**
+- `oats session restart` with a model the provider then refuses still stops the agent first,
+  leaving it stopped (a kernel gap). The plugin's Restart dialog holds such a model before
+  any call; from the CLI, check the model first.
 - The plugin's screens come before the pilot's text cut: much of their wording changes in
   the next release.
 - A tmux agent's stopped and started states reach the plugin through OATS's status read: a
@@ -254,7 +264,17 @@ and what it says when something happened to an agent outside OATS. Package `oats
   (#58). An agent on tmux can be started, restarted and resumed from bb, with the attach
   command shown (#60). The Stop dialog warns only of facts: uncommitted work in the home,
   and a turn running now (#64). Start and Restart say that they begin a new conversation,
-  and a cut-off agent is pointed at its thread first (#43).
+  and a cut-off agent is pointed at its thread first (#43). The real run proves an agent
+  on tmux through its three rows and the Restart, Start and resuming Start dialogs (#71).
+- **Restart does not stop what it cannot start.** A model the person changed in the
+  Restart dialog arms Restart only when bb's list for that harness has been read and serves
+  it exactly once, by the session provider's own rule; otherwise the dialog holds it, the
+  word on the field and beside the button: "Not found", "Pick provider" or "Required"
+  (#77). The rule is one function of the plugin's, shared with New agent and held against
+  the provider's own check by a contract test (#79).
+- **An agent whose bb thread failed at its start reads "Failed",** and the New agent form
+  never says "Created" of it (#70). The form holds Spawn on a model it cannot place
+  ("Required", "Pick provider") and leaves the rest to the provider (#72).
 - **The home, at parity with the Desktop's Home.** Each card offers the answer its request
   takes, every agent is counted once, and the CLI is checked (#41). An agent whose session
   was lost, ended by itself or has no harness loaded can be answered in its thread; a
@@ -265,15 +285,20 @@ and what it says when something happened to an agent outside OATS. Package `oats
   when, at most three lines a row, acts on a thread's line, and the acts held while the
   roster shown is not the last one read (#31, #37, #56). An agent on a bb thread is
   Working when bb says its thread works (#51). The instance panel has one state word and
-  one place for what an agent waits for (#36).
+  one place for what an agent waits for (#36). A thread's line offers "Stop…", and a read
+  asked while one is in flight is made once, after it (#66). A claim and a stop show on
+  the screen from the agent's own events between two status reads (#74).
 - **What happened outside OATS** (#55, #61): an agent's thread archived or deleted in bb,
   an agent running outside OATS after a stop, and a session lost, on bb and on tmux ("Stopped
   · session lost · tmux"). A tmux agent stopped with OATS reads Stopped.
 - **Automations, acting on a row:** on and off, Run now, Test, Edit summary, Delete, Check
   run state and Enable scheduler (#30); a due time that has passed reads as due (#50).
+  Automations name the machine, say only what is so, and put a person's own words first
+  (#68).
 - The plugin's floor is OATS 0.70.5 (#45). CI runs the plugin as five jobs: the unit
   stage, the live stage in each theme, the real run, and a pi agent launched from New
-  agent (#46, #59, #63).
+  agent (#46, #59, #63). The instance panel's fixtures were recorded again from one real
+  run on OATS 0.70.5 (#67).
 
 ## 0.3.0
 

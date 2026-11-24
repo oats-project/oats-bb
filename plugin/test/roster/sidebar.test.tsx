@@ -218,19 +218,30 @@ test("a closed parent whose subtree holds a row that needs a person carries that
   expect(within(rowOn(quiet.slot, LEAD)!).queryByTestId("oats-row-inside")).toBeNull();
 });
 
-test("the parent of the thread on screen is open, and is never closed over it; once another thread is on screen it is as the person left it", async () => {
+test("the parent of the thread on screen is open and its chevron is OFF (never a button that swallows a press): disabled, out of the tab order, named as open; once another thread is on screen it is live, and as the person left it", async () => {
   const child = await sidebar({}, "thr_mockups");
   await child.slot.findByTestId("oats-tree");
   expect(rowOn(child.slot, "thr_mockups")!.getAttribute("aria-current")).toBe("page");
-  expect(toggles(child.slot)[0]!.getAttribute("aria-expanded")).toBe("true");
-  // A press on its chevron does not hide the row the person is on.
-  fireEvent.click(toggles(child.slot)[0]!);
+  const off = toggles(child.slot)[0] as HTMLButtonElement;
+  // Drawn open, and off in the pattern book's form for an off control: disabled (so no press and no focus), and its name says what is so, not an act.
+  expect([off.getAttribute("aria-expanded"), off.disabled, off.getAttribute("aria-disabled"), off.getAttribute("aria-label")]).toEqual(["true", true, "true", "Redesign ui lead's agents shown"]);
+  expect(off.className.split(/\s+/)).toEqual(expect.arrayContaining(["disabled:opacity-50", "disabled:cursor-not-allowed"]));
+  off.focus();
+  expect(document.activeElement).not.toBe(off);
+  // A press does nothing, and neither does Left on its row: the row the person is on stays.
+  fireEvent.click(off);
+  expect(fireEvent.keyDown(rowOn(child.slot, LEAD)!, { key: "ArrowLeft" })).toBe(true);
   expect([toggles(child.slot)[0]!.getAttribute("aria-expanded"), rowOn(child.slot, "thr_mockups") !== null]).toEqual(["true", true]);
+  cleanup();
+  // The same window, the PARENT's own thread on screen: the chevron is live (nothing is above the row on screen).
+  const own = await sidebar({}, LEAD);
+  await own.slot.findByTestId("oats-tree");
+  expect([(toggles(own.slot)[0] as HTMLButtonElement).disabled, toggles(own.slot)[0]!.getAttribute("aria-disabled"), toggles(own.slot)[0]!.getAttribute("aria-label")]).toEqual([false, null, "Show Redesign ui lead's agents"]);
   cleanup();
   // The same window, another thread on screen: the person never opened the parent, so it is closed.
   const other = await sidebar({}, "thr_release");
   await other.slot.findByTestId("oats-tree");
-  expect([toggles(other.slot)[0]!.getAttribute("aria-expanded"), rowOn(other.slot, "thr_mockups")]).toEqual(["false", null]);
+  expect([toggles(other.slot)[0]!.getAttribute("aria-expanded"), rowOn(other.slot, "thr_mockups"), (toggles(other.slot)[0] as HTMLButtonElement).disabled]).toEqual(["false", null, false]);
 });
 
 test("what the person opened is kept while the window lives (the sidebar drawn anew), and not after the page loads again; a roster with no parent has no chevron and no gutter", async () => {

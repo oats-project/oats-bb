@@ -52,16 +52,22 @@ export function forgetOpened(): void {
  * over the row's gutter, and its `li` is `relative`); as high as the row, so as a control is. It
  * says whose agents it shows or hides, and whether they are shown (`aria-expanded`). The mark is
  * the pattern book's for something that opens (ui `Disclosure`), turned while it is open.
+ * `pinned`: the parent holds the row that is open on screen, so it is never closed over it: the
+ * chevron is drawn open and OFF (a button that swallows a press is a flaw): disabled, in the
+ * pattern book's form for an off control, out of the tab order, and its name says that the agents
+ * are shown, not an act. It is live again the moment another row is on screen.
  */
-export function FoldToggle({ instance, name, open, depth }: { instance: string; /** the agent's name as words */ name: string; open: boolean; depth: 0 | 1 | 2 }) {
+export function FoldToggle({ instance, name, open, pinned = false, depth }: { instance: string; /** the agent's name as words */ name: string; open: boolean; pinned?: boolean; depth: 0 | 1 | 2 }) {
   return (
     <button
       type="button"
       data-testid="oats-row-toggle"
       data-instance={instance}
       aria-expanded={open}
-      aria-label={`${open ? "Hide" : "Show"} ${name}'s agents`}
-      className={`absolute top-0 z-10 flex h-full w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground ${CHEVRON_AT[depth]}`}
+      aria-label={pinned ? `${name}'s agents shown` : `${open ? "Hide" : "Show"} ${name}'s agents`}
+      disabled={pinned}
+      aria-disabled={pinned ? true : undefined}
+      className={`absolute top-0 z-10 flex h-full w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-muted-foreground ${CHEVRON_AT[depth]}`}
       onClick={() => setOpened(instance, !open)}
     >
       <span aria-hidden="true" className={`inline-block transition-transform ${open ? "rotate-90" : ""}`}>
@@ -71,9 +77,9 @@ export function FoldToggle({ instance, name, open, depth }: { instance: string; 
   );
 }
 
-/** A parent row's own keys: Right opens it while it is closed, Left closes it while it is open; every other key is the row's. */
-export const foldKeys = (instance: string, open: boolean) => (event: KeyboardEvent) => {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+/** A parent row's own keys: Right opens it while it is closed, Left closes it while it is open (never one that holds the row on screen: `pinned`); every other key is the row's. */
+export const foldKeys = (instance: string, open: boolean, pinned = false) => (event: KeyboardEvent) => {
+  if (pinned || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
   if ((event.key === "ArrowRight" && !open) || (event.key === "ArrowLeft" && open)) {
     event.preventDefault();
     setOpened(instance, !open);

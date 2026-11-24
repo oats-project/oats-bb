@@ -190,12 +190,12 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * page at all: nothing of them takes the focus.
    */
   const agentRows = (rows: readonly TreeRow<Node>[], guttered: boolean): ReactNode[] =>
-    rows.flatMap(({ node, parent, open, inside, insideTone }) => {
+    rows.flatMap(({ node, parent, open, pinned, inside, insideTone }) => {
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
       const called = agentName(node.agent.instance);
-      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} depth={node.depth} /> : null;
-      const keys = parent ? foldKeys(node.agent.instance, open) : undefined;
+      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} /> : null;
+      const keys = parent ? foldKeys(node.agent.instance, open, pinned) : undefined;
       const status = agentStatus(node.agent, node.thread, now);
       const drawn = rowState(status, gone.has(node.agent.instance));
       // What happened to it outside OATS (app/outside): the reason follows the state's word on the

@@ -109,7 +109,9 @@ stored. A closed parent's children are not in the page, so nothing of them takes
 closed parent keeps its own state, mark and word, and carries after its own word, named for a
 screen reader, the mark of any row its subtree hides that itself carries one: a row that needs a
 person, one a person must look at (it runs outside OATS, or failed), and one whose own mark is in
-the warning tone (archived in bb while it ran), in that tone. Of several, the most urgent. The parents of the thread that is on screen are open, and are never closed over it.
+the warning tone (archived in bb while it ran), in that tone. Of several, the most urgent. The parents of the thread that is on screen are open and are never closed over it: while a parent
+holds that row its chevron is drawn open and off (disabled, out of the tab order, named
+"<Name>'s agents shown"), and is live again once another row is on screen.
 A roster with a parent in it keeps a gutter before every row, so every mark stands in one column.
 
 ## Stopping, starting, restarting and retiring an agent

@@ -42,9 +42,14 @@ describe("the rows drawn for a tree and the parents a person opened", () => {
     expect(drawn(tree(), opened, selected)).toEqual(rows);
   });
 
-  test("a parent is never closed over the row on screen: with nothing opened by the person (a close pressed on it included), it stays open", () => {
+  test("a parent is never closed over the row on screen: with nothing opened by the person it stays open, and says that it cannot be closed now (pinned)", () => {
     // The person's set holds no "lead": they closed it, or never opened it. The row on screen is under it.
     expect(drawn(tree(), [], "helper")).toContain("lead-");
+    const pinned = (opened: string[], selected: string | null) => treeRows(tree(), new Set(opened), selected).filter((each) => each.pinned).map((each) => each.node.agent.instance);
+    expect(pinned([], "reviewer")).toEqual(["lead", "dev"]); // every parent above it
+    expect(pinned(["lead", "boss"], "helper")).toEqual(["lead"]); // pinned whether or not the person opened it; one opened elsewhere is not
+    expect(pinned(["lead"], "lead")).toEqual([]); // the row on screen is the parent itself: it can be closed
+    expect(pinned(["lead"], null)).toEqual([]);
     // Once the row on screen is another, the parent is as the person left it: closed.
     expect(drawn(tree(), [], "solo")).toContain("lead+");
   });

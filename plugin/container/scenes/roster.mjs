@@ -273,9 +273,10 @@ export default [
       check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is shown beside the child's thread`);
       const onScreen = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(child)}); return row && row.getAttribute("aria-current") === "page" ? document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? "" : ""; })()`, 30);
       check(onScreen === "true", `${at} with the child's thread on screen its parent is open on load`, String(onScreen));
-      await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
-      const kept = await page.evaluate(`JSON.stringify([document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, document.querySelector(${JSON.stringify(child)}) !== null])`);
-      check(kept === JSON.stringify(["true", true]), `${at} a parent is never closed over the row on screen`, kept);
+      // Its chevron is OFF while it holds the row on screen: disabled, out of the tab order, named as open; a press does nothing.
+      const off = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(toggle)}); b.focus(); const focused = document.activeElement === b; b.click(); return JSON.stringify({ disabled: b.disabled, aria: b.getAttribute("aria-disabled"), name: b.getAttribute("aria-label"), focused, open: document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, child: document.querySelector(${JSON.stringify(child)}) !== null, muted: Number(getComputedStyle(b).opacity) < 1 }); })()`);
+      check(off === JSON.stringify({ disabled: true, aria: "true", name: "Redesign ui lead's agents shown", focused: false, open: "true", child: true, muted: true }), `${at} the chevron of the parent that holds the row on screen is drawn open and off (disabled, muted, no focus), named "Redesign ui lead's agents shown": a parent is never closed over the row on screen, and no button swallows a press`, off);
+      await page.shot(`a13-${viewport.name}-sidebar-parent-of-open-thread`);
       // And back, so the scenes after this one draw the fixtures.
       record();
       await page.goto("/");

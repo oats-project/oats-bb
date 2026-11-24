@@ -196,7 +196,7 @@ while its Terminal tab has the focus.
 bb's own composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts
 on its own when one of them is used: an agent whose thread was archived or deleted in bb stays in
 the roster, as a row that says which of the two happened and what to do
-([Outside OATS](#outside-oats)), and its soul's page says "thread missing", with Start and Retire. Nothing is retired because a thread was
+([Outside OATS](#outside-oats)), and its soul's page says "thread missing", with Start… and Retire…. Nothing is retired because a thread was
 deleted. A thread stopped in bb alone is not stopped for OATS: stop an agent with the OATS act, so
 that it stays stopped.
 

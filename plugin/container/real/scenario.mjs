@@ -561,7 +561,7 @@ async function missingShots(scene, { instance, soul }) {
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
       const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent-detached")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return t; })()`, 30);
-      check(Boolean(line) && /thread missing/.test(line) && /Start/.test(line) && /Retire/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start and Retire`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
+      check(Boolean(line) && /thread missing/.test(line) && /Start…/.test(line) && /Retire…/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start… and Retire… (each opens its dialog)`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
       await page.goto("/");

@@ -178,11 +178,11 @@ test("spawnable: false shows the problem and no form", async () => {
   expect(slot.queryByTestId("oats-spawn-mode")).toBeNull();
 });
 
-test("an agent whose thread is archived shows as thread missing, with Start and Retire", async () => {
+test("an agent whose thread is archived shows as thread missing, with Start… and Retire… (each opens its dialog)", async () => {
   const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
   const slot = await souls("oats-developer", {}, fixtureAgents(), threads);
   const missing = await slot.findByTestId("oats-soul-agent-detached");
-  expect(missing.textContent).toBe("Flaky ci developerthread missingStartRetire");
+  expect(missing.textContent).toBe("Flaky ci developerthread missingStart…Retire…");
   expect(slot.queryByTestId("oats-soul-agent")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-detached-start"));
   // Start opens the act's own dialog (test/lifecycle/actions.test.tsx holds what it does): nothing is started on one press.

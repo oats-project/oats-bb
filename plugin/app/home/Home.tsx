@@ -36,7 +36,7 @@ import type { Cli } from "./cli";
 import type { Board, Entry } from "./board";
 import {
   BACK_TO_HOME, CHECKING, CHECK_AGAIN, CHECK_FAILED, CLI_NEWER_API, CLI_REQUIRED, DETECTED, ANSWER, ANSWER_IN_THREAD, EVERY_AGENT, FINISHED, FIRST_RUN, MESSAGE_INSTEAD, MESSAGE_NOT_ANSWER, NEEDS_YOU, NEEDS_YOU_SHOWN, NEWER_API_WHY,
-  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREACHABLE, NOT_NOW_UNREAD, UNREACHABLE_WAITS, NOT_SENT, OPEN, OPEN_PAGE, OPEN_THREAD, READING, REQUIRED, SEND, SENDING, SENT, SHOW_FEWER, STOPPED_WAITS, TMUX_ANSWER, WORKING, WORKING_SHOWN,
+  NOTHING_NEEDS_YOU, NOT_ANSWERED, NOT_NOW_GONE, NOT_NOW_STOPPED, NOT_NOW_UNREACHABLE, NOT_NOW_UNREAD, UNREACHABLE, UNREACHABLE_WAITS, NOT_SENT, OPEN, OPEN_PAGE, OPEN_THREAD, READING, REQUIRED, SEND, SENDING, SENT, SHOW_FEWER, STOPPED_WAITS, TMUX_ANSWER, WORKING, WORKING_SHOWN,
   answeredWith, detected, installCommand, replyLabel, replyPlaceholder, required, showAll, summaryLine, tileCount,
 } from "./home-words";
 import { question } from "./interactions";
@@ -381,7 +381,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
         {offer === "unreachable" ? (
           // Nobody can tell where an answer or a message would go: none is offered, and no Start (the lifecycle has none for it).
           <p data-testid="oats-needs-unreachable" className="m-0 text-xs text-muted-foreground">
-            {UNREACHABLE_WAITS}
+            {entry.status.state === "unreachable" ? UNREACHABLE_WAITS : `${UNREACHABLE} ${UNREACHABLE_WAITS}`}
           </p>
         ) : offer === "stopped" ? (
           <div data-testid="oats-needs-stopped" className="flex min-w-0 flex-col gap-2">

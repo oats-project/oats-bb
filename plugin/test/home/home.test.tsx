@@ -1155,7 +1155,8 @@ test("an agent the kernel cannot reach while bb holds a request on its thread: n
   const card = await cardOf(slot, "flaky-ci-developer");
   await waitFor(() => expect(slot.inspection.sdkCalls.some((call) => call.method === "threads.interactions.list")).toBe(true));
   await waitFor(() => expect(card.dataset.offer).toBe("unreachable"));
-  expect(within(card).getByTestId("oats-needs-unreachable").textContent).toBe("OATS cannot reach this agent's session, so nothing is sent to it from here. Open its thread to see it.");
+  expect(within(card).getByTestId("oats-needs-unreachable").textContent).toBe("Unreachable. Nothing is sent from here."); // (the card draws the mark alone, under "Needs you": the word is said here, once)
+  expect(card.textContent!.split("Unreachable").length - 1).toBe(1);
   expect(within(card).queryAllByTestId("oats-needs-choice")).toEqual([]);
   for (const id of ["oats-reply", "oats-reply-send", "oats-needs-message", "oats-needs-stopped", "oats-needs-start"]) expect(within(card).queryByTestId(id)).toBeNull();
   expect(Array.from(card.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Open"]);

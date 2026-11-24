@@ -69,9 +69,11 @@ export const STOPPED_WAITS = "Not running. Start it to answer.";
 /** A press on an agent that OATS stopped since its card was drawn: nothing went to bb. */
 export const NOT_NOW_STOPPED = "OATS has stopped this agent since: nothing was sent. Start it to answer.";
 /** The same press, on an agent the kernel cannot reach now. */
-export const NOT_NOW_UNREACHABLE = "OATS cannot reach this agent's session now: nothing was sent.";
+export const NOT_NOW_UNREACHABLE = "Unreachable now. Nothing was sent.";
 /** The card of an agent the kernel cannot reach, in the place of its answer: nobody can tell where an answer or a message would go. No Start: the lifecycle offers none for it. */
-export const UNREACHABLE_WAITS = "OATS cannot reach this agent's session, so nothing is sent to it from here. Open its thread to see it.";
+export const UNREACHABLE_WAITS = "Nothing is sent from here.";
+/** Before it, where the card does not already draw the state's word "Unreachable" (a card under "Needs you" draws the mark alone): never the word twice on one card. */
+export const UNREACHABLE = "Unreachable.";
 /** A press on an agent the roster no longer names (it was retired, or the deployment changed): nothing went to bb. */
 export const NOT_NOW_GONE = "OATS no longer lists this agent: nothing was sent.";
 /** A press while the plugin's server holds no roster that reads: nothing went to bb. */

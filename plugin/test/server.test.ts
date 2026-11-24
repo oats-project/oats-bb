@@ -518,7 +518,8 @@ describe("the event path", () => {
   it("a patch over a status read in flight is dropped by the status read that starts at once after it: that read started after the events read", async () => {
     await rpc<Shown>("snapshot");
     // The read in flight answers within the pacing's limit (FOLLOW_UP_WITHIN_MS), so the read the signal asks for starts at once when it ends.
-    await fake.behave({ status: { sleepMs: 1_000 }, [EVENTS]: { stdout: claimed() } });
+    // (Held 400 ms: long enough for the signal below, sent within one 10 ms look of the call being logged, and far under the limit on a loaded host.)
+    await fake.behave({ status: { sleepMs: 400 }, [EVENTS]: { stdout: claimed() } });
     const inFlight = rpc<{ at: string }>("refresh");
     await until(async () => (await calls("status")).length === 2, "the second status read started");
     await named(); // asked for while that read is in flight: its events are read now, and a status read follows it at once

@@ -78,8 +78,11 @@ export type BbThread = {
   queuedWork: string;
   /**
    * Not bb's sidebar's: joined by the app from bb's own events of the thread (app/outside/threads.ts),
-   * for a thread whose status is "error". Set: the thread FAILED AT ITS START (bb recorded an error
-   * and never a turn), with bb's own reason. null or absent: it did not, or bb has not answered.
+   * for a thread whose status is "error". THREE values: an object: the thread FAILED AT ITS START
+   * (bb recorded an error and never a turn), with bb's own reason; `null`: bb ANSWERED, and it did
+   * not (a turn started: a later turn failed); absent: bb has not answered (or cannot), and nobody
+   * knows yet which of the two it is. What reads it fails CLOSED on the absent value: no message
+   * is invited into a thread that may never have started (model/rest.ts `messageResumes`).
    */
   startFailure?: StartFailure | null;
 };

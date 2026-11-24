@@ -436,7 +436,7 @@ export default [
       // failed, on its open thread
       await open("thr_mockups");
       line = await lineOf(page, /^Failed · /);
-      check(line !== null && line.words === "Failed · session ended · message to continue" && same(line.acts, []) && line.warning === null, `${at} failed, open: "Failed", the reason in two words, then that a message is the way on: no Restart on the line, no warning`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.words === "Failed · session ended" && same(line.acts, ["Restart…"]) && line.warning === null, `${at} failed, open: "Failed", the reason in two words, with Restart and no warning; never "message to continue"`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-failed`, { targets: true });
 
       // unreachable: what status says, and nothing about a message

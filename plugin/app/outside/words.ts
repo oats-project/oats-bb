@@ -74,12 +74,15 @@ export const FAILED_OPEN = "session ended";
 
 /**
  * After the reason, on the line of an agent's own listed thread where a MESSAGE is the designed
- * way on (model/rest.ts `messageResumes`: its session lost, no harness loaded, or ended by
- * itself): "Stopped · session lost · message to continue". It stands in the place of the act that
- * would mislead: such a line has no Start… (nor Restart…), which begins a NEW conversation and
- * whose dialog would say first to message instead; Start… stays in the thread's menu, the panel
- * and the agent's page. (The lead's ruling on the read of 24 Nov 2026, T5: one rule for every
- * such thread; an operator's stop keeps its warning and Start….)
+ * way on (model/rest.ts `messageResumes`), for a LOST session and for NO HARNESS LOADED:
+ * "Stopped · session lost · message to continue", "Idle · not loaded · message to continue". It
+ * stands in the place of the act that would mislead: such a line has no Start…, which begins a
+ * NEW conversation and whose dialog would say first to message instead; Start… stays in the
+ * thread's menu, the panel and the agent's page. (The lead's ruling on the read of 24 Nov 2026,
+ * T5, and its condition: said only where the kernel's or the provider's fact shows that a message
+ * carries the agent on under OATS. So not of a failed agent, whose line keeps its act; an
+ * operator's stop keeps its warning and Start…; and on a thread in "error" the words wait for
+ * bb's answer that a turn started there.)
  */
 export const MESSAGE_CONTINUES = "message to continue";
 

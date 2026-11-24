@@ -59,11 +59,17 @@ export function rest(agent: Row, thread: Thread = null): Rest {
  * turn bb calls failed ("error") takes a message as any other: a harness killed in a turn is how
  * a session is lost. Never for an agent on tmux (bb cannot write to it).
  * Never for a thread that FAILED AT ITS START: nothing ran there, and a message would be a first
- * start outside OATS.
+ * start outside OATS. And never for a thread in "error" bb has NOT YET ANSWERED for (it may be
+ * such a thread): the answer is `null` on the thread once bb says a turn started.
  * `thread` is bb's own row of the thread the roster draws the agent on, or null where bb lists none.
  */
 export function messageResumes(agent: Row, thread: Thread): boolean {
   if (agent.running !== false || agent.backend === "tmux" || thread === null) return false;
+  // FAIL CLOSED: a thread bb lists in "error" is one whose later turn failed (it takes a message)
+  // or one that FAILED AT ITS START (a message would be a first start outside OATS), and until bb
+  // has answered for its events (`startFailure` absent) nobody knows which. No message is invited
+  // before the answer: not on the line, not by the home's card, not in the Start dialog.
+  if ((thread as { status?: unknown }).status === "error" && startOf(thread)?.startFailure === undefined) return false;
   // (A thread that failed at its start is "never-started": there is no conversation to carry on.)
   const how = rest(agent, thread);
   return how === "lost" || how === "ended" || how === "unloaded";

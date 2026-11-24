@@ -69,9 +69,16 @@ describe("messageResumes(): a message in the thread is the designed way to carry
     for (const running of [null, false, true]) expect(messageResumes(row(running, "unreachable"), listed), String(running)).toBe(false);
     expect(messageResumes(row(false, "unreachable", "lost"), listed)).toBe(false);
   });
-  test("a listed thread whose last turn bb calls failed takes a message as any other", () => {
-    for (const agent of [row(false, "stopped", "lost"), row(false, "unknown"), row(false, "shell")]) expect(messageResumes(agent, { status: "error" }), JSON.stringify(agent)).toBe(true);
-    expect(messageResumes(row(false, "stopped", "stopped"), { status: "error" })).toBe(false);
+  test("a listed thread whose LATER turn bb calls failed takes a message as any other, once bb has said that a turn started there; before its answer, none (it may never have started)", () => {
+    const turnFailed = { status: "error", startFailure: null };
+    for (const agent of [row(false, "stopped", "lost"), row(false, "unknown"), row(false, "shell")]) {
+      expect(messageResumes(agent, turnFailed), JSON.stringify(agent)).toBe(true);
+      // FAIL CLOSED: no answer of bb's on the thread (no `startFailure` at all).
+      expect(messageResumes(agent, { status: "error" }), JSON.stringify(agent)).toBe(false);
+      // And never where bb answered that it failed at its start.
+      expect(messageResumes(agent, { status: "error", startFailure: { message: "Command thread.start failed", detail: null } }), JSON.stringify(agent)).toBe(false);
+    }
+    expect(messageResumes(row(false, "stopped", "stopped"), turnFailed)).toBe(false);
   });
   test("never for an agent that runs, one on tmux, or a thread bb does not list", () => {
     expect(messageResumes(row(true, "unknown"), listed)).toBe(false);

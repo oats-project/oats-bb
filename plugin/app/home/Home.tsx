@@ -18,7 +18,7 @@ import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
-import { lineActs, lineParts, outsideOf, OutsideWarning, rowWords, words as outsideWords } from "../outside";
+import { lineActs, lineParts, outsideNeeds, outsideOf, OutsideWarning, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
@@ -203,10 +203,12 @@ function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: b
         </div>
         {/* The same drawing as under the thread's line: Stop… and Start… are the line's own acts, and Details is under it. */}
         <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} action={lineActs(said, entry.agent.instance, held, entry.status.state)} />
-        {/* What it needs, in the words of its line: the card is under "Needs you", and asks no question. */}
-        <p data-testid="oats-needs-outside" className="m-0 min-w-0 break-words text-foreground">
-          {outsideWords.OUTSIDE_NEEDS}
-        </p>
+        {/* What it needs, in the words of its line: the card is under "Needs you", and asks no question. (None for an agent whose one act is Stop.) */}
+        {outsideNeeds(said) === null ? null : (
+          <p data-testid="oats-needs-outside" className="m-0 min-w-0 break-words text-foreground">
+            {outsideNeeds(said)}
+          </p>
+        )}
         <OutsideWarning said={said} instance={entry.agent.instance} held={held} />
       </Card>
     </li>

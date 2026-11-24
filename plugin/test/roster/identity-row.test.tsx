@@ -123,7 +123,7 @@ test("a stopped agent says Stopped and offers Start, which opens the Start dialo
         : agent,
   );
   const failed = await render("thr_harvest", states);
-  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· session ended· message to continueInstance panel"); // the reason after the state, then the way on: a message (the outside feature's rule: no Restart on such a line, it begins a new conversation)
+  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· session endedRestart…Instance panel"); // the reason after the state; Restart is the button beside it
   failed.unmount();
   const unreachable = await render("thr_mockups", states);
   // The state's word says it, with no sentence that repeats it; what the kernel said is one press away, under Details, never the line's words.

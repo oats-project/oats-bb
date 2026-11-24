@@ -108,7 +108,8 @@ describe("what the home may send to an agent's thread", () => {
       { running: false as const, runtimeState: "unknown", backend: "bb" },
       { running: false as const, runtimeState: "shell", backend: "bb" },
     ]) {
-      expect([refusal(resumable, listed), refusal(resumable, { status: "error" }), mayAnswer(resumable, listed, false), mayAnswer(resumable, listed, true)], JSON.stringify(resumable)).toEqual([null, null, true, false]);
+      // (A thread in "error" takes an answer once bb has said that a turn started there, `startFailure: null`; before that it may be a thread that never started, and the card refuses.)
+      expect([refusal(resumable, listed), refusal(resumable, { status: "error", startFailure: null }), refusal(resumable, { status: "error" }), mayAnswer(resumable, listed, false), mayAnswer(resumable, listed, true)], JSON.stringify(resumable)).toEqual([null, null, "stopped", true, false]);
       expect(refusal(resumable, null), JSON.stringify(resumable)).toBe("stopped"); // bb lists no thread of it: nothing to write in
     }
     // An agent on tmux is never written to from bb.

@@ -218,8 +218,9 @@ export function useStartFailures(ids: readonly string[], token: string): Readonl
 /**
  * bb's threads with what bb's events say of the ones in "error" that an agent's row names
  * (`BbThread.startFailure`), for `useOats()`: every place then reads ONE fact (the state, the
- * line, the acts, the home). Until bb has answered, a thread is as bb's sidebar gives it, and its
- * row says what it says without this; where bb cannot answer, what it last said of the thread
+ * line, the acts, the home). Until bb has answered, a thread is as bb's sidebar gives it (no
+ * `startFailure` at all), and its row says what it says without this, and invites no message:
+ * it may be a thread that never started. Where bb cannot answer, what it last said of the thread
  * stands (nothing, if it never answered). Asked again at each roster read
  * (`at`) and each minute.
  */
@@ -231,11 +232,10 @@ export function useStartedThreads<T extends BbThread>(agents: readonly Agent[] |
   }, [agents, threads]);
   const answered = useStartFailures(ids, `${at} ${minuteOfWindow}`);
   return useMemo(() => {
-    if (!threads.some((thread) => thread.status === "error" && answered.get(thread.id) != null)) return threads;
-    return threads.map((thread) => {
-      const failure = thread.status === "error" ? answered.get(thread.id) : undefined;
-      return failure == null ? thread : { ...thread, startFailure: failure };
-    });
+    // bb's answer rides on the thread in its THREE values (model/types.ts `BbThread.startFailure`):
+    // the failure, `null` (answered: a turn started), or nothing at all while bb has not answered.
+    if (!threads.some((thread) => thread.status === "error" && answered.has(thread.id))) return threads;
+    return threads.map((thread) => (thread.status === "error" && answered.has(thread.id) ? { ...thread, startFailure: answered.get(thread.id) ?? null } : thread));
   }, [threads, answered]);
 }
 

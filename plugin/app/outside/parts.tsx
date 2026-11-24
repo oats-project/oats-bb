@@ -19,7 +19,7 @@ import type { Agent, AgentState, ThreadWhere } from "../../model/types";
 import { said as sayOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
-import { LOST_ARCHIVED, MAY_RUN_NOTE, MESSAGE_CONTINUES, LOST_NOTE, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, STOPPED_OPEN_ASKING } from "./words";
+import { LOST_ARCHIVED, MAY_RUN_NOTE, MESSAGE_CONTINUES, LOST_NOTE, OUTSIDE_NEEDS, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, STOPPED_OPEN_ASKING } from "./words";
 
 /** On a button: with the dots, since each opens its dialog and nothing runs on the press. */
 const BUTTON: Record<Act, string> = { stop: "Stop…", start: "Start…", retire: "Retire…" };
@@ -150,6 +150,14 @@ export function DetachedActs({ said, instance, held }: { said: Said | null; inst
   if (said !== null && (said.kind === "lost-archived" || said.kind === "running-archived")) return <OutsideActs instance={instance} acts={["stop", "retire"]} held={held} />;
   return <AgentActs instance={instance} />;
 }
+
+/**
+ * What the home's card of an agent that runs outside OATS says it needs, under its line: the two
+ * steps ("Stop, then Start."), where the lifecycle offers both for it (an agent on bb); null for
+ * an agent of another session provider, whose one act is Stop (nobody reads "Start" with nothing
+ * to press: its Details says what Stop does), and where the kernel reports nothing.
+ */
+export const outsideNeeds = (said: Said | null): string | null => (said !== null && said.warning !== null && reportActs(said).includes("start") ? OUTSIDE_NEEDS : null);
 
 /** The two acts the kernel's report names, the primary one first. */
 const BOTH = ["stop", "start"] as const;

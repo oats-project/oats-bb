@@ -520,7 +520,8 @@ describe("whether a start says that a message in the thread carries the conversa
   it("never when bb shows no thread of it; a listed thread takes a message whatever bb says of its last turn", () => {
     const lost = { running: false, runtimeState: "stopped", sessionEnd: "lost" };
     expect(carriesOn(lost, null)).toBe(false);
-    expect(carriesOn(lost, { status: "error" })).toBe(true); // bb's last turn failed and the session is there: how a session is lost
+    expect(carriesOn(lost, { status: "error", startFailure: null } as { status: string })).toBe(true); // bb's last turn failed (bb said that a turn started there) and the session is there: how a session is lost
+    expect(carriesOn(lost, { status: "error" })).toBe(false); // before bb has answered for its events it may be a thread that never started: no line yet
     expect(carriesOn(lost, { status: "active" })).toBe(true);
   });
 });

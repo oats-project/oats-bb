@@ -1217,7 +1217,9 @@ test("an agent the kernel cannot reach while bb holds a request on its thread: n
 test("an agent whose session was lost, on a thread whose last turn bb calls failed, is answered as on any listed thread", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false as const, runtimeState: "stopped", sessionEnd: "lost" } : agent));
   const threads = sidebarThreads();
-  const slot = await homePage({ rpc: handlers({}, agents), sdk: BB_ASKS, sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, status: "error" as const } : thread)) } });
+  // bb says of that thread's events that a turn started (its LATER turn failed): until it has, the thread may be one that never started, and the card would not answer.
+  const events = { list: async ({ types }: { types: readonly string[] }) => (types.includes("turn/started") ? [{ type: "turn/started", seq: 5, data: {} }] : []) };
+  const slot = await homePage({ rpc: handlers({}, agents), sdk: { threads: { ...BB_ASKS.threads, events } } as never, sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, status: "error" as const } : thread)) } });
   const card = await cardOf(slot, "flaky-ci-developer");
   await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice").map((choice) => choice.textContent)).toEqual(["One", "Two"]));
   expect(within(card).queryByTestId("oats-needs-stopped")).toBeNull();

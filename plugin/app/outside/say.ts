@@ -72,10 +72,11 @@ export type Said = {
   /** The kernel's report, for the notice under the line; null: none. */
   warning: OutsideOats | null;
   /**
-   * The acts this feature itself offers, in order: the two of the kernel's report's notice (Stop,
-   * Start), Start on the line of a stop that warns and of an agent that is not loaded, Stop for a
-   * session lost to bb's Archive. null: the acts are the lifecycle's own for the agent's state (the line's own act;
-   * `AgentActs` for an agent with no listed thread).
+   * The acts this feature itself offers, in order: the two of the kernel's report (Stop, Start),
+   * Start on the line of a stop that warns, Stop for a session lost to bb's Archive; NONE (an empty
+   * list) on a line where a message is the way on (`message`: a lost session, no harness loaded),
+   * and Start there while bb has not answered for a thread in "error". null: the acts are the
+   * lifecycle's own for the agent's state (the line's own act; `AgentActs` for an agent with no listed thread).
    */
   acts: readonly Act[] | null;
   /** Whether bb still has the conversation, archived, to read. */
@@ -140,12 +141,13 @@ function whereNote(where: ThreadWhere): string | null {
  *   does where the lifecycle offers Start for it). Nothing else is said of an agent on tmux.
  * - "idle" of a row the kernel calls not running (`running: false` beside `runtimeState:
  *   "unknown"`: no harness is loaded), on an open thread: the reason, "not loaded".
- * ONE RULE over the lines above (the lead's ruling on the read of 24 Nov 2026, T5): on the agent's
- * own listed thread, where a MESSAGE is the designed way on (`messageResumes`, model/rest.ts: a
- * lost session, a harness that ended by itself, no harness loaded), `message` is set: the line
- * says "message to continue" after the reason and has NO act of its own (`acts` is empty): Start…
- * and Restart… begin a new conversation, and stay in the thread's menu, the panel and the agent's
- * page. An operator's stop keeps its warning and Start….
+ * ONE RULE over two of the lines above (the lead's ruling on the read of 24 Nov 2026, T5): on the
+ * agent's own listed thread, where a MESSAGE is the designed way on (`messageResumes`,
+ * model/rest.ts), for a LOST session and for NO HARNESS LOADED, `message` is set: the line says
+ * "message to continue" after the reason and has NO act of its own (`acts` is empty): Start…
+ * begins a new conversation, and stays in the thread's menu, the panel and the agent's page. Not
+ * for a failed agent (no fact shows a message carrying one on), not for an operator's stop (its
+ * warning and Start… stay), and not on a thread in "error" bb has not answered for.
  */
 export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread: object | null = null): Said | null {
   // An agent on tmux has no thread in bb: this feature says one thing of it, that its session was
@@ -166,8 +168,9 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
   const is = how === "stopped" && drawn === "needs-you" ? "stopped" : drawn;
   // THE RULE of the line (the lead's T5): on the agent's own listed thread, where a message is the
   // designed way on (the ONE predicate the home's card and the Start dialog read), the line says
-  // so and offers no Start… or Restart…: for a lost session, for no harness loaded, and for a
-  // harness that ended by itself, alike.
+  // so and offers no Start…: for a lost session and for no harness loaded. The predicate fails
+  // closed on a thread in "error" that bb has not answered for (it may never have started): the
+  // line then says the reason alone and keeps Start….
   const message = where === "open" && attached && messageResumes(agent, thread ?? LISTED);
   // Archived while it RAN: bb's Archive never touches the harness, so the process goes on with no
   // thread a person can see. The row keeps its state's word, in the warning tone, and where it
@@ -184,8 +187,12 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
       // `outsideOats` is set (the state function's own test).
       return { ...base, kind: "outside", sentence: OUTSIDE_RECORDED, tone: "warning", note: "", warning: agent.outsideOats ?? null, acts: ["stop", "start"], archived };
     case "error":
-      // (Where the row does not say that it does not run, `running` null or true beside "shell", a message is not the designed way: the roster's own act stands.)
-      return where === "open" && attached ? { ...base, kind: "failed-open", sentence: FAILED_OPEN, ...(message ? { acts: NO_ACTS, message } : {}) } : threadless;
+      // "message to continue" is NOT said of a failed agent, and its line keeps the roster's own act
+      // (the lead's ruling of 24 Nov 2026 on T5's condition: the words are said only where the
+      // kernel's or the provider's fact shows that a message carries the agent on under OATS; no
+      // provider prints a session that ended by itself on a bb thread, and nothing shows a message
+      // carrying one on).
+      return where === "open" && attached ? { ...base, kind: "failed-open", sentence: FAILED_OPEN } : threadless;
     case "stopped": {
       if (where === "missing") return { ...base, kind: "deleted", sentence: DELETED, tone: "warning", note: DELETED_NOTE, rowTone: "warning" };
       const lost = how === "lost";

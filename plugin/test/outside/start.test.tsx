@@ -69,9 +69,13 @@ test("the rule, on the three recorded threads: an error and never a turn is a th
 test("one reading of the row: it never ran, so it is failed, it is not carried on by a message, and nothing of the lost session is said", () => {
   const agent = harvest();
   const failed = { ...thread(), startFailure: { message: "Command thread.start failed", detail: REASON } };
-  // The same row on a thread whose later turn failed (no word of its start): a lost session, as before.
-  expect([rest(agent, thread()), state(agent, thread()), messageResumes(agent, thread())]).toEqual(["lost", "stopped", true]);
-  expect(said(agent, "open", true, thread())?.kind).toBe("lost-open");
+  // The same row on a thread whose LATER turn failed (bb answered that a turn started: null): a lost session, carried on by a message.
+  const later = { ...thread(), startFailure: null };
+  expect([rest(agent, later), state(agent, later), messageResumes(agent, later)]).toEqual(["lost", "stopped", true]);
+  expect(said(agent, "open", true, later)).toMatchObject({ kind: "lost-open", message: true, acts: [] });
+  // Before bb has answered for the thread's events (no word of its start at all): a lost session by the row, and NO message invited.
+  expect([rest(agent, thread()), state(agent, thread()), messageResumes(agent, thread())]).toEqual(["lost", "stopped", false]);
+  expect(said(agent, "open", true, thread())).toMatchObject({ kind: "lost-open", message: false, acts: ["start"] });
   // On the thread that failed at its start.
   expect([rest(agent, failed), state(agent, failed), messageResumes(agent, failed)]).toEqual(["never-started", "error", false]);
   expect(agentStatus(agent, failed, 0)).toEqual({ state: "error", word: "Failed", since: null, detail: null, kernel: null, bb: REASON });
@@ -180,19 +184,34 @@ test("a thread in \"error\" that started a turn (the recorded events of a thread
     const slot = await line({ rpc: handlers({}, agents()), sidebarThreads: threads(), sdk });
     await waitFor(() => expect(asked.length).toBeGreaterThanOrEqual(2));
     await waitFor(() => expect(words(slot)[0]).toBe("Stopped"));
-    // The lost session's words, not "Failed": the reason, and that a message is the way on.
-    expect(words(slot)).toEqual(["Stopped", "session lost", "message to continue"]);
+    // The lost session's words, not "Failed": the reason, and, bb having answered that a turn started, that a message is the way on.
+    await waitFor(() => expect(words(slot)).toEqual(["Stopped", "session lost", "message to continue"]));
+    expect(within(slot.getByTestId("oats-identity-row")).queryAllByTestId("oats-status-act")).toHaveLength(0);
     expect(slot.queryByTestId("oats-status-bb")).toBeNull();
     resetApp();
   }
 });
 
-test("where bb cannot answer for the thread's events, and for a thread that is not in \"error\", the row says what it says without them", async () => {
+test("where bb cannot answer for the thread's events, the line invites NO message (the thread may never have started): the reason alone, with Start…; a thread that is not in \"error\" is never asked about", async () => {
   const failing = bb(new Error("bb is away"));
   const slot = await line({ rpc: handlers({}, agents()), sidebarThreads: threads(), sdk: failing.sdk });
   await waitFor(() => expect(failing.asked.length).toBeGreaterThanOrEqual(2));
-  expect(words(slot)[0]).toBe("Stopped");
+  await new Promise((resolve) => setTimeout(resolve, 50)); // (time for bb's refusal to be drawn, if it changed the line)
+  // FAIL CLOSED: not "message to continue", and the act stays: until bb says that a turn started, a message there may be a first start outside OATS.
+  expect(words(slot)).toEqual(["Stopped", "session lost"]);
+  expect(within(slot.getByTestId("oats-identity-row")).getAllByTestId("oats-status-act").map((act) => act.textContent)).toEqual(["Start…"]);
   expect(slot.queryByTestId("oats-status-bb")).toBeNull();
+  resetApp();
+  // The same while bb has not answered YET (its answer is held): the same line, and once it answers that a turn started, the way on is said.
+  let answer: (value: Event[]) => void = () => undefined;
+  const held = new Promise<Event[]>((resolve) => (answer = resolve));
+  const slow = { threads: { events: { list: async (args: Asked) => (await held).filter((event) => args.types!.includes(event.type)) }, list: async () => [], interactions: { list: async () => [] } } } as never as RenderSlotOptions<Contract>["sdk"];
+  const waiting = await line({ rpc: handlers({}, agents()), sidebarThreads: threads(), sdk: slow });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(words(waiting)).toEqual(["Stopped", "session lost"]);
+  expect(within(waiting.getByTestId("oats-identity-row")).getAllByTestId("oats-status-act").map((act) => act.textContent)).toEqual(["Start…"]);
+  answer(events("later-turn-failed"));
+  await waitFor(() => expect(words(waiting)).toEqual(["Stopped", "session lost", "message to continue"]));
   resetApp();
   // A thread bb does not call failed is never asked about.
   const idle = bb(events("never-started"));

@@ -453,6 +453,12 @@ answer it, the Start dialog has no carry-on line), bb's reason (the event's `dat
   variables' values), which must not come into the page.
 - It is asked again at each roster read and each minute, as the archived threads are; a thread
   that has started a turn is not asked about again in the app window.
+- bb's answer rides on the thread in THREE values (`BbThread.startFailure`): the failure; `null`
+  (bb answered: a turn started there, so it is a thread whose LATER turn failed); or nothing at
+  all while bb has not answered. What invites a message fails CLOSED on the last (`messageResumes`,
+  model/rest.ts): until bb says that a turn started, a thread in "error" may be one that never
+  started, so its line says "session lost" alone and keeps Start…, the home's card does not
+  answer it, and the Start dialog has no carry-on line.
 - Until bb has answered, the row says what it says without the answer. Where bb cannot answer,
   what it last said of the thread stands (nothing, if it never answered): a row that said
   "Failed" does not go back to "Stopped · session lost" for a read that failed.

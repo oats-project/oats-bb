@@ -207,20 +207,12 @@ test("a stopped row with no report (an OATS that does not list the feature answe
   expect([words(slot)[0], acts(slot)]).toEqual(["Stopped", ["Start…"]]);
 });
 
-test("failed, on its open thread: \"Failed\", why in two words, and that a message is the way on: no Restart on the line (it begins a new conversation); no warning", async () => {
+test("failed, on its open thread: \"Failed\", why in two words, and the roster's own act; no warning, and never \"message to continue\"", async () => {
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "shell" } : agent));
   const slot = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
   await slot.findByTestId("oats-identity-row");
-  expect(words(slot)).toEqual(["Failed", "session ended", "message to continue"]);
-  // The line has no act of the lifecycle's: the way on is the composer under it. (Restart… and Start… are in the thread's menu, the panel and the agent's page.)
-  expect(acts(slot)).toEqual([]);
-  resetApp();
-  // Where the row does not say that it does not run (`running` null beside "shell"), a message is not the designed way: the roster's own act stands.
-  const untold = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: null, runtimeState: "shell" } : agent));
-  const other = await line("thr_harvest", { rpc: handlers({}, untold), sidebarThreads: sidebarThreads() });
-  await other.findByTestId("oats-identity-row");
-  expect(words(other)).toEqual(["Failed", "session ended"]);
-  expect(acts(other)).toEqual(["Restart…"]);
+  expect(words(slot)).toEqual(["Failed", "session ended"]);
+  expect(acts(slot)).toEqual(["Restart…"]);
   expect(slot.queryByTestId("oats-outside-warning")).toBeNull();
 });
 

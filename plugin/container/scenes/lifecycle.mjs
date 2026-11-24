@@ -8,10 +8,13 @@
 // the refusals of gone.json. So each act is asked on the agent its recording is of. A scene sets
 // which recorded answer a verb gives, and how late (so that an act in progress can be looked at).
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FOCUSED, showSidebar, testId, textOf, visible } from "../browser.mjs";
+import { fill, FOCUSED, showSidebar, testId, textOf, visible } from "../browser.mjs";
 
+/** The fake kernel's own log of the calls it answered: what the plugin really asked of `oats`. */
+const FAKE_LOG = join(homedir(), "fake-oats.log");
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "lifecycle");
 const recorded = (name) => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
 /** What the real kernel answered for each act on an agent it no longer has (gone.json): one refusal per act. */
@@ -727,6 +730,33 @@ export default [
         const after = await walk(page, 4);
         check(after.length === 4 && after[0] === "oats-start-refresh" && after[1].endsWith("Details") && after[2] === "oats-confirm-close" && after[3] === "oats-start-refresh", `${at} Tab walks Refresh status, Details, Close and round again`, JSON.stringify(after));
         await page.evaluate(click("oats-confirm-close"));
+        await page.until(closed, 10);
+
+        // Restart does not stop what it cannot start: a model the person changed to one bb's list does not serve
+        // is HELD (the kernel stops the running session before the provider judges the model). Nothing is sent.
+        const restartsAsked = () => readFileSync(FAKE_LOG, "utf8").split("\n").filter((line) => line !== "").map((line) => JSON.parse(line)).filter((call) => call.argv[0] === "session" && call.argv[1] === "restart").length;
+        const asked = restartsAsked();
+        check((await openThreadMenu(page)) && (await pick(page, "Restart agent (OATS)")), `${at} Restart is asked once more from the thread's menu`);
+        await page.until(phaseIs("ready"), 30);
+        await page.evaluate(fill(testId("oats-start-model"), "a-model-bb-does-not-list"));
+        const modelSays = `(document.querySelector(${JSON.stringify(testId("oats-start-model"))}).closest(${JSON.stringify(testId("oats-field"))}).querySelector('[role="alert"]')?.innerText ?? "")`;
+        check(Boolean(await page.until(`${modelSays} === "Not found"`, 20)), `${at} a changed model that bb's list does not serve is marked "Not found" on the Model field`, await page.evaluate(modelSays));
+        const heldAt = await page.evaluate(`({ off: document.querySelector(${JSON.stringify(testId("oats-confirm-act"))}).disabled, why: document.querySelector(${JSON.stringify(testId("oats-confirm-blocked"))})?.innerText ?? "", details: document.querySelector(${JSON.stringify(testId("oats-start-unlisted"))})?.open ?? null, body: document.querySelector('[role="dialog"]').innerText })`);
+        check(heldAt.off === true && heldAt.why === "Not found" && heldAt.details === false && !heldAt.body.includes("Any model ID can be typed") && !heldAt.body.includes("Ready to start."), `${at} Restart is off, with the word beside it; the way to an unlisted model is under Details, closed; nothing says that any model can be typed, or that it is ready to start`, JSON.stringify(heldAt));
+        // (The field that holds Restart is what matters now: at phone width the dialog scrolls to it, and says that there is more above.)
+        await dialogShot({ page, at, viewport, check }, "restart", "held", testId("oats-start-model"));
+        await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-start-unlisted")} summary`)}).click()`);
+        const line = await page.until(`document.querySelector(${JSON.stringify(testId("oats-start-unlisted"))}).open && document.querySelector(${JSON.stringify(testId("oats-start-unlisted"))}).innerText.includes("To use a model bb does not list: stop it, then start it with that model.")`, 10);
+        check(Boolean(line), `${at} Details holds the one line: to use a model bb does not list, stop it, then start it with that model`);
+        await dialogShot({ page, at, viewport, check }, "restart", "held-details", testId("oats-start-unlisted"));
+        // Pressed all the same: the dialog stays, and the kernel was asked for no restart.
+        await page.evaluate(click("oats-confirm-act"));
+        check((await page.evaluate(phaseIs("ready"))) && restartsAsked() === asked, `${at} the held Restart sends nothing: the kernel was asked for no restart`, `${restartsAsked()} restarts asked, ${asked} before`);
+        // The field left blank again is the agent's own model: armed, as the dialog opened.
+        await page.evaluate(fill(testId("oats-start-model"), ""));
+        const armed = await page.until(`document.querySelector(${JSON.stringify(testId("oats-confirm-act"))}).disabled === false && ${modelSays} === ""`, 10);
+        check(Boolean(armed), `${at} the model left blank again arms Restart: the agent's own model, unchanged`, await page.evaluate(`JSON.stringify({ off: document.querySelector(${JSON.stringify(testId("oats-confirm-act"))}).disabled, says: ${modelSays}, why: document.querySelector(${JSON.stringify(testId("oats-confirm-blocked"))})?.innerText ?? null, value: document.querySelector(${JSON.stringify(testId("oats-start-model"))}).value })`));
+        await page.evaluate(click("oats-confirm-cancel"));
         await page.until(closed, 10);
       } finally {
         answers();

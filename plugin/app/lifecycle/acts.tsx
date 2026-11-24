@@ -925,7 +925,8 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           )}
           {state.phase === "ready" ? (
             <p role="status" data-testid="oats-start-status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{held === null ? START.ready : held.reason}</span>
+              {/* (Not "Ready to start." of a Restart that is held on what was changed: the word beside the button says why.) */}
+              {held === null && notArmed !== null ? null : <span>{held === null ? START.ready : held.reason}</span>}
               {held !== null && !held.running && known.runtimeError !== null ? <span>{shown(`OATS says: ${known.runtimeError}`)}</span> : null}
               {held?.running === true && rowThread !== null ? (
                 <Button data-testid="oats-start-open" onClick={() => openThread(rowThread)}>

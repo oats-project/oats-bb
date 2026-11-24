@@ -2297,6 +2297,7 @@ test("THE HARM ITSELF: a Restart whose changed model is held sends NOTHING to th
     await waitFor(() => expect(modelError(slot), word).toBe(word));
     expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe(word);
     expect(button(slot, "oats-confirm-act").disabled).toBe(true);
+    expect(slot.getByTestId("oats-start-status").textContent).not.toContain("Ready to start."); // it is not
     // Pressed all the same (a click on a disabled button, and the form's own Enter): nothing is sent.
     fireEvent.click(button(slot, "oats-confirm-act"));
     fireEvent.keyDown(slot.getByTestId("oats-start-model"), { key: "Enter" });
@@ -2312,6 +2313,7 @@ test("a changed model that bb's list serves exactly once arms Restart, and the r
   type(whole, "openrouter/claude-opus-5-5");
   await waitFor(() => expect(button(whole, "oats-confirm-act").disabled).toBe(false));
   expect(modelError(whole)).toBeNull();
+  expect(whole.getByTestId("oats-start-status").textContent).toContain("Ready to start.");
   fireEvent.click(button(whole, "oats-confirm-act"));
   await phase(whole, "done");
   expect(calls(whole, "restart").map((call) => call.input)).toEqual([{ instance: "redesign-ui-lead", model: "openrouter/claude-opus-5-5" }]);

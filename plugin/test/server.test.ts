@@ -513,6 +513,25 @@ describe("the event path", () => {
     expect(lead(await rpc<Shown>("snapshot")).waiting).toBeNull();
   }, 60_000);
 
+  // The two rules together (the pacing's one read at once, and the order of answers): a patch
+  // over the FIRST read of a pair is older than the read started at once after it, which is the truth.
+  it("a patch over a status read in flight is dropped by the status read that starts at once after it: that read started after the events read", async () => {
+    await rpc<Shown>("snapshot");
+    // The read in flight answers within the pacing's limit (FOLLOW_UP_WITHIN_MS), so the read the signal asks for starts at once when it ends.
+    await fake.behave({ status: { sleepMs: 1_000 }, [EVENTS]: { stdout: claimed() } });
+    const inFlight = rpc<{ at: string }>("refresh");
+    await until(async () => (await calls("status")).length === 2, "the second status read started");
+    await named(); // asked for while that read is in flight: its events are read now, and a status read follows it at once
+    await until(async () => lead(await rpc<Shown>("snapshot")).waiting !== null, "the claim is shown");
+    const older = await inFlight;
+    // The read at once: it started after the events read did, and the fake's roster has no claim: the truth, whole.
+    await until(async () => (await rpc<Shown>("snapshot")).at !== older.at, "the status read started at once answers");
+    const after = await rpc<Shown>("snapshot");
+    expect(lead(after).waiting).toBeNull();
+    expect(readAgain().some((line) => line.startsWith("oats status is read again at once"))).toBe(true);
+    expect((await calls("status")).length).toBe(3);
+  }, 60_000);
+
   it("events that say what is shown publish nothing", async () => {
     await rpc<Shown>("snapshot");
     await fake.behave({ status: { sleepMs: 8_000 }, [EVENTS]: { stdout: claimed() } });

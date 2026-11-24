@@ -344,10 +344,11 @@ function snapshotRow(instance) {
  * than the first one started after the record, a NOTE says how many of the plugin's `oats status`
  * calls (the wrapper's records) started between, since the poll cannot tell a snapshot it missed
  * from one that was never shown.
- * WHICH ROAD showed the change is told the same way, and printed: a snapshot that has the
- * change and whose `at` is BEFORE the kernel's record is a status read's answer that the event
- * path moved (the instance's events, read when the watch named its file); the status read that
- * started after the record is then waited for, and must confirm it (its delay is printed beside).
+ * WHICH ROAD showed the change is told by order too, and printed (see `by`, below): "its
+ * events" only where the snapshot is of a status read that had ENDED before the kernel's record
+ * and the plugin read that instance's events since; "not told" where that read was in flight
+ * across the record (it may hold the change by itself); the status read that started after the
+ * record is then waited for, and must confirm what was shown (its delay is printed beside).
  * The delays are still measured and PRINTED, with the kernel's own `oats status` time beside
  * them, and a NOTE reports either one over 3 s (the UX standard's bar): a slow runner is then
  * seen, and fails nothing. What the order cannot hold: HOW SOON the first read after the record
@@ -377,15 +378,26 @@ async function fresh(what, { instance, home, kind, since }, matches) {
     await sleep(100);
   }
   const { at: recorded, why } = recordedAt(instance, home, kind, since);
-  // WHICH ROAD showed it, told by order and not by the clock: a snapshot that has the change and
-  // is still the answer of a status read that started BEFORE the kernel's record was moved there
-  // by the event path (server/core.ts: that instance's events, read when the watch named its
-  // file); one of a status read that started after the record is the status read's own.
-  const by = seenAt === null || recorded === null ? null : shownBy < recorded ? "events" : "status";
-  // Where the events showed it, the status read that started after the record CONFIRMS it: waited
-  // for, and a snapshot of such a read without the change counts against the order below.
+  // WHICH ROAD showed it, told by order and not by the clock, from the wrapper's records of the
+  // plugin's own calls:
+  // - the snapshot is of a status read that started AFTER the kernel's record: the status read's;
+  // - it is of a status read that had ENDED before the record (that answer cannot hold the
+  //   change), and the plugin read this instance's events since: the event path moved the row;
+  // - it is of a status read that was IN FLIGHT across the record: NOT TOLD. Such a read's kernel
+  //   process may have read the row after the record (it is the usual case for a stop: its
+  //   "stopped" row is written late in the act, with a status read under way), so the snapshot's
+  //   older `at` does not say that the events put the change there.
+  let by = null;
+  if (seenAt !== null && recorded !== null) {
+    const calls = records();
+    const read = calls.find((record) => record.argv[0] === "status" && Date.parse(record.at) >= shownBy); // the call of the read the snapshot is of: it started just after the server stamped that read
+    const eventsRead = calls.some((record) => record.argv[0] === "instance" && record.argv[1] === "events" && record.argv[2] === instance && record.argv.includes("--since") && record.exit === 0 && Date.parse(record.at) >= since && Date.parse(record.at) + record.ms <= seenAt);
+    by = shownBy >= recorded ? "status" : read !== undefined && Date.parse(read.at) + read.ms < recorded && eventsRead ? "events" : "untold";
+  }
+  // Where a status read that started after the record did not show it, that read CONFIRMS it:
+  // waited for, and a snapshot of such a read without the change counts against the order below.
   let confirmedAt = by === "status" ? seenAt : null;
-  if (by === "events") {
+  if (by === "events" || by === "untold") {
     for (const end = Date.now() + 30_000; confirmedAt === null && Date.now() < end; await sleep(100)) {
       const snapshot = rpc("snapshot");
       if (!(snapshot.ok && snapshot.value.ok) || Date.parse(snapshot.value.at) <= recorded) continue;
@@ -406,14 +418,17 @@ async function fresh(what, { instance, home, kind, since }, matches) {
     recorded === null
       ? `${ms(fromCommand)} after the moment before the command`
       : `${ms(fromRecord)} after the kernel recorded it (its "${kind}" event at ${new Date(recorded).toISOString()}), ${ms(fromCommand)} after the moment before the command`;
+  const confirmedSaid = `confirmed by the status read that started after the record ${confirmed === null ? "NEVER in 30 s" : `${confirmed} ms after it`}`;
   const road =
     by === "events"
-      ? `; shown by ITS EVENTS (the snapshot was still a status read from before the record), and confirmed by the status read that started after it ${confirmed === null ? "NEVER in 30 s" : `${confirmed} ms after the record`}`
-      : by === "status"
-        ? "; shown by a STATUS READ that started after the record (not by its events)"
-        : "";
+      ? `; shown by ITS EVENTS (the snapshot was of a status read that had ended before the record, and the plugin read this instance's events since), and ${confirmedSaid}`
+      : by === "untold"
+        ? `; WHICH ROAD showed it is not told (the snapshot was of a status read in flight across the record, which may hold the change by itself), and ${confirmedSaid}`
+        : by === "status"
+          ? "; shown by a STATUS READ that started after the record (not by its events)"
+          : "";
   const timed = `${counted}${road}; the kernel's own oats status took ${statusMs} ms`;
-  freshness.push({ what, by, fromRecordMs: fromRecord, confirmedByStatusMs: by === "events" ? confirmed : null, fromCommandMs: fromCommand, statusMs });
+  freshness.push({ what, by, fromRecordMs: fromRecord, confirmedByStatusMs: by === "events" || by === "untold" ? confirmed : null, fromCommandMs: fromCommand, statusMs });
   if (seenAt === null) {
     fail(`freshness: the plugin's snapshot never had ${what} in 60 s`, timed);
   } else if (recorded === null) {
@@ -422,9 +437,11 @@ async function fresh(what, { instance, home, kind, since }, matches) {
     // A snapshot of a read that started at or after the kernel's record, seen without the change: an answer older than its read.
     const stale = [...new Set(without.filter((at) => at > recorded))]; // (strictly after: the two clocks say milliseconds)
     check(
-      stale.length === 0 && (by !== "events" || confirmedAt !== null),
+      stale.length === 0 && confirmedAt !== null,
       `freshness: the plugin's snapshot has ${what}, and no snapshot of a read started after the kernel recorded it was without it (${timed})`,
-      `${stale.length} snapshot(s) of a read started at or after the kernel's record (${new Date(recorded).toISOString()}) did not have the change: read(s) started ${stale.map((at) => new Date(at).toISOString()).join(", ")}`,
+      stale.length > 0
+        ? `${stale.length} snapshot(s) of a read started at or after the kernel's record (${new Date(recorded).toISOString()}) did not have the change: read(s) started ${stale.map((at) => new Date(at).toISOString()).join(", ")}`
+        : `no status read that started after the kernel's record (${new Date(recorded).toISOString()}) answered with the change in 30 s: nothing confirmed what was shown`,
     );
     // The plugin's own calls that started after the record and before the read whose snapshot first showed the change.
     const between = records().filter((record) => record.argv[0] === "status" && Date.parse(record.at) >= recorded && Date.parse(record.at) < shownBy);
@@ -1227,14 +1244,15 @@ for (const line of evidence.write()) say(`     answers/${line}`);
 // 3 s bar of the UX standard is asserted on a real host by the release's QA, not by this run.
 const delay = ({ by, fromRecordMs, confirmedByStatusMs, fromCommandMs }) =>
   fromRecordMs !== null
-    ? `${fromRecordMs} ms${by === "events" ? ` by its events (the status read confirmed it at ${confirmedByStatusMs === null ? "no time in 30 s" : `${confirmedByStatusMs} ms`})` : " by a status read"}`
+    ? `${fromRecordMs} ms${by === "events" ? ` by its events (the status read confirmed it at ${confirmedByStatusMs === null ? "no time in 30 s" : `${confirmedByStatusMs} ms`})` : by === "untold" ? " (which road is not told: a status read was in flight across the record)" : " by a status read"}`
     : fromCommandMs !== null
       ? `${fromCommandMs} ms from before the command (no event of the kernel's to count from)`
       : "never seen";
 // The event path against the REAL kernel (its argument form, the watch's file name, the kernel's
-// own answer): at least one of the changes above was on the screen from its events, before any
-// status read that started after the kernel's record had answered. Which ones is printed; a
-// change that a status read showed first is the fail-safe road, and no failure by itself.
+// own answer): at least one of the changes above was on the screen from its events: a snapshot
+// of a status read that had ENDED before the kernel's record held it, after the plugin read
+// that instance's events (nothing but the event path does that). Which ones is printed; a
+// change that a status read showed first, or whose road is not told, is no failure by itself.
 check(freshness.some((one) => one.by === "events"), `the event path showed ${freshness.filter((one) => one.by === "events").length} of the ${freshness.length} changes measured before a status read did`, JSON.stringify(freshness));
 writeFileSync(join(OUT, "freshness.json"), `${JSON.stringify(freshness, null, 1)}\n`);
 say(`\n== freshness, measured from the kernel's record to the plugin's snapshot (printed, not asserted: the run asserts the order of reads): ${freshness.length === 0 ? "nothing measured" : freshness.map((one) => `${one.what} ${delay(one)}`).join(", ")}`);

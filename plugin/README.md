@@ -926,9 +926,12 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   (the status read carries them). A stop by the host's own shutdown is written as any stop, so
   for the moment until the status read answers it reads "Stopped" without "session lost". The
   server says each patch and each drop in its log at debug level (the agent, what changed, the
-  read's time). In the real run a claim was on the screen 277 to 344 ms after the kernel recorded
-  it, and a stop 378 ms (OATS 0.70.5, in the run's container); by the status read alone the same
-  three took 0.9 to 1.6 s there.
+  read's time). In the real run a claim set and a claim cleared were on the screen 344 and 277 ms
+  after the kernel recorded them (OATS 0.70.5, in the run's container); by the status read alone
+  they took 0.9 to 1.6 s there. (A stop's number says less of the road: the kernel writes its
+  "stopped" row late in the act, usually with a status read in flight that then holds it by
+  itself: 0.3 to 1.4 s by the status read alone. The real run says of each change which road
+  showed it, or that it cannot tell: `container/real/README.md`.)
   **The status read's road.** The server keeps one snapshot (`oats status --json`). It rereads on the host
   entry's `changed` signal (a watch on `<deployment>/.agents/events`, where the kernel appends one
   line per spawn, launch, stop, retire and waiting claim, set or cleared), after each of the

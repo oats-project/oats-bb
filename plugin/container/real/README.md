@@ -92,16 +92,35 @@ together.
 | `mock-anthropic.mjs` | in the container | the mock model |
 | `oats-record.mjs` | as the plugin's `oats` | the recording wrapper |
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the screenshots |
-| `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B (`parts/README.md`) |
+| `parts/<feature>.mjs` | by `scenario.mjs` | the steps a feature adds for its own acts, run after parts A and B in the files' order (`parts/README.md`). `tagged.mjs` is the LAST and must stay last: it pins the provider by a scratch tag (`v0.4.0`, made in the container), which changes what the kernel prints as the provider's version for every read after it |
 | `fixtures.mjs` | by `scenario.mjs` | writes the recorded answers, with their two substitutions |
 | `pi/` | with `REAL_PI=1` only | the pi run: its part of the setup, its mock model, its scenario (`pi/README.md`) |
 
 Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).
 The run also measures freshness (the UX standard, section 6): how long after the kernel recorded a
-claim set, a claim cleared and a stop the plugin's own snapshot has it (3 s at most, counted from
-the kernel's own record: the time of the event the change wrote, read from `oats instance events
---json`, so the `oats` command's own start-up is not in it; the kernel's own `oats status` time is
-said beside it, with the delay from before the command; a NOTE reports either delay over 3 s), and
+claim set, a claim cleared and a stop the plugin's own snapshot has it, counted from the kernel's
+own record (the time of the event the change wrote, read from `oats instance events --json`, so the
+`oats` command's own start-up is not in it); the kernel's own `oats status` time is said beside it,
+with the delay from before the command, and a NOTE reports either delay over 3 s. The run's last
+lines hold them in ONE line, in every run that reaches its end, green or red ("== freshness, measured …: the claim N ms, the claim
+cleared N ms, the agent stopped … N ms"), and `out/freshness.json` keeps them: a drift is to be
+seen there, since the delays are printed and fail nothing (the 3 s bar is asserted on a real host
+by the release's QA): what the check ASSERTS is the order of reads (a bound on elapsed time
+failed pull requests at random on a slow runner): the change comes, and no snapshot it polled on
+the way was the answer of a read that started after the kernel's record and yet without the change
+(a snapshot's `at` is its read's start). It
+shows the server's one read at once (step A5b2; `FOLLOW_UP_WITHIN_MS`, `server/core.ts`) with the
+plugin's own `oats status` calls as the wrapper recorded them: the agent sets a claim and clears it
+while the read the claim started is in flight (each status is held 600 ms for that, and the clear is
+made the moment the plugin's `oats status` is seen running in the process list), and the next
+read must start under 1 s after the first ended, which no other read does (and never before it
+ended: two calls alive at once fail the step); then it sets a claim
+again, in that second read, and the read after it must have waited the pause (1 s or more): never
+two reads at once in a row. It tries the three up to four times (whether each change lands in the
+read it is meant for is timing) and prints every try's reads and their times. It depends on the
+kernel's speed in one way, and says so: where the first read of every try took about the server's
+2 s limit or more, the server rightly waits the pause, and the run prints a NOTE that the read at
+once is NOT SHOWN, in place of a pass or a failure; and a NOTE where no read followed a pair. And
 at its end it compares its images: two scenes of different states must not be the same image (the
 thread's own row says its agent's state at every width).
 
@@ -269,12 +288,12 @@ start, restart, the retire plan and the retire. Last, two servers registered wit
 
 Each is the kernel's or the provider's to decide; the plugin shows what they say.
 
-- **A stop plan cannot say whether an idle bb agent works.** For a bb session whose thread is
-  idle, the kernel's plan says `session: {state: "unknown", present: true}` and
-  `midTask: "unknown"` (bb cannot tell an agent that waits from one that is done); for a thread in
-  a turn, or one whose turn bb holds in line, `midTask: true`. The plugin's confirmation says
-  "its session is open; bb cannot tell whether it is working" for the first and "running, in the
-  middle of a task" for the second.
+- **A stop plan's `midTask` is reported activity, not a turn.** It is `true` for a session that
+  runs (a harness is loaded: from the provider that scans its harness, oats-bb #40, an idle bb
+  agent too; a tmux agent always) or for uncommitted work, and `"unknown"` from a provider that
+  cannot tell (the bb provider before #40, for an idle thread). The plugin's confirmation says
+  nothing from it: it says "<Name> has uncommitted work in its home." from the plan's `work`, and
+  "<Name> is working on a turn now." from bb's own word on the thread.
 - **A thread whose turn bb holds in line reads `running: true`** in `oats status --json`, like one
   in its turn.
 - **`oats status --json` names the agents root** (`<deployment>/agents`) as `root`, not the

@@ -4,6 +4,7 @@
 // place reads (app/roster/status.ts), so the home's counts are the sidebar's by construction.
 // Pure: no bb, no React.
 import type { Agent, AgentState, BbThread, Node, View } from "../../model/types";
+import { messageResumes, rest } from "../../model/rest";
 import { claimOf, flatten } from "../../model/view";
 import { agentStatus, type AgentStatus } from "../roster/status";
 
@@ -55,13 +56,22 @@ export function board(view: Pick<View, "roots" | "detached" | "elsewhere" | "fin
   };
 }
 
+type Row = Pick<Agent, "running" | "runtimeState" | "backend"> & { sessionEnd?: string | null };
 /**
- * Whether the kernel says the agent does not run: it is stopped (`runtimeState: "stopped"`), or its
- * word on whether it runs is no (`running: false`: stopped, or its session ended). An answer or a
- * message in bb to the thread of such an agent starts its harness again behind OATS's back (a
- * stopped agent stays stopped), so the home offers and makes neither. (When the plugin has one
- * shared predicate for "the kernel calls it stopped", this is that one.)
+ * Why the home REFUSES an answer or a message to the agent, or null where it sends one. The
+ * plugin's one reading of the row (`rest`, `messageResumes`: model/rest.ts; the Start dialog and
+ * the thread's own line read the same):
+ * - "stopped": the kernel calls it stopped (an operator's stop, or a stop that does not say that
+ *   its session was lost): a message would start its harness behind OATS's back. The card says
+ *   so, and offers Start. Also an agent that does not run and has no thread bb lists;
+ * - "unreachable": the kernel cannot reach its session: nobody can tell where a message would go.
+ * null: it runs, or nobody stopped it (its session was lost, it ended by itself, no harness is
+ * loaded) and bb lists its thread: a message there is how it comes back.
  */
-export const notRunning = (agent: Pick<Agent, "running" | "runtimeState">): boolean => agent.running === false || agent.runtimeState === "stopped";
-/** Whether the home may answer a request of the agent, or send it a message, now: never while the roster shown is the last one read, and never to an agent the kernel says does not run. The card's handlers ask this, whatever drew the control that was pressed. */
-export const mayAnswer = (agent: Pick<Agent, "running" | "runtimeState">, held: boolean): boolean => !held && !notRunning(agent);
+export function refusal(agent: Row, thread: object | null): "stopped" | "unreachable" | null {
+  const how = rest(agent);
+  if (how === "unreachable") return "unreachable";
+  return how === "runs" || messageResumes(agent, thread) ? null : "stopped";
+}
+/** Whether the home may answer a request of the agent, or send it a message, now: never while the roster shown is the last one read, and never to an agent it refuses (above). The card's handlers ask this, whatever drew the control that was pressed. */
+export const mayAnswer = (agent: Row, thread: object | null, held: boolean): boolean => !held && refusal(agent, thread) === null;

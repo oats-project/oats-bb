@@ -31,6 +31,9 @@ writeFileSync(join(toolDirs, "with/bwrap"), "#!/bin/sh\nexit 0\n", { mode: 0o755
 symlinkSync(process.execPath, join(toolDirs, "without/node"));
 export const PATH_WITH_BWRAP = `${join(toolDirs, "with")}:${process.env.PATH}`;
 export const PATH_WITHOUT_BWRAP = join(toolDirs, "without");
+// Where the provider keeps its own state in the tests (XDG_STATE_HOME): never the state
+// directory of the user who runs them. A test that reads a home's thread record looks here.
+export const STATE_HOME = join(toolDirs, "state");
 
 export const VERSION = "0.50.1";
 
@@ -43,6 +46,11 @@ export const threadRow = (id, projectId, status, extra = {}) => ({
 export const projectRow = (id, root) => ({
   id, kind: "standard", name: id, gitRemoteUrl: null, createdAt: 1, updatedAt: 1,
   sources: [{ id: `src_${id}`, projectId: id, type: "local_path", hostId: "host_1", path: root, isDefault: true }],
+});
+export const environmentRow = (id, path, extra = {}) => ({
+  id, name: null, projectId: "proj_a", hostId: "host_1", path, isGitRepo: false, isWorktree: false, branchName: null, status: "ready",
+  environmentProviderId: "project-checkout", lifecycle: { phase: "active", retireAt: null, teardown: null }, hostLifecycle: "active",
+  environmentProviderSelection: { machine: { type: "existing", hostId: "host_1" }, inputs: { path } }, managed: false, workspaceProvisionType: "unmanaged", createdAt: 1, updatedAt: 1, ...extra,
 });
 export const tellSent = (threadId) => ({ threadId, ok: true, delivery: "sent", messageSequence: 24, mode: "auto" });
 export const tellQueued = (threadId, waitingOn = "interaction", id = "qmsg_3sgztxjk4j") => ({
@@ -167,7 +175,7 @@ export async function deadPort(t) {
 /** Run the provider's bin as the kernel does. → { status, stdout, stderr, doc }. */
 export function runBin(args, { stdin = "", env = {}, bin = providerBin } = {}) {
   return new Promise((resolveRun, reject) => {
-    const child = spawn(process.execPath, [bin, ...args], { cwd: capabilityDir, env: { PATH: PATH_WITH_BWRAP, HOME: process.env.HOME, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [bin, ...args], { cwd: capabilityDir, env: { PATH: PATH_WITH_BWRAP, HOME: process.env.HOME, XDG_STATE_HOME: STATE_HOME, ...env }, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "", stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });

@@ -27,7 +27,7 @@ import { execFileSync } from "node:child_process";
 import { after, before, test } from "node:test";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BB_VERSION, repo, rig, waitFor } from "../rig.mjs";
+import { BB_VERSION, repo, rig, sleep, waitFor } from "../rig.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RUN = "/home/node/pi-kernel-run";
@@ -245,5 +245,39 @@ for (const harness of ["pi", "claude"]) {
     assert.ok((await bbJson("thread list --include-archived --include-hidden")).find((row) => row.id === threadId)?.archivedAt, "the home's thread is archived after the retire");
     assert.deepEqual((await bbJson(`machine env list --project ${projectId}`)).variables, [], "and removed the project's env");
     assert.equal(await landed(`MARK-${harness}-AFTER-STOP`), 0);
+  });
+
+  // Contract r32, A17, under the kernel: a retire that keeps the home. The kernel's stop
+  // archives the thread and the provider's retire hook then deletes the home's bb
+  // environment, from the record the kernel's own launch of the provider left. So the
+  // thread, unarchived in bb, takes no message, and nothing starts in the kept home.
+  test(`a ${harness} home retired with --keep-dir under the kernel: the home stays, its bb environment is destroyed, and its thread, unarchived in bb, takes no message and starts nothing`, async () => {
+    const kept = `${harness}-kept`;
+    const since = (await turns()).length;
+    const spawned = await oats(`spawn ${soul} --name ${kept} --backend bb --task-file ~/task.md 2>&1`);
+    assert.match(spawned, new RegExp(`Spawned ${kept} .* bb session`), spawned);
+    const home = homeOf(soul, kept);
+    const { threadId } = (await inspect(home)).session.endpoint;
+    await waitFor("the first turn", async () => (await turns()).length > since, { timeoutMs: 120_000 });
+    await idle(threadId);
+    const environment = (await bbJson(`thread show ${threadId}`)).thread.environmentId;
+    assert.equal((await bbJson(`environment show ${environment}`)).path, home);
+    const retired = await oats(`retire ${kept} --keep-dir --force 2>&1`);
+    assert.doesNotMatch(retired, /bb environment was not deleted/, retired);
+    assert.equal((await sh(`test -d ${home} && test -e ${home}/TASK.md && echo kept || echo gone`)).trim(), "kept", "--keep-dir keeps the home");
+    assert.notEqual((await bbJson(`thread show ${threadId}`)).thread.archivedAt ?? null, null, "the home's thread is archived after the retire");
+    await waitFor("bb to have destroyed the home's environment", async () => (await bbJson(`environment show ${environment}`)).status === "destroyed", { timeoutMs: 60_000, everyMs: 500 });
+    await waitFor("no process in the kept home", async () => (await processesIn(home)) === 0, { timeoutMs: 30_000 });
+    // A person unarchives it in bb and sends a message.
+    const turnsBefore = (await turns()).length;
+    await sh(`bb thread unarchive ${threadId} --json`);
+    const told = JSON.parse(await sh(`bb thread tell ${threadId} 'MARK-${harness}-KEPT a word after the retire' --json`, { ok: false }));
+    assert.equal(told.ok, false, JSON.stringify(told));
+    assert.equal(told.error.code, "thread_environment_unavailable", JSON.stringify(told));
+    await sleep(6_000);
+    assert.equal(await landed(`MARK-${harness}-KEPT`), 0, "a retired agent took a message");
+    assert.equal((await turns()).length, turnsBefore);
+    assert.equal(await processesIn(home), 0, "a harness started in the kept home");
+    assert.equal((await carriers(threadId)).length, 0);
   });
 }

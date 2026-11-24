@@ -12,7 +12,7 @@ import { host as workspaceHost } from "../contract/workspace.js";
 import { createHostEntry } from "../host.js";
 import { codes, timeouts } from "../kernel/index.js";
 import { isUnconfirmed } from "../contract/shared.js";
-import plugin, { HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
+import plugin, { FOLLOW_UP_WITHIN_MS, followsAtOnce, HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
 import { alive, FIXTURES, installFakeOats, type FakeOats } from "./support/fake-oats.js";
 
 let fake: FakeOats;
@@ -23,6 +23,25 @@ let projects: unknown[];
 
 const rpc = <Value = any>(method: string, input: unknown = null) => server.harness.callRpc(method, input) as Promise<Value>;
 const verbs = async () => (await fake.calls()).map((call) => call.verb);
+/**
+ * A change sent WHILE the server's read number `nth` is in flight, with no race against the
+ * time that read is held: the wait is on the server's own call to the host (it is in this
+ * process), and the signal is sent in the same turn the call is seen in, so the read's end
+ * cannot be handled between the two, however long this process was stalled before.
+ */
+const changeDuringRead = async (nth: number) => {
+  const asked = () => server.harness.experimental_hostRpcCalls.filter((call) => call.method === "status").length;
+  const deadline = Date.now() + 20_000;
+  while (asked() < nth) {
+    if (Date.now() > deadline) throw new Error(`the server's read ${nth} did not start: ${asked()} status calls`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  expect(asked()).toBe(nth);
+  const sent = server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed" }); // sent before anything is awaited
+  await sent;
+};
+/** What the server said of each read asked for while another was in flight (its debug log, server/core.ts `reread`). */
+const readAgain = () => server.harness.logEntries.filter((entry) => entry.level === "debug" && entry.message.startsWith("oats status is read again")).map((entry) => entry.message);
 const refusalOf = (promise: Promise<unknown>) =>
   promise.then(
     () => {
@@ -106,6 +125,83 @@ describe("snapshot", () => {
     expect(Date.parse(quick.at) - after).toBeLessThan(MIN_INTERVAL_MS + 800);
     expect(await verbs()).toEqual(["status", "status", "status"]);
   }, 20_000);
+
+  // The rule alone, with no clock: which read asked for mid-flight starts at once.
+  it("a read asked for while another is in flight starts at once only after one that answered within the limit, and that was not itself started at once", () => {
+    expect(followsAtOnce({ answeredInMs: 850, startedAtOnce: false })).toBe(true);
+    expect(followsAtOnce({ answeredInMs: 1_520, startedAtOnce: false })).toBe(true); // the pilot's host under load
+    expect(followsAtOnce({ answeredInMs: FOLLOW_UP_WITHIN_MS, startedAtOnce: false })).toBe(true);
+    expect(followsAtOnce({ answeredInMs: FOLLOW_UP_WITHIN_MS + 1, startedAtOnce: false })).toBe(false); // a slow kernel keeps the pause
+    expect(followsAtOnce({ answeredInMs: null, startedAtOnce: false })).toBe(false); // a read that failed: its retry waits the floor
+    expect(followsAtOnce({ answeredInMs: 850, startedAtOnce: true })).toBe(false); // once: never a third read with no pause
+    expect(FOLLOW_UP_WITHIN_MS).toBeGreaterThan(MIN_INTERVAL_MS);
+  });
+
+  // Each read after a read in flight is told by the server's own account (its debug log), and held
+  // by WHEN it started (a snapshot's `at` is its read's start). The bounds are of two kinds, neither
+  // of which a loaded host can fail: a pause is a LOWER bound (a read that waited the pause started
+  // no sooner than it), and "at once" is measured against the time the server itself took for the
+  // read before it (the read starts in the same turn that read ended in: no wait stands between).
+  it("a change during a read is read at once when that read ends, and a change during THAT read waits the pause: one read at once, never two", async () => {
+    const statuses = async () => (await verbs()).filter((verb) => verb === "status").length;
+    /** The start of the read after the one that started at `last`: the `at` of the first snapshot that has moved on. */
+    const startAfter = async (last: string) => {
+      const deadline = Date.now() + 20_000;
+      for (;;) {
+        const { at } = await rpc<{ at: string }>("snapshot");
+        if (at !== last) return at;
+        if (Date.now() > deadline) throw new Error(`no read after the one that started at ${last}`);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    };
+    await rpc("snapshot"); // read 1, ended: nothing in flight
+    expect(readAgain()).toEqual([]);
+    const HELD_MS = 1_000; // long enough in flight for a change to land in it
+    await fake.behave({ status: { sleepMs: HELD_MS } });
+    const second = rpc<{ at: string }>("refresh"); // read 2: after the pause, then a second in flight
+    await changeDuringRead(2); // a change, mid-read
+    const secondAt = (await second).at;
+    await changeDuringRead(3); // a change during read 3
+    const thirdAt = await startAfter(secondAt);
+    await expect.poll(statuses, { timeout: 20_000 }).toBe(4);
+    const fourthAt = await startAfter(thirdAt);
+    const [third, fourth, ...more] = readAgain();
+    expect(more).toEqual([]);
+    // Read 3: at once, by the time the server measured for read 2 (on a host so loaded that read 2
+    // took over the limit, it says the pause and why: the rule, either way).
+    const answered = Number(/answered in (\d+) ms/.exec(third ?? "")?.[1]);
+    expect(Number.isFinite(answered)).toBe(true);
+    const between = (later: string, earlier: string) => Date.parse(later) - Date.parse(earlier);
+    if (answered <= FOLLOW_UP_WITHIN_MS) {
+      expect(third).toBe(`oats status is read again at once: asked for while a read was in flight, which answered in ${answered} ms`);
+      // What it said, it did: read 3 started when read 2 ended (in the same turn: nothing is awaited
+      // between the two), not a pause later (the pause is a second at least: half of it tells them apart).
+      expect(between(thirdAt, secondAt)).toBeLessThan(answered + MIN_INTERVAL_MS / 2);
+      // Read 4 was asked for during the read at once: it says the pause, and it WAITED it: no sooner
+      // than read 3's own time in flight and the floor after it.
+      expect(fourth).toBe("oats status is read again after the pause: asked for while a read was in flight, which was itself read at once");
+      expect(between(fourthAt, thirdAt)).toBeGreaterThanOrEqual(HELD_MS + MIN_INTERVAL_MS - 50);
+    } else {
+      expect(third).toBe(`oats status is read again after the pause: asked for while a read was in flight, which answered in ${answered} ms, over ${FOLLOW_UP_WITHIN_MS} ms`);
+      expect(between(thirdAt, secondAt)).toBeGreaterThanOrEqual(answered + MIN_INTERVAL_MS - 50);
+      // (Read 3 was then an ordinary read, and read 4 may follow it at once.)
+      expect(fourth).toMatch(/^oats status is read again (at once|after the pause): asked for while a read was in flight, which answered in \d+ ms/);
+    }
+    expect(await verbs()).toEqual(["status", "status", "status", "status"]);
+  }, 90_000);
+
+  it("a read that failed is not followed at once: the read asked for during it waits the floor", async () => {
+    await fake.behave({ status: { exit: 1, stdout: "", stderr: "boom", sleepMs: 400 } });
+    const first = rpc<{ ok: boolean; at: string }>("snapshot"); // in flight, and it fails
+    await changeDuringRead(1);
+    const failed = await first;
+    expect(failed.ok).toBe(false);
+    await expect.poll(async () => (await rpc<{ at: string }>("snapshot")).at, { timeout: 20_000 }).not.toBe(failed.at);
+    const next = await rpc<{ at: string }>("snapshot");
+    expect(readAgain()).toEqual(["oats status is read again after the pause: asked for while a read was in flight, which gave no answer to count (it failed, or the settings changed under it)"]);
+    // And it waited: the floor at least, after the failed read ended (which was no sooner than the 400 ms it was held, after its start).
+    expect(Date.parse(next.at) - Date.parse(failed.at)).toBeGreaterThanOrEqual(400 + MIN_INTERVAL_MS - 50);
+  }, 40_000);
 
   it("after a read that failed the pause is the floor: Retry is not held back by a timeout's own length", async () => {
     await fake.behave({ status: { exit: 1, stdout: "", stderr: "boom", sleepMs: 2_500 } });

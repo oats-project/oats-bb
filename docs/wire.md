@@ -37,7 +37,7 @@ new live thread in the home is the launch's, and its endpoint is the answer.
 
 | verb | input | result |
 |---|---|---|
-| launch | `{home, instance, harness, model, yolo, env, unset, pathPrepend, args, promptFile, previous, sandbox?}` | `{endpoint: {server, projectId, threadId}}` |
+| launch | `{home, instance, harness, model, yolo, env, unset, pathPrepend, args, promptFile, previous, sandbox?}` | `{endpoint: {server, projectId, threadId}}` (and the thread's id is added to the provider's record of the home's threads, "Hooks": outside the home, never part of the answer) |
 | inspect | `{home, endpoint}` | `{present, state, running, open?}` |
 | inspectMany | `{homes: [{home, endpoint}]}` | `{results: [<inspect result> or {error: {code, message}}]}`, in order |
 | input | `{home, endpoint, text}` | `{submitted: true, verified}` |
@@ -242,7 +242,10 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   has nothing said of either.
 - **what a sandboxed launch writes** into `<home>/.claude/settings.local.json`, each key
   whole and from the launch input alone: `sandbox` (the allowances), `permissions.deny`
-  (one `Edit(//<path>)` rule per path of contract item 6c, then
+  (one `Edit(//<path>)` rule per path of contract item 6c, the provider's own state
+  directory among them, whole: `$XDG_STATE_HOME/oats-bb` and `/**`, under its real path
+  too, and under the names it will have where the first launch has yet to make it; a
+  state directory a rule cannot carry refuses the launch, `E_BACKEND_SANDBOX_PATH`; then
   `mcp__bb-bridge__update_environment_directory`),
   `permissions.blockWritesOutsideWorkingDirectories: true`, and `env`. A full-mode launch
   writes `env` and removes the other three. Before it writes, a sandboxed launch checks
@@ -558,7 +561,15 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   `archivedAt`, `deletedAt`, `environmentPath`, `queuedWork` and `createdAt`, in milliseconds, included),
   `bb thread show`, `bb thread spawn` (with `--title`), `bb thread tell`, `bb thread interactions list`,
   `bb thread queue list`, `bb thread queue delete`, `bb thread stop` (also of an archived
-  thread), `bb thread archive`, and `bb thread list --project <id> --archived`. The
+  thread), `bb thread archive`, and `bb thread list --project <id> --archived`. For the
+  retire's delete of a home's environment: `bb environment show <id>` (its `id`, `path`,
+  `status`, `environmentProviderId` and `managed`; `environment_not_found` is "none"),
+  `bb thread list --environment <id> --include-archived --include-hidden` (which leaves
+  deleted threads out; a thread row's `environmentId` is read here and in the project's
+  archived list) and `bb environment delete <id>`. The contract test pins what that
+  rests on: one environment per home, shared by a person's thread there; the delete
+  answering before the teardown; a destroyed environment's `path: null`; the home
+  untouched; the tell refused; and `bb thread restore-environment`. The
   contract test also pins what the stop's archive rests on, for pi and for Claude: bb
   refuses a tell to an archived thread and starts nothing, lists it under
   `bb thread list --archived --project <id>`, and after `bb thread unarchive` takes a
@@ -601,17 +612,76 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   retire, by a person, by an earlier start; only its own where the archived threads could
   not be listed); `retired: true` where bb has a thread of the home and none is left live;
   `{retired: false, reason: "nothing-to-delete"}` only where bb has no thread of the home
-  at all and no env was removed.
+  at all and no env was removed. Where the provider's record of the home's threads is
+  there and is this home's (below), `archived` names, of the threads found archived
+  already, only those in it: a home made at a path an earlier home had shares that
+  home's bb project, and does not report its threads. `environments`: the bb environments
+  the hook asked bb to delete, where it did.
   The hook archives the home's live bb threads, after the kernel's stop, removes the env of
   the home's bb project, and deletes those two old names too (best effort). The hook is not
   told the home's backend, and nothing in the home proves it has no thread (its agent can
   write there, and the provider keeps nothing of its own there), so bb is asked for every
   home, and a bb that cannot be asked is a warning for every home, a tmux home too;
   threads left that way are what readiness reports as `session-provider-orphaned`.
-  **A limit: a retired agent whose home was kept (`oats retire --keep-dir`, or a retire
-  that ended quarantined) can be started again from bb:** its archived thread can be
-  unarchived in bb, and a message then starts the harness in the kept home with NO OATS
-  around it: no status row, no hooks OATS runs for it, no stop by OATS. Where its aweb
-  identity was not released (a team leave waiting for its controller, a retained seat, an
-  alias held), it can send mail as the retired agent. Retire bb agents the ordinary way,
-  which removes the home: then nothing can start.
+  **The home's bb environment (contract r32, A17).** Last, the hook deletes the home's bb
+  environment (`bb environment delete <id>`), so that a thread of the home, even once a
+  person unarchived it, takes no message (`thread_environment_unavailable`) and starts
+  nothing in a home that was kept. bb keeps one environment per home, shared by every
+  thread that runs there, a person's included, so the delete is asked only where all of
+  this holds; anything else leaves the threads archived only, and the warning says why:
+  - every thread of the home was stopped and archived by the hook's rule, and the home's
+    archived threads were listed;
+  - the environment (the one a thread of the home's project is on, `bb environment show`)
+    is there, has the home as its `path`, and is the local-path kind:
+    `environmentProviderId: "project-checkout"` and `managed: false`. One bb has destroyed
+    already is passed over in silence. One at another directory is never deleted: the
+    warning says so where a thread of the home's own is on it, and nothing where only
+    other threads of the home's bb project are;
+  - `bb thread list --environment <id> --include-archived --include-hidden` was read
+    whole (every row readable, every row on that environment, and none missing of the
+    threads the hook itself saw on it in the home's project), and every thread in it is
+    archived and is in the home's record.
+  The delete answers at once and bb tears the environment down afterwards; the hook
+  waits for neither more than one bb call. A delete that bb refuses, that does not
+  answer, or that meets a bb that is down fails nothing: one line on the hook's stderr
+  with bb's own words and the command to run in bb, and the warning says it was not
+  done. The warning's rule: it is given whenever a thread of the home is left without a
+  deleted environment. So also for a thread with no environment yet (a row whose
+  `environmentId` is null: bb makes the environment when the thread's first turn
+  starts), which leaves nothing to delete. Which threads are the home's, for that and
+  for `archived`: those in its record and those the hook archived; with no record that
+  is this home's, every thread of the home's bb project.
+  **The record.** `$XDG_STATE_HOME/oats-bb/homes/<sha256 of the home's real path>`
+  (`~/.local/state/oats-bb/homes/` where the variable is unset or not absolute, on every
+  platform), directories `0700`, the file `0600`. Line 1: `oats-bb-home 1 dev=<n>
+  ino=<n> birth=<nanoseconds|->`, the home directory's identity. Every other line: one
+  thread id. Each line is written whole (one append; a new record by write and rename).
+  The launch verb adds the thread it answers; a write that fails never fails the launch
+  (one line on stderr), and that thread is then unmarked. A record is this home's where
+  its birth time and inode both equal the directory's, whatever the device; a record
+  with no birth time, where device and inode both do. One of another directory at the
+  path is ignored (and replaced by that home's next launch). Not read: a file that is
+  not regular, has a second name, another owner or another mode, or whose directories
+  are not this user's `0700` directories (unreadable); anything but that first line and
+  whole lines of one id (malformed). The hook removes the record once it has decided
+  (deleted, or a no that rests on what was read: the kind, a malformed record, a thread
+  that is not the home's own). An unreadable record, and one of another directory, is
+  never removed by the hook. Where it could not decide (bb could not be asked or read, a
+  thread would not stop, a thread on the environment was not archived, bb did not do the
+  delete) the record stays, and a retire run again decides. So one can outlive a home
+  whose retire never got through to bb: harmless (ids only; a later home at the
+  path does not match it and replaces it), and an operator may delete the files of
+  `homes/` while no bb home of that user runs. No other verb or hook reads or writes it.
+  **WARNING: a retired agent whose home was kept (`oats retire --keep-dir`, or a retire
+  that ended quarantined) can still be started again from bb.** The delete is a
+  deliberate step in the way, not a lock: bb's own Restore (`bb thread
+  restore-environment <id>`, which its refusal names) gives the unarchived thread an
+  environment at the kept home again, a new one made from the destroyed one's recorded
+  path, and a message then starts the harness there. Where the hook archived only,
+  Unarchive and a message are enough. Such a session runs with NO OATS around it: no
+  status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not
+  released (a team leave waiting for its controller, a retained seat, an alias held), it
+  can send mail as the retired agent. Retire bb agents the ordinary way, which removes
+  the home: then nothing can start. The hook's warning reaches CLI users only: the
+  Desktop's Retire dialog shows no plan warnings and no hook output (oats#2102). A home
+  spawned before the record existed has none and is archived only: not a failure.

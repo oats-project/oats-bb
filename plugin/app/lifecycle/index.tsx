@@ -5,7 +5,8 @@
 import { useEffect, useState } from "react";
 import type { PluginAppBuilder, PluginCommandRegistration, PluginCommandShortcut, PluginThreadAction, PluginThreadActionItemInput } from "@get-bb/plugin-sdk/app";
 import type { Agent, AgentState, Node } from "../../model/types";
-import { state } from "../../model/view";
+import { rest } from "../../model/rest";
+import { recordedStopped, state } from "../../model/view";
 import { useOats } from "../oats";
 import { onWindowReset } from "../store";
 import { failureWords, HELD_REASON } from "../roster/unreadable";
@@ -23,8 +24,19 @@ export type { Verb } from "./words";
 /** Checked at runtime on bb-app 0.50.1 (app.tsx says why). */
 const ICON = { stop: "Square", start: "Play", restart: "RotateCcw", retire: "Trash2", oats: "Bot" } as const;
 
-/** Idle, and the kernel says that no harness is loaded for it (`running: false`): the row's "not loaded". It does not run. */
-const unloaded = (state: AgentState, agent: Agent): boolean => state === "idle" && agent.running === false;
+/**
+ * The kernel says that no harness is loaded for it (`running: false` beside a session that is
+ * there): the row's "not loaded". It does not run. The plugin's one reading of the row (`rest`,
+ * model/rest.ts), not the drawn state: an agent with no harness loaded that also carries a claim
+ * is drawn "Needs you", and it does not run either.
+ */
+const unloaded = (agent: Agent): boolean => rest(agent) === "unloaded";
+/**
+ * It does not run and nobody stopped it, by the same reading: no harness is loaded, or its session
+ * ended by itself ("shell", or a row that says "exited"). Such an agent can be started, and is
+ * never "already running", whatever it is drawn as (with a claim, or bb's question: "Needs you").
+ */
+const atRest = (agent: Agent): boolean => unloaded(agent) || rest(agent) === "ended";
 
 /**
  * The four acts, in the order every place lists them: the name on a button (the Desktop's, with
@@ -62,7 +74,8 @@ export const ACTS: readonly {
     // same agents. And one that is IDLE WITH NO HARNESS LOADED (the kernel's own word, `running:
     // false`, beside a session that is there: "Idle · not loaded"): its row says that it does not
     // run, so Start opens, and the dialog says that it begins a new conversation.
-    when: (state, agent) => state === "error" || state === "stopped" || agent.runtimeState === "stopped" || unloaded(state, agent),
+    // (`recordedStopped`: the kernel calls it stopped beside any word where the row says how its session ended.)
+    when: (state, agent) => state === "error" || state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped" || atRest(agent),
   },
   { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, when: (state) => state !== "stopped" && state !== "outside" },
   { verb: "retire", button: "Retire…", menu: "Retire agent (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
@@ -72,8 +85,9 @@ const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shif
 /**
  * The acts that apply to an agent now, and why they are held when they are (the roster is the last
  * one read). For any agent the roster names, with a bb thread or without one (its thread gone, or
- * an agent on tmux): its state is the model's one rule (`state`). Start and Restart are offered for
- * an agent on bb alone: they end on the agent's new bb thread, and an agent on tmux has none.
+ * an agent on tmux): its state is the model's one rule (`state`). Start and Restart are offered
+ * for an agent on tmux as for one on bb (and for no other session provider's): its dialog starts it (bringing back a session that was
+ * lost: `oats session start --resume`) or restarts it, opens no thread, and says where it runs.
  */
 export function actsFor(oats: Oats, instance: string): { verb: Verb; label: string; destructive: boolean; held: string | null }[] {
   if (oats.phase !== "ready") return [];
@@ -81,7 +95,9 @@ export function actsFor(oats: Oats, instance: string): { verb: Verb; label: stri
   if (agent === undefined) return [];
   const now = oats.nodeByInstance.get(instance)?.state ?? state(agent, null);
   const held = oats.stale !== null ? HELD_REASON : null;
-  return ACTS.filter((act) => act.when(now, agent) && (agent.backend === "bb" || act.verb === "stop" || act.verb === "retire")).map((act) => ({ verb: act.verb, label: act.button, destructive: act.destructive, held }));
+  // Start and Restart are this plugin's for an agent on bb and for one on tmux; an agent of another session provider has neither.
+  const starts = agent.backend === "bb" || agent.backend === "tmux";
+  return ACTS.filter((act) => act.when(now, agent) && (starts || (act.verb !== "start" && act.verb !== "restart"))).map((act) => ({ verb: act.verb, label: act.button, destructive: act.destructive, held }));
 }
 
 /**
@@ -154,7 +170,7 @@ function runCommand(verb: Verb, threadId: string | null): void {
   const { state, agent } = node;
   // (An agent that runs outside OATS runs: its harness does, whatever OATS recorded. Never "is stopped" of it.)
   // And never "is already running" of a row that says no harness is loaded.
-  const why = cannotAct(verb, agent.instance, { running: (state === "working" || state === "idle" || state === "needs-you" || state === "outside") && !unloaded(state, agent), known: state !== "unreachable" });
+  const why = cannotAct(verb, agent.instance, { running: state === "outside" || ((state === "working" || state === "idle" || state === "needs-you") && !atRest(agent)), known: state !== "unreachable" });
   // The menu's own rule decides; the sentence says why in the Desktop's words where it has one.
   if (!ACTS.find((act) => act.verb === verb)!.when(state, agent)) return say(why ?? `${agentName(agent.instance)} can't be ${verb === "stop" ? "stopped" : verb === "start" ? "started" : "restarted"} now.`);
   openAct(verb, agent.instance);

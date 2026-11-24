@@ -59,6 +59,7 @@ export const startCheckOf = (instance: string, change: Partial<Awaited<ReturnTyp
   runtimeState: "stopped" as string | null,
   runtimeError: null as string | null,
   sessionEnd: "stopped" as string | null,
+  backend: "bb" as string | null,
   harnesses: ["claude", "pi"],
   ...change,
 });

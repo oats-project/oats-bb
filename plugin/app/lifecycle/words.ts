@@ -13,6 +13,7 @@
 // Pure: no bb, no React, never throws. Text of the kernel's is returned raw: the components that
 // draw it put it through the display filter.
 import type { RetirePlan, RetireReceipt, Started, StopPlan, StopReceipt, StoppedRow } from "../../kernel/lifecycle";
+import { messageResumes } from "../../model/rest";
 import { agentName, FULL_MODE } from "../ui/words";
 
 export type PlanVerb = "stop" | "retire";
@@ -29,7 +30,7 @@ export type PlanView = {
   happens: string[];
   /** What it leaves as it is. */
   kept: string[];
-  /** What a person should see before confirming: an agent in the middle of a task, a work tree on another branch. */
+  /** What a person should see before confirming: an agent with uncommitted work or in a turn, a work tree on another branch. */
   attention: string[];
   /** Current state: plain values by label. */
   state: { label: string; value: string }[];
@@ -86,8 +87,20 @@ export const RETIRE_CHOICE = "Also delete the worktree";
 /** The reason beside Retire when the tick is set for a tree that is not the agent's own (the Desktop's E_OPTION_UNAVAILABLE, naming the tick). */
 export const DISCARD_NOT_OWN = `Only an instance with its own worktree can delete it. Untick “${RETIRE_CHOICE}”.`;
 
-/** `archives`: whether the provider archives the thread of a home it stops (`stopArchivesThread`). */
-export function stopPlanView(plan: StopPlan, archives = false): PlanView {
+/** Whether the plan observed uncommitted work in a work tree: changed or untracked files. */
+const uncommitted = (work: StopPlan["targets"][number]["work"]): boolean => work.observed && work.changed + work.untracked > 0;
+/** What the Stop dialog says first of an agent with uncommitted work in its home (the plan's own observation of its work tree). */
+export const hasWork = (instance: string): string => `${agentName(instance)} has uncommitted work in its home.`;
+/** And of an agent on bb whose thread runs a turn now (bb's own word on the thread: the model's `threadWorks`). */
+export const inATurn = (instance: string): string => `${agentName(instance)} is working on a turn now.`;
+/**
+ * `archives`: whether the provider archives the thread of a home it stops (`stopArchivesThread`).
+ * `working`: the plan's agents whose bb thread runs a turn now. What a person should see before
+ * confirming is said from those FACTS, never from the plan's `midTask` (reported activity: true
+ * for every session that runs, an idle one too): an agent whose session runs and has neither gets
+ * no line, and the state below says "Session running" of it already.
+ */
+export function stopPlanView(plan: StopPlan, archives = false, working: ReadonlySet<string> = new Set()): PlanView {
   const targets = plan.targets;
   const happens = [
     plan.recursive && targets.length > 1 ? `Stops ${targets.length} sessions, children first: ${names(targets.map((target) => target.instance))}.` : `Stops the session of ${plan.instance === null ? "this agent" : agentName(plan.instance)}.`,
@@ -101,7 +114,7 @@ export function stopPlanView(plan: StopPlan, archives = false): PlanView {
   return {
     happens,
     kept: ["Nothing is deleted. Its home, worktree, transcript and launch settings are kept; you can start it again."],
-    attention: targets.filter((target) => target.midTask === true).map((target) => `${agentName(target.instance)} reports it is in the middle of a task.`),
+    attention: targets.flatMap((target) => [...(uncommitted(target.work) ? [hasWork(target.instance)] : []), ...(working.has(target.instance) ? [inATurn(target.instance)] : [])]),
     // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
     // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.
     state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION_OF[target.session] })),
@@ -241,7 +254,7 @@ export const LEAVE = {
 export const PLAN_STALE = "Something changed since you opened this. Review it and confirm again.";
 /**
  * What differs between the plan a person confirmed and the plan as it is now, as sentences: who is
- * in it, whether each session runs, who is in the middle of a task; for a retire also its work and
+ * in it, whether each session runs; for a retire also its work and
  * its children. Whether anything differs is decided from what the dialog DRAWS (the two views),
  * never from this list of facts: where the views differ and no sentence here says how, one line
  * says that what this would do has changed. Empty only when the two views are equal (the kernel's
@@ -258,8 +271,8 @@ export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | Ret
       if (old === undefined) lines.push(`${agentName(instance)} is now in this plan.`);
       else {
         if (old.session !== target.session) lines.push(`${agentName(instance)}: its session was ${was(old.session)}, and is now ${was(target.session)}.`);
-        if (old.midTask !== true && target.midTask === true) lines.push(`${agentName(instance)} now reports it is in the middle of a task.`);
-        if (old.midTask === true && target.midTask !== true) lines.push(`${agentName(instance)} no longer reports it is in the middle of a task.`);
+        // (Uncommitted work that came or went has no sentence of its own: the box below says what is so now, and
+        // where nothing else differs the one line for "what this would do has changed" stands, below.)
       }
     }
     for (const instance of earlier.keys()) if (!later.has(instance)) lines.push(`${agentName(instance)} is no longer in this plan.`);
@@ -299,8 +312,19 @@ export type Outcome = {
    * more of it one press away. (A retire that kept the home of an agent on bb.)
    */
   warning?: { title: string; details: string };
+  /**
+   * A result that is DONE and whose title is a warning (a resume that started fresh): drawn in the
+   * warning tone, and told by the toaster as one that is opened again, never as a plain success.
+   */
+  attention?: true;
   /** What the dialog offers beside Close: read a new plan (Review again), ask for the answer to what was sent (Check again), read the agent's status again (Refresh status). */
   offers: readonly ("review" | "check" | "refresh")[];
+  /**
+   * The start SUCCEEDED and the harness waits for its person in its terminal before it loads the
+   * conversation (the kernel's `waiting: "resume-confirmation"`): said on a line of its own, in
+   * the attention tone, with the command that attaches to it.
+   */
+  waiting?: true;
 };
 
 /** One row of a stop's results, or of a retire's stopped children: its line, after its name. */
@@ -490,9 +514,12 @@ export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Ref
  *   "Show result", which opens the dialog again on that result, with everything it offers.
  */
 export const SHOW_RESULT = "Show result";
-export function toasted(verb: Verb, outcome: Outcome): { plain: boolean; tone: Outcome["tone"]; title: string; lines: string[] } {
-  const plain = outcome.tone === "done" && verb !== "retire" && outcome.warning === undefined;
-  return { plain, tone: outcome.tone, title: outcome.title, lines: plain ? outcome.lines : outcome.warning === undefined ? [] : [outcome.warning.title] };
+export function toasted(verb: Verb, outcome: Outcome, threadless = false): { plain: boolean; tone: Outcome["tone"]; title: string; lines: string[] } {
+  // `threadless`: a start or a restart of an agent with no bb thread (on tmux). Its result says where it runs, with
+  // a command to copy, which a toast cannot hold: never plain, whatever it came to. And one that started FRESH after
+  // a dialog that said it would try to continue is told in the warning tone, as the dialog draws it.
+  const plain = outcome.tone === "done" && verb !== "retire" && outcome.warning === undefined && outcome.waiting !== true && outcome.attention !== true && !threadless;
+  return { plain, tone: outcome.attention === true && outcome.tone === "done" ? "unknown" : outcome.tone, title: outcome.title, lines: plain ? outcome.lines : outcome.warning === undefined ? [] : [outcome.warning.title] };
 }
 
 // ---- Start and Restart ----
@@ -501,6 +528,8 @@ export { FULL_MODE };
 export const START = {
   continues: "Continue in this instance’s existing home, with its identity, work and notes.",
   fresh: "This starts a new conversation using the saved briefing and state.",
+  /** A start of an agent on TMUX that did not finish (the kernel kept its session): it has no thread to open, and the command that attaches is under it. */
+  keptOnTmux: "Its session was kept. Refresh status before another try.",
   /**
    * For an agent that has a thread in bb: a start, and a restart, ALWAYS make a new bb thread; the
    * launch stops and archives the one it had (the bb session provider's launch:
@@ -526,30 +555,82 @@ export const START = {
 } as const;
 /**
  * Whether the Start and the Restart dialog say first that a message in the agent's thread carries its
- * conversation on. Two facts, both read, neither inferred:
- * - the kernel's row says the agent does NOT run and that no operator stopped it: its session was
- *   lost (`running: false`, "stopped", `sessionEnd: "lost"`: with the host, or its harness gone),
- *   or its thread is at rest with no harness loaded (`running: false` with a runtime state that
- *   is not "stopped"; test/fixtures/lifecycle/README.md says which provider prints that row). An operator's stop
- *   (`sessionEnd: "stopped"`) never gets the line, and neither does a stopped row that does not
- *   say how its session ended;
- * - bb has its thread, in the sidebar (not archived, not hidden), and not in error: a thread that
- *   can take a message. `thread` is bb's own row of it, or null when bb shows none.
+ * conversation on: the plugin's ONE reading of that (`messageResumes`, model/rest.ts), which the
+ * home's card and the thread's own line read too. The kernel's row says the agent does not run and
+ * that nobody stopped it (its session was lost, or no harness is loaded), and bb has its thread in
+ * the sidebar (whatever bb says of its last turn). An operator's stop never gets the line, and neither does a stopped
+ * row that does not say how its session ended, or one with no word of the runtime's state.
+ * `thread` is bb's own row of it, or null when bb shows none.
  */
 export function carriesOn(row: { running: boolean | null; runtimeState: string | null; sessionEnd: string | null }, thread: { status: string } | null): boolean {
-  if (row.running !== false || row.sessionEnd === "stopped") return false;
-  if (row.runtimeState === "stopped" && row.sessionEnd !== "lost") return false;
-  return thread !== null && thread.status !== "error";
+  return messageResumes(row, thread);
 }
 
 /** Under the model field: what a blank field means, for the harness that will run. */
 export const modelHelp = (recorded: string | null): string =>
   `Leave blank to use ${recorded ?? "the selected harness’s default model"}. This choice is saved for later starts of this instance.`;
 
-/** A start or a restart that the kernel answered: started. Its warnings, when a capability's launch hook gave any, are its lines. */
+/**
+ * The start of a TMUX agent whose session was LOST (the kernel's row: backend tmux, sessionEnd
+ * "lost"): `oats session start --resume` brings it back in the harness's own last conversation,
+ * where a plain start begins fresh on its task. The words never promise what the kernel may not
+ * give: before the press they are conditional; after it they say what the kernel answered.
+ */
+export const RESUME = {
+  /** Final: the kernel has no preview of a resume for one agent, so nothing more is promised; the result says which happened. */
+  tries: "Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.",
+  /** Beside it for an agent whose recorded harness is claude: its resume-cost question, which nothing answers for the person. */
+  claudeAsks: "Claude may first ask, in its terminal, how to load a long conversation.",
+  /** The dialog's one choice for such an agent, off by default: the plain start, on purpose. */
+  freshChoice: "Start fresh on its task instead",
+  /** Under the choice while it is on. */
+  freshWarning: "This starts a new conversation on its task. Its last conversation is not brought back.",
+  /** The result's title when the kernel says it continues the conversation: `<Name> is back in its last conversation.` */
+  back: "is back in its last conversation.",
+  /** The result's title, in the warning tone, when the kernel says it started fresh instead (`<Name> started fresh: …`); the reason follows. */
+  fresh: "started fresh: its last conversation was not brought back.",
+  waiting: "It is waiting for you in its terminal: the harness asks how to load a long conversation before it goes on.",
+  /** The kernel refuses to resume with launch settings that changed. The dialog comes back, on Refresh status, with the plain start chosen. */
+  envChanged: "Its launch settings changed, so it can only start fresh.",
+  notLost: "Its session is no longer lost, so there is no conversation to bring back. Read what Start does now.",
+} as const;
+
+/**
+ * What the dialog says a start or a restart does, before the press. On bb: a new thread (`begins`:
+ * what becomes of the conversation it has), in bb's full mode. On tmux: no thread and no full mode
+ * of bb's to speak of; a resume says what it tries, and no more (the result says which happened).
+ */
+export function startSays(verb: RunVerb, { onBb, resumes, harness, begins }: { onBb: boolean; resumes: boolean; harness: string | null; begins: string }): string[] {
+  const warning = verb === "restart" ? [START.restartWarning] : [];
+  if (onBb) return [...warning, begins, FULL_MODE];
+  if (resumes) return [RESUME.tries, ...(harness === "claude" ? [RESUME.claudeAsks] : [])];
+  return [...warning, START.fresh];
+}
+/** Why a resume started fresh, in words, for each reason the kernel names (docs/desktop-cli-api.md, "Resume a lost session"). */
+const FRESH_BECAUSE: Readonly<Record<string, string>> = {
+  "no-conversation": "Its last conversation was not found.",
+  "no-receipts": "OATS has no record of where its harness kept it.",
+  "resume-unproven": "OATS cannot yet bring a Codex conversation back.",
+};
+/** Whether a start of this agent is a resume: the kernel's row at the check says tmux and a lost session. Nothing else. */
+export const resumable = (row: { backend: string | null; sessionEnd: string | null }): boolean => row.backend === "tmux" && row.sessionEnd === "lost";
+
+/**
+ * A start or a restart that the kernel answered: started. Its warnings, when a capability's launch
+ * hook gave any, are its lines. For a resume: what the kernel's `resume` object says, never a
+ * guess: back in its last conversation, or started fresh with the kernel's reason in words (a
+ * reason this does not know is OATS's own word, under its name).
+ */
 export function startOutcome(verb: RunVerb, instance: string, started: Started): Outcome {
   const name = agentName(instance);
-  return { tone: "done", title: `${name} ${verb === "restart" ? "restarted" : "started"}.`, lines: started.warnings, code: null, details: null, offers: [] };
+  const done = (title: string, lines: string[]): Outcome => ({ tone: "done", title, lines: [...lines, ...started.warnings], code: null, details: null, offers: [], ...(started.resume?.waiting === "resume-confirmation" ? { waiting: true as const } : {}) });
+  if (started.resume === null) return done(`${name} ${verb === "restart" ? "restarted" : "started"}.`, []);
+  if (started.resume.resumed) return done(`${name} ${RESUME.back}`, []);
+  // It did NOT come back in its conversation: said first and in the warning tone, then the kernel's reason in words
+  // (one this has no words for is OATS's own, under its name).
+  const reason = started.resume.reason;
+  const because = reason === null ? [] : Object.hasOwn(FRESH_BECAUSE, reason) ? [FRESH_BECAUSE[reason]!] : oatsSays(reason); // (its own keys only: the reason is any string of the kernel's)
+  return { ...done(`${name} ${RESUME.fresh}`, because), attention: true };
 }
 
 /** The kernel's codes for a start that started nothing, each with the Desktop's sentence. */
@@ -561,7 +642,7 @@ const STARTED_NOTHING: Readonly<Record<string, string>> = {
 };
 
 /** A start or a restart that was refused, that stopped at a launch prompt, or whose answer was lost. */
-export function startRefused(verb: RunVerb, instance: string, refusal: Refusal): Outcome {
+export function startRefused(verb: RunVerb, instance: string, refusal: Refusal, tmux = false): Outcome {
   const name = agentName(instance);
   const restart = verb === "restart";
   const nothing = restart ? "Nothing was stopped or started." : "Nothing was started.";
@@ -569,8 +650,9 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal):
   const of = (tone: Outcome["tone"], title: string, lines: string[], offers: Outcome["offers"] = ["refresh"]): Outcome => ({ tone, title, lines, code: refusal.code, details: refusal.message, offers });
   const code = refusal.code;
   // The session is there, and what its start came to is not known: never "failed", never "started".
+  // An agent on tmux has no thread to open: the command that attaches to it is under the result.
   if (code === "E_SPAWN_INCOMPLETE") {
-    return of("unknown", `OATS could not confirm that ${name} finished starting`, ["Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."]);
+    return of("unknown", `OATS could not confirm that ${name} finished starting`, [tmux ? START.keptOnTmux : "Its session was kept. Refresh status, then open its thread to read what it shows. Do not start it again before that."]);
   }
   if (code === "NO_THREAD_NAMED") return of("unknown", `${name} was started, but its thread isn't ready yet`, ["Open it from its row when it is."], []);
   // A start the kernel refused AND marked unconfirmed: it cannot tell what is left, whatever the code. Never
@@ -578,6 +660,10 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal):
   // ONE code is decided before it, above: E_SPAWN_INCOMPLETE, which the kernel marks too and of which more is
   // known (the session is there). Its sentence is as unsure, says more, and offers the same Refresh status.
   if (refusal.unconfirmed === true) return of("unknown", "Result not confirmed", [`OATS could not confirm what the ${act} left. Refresh its status before another try.`, ...oatsSays(refusal.message)]);
+  // A resume the kernel refused: its session is not lost any more (the row changed after the check), or the
+  // launch settings changed since it last ran (the one remedy is a plain start, fresh: the dialog comes back with it chosen).
+  if (code === "E_RESUME_NOT_LOST") return of("failed", `${name} wasn't started`, [RESUME.notLost]);
+  if (code === "E_LAUNCH_ENV_CHANGED") return of("failed", `${name} wasn't started`, [RESUME.envChanged]); // (OATS's own line is under Details)
   if (code !== null && LOST.has(code)) return of("unknown", "OATS didn't confirm the start", ["It may still be running: check its row in the sidebar before you start it again."]);
   if (code !== null && STARTED_NOTHING[code] !== undefined) return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [STARTED_NOTHING[code]!, ...(code === "E_SESSION_START_LOCK_STUCK" ? oatsSays(refusal.message) : [])]); // the sentence says OATS's message names what blocks: it stands under it
   if (code === "E_INSTANCE_RETIRING") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`This instance is being retired, or has cleanup to finish. ${nothing}`]);

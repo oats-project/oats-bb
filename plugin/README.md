@@ -214,16 +214,24 @@ the roster draws on no thread ([Outside OATS](#outside-oats)).
 
 **Behind a result** (`app/roster/reading.tsx`). A result that says an agent started, restarted,
 stopped or was retired is true of the agent before the roster the window holds is read again. Until
-it is, the places that say that agent's state (its page, its panel, its thread's line) say
-**Reading…** in the state's place and its acts are off: never the old state stated plainly beside
-"… started.". Rosters are compared, never clocks: the dialog notes the server's stamp of the roster
-the window held when the act was SENT, and each agent's state in it where the act must change that
-word (a stop of an agent that was not stopped; a start of one that was stopped or had failed; a
-retire); "Reading…" stands while the
-window's roster is still that one or an older one, and also while a later roster still says of the
-agent what the one at the send said (a roster can reach the window during an act that takes
-seconds; a restart keeps the stamp's rule alone, its state being the same word after). It is bounded: after ten seconds the roster's own state is drawn whatever
-it says. Nothing of it while OATS cannot be read (the last roster's notice says that).
+it is, the places that say that agent's state (its page, its panel, its thread's line, its
+thread's menu) say **Reading…** in the state's place and EVERY act of it is off there (the line's
+Answer too; the panel does not draw what it asked before the act; a command's key does nothing for
+it): never the old state stated plainly beside "… started.". ONE question decides, about the
+roster and not about the agent: was this roster READ AFTER THE ACT ENDED? The roster's `at` is the
+plugin server's clock at the START of the status read that made it; the act's answer carries the
+same clock at the act's END (`endedAt`, stamped by the server when its `oats` command returned:
+`contract/lifecycle.ts`, `server/lifecycle.ts`). The window is "before" while the roster it holds
+has `at` <= `endedAt`: a status read that started before the act ended cannot be trusted to hold
+what the act did. One process, one clock: the window's clock is in neither, and is never compared.
+Nothing else is asked: no state is kept, no word, no row, no case per act (four earlier forms
+answered the question by proxy, and each was found short). Every agent a result names is marked:
+a stop's sessions (also those that did stop in a stop that did not stop them all), a retire's
+agent and the children it stopped. Every act asks the server for a status read as it ends, so a
+roster read after the end follows within a second or two; a row the server patched from the
+agent's own events on an older roster stays "Reading…" until then (a moment late over a row that
+is already right: the safe side). It is bounded: after ten seconds the roster's own state is drawn
+whatever it says. Nothing of it while OATS cannot be read (the last roster's notice says that).
 
 **What is of an earlier moment says so.** A Stop or Retire plan is of the moment it was read: under
 its Details, before **Check again**, "Read <age>." (the form of every content read earlier, by the

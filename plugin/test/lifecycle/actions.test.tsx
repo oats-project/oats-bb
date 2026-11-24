@@ -2401,10 +2401,11 @@ test("while bb's list is read a changed model holds Restart with no word and no 
 });
 
 test("a harness changed to one bb cannot run here is NOT held: the kernel refuses that restart before it stops anything, and the dialog shows its refusal", async () => {
-  // Recorded on the real kernel (OATS 0.70.5): E_BACKEND_NOT_READY, "nothing was stopped or started", the agent still runs.
+  // Recorded on the real kernel (OATS 0.70.5; test/fixtures/lifecycle/README.md, "A restart the provider refuses"):
+  // E_BACKEND_NOT_READY, "… nothing was stopped or started", and the agent still runs. The message below is the recorded one.
   const slot = await restartDialog(listsSdk({ pi: PI_LIST, "claude-code": ["opus"] }, { "claude-code": "unauthenticated" }), {
     restart: () => {
-      throw Object.assign(new Error("E_BACKEND_NOT_READY: bb is not signed in to Claude Code; nothing was stopped or started"), { code: "conflict" });
+      throw Object.assign(new Error("E_BACKEND_NOT_READY: restart-pi was not started: oats.bb's session provider bb is not ready (unavailable): E_BACKEND_NOT_READY: bb did not report its claude-code provider's status (no claude-code entry); nothing was stopped or started"), { code: "conflict" });
     },
   });
   fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "claude" } });

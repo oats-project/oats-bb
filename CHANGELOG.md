@@ -1,6 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
+
+A stop archives the agent's thread, so an agent OATS stopped stays stopped. A host stop is
+resumed. The OATS plugin for bb gains the lifecycle's acts (Stop, Start, Restart, Retire,
+each behind a dialog), a home at parity with the Desktop's, New agent, Automations' acts,
+and what it says when something happened to an agent outside OATS. Package `oats.bb` 0.4.0.
+
+**Upgrade:**
+- Update OATS to **0.70.5 or later first**: the floor rises (`compatibility.oats`), and an
+  older kernel refuses the package (`E_CAPABILITY_INCOMPATIBLE`).
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.4.0`, then `oats sync`. bb-app
+  stays 0.50.1.
+- Then close the homes that are already stopped, once: for each bb home, stop it if it
+  runs (`oats instance stop <name>`), move its copy (`oats instance upgrade <name>`), and
+  run `oats instance stop <name>` again, which archives its thread. The session
+  provider's first entry below says why.
+
+**Known in this release:**
+- The plugin's screens come before the pilot's text cut: much of their wording changes in
+  the next release.
+- A tmux agent's stopped and started states reach the plugin through OATS's status read: a
+  few seconds after the act on a loaded host.
 
 ### The session provider
 
@@ -128,6 +149,36 @@
   - bb does not replace the title: at bb-app 0.50.1 it writes a title of its own only for
     a thread that has none (`test/contract/title.test.mjs` pins it). A rename made in bb
     (by hand, or `bb thread regenerate-title`) stays until the instance starts again.
+
+### The OATS plugin for bb
+
+- **The lifecycle from bb.** Stop, Start, Restart and Retire each open a dialog first, in
+  the Desktop's words, from the instance panel, the agent's page, a thread's line and the
+  plugin's own group in bb's thread menu (#39, #53, #54). Start is offered for an agent
+  that is idle with no harness loaded, and its sentence comes from the recorded thread
+  (#58). An agent on tmux can be started, restarted and resumed from bb, with the attach
+  command shown (#60). The Stop dialog warns only of facts: uncommitted work in the home,
+  and a turn running now (#64). Start and Restart say that they begin a new conversation,
+  and a cut-off agent is pointed at its thread first (#43).
+- **The home, at parity with the Desktop's Home.** Each card offers the answer its request
+  takes, every agent is counted once, and the CLI is checked (#41). An agent whose session
+  was lost, ended by itself or has no harness loaded can be answered in its thread; a
+  stopped one is offered Start; one OATS cannot reach is offered nothing (#61).
+- **New agent,** a page of its own: the Desktop's Spawn dialog in bb (#47, #49). An
+  incomplete rollback is read from the kernel's marker, not from its words (#52).
+- **The roster.** One name and one state word per agent, the thread's own row, since
+  when, at most three lines a row, acts on a thread's line, and the acts held while the
+  roster shown is not the last one read (#31, #37, #56). An agent on a bb thread is
+  Working when bb says its thread works (#51). The instance panel has one state word and
+  one place for what an agent waits for (#36).
+- **What happened outside OATS** (#55, #61): an agent's thread archived or deleted in bb,
+  an agent running outside OATS after a stop, and a session lost, on bb and on tmux ("Stopped
+  · session lost · tmux"). A tmux agent stopped with OATS reads Stopped.
+- **Automations, acting on a row:** on and off, Run now, Test, Edit summary, Delete, Check
+  run state and Enable scheduler (#30); a due time that has passed reads as due (#50).
+- The plugin's floor is OATS 0.70.5 (#45). CI runs the plugin as five jobs: the unit
+  stage, the live stage in each theme, the real run, and a pi agent launched from New
+  agent (#46, #59, #63).
 
 ## 0.3.0
 

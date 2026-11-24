@@ -134,8 +134,10 @@ test("the REAL kernel's row of such a home (recorded) is a lost session's row: o
   // What the kernel printed: nothing in it says that the agent never ran.
   expect([agent.backend, agent.running, agent.runtimeState, agent.sessionEnd, agent.waiting, agent.outsideOats ?? null]).toEqual(["bb", false, "stopped", "lost", null, null]);
   const listed = { ...thread(), id: agent.threadId!, status: "error" };
-  // By the row and bb's sidebar alone: "Stopped · session lost", carried on by a message.
-  expect([state(agent, listed), rest(agent, listed), messageResumes(agent, listed), said(agent, "open", true, listed)?.kind]).toEqual(["stopped", "lost", true, "lost-open"]);
+  // By the row and bb's sidebar alone: "Stopped · session lost". No message is invited yet: the thread is in "error" and bb has not said whether a turn ever started there (fail closed).
+  expect([state(agent, listed), rest(agent, listed), messageResumes(agent, listed), said(agent, "open", true, listed)?.kind]).toEqual(["stopped", "lost", false, "lost-open"]);
+  // Had bb answered that a turn started (a later turn failed), the same row would be carried on by a message.
+  expect(messageResumes(agent, { ...listed, startFailure: null })).toBe(true);
   // With bb's events of that very thread (the error's data as the pi run's P6 asserts and shows it; not a fixture: one system/error, never a turn): Failed, nothing to carry on.
   const failed = { ...listed, startFailure: startFailureOf([], [{ data: { code: "thread_command_failed", message: "Command thread.start failed", detail: 'Failed to resolve Pi model "mock/echo-20261122"' } }]) };
   expect([state(agent, failed), rest(agent, failed), messageResumes(agent, failed), said(agent, "open", true, failed)]).toEqual(["error", "never-started", false, null]);

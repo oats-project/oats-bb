@@ -1069,8 +1069,10 @@ test("behind a result the home's card of an agent that runs outside OATS says \"
   const card = await cardOf(slot, "weekly-digest-helper");
   const acts = () => Array.from(within(card).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => [button.textContent, (button as HTMLButtonElement).disabled]);
   expect([within(card).queryByTestId("oats-reading"), acts()]).toEqual([null, [["Stop…", false], ["Start…", false]]]);
+  expect(within(card).getByTestId("oats-needs-outside").textContent).toBe("Stop, then Start.");
   act(() => noteActed(["weekly-digest-helper"], fixtureSnapshot(agents).at));
   expect([within(card).getByTestId("oats-reading").textContent, acts()]).toEqual(["Reading…", [["Stop…", true], ["Start…", true]]]);
+  expect(within(card).queryByTestId("oats-needs-outside")).toBeNull(); // what it needs is said of a state that is being read again: not behind "Reading…"
   expect(within(card).getByTestId("oats-status-line").textContent).not.toMatch(/Running outside OATS/); // never the state of before, stated plainly
 });
 

@@ -896,9 +896,12 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   be shown to start), "Pick provider" (several serve it: the field then offers only those),
   "Required" (the harness was changed and no model picked). While the list is read the button is
   off with no word. A harness CHANGED to one whose bb provider is not ready on this machine holds
-  it too, with the New agent form's own sentence (`useHarnessStates`, app/spawn/models.ts); the
-  agent's own harness never does (it runs on it). That second hold follows from the kernel's
-  order of a restart and is not recorded on a kernel. THE HOLD IS THE APP'S: the plugin's server
+  it too, with the New agent form's own MARK of that state ("not signed in in bb" and its fellows:
+  `useHarnessStates`, app/spawn/models.ts), on the Harness field and beside the button; the
+  form's sentence is not drawn there (it speaks of a spawn). The agent's own harness never holds
+  (it runs on it), and in the instant before bb has said its providers' states that door does not
+  hold either: the model's rule does. That second hold follows from the kernel's order of a
+  restart and is not recorded on a kernel. THE HOLD IS THE APP'S: the plugin's server
   cannot read bb's model list or its providers' states (only the app's SDK can), so a caller past
   the app (the plugin's rpc by hand) still reaches the kernel. An agent on tmux has no harness
   and no model field, and the server refuses both for it: the trap cannot be reached there.

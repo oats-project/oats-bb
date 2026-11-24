@@ -2389,7 +2389,7 @@ test("while bb's list is read a changed model holds Restart with no word and no 
   }
 });
 
-test("the same harm by another door: a harness CHANGED to one bb cannot run here holds Restart, with the form's own sentence, and sends nothing; the agent's own harness is never held by it", async () => {
+test("the same harm by another door: a harness CHANGED to one bb cannot run here holds Restart, with the form's own mark of that state (never its sentence, which speaks of a spawn), and sends nothing; the agent's own harness is never held by it", async () => {
   // bb is not signed in to Claude Code, nor to pi (the agent's own, on which it runs).
   const sdk = () => listsSdk({ pi: PI_LIST, "claude-code": ["opus"] }, { "claude-code": "unauthenticated", pi: "unauthenticated" });
   const slot = await restartDialog(sdk());
@@ -2398,7 +2398,8 @@ test("the same harm by another door: a harness CHANGED to one bb cannot run here
   fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "claude" } });
   type(slot, "opus"); // a model bb lists for it: no model makes it start
   const harnessError = () => (slot.getByTestId("oats-start-harness").closest('[data-testid="oats-field"]') as HTMLElement).querySelector('[role="alert"]')?.textContent ?? null;
-  await waitFor(() => expect(harnessError()).toBe("bb is not signed in to Claude Code on this machine, so a spawn on it is refused. Sign in to it in bb’s settings, or pick another harness."));
+  await waitFor(() => expect(harnessError()).toBe("not signed in in bb"));
+  expect(slot.getByRole("dialog").textContent).not.toContain("spawn");
   expect(modelError(slot)).toBeNull();
   expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("not signed in in bb");
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);

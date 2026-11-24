@@ -712,12 +712,15 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     ? null
     : restartModel({ typed, harnessChanged, harnessReady: notReady === null, listed: suggestions.status === "loading" && !overdue ? { status: "loading" } : { status: "ready", ids: suggestions.models.map((each) => each.id) } });
   const heldModel = hold !== null && hold.kind === "held" ? hold : null;
-  /** The word on the Model field and beside the button; for a harness bb cannot run, the form's own sentence under the Harness field. */
+  /**
+   * The word on the Model field and beside the button. For a harness bb cannot run: the New agent form's own MARK
+   * of that state ("not signed in in bb"), on the Harness field and beside the button; its sentence is not drawn
+   * here (it speaks of a spawn).
+   */
   const modelWord = heldModel === null || heldModel.why === "harness-not-ready" ? null : heldModel.why === "required" ? START.required : heldModel.why === "not-found" ? START.notFound : START.pickProvider;
-  const harnessWord = heldModel !== null && heldModel.why === "harness-not-ready" && notReady !== null ? notReady.sentence : null;
-  // Beside the button: the held word (for a harness bb cannot run, the form's own mark of it; its sentence is under
-  // the Harness field); while the list is read, off with no word (it answers at once from bb's cache).
-  const notArmed = hold === null || hold.kind === "armed" ? null : hold.kind === "reading" ? "" : heldModel !== null && heldModel.why === "harness-not-ready" ? (notReady?.mark ?? "") : modelWord;
+  const harnessWord = heldModel !== null && heldModel.why === "harness-not-ready" && notReady !== null ? notReady.mark : null;
+  // Beside the button: the held word; while the list is read, off with no word (it answers at once from bb's cache).
+  const notArmed = hold === null || hold.kind === "armed" ? null : hold.kind === "reading" ? "" : (harnessWord ?? modelWord);
 
   // What this start is, from the kernel's row as the check read it. On bb: a new thread, with a harness and a
   // model to choose. On tmux: no thread and no choice; and where its session was LOST, a resume, unless the

@@ -10,7 +10,8 @@
   launches were then refused as "@awebai/oats-pi is not in bb's pi configuration", with
   no word of why. Where settings.json is gone and a settings.json.bak or a config.yml is
   there, readiness, `oats bb doctor` and a pi launch say so in one sentence: oh-my-pi
-  moved it; `bb provider disable acp-omp`, then copy settings.json.bak back. README,
+  moved it; `bb provider disable acp-omp`, then copy settings.json.bak back (with
+  config.yml alone: `pi install npm:@awebai/oats-pi` into that folder). README,
   "pi".
 
 ## 0.4.0

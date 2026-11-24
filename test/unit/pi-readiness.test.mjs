@@ -153,7 +153,7 @@ for (const [name, write] of [
 
 for (const [name, leave, restore] of [
   ["settings.json.bak", (dir) => { writeFileSync(join(dir, "settings.json.bak"), JSON.stringify({ packages: [BRIDGE] })); writeFileSync(join(dir, "config.yml"), "packages:\n  - npm:@awebai/oats-pi\n"); }, /then copy settings\.json\.bak back to settings\.json\./],
-  ["config.yml", (dir) => writeFileSync(join(dir, "config.yml"), "packages:\n  - npm:@awebai/oats-pi\n"), /then put back its settings\.json, listing npm:@awebai\/oats-pi\./],
+  ["config.yml", (dir) => writeFileSync(join(dir, "config.yml"), "packages:\n  - npm:@awebai/oats-pi\n"), /then give it a settings\.json listing it \(PI_CODING_AGENT_DIR=<that directory> pi install npm:@awebai\/oats-pi\)\./],
 ]) {
   test(`oh-my-pi moved bb's pi settings (${name} there, no settings.json): refused E_BACKEND_NOT_READY naming the cause and both remedies`, async (t) => {
     const { backend, bb, launch, check } = await setup(t);
@@ -161,7 +161,7 @@ for (const [name, leave, restore] of [
     leave(backend.piAgentDir);
     const answer = await launch();
     assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
-    assert.match(answer.error.message, new RegExp(`^bb's pi has no settings\\.json, and ${name.replace(".", "\\.")} is there instead: oh-my-pi moved it \\(bb runs it as its acp-omp provider, with this pi folder\\)\\. Turn that off \\(bb provider disable acp-omp\\), `));
+    assert.match(answer.error.message, new RegExp(`^bb's pi has no settings\\.json, and ${name.replaceAll(".", "\\.")} is there instead: oh-my-pi moved it \\(bb runs it as its acp-omp provider, with this pi folder\\)\\. Turn that off \\(bb provider disable acp-omp\\), `));
     assert.match(answer.error.message, restore);
     assert.ok(answer.error.message.endsWith(`Read: ${join(backend.piAgentDir, "settings.json")}`), "the file read is named, last");
     assert.ok(answer.error.message.length <= 480, String(answer.error.message.length));

@@ -1,0 +1,8 @@
+{
+  "name": "oats-bb-lock-bb-app",
+  "private": true,
+  "description": "The exact tree of bb-app that the plugin's container checks install (plugin/container/locks/README.md).",
+  "dependencies": {
+    "bb-app": "0.50.1"
+  }
+}

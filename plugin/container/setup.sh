@@ -13,8 +13,18 @@ if [ "$BB_VERSION" != "$PACKAGE_BB_VERSION" ]; then
   echo "setup: the repository pins bb $BB_VERSION (bb-version) and plugin/package.json pins bb-app $PACKAGE_BB_VERSION: make them equal" >&2
   exit 1
 fi
-if [ "$(bb --version 2>/dev/null || true)" != "$BB_VERSION" ]; then
-  npm install -g "bb-app@$BB_VERSION"
+# bb-app comes from its committed lock (locks/bb-app, locked-install.sh; locks/README.md): bb-app
+# itself and every package under it at the version and with the integrity the lock names. Nothing
+# is resolved at run time: `npm install -g bb-app@<version>` resolved bb-app's dependencies anew
+# at every run, five of them by a range. The lock must be the lock of the pinned version.
+LOCKED_BB_VERSION=$(node -p 'require("./container/locks/bb-app/package.json").dependencies["bb-app"]')
+if [ "$BB_VERSION" != "$LOCKED_BB_VERSION" ]; then
+  echo "setup: the repository pins bb $BB_VERSION and container/locks/bb-app is the lock of bb-app $LOCKED_BB_VERSION: write the lock again (plugin/container/relock.sh bb-app)" >&2
+  exit 1
 fi
+if [ "$(bb --version 2>/dev/null || true)" != "$BB_VERSION" ]; then
+  sh container/locked-install.sh bb-app
+fi
+[ "$(bb --version 2>/dev/null || true)" = "$BB_VERSION" ] || { echo "setup: bb-app $BB_VERSION could not be installed from its lock" >&2; exit 1; }
 npm ci
 echo "setup: bb-app $(bb --version), plugin SDK $(node -p 'JSON.parse(require("fs").readFileSync("node_modules/@get-bb/plugin-sdk/package.json", "utf8")).version')"

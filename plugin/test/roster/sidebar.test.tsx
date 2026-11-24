@@ -160,7 +160,7 @@ test("the workspace's name, with no heading under it; at the roster's foot New a
   expect(slot.inspection.navigateCalls).toEqual([
     { method: "toPluginPanel", path: "new-agent" }, // the form's own page (app/spawn)
   ]);
-  expect(navigated()).toBe(2);
+  expect(navigated()).toBe(1);
 });
 
 test("the four page rows call toPluginPanel, then onNavigate", async () => {

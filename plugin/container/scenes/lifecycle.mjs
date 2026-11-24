@@ -244,8 +244,8 @@ export default [
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
         check(
-          before.title === "Stop Redesign ui lead?" && before.about === "redesign-ui-lead" && before.body.includes("Also stop Desktop mockups developer, Harvest knowledge helper On") && before.body.split("Desktop mockups developer").length === 2 && !/child instances|Also stops:|nothing is forced|Stops \d+ sessions|transcript|Observed|To talk to it again|Nothing is deleted/.test(before.body),
-          `${at} Stop opens its dialog and stops nothing: titled with the act and the agent of the kernel's plan, with the choice of its children, which names them, once (no line beside it says them again; "agents", never "instances"), and none of the sentences the cut removed`,
+          before.title === "Stop Redesign ui lead?" && before.about === "redesign-ui-lead" && before.body.includes("Also stop Desktop mockups developer, Harvest knowledge helper On") && before.body.split("Also stop Desktop mockups developer").length === 2 && !/child instances|Also stops:|nothing is forced|Stops \d+ sessions|transcript|Observed|To talk to it again|Nothing is deleted/.test(before.body),
+          `${at} Stop opens its dialog and stops nothing: titled with the act and the agent of the kernel's plan, with the choice of its children, which names them, once (no line says again who is stopped; the box of who is mid-turn is another fact; "agents", never "instances"), and none of the sentences the cut removed`,
           JSON.stringify(before),
         );
         const stopSays = await page.evaluate(saysNow);

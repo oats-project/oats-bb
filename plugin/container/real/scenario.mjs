@@ -693,11 +693,12 @@ async function loadedWhileReading(asInstance, { instance, threadId }) {
         } else {
           // Nothing else changes from here. The read ends, the server publishes, and the window must show the claim.
           const shown = (await page.until(`/^Needs you/.test(${facts}) ? ${facts} : ""`, 60)) ?? null;
-          // A status of the plugin's that did not answer since the claim (the kernel's own read ran over what the hold
-          // left of its limit) carried nothing to the window: the try says nothing of the plugin.
-          const unanswered = statusCalls(before).filter((call) => call.exit !== 0).length;
-          if (shown === null && unanswered > 0) missed.push(`try ${attempt} (held ${HELD_MS} ms): ${unanswered} oats status of the plugin's since the claim did not answer`);
-          else held = { drawn, shown, reads: statusReads(before).length, ms: HELD_MS };
+          // No status of the plugin's has ANSWERED since the claim (the kernel's own read ran over what the hold left of
+          // its limit and was stopped: a stopped call leaves no record at all, so it is the answered ones that are
+          // counted): nothing carried the change to the window, and the try says nothing of the plugin.
+          const answered = statusReads(before).length;
+          if (shown === null && answered === 0) missed.push(`try ${attempt} (held ${HELD_MS} ms): no oats status of the plugin's answered since the claim`);
+          else held = { drawn, shown, reads: answered, ms: HELD_MS };
         }
       } finally {
         await page.close();

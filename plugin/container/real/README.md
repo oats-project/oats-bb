@@ -127,7 +127,7 @@ It then loads a NEW WINDOW WHILE THE PLUGIN READS A CHANGE (step A5b3): the plug
 held (6 s, then 10 s, then 14 s, a try each), the agent sets a claim, and a window is loaded while
 that read runs (checked: the read was still running when the window had drawn the roster from
 before the claim; a try whose load missed the read is made again with the longer hold; if every
-try missed, or a status did not answer under its hold, the step says NOT SHOWN and fails nothing). Nothing else changes; when the read ends
+try missed, or no status answered after the claim, the step says NOT SHOWN and fails nothing). Nothing else changes; when the read ends
 the window must show the claim, on that one read and not on a later poll's. This holds the path of
 a window loaded inside a read on the real kernel. It does NOT meet the race `app/store.ts` closes
 (an event published while the window's first answer is still on its way): in every try that

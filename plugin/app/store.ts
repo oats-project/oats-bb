@@ -146,8 +146,8 @@ export function useRead<Method extends ReadMethod>(
   const data = query.data as Result<Method> | undefined;
   const retry = () => {
     // Retry asks the server to reread OATS now, then reads what it has.
-    const reread = () => void refetch.current();
-    attempt(() => rpc.call("refresh", null)).then(reread, reread);
+    const readNow = () => void refetch.current();
+    attempt(() => rpc.call("refresh", null)).then(readNow, readNow);
   };
   if (query.error !== null) return { status: "error", data, error: errorMessage(query.error), retry };
   if (data === undefined) return { status: "loading", data: undefined, error: null, retry };

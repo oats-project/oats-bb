@@ -32,6 +32,10 @@ those stages alone: a look at one screen in minutes, never a gate.
 `LIVE_REPEAT=10` each that many times in every view: by hand only, to show whether a check that
 failed once is the scene's or the product's. A scene is given `snapshot()`: the server's roster as
 the app gets it now, so that it waits on the roster it needs and not on a number of seconds.
+`LIVE_WINDOW_LOADS=<n>` (by hand; passed into the container by name) makes the scene "a window that
+loads right after a change …" load n windows a view, where the gate loads two: a count of how
+often a window that loads while the server may still be reading a change ends on the roster with
+it (it must be all of them; which millisecond the load falls in is chance, so many loads say more).
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to

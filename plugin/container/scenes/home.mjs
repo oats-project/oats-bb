@@ -25,7 +25,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fill, testId, textOf, texts, textsNamed } from "../browser.mjs";
+import { fill, testId, textOf, texts, textsNamed, showSidebar } from "../browser.mjs";
 import { FAILS, fits, printing, refresh, setVerb, settled } from "./panel.mjs";
 
 /** The oldest OATS the plugin works with, as kernel/compat.ts holds it: the card's "Required" says it. */
@@ -413,6 +413,42 @@ export default [
       check(await open(page, within("oats-home-needs")), `${at} the home draws again`, await page.evaluate(textOf(PAGE)));
       const quiet = await page.until(`document.querySelector(${JSON.stringify(within("oats-home-cli"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-cli-line"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null`, 15);
       check(Boolean(quiet), `${at} with the tested oats the home says nothing of the CLI`, await page.evaluate(textOf(PAGE)));
+    },
+  },
+  {
+    // The home has no tile for the agents and the sidebar no line that opens the home: at a phone's
+    // width, where bb keeps the sidebar in a drawer, the roster must be one press from the home.
+    stage: "pages-default",
+    name: "at a phone's width the whole roster is one press from the home: bb's own drawer over the plugin's page; an idle agent's row opens its thread, the tmux agent's row its page",
+    run: async ({ page, at, viewport, threads, check: plain }) => {
+      if (!viewport.mobile) return;
+      const check = printing(plain);
+      const SIDE = testId("oats-sidebar");
+      const roster = `(() => { const side = document.querySelector(${JSON.stringify(SIDE)}); if (!side || side.getBoundingClientRect().width === 0) return ""; const rows = [...side.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})]; return JSON.stringify(rows.map((row) => [row.getAttribute("data-sidebar-thread-id") ?? row.getAttribute("data-instance"), ((row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? "") + (row.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim()])); })()`;
+      const idle = threads.get("thr_harvest"); // harvest-knowledge-helper: idle
+      const stopped = threads.get("thr_digest"); // weekly-digest-helper: stopped
+      const TMUX = "kernel-fix-developer";
+      const drawer = async (what) => {
+        check(await open(page, within("oats-home-needs")), `${at} ${what}: the home (the plugin's page, with the default pages)`, await page.evaluate(textOf(PAGE)));
+        // The roster is not on the page at this width: it is in bb's drawer, behind bb's own toggle.
+        const hidden = await page.evaluate(`(() => { const side = document.querySelector(${JSON.stringify(SIDE)}); if (!side) return true; const box = side.getBoundingClientRect(); return box.width === 0 || box.right <= 0 || box.left >= innerWidth; })()`);
+        check(hidden === true, `${at} ${what}: the sidebar is not on screen beside the home at this width`, String(hidden));
+        check(await showSidebar(page, viewport), `${at} ${what}: bb's own toggle opens its drawer over the plugin's home, and the roster is in it`, await page.evaluate(`JSON.stringify([...document.querySelectorAll("button")].filter((b) => b.getBoundingClientRect().width > 0).map((b) => b.getAttribute("aria-label") ?? b.innerText.trim()).slice(0, 12))`));
+        return page.until(`(() => { const rows = ${roster}; return rows !== "" && JSON.parse(rows).length >= 8 ? rows : ""; })()`, 20);
+      };
+      const first = await drawer("first");
+      const rows = Object.fromEntries(JSON.parse(first || (await page.evaluate(roster)) || "[]"));
+      check(Object.keys(rows).length === 8 && rows[idle.id] === "Idle" && rows[stopped.id] === "Stopped" && rows[TMUX] === "Working · tmux", `${at} the drawer holds every agent of the roster, each with its state: an idle one, a stopped one and the one on tmux among the eight`, JSON.stringify(rows));
+      await page.shot(`home-${viewport.name}-drawer`);
+      // An idle agent's row opens its thread.
+      await page.evaluate(`document.querySelector(${JSON.stringify(`${SIDE} ${testId("oats-agent-row")}[data-sidebar-thread-id="${idle.id}"]`)}).click()`);
+      const onThread = await page.until(`location.pathname.endsWith(${JSON.stringify(`/threads/${idle.id}`)}) ? location.pathname : ""`, 20);
+      check(Boolean(onThread), `${at} the idle agent's row, pressed in the drawer, opens its thread`, await page.evaluate("location.pathname"));
+      // Back on the home: the drawer again, and the tmux agent's row opens its own page.
+      await drawer("again");
+      await page.evaluate(`document.querySelector(${JSON.stringify(`${SIDE} ${testId("oats-agent-row-threadless")}[data-instance="${TMUX}"]`)}).click()`);
+      const onPage = await page.until(`location.pathname.endsWith(${JSON.stringify(`/plugins/oats/agent/${TMUX}`)}) && document.querySelector(${JSON.stringify(testId("oats-agent-page"))}) !== null ? location.pathname : ""`, 20);
+      check(Boolean(onPage), `${at} the tmux agent's row, pressed in the drawer, opens its own page`, await page.evaluate("location.pathname"));
     },
   },
   {

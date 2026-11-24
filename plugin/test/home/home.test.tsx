@@ -926,24 +926,24 @@ test("Home › Agents says where an agent the roster draws on no thread is, from
   resetApp();
   // A session lost with its thread archived: the reason, as on the sidebar's row.
   const lost = await rowOf(withEnd("lost"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb("thr_digest") });
-  await waitFor(() => expect(lost.words()).toBe("archived in bb · oats-expert"));
+  await waitFor(() => expect(lost.words()).toBe("oats-expert · archived in bb"));
   lost.list.unmount();
   resetApp();
   // bb answers that it has no thread of that id: deleted.
   const deleted = await rowOf(withEnd("stopped"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb() });
-  await waitFor(() => expect(deleted.words()).toBe("deleted in bb · oats-expert"));
+  await waitFor(() => expect(deleted.words()).toBe("oats-expert · deleted in bb"));
   expect(deleted.words()).not.toContain("gone");
   deleted.list.unmount();
   resetApp();
   // An agent on tmux whose session was lost: the same reason word as on bb, then where it runs (bb's terminal glyph, named "tmux").
   const tmuxLost: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
   const tmux = await rowOf([...fixtureAgents(), tmuxLost], tmuxLost.instance, { sidebarThreads: sidebarThreads(), sdk: bb() });
-  await waitFor(() => expect(tmux.words()).toBe("session lost · oats-maintainer · tmux"));
-  // One line beside the name: the reason, the soul, then where it is (bb's terminal glyph; the word here: the test SDK's icon set has no glyph).
+  await waitFor(() => expect(tmux.words()).toBe("oats-maintainer · session lost · tmux"));
+  // One line beside the name, in the row's one order: the soul, the reason, then where it is (bb's terminal glyph; the word here: the test SDK's icon set has no glyph).
   const facts = within(tmux.row).getByTestId("oats-home-agent-where");
   expect(facts.previousElementSibling).toBe(within(tmux.row).getByTestId("oats-home-agent"));
-  expect(Array.from(facts.querySelectorAll("[data-phrase]")).map((part) => [part.getAttribute("data-phrase"), part.className.split(/\s+/).includes("shrink-0")])).toEqual([["reason", true], ["soul", false], ["where", true]]); // the soul alone gives way
-  expect(facts.getAttribute("title")).toBe("session lost · oats-maintainer · tmux");
+  expect(Array.from(facts.querySelectorAll("[data-phrase]")).map((part) => [part.getAttribute("data-phrase"), part.className.split(/\s+/).includes("shrink-0")])).toEqual([["soul", true], ["reason", false], ["where", true]]); // the reason gives way first (it shortens, then leaves: test/app/row-facts.test.tsx); the glyph never
+  expect(facts.getAttribute("title")).toBe("oats-maintainer · session lost · tmux");
   expect(within(tmux.row).getByTestId("oats-state").textContent).toBe("Stopped");
 });
 
@@ -965,14 +965,14 @@ test("the card of an agent that asks and that bb lists no thread of says what be
   };
   // bb answers that it has no thread of that id: deleted. The button leads to its page.
   const deleted = await cardOn(fixtureAgents(), bb());
-  await waitFor(() => expect(deleted.where()).toBe("deleted in bb · oats-developer"));
+  await waitFor(() => expect(deleted.where()).toBe("oats-developer · deleted in bb"));
   quiet(deleted.card);
   expect(deleted.leads()).toBe("Open its page: Flaky ci developer");
   deleted.slot.unmount();
   resetApp();
   // bb has it archived (and the agent still runs): the button leads to the archived thread, and its name says so.
   const archived = await cardOn(fixtureAgents(), bb("thr_ci"));
-  await waitFor(() => expect(archived.where()).toBe("archived in bb · oats-developer"));
+  await waitFor(() => expect(archived.where()).toBe("oats-developer · archived in bb"));
   quiet(archived.card);
   expect(archived.leads()).toBe("Open thread: Flaky ci developer");
   fireEvent.click(within(archived.card).getByTestId("oats-needs-open"));
@@ -981,7 +981,7 @@ test("the card of an agent that asks and that bb lists no thread of says what be
   resetApp();
   // Its row names no thread at all: "no bb thread"; the button leads to its page.
   const none = await cardOn(fixtureAgents().map((agent): Agent => (agent.instance === CI ? { ...agent, threadId: null } : agent)), bb());
-  await waitFor(() => expect(none.where()).toBe("no bb thread · oats-developer"));
+  await waitFor(() => expect(none.where()).toBe("oats-developer · no bb thread"));
   quiet(none.card);
   expect(none.leads()).toBe("Open its page: Flaky ci developer");
 });
@@ -1399,8 +1399,8 @@ test("an agent whose bb thread was deleted that needs the person: the reason and
   const sdk = { threads: { list: async () => [], interactions: { list: async () => [] } } } as never as RenderSlotOptions<Contract>["sdk"];
   const slot = await homePage({ sidebarThreads: { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_release") }, sdk });
   const card = await cardOf(slot, "release-070-maintainer");
-  await waitFor(() => expect(within(card).getByTestId("oats-needs-where").textContent).toBe("deleted in bb · oats-maintainer"));
-  expect(card.textContent).toBe("Release 070 maintainerdeleted in bb · oats-maintainerOpen!4 dGreen light at 9f2e1c? Second reader done.");
+  await waitFor(() => expect(within(card).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer · deleted in bb"));
+  expect(card.textContent).toBe("Release 070 maintaineroats-maintainer · deleted in bbOpen!4 dGreen light at 9f2e1c? Second reader done.");
   expect(card.textContent).not.toContain("so nothing can be sent to it from here");
   expect(within(card).queryByTestId("oats-needs-elsewhere")).toBeNull();
   expect(within(card).queryByTestId("oats-reply")).toBeNull();

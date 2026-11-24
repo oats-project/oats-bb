@@ -74,12 +74,11 @@ test("a row is two blocks: its name, then on one line its state in a word and it
     const line = within(one).getByTestId("oats-row-facts");
     expect(line.getAttribute("title")).toBe(line.textContent);
     expect(line.querySelector('[data-phrase="soul"]')!.textContent).not.toBe("");
-    // When the line is short of room the SOUL alone gives way, with "…": the state, a reason and where it is never shrink.
-    for (const part of Array.from(line.querySelectorAll("[data-phrase]"))) {
-      const classes = part.className.split(/\s+/);
-      if (part.getAttribute("data-phrase") === "soul") expect(classes).toEqual(expect.arrayContaining(["shrink", "truncate", "min-w-[1.5em]"]));
-      else expect([classes.includes("shrink-0"), classes.includes("truncate")]).toEqual([true, false]);
-    }
+    // The row's one order: the state, then the soul (a reason and where it is come after: test/app/row-facts.test.tsx).
+    expect(Array.from(line.querySelectorAll("[data-phrase]")).map((part) => part.getAttribute("data-phrase")).slice(0, 2)).toEqual(["state", "soul"]);
+    // With no reason on the line the soul is the part that gives way, with "…"; the state never shrinks.
+    expect(line.querySelector('[data-phrase="soul"]')!.className.split(/\s+/)).toEqual(expect.arrayContaining(["shrink", "truncate", "min-w-[1.5em]"]));
+    expect(line.querySelector('[data-phrase="state"]')!.className.split(/\s+/)).toContain("shrink-0");
   }
   // The mark says the state too, and is hidden from a screen reader beside its word.
   for (const [id, state] of [["thr_release", "needs-you"], ["thr_redesign", "working"], ["thr_harvest", "idle"], ["thr_digest", "stopped"]] as const) {

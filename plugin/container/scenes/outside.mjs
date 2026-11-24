@@ -204,7 +204,7 @@ const flat = `(e) => (e?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
 const ACT = '[data-testid="oats-status-act"], [data-testid^="oats-agent-act-"]';
 /** One row of the sidebar by its instance (a row with no thread to open) or by its thread: → `{ facts, state, tone, lines }`: its second line's words, its mark's state and tone, and how many lines that second line takes. */
 const rowOf = (selector) =>
-  `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(selector)}); if (!row) return null; const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const mark = row.querySelector("[data-mark][data-state]"); return { facts: (flat(facts) + (facts?.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim() /* (bb's terminal glyph, read by its name) */, state: mark?.getAttribute("data-state") ?? null, tone: mark?.getAttribute("data-tone") ?? null, lines: facts ? Math.round(facts.getBoundingClientRect().height / parseFloat(getComputedStyle(facts).lineHeight)) : 0 }; })()`;
+  `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(selector)}); if (!row) return null; const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const mark = row.querySelector("[data-mark][data-state]"); return { facts: facts?.getAttribute("title") ?? "" /* (the line's title: it says all of it, the reason too where the row is too narrow to hold it, and "tmux" for bb's terminal glyph) */, state: mark?.getAttribute("data-state") ?? null, tone: mark?.getAttribute("data-tone") ?? null, lines: facts ? Math.round(facts.getBoundingClientRect().height / parseFloat(getComputedStyle(facts).lineHeight)) : 0 }; })()`;
 const threadless = (instance) => `${testId("oats-agent-row-threadless")}[data-instance="${instance}"]`;
 const onThread = (id) => `${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"]`;
 
@@ -240,8 +240,8 @@ export default [
       const digestOpens = await page.until(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.getAttribute("data-opens") === "thread"`, 15);
       check(same(rows.digest, { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 }) && Boolean(digestOpens), `${at} stopped, its thread archived in bb: "Stopped" and its soul, no reason, in the plain tone, and the row opens the archived thread`, JSON.stringify(rows.digest));
       check(same(rows.outside, { facts: "Running outside OATS · knowledge-harvester", state: "outside", tone: null, lines: 1 }) && rows.outsides === 1, `${at} the kernel's outsideOats: the state IS "Running outside OATS", with its mark, then its soul, on that row alone; no "Stopped" beside it`, JSON.stringify([rows.outside, rows.outsides]));
-      check(same(rows.ranker, { facts: "Stopped · archived in bb · research-expert", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
-      check(same(rows.flaky, { facts: "Stopped · deleted in bb · oats-developer", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));
+      check(same(rows.ranker, { facts: "Stopped · research-expert · archived in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
+      check(same(rows.flaky, { facts: "Stopped · oats-developer · deleted in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));
       // Every row's state word is one of the set: "Archived in bb" and "Deleted in bb" are reasons after a state, never states.
       const SET = ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"];
       check(rows.words.length === 8 && rows.words.every((word) => SET.includes(word)), `${at} every row's state word is one of the set (${SET.join(", ")})`, JSON.stringify(rows.words));
@@ -370,7 +370,7 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      await page.until(`(${rowOf(threadless("flaky-ci-developer"))})?.facts === "Stopped · deleted in bb · oats-developer"`, 30);
+      await page.until(`(${rowOf(threadless("flaky-ci-developer"))})?.facts === "Stopped · oats-developer · deleted in bb"`, 30);
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("flaky-ci-developer"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/plugins/oats/agent/flaky-ci-developer")`, 15)), `${at} the row of an agent whose thread was deleted opens the agent's own page`, await page.evaluate("location.pathname"));
       const read = await page.until(
@@ -436,9 +436,9 @@ export default [
       check(
         same([rows.operator, rows.host, rows.idle, rows.tmux], [
           { facts: "Stopped · knowledge-harvester", state: "stopped", tone: null, lines: 1 },
-          { facts: "Stopped · session lost · oats-maintainer", state: "stopped", tone: null, lines: 1 },
-          { facts: "Idle · not loaded · oats-desktop-developer", state: "idle", tone: null, lines: 1 },
-          { facts: "Stopped · session lost · oats-developer · tmux", state: "stopped", tone: null, lines: 1 },
+          { facts: "Stopped · oats-maintainer · session lost", state: "stopped", tone: null, lines: 1 },
+          { facts: "Idle · oats-desktop-developer · not loaded", state: "idle", tone: null, lines: 1 },
+          { facts: "Stopped · oats-developer · session lost · tmux", state: "stopped", tone: null, lines: 1 },
         ]) && rows.words.every((word) => ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"].includes(word)),
         `${at} the rows (each with its soul after these words): "Stopped" with no reason (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux, "tmux" its glyph's name: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every state word is one of the set`,
         JSON.stringify(rows),
@@ -524,8 +524,8 @@ export default [
         Boolean(answered) &&
           same(rows, [
             { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 },
-            { facts: "Stopped · archived in bb · research-expert", state: "stopped", tone: "warning", lines: 1 },
-            { facts: "Idle · archived in bb · oats-maintainer", state: "idle", tone: "warning", lines: 1 },
+            { facts: "Stopped · research-expert · archived in bb", state: "stopped", tone: "warning", lines: 1 },
+            { facts: "Idle · oats-maintainer · archived in bb", state: "idle", tone: "warning", lines: 1 },
           ]),
         `${at} the three rows (each with its soul after these words): "Stopped" with no reason, plain (an operator's stop); "Stopped · archived in bb" with the warning mark (a session lost); "Idle · archived in bb" with the warning mark (it still runs); each opens its archived thread`,
         JSON.stringify(rows),

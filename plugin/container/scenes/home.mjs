@@ -424,7 +424,7 @@ export default [
       if (!viewport.mobile) return;
       const check = printing(plain);
       const SIDE = testId("oats-sidebar");
-      const roster = `(() => { const side = document.querySelector(${JSON.stringify(SIDE)}); if (!side || side.getBoundingClientRect().width === 0) return ""; const rows = [...side.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})]; return JSON.stringify(rows.map((row) => [row.getAttribute("data-sidebar-thread-id") ?? row.getAttribute("data-instance"), ((row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? "") + (row.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim()])); })()`;
+      const roster = `(() => { const side = document.querySelector(${JSON.stringify(SIDE)}); if (!side || side.getBoundingClientRect().width === 0) return ""; const rows = [...side.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})]; return JSON.stringify(rows.map((row) => [row.getAttribute("data-sidebar-thread-id") ?? row.getAttribute("data-instance"), (row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.getAttribute("title") ?? "")])); })()`;
       const idle = threads.get("thr_harvest"); // harvest-knowledge-helper: idle
       const stopped = threads.get("thr_digest"); // weekly-digest-helper: stopped
       const TMUX = "kernel-fix-developer";

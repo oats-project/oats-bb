@@ -22,7 +22,8 @@ import { lineActs, lineParts, outsideOf, OutsideWarning } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { TMUX, TmuxMark } from "../ui";
+import { TMUX } from "../ui";
+import { RowFacts } from "../ui/row-facts";
 import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
@@ -428,46 +429,20 @@ function Cropped<Item>({ items, shown: most, more, testId, children }: { items: 
 }
 
 /**
- * What a row of the home says of its agent beside its name, on ONE line that never wraps, "·"
- * between: the reason where there is one (an agent with no bb thread: "session lost"; what became
- * of its thread), its soul, and for an agent on tmux bb's terminal glyph. As on the sidebar's row
- * (without the state: the heading over the list, or the row's own end, says it): when the line
- * does not fit the SOUL gives way with "…", never the reason, and the glyph is never pushed out.
- * Its title says the whole of it. (The machine is not on a row: it is on the agent's page.)
+ * What a row of the home says of its agent beside its name, on ONE line that never wraps (ui
+ * `RowFacts`, as the sidebar's row, without the state: the heading over the list, or the row's own
+ * end, says it): its soul, the reason where there is one (an agent with no bb thread: "session
+ * lost"; what became of its thread), and for an agent on tmux bb's terminal glyph. When the line
+ * does not fit, the reason shortens, then leaves, and only then the soul shortens; a reason that
+ * warns stays. Its title says the whole of it. (The machine is not on a row: it is on the agent's page.)
  */
 function AgentFacts({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
   const said = entry.thread === null ? outsideOf(oats).of(entry.agent) : null;
   const onTmux = entry.thread === null && entry.agent.backend === "tmux";
   const reason = entry.thread !== null ? null : onTmux ? (said !== null && said.note ? said.note : null) : said === null || said.kind === "stopped-archived" ? null : said.note || null;
   const soul = shown(oats.soulOf(entry.agent));
-  const sep = (
-    <span data-sep="" className="shrink-0 whitespace-pre">
-      {" · "}
-    </span>
-  );
-  return (
-    <span data-testid={testId} title={[reason, soul, onTmux ? TMUX : null].filter((part) => part !== null).join(" · ")} className="flex min-w-0 max-w-full overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
-      {reason === null ? null : (
-        <>
-          <span data-phrase="reason" className="shrink-0">
-            {reason}
-          </span>
-          {sep}
-        </>
-      )}
-      <span data-phrase="soul" className="min-w-[1.5em] shrink truncate">
-        {soul}
-      </span>
-      {onTmux ? (
-        <>
-          {sep}
-          <span data-phrase="where" className="shrink-0">
-            <TmuxMark />
-          </span>
-        </>
-      ) : null}
-    </span>
-  );
+  // (Beside a name the line takes the rest of the row's width, so that it can measure what fits; under a name, the card's.)
+  return <RowFacts testId={testId} soul={soul} reason={reason} reasonTone={said?.rowTone === "warning" ? "warning" : undefined} where={onTmux ? TMUX : undefined} className="max-w-full flex-1 basis-40" />;
 }
 
 /**

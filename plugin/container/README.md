@@ -138,7 +138,7 @@ open, a confirmation before its act, in progress, done, refused and with another
   (`test/fixtures/roster/status.json`, kernel-fix-developer) with its name, home, window, soul group
   and parent changed, the claim the kernel printed for another agent on the waiting ones, and
   `running` true or false with no `runtimeState`, as the kernel prints a tmux home today. The scene
-  holds: every one is a row that says its state, its soul and "tmux" (the longest row, "Stopped · session lost · oats-contrib-developer · tmux", is ONE line: the soul gives way with "…", the state, the reason and the glyph never); the foot counts every
+  holds: every one is a row that says its state, its soul and "tmux" (the longest row, "Stopped · oats-contrib-developer · session lost · tmux", is ONE line: the reason shortens, then leaves the row, and only then the soul shortens; the state and the glyph never; and with every session lost every row keeps that order); the foot counts every
   agent that waits; no row is over three lines (the name on one or two, cut only after the
   second; the second block on one line); the
   selected row of a bb-thread agent with a name longer than two lines holds it cut after the

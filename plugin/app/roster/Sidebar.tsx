@@ -1,7 +1,6 @@
 // The sidebar's thread list (experimental_threadList): the workspace's name, the roster (every agent
 // OATS has, as a tree whose parents open), under it New agent, the plugin's pages under "Workspace",
 // then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
-import { Fragment } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
@@ -24,11 +23,12 @@ import { count } from "../format";
 import { useOats } from "../oats";
 import { outsideOf, rowParts } from "../outside";
 import type { Said } from "../outside";
-import { Button, Loading, Mark, plainClick, StateMark, TARGET, TMUX, TmuxMark } from "../ui";
+import { Button, Loading, Mark, plainClick, StateMark, TARGET, TMUX } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
 import { agentStatus, rowState } from "./status";
 import { hasNewAgent, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
+import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
@@ -134,50 +134,19 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * A row's two blocks, at most three lines in all (the lead's ruling on the long names):
    * - the NAME wraps to at most two lines and is cut with "…" only after the second; the whole
    *   name (`full`: the instance as the kernel names it) is the name's title on every row;
-   * - the second block is ONE line, never wrapped, "·" between its parts: the state's word; where
-   *   there is one a reason: what happened to the agent outside OATS (`reason`, app/outside
-   *   `rowParts`: "archived in bb", "session lost"); the soul (Joan, 24 Nov 2026: "Keep the agent
-   *   type"); and for an agent on tmux where it is (`where`: bb's terminal glyph, named "tmux";
-   *   the word on a bb with no such glyph). When the line does not fit, the SOUL gives way, cut
-   *   with "…" down to room for the "…" itself: the state's word, the reason and `where` are
-   *   never cut and never pushed out. Nothing is drawn past the row (the block clips), and the
-   *   whole line is its title. (The machine is not on a row: the instance panel says it.)
+   * - the second block is ONE line, never wrapped (ui `RowFacts`): STATE · SOUL · REASON · where,
+   *   "·" between. The reason is what happened to the agent outside OATS (app/outside `rowParts`:
+   *   "archived in bb", "session lost"); `where` is bb's terminal glyph, named "tmux", for an
+   *   agent on tmux. When the line does not fit, the reason shortens with "…", then leaves the
+   *   row, and only then the soul shortens; a reason that WARNS stays, and the soul gives way
+   *   first. The state's word and the glyph never shrink. The whole line is its title.
+   *   (The machine is not on a row: the instance panel says it.)
    */
-  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** a closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word */ inside?: AgentState | null; /** "warning": the hidden row's own mark is drawn in the warning tone */ insideTone?: "warning" | null }, full: string) => {
-    // In this order, "·" between: the state, the reason if any, the soul, where it is. When the line does not fit the
-    // SOUL gives way, down to room for its "…": it is the ONE part that shrinks; the state, the reason and the glyph never do.
-    const all: { kind: "state" | "reason" | "soul" | "where"; text: string; className: string }[] = [
-      { kind: "state", text: phrases.state, className: "shrink-0" },
-      ...(phrases.reason == null ? [] : [{ kind: "reason" as const, text: phrases.reason, className: "shrink-0" }]),
-      { kind: "soul", text: phrases.soul, className: "min-w-[1.5em] shrink truncate" },
-      ...(phrases.where === undefined ? [] : [{ kind: "where" as const, text: phrases.where, className: "shrink-0" }]),
-    ];
-    // (A reason that is no words, "": the state says it all, "Running outside OATS", alone on the line.)
-    const parts = all.filter((part) => part.text !== "");
+  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** a closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word */ inside?: AgentState | null; /** "warning": the hidden row's own mark is drawn in the warning tone */ insideTone?: "warning" | null; /** "warning": the reason asks a person to look: it stays, and the soul gives way first */ reasonTone?: "warning" | undefined }, full: string) => {
     return (
       <span className="flex min-w-0 flex-1 flex-col">
         <span data-testid="oats-row-name" title={full} className={`line-clamp-2 break-words ${strong ? "font-semibold" : ""}`}>{name}</span>
-        <span data-testid="oats-row-facts" title={parts.map((part) => part.text).join(" · ")} className="flex min-w-0 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
-          {parts.map((part, index) => (
-            <Fragment key={part.kind}>
-              {index === 0 ? null : (
-                <span data-sep="" className="shrink-0 whitespace-pre">
-                  {" · "}
-                </span>
-              )}
-              <span data-phrase={part.kind} className={part.className}>
-                {part.kind === "where" && part.text === TMUX ? <TmuxMark /> : part.text}
-              </span>
-              {/* A closed parent that hides a row that needs a person, or one a person must look at: that row's mark, named,
-                  after the parent's own word, which stays what the parent itself is doing. */}
-              {part.kind === "state" && phrases.inside != null ? (
-                <span data-testid="oats-row-inside" className="ml-1.5 inline-flex shrink-0 items-center">
-                  <StateMark state={phrases.inside} tone={phrases.insideTone ?? undefined} />
-                </span>
-              ) : null}
-            </Fragment>
-          ))}
-        </span>
+        <RowFacts testId="oats-row-facts" state={phrases.state} soul={phrases.soul} reason={phrases.reason} reasonTone={phrases.reasonTone} where={phrases.where} inside={phrases.inside} insideTone={phrases.insideTone} />
       </span>
     );
   };
@@ -211,7 +180,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden tone={reason.tone} />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, soul: shown(oats.soulOf(node.agent)), reason: reason.note, inside, insideTone }, shown(node.agent.instance))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, soul: shown(oats.soulOf(node.agent)), reason: reason.note, reasonTone: reason.tone, inside, insideTone }, shown(node.agent.instance))}
           </>,
           toggle,
           keys,
@@ -251,7 +220,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           }}
         >
           <StateMark state={drawn.state} hidden tone={gone.has(agent.instance) ? undefined : reason.tone} />
-          {lines(name, status.state === "needs-you", { state: drawn.word, soul: shown(oats.soulOf(agent)), reason: reason.note, where }, shown(agent.instance))}
+          {lines(name, status.state === "needs-you", { state: drawn.word, soul: shown(oats.soulOf(agent)), reason: reason.note, reasonTone: gone.has(agent.instance) ? undefined : reason.tone, where }, shown(agent.instance))}
         </button>
       </li>
     );

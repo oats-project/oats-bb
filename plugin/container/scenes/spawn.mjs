@@ -422,7 +422,9 @@ export default [
       await page.evaluate(click(testId("oats-new-agent")));
       const opened = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: ${FIRST}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
       check(opened === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", shown: true }), `${at} it opens the form's own page, the soul field first: the form is not one of the pages a release leaves out`, opened ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
-      await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
+      // The image is of the form beside a sidebar with no page link: at a phone's width the sidebar is in bb's drawer and
+      // the form alone is the image the form's own scene takes (spawn-390x800-empty): not taken twice.
+      if (!viewport.mobile) await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
       // And on the home, which is what a person sees at a phone's width (bb's sidebar is in a drawer there): New agent is in
       // the home's heading, can be pressed, and opens the same page. The checks hold it in the page; no image is taken here
       // (the home's own image of this stage is of its summary and its one tile, further down), and where the press lands

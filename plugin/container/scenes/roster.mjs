@@ -394,8 +394,8 @@ export default [
       const facts = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(row)}); const facts = row?.querySelector(${JSON.stringify(testId("oats-row-facts"))}); return facts ? ((facts.innerText.replace(/\\s+/g, " ").trim()) + (facts.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim() : ""; })()`, 30);
       check(facts === "Stopped · session lost · tmux", `${at} its row: "Stopped · session lost", then where it is (bb's terminal glyph, named "tmux")`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       await page.evaluate(`document.querySelector(${JSON.stringify(row)}).click()`);
-      const opened = await page.until(`location.pathname.endsWith(${JSON.stringify(`/plugins/oats/agent/${LOST}`)}) && document.querySelector(${JSON.stringify(`${testId("oats-panel-header")} ${testId("oats-agent-acts")} button`)}) !== null && document.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}) !== null ? location.pathname : ""`, 30);
-      check(Boolean(opened), `${at} its row opens its own page`, opened ?? (await page.evaluate("location.pathname")));
+      const opened = await page.until(`location.pathname.endsWith(${JSON.stringify(`/plugins/oats/agent/${LOST}`)}) && document.querySelector(${JSON.stringify(`${testId("oats-panel-header")} ${testId("oats-agent-acts")} button`)}) !== null && document.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}) !== null && /Runs in/.test(document.querySelector(${JSON.stringify(testId("oats-panel-session"))})?.innerText ?? "") ? location.pathname : ""`, 30);
+      check(Boolean(opened), `${at} its row opens its own page, and its Session card is read`, opened ?? (await page.evaluate("location.pathname")));
       const flat = `(e) => (e?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
       const read = JSON.parse(
         await page.evaluate(

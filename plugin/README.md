@@ -966,7 +966,13 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   the pause after every read and spends at most half its time on status (the first spec's "never
   within 5 s of the last" gave way to this). The server says in its log, at debug level, which rule
   each read asked for mid-read took. Each
-  reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
+  reread that differs publishes `oats/changed`, and the app refetches. A window that LOADS while
+  the server reads a change is given the roster from before it (the server answers from its
+  cache at once) and hears the change published while that first answer is still on its way: the
+  app then reads once more when the first answer is here (`app/store.ts` `useRead`), so the window
+  never keeps the roster from before the change. (bb does not start again a read that has no
+  answer yet; before this the event was taken as served, and the window showed the old roster
+  until another agent changed.) A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read
   that finds it gone.

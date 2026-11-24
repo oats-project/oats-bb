@@ -619,6 +619,85 @@ const evidence = new Fixtures({ out: join(OUT, "answers"), substitutions: [] });
  */
 const statusCalls = (from = 0) => records().slice(from).filter((record) => record.argv[0] === "status");
 const statusReads = (from = 0) => statusCalls(from).filter((record) => record.exit === 0);
+/** Whether an `oats status` of the plugin's is running now: the wrapper's own process (it holds the call as long as it is told before it starts the kernel). */
+const statusRunning = () => execFileSync("ps", ["-eo", "args"], { encoding: "utf8" }).split("\n").some((line) => /oats-record\s+status(\s|$)/.test(line));
+/** Waits, looking every 25 ms, until `seen()`; false when it did not come in `seconds`. */
+const soon = async (seen, seconds = 15) => {
+  const deadline = Date.now() + seconds * 1000;
+  while (!seen()) {
+    if (Date.now() > deadline) return false;
+    await sleep(25);
+  }
+  return true;
+};
+
+/**
+ * A WINDOW THAT LOADS WHILE THE PLUGIN READS A CHANGE ends on the roster WITH the change, once that
+ * read has ended, and with no other change made (app/store.ts `useRead`; the unit test of the race
+ * itself is test/app/window-loads.test.tsx).
+ *
+ * The plugin's `oats status` is held (the wrapper, HELD_MS) so that a read is surely under way;
+ * the agent sets a claim, which starts that read; a NEW window is loaded while the read runs. The
+ * server answers the window's first read from its cache, the roster from before the claim, and
+ * publishes the change when its read ends. The window must then show the claim. Before the fix a
+ * window whose first answer was still on its way when the change was published kept the roster
+ * from before it, until some other agent changed: here nothing else changes, so such a window
+ * never shows the claim and the wait fails.
+ *
+ * What a run can and cannot hold: the load is surely INSIDE the read (checked: the read was running
+ * when the window had drawn its roster; a try whose load missed the read is made again, and said);
+ * whether the change was published in the very milliseconds in which the window's first answer
+ * was on its way is chance, which no run can arrange: that is the unit test's.
+ * No bound on elapsed time: the order alone (the window shows the claim, with ONE status read of
+ * the plugin's since the claim: the one that carried it, not a later poll's).
+ */
+async function loadedWhileReading(asInstance, { instance, threadId }) {
+  const HELD_MS = 6000; // far longer than a page takes to load and draw: the load falls inside the read
+  const view = VIEWS[0];
+  const at = `A5b3 ${view.theme} ${view.viewport.name}`;
+  const facts = `(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
+  const ended = (read) => Date.parse(read.at) + read.ms;
+  let held = null; // the try whose window was loaded inside the read: { drawn, shown, reads }
+  const missed = [];
+  try {
+    for (let attempt = 1; attempt <= 3 && held === null; attempt += 1) {
+      wrapper({ delays: { status: HELD_MS } });
+      // Quiet first: the claim's event then starts a read with no wait.
+      await until("no oats status of the plugin's in the last 3 s", () => statusReads().every((read) => Date.now() - ended(read) > 3000), 60);
+      const before = records().length;
+      const page = await viewPage(browser, view, at);
+      try {
+        const set = asInstance("instance", "attention", "--message", `Loaded while reading ${attempt}`);
+        const reading = set.status === 0 && (await soon(statusRunning));
+        // The window is loaded NOW, while that read runs: its first answer is the server's cache, from before the claim.
+        await page.goto("/");
+        const shownSidebar = await showSidebar(page, view.viewport);
+        const drawn = await page.until(`(() => { const now = ${facts}; return now === "" ? "" : now; })()`, 30);
+        const inside = reading && statusRunning() && statusReads(before).length === 0; // the read had not ended when the window had drawn its roster
+        if (!(shownSidebar && inside && drawn !== null && !/^Needs you/.test(drawn))) {
+          missed.push(`try ${attempt}: ${!reading ? "no read was seen running" : !shownSidebar ? "the sidebar was not shown" : !inside ? "the read had ended before the window drew its roster" : `the window's first roster already said "${drawn}"`}`);
+        } else {
+          // Nothing else changes from here. The read ends, the server publishes, and the window must show the claim.
+          const shown = await page.until(`/^Needs you/.test(${facts}) ? ${facts} : ""`, 60);
+          held = { drawn, shown, reads: statusReads(before).length };
+        }
+      } finally {
+        await page.close();
+        wrapper({});
+        asInstance("instance", "attention", "--clear");
+        await untilRow(instance, "no claim after the try", (r) => r.waitingOnYou == null);
+      }
+    }
+  } finally {
+    wrapper({});
+  }
+  if (missed.length > 0) say(`NOTE loaded while reading: ${missed.join("; ")}`);
+  check(held !== null, `${at}: a window was loaded while the plugin read a change (the read, held ${HELD_MS} ms, was still running when the window had drawn the roster from before it: "${held?.drawn ?? ""}")`, missed.join("; "));
+  if (held === null) return;
+  check(held.shown !== null, `${at}: that window shows the change ("${held.shown ?? ""}") once the read has ended, with no other change made: it does not keep the roster from before it`, `the row still said "${held.drawn}" after 60 s; status reads of the plugin's since the claim: ${held.reads}`);
+  check(held.shown === null || held.reads === 1, `${at}: it shows it on the ONE read that carried the change (${held.reads} status read(s) of the plugin's since the claim when the window showed it), not on a later poll's`, String(held.reads));
+}
+
 async function followedAtOnce(asInstance) {
   const PAUSE_MS = 1000; // the floor between two reads that are not a pair (MIN_INTERVAL_MS)
   const LIMIT_MS = 2000; // FOLLOW_UP_WITHIN_MS
@@ -627,17 +706,6 @@ async function followedAtOnce(asInstance) {
   // must read at once, and a miss is a failure, not a slow kernel.
   const NEAR_MS = LIMIT_MS - 150;
   const HELD_MS = 600;
-  /** Whether an `oats status` of the plugin's is running now: the wrapper's own process (it holds the call HELD_MS before it starts the kernel). */
-  const statusRunning = () => execFileSync("ps", ["-eo", "args"], { encoding: "utf8" }).split("\n").some((line) => /oats-record\s+status(\s|$)/.test(line));
-  /** Waits, looking every 25 ms, until `seen()`; false when it did not come in `seconds`. */
-  const soon = async (seen, seconds = 15) => {
-    const deadline = Date.now() + seconds * 1000;
-    while (!seen()) {
-      if (Date.now() > deadline) return false;
-      await sleep(25);
-    }
-    return true;
-  };
   const ended = (read) => Date.parse(read.at) + read.ms;
   const tries = [];
   let pair = null; // { first, second, gap, after }: `after` is the gap to the read after the pair, or null
@@ -788,6 +856,9 @@ try {
   step("A5b2 a change that lands while the plugin reads OATS is read at once when that read ends: one read at once, never two");
   await followedAtOnce(asInstance);
   await untilRow(A.instance, "no claim after the pacing check", (r) => r.waitingOnYou == null);
+
+  step("A5b3 a window that loads while the plugin reads a change shows the change when that read ends, with no other change made");
+  await loadedWhileReading(asInstance, { instance: A.instance, threadId });
 
   step("A5c the agent asks a question (Claude Code's AskUserQuestion): oats.core's claim, answered on the home's card");
   // Not the agent's own claim: the hooks oats.core wrote into the home's Claude settings set it when

@@ -123,6 +123,14 @@ kernel's speed in one way, and says so: where the first read of every try took a
 once is NOT SHOWN, in place of a pass or a failure; and a NOTE where no read followed a pair. And
 at its end it compares its images: two scenes of different states must not be the same image (the
 thread's own row says its agent's state at every width).
+It then loads a NEW WINDOW WHILE THE PLUGIN READS A CHANGE (step A5b3): the plugin's `oats status` is
+held 6 s, the agent sets a claim, and a window is loaded while that read runs (checked: the read
+was still running when the window had drawn the roster from before the claim; a try whose load
+missed the read is made again). Nothing else changes; when the read ends the window must show the
+claim, on that one read and not on a later poll's. A window that kept the roster from before the
+change (`app/store.ts`; the race itself, an event published while the window's first answer is on
+its way, is `test/app/window-loads.test.tsx`: a run cannot arrange those milliseconds) would never
+show it, and the step fails.
 
 - **bb-app** at the repository's pin (0.50.1), installed by `container/setup.sh`, started sovereign
   (no account, `BB_TELEMETRY=false`, loopback, `--no-in-app-updates`). Its concurrency limit stays

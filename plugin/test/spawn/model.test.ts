@@ -111,7 +111,7 @@ describe("a refusal, in a person's words, with what to do", () => {
     // Where the kernel could NOT undo that spawn (its marker): never "nothing was created", and its message, which
     // names what to clean up, is under Details: the plugin's sentence sends a person there.
     const left = spawnProblem({ code: model.code, message: 'session backend bb refused to launch x: pi has no model "claude-fable-9" — rollback INCOMPLETE, clean up manually: instance home /d/x: still present', unconfirmed: true }, "spawn");
-    expect([left.outcome, left.sentence, left.detail]).toEqual(["unconfirmed", "OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.", 'session backend bb refused to launch x: pi has no model "claude-fable-9" — rollback INCOMPLETE, clean up manually: instance home /d/x: still present']);
+    expect([left.outcome, left.sentence, left.detail]).toEqual(["unconfirmed", "Part of the instance may remain. See Details before spawning again.", 'session backend bb refused to launch x: pi has no model "claude-fable-9" — rollback INCOMPLETE, clean up manually: instance home /d/x: still present']);
     // The message goes through the display filter: a control character of direction is not drawn as it came.
     expect(spawnProblem({ code: "E_BACKEND_LAUNCH_ARG", message: "pi has no model \u202Ex" }, "spawn").sentence).toBe("pi has no model \uFFFDx");
     // And one the filter withholds (a credential) is never drawn as the sentence: the stage's general one, and Details (which withholds it too).
@@ -138,16 +138,16 @@ describe("a refusal, in a person's words, with what to do", () => {
   it("after the press: nothing was created is said, and what to look at before spawning again", () => {
     expect(spawnProblem({ code: "E_DECISION_STALE", message: null }, "spawn").sentence).toBe("Something changed before the spawn went through. Nothing was created — check the updated values and press Spawn again.");
     expect(spawnProblem({ code: "E_PLACEMENT_TAKEN", message: null }, "spawn").sentence).toBe("Another spawn just took this name. Nothing was created — check the new name and press Spawn again.");
-    expect(spawnProblem({ code: "E_OUTCOME_UNKNOWN", message: null }, "spawn").sentence).toBe("We couldn’t confirm whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.");
-    expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }, "spawn")).toMatchObject({ sentence: "OATS took too long to answer. The instance may already exist. Press Check result: it asks OATS again, and starts nothing twice.", next: "check-result" });
+    expect(spawnProblem({ code: "E_OUTCOME_UNKNOWN", message: null }, "spawn").sentence).toBe("We couldn’t confirm whether the instance was created. Press Check result: nothing starts twice.");
+    expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }, "spawn")).toMatchObject({ sentence: "OATS took too long to answer. The instance may already exist. Press Check result: nothing starts twice.", next: "check-result" });
     // A spawn whose oats, machine or server ended with no answer: whether the instance was made is not known either.
     for (const code of ["OATS_FAILED", "OATS_NOT_JSON", "HOST_UNREACHABLE", "PLUGIN_RPC_FAILED"]) expect(spawnProblem({ code, message: "x" }, "spawn").next, code).toBe("check-result");
-    expect(spawnProblem({ code: "OATS_FAILED", message: "oats: crashed" }, "spawn").sentence).toBe("OATS ended without saying whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.");
+    expect(spawnProblem({ code: "OATS_FAILED", message: "oats: crashed" }, "spawn").sentence).toBe("OATS ended without saying whether the instance was created. Press Check result: nothing starts twice.");
     // The same codes at the preview started nothing: the preview's general sentence.
     expect(spawnProblem({ code: "OATS_FAILED", message: "x" }, "preview").next).toBe("details");
     expect(spawnProblem({ code: "E_INTERRUPTED", message: "hook oats.build" }, "spawn").sentence).toBe("The spawn was interrupted while its worktree was being set up, and was rolled back. Nothing was created.");
     // A failure with no code at all says nothing of what the kernel did: not known.
-    expect(spawnProblem({ code: null, message: "boom" }, "spawn")).toEqual({ sentence: "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", next: "check-result", code: "OATS_FAILED", detail: "boom", outcome: "unknown" });
+    expect(spawnProblem({ code: null, message: "boom" }, "spawn")).toEqual({ sentence: "OATS didn’t say whether it was created. Press Check result: nothing starts twice.", next: "check-result", code: "OATS_FAILED", detail: "boom", outcome: "unknown" });
     // A code the preview's table holds reads the same after the press.
     expect(spawnProblem({ code: "E_INSTANCE_NAME_INVALID", message: null }, "spawn").sentence).toBe("Use lowercase letters, numbers and dashes, at most 63 characters, and don’t reuse a soul’s name.");
   });
@@ -227,9 +227,9 @@ describe("after the press, what is known decides what the form may offer", () =>
     for (const code of ["E_OUTCOME_UNKNOWN", "E_INTENT_EXPIRED", "OATS_TIMEOUT", "OATS_FAILED", "OATS_NOT_JSON", "OATS_BAD_ANSWER", "OATS_OUTPUT_TOO_LARGE", "OATS_ABORTED", "HOST_UNREACHABLE", "PLUGIN_RPC_FAILED", "E_HOOK_ENVIRONMENT_CONTRACT", "E_SOMETHING_NEW", null]) {
       const problem = spawnProblem({ code, message: "m" }, "spawn");
       expect([problem.outcome, problem.next], String(code)).toEqual(["unknown", "check-result"]);
-      expect(problem.sentence, String(code)).toMatch(/Press Check result: it asks OATS again, and starts nothing twice\.$/);
+      expect(problem.sentence, String(code)).toMatch(/Press Check result: nothing starts twice\.$/);
     }
-    expect(spawnProblem({ code: "E_HOOK_ENVIRONMENT_CONTRACT", message: "m" }, "spawn")).toMatchObject({ sentence: "OATS didn’t say whether the instance was created. Press Check result: it asks OATS again, and starts nothing twice.", code: "E_HOOK_ENVIRONMENT_CONTRACT", detail: "m" });
+    expect(spawnProblem({ code: "E_HOOK_ENVIRONMENT_CONTRACT", message: "m" }, "spawn")).toMatchObject({ sentence: "OATS didn’t say whether it was created. Press Check result: nothing starts twice.", code: "E_HOOK_ENVIRONMENT_CONTRACT", detail: "m" });
   });
 
   it("unconfirmed: the kernel refused and marks that it could not confirm what is left: never 'nothing was created', whatever the code", () => {
@@ -246,7 +246,7 @@ describe("after the press, what is known decides what the form may offer", () =>
     for (const code of ["E_BACKEND_NOT_READY", "E_REQUIRED_HOOK_FAILED", "E_INTERRUPTED", "E_MODEL_UNKNOWN", "E_OUTCOME_UNKNOWN", "E_SPAWN_FAILED", "E_SOMETHING_NEW", "OATS_FAILED", "PLUGIN_RPC_FAILED"]) {
       const problem = spawnProblem({ code, message: left, unconfirmed: true }, "spawn");
       expect([problem.outcome, problem.next, problem.code, problem.detail], code).toEqual(["unconfirmed", null, code, left]);
-      expect(problem.sentence, code).toBe("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
+      expect(problem.sentence, code).toBe("Part of the instance may remain. See Details before spawning again.");
       expect(problem.sentence, code).not.toMatch(/Nothing was created|rolled back/);
     }
     // The marker alone says it: the message need not hold the kernel's words.

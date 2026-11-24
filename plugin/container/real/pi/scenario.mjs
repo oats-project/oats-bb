@@ -292,7 +292,7 @@ try {
     const name = spawnedAt === null ? NAME : `${NAME}-${viewport.name}`;
     await page.evaluate(fill(testId("oats-spawn-name"), name));
     const read = await page.until(`(() => { const c = document.querySelector(${q("oats-spawn-preview")}); const name = c?.querySelector("dd")?.innerText; return name === ${JSON.stringify(name)} && !c.querySelector(${q("oats-spawn-updating")}) && document.querySelector(${q("oats-spawn-submit")}).disabled === false ? c.innerText.replace(/\\s+/g, " ") : ""; })()`, 60);
-    check(Boolean(read) && new RegExp(`Name ${name} Home .*Works in .*Harness pi · ${MODEL.replace("/", "\\/")}`).test(read ?? ""), `${at}: What will be created, from the kernel's preview with the harness pi: the name, the home, where it works, "Harness pi · ${MODEL}"`, read ?? (await page.evaluate(textOf(testId("oats-new-agent-page")))));
+    check(Boolean(read) && new RegExp(`Name ${name} Works in .*Harness pi · ${MODEL.replace("/", "\\/")} .*Access `).test(read ?? ""), `${at}: What will be created, from the kernel's preview with the harness pi, in view: the name, where it works, "Harness pi · ${MODEL}", the access`, read ?? (await page.evaluate(textOf(testId("oats-new-agent-page")))));
     show("what will be created", read ?? "not read");
     const previewCall = recorded(["spawn", SOUL], ["--preview", name]);
     check(previewCall !== undefined && valueAfter(previewCall.argv, "--harness") === "pi" && valueAfter(previewCall.argv, "--model") === MODEL && previewCall.argv.includes("--yolo") && valueAfter(previewCall.argv, "--backend") === "bb", `${at}: the form's preview passed --harness pi, --model ${MODEL}, --backend bb and --yolo`, JSON.stringify(previewCall?.argv));

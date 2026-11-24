@@ -40,6 +40,18 @@ const unloaded = (agent: Agent): boolean => rest(agent) === "unloaded";
 const atRest = (agent: Agent): boolean => unloaded(agent) || rest(agent) === "ended";
 
 /**
+ * The ONE act for an agent that FAILED, in every place that offers one (the acts, the panel, the
+ * thread's menu and line, the keys): never two acts for one need.
+ * - START where nothing runs: its thread failed at its start (`neverStarted`: it never ran), or the
+ *   kernel's row says it does not run (`running: false`: its session ended). A restart there is a
+ *   start with a warning about stopping what is not there; and the Start dialog's own gate takes
+ *   exactly that row.
+ * - RESTART where its harness still runs, or it is not known (`running` true, or not said): the
+ *   Start dialog's gate refuses such a row ("already running", or not known).
+ */
+export const failedAct = (agent: Pick<Agent, "running">, neverStarted: boolean): "start" | "restart" => (neverStarted || agent.running === false ? "start" : "restart");
+
+/**
  * The four acts, in the order every place lists them: the name on a button (the Desktop's, with
  * "…": it opens a dialog), the entry in bb's own thread menu (where bb's Stop sits beside ours,
  * hence "(OATS)"), the command's title and its default shortcut (the Desktop's letters after its
@@ -77,12 +89,14 @@ export const ACTS: readonly {
     // false`, beside a session that is there: "Idle · not loaded"): its row says that it does not
     // run, so Start opens, and the dialog says that it begins a new conversation.
     // (`recordedStopped`: the kernel calls it stopped beside any word where the row says how its session ended.)
-    when: (state, agent) => state === "error" || state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped" || atRest(agent),
+    // A FAILED agent has ONE act (`failedAct`): Start where the kernel's row says it does not run.
+    when: (state, agent, thread) => (state === "error" ? failedAct(agent, rest(agent, thread) === "never-started") === "start" : state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped" || atRest(agent)),
   },
   { verb: "restart", button: "Restart…", menu: "Restart (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, 
     // Not for a stopped agent, nor one that runs outside OATS; nor one that NEVER RAN (bb says its
     // thread failed at its start): nothing runs, and Start offers the harness and the model.
-    when: (state, agent, thread) => state !== "stopped" && state !== "outside" && rest(agent, thread) !== "never-started",
+    // And of a FAILED agent, only one whose harness still runs, or of which that is not known (`failedAct`).
+    when: (state, agent, thread) => state !== "stopped" && state !== "outside" && rest(agent, thread) !== "never-started" && (state !== "error" || failedAct(agent, false) === "restart"),
   },
   { verb: "retire", button: "Retire…", menu: "Retire (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
 ];

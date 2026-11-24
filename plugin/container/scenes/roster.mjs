@@ -368,7 +368,7 @@ export default [
       const failed = threads.get("thr_harvest");
       await page.goto(`/projects/${failed.projectId}/threads/${failed.id}`);
       const ended = await statusOf(page, "error");
-      check(ended !== null && ended.line === "Failed · session ended" && ended.act === "Restart…", `${at} the thread of an agent whose session fell back to a shell says "Failed", the reason in two words, with Restart`, ended === null ? await rowText(page) : JSON.stringify(ended));
+      check(ended !== null && ended.line === "Failed · session ended" && ended.act === "Start…", `${at} the thread of an agent whose session fell back to a shell says "Failed", the reason in two words, with Start (nothing runs)`, ended === null ? await rowText(page) : JSON.stringify(ended));
       await page.shot(`a16-${viewport.name}-thread-failed`, { targets: true });
 
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);

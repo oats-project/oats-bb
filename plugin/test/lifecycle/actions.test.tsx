@@ -130,7 +130,12 @@ test("each action shows only in the states it applies to", async () => {
   expect(await by("thr_harvest")).toEqual(["stop", "restart", "retire"]); // idle
   expect(await by("thr_digest")).toEqual(["start", "retire"]); // stopped
   const with_ = (change: Partial<Agent>) => fixtureAgents().map((agent) => (agent.instance === "harvest-knowledge-helper" ? { ...agent, ...change } : agent));
-  expect(await by("thr_harvest", with_({ runtimeState: "shell" }))).toEqual(["start", "restart", "retire"]); // error
+  // FAILED: ONE act (`failedAct`). Its session ended and the kernel's row says it does not run: Start, as for one that
+  // never ran. Its harness still runs, or that is not known: Restart (the Start dialog's gate would refuse it).
+  expect(await by("thr_harvest", with_({ running: false, runtimeState: "shell" }))).toEqual(["start", "retire"]);
+  expect(await by("thr_harvest", with_({ running: false, runtimeState: "unknown", sessionEnd: "exited" }))).toEqual(["start", "retire"]);
+  expect(await by("thr_harvest", with_({ running: true, runtimeState: "shell" }))).toEqual(["restart", "retire"]);
+  expect(await by("thr_harvest", with_({ running: null, runtimeState: "shell" }))).toEqual(["restart", "retire"]);
   expect(await by("thr_harvest", with_({ runtimeState: "unreachable" }))).toEqual(["restart", "retire"]);
   // A provider row the kernel calls not running beside "unknown" (its session is there, no harness
   // is loaded) is IDLE, not stopped: the menu is an idle agent's WITH START, since its row says

@@ -203,12 +203,12 @@ test("a stopped row with no report (an OATS that does not list the feature answe
   expect([words(slot)[0], acts(slot)]).toEqual(["Stopped", ["Start…"]]);
 });
 
-test("failed, on its open thread: \"Failed\", that a message here starts it again, and Restart; no warning", async () => {
+test("failed, on its open thread: \"Failed\", why in two words, and the ONE act of a failed agent whose session ended: Start (nothing runs); no warning", async () => {
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "shell" } : agent));
   const slot = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
   await slot.findByTestId("oats-identity-row");
   expect(words(slot)).toEqual(["Failed", "session ended"]);
-  expect(acts(slot)).toEqual(["Restart…"]);
+  expect(acts(slot)).toEqual(["Start…"]);
   expect(slot.queryByTestId("oats-outside-warning")).toBeNull();
 });
 

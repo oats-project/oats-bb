@@ -318,8 +318,8 @@ function snapshotRow(instance) {
  * Freshness (the UX standard, section 6: "within 3 s of the kernel recording it"): how long after
  * the kernel recorded a change the plugin's own snapshot has it, read as a client reads it (no
  * refresh asked). What brings it is the watch on the event log, or the server's own reread behind a
- * snapshot older than its 15 s poll: this check holds the delay a client sees, not the watch by
- * itself (live.sh's L2 holds the watch, with the poll off). That the change reaches the tree and the
+ * snapshot older than its 15 s poll: this check measures the delay a client sees and holds the order
+ * of reads (below), not the watch by itself (live.sh's L2 holds the watch, with the poll off). That the change reaches the tree and the
  * home is the live scenes' (the fake).
  *
  * The delay runs from the kernel's own record: the time of the event the change wrote, as
@@ -331,46 +331,134 @@ function snapshotRow(instance) {
  * when the command has returned, and the event taken is the first of its kind since the command, so
  * the delay is never less than the truth. With no such event in
  * the kernel's answer the delay runs from `since` instead, and the check's line says so. The line
- * says both delays, from the kernel's record and from before the command, and a NOTE reports
- * either one over 3 s even where the check passes.
+ * says both delays, from the kernel's record and from before the command.
  *
- * 3 s at most on a kernel whose `oats status` answers in under a second; the status's own time is
- * measured and said beside the delay. A kernel slower than that cannot be shown in 3 s by the pause
- * rule itself (the gap between two reads is the time the last one took): it is given twice its
- * status time and the pause, so a slow kernel is told apart from a slow plugin.
+ * WHAT IS ASSERTED is the order of reads, not milliseconds (a bound on elapsed time failed pull
+ * requests at random on a slow runner: 3145 ms where 3000 were allowed, with nothing of the plugin
+ * slow). A snapshot's `at` is the start of the read it is the answer of, and the kernel's event
+ * says when it recorded the change: so EVERY snapshot of a read that started at or after the
+ * kernel's record must have the change. The check polls the snapshot until it has the change, and
+ * fails if any snapshot it saw on the way was of such a read and did not have it (the plugin showed
+ * an answer older than the read it made), or if the change never came. It does not fail on what
+ * its own polling may have missed: where the change is first seen in the snapshot of a LATER read
+ * than the first one started after the record, a NOTE says how many of the plugin's `oats status`
+ * calls (the wrapper's records) started between, since the poll cannot tell a snapshot it missed
+ * from one that was never shown.
+ * WHICH ROAD showed the change is told by order too, and printed (see `by`, below): "its
+ * events" only where the snapshot is of a status read that had ENDED before the command that
+ * made the change began, and the plugin read that instance's events since; "not told", with
+ * why, in every other case of a snapshot older than the record (a status read that ended or was
+ * in flight after the command began may hold the change by itself: for a stop the kernel's row
+ * says stopped seconds before its event); the status read that started after the
+ * record is then waited for, and must confirm what was shown (its delay is printed beside).
+ * The delays are still measured and PRINTED, with the kernel's own `oats status` time beside
+ * them, and a NOTE reports either one over 3 s (the UX standard's bar): a slow runner is then
+ * seen, and fails nothing. What the order cannot hold: HOW SOON the first read after the record
+ * started (the watch's signal, the pause after a read in flight: server/core.ts) is time; and a
+ * watch that is dead brings the change with the poll's read: live.sh's L2 holds the watch. With no
+ * event of the kernel's to count from, the order cannot be told, and the check holds only that the
+ * snapshot came to have the change; its line says so.
  */
+/** Every freshness measure of the run, for its summary: what changed, and the delay from the kernel's record (null: none to count from, or never seen). */
+const freshness = [];
 async function fresh(what, { instance, home, kind, since }, matches) {
   let seenAt = null;
+  let shownBy = null; // the `at` of the snapshot that first had the change: its read's start
+  const without = []; // the `at` of every snapshot polled that did not have it
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const snapshot = rpc("snapshot");
-    const agent = snapshot.ok && snapshot.value.ok ? snapshot.value.agents.find((candidate) => candidate.instance === instance) : undefined;
-    if (agent !== undefined && matches(agent)) {
-      seenAt = Date.now();
-      break;
+    if (snapshot.ok && snapshot.value.ok) {
+      const agent = snapshot.value.agents.find((candidate) => candidate.instance === instance);
+      if (agent !== undefined && matches(agent)) {
+        seenAt = Date.now();
+        shownBy = Date.parse(snapshot.value.at);
+        break;
+      }
+      without.push(Date.parse(snapshot.value.at));
     }
     await sleep(100);
   }
   const { at: recorded, why } = recordedAt(instance, home, kind, since);
-  // Both delays are said: from the kernel's record (the one the 3 s is on), and from before the
-  // command (what the check counted until now: it holds the command's own run too).
+  // WHICH ROAD showed it, told by order and not by the clock, from the wrapper's records of the
+  // plugin's own calls:
+  // - the snapshot is of a status read that started AFTER the kernel's record: the status read's;
+  // - it is of a status read whose call had ENDED before `since`, the moment before the command
+  //   that made the change (nothing of the kernel's state has changed before the command starts,
+  //   so that answer cannot hold it), and the plugin read this instance's events since: the event
+  //   path moved the row;
+  // - anything else: NOT TOLD, with why. A status read that ended, or was in flight, between the
+  //   command's start and the kernel's record may hold the change by itself: the kernel does not
+  //   write its event first. For a stop it writes `stoppedAt` BEFORE it asks the provider and the
+  //   "stopped" event seconds later, and `oats status` says stopped from `stoppedAt`: a status
+  //   read that ENDED before the event's time can hold it. So the snapshot's older `at` does not
+  //   say that the events put the change there, and neither does the event's time.
+  let by = null;
+  let untold = "";
+  if (seenAt !== null && recorded !== null) {
+    const calls = records();
+    const read = calls.find((record) => record.argv[0] === "status" && Date.parse(record.at) >= shownBy); // the call of the read the snapshot is of: it started just after the server stamped that read
+    const eventsRead = calls.some((record) => record.argv[0] === "instance" && record.argv[1] === "events" && record.argv[2] === instance && record.argv.includes("--since") && record.exit === 0 && Date.parse(record.at) >= since && Date.parse(record.at) + record.ms <= seenAt);
+    if (shownBy >= recorded) by = "status";
+    else if (read === undefined) [by, untold] = ["untold", "the wrapper holds no record of the status read the snapshot is of"];
+    else if (Date.parse(read.at) + read.ms >= since) [by, untold] = ["untold", "the snapshot is of a status read that ended, or was in flight, after the command began: it may hold the change by itself"];
+    else if (!eventsRead) [by, untold] = ["untold", "the snapshot is of a status read that ended before the command began, and the plugin made no events read of this instance that had answered by then: NEITHER road explains it"];
+    else by = "events";
+  }
+  // Where a status read that started after the record did not show it, that read CONFIRMS it:
+  // waited for, and a snapshot of such a read without the change counts against the order below.
+  let confirmedAt = by === "status" ? seenAt : null;
+  if (by === "events" || by === "untold") {
+    for (const end = Date.now() + 30_000; confirmedAt === null && Date.now() < end; await sleep(100)) {
+      const snapshot = rpc("snapshot");
+      if (!(snapshot.ok && snapshot.value.ok) || Date.parse(snapshot.value.at) <= recorded) continue;
+      const agent = snapshot.value.agents.find((candidate) => candidate.instance === instance);
+      if (agent !== undefined && matches(agent)) confirmedAt = Date.now();
+      else without.push(Date.parse(snapshot.value.at));
+    }
+  }
+  // Both delays are said: from the kernel's record, and from before the command (which holds the command's own run too).
   const fromRecord = seenAt === null || recorded === null ? null : seenAt - recorded;
   const fromCommand = seenAt === null ? null : seenAt - since;
-  const seen = fromRecord ?? fromCommand; // with no event of the kernel's to count from: from before the command
+  const confirmed = confirmedAt === null || recorded === null ? null : confirmedAt - recorded;
   const before = Date.now();
   oats("status", "--json");
   const statusMs = Date.now() - before;
-  const limit = statusMs <= 1000 ? 3000 : 2 * statusMs + 2000;
   const ms = (delay) => (delay === null ? "never" : `${delay} ms`);
   const counted =
     recorded === null
-      ? `${ms(fromCommand)} after the moment before the command, which the limit is on here: ${why}`
+      ? `${ms(fromCommand)} after the moment before the command`
       : `${ms(fromRecord)} after the kernel recorded it (its "${kind}" event at ${new Date(recorded).toISOString()}), ${ms(fromCommand)} after the moment before the command`;
-  // The snapshot cannot have a change before the kernel recorded it: a delay under 0 means the event
-  // taken is not this change's, and the check fails on it, with both times in its line.
-  check(seen !== null && seen >= 0 && seen <= limit, `freshness: the plugin's snapshot has ${what} ${counted} (${limit} ms at most, on the first; the kernel's own oats status took ${statusMs} ms)${seen !== null && seen < 0 ? `; the snapshot had it at ${new Date(seenAt).toISOString()}, before that event: not this change's event` : ""}`);
-  // A delay over 3 s is said even where the check passes: from before the command (a slow command, or
-  // a slow runner), or under the wider limit of a kernel whose status takes over a second.
+  const confirmedSaid = `confirmed by the status read that started after the record ${confirmed === null ? "NEVER in 30 s" : `${confirmed} ms after it`}`;
+  const road =
+    by === "events"
+      ? `; shown by ITS EVENTS (the snapshot was of a status read that had ended before the command began, and the plugin read this instance's events since), and ${confirmedSaid}`
+      : by === "untold"
+        ? `; WHICH ROAD showed it is not told (${untold}), and ${confirmedSaid}`
+        : by === "status"
+          ? "; shown by a STATUS READ that started after the record (not by its events)"
+          : "";
+  const timed = `${counted}${road}; the kernel's own oats status took ${statusMs} ms`;
+  freshness.push({ what, by, ...(by === "untold" ? { untold } : {}), fromRecordMs: fromRecord, confirmedByStatusMs: by === "events" || by === "untold" ? confirmed : null, fromCommandMs: fromCommand, statusMs });
+  if (seenAt === null) {
+    fail(`freshness: the plugin's snapshot never had ${what} in 60 s`, timed);
+  } else if (recorded === null) {
+    pass(`freshness: the plugin's snapshot came to have ${what} (${timed}); the ORDER of reads is not told here: ${why}`);
+  } else {
+    // A snapshot of a read that started at or after the kernel's record, seen without the change: an answer older than its read.
+    const stale = [...new Set(without.filter((at) => at > recorded))]; // (strictly after: the two clocks say milliseconds)
+    check(
+      stale.length === 0 && confirmedAt !== null,
+      `freshness: the plugin's snapshot has ${what}, and no snapshot of a read started after the kernel recorded it was without it (${timed})`,
+      stale.length > 0
+        ? `${stale.length} snapshot(s) of a read started at or after the kernel's record (${new Date(recorded).toISOString()}) did not have the change: read(s) started ${stale.map((at) => new Date(at).toISOString()).join(", ")}`
+        : `no status read that started after the kernel's record (${new Date(recorded).toISOString()}) answered with the change in 30 s: nothing confirmed what was shown`,
+    );
+    // The plugin's own calls that started after the record and before the read whose snapshot first showed the change.
+    const between = records().filter((record) => record.argv[0] === "status" && Date.parse(record.at) >= recorded && Date.parse(record.at) < shownBy);
+    if (between.length > 0) note(`freshness: ${what} was first SEEN in the snapshot of a later read: ${between.length} oats status call(s) of the plugin started after the kernel's record and before that read (${between.map((record) => `${record.at} for ${record.ms} ms, exit ${record.exit}`).join("; ")}); the check's own polling may have missed the snapshot of the first`);
+  }
+  // A delay over 3 s is said, and fails nothing: a slow command, a slow runner, or a change that waited a pause.
   const over = [["after the kernel recorded it", fromRecord], ["after the moment before the command", fromCommand]].filter(([, delay]) => delay !== null && delay > 3000);
   if (over.length > 0) note(`freshness: ${what} was over 3 s: ${over.map(([from, delay]) => `${delay} ms ${from}`).join(", ")} (the kernel's own oats status took ${statusMs} ms)`);
 }
@@ -493,10 +581,12 @@ async function archivedShots(scene, { instance, soul, threadId }) {
 const ARCHIVED_IN_BB = "Its conversation is archived in bb. Start begins a new one.";
 /**
  * With the release's DEFAULT pages (the home alone: what a person sees first), at both widths: the
- * sidebar holds the real agent's row and who waits, and no link to a page that is not shown.
+ * sidebar holds the real agent's row and who waits, and no link to a page that is not shown. The
+ * setting is left as a fresh install has it, UNSET (bb's own `plugin config oats unset pages`),
+ * not set to "home": so this holds what an unset setting hides. All six are set again after.
  */
 async function defaultPagesShots(scene, { instance, threadId }) {
-  bb("plugin", "config", "oats", "set", "pages", "home");
+  bb("plugin", "config", "oats", "unset", "pages");
   try {
     for (const view of VIEWS) {
       const { viewport, suffix } = view;
@@ -508,7 +598,7 @@ async function defaultPagesShots(scene, { instance, threadId }) {
         const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"]`;
         // Waited for: the row, and the count of who waits as a button (it is one only once bb has given the settings).
         const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(row)})) return ""; const needs = s.querySelector(${JSON.stringify(testId("oats-needs-line"))}); if (needs?.tagName !== "BUTTON") return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: s.querySelectorAll('[data-testid^="oats-page-link-"]').length }); })()`, 30);
-        check(side === JSON.stringify({ pages: false, links: 0 }), `${at}: with the default pages the sidebar has ${instance}'s row and who waits, and no link to a page that is not shown`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        check(side === JSON.stringify({ pages: false, links: 0 }), `${at}: with the setting left as installed (unset) the sidebar has ${instance}'s row and who waits, and no link to a page that is not shown`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
         await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
       } finally {
         await page.close();
@@ -553,6 +643,116 @@ async function missingShots(scene, { instance, soul }) {
 const fixtures = new Fixtures({ out: join(OUT, "fixtures"), substitutions: [[DEPLOY, "/abs/deployment"], [REAL, "/abs/real"], [homedir(), "/abs/home"], [hostname(), "machine"]] });
 /** Answers kept as evidence beside the fixtures: verbs whose fixture is not replaced by this run. */
 const evidence = new Fixtures({ out: join(OUT, "answers"), substitutions: [] });
+/**
+ * The server's pacing (server/core.ts, FOLLOW_UP_WITHIN_MS): a read asked for while another is in
+ * flight starts AT ONCE when that one ends, if it answered within 2 s, and only once. Shown with the
+ * plugin's own `oats status` calls, as the wrapper recorded them (when each started and how long it
+ * took, the time it is held here included):
+ * - the agent sets a claim (its event starts a read) and clears it while that read is in flight
+ *   (each status is held 600 ms for that, and the clear is run the moment the plugin's `oats
+ *   status` is SEEN running, in the process list: not after a guess of when it started): the read
+ *   that follows must start sooner after the first ended than the pause allows any other read.
+ *   The server counts its pause (1 s at least) from a moment after the kernel's exit, and the
+ *   next call's start is after the server's own, so a gap under 1 s between two calls is a read
+ *   at once, and nothing else makes one (no reload of the plugin and no change of its settings
+ *   happens inside this step). A gap BELOW ZERO is two calls alive at once, which the server
+ *   must never make: it fails the step, and is never taken for a read at once;
+ * - once that first read's record exists and a status is seen running again, the agent sets a
+ *   claim again: it lands in the read at once, and the read IT asks for must wait the pause (a gap
+ *   of 1 s or more to the plugin's next status call, whatever its exit): never two reads at once
+ *   in a row.
+ * Why the first form of this step failed a run by chance: the host's watch waits before it tells
+ * (250 ms then; 75 ms since the event path), and `oats instance attention` is quick; with the
+ * clear run straight after the set, the two events were about one such wait apart: under it they
+ * reached the server as ONE signal, before any read had started, and no change landed in a read.
+ * The clear was too EARLY, never too late: hence the wait on a status seen running, which holds
+ * whatever the watch's wait is. (The event path reads the instance's events on each of these
+ * signals too: those calls are the wrapper's `instance …` records, not `status`, are not held,
+ * and are not counted here.)
+ * The three changes are tried up to four times, and every try is printed with its reads and their
+ * times. What the run cannot show it says, and does not pass or fail on: a kernel so slow here
+ * that the first read of every try took the server's limit or more, the host call around it
+ * counted (the server then rightly waits the pause: a NOTE), and a pair after which no call came
+ * (a NOTE: "never two" is then not shown by this run). No limit on elapsed time is asserted: only
+ * which rule the reads took.
+ */
+const statusCalls = (from = 0) => records().slice(from).filter((record) => record.argv[0] === "status");
+const statusReads = (from = 0) => statusCalls(from).filter((record) => record.exit === 0);
+async function followedAtOnce(asInstance) {
+  const PAUSE_MS = 1000; // the floor between two reads that are not a pair (MIN_INTERVAL_MS)
+  const LIMIT_MS = 2000; // FOLLOW_UP_WITHIN_MS
+  // The wrapper's `ms` (its hold included) from which the server's own measure, which holds the host
+  // call around it too (some tens of ms), is at the limit or over it: under this mark the server
+  // must read at once, and a miss is a failure, not a slow kernel.
+  const NEAR_MS = LIMIT_MS - 150;
+  const HELD_MS = 600;
+  /** Whether an `oats status` of the plugin's is running now: the wrapper's own process (it holds the call HELD_MS before it starts the kernel). */
+  const statusRunning = () => execFileSync("ps", ["-eo", "args"], { encoding: "utf8" }).split("\n").some((line) => /oats-record\s+status(\s|$)/.test(line));
+  /** Waits, looking every 25 ms, until `seen()`; false when it did not come in `seconds`. */
+  const soon = async (seen, seconds = 15) => {
+    const deadline = Date.now() + seconds * 1000;
+    while (!seen()) {
+      if (Date.now() > deadline) return false;
+      await sleep(25);
+    }
+    return true;
+  };
+  const ended = (read) => Date.parse(read.at) + read.ms;
+  const tries = [];
+  let pair = null; // { first, second, gap, after }: `after` is the gap to the read after the pair, or null
+  let slow = 0;
+  const overlapped = []; // tries in which two status calls of the plugin's were alive at once
+  for (let attempt = 1; attempt <= 4 && (pair === null || pair.after === null); attempt += 1) {
+    wrapper({ delays: { status: HELD_MS } });
+    // Quiet first: no `oats status` of the plugin's ended in the last 3 s (the last read and its
+    // pause are over), so the claim's event starts a read with no wait.
+    await until("no oats status of the plugin's in the last 3 s", () => statusReads().every((read) => Date.now() - ended(read) > 3000), 60);
+    const before = records().length;
+    const set = asInstance("instance", "attention", "--message", `Pacing check ${attempt}`);
+    // The read the claim's event started is seen running: the clear is made now, and lands in it.
+    const first = await soon(statusRunning);
+    const cleared = asInstance("instance", "attention", "--clear");
+    // The first read has ended (its record is written at its end) and a status runs again: the read
+    // at once, if there is one. The claim is set again now, and lands in that second read.
+    const second = (await soon(() => statusReads(before).length >= 1)) && (await soon(statusRunning, 5));
+    const again = asInstance("instance", "attention", "--message", `Pacing check ${attempt}, again`);
+    // The reads the three changes ask for, waited for: two at least, and then none for 3 s.
+    await until("the reads the changes ask for have ended", () => {
+      const since = statusReads(before);
+      return since.length >= 2 && since.every((read) => Date.now() - ended(read) > 3000);
+    }, 60);
+    wrapper({});
+    // Every status call of the plugin's since the claim, whatever its exit, in the order they started.
+    const reads = statusCalls(before);
+    const gaps = reads.slice(1).map((read, index) => ({ first: reads[index], second: read, gap: Date.parse(read.at) - ended(reads[index]) }));
+    const of = (read) => `a read of ${read.ms} ms${read.exit === 0 ? "" : ` (exit ${read.exit})`}`;
+    const said = gaps.map(({ first, second, gap }) => `${of(first)}, then ${gap} ms, then ${of(second)}`).join("; ");
+    if (gaps.some(({ gap }) => gap < 0)) overlapped.push(`try ${attempt}: ${said}`);
+    tries.push(`try ${attempt} (attention ${set.status}, clear ${cleared.status} ${first ? "with a status seen running" : "with NO status seen running"}, attention ${again.status} ${second ? "with the next status seen running" : "with no next status seen running"}): ${reads.length} reads${said === "" ? "" : `: ${said}`}`);
+    if (reads.length > 0 && reads[0].ms >= NEAR_MS) slow += 1;
+    // A read at once: two calls that ANSWERED, the second started after the first ended and under the pause after it.
+    const at = gaps.findIndex(({ first, second, gap }) => gap >= 0 && gap < PAUSE_MS && first.exit === 0 && second.exit === 0 && first.ms <= LIMIT_MS);
+    if (at !== -1 && (pair === null || pair.after === null)) pair = { ...gaps[at], after: gaps[at + 1]?.gap ?? null };
+    // The claim of this try is cleared before the next, and before the steps after this one.
+    check(asInstance("instance", "attention", "--clear").status === 0, `pacing: the claim of try ${attempt} is cleared`);
+  }
+  for (const line of tries) show("pacing", line);
+  check(overlapped.length === 0, "pacing: no two oats status calls of the plugin's were alive at once", overlapped.join(" | "));
+  if (pair === null && slow === tries.length) {
+    note(`pacing: NOT SHOWN in this run: the first read of every try took ${NEAR_MS} ms or more with the ${HELD_MS} ms it is held here, which with the host call around it is the server's limit of ${LIMIT_MS} ms or over it, so the server rightly waited the pause: ${tries.join(" | ")}`);
+    return;
+  }
+  check(
+    pair !== null,
+    pair === null
+      ? "pacing: a change that landed while a read was in flight was read at once"
+      : `pacing: a change that landed while a read was in flight was read at once: the first read took ${pair.first.ms} ms (the ${HELD_MS} ms it is held here among them), the next started ${pair.gap} ms after it ended (under the ${PAUSE_MS} ms no other read goes below) and took ${pair.second.ms} ms`,
+    tries.join(" | "),
+  );
+  if (pair === null) return;
+  if (pair.after === null) note(`pacing: "never two reads at once in a row" is NOT SHOWN in this run: no read followed the pair in any try (the third change did not land in the second read): ${tries.join(" | ")}`);
+  else check(pair.after >= PAUSE_MS, `pacing: never two reads at once in a row: the read after the pair started ${pair.after} ms after the pair's second read ended (the pause: ${PAUSE_MS} ms at least)`, tries.join(" | "));
+}
 const wrapper = (settings) => writeFileSync(WRAPPER_CONFIG, JSON.stringify({ ...JSON.parse(readFileSync(WRAPPER_CONFIG, "utf8")), delayMs: 0, delays: {}, ...settings }));
 
 say(`== the real run: bb ${bb("--version").trim()}, oats ${JSON.parse(oats("version", "--json").stdout).version}, ${existsSync(join(REAL, "refs.json")) ? readFileSync(join(REAL, "refs.json"), "utf8").trim() : "refs not recorded"}`);
@@ -644,6 +844,10 @@ try {
   await fresh("the claim cleared", { instance: A.instance, home, kind: "waiting", since: clearedAt }, (agent) => agent.waiting === null);
   await untilRow(A.instance, "no claim", (r) => r.waitingOnYou == null);
 
+  step("A5b2 a change that lands while the plugin reads OATS is read at once when that read ends: one read at once, never two");
+  await followedAtOnce(asInstance);
+  await untilRow(A.instance, "no claim after the pacing check", (r) => r.waitingOnYou == null);
+
   step("A5c the agent asks a question (Claude Code's AskUserQuestion): oats.core's claim, answered on the home's card");
   // Not the agent's own claim: the hooks oats.core wrote into the home's Claude settings set it when
   // Claude Code calls AskUserQuestion, and clear it when the session moves on. The mock asks the
@@ -732,7 +936,7 @@ try {
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   const stopAt = Date.now();
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
-  // The stop is the plugin's own act: it rereads by itself afterwards, so this one holds that an act's result is on hand at once, not the watch.
+  // The stop is the plugin's own act: it rereads by itself afterwards, so this one measures how soon an act's result is on hand, not the watch (that the act rereads is test/lifecycle/server.test.ts's).
   await fresh("the agent stopped (the plugin's own act)", { instance: A.instance, home, kind: "stopped", since: stopAt }, (agent) => agent.runtimeState === "stopped");
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   check(row?.session?.threadId === threadId, "oats status: running false / stopped, the same thread", brief(row));
@@ -1044,6 +1248,25 @@ const SAMPLES = join(HERE, "..", "..", "test", "fixtures");
 fixtures.keep("roster/status.json", sampleStatus(readFileSync(join(SAMPLES, "roster", "status.json"), "utf8"), readFileSync(join(SAMPLES, "roster", "threads.json"), "utf8"), fixtures.kept("roster/status-recorded.json")));
 for (const line of fixtures.write()) say(`     fixtures/${line}`);
 for (const line of evidence.write()) say(`     answers/${line}`);
+
+// The run's freshness, in one line a person finds, in every run that reaches its end, green or
+// red (a run that throws prints neither this nor its verdict line): the delays are measured
+// and fail nothing here (fresh(), above, asserts the order of reads), so a drift has to be SEEN. The
+// 3 s bar of the UX standard is asserted on a real host by the release's QA, not by this run.
+const delay = ({ by, untold, fromRecordMs, confirmedByStatusMs, fromCommandMs }) =>
+  fromRecordMs !== null
+    ? `${fromRecordMs} ms${by === "events" ? ` by its events (the status read confirmed it at ${confirmedByStatusMs === null ? "no time in 30 s" : `${confirmedByStatusMs} ms`})` : by === "untold" ? ` (which road is not told: ${untold})` : " by a status read"}`
+    : fromCommandMs !== null
+      ? `${fromCommandMs} ms from before the command (no event of the kernel's to count from)`
+      : "never seen";
+// The event path against the REAL kernel (its argument form, the watch's file name, the kernel's
+// own answer): at least one of the changes above was on the screen from its events: a snapshot
+// of a status read that had ENDED before the command began held it, after the plugin read that
+// instance's events (nothing but the event path does that). Which ones is printed; a
+// change that a status read showed first, or whose road is not told, is no failure by itself.
+check(freshness.some((one) => one.by === "events"), `the event path showed ${freshness.filter((one) => one.by === "events").length} of the ${freshness.length} changes measured before a status read did`, JSON.stringify(freshness));
+writeFileSync(join(OUT, "freshness.json"), `${JSON.stringify(freshness, null, 1)}\n`);
+say(`\n== freshness, measured from the kernel's record to the plugin's snapshot (printed, not asserted: the run asserts the order of reads): ${freshness.length === 0 ? "nothing measured" : freshness.map((one) => `${one.what} ${delay(one)}`).join(", ")}`);
 
 if (failures > 0) {
   say(`\n== real run: ${failures} check(s) failed${onProvider}`);

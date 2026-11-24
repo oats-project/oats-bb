@@ -6,6 +6,21 @@
       "apiKey": "dummy-not-a-secret",
       "models": [
         { "id": "echo", "name": "Echo (mock)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } },
+        { "id": "claude-fable-5.1", "name": "As a soul names a model: a bare id, served by this provider alone (mock)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } },
+        { "id": "twin", "name": "Served twice: here (mock)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } }
+      ]
+    },
+    "mock-b": {
+      "baseUrl": "http://127.0.0.1:9998/v1",
+      "api": "openai-completions",
+      "apiKey": "dummy-not-a-secret",
+      "models": [
+        { "id": "twin", "name": "Served twice: and here (mock)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } },
+        { "id": "dated-20250101", "name": "An id that ends in a date: bb holds it back from its list (mock)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } }
       ]
     }

@@ -144,7 +144,7 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 | inspect | One `bb thread list`. Maps bb's status (table below). For a thread in `error` or at rest (idle, pending), also looks at this host's processes for the thread's harness: whether it lives, and whether it works in the home. A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
 | input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
 | stop | Withdraws what bb holds in line for the thread (a turn bb's concurrency limit has not started yet: bb would start it by itself later), then `bb thread stop`, then waits until bb shows the thread settled, for the grace the kernel gives, counted from the moment `bb thread stop` answered. Stopped means settled AND nothing left in line; still in a turn after the grace, or a held turn that could not be withdrawn: `E_SESSION_STOP_FAILED`. A thread archived in bb is stopped like any other. Then archives the thread (`bb thread archive`): bb starts a stopped thread's agent again at the next message to it and refuses every message to an archived one, so an agent OATS stopped stays stopped ("Stops", below). An archive bb refuses fails no stop: `stopped`, and a warning on the command's standard error that names the thread. |
-| retire (hook) | For each of the home's live threads: withdraws what bb holds in line for it, stops it, and archives it once the stop is confirmed (a thread it could not stop is left, and named in a warning). Then stops the home's threads that were archived before, and removes the env of the home's bb project (what a pi launch wrote there). It asks bb for every home that has the capability: the home is its agent's to write, so nothing in it proves there is no thread. Its receipt (`meta`) names every thread of the home that is archived in bb when it ends (`archived`: its own, then those archived before, the one the retire's own stop archived among them), with `retired: true`; `nothing-to-delete` is for a home bb has no thread of. |
+| retire (hook) | For each of the home's live threads: withdraws what bb holds in line for it, stops it, and archives it once the stop is confirmed (a thread it could not stop is left, and named in a warning). Then stops the home's threads that were archived before, and removes the env of the home's bb project (what a pi launch wrote there). Last, it deletes the home's bb environment, where every thread on it is one a launch of this home made ("Retires", below); otherwise the threads are archived only, and its warning says why. It asks bb for every home that has the capability: the home is its agent's to write, so nothing in it proves there is no thread. Its receipt (`meta`) names every thread of the home that is archived in bb when it ends (`archived`: its own, then those archived before, the one the retire's own stop archived among them; only the home's own where the provider's record of them is there), with `retired: true`, and the environments it asked bb to delete (`environments`); `nothing-to-delete` is for a home bb has no thread of. |
 | stop (no endpoint) | Finds the home's bb project and stops every live thread that runs in the home, and its archived threads: the kernel's cleanup after a launch whose answer was lost, or whose caller was killed while it ran. `stopped` also when there is none; `E_SESSION_STOP_FAILED` when bb's lists cannot be read. A thread bb made at or after the time the kernel says the failed launch was sent (`launchSent`) is taken to be that launch's, and is archived once stopped, so no message in bb starts it again and the next start launches (if bb does not archive it, the stop warns on its standard error and the next launch names it). That includes a thread a person started in the home after that time: it stays in bb, archived. An older thread, or any thread when the kernel gives no time, may be a person's: it is stopped and stays in bb, and the next launch names it until it is archived (in bb, or by the retire). |
 
 | bb thread | present | state | running |
@@ -168,14 +168,29 @@ hundred, by the machine's processors and by the command) makes the stop fail, an
 many, and the remedy. Remove old archived threads of that project in bb: for each,
 `bb thread stop <id>`, then `bb thread delete --yes <id>`.
 
-> **A known limit: a retired agent whose home was kept can be started again from bb.**
-> A retired agent whose home was kept (`oats retire --keep-dir`, or a retire that ended
-> quarantined) can be started again from bb: its archived thread can be unarchived in bb,
-> and a message then starts the harness in the kept home with NO OATS around it: no
-> status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not
-> released (a team leave waiting for its controller, a retained seat, an alias held), it
-> can send mail as the retired agent. Retire bb agents the ordinary way, which removes
-> the home: then nothing can start.
+> **WARNING: a retired agent whose home was kept can still be started again from bb.**
+> A retire deletes the home's bb environment, so a retired agent's thread takes no
+> message even once it is unarchived ("Retires", below). That is a deliberate step in
+> the way, not a lock. Where the home was kept (`oats retire --keep-dir`, or a retire
+> that ended quarantined), a person can still start the agent with three acts in bb:
+> **Unarchive** the thread, **Restore** its environment (`bb thread
+> restore-environment <id>`, which bb's own refusal names), and send it a message. And
+> where the retire **archived only** (the cases under "Retires"), Unarchive and a
+> message are enough. A session revived that way runs with NO OATS around it: no status
+> row, no hooks OATS runs for it, no stop by OATS. Retire bb agents the ordinary way,
+> which removes the home: then nothing can start.
+>
+> **Whether such a session can send mail as the retired agent** depends on the oats.aweb
+> that retired the home:
+> - **oats.aweb 1.49.0 or later:** not through `aw`'s ordinary lookup. A retire whose
+>   answer exits 0 removes the home's aweb keys, and one that fails holds them aside for
+>   the retry (`aw` then answers "not initialized"). That too is a step in the way, not
+>   a boundary: held keys stay in the home's `.oats-aweb/held/`, readable by the
+>   session's own user, and a retire that crashed leaves them in place (oats.aweb's
+>   README, "What retire does with the key material").
+> - **An older oats.aweb:** the home keeps its keys. Where its aweb identity was not
+>   released (a team leave waiting for its controller, a retained seat, an alias held), a
+>   revived session can send mail as the retired agent.
 
 bb has no "stopped" status: a stopped thread reads `idle`, like one that finished its
 turn. The kernel records its own stop and answers "stopped" itself, and the provider's
@@ -342,6 +357,11 @@ hooks. So a launch in a sandboxed mode also writes, into the same
   - bb's own plugin directory for Claude, under the temporary directory
     (`bb-provider-bridge-*`; the provider takes its own temporary directory for bb's,
     which holds where both run with the same `TMPDIR`);
+  - the provider's own state directory, whole (`$XDG_STATE_HOME/oats-bb/`, by default
+    `~/.local/state/oats-bb/`): its record of the threads it made for each home, which
+    decides whether a retire deletes a home's bb environment ("Retires"). It is outside
+    every home and the agent runs as the same user, so only this rule keeps its tools
+    off it;
   - and the one MCP tool bb pre-allows for its Claude, which moves a thread to another
     directory (`mcp__bb-bridge__update_environment_directory`).
 - `permissions.blockWritesOutsideWorkingDirectories: true`: without it Claude's Write and
@@ -483,11 +503,11 @@ never a failed start.
 
 ## pi
 
-A soul whose harness is pi runs on bb as a thread of bb's own pi provider
-(`bb thread spawn --provider pi --model <the launch's model>`; a model is
-`<pi provider>/<id>`, which bb splits itself). Everything above holds for it, except what
-follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5
-(`test/contract/pi.test.mjs`).
+A soul whose harness is pi runs on bb as a thread of bb's own pi provider (`bb thread
+spawn --provider pi --model <the launch's model>`; a model is `<pi provider>/<id>`, which
+bb splits itself, or the bare `<id>` where one pi provider serves it: "The model",
+below). Everything above holds for it, except what follows. Checked against bb-app at
+`bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5 (`test/contract/pi.test.mjs`).
 
 **What a pi launch carries: three variables, and no argument.**
 
@@ -537,6 +557,89 @@ follows. Checked against bb-app at `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.
   pi. So a project-level `PATH` set by hand in an OATS home's bb project does not survive
   a launch, of either harness. bb shows no value of its env back, and no record of it
   is kept in the home.
+
+**The model must be one bb's pi resolves.** bb takes any model id when a thread is
+spawned and resolves it only when the thread starts. An id its pi cannot resolve used to
+leave a spawn that looked launched (a thread id, `launched: true`) over a thread that had
+failed as it started: `oats status` then read not running, session lost. So a pi launch
+that names a model reads the models bb lists for its pi (`bb provider models pi`, one
+call) and is **refused before anything is started**, with `E_BACKEND_LAUNCH_ARG`:
+
+| the launch's model | the refusal |
+|---|---|
+| a bare id no pi provider serves, or a `<provider>/<id>` pi does not have | `pi has no model "<id>" (if you just added it to pi, try again in a minute)` |
+| a bare id two or more pi providers serve | `pi model "<id>" is served by A and B: use A/<id> or B/<id> (if you just changed that in pi, try again in a minute)` |
+
+The rule is bb's own, and no stricter: the id is one model's `<provider>/<id>` exactly,
+or it is a bare id and exactly one model's. Nothing is matched loosely (no prefix, no
+pattern, no other case). So a soul may name a bare id, `claude-fable-5.1`, as long as
+one of pi's providers serves it; where a second one comes to serve it, name the one you
+want.
+
+**Where the list cannot settle it, nothing is refused**: the launch goes on as it did
+before this check, and says once `could not check the model "<id>" against pi's model
+list: <why>`. That is the case when bb's list cannot be read (bb does not answer in
+time, answers an error, an empty list or one the provider cannot read), and in three
+cases where bb lists fewer models than its pi resolves (the first two seen at bb-app
+0.50.1, pi 1.5.2):
+
+- a model whose id ends in a date (`-YYYYMMDD`) is held back from the list, and listed
+  only where it is named as its exact `<provider>/<id>`: so named, it is found. Any
+  other id that ends in a date and is not listed is not checked (a bare id may itself
+  hold a slash, so an id that looks full may be a held-back model's bare one);
+- where the pi configuration bb's server runs with sets `enabledModels`
+  (`settings.oats.bb.piAgentDir`, its `settings.json`), bb lists only those models, and
+  a thread still starts on any other model pi has. A model that is not listed is then
+  not checked. Two listed models with the id are still refused (a bare id with no
+  slash: one with a slash may be a held-back model's exact `<provider>/<id>`, and is
+  not checked). bb's pi keeps the
+  setting it started with: after `enabledModels` is removed, bb goes on listing only
+  those models, at least while its pi is in use. So a model that is not listed is refused only
+  where that `settings.json` sets no `enabledModels` **and has not changed since bb
+  started** (bb-app's own record of its start, `bb-app-runtime.json` in
+  `settings.oats.bb.dataDir`); where it has, or that record cannot be read, the model
+  is not checked. After a change to bb's pi settings, restart bb;
+- a home with a pi configuration of its own (`<home>/.pi`) may give its thread models
+  that bb, which lists from a directory of its own, does not show: its launch is not
+  refused for a model that is not listed.
+
+**bb's list may also be older than pi's configuration.** bb's server serves the list it
+fetched for a minute as it is, while a thread starts by what pi has now. So where the
+pi configuration bb's server runs with changed in the last minute and a half (its
+`settings.json`, `models.json` or `auth.json`: a model or a provider added or removed, a
+login), neither refusal is given: the launch goes on with the warning. pi writes
+`auth.json` itself when it renews a login, and that counts too.
+
+**A wrong refusal is possible in two cases, and only these:**
+
+- where bb's own refresh of pi's list has failed (bb then serves the list it kept, of
+  any age, and says nothing) AND a model was added to pi since that list was fetched
+  (or a provider removed). It lasts until bb's next good refresh;
+- where one of those three files was removed in the last minute (a provider or a login
+  taken away with its file): a removed file has no time left to read. Only the
+  two-provider refusal can be wrong then, naming a provider pi no longer has, for a
+  minute.
+
+That is why each refusal ends with the way out: try again in a minute.
+
+What this rule reads beside bb's list is bb-app's and pi's own layout (`startedAt` in
+`bb-app-runtime.json`, the three files' times), pinned against bb-app at `bb-version`
+by `test/contract/pi.test.mjs`; whatever cannot be read warns, and never refuses.
+
+One edge is left as it was: a bare id that bb lists once and that a second, held-back
+model also has (a dated one, or one outside `enabledModels`) passes here, and bb refuses
+it when the thread starts ("Ambiguous Pi model"). Name the one you want,
+`<provider>/<id>`.
+
+Then an id bb's pi cannot resolve ends as before: a thread that fails as it starts.
+
+The check of a planned launch (the spawn's preview, and the check before every launch)
+says the same, as a problem or as the warning `session-provider-pi-model-unchecked`,
+where the kernel hands it the launch's model (`launch.model`); a kernel that does not
+is refused at the launch itself, with nothing created in bb. The launch's own warning
+goes to the provider command's standard error (a launch result has no place for it).
+Nothing is asked of bb for a Claude launch, a pi launch with no model (bb then starts pi
+on its own default), or a launch that is refused for something else.
 
 **The home's skills load through @awebai/oats-pi**, the OATS bridge for pi, and only
 when `OATS_INSTANCE_HOME` names the home: that is what the project env is for (never
@@ -629,6 +732,7 @@ launch checks first:
 | bb's server or host daemon does not answer | `E_BACKEND_UNREACHABLE` |
 | the host daemon is not connected yet, or serves another server; with `hostDaemonPort` set, the daemon at that port is not a connected host of the server (it does not say which host it is, the server does not list it, or its hosts cannot be read); bb reports the provider of the launch's harness (claude-code, or pi) as `not_installed`, `unsupported_version`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read; for a pi launch, the pi configuration bb's server runs with does not list @awebai/oats-pi | `E_BACKEND_NOT_READY` |
 | for a pi launch, that configuration lists @awebai/pi, and `AWEB_DELIVERY` is not in bb's machine env | `E_BACKEND_PI_LISTENER` |
+| for a pi launch whose model the check is handed, bb's pi has no such model, or two of its providers serve that bare id ([pi](#pi), "The model") | `E_BACKEND_LAUNCH_ARG` |
 
 Which harness these speak for: with the launch the kernel plans, only that harness's
 facts are problems (a pi launch is not held up because bb's Claude is signed out, nor a
@@ -741,6 +845,102 @@ archived thread, so the home reads as stopped, mail to it is refused, and
 
 The same goes for a person's answer: answer a thread's question or permission prompt in
 bb. `oats session input` never answers one; it refuses while one is open.
+
+## Retires
+
+**A retire deletes the home's bb environment.** The retire hook stops and archives the
+home's threads, and bb unarchives an archived thread at one press, with no question
+asked. Where the home is then still on disk (`oats retire --keep-dir`, or a retire that
+ended quarantined), a message to the unarchived thread started the agent in the retired
+home, outside OATS. So the hook, after the stop and the archive, asks bb to delete the
+home's environment (`bb environment delete <id>`). bb marks it destroyed, refuses every
+message to a thread whose environment is gone (`thread_environment_unavailable`), and
+starts nothing.
+
+- The home directory is not touched, byte for byte: for a local directory bb did not
+  make, the delete removes bb's record and nothing on disk.
+- The conversation stays in bb, readable, as an archived thread.
+- The retire never waits for bb: bb answers the delete at once and finishes within
+  seconds. A delete bb refuses, does not answer, or that meets a bb that is down fails
+  no retire: the threads stay archived only. The retire's warning says so, and the hook
+  writes one line on its standard error with bb's own words and the command to run in
+  bb (`bb environment delete <id>`).
+- The receipt (`environments`) names each environment bb was asked to delete.
+
+**When the retire archives only.** bb keeps ONE environment per home, shared by every
+thread that runs there: the agent's, and any thread a person opened in the home's bb
+project. bb's delete takes it from all of them, and nothing bb shows tells a person's
+thread from the agent's. So the hook deletes only where it is certain, and otherwise
+leaves the threads archived, as before this release, and says why in the retire's
+warning:
+
+- **The environment is not the home's own local directory.** Only an environment whose
+  path is the home and whose kind is local-path (`project-checkout`, a directory bb
+  does not manage) is deleted. A worktree, a remote environment, or one at another
+  directory never is. Where a thread of the home's own is on such an environment (one
+  moved to another directory), the warning says so; a person's thread of the home's bb
+  project that runs elsewhere is passed over in silence.
+- **A thread on it is not the home's own.** The provider keeps a record of the threads
+  its launches made for each home, and deletes only where bb's list of the threads on
+  the environment (`bb thread list --environment <id> --include-archived
+  --include-hidden`) was read whole and every thread in it is in that record. A
+  person's thread there, archived or not, keeps the environment: it is theirs too.
+- **The home has no record.** A home spawned before this release has none, and a
+  record is never made up afterwards: such a home is archived only for good. That is
+  not a failure. Once such a home is started with this release, it has a record of its
+  new threads only: its older threads are not in it and keep the environment, and the
+  warning then names them as threads that are not in the home's record. Archive only
+  is also what a thread whose launch could not write the record gets (the launch warns
+  on its standard error and goes on), and a launch whose answer was lost, and a record
+  that cannot be read whole (the warning then says what is wrong with it).
+- **A thread of the home could not be stopped and archived**, or bb could not be read.
+- **A thread has no environment yet.** bb makes a thread's environment when its first
+  turn starts. A home retired before that (bb held the turn in line) has nothing to
+  delete, and its thread, unarchived, would still start.
+- **bb did not do the delete** (above).
+
+The rule: the retire warns whenever a thread of the home is left without a deleted
+environment, because with the home kept that thread can be started from bb.
+
+> **The warning reaches CLI users only.** `oats retire` prints the hook's warning. The
+> Desktop's Retire dialog shows no plan warnings and no hook output (oats#2102): a
+> retire made there that archived only says nothing. Check in bb
+> (`bb environment show <id>`), or retire from the CLI.
+
+**The record.** One file per home in `$XDG_STATE_HOME/oats-bb/homes/` (by default
+`~/.local/state/oats-bb/homes/`, on macOS too), for the OS user that runs OATS and bb.
+Directories are `0700`, files `0600`.
+
+- It holds the home directory's identity and one thread id per line, nothing else: no
+  title, no path, nothing of a person's, no secret. Its name is a hash of the home's
+  real path.
+- It is a record of one directory, not of a path: the home's inode and birth time must
+  match (the device and inode where the filesystem gives no birth time). A home made
+  again at the same path is another directory, and an earlier home's record vouches for
+  nothing there.
+- A file with another mode or owner, a link, or a file with a second name is not read.
+  A line that was not written whole makes the record malformed. Both mean archive only.
+- Each launch adds its thread's id. Only the retire hook reads it, for this one
+  question, and removes it once it has decided: the environment deleted, or a no that
+  rests on what it read (a thread that is not the home's own, the wrong kind, a record
+  that is malformed). After such a no, the home is archived only for good. A record
+  the hook does not read (another mode or owner, a link, a second name) is left as it
+  is: it is not the provider's to remove. No other
+  command reads it: which threads are a home's stays by project, environment and the
+  recorded endpoint.
+- Its place is read from the environment of the process that runs OATS
+  (`XDG_STATE_HOME`). A launch and a retire that run with different values look in two
+  places: the retire then finds no record and archives only.
+- Where the hook could not decide (bb could not be asked or read, a thread would not
+  stop, bb did not do the delete), the record stays, so a retire run again can still
+  delete. So a record can outlive a home whose retire never got through to bb. That is harmless: it holds thread ids only, and a later home
+  at that path is another directory, which it does not match (that home's first launch
+  replaces it). To remove leftovers by hand, delete the files in
+  `$XDG_STATE_HOME/oats-bb/homes/` (`~/.local/state/oats-bb/homes/`) while no bb home
+  of this user is running: a file removed under a live home only makes that home's
+  retire archive only.
+- It is outside the home, and in bb's full mode the agent runs as the same user: it is
+  not out of the agent's reach. A launch in a sandboxed mode denies the directory.
 
 ## Two bbs on one host
 
@@ -863,6 +1063,12 @@ stopped (archived: a tell is refused and starts nothing; unarchived by hand, a t
 starts pi again), and that no process is left in a home after a stop or a retire. Run it again
 on every bump of bb-app or pi.
 
+The first and the third file also pin the retire's delete of the home's bb environment,
+for Claude and for pi: the kept home byte for byte unchanged, an Unarchive plus a
+message refused with nothing started, and a person's thread on the environment leaving
+it alone. The first file also pins that the conversation stays readable, and the door
+bb's own Restore leaves.
+
 A fourth (`test/contract/title.test.mjs`, the first file's image) pins what bb does to a
 thread's title by itself, and that a launched thread's title is the instance's name as
 words and stays so. bb writes titles through an AI service, which a signed-out bb has
@@ -883,5 +1089,6 @@ home under the kernel the pi contract image installs from npm, with no clone: th
 kernel's spawn on bb, `oats session input`, a failed turn (the home stays present), a
 thread in `error` whose process is gone (the home reads lost, and an input is the
 kernel's resume: counted once, then bb starts the harness again in the same thread for
-one turn), the stop and the retire. CI does not run it either (it needs the network for
+one turn), the stop and the retire, and `oats retire --keep-dir`: the home kept, its bb
+environment destroyed, its thread taking no message. CI does not run it either (it needs the network for
 the workspace's framework package); run it at a bump of bb, of pi or of the kernel.

@@ -9,6 +9,7 @@
 // namespaces: the container runs with seccomp, apparmor and systempaths unconfined).
 // Again on every bump of bb-app or Claude Code.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { after, afterEach, before, test } from "node:test";
 import { BB_VERSION, MODEL, rig, waitFor } from "./rig.mjs";
 import { dirname, resolve } from "node:path";
@@ -30,6 +31,11 @@ const MOVE_TOOL = "mcp__bb-bridge__update_environment_directory";
 // agent must read and run it where it is, and never write it.
 const RETIREMENT = `${INSTANCES}/.oats-retirement`;
 const copyOf = (name) => `${RETIREMENT}/modules/hash-of-${name}/store-1/oats.core`;
+// The provider's own state directory (contract r32, A17, on A8's list): its record of the
+// threads it made for each home, which decides whether a retire deletes the home's bb
+// environment. Outside every home, and this user's: a sandboxed agent must not write it.
+const STATE = "/home/node/.local/state/oats-bb";
+const recordOf = (home) => `${STATE}/homes/${createHash("sha256").update(home).digest("hex")}`;
 
 const box = rig({
   name: `oats-bb-contract-sandbox-${process.pid}`,
@@ -176,9 +182,12 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     for (const path of [`${home}/.oats/**`, `${home}/TASK.md`, `${INSTANCES}/.mcp.json`, "/home/node/.claude.json", "/home/node/.claude/**", "/etc/claude-code/**",
       `${home}/work/.git`, `${gitDir}/config`, `${gitDir}/hooks/**`, `${gitDir}/commondir`, `${gitDir}/gitdir`,
       `${home}/trees/extra/.git`, `${extraGitDir}/config`, `${extraGitDir}/hooks/**`, `${home}/.git/**`,
-      `${RETIREMENT}`, `${RETIREMENT}/**`, `${CLONE}/.git/config`, `${CLONE}/.git/hooks/**`, `${DATA}/thread-storage/.mcp.json`, "/tmp/bb-provider-bridge-*/**"]) {
+      `${RETIREMENT}`, `${RETIREMENT}/**`, `${CLONE}/.git/config`, `${CLONE}/.git/hooks/**`, `${DATA}/thread-storage/.mcp.json`, "/tmp/bb-provider-bridge-*/**", STATE, `${STATE}/**`]) {
       assert.ok(settings.permissions.deny.includes(`Edit(/${path})`), path);
     }
+    // The launch noted its thread in the home's record: the identity line, then the thread.
+    const record = await sh(`cat ${recordOf(home)}`);
+    assert.match(record, new RegExp(`^oats-bb-home 1 dev=\\d+ ino=\\d+ birth=(\\d+|-)\\n${id}\\n$`));
     // Readiness reports the home sandboxed: the block and both additions stand in its settings.
     assert.ok((await provider("check", { home, soul: null })).result.warnings.some((warning) => warning.code === "session-provider-sandboxed"));
 
@@ -190,6 +199,8 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     const paths = [...protectedPaths(home), `${gitDir}/config`, `${gitDir}/hooks/pre-commit`, `${gitDir}/commondir`, `${home}/trees/extra/.git`, `${extraGitDir}/config`, `${extraGitDir}/hooks/pre-commit`,
       // what the kernel keeps outside the home
       `${copyOf(name)}/hooks/hook.sh`, `${copyOf(name)}/hooks/new.sh`, `${RETIREMENT}/planted`,
+      // the provider's record of this home's threads, and a record of the agent's own making
+      recordOf(home), `${STATE}/homes/planted`, `${STATE}/planted`,
       // the clone tree: what git runs or follows in its .git directory
       `${home}/trees/clone/.git/config`, `${home}/trees/clone/.git/config.worktree`, `${home}/trees/clone/.git/hooks/pre-commit`, `${home}/trees/clone/.git/commondir`, `${home}/trees/clone/.git/gitdir`];
     // bb's plugin directory is where the rule says it is: an attempt on a name that
@@ -238,6 +249,7 @@ for (const [mode, extra] of [["accept-edits", {}], ["auto", { yolo: null, args: 
     // working directories is refused by the switch, whatever it is.
     for (const path of [`${home}/.mcp.json`, `${home}/.oats/modules/new.sh`, `${home}/.aw/signing.key`, `${home}/trees/extra/.git`, `${INSTANCES}/.mcp.json`, "/home/node/.claude/settings.json", `${CLONE}/.git/hooks/pre-commit`, `${extraGitDir}/config`, `${DATA}/thread-storage/.mcp.json`,
       `${copyOf(name)}/hooks/hook.sh`, `${RETIREMENT}/planted`, `${home}/.git/config`,
+      recordOf(home), `${STATE}/homes/planted`,
       // the one rule with a wildcard inside its path: Claude Code matches it
       `${pluginDir}/PLANTED-HERE`]) {
       const write = await toolCall(id, { tool: "Write", input: { file_path: path, content: "PLANTED\n" } });

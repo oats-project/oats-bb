@@ -133,7 +133,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const held = oats.stale !== null;
   // The act that applies to the state, through OATS: a stopped agent is started, one whose session
   // ended is restarted, one the kernel cannot reach is read again.
-  const verb = status.state === "stopped" ? (["start", "Start"] as const) : status.state === "error" ? (["restart", "Restart"] as const) : null;
+  // One that never ran (bb says its thread failed at its start: `status.bb`) is started, not restarted: nothing runs.
+  const verb = status.state === "stopped" || (status.state === "error" && status.bb !== undefined) ? (["start", "Start"] as const) : status.state === "error" ? (["restart", "Restart"] as const) : null;
   const act =
     verb !== null ? (
       <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
@@ -158,9 +159,10 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       </Button>
     ) : status.state === "working" || status.state === "idle" ? (
       // An agent that runs is stopped from its own thread, through OATS: the plan first (what stops
-      // with it), then the confirmation. bb's own stop of a turn is not this.
+      // with it), then the confirmation. bb's own stop of a turn is not this. "Stop…": it opens a
+      // dialog, as the same act says in the instance panel (the lifecycle's rule for what asks first).
       <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : "Stop this agent through OATS"} onClick={() => askPlan("stop", agent.instance)}>
-        Stop
+        Stop…
       </Button>
     ) : held ? undefined : status.state === "unreachable" ? (
       <Button data-testid="oats-status-act" onClick={oats.retry}>

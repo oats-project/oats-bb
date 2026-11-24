@@ -125,7 +125,8 @@ const BOTH = ["stop", "start"] as const;
  * two acts that mend it, each with what it does here. The kernel's own sentence and its code are
  * one press away, under Details, through the display filter: no command is on screen where the two
  * buttons do the same. Nothing where the kernel reports nothing.
- * The lifecycle starts an agent on bb only: for an agent of another session provider the notice
+ * The lifecycle starts an agent on bb or on tmux, and the report is never a tmux agent's (the
+ * kernel reports it of a provider home): for an agent of another session provider the notice
  * names Stop alone (no Start line, and its sentence does not say to start it), so that nothing is
  * named that cannot be pressed.
  */
@@ -221,10 +222,11 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
  * Nothing for an agent this feature has nothing to say of. `roster` is what the place holds of the
  * roster (`Oats`' own `nodeByInstance` and `whereOf`); `held`: the roster is the last one read.
  */
-export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere }; held: boolean }) {
-  const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
+export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent; thread?: { startFailure?: unknown } }>; whereOf(agent: Agent): ThreadWhere }; held: boolean }) {
+  const node = roster.nodeByInstance.get(agent.instance);
+  const attached = node?.agent === agent;
   const where = roster.whereOf(agent);
-  const said = sayOf(agent, where, attached);
+  const said = sayOf(agent, where, attached, attached ? (node?.thread ?? null) : null);
   const now = useNow();
   const started = agent.startedAt == null ? "" : waitingClock(agent.startedAt, now);
   // The header's own acts for this agent now (`AgentActs` draws exactly these).
@@ -254,7 +256,7 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
         </div>
       )}
       {/* Act by act: one the header has is the header's (the notice says what it does); one it lacks is the notice's own
-          button. Start is the lifecycle's for an agent on bb only, so the notice draws none for another provider's. */}
+          button. Start is the lifecycle's for an agent on bb or on tmux, and the report is never a tmux agent's, so the notice draws none for another provider's. */}
       <OutsideWarning said={said} instance={agent.instance} held={held} own={BOTH.filter((act) => !headed.includes(act) && (act === "stop" || agent.backend === "bb"))} />
     </div>
   );

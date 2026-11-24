@@ -1,4 +1,4 @@
-// Acting on OATS's own schedules and triggers: turn one on or off on this computer, run a
+// Acting on OATS's own schedules and triggers: turn one on or off on the machine, run a
 // schedule now, test one, change a local one's summary, delete a local schedule, check a run
 // whose state is unknown, and install the host timer. Each is the kernel's own verb with `--json`
 // (docs/desktop-cli-api.md "Schedules and triggers"), the argv the Desktop sends
@@ -7,7 +7,7 @@
 // text that starts with "-" is never read as an option.
 import { z } from "zod";
 import type { AutomationKind, AutomationRow, AutomationScheduler, AutomationTest, AutomationTestSource, ScheduleReconciled, ScheduleRunReceipt } from "../contract/automations.js";
-import { automationRowOf, checkAutomationId, counted, eventLabel, list, record, refusedEvents, runOf, skippedItems, sourceCheck, sourceSays, text, type Json } from "./automations.js";
+import { automationRowOf, checkAutomationId, counted, eventLabel, list, record, refusedEvents, runOf, skippedItems, sourceCheck, sourceSays, text, type Json } from "./automations-read.js";
 import { displayLine } from "../model/text.js";
 import { DESCRIPTION_RULE, descriptionValid } from "../model/automations.js";
 import { shaped } from "./envelope.js";
@@ -25,7 +25,7 @@ const strings = (value: unknown): string[] =>
     .map((entry) => (typeof entry === "string" ? entry : record(entry) ? (text(entry.message) ?? text(entry.code)) : null))
     .filter((entry): entry is string => entry !== null && entry !== "");
 
-// ---- on and off, on this computer ----
+// ---- on and off, on the machine ----
 /** A local item's own `enabled`; a workspace item's entry in this host's `triggers.disabled` or `schedules.disabled`. */
 export const enableArgv = (kind: AutomationKind, id: string, enabled: boolean): Result<string[]> => idArgv(kind, [enabled ? "enable" : "disable"], id);
 
@@ -146,7 +146,7 @@ export function parseScheduleReconcile(document: unknown): Result<ScheduleReconc
 }
 
 // ---- the host timer ----
-/** `oats schedule host install`: registers this deployment and installs the one timer of this user on this computer (a systemd user timer, or a launchd agent). */
+/** `oats schedule host install`: registers this deployment and installs the one timer of this user on the machine (a systemd user timer, or a launchd agent). */
 export const hostInstallArgv = (): string[] => ["schedule", "host", "install", "--json"];
 const installed = z.looseObject({ scheduler: z.looseObject({ installed: z.boolean().nullish(), active: z.boolean().nullish(), registered: z.boolean().nullish(), lastTick: z.string().nullish(), maxConcurrent: z.number().nullish() }), warnings: z.array(z.unknown()).nullish() });
 export function parseHostInstall(document: unknown): Result<{ scheduler: AutomationScheduler; warnings: string[] }> {

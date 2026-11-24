@@ -5,9 +5,10 @@
 // server/<feature>.ts; server.ts composes them.
 import { experimental_PluginRpcRefusal, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { hostContract, hostSignals, REALTIME_CHANGED, type snapshot as snapshotSchema } from "../contract/index.js";
+import { CHANGED_FILES_MAX, hostContract, hostSignals, REALTIME_CHANGED, type snapshot as snapshotSchema } from "../contract/index.js";
 import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
+import { withEvents, type EventsSaid } from "../model/events.js";
 import type { Agent } from "../model/types.js";
 
 /** What the kernel printed for one instance: its own row, and its agent group's row without the instances. */
@@ -17,12 +18,47 @@ export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly
 export const POLL_MS = 15_000;
 /**
  * The pause between the end of one `oats status` and the start of the next: this, or as long as
- * the last status took to answer, whichever is longer (a read that failed is followed by this floor). So a change the watch reports reaches the screen
- * within 3 s on a kernel that answers in under a second (the UX standard, section 6), and a slow
- * kernel spends at most half its time on status, however many events arrive. (The first spec's
- * "never within 5 s of the last" gave way to this.)
+ * the last status took to answer, whichever is longer (a read that failed is followed by this
+ * floor). One read is excepted, the read at once (FOLLOW_UP_WITHIN_MS, below, which also says what
+ * share of its time a kernel then spends on status). (The first spec's "never within 5 s of the
+ * last" gave way to this.)
  */
 export const MIN_INTERVAL_MS = 1_000;
+/**
+ * ONE read at once. A change that arrives while a read is in flight may be missed by that read, so
+ * another must follow; when the read in flight answered within this limit, the next one starts at
+ * once, with no pause, and once: a change that arrives during that second read waits the pause
+ * again (the pause after the pair is the rule above, counted from the second).
+ *
+ * What it buys, with t the time one status takes: a change that lands in the FIRST read of a pair
+ * is on the screen after about two reads (2t) instead of two reads and the pause. A change that
+ * lands in the SECOND read (the one started at once: the clear after a set, the second event of
+ * one act) still waits that read, the pause and the next: 2t + max(1 s, t), as before this rule.
+ * No read is later than it was; the worst case is not shorter, the common one is.
+ *
+ * Why 2 s and not the floor's 1 s: on the pilot's host one `oats status` took 1.05 to 1.52 s under
+ * load (measured 2026-11-23, eight agents, load 16), and with a limit of 1 s no read there would be
+ * followed at once: a change in the middle of a read stayed at two reads and the pause, 3.3 to
+ * 4.3 s, over the 3 s of the UX standard (section 6, amended by the specialist on 23 Nov to this
+ * condition). With 2 s it is two reads there: 2.1 to 3.04 s, before the host call's own overhead:
+ * at the slow end still at the bar's edge, not under it.
+ * The cost, in a sustained burst of changes: a kernel that answers in t spends 2t of every
+ * 2t + max(1 s, t) on status (63 % at 0.85 s, 67 % from 1 s to 2 s), not "at most half". A kernel
+ * slower than 2 s keeps the pause after every read (at most half its time on status): it is over
+ * the 3 s whatever the pacing.
+ */
+export const FOLLOW_UP_WITHIN_MS = 2_000;
+/**
+ * Whether a read that was asked for while another was in flight starts at once when that one ends
+ * (see FOLLOW_UP_WITHIN_MS): only after a read that ANSWERED (a failed one says nothing of the
+ * kernel's speed, and its retry waits the floor), within the limit, and that was not itself a read
+ * started at once.
+ */
+export function followsAtOnce(inFlight: { answeredInMs: number | null; startedAtOnce: boolean }): boolean {
+  return !inFlight.startedAtOnce && inFlight.answeredInMs !== null && inFlight.answeredInMs <= FOLLOW_UP_WITHIN_MS;
+}
+/** The most `oats instance events` reads alive at once, for all instances together (the event path: `askEvents`). */
+export const EVENTS_READS_MAX = 2;
 /** How long the answers behind the four pages are reused. */
 const PAGE_TTL_MS = 30_000;
 /** A client that asked for the snapshot this recently counts as connected, beside the watched reads. */
@@ -126,15 +162,46 @@ export function createCore(bb: BbPluginApi) {
   let cached: Snapshot | null = null;
   /** What the kernel printed behind the last roster read: its root, and each instance's rows; null before any. */
   let rawRows: { at: string; root: string; rows: ReadonlyMap<string, RawRow> } | null = null;
-  /** The last roster read, kept while OATS cannot be read (it is `cached` while that is a roster). */
+  /**
+   * The last roster read, as the status read answered it, kept while OATS cannot be read. (While
+   * the snapshot is a roster, `cached` is this with the event path's patches over it: a status
+   * read that FAILS shows this one, so a patch leaves the screen with it: what is then shown is
+   * the last thing `oats status` said.)
+   */
   let lastRoster: Extract<Snapshot, { ok: true }> | null = null;
   let comparable = "";
   let lastStart = 0;
-  /** When the last read ended, and how long it took: what the pause before the next is counted from. */
+  /** When the last read ended: what the pause before the next is counted from. */
   let lastEnd = 0;
-  let lastTook = 0;
+  /**
+   * How long the last read took when it answered; null when it gave no answer to count: it failed
+   * (a timeout, an unreachable machine, no oats: its own length must not hold back Retry or the
+   * watch), or it answered for settings that changed under it. The pause after it is this, or the floor.
+   */
+  let lastAnsweredInMs: number | null = null;
+  /** Whether the last read to start was started at once after the one before it (FOLLOW_UP_WITHIN_MS). */
+  let lastStartedAtOnce = false;
   let running: Promise<Snapshot> | null = null;
   let queued: Promise<Snapshot> | null = null;
+  // ---- the event path (below, "between two status reads") ----
+  /**
+   * Per instance, the last events answer applied to its row, and when the read that brought it
+   * STARTED: kept so that a status answer OLDER than it (a status read that started before it) does
+   * not take the change off the screen again. Dropped by the first status read that started after it.
+   */
+  const patches = new Map<string, { said: EventsSaid; startedAt: number }>();
+  /**
+   * The agents of the status read the snapshot is of, as that read answered them (no patch): a
+   * patch is always computed from these, never from a row that is patched already, so that a later
+   * events answer can take an earlier one's change off again. Null while the snapshot is no roster.
+   */
+  let statusAgents: Agent[] | null = null;
+  /** The last token published (epoch ms): every publish carries one that is later than every one before it. */
+  let lastToken = 0;
+  /** The instances whose events are being read now; `again`: a signal named it meanwhile, and one more read follows. */
+  const eventsReads = new Map<string, { again: boolean }>();
+  /** The instances that wait for their events to be read, in the order they were named (each once). */
+  const eventsLine: string[] = [];
   let watchers = 0;
   let clientSeenAt = 0;
   const pages = new Map<string, { at: number; value: Promise<unknown> }>();
@@ -276,10 +343,15 @@ export function createCore(bb: BbPluginApi) {
     // no client is shown it and no act finds an agent, or a home, of the old deployment in it.
     if (generation !== settingsGeneration) {
       lastEnd = Date.now();
-      lastTook = 0;
+      lastAnsweredInMs = null;
       return next;
     }
-    const key = JSON.stringify({ ...next, at: null, last: next.ok ? null : (next.last?.at ?? null), root, rows: rows === null ? null : [...rows] });
+    // The event path's patches that are NEWER than this read (their events read started after this
+    // status read did) still stand over it; the others are older than it, and this read is the truth.
+    patchesOlderThan(lastStart);
+    statusAgents = next.ok ? next.agents : null;
+    if (next.ok) next = { ...next, agents: withPatches(next.agents, next.at) };
+    const key = keyOf(next, root, rows);
     const changed = key !== comparable;
     cached = next;
     comparable = key;
@@ -287,22 +359,192 @@ export function createCore(bb: BbPluginApi) {
     // Only a status that answered lengthens the pause: the guard is for a kernel that answers
     // slowly. After a read that failed (a timeout, an unreachable machine, no oats) the next one
     // waits the floor, so Retry and the watch are not held back by the failure's own length.
-    lastTook = next.ok ? lastEnd - lastStart : 0;
-    if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at });
+    lastAnsweredInMs = next.ok ? lastEnd - lastStart : null;
+    if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: token(lastStart) });
     return next;
+  }
+
+  // ---- between two status reads: the event path ----
+  //
+  // A change OATS itself makes (a claim set or cleared, a stop) appends a line to that instance's
+  // file in the deployment's event log, and the watch names the file. `oats instance events` for
+  // ONE instance answers in about a tenth of a status read: the server reads it, moves that
+  // agent's row to what it says (model/events.ts `withEvents`: the claim and a stop, nothing
+  // else) and publishes, so that the change is on the screen without waiting for `oats status`.
+  // The status read is asked for exactly as before, and it is the truth:
+  //
+  // - Every answer is ranked by WHEN ITS READ STARTED. An events answer whose read started before
+  //   the snapshot's status read did is dropped (that status read is newer). A status answer whose
+  //   read started before an events read that patched a row is OLDER than the patch: the same
+  //   function is applied to its row again from the kept answer (`withPatches`), so the change
+  //   does not leave the screen and come back. The first status read that started AFTER that
+  //   events read is taken whole, and the kept answer is dropped.
+  // - FAIL SAFE: an events read that fails, times out, answers a shape this does not know, or is
+  //   for an instance the snapshot does not hold changes nothing, and is said at debug level.
+  // - Only the snapshot's agents are patched. What the kernel printed (`rawRows`: the lifecycle's
+  //   and the automations' reads) is the status read's alone: an act on a patched agent reads the
+  //   kernel's own row and goes to the kernel, as it does on any roster that is a moment old.
+  // - The snapshot's `at` stays the status read's start: it is how old the roster is.
+
+  /** What tells one shown snapshot from another: everything of it but when it was read, and what the kernel printed beside it. */
+  const keyOf = (snapshot: Snapshot, root: string, rows: ReadonlyMap<string, RawRow> | null): string =>
+    JSON.stringify({ ...snapshot, at: null, last: snapshot.ok ? null : (snapshot.last?.at ?? null), root, rows: rows === null ? null : [...rows] });
+  /**
+   * The token of a publish: `wanted` (the start of the read behind it, epoch ms), or the first
+   * millisecond after the last token where that is not later. A client acts once per token
+   * (app/store.ts), and two reads can start in one millisecond (two instances named by one
+   * signal; a status read asked for by the signal that named them): each publish gets its own.
+   */
+  function token(wanted: number): string {
+    lastToken = Math.max(wanted, lastToken + 1);
+    return new Date(lastToken).toISOString();
+  }
+  /** Drops the kept answers a status read that started at `statusStart` is newer than. */
+  function patchesOlderThan(statusStart: number): void {
+    for (const [instance, kept] of patches) if (kept.startedAt <= statusStart) patches.delete(instance);
+  }
+  /** A status read's own agents, with every kept answer applied (each is newer than that read: the older ones were dropped). */
+  function withPatches(agents: Agent[], readAt: string): Agent[] {
+    if (patches.size === 0) return agents;
+    return agents.map((agent) => {
+      const kept = patches.get(agent.instance);
+      return kept === undefined ? agent : withEvents(agent, kept.said, readAt);
+    });
+  }
+  /** What a patch changed, in words for the log. */
+  const patchSaid = (before: Agent, after: Agent): string =>
+    [
+      before.waiting === null && after.waiting !== null ? "a claim set" : null,
+      before.waiting !== null && after.waiting === null ? "the claim cleared" : null,
+      before.waiting !== null && after.waiting !== null && JSON.stringify(before.waiting) !== JSON.stringify(after.waiting) ? "the claim changed" : null,
+      before.running !== false && after.running === false ? "stopped" : null,
+      before.running === false && after.running !== false ? "not stopped after all (its events say it started again): as the status read said" : null,
+    ]
+      .filter((part) => part !== null)
+      .join(", ") || "the row";
+
+  /**
+   * Asks for one instance's events to be read. Never two reads at once for one instance (a signal
+   * that names it meanwhile makes one more read, when this one has ended), and never more than
+   * EVENTS_READS_MAX `oats` at once for all of them: a sweep or a mass stop writes many instances'
+   * files in separate batches, and the plugin must not start a process per agent on a host that
+   * is loaded already (what the status read's pause is for). The others wait in line, in the
+   * order they were named, each once. A line of more than CHANGED_FILES_MAX is dropped whole:
+   * the status read, which every signal asks for, carries them.
+   */
+  function askEvents(instance: string): void {
+    const reading = eventsReads.get(instance);
+    if (reading !== undefined) {
+      reading.again = true;
+      return;
+    }
+    if (eventsLine.includes(instance)) return;
+    if (eventsReads.size < EVENTS_READS_MAX && eventsLine.length === 0) startEvents(instance);
+    else inLine(instance);
+  }
+  function inLine(instance: string): void {
+    eventsLine.push(instance);
+    if (eventsLine.length > CHANGED_FILES_MAX) {
+      bb.log.debug(`the event path: ${eventsLine.length} instances wait for their events to be read: none of them is read, the status read carries them`);
+      eventsLine.length = 0;
+    }
+  }
+  /** Starts a read nobody awaits: whatever it throws is said at debug level and changes nothing (fail safe, by construction). */
+  const startEvents = (instance: string): void =>
+    void readEvents(instance).catch((error: unknown) => bb.log.debug(`the event path: ${instance}: nothing changed: its read ended with ${String((error as Error)?.message ?? error)}`));
+  /** Reads one instance's events, and then the next in line. */
+  async function readEvents(instance: string): Promise<void> {
+    const mine = { again: false };
+    eventsReads.set(instance, mine);
+    try {
+      await readEventsOnce(instance);
+    } finally {
+      eventsReads.delete(instance);
+      if (!lifetime.signal.aborted) {
+        // Named again meanwhile: one more read, behind those that wait already.
+        if (mine.again) inLine(instance);
+        // The place this read leaves is the next in line's.
+        const next = eventsLine.shift();
+        if (next !== undefined) startEvents(next);
+      }
+    }
+  }
+  async function readEventsOnce(instance: string): Promise<void> {
+    const dropped = (why: string) => bb.log.debug(`the event path: ${instance}: nothing changed: ${why}`);
+    const generation = settingsGeneration;
+    const from = cached;
+    const at = target;
+    const agent = from !== null && from.ok ? from.agents.find((candidate) => candidate.instance === instance) : undefined;
+    if (from === null || !from.ok || agent === undefined || at === null) return dropped("the snapshot holds no such agent now");
+    const startedAt = Date.now();
+    let answer: Answer<EventsSaid>;
+    try {
+      answer = await host.call(
+        "rosterEvents",
+        { deployment: at.deployment, oatsBin: (await settings.get()).oatsBin, instance, home: agent.home, since: from.at },
+        { hostId: at.hostId, signal: lifetime.signal, timeoutMs: HOST_TIMEOUT.read },
+      );
+    } catch (error) {
+      return dropped(`its events could not be read: ${String((error as Error).message)}`);
+    }
+    const took = Date.now() - startedAt;
+    if (!answer.ok) return dropped(`oats instance events answered ${answer.error.code} in ${took} ms`);
+    if (generation !== settingsGeneration || lifetime.signal.aborted) return dropped("the settings changed while its events were read");
+    const now = cached;
+    if (now === null || !now.ok) return dropped("OATS cannot be read now: the roster shown is the last one read");
+    // A status read that started after this events read did is newer than it: it is the truth.
+    if (Date.parse(now.at) >= startedAt) return dropped(`a status read that started after its events read (${took} ms) has answered`);
+    const shown = now.agents.find((candidate) => candidate.instance === instance);
+    // (The status read's own agents hold the same instances as the snapshot: one block of read() sets both.)
+    if (shown === undefined || statusAgents === null || !statusAgents.some((candidate) => candidate.instance === instance)) return dropped("the snapshot holds no such agent now");
+    // The row is computed from what the STATUS read said of it, with this answer in the place of any
+    // earlier one: never from a row that is patched already (an answer that says "stopped, then
+    // started again" must take an earlier answer's "stopped" off).
+    patches.set(instance, { said: answer.value, startedAt });
+    const agents = withPatches(statusAgents, now.at);
+    const next = agents.find((candidate) => candidate.instance === instance)!;
+    const patchedSnapshot: Snapshot = { ...now, agents };
+    const key = keyOf(patchedSnapshot, rawRows?.root ?? "", rawRows?.rows ?? null);
+    if (key === comparable) return dropped(`its events say what is shown (read in ${took} ms)`);
+    cached = patchedSnapshot;
+    comparable = key;
+    bb.log.debug(`the event path: ${instance}: ${patchSaid(shown, next)}, from its events read in ${took} ms`);
+    // The token is this read's start (or the next free one), not the snapshot's `at`, which stays the status read's.
+    if (!lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: token(startedAt) });
+  }
+  /** The agent of the snapshot whose event file is `file` (`<agent>--<instance>.jsonl`), when exactly one is. */
+  function agentOfFile(file: string): string | null {
+    if (cached === null || !cached.ok) return null;
+    const named = cached.agents.filter((agent) => `${agent.soul}--${agent.instance}.jsonl` === file);
+    return named.length === 1 ? named[0]!.instance : null;
   }
 
   /**
    * The next read that starts from now on: after the one in flight, and never sooner after the
    * last one ended than MIN_INTERVAL_MS or the time that one took to answer, whichever is longer. Callers
-   * asking meanwhile share it.
+   * asking meanwhile share it. The one exception is the read asked for WHILE another is in flight,
+   * which starts at once when that one ends, under `followsAtOnce`: what was asked for mid-read may
+   * be a change that read did not see.
    */
   function reread(): Promise<Snapshot> {
     if (queued) return queued;
+    const inFlight = running;
     const next = (async () => {
-      if (running) await running;
-      await sleep(Math.max(0, lastEnd + Math.max(MIN_INTERVAL_MS, lastTook) - Date.now()), lifetime.signal);
+      let atOnce = false;
+      if (inFlight) {
+        await inFlight;
+        // (No other read can have started meanwhile: this one is the queued one, and the only next.)
+        atOnce = followsAtOnce({ answeredInMs: lastAnsweredInMs, startedAtOnce: lastStartedAtOnce });
+        // Said in the log (debug), so that a slow screen can be told from a slow kernel: which rule the read after a read in flight took.
+        bb.log.debug(
+          atOnce
+            ? `oats status is read again at once: asked for while a read was in flight, which answered in ${lastAnsweredInMs} ms`
+            : `oats status is read again after the pause: asked for while a read was in flight, which ${lastStartedAtOnce ? "was itself read at once" : lastAnsweredInMs === null ? "gave no answer to count (it failed, or the settings changed under it)" : `answered in ${lastAnsweredInMs} ms, over ${FOLLOW_UP_WITHIN_MS} ms`}`,
+        );
+      }
+      if (!atOnce) await sleep(Math.max(0, lastEnd + Math.max(MIN_INTERVAL_MS, lastAnsweredInMs ?? 0) - Date.now()), lifetime.signal);
       queued = null;
+      lastStartedAtOnce = atOnce;
       const mine = read();
       running = mine;
       try {
@@ -463,6 +705,11 @@ export function createCore(bb: BbPluginApi) {
     const offChanged = host.experimental_onSignal("changed", ({ hostId, payload }) => {
       if (target && hostId !== target.hostId) return;
       if (payload.reason !== "changed") watchAsserted = false; // a watcher error or a rescan: assert the watch again
+      // The event path: each instance the watch named is read by itself; the status read follows as before.
+      for (const file of payload.files) {
+        const instance = agentOfFile(file);
+        if (instance !== null) askEvents(instance);
+      }
       rereadSoon();
     });
     const offWorkerExit = host.experimental_onWorkerExit(() => {
@@ -480,6 +727,9 @@ export function createCore(bb: BbPluginApi) {
       // its last one. Until the new one is read there is none: a client and an act wait for it.
       cached = null;
       comparable = "";
+      patches.clear();
+      statusAgents = null;
+      eventsLine.length = 0;
       lastRoster = null;
       rawRows = null;
       target = null;

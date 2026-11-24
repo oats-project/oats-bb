@@ -86,7 +86,7 @@ export default [
       const line = await statusOf(page, "working");
       const facts = await page.evaluate(texts(`${testId("oats-identity-facts")} > *`));
       check(
-        line !== null && /^Working( · started .+)?$/.test(line.line) && line.act === "Stop" && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
+        line !== null && /^Working( · started .+)?$/.test(line.line) && line.act === "Stop…" && line.panel === "Instance panel" && JSON.stringify(facts) === JSON.stringify(["instance of oats-desktop-developer", "Parent Redesign ui lead", "Messaging ID desktop-mockups-developer"]),
         `${at} the row: the state in words, the act that applies (Stop) and the way to the instance panel, then the soul, the parent and the messaging id, each with the Desktop's label`,
         JSON.stringify({ line, facts }),
       );
@@ -106,7 +106,7 @@ export default [
       const lead = threads.get("thr_redesign");
       await page.goto(`/projects/${lead.projectId}/threads/${lead.id}`);
       const leadLine = await statusOf(page, "working");
-      check(leadLine !== null && leadLine.act === "Stop", `${at} a working agent's line offers Stop`, JSON.stringify(leadLine));
+      check(leadLine !== null && leadLine.act === "Stop…", `${at} a working agent's line offers Stop…`, JSON.stringify(leadLine));
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-status-act")}`)}).click()`);
       // The dialog is titled with the agent the kernel's plan names, once the plan is read ("Stop an agent" until then).
       const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return /^Stop .+\\?$/.test(t) ? t : ""; })()`, 20);
@@ -193,6 +193,46 @@ export default [
     },
   },
   {
+    stage: "fixtures",
+    name: "the event path: a claim the kernel records is in the tree while the status read is still held, and the status read then confirms it",
+    run: async ({ page, at, viewport, threads, check, sleep, record, recordFor, statusAnsweredSinceRecord, snapshot }) => {
+      await page.goto("/");
+      check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+      const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_harvest").id}"]`;
+      const drawn = (state) => `document.querySelector(${JSON.stringify(`${row} [data-state="${state}"]`)}) !== null`;
+      check(Boolean(await page.until(drawn("idle"), 30)), `${at} before the change the agent is drawn idle`);
+      const waits = (shot) => shot.ok === true && shot.agents.some((agent) => agent.instance === "harvest-knowledge-helper" && agent.waiting !== null);
+      // The kernel records a claim of that agent: a line in ITS file of the event log, which the watch
+      // names; its events say the claim; and `oats status` is HELD, so no status read can answer yet.
+      const HELD_MS = 6000;
+      const claim = { since: new Date().toISOString(), producer: "agent", reason: "attention", message: "Keep the retry, or fail the job?" };
+      const recorded = recordFor(
+        { agent: "knowledge-harvester", instance: "harvest-knowledge-helper" },
+        { changes: { "harvest-knowledge-helper": { waitingOnYou: claim } }, said: { waitingOnYou: claim, waitingClaims: [{ producer: "agent", waiting: true, since: claim.since, reason: "attention", message: claim.message }] }, statusHeldMs: HELD_MS },
+      );
+      const shown = (await page.until(drawn("needs-you"), 15)) ? Date.now() - recorded : null;
+      // By the server's own order, not by the clock: the snapshot that has the claim is still the
+      // one of a status read that STARTED BEFORE the kernel recorded it. Only the events can have put it there.
+      // And no status read that could carry the claim has answered yet (the fake's own log): the status is still held.
+      const answered = statusAnsweredSinceRecord();
+      const during = snapshot();
+      check(
+        shown !== null && waits(during) && Date.parse(during.at) < recorded && answered === false,
+        `${at} the tree shows the agent waiting ${shown === null ? "never" : `${shown} ms`} after the kernel recorded it, from its events alone: the snapshot is still the status read from before the record (the status is held ${HELD_MS} ms)`,
+        JSON.stringify({ shown, ok: during.ok, at: during.at, recorded: new Date(recorded).toISOString(), waits: waits(during), aStatusReadAnswered: answered }),
+      );
+      await page.shot(`event-path-${viewport.name}-claim-before-status`);
+      // The status read that the same signal asked for answers, with the claim: it confirms, and the row stays.
+      let confirmed = during;
+      for (const deadline = Date.now() + 30_000; Date.now() < deadline && !(confirmed.ok === true && Date.parse(confirmed.at) >= recorded); await sleep(250)) confirmed = snapshot();
+      const still = await page.evaluate(drawn("needs-you"));
+      check(confirmed.ok === true && Date.parse(confirmed.at) >= recorded && waits(confirmed) && still === true, `${at} and the status read that started after the record confirms it: the agent still waits`, JSON.stringify({ ok: confirmed.ok, at: confirmed.at, waits: waits(confirmed), still }));
+      // And back, so the scenes after this one draw the fixtures.
+      record();
+      check(Boolean(await page.until(drawn("idle"), 30)), `${at} and idle again once the kernel's status says so`);
+    },
+  },
+  {
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {
@@ -262,7 +302,7 @@ export default [
       );
       // Holding is SHOWN: the act that applies to this agent (Stop: it works) stays on its line, off, with the reason.
       const heldAct = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-act")}`)}); return b ? JSON.stringify({ text: b.innerText.trim(), off: b.disabled, why: b.title }) : "none"; })()`);
-      check(heldAct === JSON.stringify({ text: "Stop", off: true, why: "Comes back when OATS is read again" }), `${at} the act on the thread's line (Stop) is held: in its place, off, with the reason`, heldAct);
+      check(heldAct === JSON.stringify({ text: "Stop…", off: true, why: "Comes back when OATS is read again" }), `${at} the act on the thread's line (Stop…) is held: in its place, off, with the reason`, heldAct);
       await page.shot(`a14-${viewport.name}-thread`, { targets: true });
 
       // The home keeps what it showed, under the same notice.
@@ -287,14 +327,14 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default: only the home is a page; no link, no mark, no route and no dangling link to another",
+    name: "the release's default, with the setting left as installed (unset): only the home is a page; no link, no mark, no route and no dangling link to another",
     run: async ({ page, at, viewport, threads, check }) => {
       const mockups = threads.get("thr_mockups");
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       // The sidebar: the roster and who waits; no list of pages, no link to one, no mark of one.
       const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(testId("oats-tree"))})) return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: [...s.querySelectorAll('[data-testid^="oats-page-link-"]')].map((e) => e.getAttribute("data-testid")), needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))})?.tagName ?? "" }); })()`, 30);
-      check(side === JSON.stringify({ pages: false, links: [], needs: "BUTTON" }), `${at} the sidebar has the roster and who waits (which opens the home), and no page link`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(side === JSON.stringify({ pages: false, links: [], needs: "BUTTON" }), `${at} with the setting left as installed the sidebar has the roster and who waits (which opens the home), and no page link`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // The thread's own row: the soul by its name alone (its page is not shown: no link leads nowhere).
       // Read AFTER the sidebar: the needs line is a button only once bb has given the settings, and
       // until then no page is known shown under any value, so an earlier read would prove nothing.
@@ -363,7 +403,7 @@ export default [
     // By hand only (LIVE_UI_STATUS_FILE): a real deployment's roster, for a look at it. Nothing of it
     // is printed but counts; its images stay with whoever ran it.
     stage: "local-roster",
-    name: "a real deployment's roster, drawn from its own oats status, with the release's default pages",
+    name: "a real deployment's roster, drawn from its own oats status, with the release's default pages (the setting left as installed)",
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);

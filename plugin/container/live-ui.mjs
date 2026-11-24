@@ -77,6 +77,12 @@ const fake = (verbs = {}) =>
 /** Every page's id, as live.sh sets them for the checks; and how a stage or a scene sets the plugin's `pages`. */
 const ALL_PAGES = "home, automations, souls, capabilities, teams, machines";
 const pages = (value) => void bb("plugin", "config", "oats", "set", "pages", value);
+/**
+ * The setting `pages` as a fresh install has it: UNSET (bb's own `plugin config <id> unset <key>`),
+ * not set to its default's value. A stage that shows the release's default leaves it so, and so
+ * proves that an unset setting hides the five other pages, not only that "home" does.
+ */
+const pagesAsInstalled = () => void bb("plugin", "config", "oats", "unset", "pages");
 
 const fixtureStatus = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/roster/status.json"), "utf8"));
 /**
@@ -395,8 +401,9 @@ const BUILT_IN = {
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.threadId === "thr_digest"));
     },
   },
-  // The release's default: only the home is a page that is shown. Every other stage runs with all
-  // pages shown (live.sh); the scenes of this one assert what is absent. `pages(value)` is for a
+  // The release's default: only the home is a page that is shown, with the setting left as
+  // installed (unset: `pagesAsInstalled`). Every other stage runs with all pages shown (live.sh,
+  // which sets all six; this stage sets them again when it leaves); the scenes of this one assert what is absent. `pages(value)` is for a
   // scene that needs another set: it changes the setting; the scene then opens its page and waits on what it reads.
   // A deployment that is mostly tmux agents (tmuxRoster, above): what a person who ran OATS on tmux sees first.
   "tmux-roster": {
@@ -426,7 +433,7 @@ const BUILT_IN = {
         archivedForLocal.push(thread.id);
       }
       fake({ status: { stdout: status } });
-      pages("home");
+      pagesAsInstalled();
       const deadline = Date.now() + 60_000;
       let seen = "no answer";
       for (;;) {
@@ -452,7 +459,7 @@ const BUILT_IN = {
     label: "PG",
     enter: async ({ threads }) => {
       fake({ status: { stdout: statusWithRealIds(threads) } });
-      pages("home");
+      pagesAsInstalled(); // the setting left as installed: unset
       // The fixtures' roster is WAITED for: the stage before this one drew another (found by a run whose
       // image of this stage was the tmux roster's).
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper") && snapshot.agents.length === 8);
@@ -484,6 +491,50 @@ function record(threads, changes = {}) {
   const at = Date.now();
   appendFileSync(EVENTS, `${JSON.stringify({ kind: "live-ui", at: new Date(at).toISOString() })}\n`);
   return at;
+}
+
+/**
+ * A change of ONE instance, as the kernel records it, for the event path (server/core.ts): the
+ * line is appended to THAT instance's own file of the event log (`<agent>--<instance>.jsonl`),
+ * which the watch names; the fake answers `oats instance events … --since` for it with `said`
+ * (the fields of the kernel's answer the plugin reads: shaped here in step with `changes`, not
+ * recorded), and its status answers the fixtures with `changes`, HELD `statusHeldMs` first: so a
+ * scene can see what the events alone put on the screen before any status read can have answered.
+ * → the instant the change was recorded.
+ */
+let heldSince = 0;
+function recordFor(threads, { agent, instance }, { changes = {}, said = {}, statusHeldMs = 0 } = {}) {
+  heldSince = Date.now(); // before the fake is rewritten: a status call that started at or after this may have read the new answer
+  const answer = { schemaVersion: 1, ok: true, result: { eventsApi: 2, instance, incarnation: "2026-11-23T09:00:00.000Z", count: 0, returned: 0, truncated: false, events: [], lastEvent: null, waitingOnYou: null, waitingClaims: [], ...said } };
+  fake({ status: { stdout: statusWithRealIds(threads, changes), ...(statusHeldMs > 0 ? { sleepMs: statusHeldMs } : {}) }, "instance events --since": { stdout: JSON.stringify(answer) } });
+  const at = Date.now();
+  appendFileSync(join(homedir(), "deployment", ".agents", "events", `${agent}--${instance}.jsonl`), `${JSON.stringify({ kind: "live-ui", at: new Date(at).toISOString() })}\n`);
+  return at;
+}
+
+/**
+ * Whether a status read that could carry the last `recordFor`'s change HAS ANSWERED: an `oats status`
+ * the fake logged at or after the fake was rewritten, and that is no longer running. While none has,
+ * nothing but the events can have put that change on the screen (a status read stamped before the
+ * record whose process started after the fake was rewritten would answer the change under an older
+ * stamp: this tells it).
+ */
+function statusAnsweredSinceRecord() {
+  let calls = [];
+  try {
+    calls = readFileSync(FAKE_LOG, "utf8").split("\n").filter((line) => line !== "").map((line) => JSON.parse(line));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const running = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  return calls.some((call) => call.verb === "status" && Date.parse(call.at) >= heldSince && !running(call.pid));
 }
 
 // ---- the run
@@ -557,7 +608,7 @@ try {
           const at = `${stage.label} ${theme} ${viewport.name}`;
           const page = await themedPage(browser, viewport, theme, at);
           try {
-            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, record: (changes) => record(threads, changes) });
+            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, record: (changes) => record(threads, changes), recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, snapshot: () => rpc("snapshot") });
           } finally {
             await page.close();
           }

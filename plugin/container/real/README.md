@@ -27,12 +27,12 @@ which is also the plugin's own floor (`kernel/compat.ts`, `OATS_FLOOR`). It was 
 without recording the fixtures again: every check of the run passed on 0.70.5 against the answers
 recorded at 0.70.0, and no answer it records gained or lost a field. One fixture is of the 0.70.5
 run, because it is the kernel's version itself: `roster/version.json` (`test/fixtures/README.md`).
-One recorded answer does differ in what it says, and its fixtures were left as recorded, since no
-check of the run reads the difference: in `oats readiness --home` for a bb home
-(`panel/readiness-home.json`, `panel/readiness-home-not-ready.json`), the item "harness folder
-trust" is `status: "unknown"` with `file: "…/.claude.json"` at 0.70.0, and from OATS 0.70.4
-`status: "not-applicable"` with `file: null` ("a session provider runs this launch … claude folder
-trust is not read for it"). The panel's tests on those two fixtures hold the 0.70.0 answer.
+One recorded answer did differ in what it says: in `oats readiness --home` for a bb home, the item
+"harness folder trust" is `status: "unknown"` with `file: "…/.claude.json"` at 0.70.0, and from
+OATS 0.70.4 `status: "not-applicable"` with `file: null` ("a session provider runs this launch …
+claude folder trust is not read for it"). The instance panel's eight fixtures (`panel/*.json`) were
+therefore recorded again, all from one run on 0.70.5 (`test/fixtures/panel/README.md`), and the
+panel's tests hold the 0.70.5 answer.
 The floor is the provider's own (`compatibility.oats`: `>=0.70.0` when the run was moved, `>=0.70.5`
 from oats-bb#40): it admits the kernel, so **no trial commit is made**, and the run's log says so
 (`workspace: … (no trial commit: its own floor (>=…) admits the kernel)`).
@@ -97,11 +97,45 @@ together.
 | `pi/` | with `REAL_PI=1` only | the pi run: its part of the setup, its mock model, its scenario (`pi/README.md`) |
 
 Every image of the real run is taken in bb's light theme and again in its dark one (`…-dark.png`).
+The run also says, for each change, WHICH ROAD showed it, by order and not by the clock, from the
+wrapper's records of the plugin's own calls: "by its events" only where the snapshot that has the
+change is of a status read that had ENDED before the command that made the change began (no
+state of the kernel's has changed before that, so that answer cannot hold it) and the plugin
+read that instance's events since (`server/core.ts`, the event path); "by a status read" where
+the snapshot is of a status read that started after the kernel's record; and "not told", with
+why, in every other case: a status read that ended or was in flight after the command began may
+hold the change by itself (for a stop the kernel's row says stopped from the moment it records
+the stop's start, seconds before it writes the "stopped" event: so a stop can be "not told"). Then it waits
+for the status read that started after the record, which must confirm what was shown, and prints
+that delay beside the first. The run's freshness line says it ("the claim N ms by its events (the
+status read confirmed it at M ms)"), and one check holds the event path against the real kernel:
+at least one of the changes measured was shown by its events. A change that a status read shows
+first, or whose road is not told, is no failure by itself.
+
 The run also measures freshness (the UX standard, section 6): how long after the kernel recorded a
-claim set, a claim cleared and a stop the plugin's own snapshot has it (3 s at most, counted from
-the kernel's own record: the time of the event the change wrote, read from `oats instance events
---json`, so the `oats` command's own start-up is not in it; the kernel's own `oats status` time is
-said beside it, with the delay from before the command; a NOTE reports either delay over 3 s), and
+claim set, a claim cleared and a stop the plugin's own snapshot has it, counted from the kernel's
+own record (the time of the event the change wrote, read from `oats instance events --json`, so the
+`oats` command's own start-up is not in it); the kernel's own `oats status` time is said beside it,
+with the delay from before the command, and a NOTE reports either delay over 3 s. The run's last
+lines hold them in ONE line, in every run that reaches its end, green or red ("== freshness, measured …: the claim N ms, the claim
+cleared N ms, the agent stopped … N ms"), and `out/freshness.json` keeps them: a drift is to be
+seen there, since the delays are printed and fail nothing (the 3 s bar is asserted on a real host
+by the release's QA): what the check ASSERTS is the order of reads (a bound on elapsed time
+failed pull requests at random on a slow runner): the change comes, and no snapshot it polled on
+the way was the answer of a read that started after the kernel's record and yet without the change
+(a snapshot's `at` is its read's start). It
+shows the server's one read at once (step A5b2; `FOLLOW_UP_WITHIN_MS`, `server/core.ts`) with the
+plugin's own `oats status` calls as the wrapper recorded them: the agent sets a claim and clears it
+while the read the claim started is in flight (each status is held 600 ms for that, and the clear is
+made the moment the plugin's `oats status` is seen running in the process list), and the next
+read must start under 1 s after the first ended, which no other read does (and never before it
+ended: two calls alive at once fail the step); then it sets a claim
+again, in that second read, and the read after it must have waited the pause (1 s or more): never
+two reads at once in a row. It tries the three up to four times (whether each change lands in the
+read it is meant for is timing) and prints every try's reads and their times. It depends on the
+kernel's speed in one way, and says so: where the first read of every try took about the server's
+2 s limit or more, the server rightly waits the pause, and the run prints a NOTE that the read at
+once is NOT SHOWN, in place of a pass or a failure; and a NOTE where no read followed a pair. And
 at its end it compares its images: two scenes of different states must not be the same image (the
 thread's own row says its agent's state at every width).
 

@@ -23,6 +23,15 @@ function within<Answer>(ms: number, asked: Promise<Answer>): Promise<Answer | nu
   return Promise.race([asked, late]).finally(() => clearTimeout(timer));
 }
 
+/**
+ * When an act ended: this server's clock at the instant its `oats` command returned. The roster's
+ * `at` is the same clock at the start of a status read (core.ts), and every act asks for a read
+ * when it ends (`rereadAfterAct`, which queues a new read behind one in flight and has its roster
+ * published also when it says nothing new): so a roster whose `at` is later than this was read
+ * after the act, it reaches the window, and the window compares the two (contract/lifecycle.ts `endedAt`).
+ */
+const ended = (): string => new Date().toISOString();
+
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => {
   /**
    * The retires this server sent, by their key: the instance and the plan's revision each was for.
@@ -50,13 +59,16 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     if (agent.backend !== "bb" && (harness !== undefined || model !== undefined)) throw invalid(`a harness or a model is chosen for a home on bb alone ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`);
     const choice = given({ harness: await chosen(harness), model, resume });
     let started: Value<"start">;
+    let endedAt: string;
     try {
       started = verb === "start" ? await core.call("start", { home: agent.home, ...choice }, HOST_TIMEOUT.act, core.signal) : await core.call("restart", { home: agent.home, ...given({ harness: choice.harness, model: choice.model }) }, HOST_TIMEOUT.act, core.signal);
+      // The act ended when its command returned (not after the wait for the new thread, below).
+      endedAt = ended();
     } finally {
-      core.rereadSoon();
+      core.rereadAfterAct();
     }
     // A home on bb is in a new thread after the act; any other has no bb thread, and none is waited for.
-    return { ...started, threadId: agent.backend === "bb" ? await core.threadOf(instance, started.threadId, verb === "start" ? "Started" : "Restarted") : null };
+    return { ...started, endedAt, threadId: agent.backend === "bb" ? await core.threadOf(instance, started.threadId, verb === "start" ? "Started" : "Restarted") : null };
   }
   return {
     async stopPlan({ instance, recursive }, context) {
@@ -73,9 +85,10 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     async stopApply({ instance, revision, key, recursive }) {
       await core.agentForAct(instance);
       try {
-        return await core.call("stopApply", { instance, revision, key, ...given({ recursive }) }, HOST_TIMEOUT.act, core.signal);
+        const receipt = await core.call("stopApply", { instance, revision, key, ...given({ recursive }) }, HOST_TIMEOUT.act, core.signal);
+        return { ...receipt, endedAt: ended() };
       } finally {
-        core.rereadSoon();
+        core.rereadAfterAct();
       }
     },
     /**
@@ -121,9 +134,10 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         retires.set(key, { instance, revision });
       }
       try {
-        return await core.call("retireApply", { instance, revision, key, ...given({ discardWorktree }) }, HOST_TIMEOUT.long, core.signal);
+        const receipt = await core.call("retireApply", { instance, revision, key, ...given({ discardWorktree }) }, HOST_TIMEOUT.long, core.signal);
+        return { ...receipt, endedAt: ended() };
       } finally {
-        core.rereadSoon();
+        core.rereadAfterAct();
       }
     },
   };

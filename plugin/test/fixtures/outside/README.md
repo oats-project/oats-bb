@@ -54,3 +54,22 @@ kept are unchanged; the events of every other type are left out, as the typed re
 Limits of the probe: bb 0.50.1, the pi provider only, the pi run's mock. Whether another failed
 command of bb's also arrives as a `system/error` with the code "thread_command_failed" was not seen
 (the rule does not read the code or the message: an error and never a turn).
+
+**Recorded: the kernel's row of a home whose bb thread failed at its start**
+(`status-failed-at-start.json`), read by `test/model/cases.test.ts` (the case table's row) and
+`test/outside/start.test.tsx`. It is `oats status --json` as the kernel printed it, WHOLE, in the
+pi run's step P6 (`../../../container/real/pi/README.md`): OATS 0.70.5 from npm, bb-app 0.50.1, pi
+1.5.2, the bb session provider of the checkout that recorded it (main eb1b9f8b; the provider at
+372b0a87, oats-bb #65, with its check of pi model ids), on 2026-11-24. The agent (`pi-unstarted-developer`, the only one of the deployment at that moment) was
+spawned through the New agent form with the harness pi and the model `mock/echo-20261122`, an id
+that ends in a date: the provider cannot check it against bb's list and lets it go, the kernel says
+"launched", and bb's pi cannot resolve it when the thread starts. The row is a LOST SESSION's:
+`launched: true`, `running: false`, `runtimeState: "stopped"`, `sessionEnd: "lost"`, no claim, no
+`outsideOats`: nothing in it says that the agent never ran (bb's events of the thread do: one
+`system/error`, no `turn/started`).
+The pi run writes no fixture: it keeps the answer as evidence (`answers/status-failed-at-start.json`
+of its artefacts), and this file is copied from that one BY HAND, with the main run's own
+substitutions (`container/real/scenario.mjs`, its `fixtures`) and no other change, in this order:
+`/home/node/real/deploy` → `/abs/deployment` (33 places), `/home/node/real` → `/abs/real` (8),
+`/home/node` → `/abs/home` (8), and the container's host name → `machine` (none in this answer).
+The JSON is written as the run's evidence writes it (one space of indent).

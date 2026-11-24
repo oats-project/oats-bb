@@ -97,8 +97,20 @@ const startCheck = z.object({
   /** The harnesses a start may name (the provider's declared list: contract/spawn.ts `spawnHarnesses`); with one or none, no choice is offered. */
   harnesses: z.array(z.string()),
 });
+/**
+ * WHEN AN ACT ENDED, on the plugin server's own clock: the instant its `oats` command returned. The
+ * roster's `at` is the same clock at the START of the status read that made it (server/core.ts),
+ * so the two can be compared: a roster whose read started before the act ended cannot be trusted
+ * to hold what the act did (app/roster/reading.tsx: the lead's L13). An ISO time. On every answer
+ * of an act that was applied (a stop's and a retire's receipt, a start's and a restart's answer).
+ */
+const ended = { endedAt: z.string() };
+
 /** The thread the agent is in after the act (null for a home that is not on bb: it has none), and what the kernel said of the start. */
-const startedIn = started.extend({ threadId: z.string().nullable() });
+const startedIn = started.extend({ threadId: z.string().nullable(), ...ended });
+/** The receipts as the dialog reads them: the kernel's, with when the act ended. */
+export const stopReceiptRead = stopReceipt.extend(ended);
+export const retireReceiptRead = retireReceipt.extend(ended);
 
 /**
  * The retire plan as the dialog reads it: the kernel's plan, and the harness the kernel's own
@@ -117,12 +129,12 @@ export const stopPlanRead = stopPlan.extend({ providerVersion: z.string().nullab
 
 export const rpc = defineRpcContract({
   stopPlan: { input: z.object({ instance: instanceName, recursive: z.boolean().optional() }).strict(), output: stopPlanRead },
-  stopApply: { input: z.object({ ...apply, recursive: z.boolean().optional() }).strict(), output: stopReceipt },
+  stopApply: { input: z.object({ ...apply, recursive: z.boolean().optional() }).strict(), output: stopReceiptRead },
   startCheck: { input: instance, output: startCheck },
   start: { input: z.object({ instance: instanceName, ...choices, ...resume }).strict(), output: startedIn },
   restart: { input: z.object({ instance: instanceName, ...choices }).strict(), output: startedIn },
   retirePlan: { input: instance, output: retirePlanRead },
-  retireApply: { input: z.object({ ...apply, discardWorktree: z.boolean().optional() }).strict(), output: retireReceipt },
+  retireApply: { input: z.object({ ...apply, discardWorktree: z.boolean().optional() }).strict(), output: retireReceiptRead },
 });
 
 const hostStart = z.object({ ...hostHome.shape, ...choices }).strict();

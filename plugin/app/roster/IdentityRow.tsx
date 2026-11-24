@@ -105,9 +105,11 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       // The agent asked through OATS: what it asks is on the line; "Answer" is the way to reply. It
       // opens the instance panel at "Needs input", and with the panel already open it moves the focus
       // there (never a dead press). A question bb itself shows is answered in the thread: no act.
+      // (Behind a result that says the agent changed, the claim is from before the act: off with every act of it, until the roster is read again.)
       <Button
         data-testid="oats-status-act"
         title="Answer in the instance panel"
+        disabled={reading}
         onClick={() => {
           // "Needs input" is on the panel's Instance tab, and the panel keeps the tab a person left it
           // on: turn it there first, whether the panel is open or opens now.

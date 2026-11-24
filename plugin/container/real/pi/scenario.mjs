@@ -659,7 +659,8 @@ try {
     const head = JSON.parse((await page.until(`(() => { const now = ${HEAD}; return /"state":"Failed"/.test(now) ? now : ""; })()`, 40)) || (await page.evaluate(HEAD)) || "null");
     check(head !== null && head.state === "Failed" && head.details === true && JSON.stringify(head.acts) === JSON.stringify(["Start…", "Retire…"]) && head.block === false, `${at}: its own page says "Failed", with Details, Start… and Retire… (no Restart), and no sentence of a lost session`, JSON.stringify(head));
     await shot("page");
-    await page.goto("/plugins/oats/home");
+    // (The count line stands on Home › Agents alone, at its address: the home itself has no summary line since the text cut.)
+    await page.goto("/plugins/oats/home/agents");
     const summary = await page.until(`(() => { const now = ${textOf(testId("oats-home-summary"))}; return /failed/i.test(now) ? now : ""; })()`, 40);
     check(/\b1 failed\b/i.test(summary ?? "") && !/stopped/i.test(summary ?? ""), `${at}: the home counts it failed, not stopped`, summary ?? (await page.evaluate(textOf(testId("oats-home-summary")))));
   });

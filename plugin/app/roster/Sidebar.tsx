@@ -22,7 +22,7 @@ import { flatten, isListed, treeRows } from "../../model/view";
 import type { TreeRow } from "../../model/view";
 import { count } from "../format";
 import { useOats } from "../oats";
-import { outsideOf, rowParts } from "../outside";
+import { outsideOf, rowParts, rowWarns } from "../outside";
 import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET, TMUX, TmuxMark } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
@@ -143,7 +143,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    *   never cut and never pushed out. Nothing is drawn past the row (the block clips), and the
    *   whole line is its title. (The machine is not on a row: the instance panel says it.)
    */
-  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** a closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word */ inside?: AgentState | null }, full: string) => {
+  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** a closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word */ inside?: AgentState | null; /** "warning": the hidden row's own mark is drawn in the warning tone */ insideTone?: "warning" | null }, full: string) => {
     // In this order, "·" between: the state, the reason if any, the soul, where it is. When the line does not fit the
     // SOUL gives way, down to room for its "…": it is the ONE part that shrinks; the state, the reason and the glyph never do.
     const all: { kind: "state" | "reason" | "soul" | "where"; text: string; className: string }[] = [
@@ -172,7 +172,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
                   after the parent's own word, which stays what the parent itself is doing. */}
               {part.kind === "state" && phrases.inside != null ? (
                 <span data-testid="oats-row-inside" className="ml-1.5 inline-flex shrink-0 items-center">
-                  <StateMark state={phrases.inside} />
+                  <StateMark state={phrases.inside} tone={phrases.insideTone ?? undefined} />
                 </span>
               ) : null}
             </Fragment>
@@ -193,11 +193,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * page at all: nothing of them takes the focus.
    */
   const agentRows = (rows: readonly TreeRow<Row>[], guttered: boolean): ReactNode[] =>
-    rows.flatMap(({ node, parent, open, inside }) => {
+    rows.flatMap(({ node, parent, open, inside, insideTone }) => {
       const called = agentName(node.agent.instance);
       const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} depth={node.depth} /> : null;
       const keys = parent ? foldKeys(node.agent.instance, open) : undefined;
-      if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), guttered, node.depth, toggle, keys, inside)];
+      if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), guttered, node.depth, toggle, keys, inside, insideTone)];
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
@@ -215,7 +215,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden tone={reason.tone} />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, soul: shown(oats.soulOf(node.agent)), reason: reason.note, inside }, shown(node.agent.instance))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, soul: shown(oats.soulOf(node.agent)), reason: reason.note, inside, insideTone }, shown(node.agent.instance))}
           </>,
           toggle,
           keys,
@@ -241,6 +241,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     before: ReactNode = null,
     onKeyDown?: (event: KeyboardEvent) => void,
     inside?: AgentState | null,
+    insideTone?: "warning" | null,
   ) => {
     const status = agentStatus(agent, null, now);
     const drawn = rowState(status, gone.has(agent.instance));
@@ -267,7 +268,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           }}
         >
           <StateMark state={drawn.state} hidden tone={gone.has(agent.instance) ? undefined : reason.tone} />
-          {lines(name, status.state === "needs-you", { state: drawn.word, soul: shown(oats.soulOf(agent)), reason: reason.note, where, inside }, shown(agent.instance))}
+          {lines(name, status.state === "needs-you", { state: drawn.word, soul: shown(oats.soulOf(agent)), reason: reason.note, where, inside, insideTone }, shown(agent.instance))}
         </button>
       </li>
     );
@@ -322,6 +323,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // The row that is open on screen, by its agent: its parents are open whatever the person left.
   const selected = activeThreadId === null ? null : (flatten(view.rows).find((row) => row.thread?.id === activeThreadId)?.agent.instance ?? null);
   const guttered = view.rows.some((row) => row.children.length > 0);
+  // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a
+  // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the state the row itself draws.
+  const warns = (row: Row): boolean => !gone.has(row.agent.instance) && rowWarns(outside.of(row.agent), agentStatus(row.agent, row.thread, now).state);
   return (
     // `data-pages`: whether bb has given the settings that say which pages are shown. With nobody
     // waiting the foot has no line, so nothing drawn says it: a live check that asserts an absence
@@ -346,7 +350,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
               an agent with no bb thread is under its parent like any other, and a root where it has none that is drawn.
               - no thread bb lists: where its thread is, by bb's own answer, after the state's word; nothing until bb has answered;
               - on tmux: where it is; one whose session was lost says so first ("Stopped · session lost"): nobody stopped it. */}
-          {agentRows(treeRows(view.rows, opened, selected), guttered)}
+          {agentRows(treeRows(view.rows, opened, selected, warns), guttered)}
         </ul>
       )}
       {/* No line counts who waits on a person: the rows that wait are marked, and bb's badge on the

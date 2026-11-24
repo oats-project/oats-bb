@@ -182,9 +182,10 @@ export type Foldable<T> = { agent: Pick<Agent, "instance">; state: AgentState; c
 /**
  * One row the roster's tree draws: the row, whether it is a parent (it has children, so it
  * carries the chevron), whether it is open, and for a CLOSED parent the mark it carries after its
- * own state: the state of the most urgent row its subtree hides, or null.
+ * own state: the state of the most urgent row its subtree hides, or null; and that mark's tone,
+ * "warning" where the hidden row is one the caller says warns (`insideOf`).
  */
-export type TreeRow<T> = { node: T; parent: boolean; open: boolean; inside: AgentState | null };
+export type TreeRow<T> = { node: T; parent: boolean; open: boolean; inside: AgentState | null; insideTone: "warning" | null };
 
 /** The instances above one in the tree (its parent, its parent's parent, …), or none where it is a root or not in the tree. */
 export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance: string): Set<string> {
@@ -204,21 +205,29 @@ export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance
 }
 
 /**
- * What a closed parent says of the rows it hides: the state of the most urgent one, where one
- * needs a person (rank 0) or must be looked at (rank 1); the first of them in the tree's order
- * among equals. Null where every hidden row is quiet (rank 2). The parent's own state is never
- * part of it: its own word and mark stay its own.
+ * What a closed parent says of the rows it hides. ONE principle: it carries a mark for any row
+ * inside it that itself carries a mark: one that needs a person (rank 0), one a person must look
+ * at (rank 1: it runs outside OATS, or failed), and one that WARNS (`warns`: the caller's word for
+ * a row whose own mark is drawn in the warning tone, which the model cannot tell: a thread
+ * archived in bb while it ran; that is of rank 1 too). Several inside: the most urgent by rank,
+ * and among equals the first in the tree's order. → that row's own state, and "warning" as the
+ * tone where it is a row that warns; `{ state: null }` where every hidden row is quiet and none
+ * warns. The parent's own state is never part of it: its own word and mark stay its own.
  */
-export function insideOf<T extends Foldable<T>>(node: T): AgentState | null {
-  let found: AgentState | null = null;
+export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null } {
+  // The best so far, in a list of at most one (a local a closure assigns is not narrowed after it).
+  const best: { state: AgentState; tone: "warning" | null; rank: number }[] = [];
   const walk = (nodes: readonly T[]) => {
     for (const each of nodes) {
-      if (RANK[each.state] < 2 && (found === null || RANK[each.state] < RANK[found])) found = each.state;
+      const warned = warns(each);
+      const rank = Math.min(RANK[each.state], warned ? 1 : 2);
+      if (rank < 2 && (best[0] === undefined || rank < best[0].rank)) best[0] = { state: each.state, tone: warned ? "warning" : null, rank };
       walk(each.children);
     }
   };
   walk(node.children);
-  return found;
+  const found = best[0];
+  return found === undefined ? { state: null, tone: null } : { state: found.state, tone: found.tone };
 }
 
 /**
@@ -227,17 +236,19 @@ export function insideOf<T extends Foldable<T>>(node: T): AgentState | null {
  * - the person opened it (`opened`, by instance: the window's memory, empty when the page loads); or
  * - it is above the row that is open on screen (`selected`, an instance): a parent is never
  *   closed over the row a person is on.
- * Every other parent is closed: its children are not drawn, and it carries `inside` (`insideOf`).
+ * Every other parent is closed: its children are not drawn, and it carries `inside` (`insideOf`;
+ * `warns`: which rows carry their mark in the warning tone, the caller's to say).
  * The order is the tree's own (`view().roots`, already in the roster's one order). Pure.
  */
-export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: ReadonlySet<string>, selected: string | null = null): TreeRow<T>[] {
+export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: ReadonlySet<string>, selected: string | null = null, warns?: (node: T) => boolean): TreeRow<T>[] {
   const above = selected === null ? new Set<string>() : ancestorsOf(roots, selected);
   const out: TreeRow<T>[] = [];
   const walk = (nodes: readonly T[]) => {
     for (const node of nodes) {
       const parent = node.children.length > 0;
       const open = parent && (opened.has(node.agent.instance) || above.has(node.agent.instance));
-      out.push({ node, parent, open, inside: parent && !open ? insideOf(node) : null });
+      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null };
+      out.push({ node, parent, open, inside: inside.state, insideTone: inside.tone });
       if (open) walk(node.children);
     }
   };

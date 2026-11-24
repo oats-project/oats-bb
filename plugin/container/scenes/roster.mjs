@@ -437,6 +437,35 @@ export default [
     },
   },
   {
+    // WHOSE line it is (the lead's ruling S1). A thread's title is the agent's name as the provider gives it at every
+    // start, so the thread's line carries no name (every other scene of a thread's line holds that). A person can
+    // rename the thread in bb: the line then starts with the agent's NAME, so that its acts never sit under a name
+    // that is not the agent's; and it goes again when the title is the name once more.
+    stage: "fixtures",
+    name: "a thread a person renamed in bb: its line starts with the agent's name, and loses it when the title is the name again",
+    run: async ({ page, at, viewport, threads, check, retitle }) => {
+      const mockups = threads.get("thr_mockups");
+      const NAME = "Desktop mockups developer";
+      const named = `(() => { const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); if (!row) return ""; const name = row.querySelector(${JSON.stringify(testId("oats-thread-agent"))}); return JSON.stringify({ name: name ? name.innerText.trim() : null, first: name !== null && row.firstElementChild === name, line: (row.querySelector(${JSON.stringify(testId("oats-status-line"))})?.innerText ?? "").replace(/\\s+/g, " ").trim() }); })()`;
+      await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
+      const asTitled = (await page.until(named, 30)) ?? null;
+      check(asTitled !== null && JSON.parse(asTitled).name === null, `${at} titled as the provider titles it, the thread's line carries no name: bb's title over it is the agent's`, asTitled ?? "no identity row");
+      try {
+        // bb's own rename of the thread (its CLI: what its Rename writes).
+        retitle("thr_mockups", "Try the new sidebar");
+        const renamed = (await page.until(`(() => { const now = ${named}; return now !== "" && JSON.parse(now).name !== null ? now : ""; })()`, 30)) ?? null;
+        check(renamed !== null && JSON.parse(renamed).name === NAME && JSON.parse(renamed).first === true, `${at} renamed in bb, the thread's line starts with the agent's name ("${NAME}"), before its state and its acts`, renamed ?? (await page.evaluate(named)));
+        check(renamed !== null && JSON.parse(renamed).line === JSON.parse(asTitled ?? "{}").line, `${at} and the line under the name is what it was: the state and the acts do not change with the title`, JSON.stringify({ before: asTitled, after: renamed }));
+        await page.shot(`a13-${viewport.name}-thread-renamed`);
+      } finally {
+        // The title the provider gives, for the scenes after this one (they find and read the thread by it).
+        retitle("thr_mockups", NAME);
+      }
+      const back = (await page.until(`(() => { const now = ${named}; return now !== "" && JSON.parse(now).name === null ? now : ""; })()`, 30)) ?? null;
+      check(back !== null, `${at} titled as the agent's name again, the line carries no name: never the name twice`, back ?? (await page.evaluate(named)));
+    },
+  },
+  {
     stage: "detached",
     name: "the states no fixture row is in",
     run: async ({ page, at, viewport, threads, check }) => {

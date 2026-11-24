@@ -105,8 +105,7 @@ read that instance's events since (`server/core.ts`, the event path); "by a stat
 the snapshot is of a status read that started after the kernel's record; and "not told", with
 why, in every other case: a status read that ended or was in flight after the command began may
 hold the change by itself (for a stop the kernel's row says stopped from the moment it records
-the stop's start, seconds before it writes the "stopped" event: so a stop is almost always "not
-told"). Then it waits
+the stop's start, seconds before it writes the "stopped" event: so a stop can be "not told"). Then it waits
 for the status read that started after the record, which must confirm what was shown, and prints
 that delay beside the first. The run's freshness line says it ("the claim N ms by its events (the
 status read confirmed it at M ms)"), and one check holds the event path against the real kernel:

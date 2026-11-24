@@ -928,10 +928,10 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   server says each patch and each drop in its log at debug level (the agent, what changed, the
   read's time). In the real run a claim set and a claim cleared were on the screen 344 and 277 ms
   after the kernel recorded them (OATS 0.70.5, in the run's container); by the status read alone
-  they took 0.9 to 2.0 s there (seven runs). (A stop's number says nothing of the road: the
+  they took 0.9 to 2.0 s there (seven runs). (A stop's number does not say the road by itself: the
   kernel's row says stopped from the start of the stop, seconds before it writes the "stopped"
-  event the delay is counted from, so a status read holds it by itself: 0.3 to 1.4 s by the
-  status read alone. The real run says of each change which road
+  event the delay is counted from, so a status read under way can hold it by itself: 0.3 to
+  1.4 s by the status read alone. The real run says of each change which road
   showed it, or that it cannot tell: `container/real/README.md`.)
   **The status read's road.** The server keeps one snapshot (`oats status --json`). It rereads on the host
   entry's `changed` signal (a watch on `<deployment>/.agents/events`, where the kernel appends one

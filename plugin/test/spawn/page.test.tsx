@@ -825,6 +825,13 @@ test("while OATS cannot be read the form draws ONE button named Retry, the notic
   expect(named()).toHaveLength(1);
   expect(named()[0]!.closest('[data-testid="oats-unreadable"]')).not.toBeNull();
   expect(slot.getByTestId("oats-spawn-form").textContent).toContain("Harnesses could not be read"); // the sentence stays
+  // The roster is read again while the list is still failed: its own Retry is back, and reads it (the way to read the list again is not lost).
+  stale = false;
+  await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:26.000Z" });
+  await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).toBeNull());
+  const asked = calls(slot, "spawnHarnesses").length;
+  fireEvent.click(await slot.findByTestId("oats-spawn-harness-retry"));
+  await waitFor(() => expect(calls(slot, "spawnHarnesses").length).toBeGreaterThan(asked));
 });
 
 test("held as it is, the form keeps saying why: the word of an unknown outcome stays when the roster is read again, and Check result is held like the acts while OATS cannot be read", async () => {

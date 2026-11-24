@@ -190,6 +190,7 @@ in the soul's place. "Archived in bb" and "deleted in bb" are reasons, never sta
 |---|---|---|---|---|
 | stopped by an operator, or stopped with no word how its session ended (`sessionEnd` "stopped" or none) | open: bb's composer is live under it | "Stopped · since 14:03 · A message sent here in bb starts it again without OATS. Use Start.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped · <soul>" | Start |
 | its session lost (`sessionEnd: "lost"`: it ended without OATS stopping it) | open | "Stopped · Its session ended without OATS stopping it. Nobody stopped it. To carry on, send it a message here. Start begins a new conversation." No warning, no time (the kernel records none of the loss), no cause guessed, nothing promised. | "Stopped · session lost" | Start (its dialog says first to send a message instead: the lifecycle's) |
+| any row that does not run, where bb says the thread FAILED AT ITS START (below) | open, in "error" | "Failed", and nothing after it; bb's own reason under Details ("bb says: …") | "Failed · <soul>" | Start on the line; Start… and Retire… on its page and in the thread's menu. No Restart, and the Start dialog has no carry-on line |
 | its session lost, on TMUX (no thread in bb) | none | on its page: "Its session ended without OATS stopping it. Nobody stopped it." and "Last started <time>" where the row has it; "Start tries to continue its last conversation." after the first only where the lifecycle offers Start for that agent | "Stopped · session lost · tmux" | the header's (the lifecycle's) |
 | idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread. | "Idle · not loaded" | Start (its dialog says first to send a message instead: the lifecycle's) |
 | stopped, its session not lost | archived | "Stopped · since when · Its conversation is archived in bb. Start begins a new one." (so that nobody expects the archived one to continue). The row opens the archived thread, which bb shows to read (no composer). | "Stopped · <soul>", in the plain tone (once the provider archives at stop, this is every stopped agent) | Start…, Retire… |
@@ -279,7 +280,8 @@ report has its Stop and Start in its notice, each with what it does there. On th
 no act is drawn twice, act by act: one the header has is the header's, and the notice there says
 what it does; one the header lacks keeps its own button in the notice (while no roster is read
 the header has none, and the notice has both: "Stop" and "Start" are never named with nothing to
-press). For an agent whose session provider is not bb the lifecycle has no Start, and the notice
+press). For an agent whose session provider is neither bb nor tmux the lifecycle has no Start (and the
+report is never a tmux agent's), and the notice
 names none: Stop alone, and its sentence does not say to start it. And this feature adds one act the header never offers: Stop for a session OATS lost,
 which reads stopped.
 
@@ -333,14 +335,42 @@ provider's own tests hold its side). A dash is a field the row does not carry, o
 | stopped with OATS, then started again by a message in bb | false | stopped | stopped | running-outside-oats | in a turn | Running outside OATS | `outside/status-outside.json` |
 | its thread archived in bb while it ran | false | stopped | lost | - | archived | Stopped | `outside/status-archived-while-running.json` |
 | its thread deleted in bb | false | stopped | lost | - | deleted | Stopped | `roster/status-recorded.json#threadDeleted` |
-| stopped with the machine (`oats host run`'s shutdown) | false | stopped | lost | - | at rest | Stopped | (no recording: the run stops no host) |
+| its session lost, its thread open | false | stopped | lost | - | at rest | Stopped | (no recording) |
 | its session ended in a shell | false | shell | - | - | at rest | Failed | (no recording) |
+| its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | (no recording of the kernel's row here; bb's events of such a thread are recorded: test/fixtures/outside/events/) |
 | the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
 
 What comes after the state's word (the reason, the tone, the acts) is the table at the head of
-this section; this one holds only what the two functions must agree on. An agent on tmux is not
+this section; this one holds only what the two functions must agree on. One row is the plugin's
+own reading: "its thread failed at its start in bb" has the kernel's four fields of "its session
+lost, its thread open", and is told apart from it by bb's events of the thread, not by the row. An agent on tmux is not
 in it: its row has no `runtimeState` while it runs, and the kernel's `running` is its own word
 for whether it works.
+
+### A thread that failed at its start
+
+A spawn whose thread fails at its start inside bb (a model the harness cannot resolve, a harness
+that is not installed) is refused by nobody: OATS reads the home `running: false`, `runtimeState:
+"stopped"`, `sessionEnd: "lost"`, which is the row of a session that ran and was lost, and bb's
+record of the thread and its sidebar say `status: "error"`, which is also what they say of a thread
+whose later turn failed. Only bb's EVENTS of the thread tell them apart, so for each agent whose
+listed thread is in "error" the plugin asks bb for them (`sdk.threads.events.list`, from the page;
+app/outside/threads.ts): **a `system/error` event and never a `turn/started`** is a thread that
+failed at its start (`startFailureOf`). The answer is joined on the thread (`BbThread.startFailure`,
+in `useOats()`), and every place reads that one fact: the state is "Failed" (`state`), how it is at
+rest is "never-started" (`rest(agent, thread)`: no message carries it on, the home's card does not
+answer it, the Start dialog has no carry-on line), bb's reason (the event's `data.detail`, else its
+`data.message`) is under Details, and the acts are Start and Retire, never Restart.
+
+- The read is ALWAYS by type, one type and one event at a time (whether a turn ever started; bb's
+  last error): the thread's whole log holds its environment (`provider.env-resolved`: its
+  variables' values), which must not come into the page.
+- It is asked again at each roster read and each minute, as the archived threads are; a thread
+  that has started a turn is not asked about again in the app window.
+- Until bb has answered, the row says what it says without the answer. Where bb cannot answer,
+  what it last said of the thread stands (nothing, if it never answered): a row that said
+  "Failed" does not go back to "Stopped · session lost" for a read that failed.
+- Never of an agent the kernel says runs (one started again since), nor of an agent on tmux.
 
 ## The home
 
@@ -531,7 +561,7 @@ leave out: whatever a release shows, an agent can be started.
 | **Soul** | the souls OATS lists, each with its description, with a filter over them from eight on. A soul that cannot be spawned is drawn apart in the list and says why under the field. |
 | **Opening instruction · optional** | what the agent should do. Empty, it starts and waits for its person. |
 | **Harness** | "The soul's default" (nothing is passed, and the entry says what the kernel resolved: "The soul's default: pi"), or one the bb session provider declares. A harness bb cannot run on this machine is marked at the choice ("pi · not installed in bb") and the field says what to do: bb's own state of its providers (`sdk.system.providerStates`), never a guess; it can still be chosen, and the kernel and the provider decide. With one harness declared there is no field; when the list cannot be read the field says so, with Retry, and a spawn uses the soul's default. |
-| **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…**, which opens a field for a typed model id. |
+| **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…**, which opens a field for a typed model id. Spawn is held for the model in two cases, each said in two words at most, on the field (its mark) and beside the button (`model/spawn.ts` `modelCheck`, one rule with its table in `test/spawn/model.test.ts`). **Required**: the person chose a harness that is not the soul's own (the one the kernel resolves when none is chosen: kept from that preview, or asked once where a harness was picked before the soul) and the kernel resolves no model for it (the soul's model is another harness's); the column then names the harness alone and the field's first entry reads "Default" alone: no default is promised. While bb's list of models for the harness is being read, Spawn is off with "Reading defaults…". A list bb has not given after 10 seconds reads as not read (Spawn goes on the kernel's answer, as where bb gives no list), and the rule is read on it if it answers later: a call of bb's that never settles does not hold the form. **Pick provider**: the model the spawn would send (picked or typed, else the one the kernel resolved from the soul) is a bare id that several of the models bb lists for the harness serve; exactly those are the ones offered, and they are the ids the bb session provider's own refusal names at the launch (the provider says the same there). Which listed models serve an id is ONE function, `model/served.ts` `served` (read by this form; written for the Restart dialog too), and it is the provider's own resolution: a model's bare id is its id minus the provider bb routes it by (so "openrouter/openai/gpt-6" has the bare id "openai/gpt-6", and "gpt-6" is served by nothing there), and a model bb lists for pi with no provider serves nothing. (That bb's list, as the plugin reads it through the SDK, names each pi model's provider was shown on the real kernel by the pi run of the Restart dialog's change, which lands after this one and keeps the step: a bare id is armed there by its provider, `echo` of `mock/echo`, and a nested one, `nested/echo2` of `mock/nested/echo2`, where its tail `echo2` is not. Where a row names none, nothing is held for it.) For a harness whose models are not resolved by provider (Claude Code) nothing is held for the list: the provider checks a model for pi alone. `test/model/served.contract.test.ts` runs one table through the provider's `piModelVerdict` (`oats-package/capabilities/oats-bb/lib/pi-model.mjs`) and through `served`, and fails on any difference. It is not held for an id that holds a slash (where bb's list is not whole such an id may be a held-back model's exact id, and the provider lets it go), nor while bb's list is not read or holds nothing: the kernel's answer then stands. One limit: for a minute after pi's configuration changed the provider does not refuse two listed models, and the form, which has the list alone, still asks for the provider. **That no listed model serves the id is not the form's to judge** ("Not found" is not said): bb's list leaves out models a thread still starts on (an id that ends in a date, a list pi's own configuration narrows, a list older than pi's configuration), and the form must never hold an agent the provider would start. Such a model is armed, the preview passes (a planned launch carries no model at this kernel), and the provider judges it at the launch: it refuses the spawn (`E_BACKEND_LAUNCH_ARG`: "pi has no model …", rolled back, nothing left behind), and the form says the kernel's whole message once under "The agent was not spawned", marks no field, holds nothing, and is editable again; or, where it cannot check the model, it lets the launch go with a warning that this kernel does not carry to the form: nothing is said, and the agent then starts, or its thread fails at its start and the form says it did not start. The soul's own harness with no model declared is not held: bb starts it on its own default, and the column says so. |
 | **Relationship** | Independent, Child of, Sibling of or Parent of, then **Which instance**: one of the roster's, by its name as words with its soul. |
 | **Name · optional** | exactly what is typed, in lower case. Empty, the kernel numbers the agent. A name that cannot be used says its fault under the field. |
 
@@ -567,6 +597,19 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   also told through bb's own toaster (`notify`, `app/ui/notify.ts`), with "Open <name>": it stays
   when the thread opens, and reaches a person who left the form while it spawned (a failure is
   told there the same way, and stays until dismissed).
+- "Created" is said once the new thread is past its start in bb, not when the kernel answers: the
+  kernel says "launched" before bb has started the thread, and a thread can fail at its start (a
+  model the harness cannot resolve). So the form stays busy ("Spawning…") until bb's own status of
+  the thread is no longer "starting" or "pending", for 10 s at most (`startOutcome`,
+  app/outside/threads.ts: `sdk.threads.get`, then the rule of "A thread that failed at its start").
+  Where the thread failed at its start the result is **<Name> did not start**, in the failed tone,
+  with bb's own reason under Details and one button, **Open** (the agent's own page, whose Start
+  offers the harness and the model); the form stays held (an instance exists) and its submit is
+  not drawn (the result has nothing that is off: its title, Details, Open, and Close), nothing navigates,
+  and nothing says "Created". A person who left the form is told the same by a notification that
+  stays, with Open. Nothing is said of the model: the form does not guess. A thread still starting
+  after 10 s, and one bb cannot answer for, are "Created" as before (the agent's row then says
+  "Failed" by the same rule if it failed).
 - After a press that did not answer "created", the form goes by what is KNOWN
   (`model/spawn.ts` `SpawnOutcome`). **Refused**, with the values free again, only where something
   says nothing was created: a refusal of the kernel's that the tables name, whose rollback the

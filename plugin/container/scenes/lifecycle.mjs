@@ -947,8 +947,8 @@ export default [
           ),
         );
         check(
-          said.first && said.title === "To continue its conversation, message it instead." && said.open === "Open Weekly digest helper" && said.next.trim() === "Stops what it is doing now.",
-          `${at} the dialog says FIRST to message it instead to continue its conversation, with Open Weekly digest helper, and then its one line, that a restart stops what it is doing now`,
+          said.first && said.title === "To continue its conversation, message it instead." && said.open === "Open Weekly digest helper" && said.next.trim() === "Starts a new conversation.",
+          `${at} the dialog says FIRST to message it instead to continue its conversation, with Open Weekly digest helper, and then its one line, that a restart starts a new conversation (the agent does not run: nothing is said to be stopped)`,
           JSON.stringify(said),
         );
         const before = await dialog(page);

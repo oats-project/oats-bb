@@ -478,9 +478,11 @@ export default [
       // The one count line of the home is Home › Agents': it counts the failed agent and the unreachable one, each agent once, with no total.
       const summary = await page.until(`(() => { const text = ${textOf(within("oats-home-summary"))}; return /1 failed/.test(text) && /1 unreachable/.test(text) ? text : ""; })()`, 20);
       const numbers = String(summary ?? "").split(" · ").map((part) => Number(part.split(" ")[0]));
-      check(Boolean(summary) && !/agents/.test(summary) && `Agents ${numbers.reduce((sum, n) => sum + n, 0)}` === total, `${at} the count line counts the failed agent and the unreachable one, each agent once: as many as the Agents tile says`, summary ?? (await page.evaluate(textOf(within("oats-home-summary")))));
-      const rows = JSON.parse(await page.evaluate(`JSON.stringify(Object.fromEntries([...document.querySelectorAll(${JSON.stringify(within("oats-home-agent-row"))})].map((row) => [row.dataset.instance, row.innerText.replace(/\\s+/g, " ").trim()])))`));
-      check(/Unreachable$/.test(rows["desktop-mockups-developer"] ?? "") && /Failed$/.test(rows["harvest-knowledge-helper"] ?? "") && /its bb thread is gone/.test(rows["weekly-digest-helper"] ?? "") && /Stopped$/.test(rows["weekly-digest-helper"] ?? ""), `${at} each is a row with its state in words: Unreachable, Failed, and a stopped one whose bb thread is gone`, JSON.stringify(rows));
+      const read = `JSON.stringify(Object.fromEntries([...document.querySelectorAll(${JSON.stringify(within("oats-home-agent-row"))})].map((row) => [row.dataset.instance, row.innerText.replace(/\\s+/g, " ").trim()])))`;
+      // Where its thread is comes from bb's own answer for its id (the one the sidebar's row reads): waited for.
+      const answered = await page.until(`(() => { const rows = ${read}; return /deleted in bb/.test(JSON.parse(rows)["weekly-digest-helper"] ?? "") ? rows : ""; })()`, 30);
+      const rows = JSON.parse(answered || (await page.evaluate(read)));
+      check(/Unreachable$/.test(rows["desktop-mockups-developer"] ?? "") && /Failed$/.test(rows["harvest-knowledge-helper"] ?? "") && /deleted in bb/.test(rows["weekly-digest-helper"] ?? "") && !/gone/.test(rows["weekly-digest-helper"] ?? "") && /Stopped$/.test(rows["weekly-digest-helper"] ?? ""), `${at} each is a row with its state in words: Unreachable, Failed, and a stopped one whose thread bb answers is deleted ("deleted in bb", the sidebar's own word, the reason alone)`, JSON.stringify(rows));
       await sound(page, viewport, check, at, "Home › Agents with every state");
       await page.shot(`home-${viewport.name}-agents-states`);
     },

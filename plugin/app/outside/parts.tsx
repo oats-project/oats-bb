@@ -43,7 +43,7 @@ export function OutsideActs({ instance, acts, held }: { instance: string; acts: 
 }
 
 /** The state each reason is said after: `said()` reads the agent's state without bb's own question on its thread. */
-const AFTER: Partial<Record<Said["kind"], AgentState>> = { "stopped-open": "stopped", "stopped-host": "stopped", "stopped-archived": "stopped", "lost-archived": "stopped", deleted: "stopped", "idle-unloaded": "idle", "failed-open": "error", outside: "outside" };
+const AFTER: Partial<Record<Said["kind"], AgentState>> = { "stopped-open": "stopped", "lost-open": "stopped", "lost-tmux": "stopped", "stopped-archived": "stopped", "lost-archived": "stopped", deleted: "stopped", "idle-unloaded": "idle", "failed-open": "error", outside: "outside" };
 
 /**
  * Whether a reason belongs on a line or a row that draws `state`: the reason follows ONE state,
@@ -69,7 +69,7 @@ export function lineActs(said: Said | null, instance: string, held: boolean, sta
 /**
  * What a sidebar's row says after the state's word, in the soul's place, and whether its mark is in
  * the warning tone: the reason, where the row's state is the one it follows; null (the soul, the
- * state's own mark) where it is not ("Needs you · with the machine" is no sentence), and where this
+ * state's own mark) where it is not ("Needs you · session lost" is no sentence), and where this
  * feature has nothing to say.
  */
 export function rowParts(said: Said | null, state: AgentState): { note: string | null; tone: "warning" | undefined } {
@@ -95,6 +95,8 @@ export function lineParts(said: Said | null, status: { state: AgentState; since:
   const tone = said.tone === "warning" ? "warning" : undefined;
   if (said.kind === "stopped-open" && status.state !== "stopped") return { since: null, detail: STOPPED_OPEN_ASKING, tone };
   if (!follows(said, status.state)) return own;
+  // A lost session has no time: the kernel records none of the loss (never "lost since").
+  if (said.kind === "lost-open" || said.kind === "lost-tmux") return { since: null, detail: said.sentence, tone };
   return { since: status.since, detail: said.sentence, tone };
 }
 
@@ -131,7 +133,7 @@ export function OutsideWarning({ said, instance, held, own = BOTH }: { said: Sai
   const startable = said.warning.backend === "bb";
   return (
     <div data-testid="oats-outside-warning" data-instance={instance}>
-      <Notice title={outsideTitle(instance)} tone="warning" details={`${said.warning.code}: ${said.warning.message}`}>
+      <Notice title={outsideTitle(instance, startable)} tone="warning" details={`${said.warning.code}: ${said.warning.message}`}>
         <p>{startable ? OUTSIDE_WHAT : OUTSIDE_WHAT_STOP}</p>
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
           {(

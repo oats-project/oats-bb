@@ -128,7 +128,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    *   name (`full`: the instance as the kernel names it) is the name's title on every row;
    * - the second block is ONE line, never wrapped: the state's word, and where there is one a
    *   reason: what happened to the agent outside OATS (`reason`, app/outside `rowParts`:
-   *   "archived in bb", "with the machine"), and for an agent on tmux where it is (`where`:
+   *   "archived in bb", "session lost"), and for an agent on tmux where it is (`where`:
    *   bb's terminal glyph, named "tmux"; the word on a bb with no such glyph). The state's word and `where` are never cut; a reason fits the line beside the
    *   state's word (should one ever not fit, it is cut with "…" and whole in the title: never
    *   drawn past the row). The soul is not on the row: the name tells agents apart, and the
@@ -298,7 +298,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           {agentRows(view.roots)}
           {/* Where its thread is, by bb's own answer, after the state's word; nothing until bb has answered. */}
           {view.detached.map((agent) => threadlessRow(agent, undefined, outside.of(agent)))}
-          {view.elsewhere.map((agent) => threadlessRow(agent, TMUX))}
+          {/* An agent on tmux whose session was lost says so ("Stopped · session lost", then where it is): nobody stopped it. */}
+          {view.elsewhere.map((agent) => threadlessRow(agent, TMUX, outside.of(agent)))}
         </ul>
       )}
       {/* The roster's foot (D-039): who waits on a person, then the act that makes an agent. With

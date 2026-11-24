@@ -1,8 +1,8 @@
 // The outside feature's live scenes: what the sidebar's row and the thread's line
 // say when something happened to an OATS agent outside OATS (container/live-ui.mjs says what a
 // scene is). Stages of its own: `outside`, every row of the feature's table that is a stop of OATS's
-// or an act in bb, at once on one roster; `outside-host`, the two rows that are neither (stopped
-// with the machine, idle with no harness loaded); `outside-archived`, three agents whose thread bb has archived; and `outside-question`, the first roster while bb
+// or an act in bb, at once on one roster; `outside-host`, the rows that are neither (a session
+// lost, on bb and on tmux; idle with no harness loaded); `outside-archived`, three agents whose thread bb has archived; and `outside-question`, the first roster while bb
 // holds a question on the thread of the agent OATS recorded stopped. What OATS says is the fake's status (the fixtures' rows with the fields below); what bb
 // says of each thread is bb's own answer, made true in bb itself: the threads said archived ARE
 // archived in bb for the length of the stage (and unarchived when it ends).
@@ -75,13 +75,15 @@ const EVENTS = join(homedir(), "deployment", ".agents", "events", "live-ui.jsonl
  *   harvest-knowledge-helper   stopped by an operator (sessionEnd "stopped"), its thread open Shaped as the kernel's contract says (docs/desktop-cli-api.md
  * at v0.70.5, "A status row of a provider home"), not recorded: `running: false` for an idle bb
  * thread exists only from the provider's next release.
- *   release-070-maintainer     stopped with the host (sessionEnd "lost"), its thread open
+ *   release-070-maintainer     its session lost (sessionEnd "lost"), its thread open
+ *   kernel-fix-developer       on tmux, its session lost (the recorded row: running false, sessionEnd "lost", no runtimeState)
  *   desktop-mockups-developer  idle, no harness loaded (running false, runtimeState "unknown", no sessionEnd)
  */
 const HOST_ROWS = {
   "harvest-knowledge-helper": STOPPED,
   "release-070-maintainer": LOST,
   "desktop-mockups-developer": { running: false, runtimeState: "unknown", waitingOnYou: null },
+  "kernel-fix-developer": { running: false, runtimeState: null, sessionEnd: "lost", waitingOnYou: null },
 };
 
 /** The stage's roster: the threads said archived are archived in bb, and the fake answers ROWS on a kernel that lists the feature. */
@@ -132,6 +134,8 @@ const ARCHIVED_ROWS = {
   "weekly-digest-helper": STOPPED,
   "ranker-v3-probe": LOST,
   [RUNS]: { running: true, runtimeState: "running", sessionEnd: null, open: null, waitingOnYou: null },
+  // An agent on tmux that OATS stopped (the recorded row: its window is left at a shell): Stopped, never Failed.
+  "kernel-fix-developer": { running: false, runtimeState: "shell", sessionEnd: "stopped", waitingOnYou: null },
 };
 const ARCHIVED_THREE = ["thr_digest", "thr_research", "thr_release"];
 
@@ -200,7 +204,7 @@ const flat = `(e) => (e?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
 const ACT = '[data-testid="oats-status-act"], [data-testid^="oats-agent-act-"]';
 /** One row of the sidebar by its instance (a row with no thread to open) or by its thread: → `{ facts, state, tone, lines }`: its second line's words, its mark's state and tone, and how many lines that second line takes. */
 const rowOf = (selector) =>
-  `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(selector)}); if (!row) return null; const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const mark = row.querySelector("[data-mark][data-state]"); return { facts: flat(facts), state: mark?.getAttribute("data-state") ?? null, tone: mark?.getAttribute("data-tone") ?? null, lines: facts ? Math.round(facts.getBoundingClientRect().height / parseFloat(getComputedStyle(facts).lineHeight)) : 0 }; })()`;
+  `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(selector)}); if (!row) return null; const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const mark = row.querySelector("[data-mark][data-state]"); return { facts: (flat(facts) + (facts?.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim() /* (bb's terminal glyph, read by its name) */, state: mark?.getAttribute("data-state") ?? null, tone: mark?.getAttribute("data-tone") ?? null, lines: facts ? Math.round(facts.getBoundingClientRect().height / parseFloat(getComputedStyle(facts).lineHeight)) : 0 }; })()`;
 const threadless = (instance) => `${testId("oats-agent-row-threadless")}[data-instance="${instance}"]`;
 const onThread = (id) => `${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"]`;
 
@@ -417,7 +421,7 @@ export default [
   },
   {
     stage: "outside-host",
-    name: "the three rows that read \"not running\" are never confused: an operator's stop, stopped with the machine, not loaded; on the sidebar's rows and on each thread's line",
+    name: "the three rows that read \"not running\" are never confused: an operator's stop, a session lost (on bb and on tmux: one reason word), not loaded; on the sidebar's rows and on each thread's line",
     run: async ({ page, at, viewport, threads, check }) => {
       const shown = () => page.evaluate(textOf(testId("oats-identity-row")));
       const [operator, host, idle] = [threads.get("thr_harvest"), threads.get("thr_release"), threads.get("thr_mockups")];
@@ -425,16 +429,17 @@ export default [
       // The sidebar's three rows, side by side: two words of state, and what tells the two stopped ones apart.
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      const all = `JSON.stringify({ operator: ${rowOf(onThread(operator.id))}, host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, words: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
-      const settled = await page.until(`(() => { const now = ${all}; return /with the machine/.test(now) && /not loaded/.test(now) ? now : ""; })()`, 30);
+      const all = `JSON.stringify({ operator: ${rowOf(onThread(operator.id))}, host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, tmux: ${rowOf(threadless("kernel-fix-developer"))}, words: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
+      const settled = await page.until(`(() => { const now = ${all}; return (now.match(/session lost/g) ?? []).length >= 2 && /not loaded/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       check(
-        same([rows.operator, rows.host, rows.idle], [
+        same([rows.operator, rows.host, rows.idle, rows.tmux], [
           { facts: "Stopped", state: "stopped", tone: null, lines: 1 },
-          { facts: "Stopped · with the machine", state: "stopped", tone: null, lines: 1 },
+          { facts: "Stopped · session lost", state: "stopped", tone: null, lines: 1 },
           { facts: "Idle · not loaded", state: "idle", tone: null, lines: 1 },
+          { facts: "Stopped · session lost · tmux", state: "stopped", tone: null, lines: 1 },
         ]) && rows.words.every((word) => ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"].includes(word)),
-        `${at} the three rows: "Stopped" alone (an operator's stop), "Stopped · with the machine", "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every state word is one of the set`,
+        `${at} the rows: "Stopped" alone (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux, "tmux" its glyph's name: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every state word is one of the set`,
         JSON.stringify(rows),
       );
       await page.shot(`outside-${viewport.name}-three-sidebar`);
@@ -446,12 +451,12 @@ export default [
       check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && one.stateTone === "warning" && same(one.tones, ["warning"]) && same(one.acts, ["Start…"]), `${at} (1) an operator's stop: "Stopped", the warning in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
       await page.shot(`outside-${viewport.name}-three-1-operator-stop`, { targets: true });
 
-      // (2) stopped with the machine: "Stopped · with the machine …", no warning
+      // (2) its session lost: "Stopped · session lost", the reason alone; no sentence, no time, no cause, no warning
       await page.goto(`/projects/${host.projectId}/threads/${host.id}`);
-      const HOST = new RegExp(`^Stopped${SINCE} · with the machine\\. OATS starts it again when the machine is back\\.$`);
+      const HOST = /^Stopped · session lost$/;
       const two = await lineOf(page, HOST);
-      check(two !== null && two.state === "stopped" && HOST.test(two.words) && two.stateTone === null && same(two.tones, []) && same(two.acts, ["Start…"]) && two.warning === null && !/outside OATS/.test(two.words), `${at} (2) stopped with the machine: "Stopped · with the machine", that OATS starts it again; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
-      await page.shot(`outside-${viewport.name}-three-2-stopped-with-machine`, { targets: true });
+      check(two !== null && two.state === "stopped" && two.words === "Stopped · session lost" && two.stateTone === null && same(two.tones, []) && same(two.acts, ["Start…"]) && two.warning === null && !/outside OATS|machine|since|Nobody stopped/.test(two.words), `${at} (2) a session lost: "Stopped · session lost", the reason alone: no sentence, no time and no cause; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
+      await page.shot(`outside-${viewport.name}-three-2-session-lost`, { targets: true });
 
       // (3) its session is there, not loaded: "Idle · not loaded …", no warning
       await page.goto(`/projects/${idle.projectId}/threads/${idle.id}`);
@@ -524,6 +529,8 @@ export default [
         `${at} the three rows: "Stopped" alone, plain (an operator's stop); "Stopped · archived in bb" with the warning mark (a session lost); "Idle · archived in bb" with the warning mark (it still runs); each opens its archived thread`,
         JSON.stringify(rows),
       );
+      const stoppedTmux = JSON.parse(await page.evaluate(`JSON.stringify(${rowOf(threadless("kernel-fix-developer"))})`));
+      check(same(stoppedTmux, { facts: "Stopped · tmux", state: "stopped", tone: null, lines: 1 }), `${at} an agent on tmux that OATS stopped (its row says "shell" beside an operator's stop) reads "Stopped" and where it is, never "Failed"`, JSON.stringify(stoppedTmux));
       await page.shot(`outside-${viewport.name}-archived-three-sidebar`, { targets: true });
 
       // The one that still runs: its row opens the archived thread, whose own row says the remedy, with Stop.

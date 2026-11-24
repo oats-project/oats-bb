@@ -63,8 +63,10 @@ agents, their homes, identities and mail are OATS's and aweb's.
   there); for an agent on tmux, "Answer it in its terminal." (Open leads to its own page, which
   has the command that reaches it: `oats session attach --home <its home>`).
   A message never grants an approval: beside choices it is behind "Message instead".
-  The card of an agent that is not running offers neither an answer nor a message (either would
-  start it outside OATS): it offers Start….
+  The card of an agent OATS STOPPED offers neither an answer nor a message (either would start it
+  outside OATS): it offers Start…. One the kernel cannot reach offers neither, and no Start. An
+  agent that does not run and that nobody stopped (its session lost, ended, or not loaded) is
+  answered as any other: a message in its thread is how it comes back.
   **New agent** is first on every home. The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
   with no bb thread among them, with its state, under one count line ("3 working · 3 need you · …").
   While OATS cannot be read the cards' choices and replies are off, and the notice over them says
@@ -83,8 +85,9 @@ agents, their homes, identities and mail are OATS's and aweb's.
   then the reason and what to do: a stopped agent whose row opens an archived thread (Start makes a
   new thread; the old one stays to read); "Stopped · archived in bb" or "Idle · archived in bb" in the warning
   tone (it was archived while it ran, and its process may still run: Stop it, then
-  Start it); "Stopped · deleted in bb" (Start it for a new thread); "Stopped · with the machine"
-  (nothing to do: OATS starts it again); "Idle · not loaded" (send it a message in its thread to
+  Start it); "Stopped · deleted in bb" (Start it for a new thread); "Stopped · session lost"
+  (nobody stopped it: on bb send it a message in its thread to carry on; on tmux, where bb
+  cannot write to it, use the acts its page offers); "Idle · not loaded" (send it a message in its thread to
   carry on; Start begins a new conversation); "Running outside OATS" (OATS recorded it stopped and
   it runs, because a message was sent in its thread: Stop or Start it through OATS). Never answer
   in bb's composer an agent whose line warns that a message starts it outside OATS: Start it.

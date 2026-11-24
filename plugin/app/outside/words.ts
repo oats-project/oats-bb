@@ -23,11 +23,17 @@ export const STOPPED_OPEN = "A message here starts it outside OATS.";
 export const STOPPED_OPEN_ASKING = "Stopped. An answer here starts it outside OATS.";
 
 /**
- * Stopped WITH THE HOST (the machine went down, or `oats host run` stopped it as the machine
- * stopped): OATS resumes it by itself when the machine is back. No warning: nothing is wrong.
+ * Its session was LOST (`sessionEnd: "lost"`): it ended without OATS stopping it. The kernel
+ * names no cause and no time of the loss (the host went down, its harness was killed, a tmux
+ * window died), so the plugin guesses none, and promises nothing the kernel may not do (nothing
+ * brings a lost session back by itself on a host that does not run `oats host run`). ONE reason
+ * word, for an agent on bb and on tmux, on the row, on the thread's line and on the agent's page:
+ * the reason alone, and no sentence (the text audit of 23 Nov 2026, T14). What a person does next
+ * is said where they do it: the Start dialog's first line (a message carries a bb agent on) and
+ * its one consequence line (a lost tmux agent: "Tries to continue its last conversation; else
+ * starts fresh."). No warning: nobody did anything wrong.
  */
-export const STOPPED_HOST = "with the machine. OATS starts it again when the machine is back.";
-export const STOPPED_HOST_NOTE = "with the machine";
+export const LOST_NOTE = "session lost";
 
 /** Stopped (its session not lost), and bb has its thread archived (what a stop leaves once the provider archives at stop): the fact, and the row opens the conversation to read. */
 /** The reason, on a row and on a line, for every agent whose thread bb has archived (what Start does is the Start dialog's one line). */
@@ -61,7 +67,7 @@ export const FAILED_OPEN = "session ended";
 /** The fact after the state on its line: what OATS recorded, which is no longer what the agent does. */
 export const OUTSIDE_RECORDED = "recorded stopped";
 /** The notice, in a person's words: what is so, what happened, what to do. The kernel's own sentence and its code are behind Details. */
-export const outsideTitle = (instance: string): string => `${agentName(instance)} is running in bb, but OATS recorded it as stopped.`;
+export const outsideTitle = (instance: string, onBb = true): string => `${agentName(instance)} is running${onBb ? " in bb" : ""}, but OATS recorded it as stopped.`; // ("in bb" of an agent on bb only: the report's backend is the row's)
 export const OUTSIDE_WHAT = "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.";
 /** The same, of an agent the lifecycle offers no Start for here (its session provider is not bb): the one remedy this plugin has is Stop. */
 export const OUTSIDE_WHAT_STOP = "Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.";

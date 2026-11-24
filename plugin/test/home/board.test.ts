@@ -1,8 +1,8 @@
 // The home's board and its words: grouped from the roster the sidebar shows, counted by the one
 // function for a state.
 import { describe, expect, it } from "vitest";
-import { board, mayAnswer, notRunning } from "../../app/home/board";
-import { THREAD_GONE_NOTE, summaryLine, tileCount } from "../../app/home/home-words";
+import { board, mayAnswer, refusal } from "../../app/home/board";
+import { summaryLine, tileCount } from "../../app/home/home-words";
 import * as words from "../../app/home/home-words";
 import { TMUX } from "../../app/ui/tmux";
 import { attachCommand } from "../../app/panel/words";
@@ -84,20 +84,35 @@ describe("the order of what needs the person", () => {
 
 describe("what the home may send to an agent's thread", () => {
   // What a card offers follows it, and its handlers ask it again of the roster the server holds at the press.
-  it("never to an agent the kernel says does not run, and never while the roster is the last one read", () => {
-    const runs = { running: true as const, runtimeState: "unknown" };
-    expect([notRunning(runs), mayAnswer(runs, false), mayAnswer(runs, true)]).toEqual([false, true, false]);
+  it("never to an agent the kernel calls stopped or cannot reach, and never while the roster is the last one read; an agent nobody stopped is answered on a thread bb lists", () => {
+    const listed = { status: "idle" };
+    const runs = { running: true as const, runtimeState: "unknown", backend: "bb" };
+    expect([refusal(runs, listed), mayAnswer(runs, listed, false), mayAnswer(runs, listed, true)]).toEqual([null, true, false]);
     // on bb the kernel says neither yes nor no of an agent that waits between turns: it may be answered
-    expect(mayAnswer({ running: null, runtimeState: "unknown" }, false)).toBe(true);
+    expect(mayAnswer({ running: null, runtimeState: "unknown", backend: "bb" }, listed, false)).toBe(true);
+    // A stop: refused (an answer or a message would start it outside OATS).
     for (const stopped of [
-      { running: false as const, runtimeState: "stopped" },
-      { running: false as const, runtimeState: "shell" },
-      { running: null, runtimeState: "stopped" },
-      { running: false as const, runtimeState: null },
+      { running: false as const, runtimeState: "stopped", sessionEnd: "stopped", backend: "bb" },
+      { running: false as const, runtimeState: "stopped", backend: "bb" },
+      { running: null, runtimeState: "stopped", backend: "bb" },
+      { running: false as const, runtimeState: null, backend: "bb" },
+      { running: false as const, runtimeState: "unknown", sessionEnd: "stopped", backend: "bb" },
     ]) {
-      expect(notRunning(stopped), JSON.stringify(stopped)).toBe(true);
-      expect(mayAnswer(stopped, false), JSON.stringify(stopped)).toBe(false);
+      expect([refusal(stopped, listed), mayAnswer(stopped, listed, false)], JSON.stringify(stopped)).toEqual(["stopped", false]);
     }
+    // The kernel cannot reach its session (the row the kernel prints: `running: null` beside "unreachable"): refused, for another reason.
+    for (const running of [null, false, true]) expect([refusal({ running, runtimeState: "unreachable", backend: "bb" }, listed), mayAnswer({ running, runtimeState: "unreachable", backend: "bb" }, listed, false)], String(running)).toEqual(["unreachable", false]);
+    // Nobody stopped it: a message in its thread is how it comes back. Answered, on a thread bb lists, one whose last turn bb calls failed included.
+    for (const resumable of [
+      { running: false as const, runtimeState: "stopped", sessionEnd: "lost", backend: "bb" },
+      { running: false as const, runtimeState: "unknown", backend: "bb" },
+      { running: false as const, runtimeState: "shell", backend: "bb" },
+    ]) {
+      expect([refusal(resumable, listed), refusal(resumable, { status: "error" }), mayAnswer(resumable, listed, false), mayAnswer(resumable, listed, true)], JSON.stringify(resumable)).toEqual([null, null, true, false]);
+      expect(refusal(resumable, null), JSON.stringify(resumable)).toBe("stopped"); // bb lists no thread of it: nothing to write in
+    }
+    // An agent on tmux is never written to from bb.
+    expect(refusal({ running: false, runtimeState: null, sessionEnd: "lost", backend: "tmux" }, listed)).toBe("stopped");
   });
 });
 
@@ -109,9 +124,10 @@ describe("the home's words", () => {
     // An agent that runs outside OATS is one of those that need you (the sidebar's foot counts it so): counted once, there.
     expect(summaryLine({ "needs-you": 1, working: 1, idle: 0, stopped: 2, error: 0, unreachable: 0, outside: 1 })).toBe("1 working · 2 need you · 2 stopped");
   });
-  it("a tile's count; and the reasons of an agent with no bb thread, the only words of a row's second line (who started it is the panel's Lineage: no row says it)", () => {
+  it("a tile's count; where an agent on tmux is, the one word of the home's own (what became of a thread is the outside feature's answer); who started it is the panel's Lineage: no row says it", () => {
     expect([tileCount(4), tileCount("loading"), tileCount("failed")]).toEqual(["4", "Counting…", "Couldn't count"]);
-    expect([TMUX, THREAD_GONE_NOTE]).toEqual(["tmux", "its bb thread is gone"]);
+    expect(TMUX).toBe("tmux");
+    expect(Object.keys(words)).not.toContain("THREAD_GONE_NOTE"); // "gone" is said of no agent: bb's answer says what became of its thread
     expect(Object.keys(words)).not.toContain("startedBy");
   });
   it("the command into a tmux agent's session names its home as one word of a shell", () => {

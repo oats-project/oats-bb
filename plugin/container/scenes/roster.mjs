@@ -345,7 +345,15 @@ export default [
       await page.goto("/");
       // (At a phone's width bb may keep its drawer as it was over the reload: asked twice, the second press opens one the first closed.)
       if (!(await showSidebar(page, viewport, { fold: "asLoaded" }))) await showSidebar(page, viewport, { fold: "asLoaded" });
-      const back = await page.until(`(() => { const now = ${read}; return now !== "" && JSON.parse(now).inside === null && JSON.parse(now).open === "false" ? now : ""; })()`, 30);
+      // (The status read that follows the kernel's record can be one that was already in flight, with the claim still
+      // in it; the read after it is the plugin's next poll. So: the wait of one poll, the record said once more, which
+      // asks for a read of its own, and the wait of two.)
+      const cleared = `(() => { const now = ${read}; return now !== "" && JSON.parse(now).inside === null && JSON.parse(now).open === "false" ? now : ""; })()`;
+      let back = await page.until(cleared, 20);
+      if (!back) {
+        record();
+        back = await page.until(cleared, 40);
+      }
       check(Boolean(back), `${at} once the child no longer waits the closed lead carries no mark`, back ?? `not within 30 s; the lead's row now: ${await page.evaluate(read)}; the sidebar: ${(await page.evaluate(textOf(testId("oats-sidebar")))).slice(0, 300)}`);
     },
   },

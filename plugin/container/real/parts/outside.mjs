@@ -162,7 +162,6 @@ export default async (run) => {
   let view = 0;
   await views("real-outside", async ({ page, at, viewport, shot }) => {
     view += 1;
-    step(`C outside 3, at ${at}: a person unarchives the stopped agent's thread and sends it a message: it runs outside OATS`);
     const threadId = row().session.threadId;
     // THE MOMENT BEHIND A STOP, once: the plugin's home can still send a message to the thread a Stop just archived
     // (its guard asks the server's roster, which for a second or two is the one from before: test/home/home.test.tsx).
@@ -170,6 +169,7 @@ export default async (run) => {
     // (oats-package, capabilities/oats-bb/lib/stop.mjs). Shown here, through bb's own CLI, on this bb: it is refused,
     // and nothing starts. (If bb ever answers otherwise this fails: a finding for the provider's side, not a test to bend.)
     if (view === 1) {
+      step(`C outside 2b, at ${at}: a message to the thread the stop archived is refused by bb, and nothing starts`);
       let said;
       let refusedByBb = false;
       try {
@@ -189,6 +189,7 @@ export default async (run) => {
       }
       check(stayed, "and nothing started: ten seconds on, oats status still reads it stopped with no harness outside OATS, its thread still archived", `${brief(row())} | ${briefThread(threadNow())}`);
     }
+    step(`C outside 3, at ${at}: a person unarchives the stopped agent's thread and sends it a message: it runs outside OATS`);
     show("bb thread unarchive", bb("thread", "unarchive", threadId).trim());
     show("bb thread tell", bb("thread", "tell", threadId, "Are you there?").trim());
     const reported = await untilRow("to carry the kernel's report of a harness outside OATS", (r) => r.outsideOats?.code === "running-outside-oats");

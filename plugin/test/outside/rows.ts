@@ -19,6 +19,17 @@ const only = (agents: Agent[]): Agent => {
   return agents[0]!;
 };
 
+/**
+ * A recorded ROW of an agent on tmux (test/fixtures/lifecycle/tmux-row-*.json: OATS 0.70.5, the
+ * real run), read by the roster's parser inside the recorded status document of the same kernel
+ * family (the row is the document's one instance).
+ */
+export function tmuxRow(name: "tmux-row-running.json" | "tmux-row-stopped.json" | "tmux-row-lost.json"): Agent {
+  const document = structuredClone((read("roster/status-recorded.json") as Record<string, { agents: { instances: unknown[] }[] }>).working!);
+  document.agents[0]!.instances = [read(`lifecycle/${name}`)];
+  return only(agentsOf(document));
+}
+
 /** One state of the real run's recording (test/fixtures/roster/status-recorded.json): OATS 0.70.0, which has no `provider-outside-oats`. */
 export const recorded = (state: "stoppedByOats" | "threadDeleted" | "working" | "idle"): Agent => only(agentsOf((read("roster/status-recorded.json") as Record<string, unknown>)[state]));
 

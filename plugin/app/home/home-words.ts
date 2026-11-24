@@ -75,6 +75,10 @@ export const PERMISSION_IN_THREAD = "It waits for an approval, and bb lists no r
 export const STOPPED_WAITS = "This agent is not running, and its request waits for it: an answer or a message would start it outside OATS. Start it to answer.";
 /** A press on an agent that OATS stopped since its card was drawn: nothing went to bb. */
 export const NOT_NOW_STOPPED = "OATS has stopped this agent since: nothing was sent. Start it to answer.";
+/** The same press, on an agent the kernel cannot reach now. */
+export const NOT_NOW_UNREACHABLE = "OATS cannot reach this agent's session now: nothing was sent.";
+/** The card of an agent the kernel cannot reach, in the place of its answer: nobody can tell where an answer or a message would go. No Start: the lifecycle offers none for it. */
+export const UNREACHABLE_WAITS = "OATS cannot reach this agent's session, so nothing is sent to it from here. Open its thread to see it.";
 /** A press on an agent the roster no longer names (it was retired, or the deployment changed): nothing went to bb. */
 export const NOT_NOW_GONE = "OATS no longer lists this agent: nothing was sent.";
 /** A press while the plugin's server holds no roster that reads: nothing went to bb. */
@@ -85,6 +89,8 @@ export const MESSAGE_NOT_ANSWER = "A message does not answer its request: it gra
 /** An agent on tmux: where its terminal is. */
 export const tmuxWhere = (machine: string): string => `It runs in tmux on ${machine}, where bb cannot write to it. Answer it in its terminal there:`;
 export const THREAD_GONE = "Its bb thread is gone, so nothing can be sent to it from here.";
+/** The same card, for an agent whose thread bb still has and does not list (archived, hidden), or that names none: said only as far as bb's answer goes. */
+export const THREAD_NOT_LISTED = "bb lists no thread of it to write in, so nothing can be sent to it from here.";
 /** Where Open leads for an agent with no thread. */
 export const PAGE_LEADS = "Open its page shows who it is and how it runs.";
 

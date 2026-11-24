@@ -196,6 +196,19 @@ export function createCore(bb: BbPluginApi) {
    * The status read the last act that ended asked for, until it has ENDED; null when none is owed.
    * While it is there the cached roster was read no later than that act's end: a client is not
    * answered with it (`clientSnapshot`).
+   *
+   * THE WAIT IS BOUNDED, by what bounds that read. It ends when the read ends, answered or not: a
+   * kernel that hangs is stopped at the kernel call's limit (20 s: kernel/runner.ts `read`) and the
+   * read then answers the failure; a machine that is silent is given up at `HOST_TIMEOUT.read`
+   * (45 s), the same. Before the owed read starts there can be: the rest of a read in flight when
+   * the act ended (as bounded: 20 s, or 45 s), and the pause after it (`reread`: none where it
+   * answered within FOLLOW_UP_WITHIN_MS; else the longer of MIN_INTERVAL_MS, 1 s, and that read's
+   * own length, which for a read that answered is under 20 s; 1 s after one that failed).
+   * So, at most: 20 + 20 + 20 = 60 s while the machine answers (a slow read in flight, its pause,
+   * the owed read at its limit); 45 + 1 + 45 = 91 s where the machine itself is silent; and in the
+   * usual case the 1 s floor and one read. After a read that FAILED the answer is the failure with
+   * the last roster beside it (`last`): the windows' "cannot be read" state, its acts held; never
+   * the roster from before as if it were read now.
    */
   let afterAct: Promise<void> | null = null;
   // ---- the event path (below, "between two status reads") ----

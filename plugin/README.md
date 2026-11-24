@@ -317,7 +317,9 @@ harness process it finds in the home), and the plugin, which says the state from
 and from bb's own word on the thread (`state` and `threadWorks`, `model/view.ts`). `running` is
 endpoint activity: true while a harness is loaded, an idle agent's too; it never says that an
 agent works. Each row below that names a recording is the kernel's row as printed: the five
-of `outside/` on that provider (OATS 0.70.5, the provider at oats-bb #40), the two of
+of `outside/` on that provider (OATS 0.70.5, the provider at oats-bb #40), the row of a thread
+that failed at its start from the pi run (`outside/status-failed-at-start.json`: OATS 0.70.5, pi
+1.5.2, the provider of the checkout that recorded it; `container/real/pi/README.md`, P6), the two of
 `roster/status-recorded.json` on the earlier recording (OATS 0.70.0, the provider before #40:
 those two rows read the same on both). A test reads every recorded row against this table (`test/model/cases.test.ts`): the row's four fields, and the state the plugin says of
 it with the thread as the column gives it. That test holds the plugin's side alone: the
@@ -337,13 +339,14 @@ provider's own tests hold its side). A dash is a field the row does not carry, o
 | its thread deleted in bb | false | stopped | lost | - | deleted | Stopped | `roster/status-recorded.json#threadDeleted` |
 | its session lost, its thread open | false | stopped | lost | - | at rest | Stopped | (no recording) |
 | its session ended in a shell | false | shell | - | - | at rest | Failed | (no recording) |
-| its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | (no recording of the kernel's row here; bb's events of such a thread are recorded: test/fixtures/outside/events/) |
+| its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | `outside/status-failed-at-start.json` |
 | the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
 
 What comes after the state's word (the reason, the tone, the acts) is the table at the head of
 this section; this one holds only what the two functions must agree on. One row is the plugin's
 own reading: "its thread failed at its start in bb" has the kernel's four fields of "its session
-lost, its thread open", and is told apart from it by bb's events of the thread, not by the row. An agent on tmux is not
+lost, its thread open" (its recording shows it: a real kernel prints a lost session's row for it),
+and is told apart from it by bb's events of the thread, not by the row. An agent on tmux is not
 in it: its row has no `runtimeState` while it runs, and the kernel's `running` is its own word
 for whether it works.
 
@@ -371,6 +374,10 @@ answer it, the Start dialog has no carry-on line), bb's reason (the event's `dat
   what it last said of the thread stands (nothing, if it never answered): a row that said
   "Failed" does not go back to "Stopped · session lost" for a read that failed.
 - Never of an agent the kernel says runs (one started again since), nor of an agent on tmux.
+- Proven against a real kernel by the pi run's step P6 (`container/real/pi/README.md`): a pi agent
+  spawned through the form with a model id that ends in a date (the provider lets it go, bb's pi
+  cannot resolve it). The kernel's row of that home is recorded
+  (`test/fixtures/outside/status-failed-at-start.json`): a lost session's row.
 
 ## The home
 
@@ -1033,7 +1040,13 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   the pause after every read and spends at most half its time on status (the first spec's "never
   within 5 s of the last" gave way to this). The server says in its log, at debug level, which rule
   each read asked for mid-read took. Each
-  reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
+  reread that differs publishes `oats/changed`, and the app refetches. A window that LOADS while
+  the server reads a change is given the roster from before it (the server answers from its
+  cache at once) and hears the change published while that first answer is still on its way: the
+  app then reads once more when the first answer is here (`app/store.ts` `useRead`), so the window
+  never keeps the roster from before the change. (bb does not start again a read that has no
+  answer yet; before this the event was taken as served, and the window showed the old roster
+  until another agent changed.) A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read
   that finds it gone.

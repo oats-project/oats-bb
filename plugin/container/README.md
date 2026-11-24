@@ -18,10 +18,19 @@ bb's light theme and `plugin-live-dark` in its dark one; `plugin-real`), and the
 (`plugin-pi`), so each line after the first installs and builds what it needs by itself.
 `LIVE_THEMES=light` (or `dark`) makes the live stage draw one theme, as each of CI's two live jobs
 does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a machine.
+`LIVE_WINDOW_LOADS=<n>` (by hand; passed into the container by name) makes the scene "a window that
+loads right after a change …" load n windows a view, where the gate loads two: a count of how
+often a window that loads while the server may still be reading a change ends on the roster with
+it (it must be all of them; which millisecond the load falls in is chance, so many loads say more).
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
-`plugin/container/out/` (ignored by git). The artefacts have an owner (`out/.owner`: the OATS
+`plugin/container/out/` (ignored by git). A run that fails also keeps bb's own logs and crash
+reports there, cut short, under `bb-logs/` (`real/bb-logs.sh`, `real/README.md`): never the
+plugin's own log file, and nothing of bb's data. bb's logs name threads and environments by their
+ids, and carry the text of an error and what a plugin's worker printed on its standard error:
+after a failed run by hand on a person's own roster (`LOCAL_STATUS`, below), `out/bb-logs/` is as
+private as that run's images. The artefacts have an owner (`out/.owner`: the OATS
 instance that ran, else the user; `ARTEFACTS_OWNER` to name one): the first to run in a checkout
 owns `out/`, and a run by another (a reviewer attached to an author's tree) leaves `out/` as it is
 and writes to `out.<owner>/` beside it, so that nobody's images are deleted under them. A run

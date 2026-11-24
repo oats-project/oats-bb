@@ -487,7 +487,9 @@ test("the agent's page says, on its state's line, the reason its row says for ev
   resetApp();
   // An agent that asks through OATS and has no thread: what it asks is said once, in Needs input; the line keeps the reason.
   const asks = await agentPage("flaky-ci-developer", { rpc: handlers({}, fixtureAgents().map((agent): Agent => (agent.instance === "flaky-ci-developer" ? { ...agent, threadId: null } : agent))), sidebarThreads: sidebarThreads(), sdk: bb([]).sdk });
-  await waitFor(() => expect(header(asks)).toMatchObject({ state: "!Needs you", sentence: "no bb thread" })); // ("!": the mark of an agent that waits)
+  await waitFor(() => expect(header(asks).sentence).toMatch(/(^| \| )no bb thread$/)); // (after how long it has waited, where the line says that)
+  expect(header(asks).state).toBe("!Needs you"); // ("!": the mark of an agent that waits)
+  expect(header(asks).sentence).not.toMatch(/permission|Bash/); // what it asks is not said twice
 });
 
 test("no act is drawn twice on the agent's page: the three agents whose thread bb has archived, and the one that runs outside OATS", async () => {

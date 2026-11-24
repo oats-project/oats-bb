@@ -182,7 +182,7 @@ export default async (run) => {
       check(refusedByBb, "bb refuses a message sent to the thread the stop archived (bb's own CLI)", said);
       // Nothing starts: for ten seconds the kernel keeps reading it stopped, with no report of a harness outside OATS, and bb keeps the thread archived.
       let stayed = true;
-      for (const until = Date.now() + 10_000; Date.now() < until; ) {
+      for (const deadline = Date.now() + 10_000; Date.now() < deadline; ) {
         const r = row();
         if (!(r?.running === false && (r.outsideOats ?? null) === null && threadNow()?.archivedAt != null)) stayed = false;
         await new Promise((resolve) => setTimeout(resolve, 1000));

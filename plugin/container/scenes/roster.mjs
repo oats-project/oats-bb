@@ -29,9 +29,9 @@ const statusOf = async (page, state, want = null) => {
 /** What the page shows of the thread's row when a read of it found nothing: for a failing check's line. */
 /**
  * Every roster row of the sidebar measured: a row is at most three lines (the name on one or two,
- * cut only after the second; the second block on ONE line: the state's word, a reason where there is one, "tmux"; no soul). Counts
+ * cut only after the second; the second block on ONE line: the state's word, a reason where there is one, the soul, "tmux"). Counts
  * only, never a name: `{ rows, over, wrapped, nameCut, soulCut, soulGone, whereCut, edgeCut, untitled }`
- * (`soulCut` and `soulGone` count a soul's phrase: a row has none, so both are 0; `whereCut`: the last phrase cut; `edgeCut`: something past the
+ * (`soulCut`: a soul cut with "…", which it may be; `soulGone`: a soul squeezed to nothing, which it never is; `whereCut`: the last phrase cut; `edgeCut`: something past the
  * row's edge, or the state's word cut; `untitled`: a name with no title holding it whole).
  */
 const rowLines = (page) =>
@@ -62,13 +62,13 @@ export default [
       check(headings === JSON.stringify(["workspace", "other threads"]), `${at} the sidebar's headings are "Workspace" and "Other threads": none names the roster`, headings);
       const waits = await page.evaluate(`JSON.stringify({ marked: document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} [data-mark][data-state="needs-you"]`)}).length, foot: !(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}) === null) })`);
       check(waits === JSON.stringify({ marked: 3, foot: false }), `${at} three rows carry the mark of an agent that waits, and no line at the roster's foot counts them`, waits);
-      // What the image's name says: every agent a row, each with its state in a word, and no soul; the
+      // What the image's name says: every agent a row, each with its state in a word and its soul; the
       // one that runs in tmux among them; the roster first, then New agent, the pages.
       const drawn = JSON.parse(await page.evaluate(`JSON.stringify({ facts: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}, order: [...document.querySelectorAll(${JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"].map(testId).join(", "))})].map((e) => e.getAttribute("data-testid")), marks: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark]`)}).length })`));
-      const WORDS = /^(Needs you|Working|Idle|Stopped|Failed|Unreachable)( · tmux)?$/;
+      const WORDS = /^(Needs you|Working|Idle|Stopped|Failed|Unreachable) · [a-z][a-z0-9.\/-]*( · tmux)?$/;
       check(
-        drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Working · tmux") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-new-agent", "oats-pages"]),
-        `${at} eight agents, eight rows: each its mark and its state in a word, and no soul; the one in tmux says "tmux"; then New agent and the pages`,
+        drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Working · oats-developer · tmux") && drawn.facts.includes("Needs you · oats-maintainer") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-new-agent", "oats-pages"]),
+        `${at} eight agents, eight rows: each its mark, its state in a word and its soul; the one in tmux says "tmux"; then New agent and the pages`,
         JSON.stringify(drawn),
       );
       // "tmux" on the row is bb's own terminal glyph, named "tmux" (the plugin draws no icon of its own): the
@@ -337,12 +337,12 @@ export default [
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const side = JSON.stringify(testId("oats-sidebar"));
       const tmux = TMUX_ROSTER.tmux;
-      // Every tmux agent is a row, by its one name, and says its state and "tmux" (no soul).
+      // Every tmux agent is a row, by its one name, and says its state, its soul and "tmux".
       const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), ((row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? "") + (row.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim()])) : ""; })()`, 30);
       const read = rows === null ? [] : JSON.parse(rows);
-      const wanted = tmux.map(([instance, , , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : how === "lost" ? "Stopped · session lost" : "Working"} · tmux`]);
+      const wanted = tmux.map(([instance, soul, , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : how === "lost" ? "Stopped · session lost" : "Working"} · ${soul} · tmux`]);
       const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
-      check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, then "tmux", and no soul`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, its soul, then "tmux"`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // ("tmux" in that reading is the glyph's name: every tmux row draws bb's terminal glyph, named, and no word.)
       const glyphs = JSON.parse(await page.evaluate(tmuxMarks));
       check(glyphs.marks === tmux.length && glyphs.glyphs === tmux.length && glyphs.named === tmux.length && glyphs.drawn === tmux.length, `${at} on each of the ${tmux.length} rows "tmux" is bb's terminal glyph, named "tmux"`, JSON.stringify(glyphs));
@@ -355,7 +355,7 @@ export default [
       const measured = await rowLines(page);
       const rowsRead = JSON.parse(measured);
       check(rowsRead.rows >= tmux.length + TMUX_ROSTER.bb.length && rowsRead.over === 0 && rowsRead.wrapped === 0, `${at} no row is over three lines, and no row's second block is on two`, measured);
-      check(rowsRead.edgeCut === 0 && rowsRead.whereCut === 0 && rowsRead.soulGone === 0 && rowsRead.untitled === 0, `${at} the state's word and "tmux" are never cut, no row draws a soul (${rowsRead.soulCut} cut), and every name has the whole name as its title`, measured);
+      check(rowsRead.edgeCut === 0 && rowsRead.whereCut === 0 && rowsRead.soulGone === 0 && rowsRead.untitled === 0, `${at} the state's word and "tmux" are never cut, no soul is squeezed to nothing (${rowsRead.soulCut} cut with "…"), and every name has the whole name as its title`, measured);
       await page.shot(`tmux-roster-${viewport.name}-sidebar`, { targets: true });
       // Scale: with twenty and more rows the list scrolls, and the last row and the foot can be brought into view.
       const reach = await page.evaluate(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; const last = rows[rows.length - 1]; last.scrollIntoView({ block: "center" }); const r = last.getBoundingClientRect(); const lastIn = r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight; const foot = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-new-agent")}`)}); foot.scrollIntoView({ block: "center" }); const f = foot.getBoundingClientRect(); return JSON.stringify({ last: lastIn, foot: f.top >= 0 && f.bottom <= window.innerHeight }); })()`);
@@ -391,8 +391,14 @@ export default [
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const row = `${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${LOST}"]`;
+      // The longest row there is: the state, the reason, a long soul, the glyph, on ONE line; the soul gives way.
+      await page.until(`document.querySelector(${JSON.stringify(row)}) !== null`, 30);
+      await page.evaluate(`document.querySelector(${JSON.stringify(row)}).scrollIntoView({ block: "center" })`);
+      const longest = await page.evaluate(`(() => { const row = document.querySelector(${JSON.stringify(row)}); const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const box = (e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right)]; }; const part = (kind) => facts.querySelector('[data-phrase="' + kind + '"]'); return JSON.stringify({ title: facts.getAttribute("title"), lines: Math.round(facts.getBoundingClientRect().height / parseFloat(getComputedStyle(facts).lineHeight)), state: getComputedStyle(part("state")).flexShrink === "0" && part("state").scrollWidth <= part("state").clientWidth + 1, reason: getComputedStyle(part("reason")).flexShrink === "0" && getComputedStyle(part("reason")).textOverflow !== "ellipsis" && part("reason").scrollWidth <= part("reason").clientWidth + 1, soulCut: part("soul").scrollWidth > part("soul").clientWidth + 1, soulRoom: part("soul").clientWidth >= 12, glyphIn: box(part("where"))[1] <= box(facts)[1] + 1 }); })()`);
+      check(/^\{"title":"Stopped · session lost · oats-contrib-developer · tmux","lines":1,"state":true,"reason":true,"soulCut":(true|false),"soulRoom":true,"glyphIn":true\}$/.test(longest), `${at} the longest row is ONE line: the state and the reason whole, the soul (giving way with "…" where it must), the glyph inside the row; its title says all of it`, longest);
+      await page.shot(`tmux-roster-${viewport.name}-longest-row`);
       const facts = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(row)}); const facts = row?.querySelector(${JSON.stringify(testId("oats-row-facts"))}); return facts ? ((facts.innerText.replace(/\\s+/g, " ").trim()) + (facts.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim() : ""; })()`, 30);
-      check(facts === "Stopped · session lost · tmux", `${at} its row: "Stopped · session lost", then where it is (bb's terminal glyph, named "tmux")`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(facts === "Stopped · session lost · oats-contrib-developer · tmux", `${at} its row: "Stopped · session lost", its soul, then where it is (bb's terminal glyph, named "tmux")`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       await page.evaluate(`document.querySelector(${JSON.stringify(row)}).click()`);
       const opened = await page.until(`location.pathname.endsWith(${JSON.stringify(`/plugins/oats/agent/${LOST}`)}) && document.querySelector(${JSON.stringify(`${testId("oats-panel-header")} ${testId("oats-agent-acts")} button`)}) !== null && document.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}) !== null && /Runs in/.test(document.querySelector(${JSON.stringify(testId("oats-panel-session"))})?.innerText ?? "") ? location.pathname : ""`, 30);
       check(Boolean(opened), `${at} its row opens its own page, and its Session card is read`, opened ?? (await page.evaluate("location.pathname")));
@@ -429,8 +435,8 @@ export default [
         await page.evaluate(click("oats-confirm-close"));
         check(Boolean(await page.until(closed, 10)), `${at} Close closes the dialog`);
         check(await showSidebar(page, viewport), `${at} the sidebar is shown again`);
-        const after = await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)}); const text = facts ? ((facts.innerText.replace(/\\s+/g, " ").trim()) + (facts.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim() : ""; return text === "Working · tmux" ? text : ""; })()`, 60);
-        check(after === "Working · tmux", `${at} its row then says "Working", and where it is: no "session lost" any more`, after ?? (await page.evaluate(textOf(row))));
+        const after = await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)}); const text = facts ? ((facts.innerText.replace(/\\s+/g, " ").trim()) + (facts.querySelector('[data-tmux="glyph"][aria-label="tmux"]') ? " tmux" : "")).trim() : ""; return text === "Working · oats-contrib-developer · tmux" ? text : ""; })()`, 60);
+        check(after === "Working · oats-contrib-developer · tmux", `${at} its row then says "Working", its soul and where it is: no "session lost" any more`, after ?? (await page.evaluate(textOf(row))));
         await page.evaluate(`document.querySelector(${JSON.stringify(row)})?.scrollIntoView({ block: "center" })`);
         await page.shot(`tmux-roster-${viewport.name}-lost-row-after`);
       } finally {

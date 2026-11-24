@@ -19,11 +19,10 @@ import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, outsideOf, OutsideWarning } from "../outside";
-import type { Said } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
-import { TmuxMark } from "../ui";
+import { TMUX, TmuxMark } from "../ui";
 import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
@@ -95,23 +94,6 @@ function AgentName({ entry, oats, testId }: { entry: Entry; oats: Ready; testId:
       {name}
     </a>
   );
-}
-
-/**
- * Where an agent the roster draws on no thread is, in a word or a few, or null where there is
- * nothing to say of it: from the outside feature's ONE answer (app/outside `said`: the kernel's
- * row and bb's own answer for the row's thread), the same words as the sidebar's row. An agent on
- * tmux: bb's terminal glyph named "tmux" (the word on a bb with none), after "session lost" where
- * its session was; an agent on bb says "archived in bb", "deleted in bb", "no bb thread" or
- * "thread not shown in bb"; nothing until bb has answered, and nothing for an agent OATS stopped
- * whose thread bb has archived (on a provider that archives at stop that is every stopped agent:
- * its row says Stopped, and opens the archived thread). The reason alone: its soul, its machine
- * and who started it are on its page.
- */
-function elsewhere(entry: Entry, said: Said | null): ReactNode {
-  if (entry.agent.backend === "tmux") return said !== null && said.note ? <>{said.note} · <TmuxMark /></> : <TmuxMark />;
-  if (said === null || said.kind === "stopped-archived") return null;
-  return said.note ? said.note : null;
 }
 
 /** The lifecycle's own word for the act that starts an agent ("Start…": it opens that act's dialog). */
@@ -346,8 +328,6 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
       {reply}
     </Disclosure>
   );
-  const saidOf = entry.thread === null ? outsideOf(oats).of(entry.agent) : null;
-  const where = entry.thread === null ? elsewhere(entry, saidOf) : null;
   // Why nothing was sent, in one line on the card: the first line of what the press was answered (the rest, if any, under Details).
   const why = failure === null ? [] : refusalLines(failure.message);
   return (
@@ -356,12 +336,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-0.5">
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            {/* The reason alone, where there is one: its soul and its machine are on its page. */}
-            {where === null ? null : (
-              <span data-testid="oats-needs-where" className="break-words text-xs text-muted-foreground">
-                {where}
-              </span>
-            )}
+            {/* Under its name, one line: the reason where there is one, its soul, and where it is for an agent on tmux. */}
+            <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" />
           </div>
           {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page.
               Where the request can only be answered in its thread the word is "Answer": the same press, the same place. */}
@@ -452,30 +428,60 @@ function Cropped<Item>({ items, shown: most, more, testId, children }: { items: 
 }
 
 /**
- * One agent as a row: its name, where it is where it has no bb thread (the reason alone), and, in
- * the list of every agent, its state in words. A list under a heading that says the state ("Working")
- * does not repeat it on every row.
+ * What a row of the home says of its agent beside its name, on ONE line that never wraps, "·"
+ * between: the reason where there is one (an agent with no bb thread: "session lost"; what became
+ * of its thread), its soul, and for an agent on tmux bb's terminal glyph. As on the sidebar's row
+ * (without the state: the heading over the list, or the row's own end, says it): when the line
+ * does not fit the SOUL gives way with "…", never the reason, and the glyph is never pushed out.
+ * Its title says the whole of it. (The machine is not on a row: it is on the agent's page.)
  */
-function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
+function AgentFacts({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
   const said = entry.thread === null ? outsideOf(oats).of(entry.agent) : null;
   const onTmux = entry.thread === null && entry.agent.backend === "tmux";
-  // On a row the glyph of an agent on tmux stands on the NAME's line, after the name: alone on a line under it, it reads as an orphan.
-  // The line under the name is the reason, where there is one ("session lost"; what became of a thread bb does not list).
-  const reason = entry.thread !== null ? null : onTmux ? (said !== null && said.note ? said.note : null) : elsewhere(entry, said);
+  const reason = entry.thread !== null ? null : onTmux ? (said !== null && said.note ? said.note : null) : said === null || said.kind === "stopped-archived" ? null : said.note || null;
+  const soul = shown(oats.soulOf(entry.agent));
+  const sep = (
+    <span data-sep="" className="shrink-0 whitespace-pre">
+      {" · "}
+    </span>
+  );
   return (
-    // A row is its name's ONE line (with the glyph of an agent on tmux after it), and the reason under it where there
-    // is one. No rule between rows: bb's own lists draw none between theirs.
-    <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-muted-foreground">
-          <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
-          {onTmux ? <TmuxMark /> : null}
-        </span>
-        {reason === null ? null : (
-          <span data-testid="oats-home-agent-where" className="break-words text-xs text-muted-foreground">
+    <span data-testid={testId} title={[reason, soul, onTmux ? TMUX : null].filter((part) => part !== null).join(" · ")} className="flex min-w-0 max-w-full overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+      {reason === null ? null : (
+        <>
+          <span data-phrase="reason" className="shrink-0">
             {reason}
           </span>
-        )}
+          {sep}
+        </>
+      )}
+      <span data-phrase="soul" className="min-w-[1.5em] shrink truncate">
+        {soul}
+      </span>
+      {onTmux ? (
+        <>
+          {sep}
+          <span data-phrase="where" className="shrink-0">
+            <TmuxMark />
+          </span>
+        </>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * One agent as a row of a list: its name, then on the same line what `AgentFacts` says of it, and,
+ * in the list of every agent, its state in words at the row's end. A list under a heading that
+ * says the state ("Working") does not repeat it on every row. No rule between rows: bb's own lists
+ * draw none between theirs.
+ */
+function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
+  return (
+    <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
+      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+        <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
+        <AgentFacts entry={entry} oats={oats} testId="oats-home-agent-where" />
       </span>
       {stateToo ? (
         <span className="shrink-0 text-sm">

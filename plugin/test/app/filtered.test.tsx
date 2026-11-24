@@ -41,7 +41,7 @@ test("the home's card: an agent's message with a line break and a bidi override 
   expect(questions.join("")).not.toMatch(/[\n\t\u202E]|abc123/);
 });
 
-test("the sidebar: the workspace's name is one filtered line; the machine and a soul's name are not drawn", async () => {
+test("the sidebar: the workspace's name and a soul's name are each one filtered line; the machine is not drawn", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, soul: `oats${BIDI}developer` } : agent));
   const snapshot = { ...fixtureSnapshot(agents), deployment: { root: "/abs/deployment", workspace: `oats${BIDI}`, machine: "fal\ncon" } };
   const app = await loadApp();
@@ -51,10 +51,10 @@ test("the sidebar: the workspace's name is one filtered line; the machine and a 
     { rpc: handlers({ snapshot: () => snapshot, souls: () => ({ souls: [] }) }), sidebarThreads: sidebarThreads() },
   );
   expect((await slot.findByTestId("oats-workspace-line")).textContent).toBe(`oats${GONE}`);
-  // The soul left the row and the machine the line: neither is drawn, filtered or not.
+  // The soul is on the row, through the display filter; the machine is not on the line.
   const row = slot.getAllByTestId("oats-agent-row").find((candidate) => candidate.getAttribute("data-sidebar-thread-id") === "thr_ci")!;
-  expect(within(row).getByTestId("oats-row-facts").textContent).toBe("Needs you");
-  expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/developer\b.*oats|fal con|falcon/);
+  expect(within(row).getByTestId("oats-row-facts").textContent).toBe(`Needs you · oats${GONE}developer`);
+  expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/fal con|falcon/);
   expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/[\n\u202E]/);
 });
 

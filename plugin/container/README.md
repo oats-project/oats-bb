@@ -22,6 +22,8 @@ does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a mac
 fresh install shows them: the plugin's `pages` stays at its default (the home alone) through every
 stage, and only those screens' scenes run. It is a pass for images: a check that asserts another
 page's link or tile does not hold in it, and the gate is the run without it.
+`LIVE_ONLY_STAGES="tmux-roster"` (stage names, commas between), by hand only and never in CI, runs
+those stages alone: a look at one screen in minutes, never a gate.
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
@@ -132,7 +134,7 @@ open, a confirmation before its act, in progress, done, refused and with another
   (`test/fixtures/roster/status.json`, kernel-fix-developer) with its name, home, window, soul group
   and parent changed, the claim the kernel printed for another agent on the waiting ones, and
   `running` true or false with no `runtimeState`, as the kernel prints a tmux home today. The scene
-  holds: every one is a row that says its state and "tmux" (no soul); the foot counts every
+  holds: every one is a row that says its state, its soul and "tmux" (the longest row, "Stopped · session lost · oats-contrib-developer · tmux", is ONE line: the soul gives way with "…", the state, the reason and the glyph never); the foot counts every
   agent that waits; no row is over three lines (the name on one or two, cut only after the
   second; the second block on one line); the
   selected row of a bb-thread agent with a name longer than two lines holds it cut after the

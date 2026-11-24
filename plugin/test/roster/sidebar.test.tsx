@@ -41,7 +41,7 @@ test("the tree: every bb agent has a row with both data-sidebar-thread-* attribu
   }
 });
 
-test("a row is two blocks: its name, then on one line its state in a word, and no soul; the mark sits beside the word, and no ? or new", async () => {
+test("a row is two blocks: its name, then on one line its state in a word and its soul; the mark sits beside the word, and no ? or new", async () => {
   const { slot } = await sidebar();
   const rows = await slot.findAllByTestId("oats-agent-row");
   const row = (id: string) => rows.find((candidate) => candidate.getAttribute("data-sidebar-thread-id") === id)!;
@@ -49,16 +49,22 @@ test("a row is two blocks: its name, then on one line its state in a word, and n
   const mark = (id: string) => row(id).querySelector("[data-mark]")!;
 
   expect(row("thr_release").textContent).toContain("Release 070 maintainer"); // the instance name as words, never bb's title for the thread (R1)
-  // The state's word alone: the soul is not on a row, in its words or in its title (the instance panel says it).
-  expect(facts("thr_release")).toBe("Needs you");
-  expect(facts("thr_ci")).toBe("Needs you"); // a claim, and a bb pending interaction
-  expect(facts("thr_redesign")).toBe("Working");
-  expect(facts("thr_harvest")).toBe("Idle");
-  expect(facts("thr_digest")).toBe("Stopped");
+  // The state's word, then the soul (Joan's word of 24 Nov: "Keep the agent type").
+  expect(facts("thr_release")).toBe("Needs you · oats-maintainer");
+  expect(facts("thr_ci")).toBe("Needs you · oats-developer"); // a claim, and a bb pending interaction
+  expect(facts("thr_redesign")).toBe("Working · oats-product-expert");
+  expect(facts("thr_harvest")).toBe("Idle · knowledge-harvester");
+  expect(facts("thr_digest")).toBe("Stopped · oats-expert");
   for (const one of rows) {
     const line = within(one).getByTestId("oats-row-facts");
     expect(line.getAttribute("title")).toBe(line.textContent);
-    expect(line.querySelector('[data-phrase="soul"]')).toBeNull();
+    expect(line.querySelector('[data-phrase="soul"]')!.textContent).not.toBe("");
+    // When the line is short of room the SOUL alone gives way, with "…": the state, a reason and where it is never shrink.
+    for (const part of Array.from(line.querySelectorAll("[data-phrase]"))) {
+      const classes = part.className.split(/\s+/);
+      if (part.getAttribute("data-phrase") === "soul") expect(classes).toEqual(expect.arrayContaining(["shrink", "truncate", "min-w-[1.5em]"]));
+      else expect([classes.includes("shrink-0"), classes.includes("truncate")]).toEqual([true, false]);
+    }
   }
   // The mark says the state too, and is hidden from a screen reader beside its word.
   for (const [id, state] of [["thr_release", "needs-you"], ["thr_redesign", "working"], ["thr_harvest", "idle"], ["thr_digest", "stopped"]] as const) {
@@ -76,8 +82,8 @@ test("two failures are two words: Failed for a session that ended, Unreachable f
   const { slot } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents }) });
   const rows = await slot.findAllByTestId("oats-agent-row");
   const facts = (id: string) => within(rows.find((row) => row.getAttribute("data-sidebar-thread-id") === id)!).getByTestId("oats-row-facts").textContent;
-  expect(facts("thr_harvest")).toBe("Failed");
-  expect(facts("thr_digest")).toBe("Unreachable");
+  expect(facts("thr_harvest")).toBe("Failed · knowledge-harvester");
+  expect(facts("thr_digest")).toBe("Unreachable · oats-expert");
 });
 
 test("an agent with no bb thread stays in the roster: one that runs in tmux, and one whose thread bb does not list; each opens its own page", async () => {
@@ -86,8 +92,8 @@ test("an agent with no bb thread stays in the roster: one that runs in tmux, and
   expect(rows.map((row) => [row.getAttribute("data-instance"), within(row).getByTestId("oats-row-facts").textContent])).toEqual([
     // Where its thread is (archived in bb, or deleted) is bb's own answer, which the outside feature asks and says (test/outside/places.test.tsx); bb says nothing here.
     // (In the kernel's order, as every row of their rank: the one on tmux is listed before the stopped one.)
-    ["kernel-fix-developer", "Working · tmux"],
-    ["weekly-digest-helper", "Stopped"],
+    ["kernel-fix-developer", "Working · oats-developer · tmux"],
+    ["weekly-digest-helper", "Stopped · oats-expert"],
   ]);
   expect(rows[0]!.textContent).toContain("Kernel fix developer");
   // (That neither is in a block of its own after the tree is the model's table: test/model/order.test.ts.)
@@ -272,7 +278,7 @@ test("a title with markup is drawn as text", async () => {
   expect(other.querySelector("img")).toBeNull();
 });
 
-test("no row says a soul, before or after the souls are read: neither in its words nor in a title", async () => {
+test("a row's soul is the matching soul's key once the souls are read, else the roster's name", async () => {
   const { slot } = await sidebar({
     souls: () => ({
       souls: [{ name: "oats.okf/knowledge-harvester", agent: "knowledge-harvester", description: "", origin: "oats.okf 2.1.0", capabilities: [], spawnable: true, problem: null }],
@@ -280,13 +286,8 @@ test("no row says a soul, before or after the souls are read: neither in its wor
   });
   const rows = await slot.findAllByTestId("oats-agent-row");
   const row = (id: string) => rows.find((candidate) => candidate.getAttribute("data-sidebar-thread-id") === id)!;
-  await waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "souls")).toBe(true));
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  for (const id of ["thr_harvest", "thr_release"]) {
-    expect(row(id).textContent).not.toMatch(/knowledge-harvester|oats-maintainer/);
-    expect(Array.from(row(id).querySelectorAll("[title]")).map((element) => element.getAttribute("title")).join(" ")).not.toMatch(/knowledge-harvester|oats-maintainer/);
-  }
-  expect(within(row("thr_harvest")).getByTestId("oats-row-facts").textContent).toBe("Idle");
+  await waitFor(() => expect(row("thr_harvest").textContent).toContain("oats.okf/knowledge-harvester"));
+  expect(row("thr_release").textContent).toContain("oats-maintainer");
 });
 
 test("several machines and none chosen: the notice says so and links to the plugin's settings; Retry would not help", async () => {
@@ -403,14 +404,14 @@ test("an agent the kernel refused as one it does not know says so in its row, un
   const { slot } = await sidebar({ snapshot: () => ({ ...fixtureSnapshot(), at }) });
   const facts = () => within(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_release")!).getByTestId("oats-row-facts").textContent;
   await slot.findByTestId("oats-tree");
-  expect(facts()).toBe("Needs you");
+  expect(facts()).toBe("Needs you · oats-maintainer");
   const { markGone } = await import("../../app/roster/gone");
   act(() => markGone("release-070-maintainer"));
-  expect(facts()).toBe("Not in OATS any more");
+  expect(facts()).toBe("Not in OATS any more · oats-maintainer");
   // The next roster: the kernel lists it after all, and the row says what the kernel says.
   at = "2026-11-19T12:31:00.000Z";
   await slot.behavior.emitRealtime("oats/changed", { at });
-  await waitFor(() => expect(facts()).toBe("Needs you"));
+  await waitFor(() => expect(facts()).toBe("Needs you · oats-maintainer"));
 });
 
 test("the row of the plugin's page that is shown is the selected one (D-037), and none is while a thread is shown", async () => {
@@ -448,7 +449,7 @@ test("a stopped tmux agent says Stopped in its sidebar row and in its own panel"
     { rpc: handlers({ snapshot: () => fixtureSnapshot(agents) }), sidebarThreads: sidebarThreads() },
   );
   const row = (await slot.findAllByTestId("oats-agent-row-threadless")).find((candidate) => candidate.getAttribute("data-instance") === "kernel-fix-developer")!;
-  expect(within(row).getByTestId("oats-row-facts").textContent).toBe("Stopped · tmux");
+  expect(within(row).getByTestId("oats-row-facts").textContent).toBe("Stopped · oats-developer · tmux");
   expect(row.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("stopped");
   const header = await slot.findByTestId("oats-panel-state");
   expect(header.querySelector("[data-state]")!.getAttribute("data-state")).toBe("stopped");
@@ -541,7 +542,7 @@ test("every agent that waits is marked on its row, the ones with no bb thread in
   expect(slot.queryByTestId("oats-needs-line")).toBeNull();
   expect(Array.from(slot.getByTestId("oats-tree").querySelectorAll('[data-mark][data-state="needs-you"]')).length).toBe(4); // three in the tree, and the one on tmux
   const tmux = slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === "kernel-fix-developer")!;
-  expect(within(tmux).getByTestId("oats-row-facts").textContent).toBe("Needs you · tmux");
+  expect(within(tmux).getByTestId("oats-row-facts").textContent).toBe("Needs you · oats-developer · tmux");
 });
 
 // Nobody waits: no row is marked, and no line says so. "Nothing needs you." is the home's empty

@@ -85,6 +85,8 @@ const fake = (verbs = {}) =>
  * the run without it.
  */
 const PILOT = process.env.LIVE_PILOT_IMAGES === "1";
+/** By hand only: LIVE_ONLY_STAGES="tmux-roster,…" runs those stages alone (a look at one screen, in minutes; never a gate). */
+const ONLY_STAGES = (process.env.LIVE_ONLY_STAGES ?? "").split(",").map((name) => name.trim()).filter((name) => name !== "");
 const PILOT_FEATURES = ["roster", "outside", "panel", "home", "lifecycle", "spawn"];
 /** Every page's id, as live.sh sets them for the checks (the default alone in the pilot's image pass); and how a stage or a scene sets the plugin's `pages`. */
 const ALL_PAGES = PILOT ? "home" : "home, automations, souls, capabilities, teams, machines";
@@ -301,7 +303,13 @@ function tmuxRoster(threads, as = {}) {
     row.running = how !== "stopped" && how !== "lost";
     // A lost session (the kernel's recorded row for a tmux home whose window was killed): not running, no word, and `sessionEnd: "lost"`.
     if (how === "lost") row.sessionEnd = "lost";
-    status.agents.find((group) => group.name === soul).instances.push(row);
+    // (A soul the fixtures' status does not list gets a group of its own, shaped as the model's.)
+    let group = status.agents.find((each) => each.name === soul);
+    if (group === undefined) {
+      group = { ...structuredClone(status.agents.find((each) => each.instances.length > 0 || each.name === "oats-developer") ?? status.agents[0]), name: soul, instances: [] };
+      status.agents.push(group);
+    }
+    group.instances.push(row);
   }
   return JSON.stringify(status);
 }
@@ -570,6 +578,7 @@ try {
   for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
     const mine = scenes.filter((scene) => scene.stage === name);
     if (mine.length === 0) continue;
+    if (ONLY_STAGES.length > 0 && !ONLY_STAGES.includes(name)) continue;
     if ((name === "local-roster") !== (LOCAL_STATUS !== "")) continue; // the local stage alone, or every stage but it
     // The hold for this stage: taken, or lifted where the stage tells a thread itself.
     // (None for the local stage either: it archives the fixtures' threads, and no turn is held on an archived thread.)

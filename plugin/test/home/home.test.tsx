@@ -60,7 +60,7 @@ test("what needs you first, then the tiles, who works and what is unread; no hea
   for (let i = 1; i < order.length; i++) expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-test("a card says who (the name as words, and no soul or machine), what it asks and how long it has waited; its name and Open lead to its thread", async () => {
+test("a card says who (the name as words, its soul under it, and no machine), what it asks and how long it has waited; its name and Open lead to its thread", async () => {
   const slot = await homePage();
   const release = await cardOf(slot, "release-070-maintainer");
   expect(within(release).getByTestId("oats-needs-name").textContent).toBe("Release 070 maintainer");
@@ -69,14 +69,17 @@ test("a card says who (the name as words, and no soul or machine), what it asks 
   expect(named.className.split(/\s+/)).not.toContain("underline");
   expect(named.className.split(/\s+/)).toEqual(expect.arrayContaining(["font-semibold", "hover:underline", "focus-visible:underline"]));
   expect([named.tagName, named.getAttribute("href") !== null]).toEqual(["A", true]);
-  // A row of the Working list: one line (its name), the same link, and no rule between rows.
+  // A row of the Working list: one line (its name, then its soul), the same link, and no rule between rows.
   const worker = within(slot.getByTestId("oats-home-working")).getAllByTestId("oats-working-row")[0]!;
   expect(worker.className).not.toMatch(/border/);
   expect(within(worker).getByTestId("oats-home-agent").className.split(/\s+/)).not.toContain("underline");
-  expect(within(worker).queryByTestId("oats-home-agent-where")).toBeNull();
-  // Its soul and its machine are on its page, not on the card; an agent on its thread has no second line at all.
-  expect(release.textContent).not.toMatch(/falcon|oats-maintainer/);
-  expect(within(release).queryByTestId("oats-needs-where")).toBeNull();
+  const workerFacts = within(worker).getByTestId("oats-home-agent-where");
+  expect([workerFacts.textContent, workerFacts.getAttribute("title"), workerFacts.className.split(/\s+/).includes("whitespace-nowrap")]).toEqual(["oats-product-expert", "oats-product-expert", true]);
+  expect(workerFacts.querySelector('[data-phrase="soul"]')!.className.split(/\s+/)).toEqual(expect.arrayContaining(["shrink", "truncate"])); // the soul is the part that gives way
+  // Its soul is under its name on the card (Joan, 24 Nov: "Keep the agent type"); its machine is on its page.
+  expect(within(release).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer");
+  expect(release.textContent).not.toMatch(/falcon/);
+  expect(within(release).getByTestId("oats-needs-where").querySelector('[data-phrase="reason"], [data-phrase="where"]')).toBeNull(); // on its thread: no reason, no glyph
   // Under "Needs you" the heading says the word: the card keeps the mark, named for a screen reader, and the wait.
   expect(within(release).getByTestId("oats-state").textContent).toBe("!");
   expect(within(release).getByTestId("oats-state").querySelector('[data-mark][role="img"]')!.getAttribute("aria-label")).toBe("Needs input"); // (the mark's own name, as on every row)
@@ -595,13 +598,15 @@ test("Home › Agents: every agent OATS has, in the sidebar's order, each with i
   const tmux = rows.find((row) => row.dataset.instance === "night-watch-helper")!;
   expect(rows.indexOf(tmux)).toBeLessThan(rows.length - 1); // in the sidebar's one order: it waits, so it is among the first, not in a block after the tree
   expect(within(tmux).getByTestId("oats-home-agent").textContent).toBe("Night watch helper");
-  // Where it is, the reason alone; its soul, its machine and who started it are on its page (the panel's Lineage).
-  expect(within(tmux).queryByTestId("oats-home-agent-where")).toBeNull(); // no reason: nothing stands under its name
-  expect(within(tmux).getByTestId("oats-tmux").previousElementSibling).toBe(within(tmux).getByTestId("oats-home-agent")); // where it is: on the name's line, after the name
+  // Beside its name, one line: no reason, its soul, where it is; its machine and who started it are on its page (the panel's Lineage).
+  expect(within(tmux).getByTestId("oats-home-agent-where").textContent).toBe("oats-maintainer · tmux");
+  expect(within(tmux).getByTestId("oats-home-agent-where").getAttribute("title")).toBe("oats-maintainer · tmux");
+  expect(within(tmux).getByTestId("oats-home-agent-where").previousElementSibling).toBe(within(tmux).getByTestId("oats-home-agent")); // on the name's line, after the name
+  expect(within(within(tmux).getByTestId("oats-home-agent-where")).getByTestId("oats-tmux").parentElement!.className.split(/\s+/)).toContain("shrink-0"); // the glyph is never pushed out
   expect(tmux.textContent).not.toMatch(/started by|Ana|falcon/);
   expect(within(tmux).getByTestId("oats-state").textContent).toContain("Needs you");
-  // An agent on its bb thread has no second line.
-  expect(within(rows.find((row) => row.dataset.instance === "redesign-ui-lead")!).queryByTestId("oats-home-agent-where")).toBeNull();
+  // An agent on its bb thread: its soul alone, no reason and no glyph.
+  expect(within(rows.find((row) => row.dataset.instance === "redesign-ui-lead")!).getByTestId("oats-home-agent-where").textContent).toBe("oats-product-expert");
   // no card and no reply here: the list says who there is
   expect(list.queryByTestId("oats-needs-card")).toBeNull();
   const back = list.getByTestId("oats-home-back");
@@ -644,11 +649,11 @@ test("an agent with no bb thread that needs the person has its card: what it ask
     const card = await cardOf(slot, "night-watch-helper");
     expect(heading(slot.getByTestId("oats-home-needs"))).toBe("Needs you4");
     expect(within(card).getByTestId("oats-needs-question").textContent).toBe("Which branch do I watch?");
-    // Where it runs is the card's second line, the reason alone; then where to answer it. The
+    // Its soul and where it runs are the card's second line; then where to answer it. The
     // kernel's command is not on the card: it is on the agent's page, where Open leads.
-    expect(within(card).getByTestId("oats-needs-where").textContent).toBe("tmux");
+    expect(within(card).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer · tmux");
     expect(within(card).getByTestId("oats-needs-elsewhere").textContent).toBe("Answer it in its terminal.");
-    expect(card.textContent).toBe("Night watch helpertmuxOpen!4 dWhich branch do I watch?Answer it in its terminal.");
+    expect(card.textContent).toBe("Night watch helperoats-maintainer · tmuxOpen!4 dWhich branch do I watch?Answer it in its terminal.");
     expect(card.textContent).not.toMatch(/oats session attach|falcon/);
     expect(within(card).queryByRole("button", { name: "Copy the command" })).toBeNull();
     expect(within(card).getByTestId("oats-needs-open").textContent).toBe("Open");
@@ -897,7 +902,7 @@ test("the release's default shows the home alone: no tile at all, no count read 
   expect(empty.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent" }]);
 });
 
-test("Home › Agents says where an agent the roster draws on no thread is, from the one answer the sidebar reads, as the reason alone: nothing of an archived thread for a stop, the reason otherwise, and a lost tmux session", async () => {
+test("Home › Agents says where an agent the roster draws on no thread is, from the one answer the sidebar reads, as the reason before its soul: nothing of an archived thread for a stop, the reason otherwise, and a lost tmux session", async () => {
   const threads = (...gone: string[]) => { const all = sidebarThreads(); return { ...all, threads: all.threads.filter((thread) => !gone.includes(thread.id)) }; };
   /** bb's own answer for the ids asked: the archived ones among them. */
   const bb = (...archived: string[]) => ({ threads: { list: async ({ threadIds }: { threadIds: readonly string[] }) => threadIds.filter((id) => archived.includes(id)).map((id) => ({ id, archivedAt: 1 })), interactions: { list: async () => [] } } }) as never as RenderSlotOptions<Contract>["sdk"];
@@ -921,27 +926,28 @@ test("Home › Agents says where an agent the roster draws on no thread is, from
   resetApp();
   // A session lost with its thread archived: the reason, as on the sidebar's row.
   const lost = await rowOf(withEnd("lost"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb("thr_digest") });
-  await waitFor(() => expect(lost.words()).toBe("archived in bb"));
+  await waitFor(() => expect(lost.words()).toBe("archived in bb · oats-expert"));
   lost.list.unmount();
   resetApp();
   // bb answers that it has no thread of that id: deleted.
   const deleted = await rowOf(withEnd("stopped"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb() });
-  await waitFor(() => expect(deleted.words()).toBe("deleted in bb"));
+  await waitFor(() => expect(deleted.words()).toBe("deleted in bb · oats-expert"));
   expect(deleted.words()).not.toContain("gone");
   deleted.list.unmount();
   resetApp();
   // An agent on tmux whose session was lost: the same reason word as on bb, then where it runs (bb's terminal glyph, named "tmux").
   const tmuxLost: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
   const tmux = await rowOf([...fixtureAgents(), tmuxLost], tmuxLost.instance, { sidebarThreads: sidebarThreads(), sdk: bb() });
-  await waitFor(() => expect(tmux.words()).toBe("session lost"));
-  // Where it is stands on the NAME's line, after the name (bb's terminal glyph; the word here: the test SDK's icon set has no glyph).
-  const mark = within(tmux.row).getByTestId("oats-tmux");
-  expect(mark.previousElementSibling).toBe(within(tmux.row).getByTestId("oats-home-agent"));
-  expect(mark.closest('[data-testid="oats-home-agent-where"]')).toBeNull();
+  await waitFor(() => expect(tmux.words()).toBe("session lost · oats-maintainer · tmux"));
+  // One line beside the name: the reason, the soul, then where it is (bb's terminal glyph; the word here: the test SDK's icon set has no glyph).
+  const facts = within(tmux.row).getByTestId("oats-home-agent-where");
+  expect(facts.previousElementSibling).toBe(within(tmux.row).getByTestId("oats-home-agent"));
+  expect(Array.from(facts.querySelectorAll("[data-phrase]")).map((part) => [part.getAttribute("data-phrase"), part.className.split(/\s+/).includes("shrink-0")])).toEqual([["reason", true], ["soul", false], ["where", true]]); // the soul alone gives way
+  expect(facts.getAttribute("title")).toBe("session lost · oats-maintainer · tmux");
   expect(within(tmux.row).getByTestId("oats-state").textContent).toBe("Stopped");
 });
 
-test("the card of an agent that asks and that bb lists no thread of says what became of its thread as the reason alone, as far as bb's answer goes, with no sentence; its Open leads to its page, or to the archived thread", async () => {
+test("the card of an agent that asks and that bb lists no thread of says what became of its thread as the reason before its soul, as far as bb's answer goes, with no sentence; its Open leads to its page, or to the archived thread", async () => {
   const CI = "flaky-ci-developer"; // the sample's agent that asks (it carries a claim), on thr_ci
   const without = () => { const all = sidebarThreads(); return { ...all, threads: all.threads.filter((thread) => thread.id !== "thr_ci") }; };
   const bb = (...archived: string[]) => ({ threads: { list: async ({ threadIds }: { threadIds: readonly string[] }) => threadIds.filter((id) => archived.includes(id)).map((id) => ({ id, archivedAt: 1 })), interactions: { list: async () => [] } } }) as never as RenderSlotOptions<Contract>["sdk"];
@@ -959,14 +965,14 @@ test("the card of an agent that asks and that bb lists no thread of says what be
   };
   // bb answers that it has no thread of that id: deleted. The button leads to its page.
   const deleted = await cardOn(fixtureAgents(), bb());
-  await waitFor(() => expect(deleted.where()).toBe("deleted in bb"));
+  await waitFor(() => expect(deleted.where()).toBe("deleted in bb · oats-developer"));
   quiet(deleted.card);
   expect(deleted.leads()).toBe("Open its page: Flaky ci developer");
   deleted.slot.unmount();
   resetApp();
   // bb has it archived (and the agent still runs): the button leads to the archived thread, and its name says so.
   const archived = await cardOn(fixtureAgents(), bb("thr_ci"));
-  await waitFor(() => expect(archived.where()).toBe("archived in bb"));
+  await waitFor(() => expect(archived.where()).toBe("archived in bb · oats-developer"));
   quiet(archived.card);
   expect(archived.leads()).toBe("Open thread: Flaky ci developer");
   fireEvent.click(within(archived.card).getByTestId("oats-needs-open"));
@@ -975,7 +981,7 @@ test("the card of an agent that asks and that bb lists no thread of says what be
   resetApp();
   // Its row names no thread at all: "no bb thread"; the button leads to its page.
   const none = await cardOn(fixtureAgents().map((agent): Agent => (agent.instance === CI ? { ...agent, threadId: null } : agent)), bb());
-  await waitFor(() => expect(none.where()).toBe("no bb thread"));
+  await waitFor(() => expect(none.where()).toBe("no bb thread · oats-developer"));
   quiet(none.card);
   expect(none.leads()).toBe("Open its page: Flaky ci developer");
 });
@@ -1389,12 +1395,12 @@ test("the home's one more try of the version waits for the roster: none while th
 // An agent whose thread bb no longer has and that still needs the person: nothing can be sent to
 // it from bb. The card's second line says what became of its thread, as the reason alone (bb's own
 // answer: "deleted in bb"); no sentence repeats it, and the card draws no reply. Open leads to its page.
-test("an agent whose bb thread was deleted that needs the person: the reason on its second line, no sentence under it, no reply, and Open to its page", async () => {
+test("an agent whose bb thread was deleted that needs the person: the reason and its soul on its second line, no sentence under it, no reply, and Open to its page", async () => {
   const sdk = { threads: { list: async () => [], interactions: { list: async () => [] } } } as never as RenderSlotOptions<Contract>["sdk"];
   const slot = await homePage({ sidebarThreads: { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_release") }, sdk });
   const card = await cardOf(slot, "release-070-maintainer");
-  await waitFor(() => expect(within(card).getByTestId("oats-needs-where").textContent).toBe("deleted in bb"));
-  expect(card.textContent).toBe("Release 070 maintainerdeleted in bbOpen!4 dGreen light at 9f2e1c? Second reader done.");
+  await waitFor(() => expect(within(card).getByTestId("oats-needs-where").textContent).toBe("deleted in bb · oats-maintainer"));
+  expect(card.textContent).toBe("Release 070 maintainerdeleted in bb · oats-maintainerOpen!4 dGreen light at 9f2e1c? Second reader done.");
   expect(card.textContent).not.toContain("so nothing can be sent to it from here");
   expect(within(card).queryByTestId("oats-needs-elsewhere")).toBeNull();
   expect(within(card).queryByTestId("oats-reply")).toBeNull();

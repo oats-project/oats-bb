@@ -24,6 +24,6 @@ export const TMUX_ROSTER = {
     ["ranker-v4-probe", "research-expert", null, "running"],
     ["ranker-ablation-probe", "research-expert", null, "waiting"],
     ["docs-site-expert", "oats-expert", null, "running"],
-    ["overnight-sweep-developer", "oats-developer", null, "lost"],
+    ["overnight-sweep-developer", "oats-contrib-developer", null, "lost"], // (a long soul: the longest row there is, "Stopped · session lost · <soul> · <glyph>")
   ],
 };

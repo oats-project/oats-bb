@@ -236,16 +236,16 @@ export default [
       const all = `JSON.stringify({ digest: ${rowOf(threadless("weekly-digest-helper"))}, ranker: ${rowOf(threadless("ranker-v3-probe"))}, flaky: ${rowOf(threadless("flaky-ci-developer"))}, outside: ${rowOf(onThread(threads.get("thr_harvest").id))}, failed: ${rowOf(onThread(threads.get("thr_mockups").id))}, unreachable: ${rowOf(onThread(threads.get("thr_redesign").id))}, open: ${rowOf(onThread(threads.get("thr_release").id))}, tree: ${textOf(testId("oats-tree"))}, outsides: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark][data-state="outside"]`)}).length, words: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
       const settled = await page.until(`(() => { const now = ${all}; return /archived in bb/.test(now) && /deleted in bb/.test(now) && /Running outside OATS/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
-      // The reason follows the state's word on a row (no soul): each of these rows' second line is ONE line, never two.
+      // The reason follows the state's word on a row and the soul follows it: each of these rows' second line is ONE line, never two.
       const digestOpens = await page.until(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.getAttribute("data-opens") === "thread"`, 15);
-      check(same(rows.digest, { facts: "Stopped", state: "stopped", tone: null, lines: 1 }) && Boolean(digestOpens), `${at} stopped, its thread archived in bb: "Stopped" alone, in the plain tone, and the row opens the archived thread`, JSON.stringify(rows.digest));
-      check(same(rows.outside, { facts: "Running outside OATS", state: "outside", tone: null, lines: 1 }) && rows.outsides === 1, `${at} the kernel's outsideOats: the state IS "Running outside OATS", with its mark, alone on its line, on that row alone; no "Stopped" beside it`, JSON.stringify([rows.outside, rows.outsides]));
-      check(same(rows.ranker, { facts: "Stopped · archived in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
-      check(same(rows.flaky, { facts: "Stopped · deleted in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));
+      check(same(rows.digest, { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 }) && Boolean(digestOpens), `${at} stopped, its thread archived in bb: "Stopped" and its soul, no reason, in the plain tone, and the row opens the archived thread`, JSON.stringify(rows.digest));
+      check(same(rows.outside, { facts: "Running outside OATS · knowledge-harvester", state: "outside", tone: null, lines: 1 }) && rows.outsides === 1, `${at} the kernel's outsideOats: the state IS "Running outside OATS", with its mark, then its soul, on that row alone; no "Stopped" beside it`, JSON.stringify([rows.outside, rows.outsides]));
+      check(same(rows.ranker, { facts: "Stopped · archived in bb · research-expert", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
+      check(same(rows.flaky, { facts: "Stopped · deleted in bb · oats-developer", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));
       // Every row's state word is one of the set: "Archived in bb" and "Deleted in bb" are reasons after a state, never states.
       const SET = ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"];
       check(rows.words.length === 8 && rows.words.every((word) => SET.includes(word)), `${at} every row's state word is one of the set (${SET.join(", ")})`, JSON.stringify(rows.words));
-      check(rows.failed?.facts === "Failed" && rows.unreachable?.facts === "Unreachable" && rows.open?.facts === "Stopped", `${at} failed, unreachable and stopped on an open thread: the roster's own words, the state alone`, JSON.stringify([rows.failed, rows.unreachable, rows.open]));
+      check(rows.failed?.facts === "Failed · oats-desktop-developer" && rows.unreachable?.facts === "Unreachable · oats-product-expert" && rows.open?.facts === "Stopped · oats-maintainer", `${at} failed, unreachable and stopped on an open thread: the roster's own words, the state and the soul, no reason`, JSON.stringify([rows.failed, rows.unreachable, rows.open]));
       check(!/its bb thread is gone/.test(rows.tree), `${at} no row says "its bb thread is gone"`, rows.tree);
       // The one the kernel reports running outside OATS is counted among those that need a person (no other agent of this roster waits).
       const foot = await page.evaluate(`JSON.stringify({ foot: !(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}) === null), said: /need you/i.test(document.querySelector(${JSON.stringify(testId("oats-sidebar"))}).innerText) })`);
@@ -370,7 +370,7 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      await page.until(`(${rowOf(threadless("flaky-ci-developer"))})?.facts === "Stopped · deleted in bb"`, 30);
+      await page.until(`(${rowOf(threadless("flaky-ci-developer"))})?.facts === "Stopped · deleted in bb · oats-developer"`, 30);
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("flaky-ci-developer"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/plugins/oats/agent/flaky-ci-developer")`, 15)), `${at} the row of an agent whose thread was deleted opens the agent's own page`, await page.evaluate("location.pathname"));
       const read = await page.until(
@@ -435,12 +435,12 @@ export default [
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       check(
         same([rows.operator, rows.host, rows.idle, rows.tmux], [
-          { facts: "Stopped", state: "stopped", tone: null, lines: 1 },
-          { facts: "Stopped · session lost", state: "stopped", tone: null, lines: 1 },
-          { facts: "Idle · not loaded", state: "idle", tone: null, lines: 1 },
-          { facts: "Stopped · session lost · tmux", state: "stopped", tone: null, lines: 1 },
+          { facts: "Stopped · knowledge-harvester", state: "stopped", tone: null, lines: 1 },
+          { facts: "Stopped · session lost · oats-maintainer", state: "stopped", tone: null, lines: 1 },
+          { facts: "Idle · not loaded · oats-desktop-developer", state: "idle", tone: null, lines: 1 },
+          { facts: "Stopped · session lost · oats-developer · tmux", state: "stopped", tone: null, lines: 1 },
         ]) && rows.words.every((word) => ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"].includes(word)),
-        `${at} the rows: "Stopped" alone (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux, "tmux" its glyph's name: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every state word is one of the set`,
+        `${at} the rows (each with its soul after these words): "Stopped" with no reason (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux, "tmux" its glyph's name: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every state word is one of the set`,
         JSON.stringify(rows),
       );
       await page.shot(`outside-${viewport.name}-three-sidebar`);
@@ -523,15 +523,15 @@ export default [
       check(
         Boolean(answered) &&
           same(rows, [
-            { facts: "Stopped", state: "stopped", tone: null, lines: 1 },
-            { facts: "Stopped · archived in bb", state: "stopped", tone: "warning", lines: 1 },
-            { facts: "Idle · archived in bb", state: "idle", tone: "warning", lines: 1 },
+            { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 },
+            { facts: "Stopped · archived in bb · research-expert", state: "stopped", tone: "warning", lines: 1 },
+            { facts: "Idle · archived in bb · oats-maintainer", state: "idle", tone: "warning", lines: 1 },
           ]),
-        `${at} the three rows: "Stopped" alone, plain (an operator's stop); "Stopped · archived in bb" with the warning mark (a session lost); "Idle · archived in bb" with the warning mark (it still runs); each opens its archived thread`,
+        `${at} the three rows (each with its soul after these words): "Stopped" with no reason, plain (an operator's stop); "Stopped · archived in bb" with the warning mark (a session lost); "Idle · archived in bb" with the warning mark (it still runs); each opens its archived thread`,
         JSON.stringify(rows),
       );
       const stoppedTmux = JSON.parse(await page.evaluate(`JSON.stringify(${rowOf(threadless("kernel-fix-developer"))})`));
-      check(same(stoppedTmux, { facts: "Stopped · tmux", state: "stopped", tone: null, lines: 1 }), `${at} an agent on tmux that OATS stopped (its row says "shell" beside an operator's stop) reads "Stopped" and where it is, never "Failed"`, JSON.stringify(stoppedTmux));
+      check(same(stoppedTmux, { facts: "Stopped · oats-developer · tmux", state: "stopped", tone: null, lines: 1 }), `${at} an agent on tmux that OATS stopped (its row says "shell" beside an operator's stop) reads "Stopped" and where it is, never "Failed"`, JSON.stringify(stoppedTmux));
       await page.shot(`outside-${viewport.name}-archived-three-sidebar`, { targets: true });
 
       // The one that still runs: its row opens the archived thread, whose own row says the remedy, with Stop.

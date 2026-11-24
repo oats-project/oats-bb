@@ -115,7 +115,7 @@ test("opened with no soul: the soul is the first field and holds the focus, noth
   expect(submit(slot).disabled).toBe(true);
   expect(submit(slot).textContent).toBe("Spawn");
   // Off, and nothing beside it says why: the Soul field is empty, first on the page, and says what it wants.
-  expect([reason(slot), describedBy(slot)]).toEqual([null, null]);
+  expect([reason(slot), describedBy(slot)]).toEqual([null, "SoulChoose a soul…▾"]); // (for a screen reader the off button is described by that field: no word is added to the screen)
   expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Choose a soul first|to see what will be created/);
   expect(slot.queryByTestId("oats-spawn-preview")).toBeNull(); // nothing will be created yet: no heading over an empty column
   expect(calls(slot, "spawnPlan")).toEqual([]);
@@ -177,6 +177,17 @@ test("What will be created: in view what a person decides on (the name, where it
   expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", name: "ranker-v4-probe" });
 });
 
+// SAFETY (the review of part 7): the mode line over the buttons is gone because the column's Access row says it. So
+// the row is there WHENEVER Spawn can be pressed: also for a preview that is silent on its decision (a valid answer:
+// the schema asks only for its revision). The plugin asks for bb's full mode on every spawn, and says so.
+test("a preview that does not say the access: the Access row is drawn all the same, from what the plugin asks (full mode: no sandbox), in view, with Spawn on", async () => {
+  const { decision: _silent, ...undecided } = recorded;
+  const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts({ ...undecided, decision: { revision: "r1" } }, { name: input.name ?? null }), revision: REVISION }) });
+  expect(submit(slot).disabled).toBe(false);
+  expect(rows(slot).inView).toContainEqual(["Access", "full mode: no sandbox"]);
+  expect(slot.getByTestId("oats-spawn-form").textContent!.split("no sandbox")).toHaveLength(2);
+});
+
 test("a warning of the kernel's is drawn as a warning, through the display filter", async () => {
   const warned = { ...recorded, warnings: ["the bb server runs bb-app 0.60.0; the capability was tested up to 0.50.1", "the hook printed token: abc123"] };
   const slot = await form("oats-developer", { spawnPlan: () => ({ facts: formFacts(warned), revision: REVISION }) });
@@ -220,7 +231,7 @@ test("the model: Default says what the kernel resolved and passes nothing; a sug
   choose(slot, "oats-spawn-model", "__custom__");
   const typed = slot.getByTestId("oats-spawn-model-id") as HTMLInputElement;
   expect(typed.placeholder).toBe("Type a model ID");
-  expect([submit(slot).disabled, why(slot)]).toEqual([true, null]); // off, and no sentence: the empty field under it says "Type a model ID"
+  expect([submit(slot).disabled, reason(slot), describedBy(slot)]).toEqual([true, null, "Model ID"]); // off, and no sentence: the empty field under it says "Type a model ID", and describes the button
   fireEvent.change(typed, { target: { value: " openai/o3 " } });
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", model: "openai/o3" }));
   expect(submit(slot).disabled).toBe(false);
@@ -498,7 +509,7 @@ test("the relationship: Independent at the start; a relation needs its instance,
   fireEvent.keyDown(slot.getByTestId("oats-spawn-relative-filter"), { key: "Escape" });
   expect(line()).toBe(""); // no sentence: the empty choice says "Choose an instance…"
   expect(slot.getByTestId("oats-spawn-relation").querySelector("label")).toBeNull(); // and no "Which instance" over it: it is named for a screen reader
-  expect([submit(slot).disabled, why(slot)]).toEqual([true, null]); // off, and no sentence: the choice under the relationship says "Choose an instance…"
+  expect([submit(slot).disabled, reason(slot), describedBy(slot)]).toEqual([true, null, "Choose an instance…▾"]); // off, and no sentence: the choice under the relationship says it, and describes the button
   choose(slot, "oats-spawn-relative", "flaky-ci-developer");
   expect([line(), slot.getByTestId("oats-spawn-relative").textContent]).toEqual(["", "Flaky ci developer▾"]); // the choice says who; the column's Relationship row says the rest
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", relation: { kind: "child", to: "flaky-ci-developer" } }));
@@ -814,7 +825,8 @@ test("held as it is, the form keeps saying why: the word of an unknown outcome s
   stale = true;
   await slot.behavior.emitRealtime("oats/changed", { at: new Date().toISOString() });
   await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).not.toBeNull());
-  expect([submit(slot).textContent, submit(slot).disabled, why(slot)]).toEqual(["Check result", true, null]);
+  expect([submit(slot).textContent, submit(slot).disabled, reason(slot)]).toEqual(["Check result", true, null]);
+  expect(describedBy(slot)).toContain("Acts are off."); // described by the roster's notice
   expect(slot.getByTestId("oats-unreadable").textContent).toContain("Acts are off.");
   expect(slot.getByTestId("oats-new-agent-page").textContent).not.toContain("Comes back when OATS is read again");
   fireEvent.click(submit(slot));
@@ -968,7 +980,8 @@ test("a preview the kernel refuses: a person's words first, the kernel's code an
   // The kernel's code is one press away, with its line: nowhere on the notice's face.
   expect(notice.querySelector(":scope > p")).toBeNull();
   expect([(notice.querySelector('[data-testid="oats-notice-details"]') as HTMLDetailsElement).open, notice.querySelector('[data-testid="oats-notice-details"] p')!.textContent]).toEqual([false, expect.stringMatching(/^E_BACKEND_HARNESS: .*the bb session provider cannot launch codex/)]);
-  expect([submit(slot).disabled, why(slot)]).toEqual([true, null]); // off, and no sentence beside it: the column's refusal says why
+  expect([submit(slot).disabled, reason(slot)]).toEqual([true, null]); // off, and no sentence beside it: the column's refusal says why
+  expect(describedBy(slot)).toContain("This can’t be spawned as it is"); // and describes the button
   refuse = false;
   fireEvent.click(slot.getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(column(slot).textContent).toContain("numbered by the kernel"));
@@ -1000,7 +1013,8 @@ test("a preview the provider refuses (from OATS 0.70.1 it refuses as the spawn d
   expect(notice.querySelector('[data-testid="oats-notice-details"] p')!.textContent).toMatch(/^E_BACKEND_NOT_READY: .*bb reports its pi provider as not_installed/);
   // Not "no preview yet": nothing is being read, the facts of the earlier values are gone, and Spawn is off with the refusal in view.
   expect(column(slot).textContent).not.toMatch(/Reading…|Updating…|numbered by the kernel/);
-  expect([submit(slot).disabled, why(slot)]).toEqual([true, null]); // off, and no sentence beside it: the column's refusal says why
+  expect([submit(slot).disabled, reason(slot)]).toEqual([true, null]); // off, and no sentence beside it: the column's refusal says why
+  expect(describedBy(slot)).toContain("This can’t be spawned as it is"); // and describes the button
   fireEvent.click(submit(slot));
   fireEvent.keyDown(slot.getByTestId("oats-spawn-task"), { key: "Enter", ctrlKey: true });
   expect(calls(slot, "spawn")).toEqual([]);
@@ -1061,7 +1075,8 @@ test("while OATS cannot be read the form is held like the acts: the roster's own
   expect(notice.textContent).toContain("Read 40 min ago.");
   expect(slot.getAllByTestId("oats-held")).toHaveLength(1);
   expect(fieldset(slot).disabled).toBe(true);
-  expect([submit(slot).disabled, why(slot)]).toEqual([true, null]); // the notice says "Acts are off.", once: no reason beside the button
+  expect([submit(slot).disabled, reason(slot)]).toEqual([true, null]); // the notice says "Acts are off.", once: no reason beside the button
+  expect(describedBy(slot)).toContain("Acts are off."); // which is described by that notice
   expect(notice.textContent).toContain("Acts are off.");
   await new Promise((resolve) => setTimeout(resolve, 500));
   expect(calls(slot, "spawnPlan")).toEqual([]);

@@ -190,8 +190,13 @@ describe("the form's own rows of the preview", () => {
     ]);
     expect("prompts" in facts).toBe(false);
     expect(facts.identity).toEqual(previewFacts(preview, { name: "flaky-ci-2-developer" }).identity);
-    // What the answer does not say is not said: no row is made up.
-    expect(formFacts({}).facts).toEqual([]);
+    // What the answer does not say is not said: no row is made up. ONE exception, for safety: the access. The plugin
+    // asks for bb's full mode on every spawn, and the Access row is the one place the form says "no sandbox", in view of
+    // Spawn: a preview that is silent on its decision still gets the row, from what the plugin asks (the review of part 7).
+    expect(formFacts({}).facts.map((fact) => [fact.label, fact.parts[0]!.text])).toEqual([["Access", "full mode: no sandbox"]]);
+    const { decision: _silent, ...undecided } = preview as Record<string, unknown>;
+    expect(formFacts(undecided).facts.filter((fact) => fact.label === "Access").map((fact) => fact.parts[0]!.text)).toEqual(["full mode: no sandbox"]);
+    expect(formFacts({ ...preview, decision: { revision: "r1" } }).facts.filter((fact) => fact.label === "Access").map((fact) => fact.parts[0]!.text)).toEqual(["full mode: no sandbox"]);
     expect(formFacts({ ...preview, backend: "tmux", decision: { effective: { yolo: false } } }).facts.filter((fact) => ["Session", "Access"].includes(fact.label)).map((fact) => fact.parts[0]!.text)).toEqual(["tmux", "the harness asks before it acts"]);
   });
 

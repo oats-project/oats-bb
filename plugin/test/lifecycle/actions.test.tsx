@@ -647,7 +647,7 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   // Not cut off (the kernel says stopped): nothing points at its thread.
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
   // One press away, under the dialog's one Details: a start from bb runs in bb's full mode (there is no control for it), and the agent's facts.
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Saved for later starts too.", "Runs in bb's full mode: no sandbox."]); // (that the model is saved is under Details, not under the field: L9)
+  expect(under(slot, "oats-start-details", "p")).toEqual(["The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]); // (that the model is saved is under Details, not under the field: L9)
   expect(under(slot, "oats-start-details", "dt, dd")).toEqual(["Machine", "falcon", "Home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
   expect(dialog.textContent).not.toMatch(/existing home|saved briefing|stays readable/);
   // A start that can run says nothing more: no status line, and no "Refresh status" (it is for a Start that is off).
@@ -659,8 +659,8 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   expect(harness.value).toBe("");
   expect(texts(harness, "option")).toEqual(["Keep the recorded harness: Claude Code", "Claude Code", "pi"]);
   // That the choice outlives this start is said once, under Details: nothing stands under the model field.
-  expect(slot.getByTestId("oats-start").textContent!.split("Saved for later starts too.")).toHaveLength(2);
-  expect(slot.getByTestId("oats-start-details").textContent).toContain("Saved for later starts too.");
+  expect(slot.getByTestId("oats-start").textContent!.split("The model is saved for later starts too.")).toHaveLength(2);
+  expect(slot.getByTestId("oats-start-details").textContent).toContain("The model is saved for later starts too.");
   expect(slot.getByTestId("oats-start-model").getAttribute("aria-describedby")).toBeNull();
   expect(slot.getByTestId("oats-start").textContent).not.toMatch(/Leave blank|No model suggestions/);
   await waitFor(() => expect(document.activeElement).toBe(harness));
@@ -716,7 +716,7 @@ test("Restart opens its dialog with its one line, that it stops what the agent d
   expect(says(slot)).toEqual(["Stops what it is doing now."]);
   plain(slot);
   // Under Details: that it starts a new conversation too, and bb's full mode.
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
   expect(calls(slot, "restart")).toEqual([]);
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
@@ -1316,7 +1316,7 @@ test("Restart says in its one line that it stops what the agent does now; that i
   await pick("restart");
   await ready(slot);
   expect(says(slot)).toEqual(["Stops what it is doing now."]);
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "Saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
+  expect(under(slot, "oats-start-details", "p")).toEqual(["Starts a new conversation.", "The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
 });
 
@@ -1327,7 +1327,7 @@ test("an agent whose recorded thread bb does not have (deleted, or bb cannot be 
   openAct("start", "weekly-digest-helper");
   await ready(slot);
   expect(says(slot)).toEqual(["Starts a new conversation."]);
-  expect(under(slot, "oats-start-details", "p")).toEqual(["Saved for later starts too.", "Runs in bb's full mode: no sandbox."]); // (that the model is saved is under Details, not under the field: L9)
+  expect(under(slot, "oats-start-details", "p")).toEqual(["The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]); // (that the model is saved is under Details, not under the field: L9)
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
 });
 

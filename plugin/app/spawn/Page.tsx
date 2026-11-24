@@ -99,6 +99,12 @@ function useFlight(): { soul: string } | null {
 
 /** The ids of the fields' marks: what an off Spawn is described by (aria-describedby), the word said once. */
 const MARK = { soul: "oats-spawn-soul-mark", model: "oats-spawn-model-mark", name: "oats-spawn-name-mark" } as const;
+/**
+ * The ids of what is IN VIEW for a hold that has no mark: the field that is empty, the column (its refusal), the
+ * roster's notice. An off Spawn is described by it too (aria-describedby): no word is added to the screen, and for a
+ * screen reader the button is never just dimmed (the review of part 7).
+ */
+const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice" } as const;
 /** How long Spawn waits for bb's list of models before it goes without it (the wait a thread's start is given too). */
 const MODELS_WAIT_MS = 10_000;
 type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
@@ -554,7 +560,21 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                   ? "model-mark" // the Model field's own words: it is marked with them, once
                   : null;
   const reading = hold === "reading";
-  const describedBy = hold === "model-mark" ? MARK.model : hold === "name" ? MARK.name : hold === "cannot" || (hold === "soul" && unknownSoul) ? MARK.soul : undefined;
+  const described: Record<NonNullable<typeof hold>, string | undefined> = {
+    "model-mark": MARK.model,
+    name: MARK.name,
+    cannot: MARK.soul,
+    soul: unknownSoul ? MARK.soul : SAYS.soul,
+    model: SAYS.modelId,
+    relation: SAYS.relative,
+    refused: SAYS.column,
+    held: SAYS.held,
+    // A read in flight says "Reading…" beside the button; a spawn in flight is the button's own word.
+    reading: undefined,
+    flight: undefined,
+  };
+  // (Check result is held like the acts while OATS cannot be read: the roster's notice says so.)
+  const describedBy = hold !== null ? described[hold] : phase === "unknown" && held ? SAYS.held : undefined;
   const canSpawn = phase === "idle" && hold === null && preview !== null && input !== null;
   const press = () => {
     if (phase === "unknown") {
@@ -625,7 +645,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         <h1 data-testid="oats-spawn-title" className="sr-only">
           {W.TITLE}
         </h1>
-        <RosterNotice oats={oats} />
+        <div id={SAYS.held} className="empty:hidden">
+          <RosterNotice oats={oats} />
+        </div>
         {/* While OATS cannot be read the roster's notice says so, alone: never a second one for the same cause. */}
         {souls.status === "error" && list === undefined && !held ? (
           <Notice title="The souls could not be read" tone="error" code={refusalCode(souls.error)} details={souls.error} actions={<Button onClick={souls.retry}>Retry</Button>} />
@@ -640,6 +662,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           onSubmit={(event) => event.preventDefault()}
         >
           <fieldset ref={fields} disabled={fieldsHeld} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0 lg:col-start-1 lg:row-start-1">
+            <div id={SAYS.soul} className="flex min-w-0 flex-col">
             <Field
               label={W.SOUL_LABEL}
               // (A soul's description is in the list, with its option: not again under the field.)
@@ -658,6 +681,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 onChange={setSoul}
               />
             </Field>
+            </div>
             <Field label={W.TASK_LABEL} optional>
               <textarea data-testid="oats-spawn-task" data-field="task" rows={4} className={`${INPUT} py-2`} value={task} placeholder={W.TASK_PLACEHOLDER} onChange={(event) => setTask(event.target.value)} />
             </Field>
@@ -726,9 +750,11 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               />
             </Field>
             {modelPick === CUSTOM ? (
+              <div id={SAYS.modelId} className="flex min-w-0 flex-col">
               <Field label={W.MODEL_CUSTOM_LABEL}>
                 <input data-testid="oats-spawn-model-id" className={INPUT} value={modelTyped} placeholder={W.MODEL_CUSTOM_PLACEHOLDER} autoComplete="off" spellCheck={false} onChange={(event) => setModelTyped(event.target.value)} />
               </Field>
+              </div>
             ) : null}
             <div data-testid="oats-spawn-relation" className="flex min-w-0 flex-col gap-2 text-xs text-muted-foreground">
               <div className="flex min-w-0 flex-col gap-1">
@@ -740,6 +766,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               </div>
               {relation === "unrelated" ? null : (
                 // No label over it: the option chosen above says what it is ("Child of"), and it is named for a screen reader.
+                <span id={SAYS.relative} className="flex min-w-0 flex-col">
                 <Choice
                   testId="oats-spawn-relative"
                   aria-label={W.whichInstance(relation)}
@@ -750,6 +777,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                   options={agents.map((agent) => ({ id: agent.instance, label: agentName(agent.instance), detail: shown(agent.soul) }))}
                   onChange={setRelativeTo}
                 />
+                </span>
               )}
               {/* Only where the choice above cannot be made at all. */}
               <span aria-live="polite" data-testid="oats-spawn-relation-line" className="empty:hidden">
@@ -770,6 +798,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           {/* Nothing to show (no soul yet, a field that is empty or marked): no heading over an empty column. */}
           {column === null ? null : (
           <aside
+            id={SAYS.column}
             data-testid="oats-spawn-preview"
             aria-label="Spawn preview"
             aria-busy={updating}

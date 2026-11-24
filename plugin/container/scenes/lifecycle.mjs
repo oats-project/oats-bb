@@ -485,8 +485,8 @@ export default [
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
         check(
-          before.title === "Start Weekly digest helper" && before.about === "weekly-digest-helper" && before.body.includes("Starts a new conversation.") && !/message it instead|existing home|stays readable|Ready to start|full mode|Refresh status|Leave blank/.test(before.body) && before.body.includes("Saved for later starts too."),
-          `${at} Start opens its dialog and starts nothing: titled with the agent as the kernel's roster names it now, with its one line and none of the sentences the cut removed or folded; a Start that can run says nothing more`,
+          before.title === "Start Weekly digest helper" && before.about === "weekly-digest-helper" && before.body.includes("Starts a new conversation.") && !/message it instead|existing home|stays readable|Ready to start|full mode|Refresh status|Leave blank|saved for later/.test(before.body) && /The model is saved for later starts too\./.test((await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-details"))})?.textContent ?? ""`)) ?? ""),
+          `${at} Start opens its dialog and starts nothing: titled with the agent as the kernel's roster names it now, with its one line and none of the sentences the cut removed or folded (that the model is saved is under Details); a Start that can run says nothing more`,
           JSON.stringify(before),
         );
         const startSaid = await page.evaluate(saysNow);

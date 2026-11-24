@@ -168,7 +168,7 @@ while its Terminal tab has the focus.
   mode: no sandbox." (neither act names a mode: the home's recorded choice stands). **Harness**
   starts on "Keep the recorded harness" and passes nothing; one the bb session provider declares
   is passed as `--harness`. With one harness declared there is no choice. **Model** is blank for
-  the recorded or default model, or a model id (that it is "Saved for later starts too." is under
+  the recorded or default model, or a model id ("The model is saved for later starts too." is under
   Details). A start that can
   run says nothing more; an agent the kernel says is running is not started again: Start is off,
   the dialog says why and offers its thread and **Refresh status**.

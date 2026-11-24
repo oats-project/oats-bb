@@ -242,9 +242,13 @@ export function formFacts(preview: unknown, options: { name?: string | null } = 
   if (soul !== null) rows.unshift({ label: "Soul", parts: [{ text: soul }] });
   const decision = record(data.decision) && record(data.decision.effective) ? data.decision.effective : {};
   const backend = text(data.backend);
-  const access = decision.yolo === true ? "full mode: no sandbox" : decision.yolo === false ? "the harness asks before it acts" : null;
+  // What the agent may do: ALWAYS a row (it is the one place the form says it, in view of Spawn). The kernel's own
+  // decision where the preview carries it; where it carries none, what the plugin asks on every spawn (`--yolo`: bb's
+  // full mode): a preview that is silent on it never leaves a Spawn that can be pressed with nothing saying "no sandbox"
+  // (the review of part 7).
+  const access = decision.yolo === false ? "the harness asks before it acts" : "full mode: no sandbox";
   // After the harness: where its session is, then what it may do.
-  if (access !== null) after("Harness", { label: "Access", parts: [{ text: access }] });
+  after("Harness", { label: "Access", parts: [{ text: access }] });
   if (backend !== null) after("Harness", { label: "Session", parts: [{ text: backend === "bb" ? "bb thread" : backend }] });
   return { ...facts, facts: rows };
 }

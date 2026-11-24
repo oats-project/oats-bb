@@ -396,6 +396,10 @@ try {
   show("what the tool answered pi", answer?.lastText ?? "nothing");
 
   step("P4b Restart does not stop what it cannot start: a changed model bb's list for pi does not serve is HELD in the dialog (by bb's list, read by the app; the kernel is asked nothing)");
+  // (The wrapper writes a call's record when the call ENDS: a restart sent in P4b would have no record yet at P4b's
+  // own end. So what the wrapper recorded is read again after P5's stop, where such a call has ended.)
+  const beforeHold = records().length;
+  const restartsSinceHold = () => records().slice(beforeHold).filter((record) => record.argv[0] === "session" && record.argv[1] === "restart").map((record) => record.argv.join(" "));
   {
     // Since here, the plugin may ask the kernel for no restart and no stop of this agent (its own `oats status` reads are not counted).
     const before = records().length;
@@ -432,13 +436,15 @@ try {
       await page.evaluate(`document.querySelector(${q("oats-confirm-act")})?.click()`);
       check(Boolean(await page.evaluate(ready)), "pressed all the same, the dialog stays as it was: nothing is confirmed");
       await page.evaluate(`document.querySelector(${q("oats-confirm-cancel")})?.click()`);
-      await page.until(`document.querySelector('[role="dialog"]') === null`, 10);
+      check(Boolean(await page.until(`document.querySelector('[role="dialog"]') === null`, 10)), "Cancel closes the dialog");
     } finally {
       await page.close();
     }
-    check(asked().length === 0, "the wrapper recorded NO `oats session restart` and NO `oats instance stop` since the dialog opened", JSON.stringify(asked()));
+    // What proves that nothing was sent is the page: the button off, and the dialog still "ready" after the press.
+    // The wrapper's records agree as far as they can here (a call that has ENDED), and are read again after P5's stop.
+    check(asked().length === 0, "the wrapper has recorded NO `oats session restart` and NO `oats instance stop` since the dialog opened (of the calls that have ended)", JSON.stringify(asked()));
     row = rowOf(NAME);
-    check(row?.running !== false && row?.runtimeState !== "stopped" && bbThread(threadId)?.status === "idle" && bbThread(threadId)?.archivedAt == null, "after: the pi agent still runs, on the same thread, not archived", `${brief(row)} ${JSON.stringify({ status: bbThread(threadId)?.status, archivedAt: bbThread(threadId)?.archivedAt ?? null })}`);
+    check(row !== undefined && idleRunning(row) && row.runtimeState !== "stopped" && bbThread(threadId)?.status === "idle" && bbThread(threadId)?.archivedAt == null, "after: the pi agent still runs, on the same thread, not archived", `${brief(row)} ${JSON.stringify({ status: bbThread(threadId)?.status, archivedAt: bbThread(threadId)?.archivedAt ?? null })}`);
   }
 
   step("P5 the plugin stops and retires the pi agent");
@@ -448,6 +454,8 @@ try {
   act("stop apply", "stopApply", { instance: NAME, revision: stopPlan?.revision, key: "stop-a1b2c3d4e5f6" });
   row = await untilRow(NAME, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   show("oats status", brief(row));
+  // (P4b's last word: a restart sent by its press would have ended by now, and would be recorded.)
+  check(restartsSinceHold().length === 0, "the wrapper recorded NO `oats session restart` between the held Restart dialog and this stop", JSON.stringify(restartsSinceHold()));
   // What the stop left of the pi thread, by provider (../scenario.mjs, stopLeft): archived (a provider that archives at stop), or there and not active.
   const stoppedOn = bbThread(threadId);
   const stopLeft = stoppedOn === undefined ? "gone" : stoppedOn.archivedAt != null ? "archived" : stoppedOn.status === "active" ? "active" : "kept";

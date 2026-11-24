@@ -510,6 +510,12 @@ export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Ref
  *   "Show result", which opens the dialog again on that result, with everything it offers.
  */
 export const SHOW_RESULT = "Show result";
+/**
+ * The notice of an agent whose thread a person archived or deleted in bb while it ran
+ * (app/lifecycle/left.ts): bb stopped nothing OATS knows of. Its one button opens the Stop dialog.
+ */
+export const mayStillRun = (instance: string): string => `${agentName(instance)} may still run.`;
+export const MAY_STILL_RUN_ACT = "Stop…";
 export function toasted(verb: Verb, outcome: Outcome, threadless = false): { plain: boolean; tone: Outcome["tone"]; title: string; lines: string[] } {
   // `threadless`: a start or a restart of an agent with no bb thread (on tmux). Its result says where it runs, with
   // a command to copy, which a toast cannot hold: never plain, whatever it came to. And one that started FRESH after

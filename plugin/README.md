@@ -219,6 +219,14 @@ while its Terminal tab has the focus.
   on a stop or a retire plan and nowhere else) says that the agent is not in OATS any more.
 - **On a roster that is the last one read** (OATS cannot be read) the acts stay where they are,
   off; the notice on the same screen says "Acts are off.", with Retry.
+- **A thread that a person archives or deletes in bb while its agent runs** is told at once,
+  through bb's toaster, and stays: "<Name> may still run.", with **Stop…**, which opens the Stop
+  dialog (bb took the thread away and stopped nothing OATS knows of). Never a false alarm
+  (`app/lifecycle/left.ts`): only of an agent the window saw running on a thread bb listed; only
+  once bb has answered that the same thread is archived or gone; never for a stop through OATS,
+  which archives the thread itself (OATS is asked again once, and the roster read after decides:
+  a row that says an operator stopped it is told to nobody); never while an act of ours is in
+  flight or its dialog is open; once per agent and thread in an app window.
 
 bb's own composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts
 on its own when one of them is used: an agent whose thread was archived or deleted in bb stays in

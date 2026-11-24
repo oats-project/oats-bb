@@ -13,10 +13,11 @@ import { useReading } from "../roster/reading";
 import { failureWords } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import { Button } from "../ui";
-import { ActsOverlay, openAct } from "./acts";
+import { ActsOverlay, openAct, useActsBusy } from "./acts";
+import { lookForLeft } from "./left";
 import { notify } from "../ui";
 import { agentName, STATE } from "../ui/words";
-import { cannotAct, failedAct, NO_TARGET } from "./words";
+import { cannotAct, failedAct, MAY_STILL_RUN_ACT, mayStillRun, NO_TARGET } from "./words";
 import type { Verb } from "./words";
 
 export { askPlan, asked, openAct, run } from "./acts";
@@ -206,7 +207,14 @@ onWindowReset(() => {
   roster = null;
 });
 function Overlay() {
-  roster = useOats();
+  const oats = useOats();
+  roster = oats;
+  // A thread that bb archived or deleted under an agent that ran: told at once, and it stays (a warning,
+  // not a failure), with the way to stop the agent through OATS. Looked for at each draw: the rule is left.ts's.
+  const busy = useActsBusy();
+  useEffect(() => {
+    lookForLeft(oats, busy, (instance) => notify({ tone: "unknown", title: mayStillRun(instance), open: { label: MAY_STILL_RUN_ACT, run: () => openAct("stop", instance) } }));
+  });
   return <ActsOverlay />;
 }
 const nodeIn = (threadId: string | null): Node | undefined => (roster?.phase === "ready" && threadId !== null ? roster.nodeByThread.get(threadId) : undefined);

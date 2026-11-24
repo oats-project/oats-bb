@@ -48,7 +48,11 @@ const startedOn = (name, thread) => {
   return JSON.stringify(answer);
 };
 /** The fake answers the roster with the run's thread ids, and what the scene asks of a verb (the rest is each feature's recorded default). */
-const answers = (verbs = {}, status = tools.statusWithRealIds(tools.threads, changes)) => tools.fake({ status: { stdout: status }, "capabilities show": { stdout: PILOT_PROVIDER }, ...verbs });
+let verbsNow = {};
+const answers = (verbs = {}, status = tools.statusWithRealIds(tools.threads, changes)) => {
+  verbsNow = verbs;
+  return tools.fake({ status: { stdout: status }, "capabilities show": { stdout: PILOT_PROVIDER }, ...verbs });
+};
 /**
  * The bb session provider these scenes run on: the recorded `oats capabilities show oats.bb` with
  * the version of the release that archives a thread at stop (oats-bb 0.4.0, the pilot's), in place
@@ -64,23 +68,38 @@ const PILOT_PROVIDER = (() => {
  * The PILOT's provider archives a home's thread at its stop, and the Stop dialog's RESULT says what
  * bb shows of the thread after the stop. The fake kernel stops nothing in bb: so, on these stages
  * (the pilot's provider by its version), a scene that confirms a stop archives the agent's thread
- * in bb itself while the fake's apply is on its way, as that provider would, and puts it back once
- * the result is read (the stage holds the thread live for the scenes that follow). What is archived
- * and not yet put back is kept, so that a scene that fails leaves bb as its stage holds it.
+ * in bb itself while the fake's apply is on its way, as that provider would, and makes the fake's
+ * roster say what a kernel says of a home an operator stopped (sessionEnd "stopped": without it
+ * the agent would read as one whose thread bb archived under it while it ran, and the plugin would
+ * say so: "<Name> may still run."). Both are put back once the result is read (the stage holds the
+ * thread live and the agent running for the scenes that follow). What is not yet put back is kept,
+ * so that a scene that fails leaves bb and the fake as its stage holds them.
  * (The product's other case, a provider that says 0.4.0 and a thread bb did not archive, keeps its
  * warning, and its unit test: test/lifecycle/actions.test.tsx, "a stop's result says of the agent's thread what bb shows after the stop".)
  */
 const bb = (...args) => execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-const archivedByStop = new Set();
-const pilotStopArchives = (thread) => {
+const archivedByStop = new Map();
+let changesBeforeStop = null;
+const LEAD_INSTANCE = "redesign-ui-lead";
+const pilotStopArchives = (thread, instance) => {
+  // bb's list changes first, then the roster says the stop: the order a person's window sees them in.
   bb("thread", "archive", thread.id);
-  archivedByStop.add(thread.id);
+  archivedByStop.set(thread.id, instance);
+  if (changesBeforeStop === null) changesBeforeStop = changes;
+  changes = { ...changes, [instance]: { running: false, runtimeState: "stopped", sessionEnd: "stopped" } };
+  tools.fake({ status: { stdout: tools.statusWithRealIds(tools.threads, changes) }, "capabilities show": { stdout: PILOT_PROVIDER }, ...verbsNow });
 };
-const putBack = () => {
-  for (const id of [...archivedByStop]) {
+const putBack = async () => {
+  if (archivedByStop.size === 0) return;
+  const instances = [...archivedByStop.values()];
+  for (const id of [...archivedByStop.keys()]) {
     bb("thread", "unarchive", id);
     archivedByStop.delete(id);
   }
+  changes = changesBeforeStop ?? changes;
+  changesBeforeStop = null;
+  answers(verbsNow);
+  await tools.untilSnapshot((snapshot) => snapshot.ok === true && instances.every((instance) => snapshot.agents.some((agent) => agent.instance === instance && agent.running !== false)));
 };
 /** The plugin's server keeps the provider's answer for 30 s (server/core.ts PAGE_TTL_MS): the first of these stages waits that out ONCE, so that no dialog is drawn on an earlier stage's answer. */
 let providerSettled = false;
@@ -246,7 +265,7 @@ export default [
         const running = await dialog(page);
         check(running.phase === "running" && running.body.includes("Stopping…") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
         // As the pilot's provider stops the home: its thread is archived in bb (the fake's apply is still on its way).
-        pilotStopArchives(lead);
+        pilotStopArchives(lead, LEAD_INSTANCE);
         const leave = JSON.parse(await page.evaluate(`JSON.stringify({ line: ${textOf(testId("oats-confirm-leave-line"))}, close: ${textOf(testId("oats-confirm-leave"))}, off: document.querySelector(${JSON.stringify(testId("oats-confirm-leave"))})?.disabled ?? null })`));
         check(leave.line === "" && leave.close === "Close" && leave.off === false, `${at} while it runs the dialog can be left: Close is on (not Cancel), and no line says so`, JSON.stringify(leave));
         await shot("running");
@@ -261,7 +280,7 @@ export default [
         await page.evaluate(click("oats-confirm-close"));
         check(Boolean(await page.until(closed, 10)), `${at} Close closes the dialog`);
         // The stage holds the thread live for what follows: it is put back (its row is waited for where it is next asked for).
-        putBack();
+        await putBack();
 
         // The plan changed under the confirmation (recorded: the apply of a plan read before a child stopped by
         // itself is refused E_PLAN_STALE, and its answer carries the plan as it is now: the fake answers that
@@ -301,7 +320,7 @@ export default [
         const back = await page.evaluate(`document.activeElement?.getAttribute("data-sidebar-thread-id") ?? ${FOCUSED}`);
         check(viewport.mobile || back === lead.id, `${at} the focus returns to the row the menu was opened on`, back);
       } finally {
-        putBack();
+        await putBack();
         answers();
         await page.clock(null);
       }
@@ -377,12 +396,12 @@ export default [
         await page.evaluate(click("oats-confirm-leave"));
         check(Boolean(await page.until(closed, 10)), `${at} Close leaves the dialog while the stop runs`);
         // As the pilot's provider stops the home: its thread is archived in bb (the fake's apply is still on its way).
-        pilotStopArchives(lead);
+        pilotStopArchives(lead, LEAD_INSTANCE);
         const told = await page.until(`(() => { const toast = [...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("3 sessions stopped.")); return toast ? toast.innerText.replace(/\\s+/g, " ").trim() : null; })()`, 30);
         check(Boolean(told) && !/starts it outside OATS/.test(String(told)), `${at} the result of a stop whose dialog was left is told through bb's toaster: that it stopped, and nothing of a message in its thread (bb shows it archived)`, String(told));
         await page.until(toastSettled("3 sessions stopped."), 10);
         await page.shot(`lifecycle-${viewport.name}-stop-left-toast`);
-        putBack();
+        await putBack();
         await page.evaluate(`[...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("3 sessions stopped."))?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
 
         // A refusal that arrives after the dialog was left: a toast cannot hold it (no Details, no Review again).
@@ -411,9 +430,48 @@ export default [
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
       } finally {
-        putBack();
+        await putBack();
         answers();
         await page.clock(null);
+      }
+    },
+  },
+  {
+    stage: "lifecycle",
+    name: "A thread that a person archives in bb under an agent that runs: the notice, at once, with Stop…",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const lead = threads.get(LEAD);
+      const notice = `[...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("Redesign ui lead may still run."))`;
+      const row = `document.querySelector('[data-sidebar-thread-id="${lead.id}"]')`;
+      let archived = false;
+      try {
+        await page.goto("/");
+        check(Boolean(await page.until(`${row} !== null`, 30)), `${at} Redesign ui lead, which runs, is drawn on its thread, and nothing has been said of it`);
+        const before = await page.evaluate(`${notice} === undefined`);
+        // bb's own Archive, as a person presses it in the thread's menu: bb stops nothing OATS knows of, and the roster still says that the agent runs.
+        bb("thread", "archive", lead.id);
+        archived = true;
+        const said = await page.until(`(() => { const toast = ${notice}; return toast ? JSON.stringify({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((text) => text !== "") }) : null; })()`, 60);
+        const toast = said ? JSON.parse(said) : { text: "", buttons: [] };
+        check(before === true && toast.text.startsWith("Redesign ui lead may still run.") && same(toast.buttons, ["Stop…"]), `${at} bb archived the thread of an agent that runs: at once a notification says "Redesign ui lead may still run.", with ONE button, Stop…`, JSON.stringify({ before, toast }));
+        await page.until(toastSettled("Redesign ui lead may still run."), 10);
+        await page.shot(`lifecycle-${viewport.name}-archived-while-running`);
+        const count = await page.evaluate(`[...document.querySelectorAll("[data-sonner-toast]")].filter((each) => each.innerText.includes("may still run.")).length`);
+        check(count === 1, `${at} it is said once`, String(count));
+        await page.evaluate(`[...${notice}.querySelectorAll("button")].find((button) => button.innerText.trim() === "Stop…").click()`);
+        await page.until(phaseIs("ready"), 30);
+        const stop = await dialog(page);
+        check(stop.title === "Stop Redesign ui lead?" && stop.about === "redesign-ui-lead" && stop.act === "Stop" && stop.off === false, `${at} Stop… opens the Stop dialog for that agent: the kernel's plan, to be confirmed (nothing was stopped by the press)`, JSON.stringify(stop));
+        await page.evaluate(click("oats-confirm-cancel"));
+        await page.until(closed, 10);
+        // (That it is said once per agent and thread, whatever is read after, is the rule's unit test: test/lifecycle/left.test.ts.)
+        await page.evaluate(`${notice}?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
+      } finally {
+        if (archived) bb("thread", "unarchive", lead.id);
+        answers();
+        await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === LEAD_INSTANCE && agent.running !== false));
+        await page.goto("/");
+        await page.until(`${row} !== null`, 30);
       }
     },
   },

@@ -81,6 +81,22 @@ function set(next: Request | null): void {
   current = next;
   for (const listener of [...listeners]) listener();
 }
+/** The acts that were sent and have not answered yet, whether their dialog is still there or not. */
+let inFlight = 0;
+/** Count an act from its sending to its answer (a result or a refusal). */
+function flying<T>(sent: Promise<T>): Promise<T> {
+  inFlight += 1;
+  for (const listener of [...listeners]) listener();
+  const landed = () => {
+    inFlight -= 1;
+    for (const listener of [...listeners]) listener();
+  };
+  sent.then(landed, landed);
+  return sent;
+}
+const busyNow = () => current !== null || inFlight > 0;
+/** Whether an act of ours is in flight or its dialog is on screen: what happens to an agent's thread meanwhile may be the act's own doing (app/lifecycle/left.ts). */
+export const useActsBusy = (): boolean => useSyncExternalStore(subscribe, busyNow, busyNow);
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -90,6 +106,7 @@ const get = () => current;
 // A new app window starts with nothing asked.
 onWindowReset(() => {
   current = null;
+  inFlight = 0;
   listeners.clear();
 });
 
@@ -407,13 +424,13 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     };
     const answered =
       plan.action === "stop"
-        ? rpc.call("stopApply", { instance, revision: plan.revision, key, recursive: plan.recursive }).then(async (receipt) => {
+        ? flying(rpc.call("stopApply", { instance, revision: plan.revision, key, recursive: plan.recursive })).then(async (receipt) => {
             const onBb = plan.targets.some((target) => target.backend === "bb");
             // What the stop left of the agent's thread is what bb SHOWS of it now, where bb answers; else what the confirmation said.
             const archived = receipt.ok && onBb && threadId !== null ? await threadArchived(sdk, threadId) : null;
             return stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? stopArchivesThread(versionOf(plan)));
           })
-        : rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard }).then((receipt) => retireOutcome(receipt, plan));
+        : flying(rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard })).then((receipt) => retireOutcome(receipt, plan));
     answered.then(
       (outcome) => settle(outcome, null),
       (cause: unknown) => {
@@ -766,7 +783,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     const sentAt = rosterAt.current;
     const was = new Map([[checked.instance, keptState(verb, stateIn(oatsNow.current, checked.instance))] as const]);
     const asked = verb === "start" && resumes ? { instance, resume: true as const } : { instance, ...(onBb && harness !== "" ? { harness } : {}), ...(onBb && typed !== "" ? { model: typed } : {}) };
-    rpc.call(verb, asked).then(
+    flying(rpc.call(verb, asked)).then(
       (started) => {
         const outcome = startOutcome(verb, started.instance ?? checked.instance, started);
         if (outcome.tone === "done") noteActed([checked.instance], sentAt, was);

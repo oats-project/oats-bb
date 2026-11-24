@@ -320,8 +320,8 @@ of who needs a person):
 **Three rows read "not running", and they are never drawn alike**: an operator's stop (Start, and
 never a message), a session that was lost (nobody stopped it: a message carries it on), and no
 harness loaded (a message; Start begins a new conversation). The state word tells the third from the first two;
-the tone tells the first from the others (the line's `tone="warning"`: the state's mark and the
-sentence, `data-tone="warning"`); and the rows' words differ. One live scene draws the three side
+the tone tells the first from the others (the line's `tone="warning"`: the sentence,
+`data-tone="warning"`; the mark is the row's, the state's own grey); and the rows' words differ. One live scene draws the three side
 by side and asserts the word and the tone, not only the text. The tone never carries the meaning
 alone: the sentence does.
 

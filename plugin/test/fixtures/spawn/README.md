@@ -22,6 +22,14 @@ edit. `../README.md` says how the first two were recorded.
   provider it can launch (`E_BACKEND_NOT_READY`, the bb session provider's; the spawn is rolled
   back), as OATS 0.70.0 printed it: there the preview of the same choices answers, and the
   provider is asked at the launch.
+- `spawn-pi-model-refused.json`: the kernel's refusal of a spawn on pi whose model bb's pi does
+  not have (`E_BACKEND_LAUNCH_ARG`, the bb session provider's check of a pi model id; the spawn is
+  rolled back and nothing is left: no home, no row in `oats status`). RECORDED, whole and with no
+  edit (it holds no path; its instance was named `shape-refused`), by the provider's developer on
+  the real kernel, OATS 0.70.5 with the provider of oats-bb #65: `oats spawn … --model
+  claude-fable-9 --json`, exit 1. The PREVIEW of the same values passes (a planned launch carries
+  no model at this kernel), so the form meets this refusal at the press. The error names no
+  argument: no field of the form is marked by it.
 - `spawn-preview-pi-refused.json`: the same refusal one step earlier, as OATS 0.70.5 printed it on
   2026-11-23: from 0.70.1 a preview asks the provider's own check, so the PREVIEW with
   `--harness pi` is refused ("… would not be launched … nothing was created") and no spawn is

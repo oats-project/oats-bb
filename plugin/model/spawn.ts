@@ -9,6 +9,8 @@
 // them filters them, as every text of the kernel's; the one SENTENCE that is the kernel's own
 // words is filtered here, where it is chosen.
 import { DETAIL_WITHHELD, displayLine } from "./text.js";
+import { served } from "./served.js";
+import type { ListedModel } from "./served.js";
 
 type Json = Record<string, unknown>;
 const record = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -171,7 +173,7 @@ export const bbDefaultModel = (harness: string): string => `bb’s default for $
 // ---- the Model field: whether a spawn may go with the model it would send ----
 
 /** Why Spawn is held for the model: the field's mark and the reason beside the button, two words at most. */
-export const MODEL_HELD = { required: "Required", missing: "Not found", ambiguous: "Pick provider" } as const;
+export const MODEL_HELD = { required: "Required", ambiguous: "Pick provider" } as const;
 export type ModelCheck = { held: null } | { held: (typeof MODEL_HELD)[keyof typeof MODEL_HELD]; /** the listed ids that serve the bare one, to pick from */ offers: string[] };
 /**
  * The ONE rule of the form's Model field: may a spawn go with the model it would send?
@@ -183,31 +185,34 @@ export type ModelCheck = { held: null } | { held: (typeof MODEL_HELD)[keyof type
  *   known to be the soul's own).
  * - `picked`: the model the person picked or typed; null while it is "Default" (none is passed).
  * - `resolved`: what the kernel's preview resolved for the values on screen; null before it answered.
- * - `listed`: the ids bb lists for the harness the spawn would run on; null when bb's list was not
- *   read or cannot be (the kernel's answer then stands).
+ * - `listed`: the models bb lists for the harness the spawn would run on; null when bb's list was
+ *   not read or cannot be (the kernel's answer then stands).
+ * - `byProvider`: that harness's models are resolved by provider (pi): model/served.ts.
  *
  * The model the spawn WOULD SEND is the one picked, else the one the kernel resolved from the soul.
  * 1. None at all, for a harness the person chose that is NOT the soul's own: REQUIRED. The soul's
  *    model is another harness's, the kernel resolves none, and nothing says what the agent would
  *    run on. (The soul's own harness with no model declared is the soul's decision, picked in the
  *    form or not: it goes, on bb's default.)
- * 2. bb must serve it exactly once, where bb lists its models BY PROVIDER (an id is
- *    `<provider>/<model>`: pi's list; Claude Code's ids have no provider, and the rule does not
- *    apply to such a list). An id that is listed as it is: served. A bare id that exactly one
- *    listed id ends in (`<provider>/<bare>`): served, and the harness resolves it. Served by none:
- *    NOT FOUND. By more than one: PICK PROVIDER, with the ids that serve it. Nobody else refuses
- *    these: the preview and the spawn pass, and the thread then fails at its start inside bb.
+ * 2. A bare id that MORE THAN ONE listed model serves (`served`, the bb session provider's own
+ *    resolution): PICK PROVIDER, with exactly the ids that serve it, which are the ids the
+ *    provider's refusal would name at the launch. Two listed models are two, whatever else bb's
+ *    list leaves out. Not for an id that holds a slash: where bb's list is not whole such an id
+ *    may be the exact `<provider>/<id>` of a model the list holds back, and the provider lets it
+ *    go; the form never holds an agent the provider would start.
+ *
+ * That NO listed model serves the id is not the form's to judge: bb's list leaves models out that
+ * a thread still starts on (an id that ends in a date, a list pi's own configuration narrows, a
+ * list older than pi's configuration), and the provider, which knows, refuses such a spawn at its
+ * launch with nothing left behind, or lets it go. The form arms it.
  */
-export function modelCheck({ chosenHarness, soulHarness, picked, resolved, listed }: { chosenHarness: string | null; soulHarness: string | null; picked: string | null; resolved: { harness: string | null; model: string | null } | null; listed: readonly string[] | null }): ModelCheck {
+export function modelCheck({ chosenHarness, soulHarness, picked, resolved, listed, byProvider }: { chosenHarness: string | null; soulHarness: string | null; picked: string | null; resolved: { harness: string | null; model: string | null } | null; listed: readonly ListedModel[] | null; byProvider: boolean }): ModelCheck {
   const sent = picked ?? resolved?.model ?? null;
   if (sent === null) return chosenHarness !== null && chosenHarness !== soulHarness && resolved !== null ? { held: MODEL_HELD.required, offers: [] } : { held: null };
-  if (listed === null || !listed.some((id) => id.includes("/"))) return { held: null };
-  if (listed.includes(sent)) return { held: null };
-  const serving = listed.filter((id) => id.slice(id.indexOf("/") + 1) === sent);
-  if (serving.length === 1) return { held: null };
-  return serving.length === 0 ? { held: MODEL_HELD.missing, offers: [] } : { held: MODEL_HELD.ambiguous, offers: serving };
+  if (listed === null || sent.includes("/")) return { held: null };
+  const answer = served(sent, listed, byProvider);
+  return answer.kind === "several" ? { held: MODEL_HELD.ambiguous, offers: answer.ids } : { held: null };
 }
-
 /** The column's rows with no default promised for the harness: its row names the harness alone (where a model is required of the person). */
 export function withoutDefault<Row extends { label: string; parts: { text: string }[] }>(rows: readonly Row[], harness: string): Row[] {
   const promised = `${harnessLabel(harness)} · ${bbDefaultModel(harness)}`;
@@ -440,17 +445,23 @@ export function spawnProblem(
 ): SpawnProblem {
   const code = reason.code ?? "OATS_FAILED";
   const message = reason.message === null ? "" : reason.message.trim();
-  const kernelLine = code === "E_HARNESS_UNAVAILABLE" ? displayLine(message) : null;
-  const kernelWords = kernelLine !== null && kernelLine !== "" && kernelLine !== DETAIL_WITHHELD ? said(kernelLine, "change-options") : null;
+  // The bb session provider's refusal of a launch's argument, after the press (a pi model that bb's pi does not have,
+  // or that several providers serve: test/fixtures/spawn/spawn-pi-model-refused.json, the real kernel's). The
+  // provider's sentence says which and what to use, and the kernel's message ends "spawn rolled back": it is said
+  // whole, once, through the display filter, as the result's sentence. No field is marked: the answer names none.
+  const launchArg = stage === "spawn" && code === "E_BACKEND_LAUNCH_ARG";
+  const kernelLine = code === "E_HARNESS_UNAVAILABLE" || launchArg ? displayLine(message) : null;
+  const kernelWords = kernelLine !== null && kernelLine !== "" && kernelLine !== DETAIL_WITHHELD ? said(kernelLine, launchArg ? null : "change-options") : null;
   const facts = stage === "spawn" ? SPAWN_FACTS : PREVIEW_FACTS;
   // A failure with no code at all reads the stage's general sentence: only a code says what happened.
   const general = stage === "spawn" ? SPAWN_FAILED : PREVIEW_FAILED;
-  const named = reason.code === null ? undefined : (kernelWords ?? facts[code] ?? COMMON_FACTS[code]);
+  // (Where the filter leaves nothing of that message, or withholds it: the stage's general sentence, and Details.)
+  const named = reason.code === null ? undefined : (kernelWords ?? facts[code] ?? COMMON_FACTS[code] ?? (launchArg ? general : undefined));
   const outcome = outcomeOf(stage, reason.code, reason.unconfirmed === true, named, replay);
   const words = outcome === "unconfirmed" ? UNCONFIRMED : outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
   const dashed = Object.hasOwn(DASHED, code) && DASHED[code]![0] === words.next ? DASHED[code]![1] : null;
   const tail = BY_CODE[code] ?? null;
   const after = words.next === null ? null : words.next !== "change-options" ? NEXT[words.next] : tail !== null && !harnessField && HARNESS_TAILS.has(code) ? (NO_HARNESS_FIELD[code] ?? SEE_DETAILS) : tail;
   const sentence = dashed !== null ? `${words.fact.replace(/\.$/, "")} — ${dashed}` : after === null ? words.fact : `${words.fact} ${after}`;
-  return { sentence, next: words.next, code, detail: message === "" ? null : message, outcome };
+  return { sentence, next: words.next, code, detail: message === "" || (launchArg && kernelWords !== null) ? null : message, outcome };
 }

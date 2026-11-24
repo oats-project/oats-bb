@@ -32,7 +32,7 @@ import { Button, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading,
 import { refusalCode, refusalLines, shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { Choice } from "./Choice";
-import { MODEL_DEFAULT, resolvedLabel, SOUL_DEFAULT, useHarnesses, useHarnessStates, useModelSuggestions } from "./models";
+import { BB_PROVIDER, MODEL_DEFAULT, resolvedLabel, SOUL_DEFAULT, useHarnesses, useHarnessStates, useModelSuggestions } from "./models";
 import * as W from "./words";
 
 type Soul = Answer<"souls">["souls"][number];
@@ -365,10 +365,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   }, [rpc, ownAsked, soul]);
   const soulHarness = ownKnown ? own.harness : null;
   // Whether a spawn may go with the model it would send (model/spawn.ts `modelCheck`): a model is required for a
-  // harness the person chose that is not the soul's own, and it must be one bb serves exactly once where bb lists
-  // its models by provider.
+  // harness the person chose that is not the soul's own, and a bare id that several of bb's listed models serve needs
+  // its provider picked. That no listed model serves it is the provider's to judge, at the launch.
   // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
-  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models.map((option) => option.id) : null });
+  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models : null, byProvider: effectiveHarness !== null && BB_PROVIDER[effectiveHarness] === "pi" });
   // The "Required" mark waits for the soul's own harness to be known: until then Spawn is off as for any read.
   const modelMark = ownAsked && modelHeld.held === MODEL_HELD.required ? null : modelHeld.held;
   // bb's list for the harness is being read: until it answers, whether bb serves the model is not known.

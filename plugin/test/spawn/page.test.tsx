@@ -299,7 +299,7 @@ test("a list of models bb never gives does not hold the form: after 10 seconds i
     expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]);
     // The list answers after all, and two providers serve the soul's bare model: held by the rule.
     await act(async () => {
-      answer({ modelLoadError: null, models: ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1"].map(bbModel) });
+      answer({ modelLoadError: null, models: ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1"].map((model) => ({ ...bbModel(model), routeProviderId: model.slice(0, model.indexOf("/")) })) });
     });
     await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Pick provider"]));
   } finally {
@@ -345,8 +345,8 @@ test("while bb's list of models for the harness is being read, Spawn is off with
   await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
 });
 
-test("the model must be one bb serves exactly once, where bb lists its models by provider: not found, or pick the provider, in two words; served once, it goes", async () => {
-  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium" });
+test("a bare model that several of bb's listed models serve: pick the provider, in two words, with exactly those offered; a model nobody lists is armed: the provider judges it", async () => {
+  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium", routeProviderId: model.slice(0, model.indexOf("/")) });
   const LISTED = ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1", "openai/sol-5"];
   // The soul's own model as the preview resolves it; a model picked replaces it.
   const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts({ ...recorded, model: input.model ?? "claude-fable-5.1" }, { name: input.name ?? null }), revision: REVISION }) }, { models: () => ({ modelLoadError: null, models: LISTED.map(bbModel) }) });
@@ -363,13 +363,56 @@ test("the model must be one bb serves exactly once, where bb lists its models by
   // One of them picked: armed.
   choose(slot, "oats-spawn-model", "anthropic/claude-fable-5.1");
   await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
-  // An id nobody serves, typed: not found.
+  // An id no listed model serves, typed: ARMED. Whether pi has it is the provider's to say, at the launch.
   choose(slot, "oats-spawn-model", "__custom__");
-  set(slot, "oats-spawn-model-id", "mistral/large");
-  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Not found", "Not found"]));
+  set(slot, "oats-spawn-model-id", "mistral-large");
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "do it", model: "mistral-large" }));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Not found/);
   // A bare id one provider serves: it goes.
   set(slot, "oats-spawn-model-id", "sol-5");
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "do it", model: "sol-5" }));
   await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+});
+
+test("a model bb's pi does not have is refused by the provider at the press: the kernel's whole message once under the result's title, the Model field not marked, nothing held, the form editable again", async () => {
+  // The real kernel's answer to that spawn (test/fixtures/spawn/README.md): refused, rolled back, nothing left.
+  const refused = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-pi-model-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;
+  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium", routeProviderId: model.slice(0, model.indexOf("/")) });
+  const slot = await ready(
+    {
+      // The preview passes for a model nobody serves: a planned launch carries no model at this kernel.
+      spawnPlan: (input) => ({ facts: formFacts({ ...recorded, model: input.model ?? "claude-fable-5.2" }, { name: input.name ?? null }), revision: REVISION }),
+      spawn: () => {
+        throw new Error(`${refused.code}: ${refused.message}`);
+      },
+    },
+    { models: () => ({ modelLoadError: null, models: ["github-copilot/claude-fable-5.2", "openai/sol-5"].map(bbModel) }) },
+  );
+  const modelError = () => slot.getByTestId("oats-spawn-model").closest('[data-testid="oats-field"]')!.querySelector('[role="alert"]')?.textContent ?? null;
+  choose(slot, "oats-spawn-model", "__custom__");
+  set(slot, "oats-spawn-model-id", "claude-fable-9");
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", model: "claude-fable-9" }));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+  fireEvent.click(submit(slot));
+  const result = await slot.findByTestId("oats-result");
+  expect(result.getAttribute("role")).toBe("alert");
+  expect(result.querySelector("h3")!.textContent).toBe("The agent was not spawned");
+  // The kernel's message, whole, once: the result's sentence, and no Details repeating it.
+  const MESSAGE = "session backend bb refused to launch shape-refused: pi has no model \"claude-fable-9\" (if you just added it to pi, try again in a minute) — spawn rolled back";
+  expect(result.querySelector("p")!.textContent).toBe(MESSAGE);
+  expect(Array.from(result.querySelectorAll(":scope > p")).at(-1)!.textContent).toBe("E_BACKEND_LAUNCH_ARG");
+  expect(slot.queryByTestId("oats-spawn-details")).toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").textContent!.split(MESSAGE)).toHaveLength(2);
+  // Nothing says an instance exists, nothing is held, no field is marked, and nothing was opened.
+  expect(result.textContent).not.toMatch(/was created|Check result|Open /);
+  expect([modelError(), slot.getByTestId("oats-spawn-model").getAttribute("aria-invalid")]).toEqual([null, null]);
+  expect(fieldset(slot).disabled).toBe(false);
+  expect(slot.inspection.navigateCalls).toEqual([]);
+  expect([submit(slot).disabled, submit(slot).textContent]).toEqual([false, "Spawn"]);
+  // Another model typed: the refusal about the old one goes, and the spawn can be asked again.
+  set(slot, "oats-spawn-model-id", "sol-5");
+  expect(slot.queryByTestId("oats-result")).toBeNull();
 });
 
 test("where bb's list cannot decide, nothing is held for the model: no list read, or a list that names no provider (Claude Code's)", async () => {

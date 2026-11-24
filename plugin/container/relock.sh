@@ -40,9 +40,12 @@ RELOCK_NPM=${RELOCK_NPM:-11}
 trap 'rm -f "$LOCK/package-lock.json.new"' EXIT
 docker build -q -t "$IMAGE" "$HERE" > /dev/null
 # shellcheck disable=SC2086 # FILES and DOCKER_RUN_ARGS are lists
-(cd "$LOCK" && tar -c $FILES) | docker run --rm -i --cpus 2 --memory 6g -e "RELOCK_NPM=$RELOCK_NPM" ${DOCKER_RUN_ARGS:-} "$IMAGE" sh -c '
+# The container refuses to go on without every file it is sent: a pipe hides a tar that failed
+# here, and a plugin's lock that did not arrive would be resolved anew, with no word of it.
+(cd "$LOCK" && tar -c $FILES) | docker run --rm -i --cpus 2 --memory 6g -e "RELOCK_NPM=$RELOCK_NPM" -e "FILES=$FILES" ${DOCKER_RUN_ARGS:-} "$IMAGE" sh -c '
   set -eu
   mkdir /tmp/relock && cd /tmp/relock && tar -x
+  for file in $FILES; do [ -s "$file" ] || { echo "relock: $file did not reach the container: nothing is written" >&2; exit 1; }; done
   npx --yes "npm@$RELOCK_NPM" install --package-lock-only --ignore-scripts --no-audit --no-fund >&2
   cat package-lock.json' > "$LOCK/package-lock.json.new"
 mv "$LOCK/package-lock.json.new" "$LOCK/package-lock.json"

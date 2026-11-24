@@ -77,6 +77,15 @@ only when its pin moves:
 - **The image** (`../Dockerfile`): `node:22` and three packages of the distribution, at the
   image's build. Not npm, and not pinned here.
 
+## Known, and not closed
+
+**pi fetches two tools by itself, from github.com, at their latest release.** pi 1.5.2 downloads
+`fd` and `ripgrep` when its interactive mode starts, or when its `grep` or `find` tool runs, and
+neither is on the PATH (the image has neither). The checks drive pi through bb, without its
+interactive mode, and their mock model calls neither tool: so no check resolves them today. A
+check that did would take whatever was released that minute. It is not npm, and a lock does not
+reach it: the fix is the two packages in the image, a change of its own.
+
 ## When a pin moves
 
 One command writes a tool's lock again, from its `package.json`:
@@ -91,7 +100,8 @@ same version, just run it. Commit both files with the pin that moved:
 - **pi**: `PI_VERSION` and `PI_INTEGRITY` in `../real/pi/setup.sh` (the lock's line for pi's own
   tarball holds the integrity to put there);
 - **bb-app**: `bb-version` and `plugin/package.json`'s `bb-app` (`../../../container/README.md`,
-  "Changing bb's version"). If the new bb-app asks for other versions of its build toolchain (the
+  "Changing bb's version"); `plugin/package.json` changed, so the plugin's own lock is written
+  again too: `plugin/container/relock.sh plugin`. If the new bb-app asks for other versions of its build toolchain (the
   unit test says so, with the versions), put them in `locks/bb-app/package.json` AND in
   `plugin/package.json`'s dev dependencies, then run `plugin/container/relock.sh bb-app` and
   `plugin/container/relock.sh plugin`. The second writes the plugin's own lock

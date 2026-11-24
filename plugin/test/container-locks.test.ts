@@ -100,7 +100,7 @@ test("bb-app's lock is the lock of the bb-app the plugin pins, with the build to
 test("the plugin's own bb-app (the unit stage's build) finds bb's build toolchain in the plugin's dev dependencies", () => {
   const manifest = JSON.parse(readFileSync(join(PLUGIN, "package.json"), "utf8")) as { dependencies?: Record<string, string>; devDependencies: Record<string, string> };
   for (const [name, version] of Object.entries(toolchainOfBb())) {
-    expect(manifest.devDependencies[name], `plugin/package.json has ${name} as a dev dependency at bb's own pin (then: npm install --package-lock-only, with npm 11)`).toBe(version);
+    expect(manifest.devDependencies[name], `plugin/package.json has ${name} as a dev dependency at bb's own pin (then: plugin/container/relock.sh plugin)`).toBe(version);
     // Never a dependency: a deployment's install of the plugin (bb's, from git) takes `dependencies` only.
     expect(manifest.dependencies?.[name], `${name} is not a dependency of the plugin: a deployment does not install it`).toBeUndefined();
     const installed = JSON.parse(readFileSync(join(PLUGIN, "node_modules", name, "package.json"), "utf8")) as { version: string };

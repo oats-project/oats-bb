@@ -70,7 +70,7 @@ most) and bb's own crash reports (`process-*.json` there, one per uncaught error
 and the runtime's version, platform, architecture and executable). Nothing else of bb's data is
 read, nor any login. It needs the network for
 npm and for the `oats.framework` package (github.com); nothing else leaves the container. A run
-takes six to eight minutes.
+takes about 43 minutes (24 Nov 2026), and grows with each part.
 
 ## CI runs it
 

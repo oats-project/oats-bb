@@ -19,8 +19,8 @@ afterEach(() => {
 });
 
 const CHILD = "panel-worktree-helper";
-const CHILD_THREAD = "thr_gx4sgexjgw";
-const NOW = Date.parse("2026-11-21T18:29:30.000Z");
+const CHILD_THREAD = "thr_u2jw8887aw";
+const NOW = Date.parse("2026-11-23T18:16:56.000Z");
 const text = (element: Element) => element.textContent;
 
 function panel(over: Partial<Handlers> = {}, options: RenderSlotOptions<Contract> = {}) {
@@ -48,8 +48,8 @@ test("the Soul tab: the soul as this instance was spawned from it, its core capa
   // each a labelled fact: a bare "oats-real" says nothing of what it is
   expect(facts(await slot.findByTestId("oats-panel-soul-meta"))).toEqual(["Repository: oats-real"]);
   expect(text(slot.getByTestId("oats-panel-as-spawned"))).toBe("As spawned: an instance never changes under itself. A newer soul or module needs a new instance.");
-  expect(text(slot.getByTestId("oats-panel-spawned-from"))).toBe("Spawned from oats-expert @ 0ab9f62");
-  expect(slot.getByTestId("oats-panel-spawned-from").getAttribute("title")).toBe("0ab9f62d3d27913d0fda74c372860b1a90cce147");
+  expect(text(slot.getByTestId("oats-panel-spawned-from"))).toBe("Spawned from oats-expert @ ca07fa8");
+  expect(slot.getByTestId("oats-panel-spawned-from").getAttribute("title")).toBe("ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea");
   const core = slot.getByTestId("oats-panel-core");
   expect(text(within(core).getByRole("heading"))).toBe("Core capabilities");
   // The recording's workspace fills no core slot.
@@ -59,10 +59,10 @@ test("the Soul tab: the soul as this instance was spawned from it, its core capa
   // each capability: its name, why it is here in words and where it comes from, each under its label (no bare tag);
   // a commit id as a version is short, and whole in the title
   expect(within(capabilities).getAllByTestId("oats-panel-capability").map((row) => [text(row.firstElementChild!), ...facts(row)])).toEqual([
-    ["oats.bb", "Here because: Not declared by this soul: a workspace or team default (the kernel does not say which)", "From: oats.bb a3cca85"],
+    ["oats.bb", "Here because: Not declared by this soul: a workspace or team default (the kernel does not say which)", "From: oats.bb ce546bb"],
     ["oats.core", "Here because: Not declared by this soul: a workspace or team default (the kernel does not say which)", "From: oats.framework 1.26.0"],
   ]);
-  expect(within(capabilities).getAllByTestId("oats-panel-capability")[0]!.querySelector("[title]")!.getAttribute("title")).toBe("package: oats.bb a3cca8511461e92c25d86f693365ec250b7c4684");
+  expect(within(capabilities).getAllByTestId("oats-panel-capability")[0]!.querySelector("[title]")!.getAttribute("title")).toBe("package: oats.bb ce546bb879b58d1a16400eccc0e964c9487f4621");
   expect(facts(slot.getByTestId("oats-panel-modules"))).toEqual(["Modules as spawned: 2"]);
   expect(within(body).queryByTestId("oats-panel-soul-warnings")).toBeNull();
   // One read of `oats inspect --home`, for this instance.
@@ -153,29 +153,29 @@ test("an inspection that names no soul draws nothing under the header; a refusal
 });
 
 test("the soul is read again when the instance was started again, and not when nothing of it changed", async () => {
-  let startedAt = "2026-11-21T18:13:36.478Z";
+  let startedAt = "2026-11-23T18:00:56.149Z";
   const slot = await soulTab({ panelInstance: ({ instance }) => instanceAnswer(instance, (answer) => ({ ...answer, startedAt })) });
   await slot.findByTestId("oats-panel-spawned-from");
-  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:30:00.000Z" }));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:26.000Z" }));
   await waitFor(() => expect(calls(slot, "panelInstance").length).toBeGreaterThan(1));
   expect(calls(slot, "panelSoul")).toHaveLength(1);
-  startedAt = "2026-11-21T18:31:00.000Z";
-  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:31:05.000Z" }));
+  startedAt = "2026-11-23T18:18:26.000Z";
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:18:31.000Z" }));
   await waitFor(() => expect(calls(slot, "panelSoul")).toHaveLength(2));
 });
 
 test("the soul is read again when the instance was started again while the Soul tab was off the page", async () => {
   // What a read depends on can change while its part is not drawn: the part that is shown again
   // (a mount) reads again, as one that stayed on the page does.
-  let startedAt = "2026-11-21T18:13:36.478Z";
+  let startedAt = "2026-11-23T18:00:56.149Z";
   const slot = await soulTab({ panelInstance: ({ instance }) => instanceAnswer(instance, (answer) => ({ ...answer, startedAt })) });
   await slot.findByTestId("oats-panel-spawned-from");
   expect(calls(slot, "panelSoul")).toHaveLength(1);
   fireEvent.click(slot.getByTestId("oats-tab-instance"));
   await slot.findByTestId("oats-panel-work");
-  startedAt = "2026-11-21T18:31:00.000Z";
+  startedAt = "2026-11-23T18:18:26.000Z";
   const before = calls(slot, "panelInstance").length;
-  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T18:31:05.000Z" }));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:18:31.000Z" }));
   await waitFor(() => expect(calls(slot, "panelInstance").length).toBeGreaterThan(before));
   expect(calls(slot, "panelSoul")).toHaveLength(1); // the Soul tab is not drawn: nothing of it is read
   fireEvent.click(slot.getByTestId("oats-tab-soul"));
@@ -202,7 +202,7 @@ test("the activity is read only when a person asks: Load activity, then the rows
   fireEvent.click(load);
   // The last recorded event, its instant in the plugin's one form. What the agent waits for is the header's and
   // Needs input's to say, from the roster as it is now: the summary says nothing of it.
-  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toBe(`Last recorded: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
+  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toBe(`Last recorded: Waiting claim · ${whenText("2026-11-23T18:01:45.726Z", NOW)}`);
   expect(text(slot.getByTestId("oats-panel-activity-load"))).toBe("Refresh activity");
   await waitFor(() => expect(text(activity)).toContain("Reported observation loaded. Runtime state is shown separately."));
   const list = slot.getByTestId("oats-panel-activity-list");
@@ -216,10 +216,10 @@ test("the activity is read only when a person asks: Load activity, then the rows
   const rows = within(list).getAllByTestId("oats-panel-event");
   expect(rows.map((row) => text(row.querySelector("strong")!))).toEqual(["Waiting claim", "Launched", "Stopped", "Launched", "Restarted", "Waiting claim", "Launched", "Spawned"]);
   // the plugin's one form for an instant; the kernel's own text of it is the title
-  expect([text(rows[7]!.querySelector("time")!), rows[7]!.querySelector("time")!.getAttribute("title"), rows[7]!.querySelector("time")!.getAttribute("datetime")]).toEqual([whenText("2026-11-21T18:13:37.962Z", NOW), "2026-11-21T18:13:37.962Z", "2026-11-21T18:13:37.962Z"]);
+  expect([text(rows[7]!.querySelector("time")!), rows[7]!.querySelector("time")!.getAttribute("title"), rows[7]!.querySelector("time")!.getAttribute("datetime")]).toEqual([whenText("2026-11-23T18:00:58.151Z", NOW), "2026-11-23T18:00:58.151Z", "2026-11-23T18:00:58.151Z"]);
   expect(text(rows[7]!)).toContain("Producer: kernel · Current recorded incarnation");
   expect(facts(rows[7]!)).toEqual(["Soul: oats-expert", "Work mode: worktree", "Branch: agents/panel-worktree-helper", "Model: claude-opus-5-5", "Parent: redesign-ui-lead", "Relation: child", "Harness: claude", "Launch reported: true"]);
-  expect(facts(rows[2]!)).toEqual(["Signal: not reported", "State reported: stopped", "Waited (ms): 2149", "Targets still running: 0"]);
+  expect(facts(rows[2]!)).toEqual(["Signal: not reported", "State reported: stopped", "Waited (ms): 4436", "Targets still running: 0"]);
   expect(text(list)).toContain("Reading this starts nothing and allows nothing.");
   expect(text(list)).not.toContain("Null waiting");
   fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
@@ -236,7 +236,7 @@ test("incomplete evidence is said; an added worktree's setup is listed; a refusa
         ...events,
         truncated: true,
         integrity: { ...events.integrity, unreadableRows: 1 },
-        events: [{ at: "2026-11-21T18:40:00.000Z", kind: "worktree-added", producer: "kernel", incarnation: "earlier" as const, facts: [{ key: "purpose", value: "docs" }], setup: [{ capability: "oats.dev", ok: false, log: "/abs/log" }], policy: null, differed: null }],
+        events: [{ at: "2026-11-23T18:27:26.000Z", kind: "worktree-added", producer: "kernel", incarnation: "earlier" as const, facts: [{ key: "purpose", value: "docs" }], setup: [{ capability: "oats.dev", ok: false, log: "/abs/log" }], policy: null, differed: null }],
       };
     },
   });
@@ -267,7 +267,7 @@ test("the activity read earlier is shown again as the last observation after the
   await slot.findByTestId("oats-panel-soul-body");
   act(() => showPanelTab("instance"));
   expect(text(await slot.findByTestId("oats-panel-activity-load"))).toBe("Refresh activity");
-  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toContain(`Last recorded: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
+  expect(text(await slot.findByTestId("oats-panel-activity-summary"))).toContain(`Last recorded: Waiting claim · ${whenText("2026-11-23T18:01:45.726Z", NOW)}`);
   await waitFor(() => expect(text(slot.getByTestId("oats-panel-activity-status"))).toBe("Last observation retained; refresh required."));
   expect(calls(slot, "panelEvents")).toHaveLength(1);
   fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
@@ -280,7 +280,7 @@ test("a blocked launch's row shows what its screen differed in, the terminal's t
   const slot = panel({
     panelEvents: () => ({
       ...events,
-      events: [{ at: "2026-11-21T18:40:00.000Z", kind: "launch-prompt", producer: "kernel", incarnation: "current" as const, facts: [{ key: "status", value: "blocked" }], setup: null, policy: null, differed: { nearest: "dev-channel-1", index: 12, expected: "Do you trust this folder?", found: "Yes, proceed\u202E" } }],
+      events: [{ at: "2026-11-23T18:27:26.000Z", kind: "launch-prompt", producer: "kernel", incarnation: "current" as const, facts: [{ key: "status", value: "blocked" }], setup: null, policy: null, differed: { nearest: "dev-channel-1", index: 12, expected: "Do you trust this folder?", found: "Yes, proceed\u202E" } }],
     }),
   });
   fireEvent.click(await slot.findByTestId("oats-panel-activity-load"));
@@ -409,7 +409,7 @@ test("readiness read again that fails keeps what was read, with its age, the Des
   const slot = panel({
     panelReadiness: () => {
       if (fail) throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
-      return { ...recordedReadiness("instance"), at: "2026-11-21T18:26:30.000Z" };
+      return { ...recordedReadiness("instance"), at: "2026-11-23T18:13:56.000Z" };
     },
   });
   await slot.findByTestId("oats-panel-readiness-summary");
@@ -603,21 +603,21 @@ test("one act at a time: no Refresh while the first read runs, and none beside a
 });
 
 test("the roster and the activity are read at two moments: an activity that names a newer claim than the roster's asks for the roster again, once, and the header then says the newer claim", async () => {
-  // The roster was read at 18:16 (the agent waits since 18:14 for its first question). Since then the agent was
-  // started again and asked something new: the activity, read now, names a claim since 18:23.
+  // The roster was read while the agent waited for its first question (since 18:00:58). Since then the agent was
+  // started again and asked something new: the activity, read now, names a claim since 18:01:45.
   let refreshed = 0;
   const older = panelAgents();
-  const newer = older.map((agent) => (agent.instance === CHILD ? { ...agent, waiting: { reason: "attention", message: "Which base branch?", since: "2026-11-21T18:23:39.829Z" } } : agent));
+  const newer = older.map((agent) => (agent.instance === CHILD ? { ...agent, waiting: { reason: "attention", message: "Which base branch?", since: "2026-11-23T18:01:45.726Z" } } : agent));
   const slot = panel({
     snapshot: () => panelSnapshot(refreshed === 0 ? older : newer),
     refresh: () => {
       refreshed += 1;
-      return { at: "2026-11-21T18:29:31.000Z" };
+      return { at: "2026-11-23T18:16:57.000Z" };
     },
   });
   await slot.findByTestId("oats-panel-waiting");
   expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("How should I merge the pull request?");
-  expect(recordedEvents().waitingOnYou?.since).toBe("2026-11-21T18:23:39.829Z");
+  expect(recordedEvents().waitingOnYou?.since).toBe("2026-11-23T18:01:45.726Z");
   expect(refreshed).toBe(0);
   fireEvent.click(slot.getByTestId("oats-panel-activity-load"));
   await slot.findByTestId("oats-panel-activity-summary");
@@ -625,7 +625,7 @@ test("the roster and the activity are read at two moments: an activity that name
   await waitFor(() => expect(refreshed).toBe(1));
   // what the person then sees: the header and Needs input say the claim the activity names
   await waitFor(() => expect(text(slot.getByTestId("oats-panel-waiting-message"))).toBe("Which base branch?"));
-  expect(text(slot.getByTestId("oats-panel-state"))).toContain(`since ${waitingClock("2026-11-21T18:23:39.829Z", NOW)}`);
+  expect(text(slot.getByTestId("oats-panel-state"))).toContain(`since ${waitingClock("2026-11-23T18:01:45.726Z", NOW)}`);
   // the same answer drawn again asks nothing more
   act(() => showPanelTab("soul"));
   act(() => showPanelTab("instance"));
@@ -639,10 +639,10 @@ test("an activity whose standing claim is the roster's asks for nothing", async 
   const slot = panel({
     refresh: () => {
       refreshed += 1;
-      return { at: "2026-11-21T18:29:31.000Z" };
+      return { at: "2026-11-23T18:16:57.000Z" };
     },
-    // the claim the recorded roster holds for the agent: since 18:14:12.916Z
-    panelEvents: () => ({ ...events, waitingOnYou: { producer: "oats.board", since: "2026-11-21T18:14:12.916Z", message: "How should I merge the pull request?" } }),
+    // the claim the recorded roster holds for the agent: since 18:00:58.993Z
+    panelEvents: () => ({ ...events, waitingOnYou: { producer: "oats.board", since: "2026-11-23T18:00:58.993Z", message: "How should I merge the pull request?" } }),
   });
   fireEvent.click(await slot.findByTestId("oats-panel-activity-load"));
   await slot.findByTestId("oats-panel-activity-summary");
@@ -660,8 +660,8 @@ test("readiness says what was observed with its path whole between segments, and
   expect(context.className).not.toContain("break-all");
   const origin = within(slot.getByTestId("oats-panel-check-installed")).getAllByTestId("oats-fact").find((fact) => text(fact.querySelector("dt")!) === "Origin")!;
   // the id beside its own short form is said once
-  expect(text(origin.querySelector("dd")!)).toBe("package oats.bb a3cca85");
-  expect(origin.querySelector("dd")!.getAttribute("title")).toBe("package oats.bb a3cca8511461e92c25d86f693365ec250b7c4684 @ a3cca85");
+  expect(text(origin.querySelector("dd")!)).toBe("package oats.bb ce546bb");
+  expect(origin.querySelector("dd")!.getAttribute("title")).toBe("package oats.bb ce546bb879b58d1a16400eccc0e964c9487f4621 @ ce546bb");
 });
 
 // ---- from the third round of review

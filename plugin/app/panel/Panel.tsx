@@ -192,7 +192,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
         <div data-testid="oats-panel-state">
           {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here. */}
           <StatusLine state={status.state} since={status.since} detail={status.state === "needs-you" && claimOf(agent) !== null ? null : status.detail} />
-          <KernelSays text={status.kernel} />
+          <KernelSays text={status.kernel} bb={status.bb} />
         </div>
         {/* What a person can do with the agent, where its state is said: the lifecycle's own acts (each opens its dialog; nothing runs on the press), the ones that apply to its state, held with the reason while the roster is the last one read. Here an agent with no thread in bb has them too: its row opens this panel on its own page. */}
         <AgentActs instance={agent.instance} />

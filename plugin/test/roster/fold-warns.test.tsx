@@ -55,9 +55,10 @@ test.each([
   expect(slot.queryAllByTestId("oats-agent-row-threadless").some((row) => row.getAttribute("data-instance") === CHILD)).toBe(false);
   // bb's answer comes after the first draw: then the parent carries the child's own mark, in the warning tone, after its own word.
   await waitFor(() => expect(inside()).toEqual([state, "warning"]));
-  // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then the hidden row's state by its own name. (The warning is said by
-  // the mark's tone alone: the name says the state, not why it warns; the row itself says that once it is shown.)
-  const named = `Show Redesign ui lead's agents: ${state === "idle" ? "Idle" : "Stopped"}`;
+  // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then the hidden row's state by the NAME its mark has everywhere
+  // (app/ui/words.ts STATE: "status unknown" for an idle agent, "stopped"). The warning is said by the mark's tone alone: the name says the state,
+  // not why it warns; the row itself says that once it is shown.
+  const named = `Show Redesign ui lead's agents: ${state === "idle" ? "status unknown" : "stopped"}`;
   expect([toggle().getAttribute("aria-label"), toggle().getAttribute("title")]).toEqual([named, named]);
   expect(within(parent()).getByTestId("oats-row-facts").textContent).toMatch(/^Working/); // the parent's own word stays its own
   // Opened: the child's row is there with that same mark, and the parent carries none.

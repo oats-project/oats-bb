@@ -216,7 +216,9 @@ stopped or was retired is true of the agent before the roster the window holds i
 it is, the places that say that agent's state (its page, its panel, its thread's line) say
 **Reading…** in the state's place and its acts are off: never the old state stated plainly beside
 "… started.". Rosters are compared, never clocks: the dialog notes the server's stamp of the roster
-the window held when the act was SENT, and each agent's state in it; "Reading…" stands while the
+the window held when the act was SENT, and each agent's state in it where the act must change that
+word (a stop of an agent that was not stopped; a start of one that was stopped or had failed; a
+retire); "Reading…" stands while the
 window's roster is still that one or an older one, and also while a later roster still says of the
 agent what the one at the send said (a roster can reach the window during an act that takes
 seconds; a restart keeps the stamp's rule alone, its state being the same word after). It is bounded: after ten seconds the roster's own state is drawn whatever

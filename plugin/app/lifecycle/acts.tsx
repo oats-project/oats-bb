@@ -22,7 +22,7 @@ import type { Contract, Result as Answer } from "../store";
 import { RPC_FAILED, useOats } from "../oats";
 import { markGone, planSaysGone } from "../roster/gone";
 import { useNow } from "../roster/now";
-import { noteActed, stateIn } from "../roster/reading";
+import { keptState, noteActed, stateIn } from "../roster/reading";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, Code, Confirm, CopyButton, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
 import type { ConfirmProps } from "../ui";
@@ -392,7 +392,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     const sentAt = rosterAt.current;
     const acted = plan.action === "stop" ? plan.targets.map((target) => target.instance) : [plan.instance ?? instance];
     // (And each agent's state in that roster: a roster that reaches the window during the act can still say it.)
-    const was = new Map(acted.map((each) => [each, stateIn(oatsNow.current, each)]));
+    const was = new Map(acted.map((each) => [each, keptState(plan.action === "stop" ? "stop" : "retire", stateIn(oatsNow.current, each))]));
     const settle = (outcome: Outcome, refusal: Refusal | null) => {
       if (outcome.tone === "done") noteActed(acted, sentAt, was);
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
@@ -721,7 +721,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     // (As for a stop: the roster held as the act is sent, and for a start the agent's state in it; a restart's
     // state is the same word before and after, so the roster's stamp alone decides; app/roster/reading.tsx.)
     const sentAt = rosterAt.current;
-    const was = new Map(verb === "start" ? [[checked.instance, stateIn(oatsNow.current, checked.instance)] as const] : []);
+    const was = new Map([[checked.instance, keptState(verb, stateIn(oatsNow.current, checked.instance))] as const]);
     const asked = verb === "start" && resumes ? { instance, resume: true as const } : { instance, ...(onBb && harness !== "" ? { harness } : {}), ...(onBb && typed !== "" ? { model: typed } : {}) };
     rpc.call(verb, asked).then(
       (started) => {

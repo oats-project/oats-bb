@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { act } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
-import { BOUND_MS, READING, actedAt, actedWas, beforeAct, fromBefore, noteActed } from "../../app/roster/reading";
+import { BOUND_MS, READING, actedAt, actedWas, beforeAct, fromBefore, keptState, noteActed } from "../../app/roster/reading";
 import { fixtureAgents, fixtureSnapshot } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract } from "../helpers/render";
@@ -56,6 +56,29 @@ describe("whether the window still shows an agent as it was before an act (pure:
     ["no roster in the window: not before (nothing is left standing on nothing)", { was: "working" }, null, null, false],
   ])("%s", (_name, acted, rosterAt, now, before) => {
     expect(fromBefore({ sentAt: SENT, ...acted }, rosterAt, now)).toBe(before);
+  });
+});
+
+// The state is kept only where the act MUST change the word: else a later roster that says the same word would hold
+// "Reading…" for the whole ten seconds over a state that will not change (the delta read of the first review round).
+describe("the state kept for an agent of an act", () => {
+  test.each<[Parameters<typeof keptState>[0], Parameters<typeof keptState>[1], ReturnType<typeof keptState>]>([
+    ["stop", "working", "working"],
+    ["stop", "idle", "idle"],
+    ["stop", "needs-you", "needs-you"],
+    ["stop", "error", "error"],
+    ["stop", "stopped", null], // a target that was already stopped: the same word after
+    ["start", "stopped", "stopped"],
+    ["start", "error", "error"],
+    ["start", "idle", null], // not loaded: it can read Idle after too
+    ["start", "needs-you", null], // its claim kept: Needs you after too
+    ["restart", "working", null],
+    ["restart", "error", null],
+    ["retire", "working", "working"], // it leaves the roster
+    ["retire", "stopped", "stopped"],
+    ["stop", null, null],
+  ])("%s of an agent that read %s: %s", (verb, was, keeps) => {
+    expect(keptState(verb, was)).toBe(keeps);
   });
 });
 

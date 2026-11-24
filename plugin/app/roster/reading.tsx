@@ -50,6 +50,22 @@ export function fromBefore(acted: { sentAt: string; was: AgentState | null }, ro
   return beforeAct(acted.sentAt, rosterAt) || (rosterAt !== null && acted.was !== null && now === acted.was);
 }
 
+/**
+ * The state to keep for an agent of an act, from its state at the send: only where the act MUST
+ * change the word, so that a later roster saying the same word means "not read yet". A stop changes
+ * every state but "stopped" (a target that was already stopped stays that word); a start changes
+ * "stopped" and "error" (an agent that reads Idle with no harness loaded, or Needs you with its
+ * claim kept, can read the same after); a retire changes every state (the agent leaves the
+ * roster); a restart none (the same word after). Null: the stamp's rule alone, never ten seconds of "Reading…" over
+ * a state that will not change (the first review round's delta read).
+ */
+export function keptState(verb: "stop" | "start" | "restart" | "retire", was: AgentState | null): AgentState | null {
+  if (was === null || verb === "restart") return null;
+  if (verb === "stop") return was === "stopped" ? null : was;
+  if (verb === "start") return was === "stopped" || was === "error" ? was : null;
+  return was;
+}
+
 /** An agent's state in the roster the window holds, as every place says it; null where the roster has no such agent (or none is read). */
 export function stateIn(oats: Oats, instance: string): AgentState | null {
   if (oats.phase !== "ready") return null;

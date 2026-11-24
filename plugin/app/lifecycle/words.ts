@@ -13,6 +13,7 @@
 // Pure: no bb, no React, never throws. Text of the kernel's is returned raw: the components that
 // draw it put it through the display filter.
 import type { RetirePlan, RetireReceipt, Started, StopPlan, StopReceipt, StoppedRow } from "../../kernel/lifecycle";
+import { messageResumes } from "../../model/rest";
 import { agentName, FULL_MODE } from "../ui/words";
 
 export type PlanVerb = "stop" | "retire";
@@ -554,20 +555,15 @@ export const START = {
 } as const;
 /**
  * Whether the Start and the Restart dialog say first that a message in the agent's thread carries its
- * conversation on. Two facts, both read, neither inferred:
- * - the kernel's row says the agent does NOT run and that no operator stopped it: its session was
- *   lost (`running: false`, "stopped", `sessionEnd: "lost"`: with the host, or its harness gone),
- *   or its thread is at rest with no harness loaded (`running: false` with a runtime state that
- *   is not "stopped"; test/fixtures/lifecycle/README.md says which provider prints that row). An operator's stop
- *   (`sessionEnd: "stopped"`) never gets the line, and neither does a stopped row that does not
- *   say how its session ended;
- * - bb has its thread, in the sidebar (not archived, not hidden), and not in error: a thread that
- *   can take a message. `thread` is bb's own row of it, or null when bb shows none.
+ * conversation on: the plugin's ONE reading of that (`messageResumes`, model/rest.ts), which the
+ * home's card and the thread's own line read too. The kernel's row says the agent does not run and
+ * that nobody stopped it (its session was lost, or no harness is loaded), and bb has its thread in
+ * the sidebar (whatever bb says of its last turn). An operator's stop never gets the line, and neither does a stopped
+ * row that does not say how its session ended, or one with no word of the runtime's state.
+ * `thread` is bb's own row of it, or null when bb shows none.
  */
 export function carriesOn(row: { running: boolean | null; runtimeState: string | null; sessionEnd: string | null }, thread: { status: string } | null): boolean {
-  if (row.running !== false || row.sessionEnd === "stopped") return false;
-  if (row.runtimeState === "stopped" && row.sessionEnd !== "lost") return false;
-  return thread !== null && thread.status !== "error";
+  return messageResumes(row, thread);
 }
 
 /** Under the model field: what a blank field means, for the harness that will run. */

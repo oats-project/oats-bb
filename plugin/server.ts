@@ -15,7 +15,7 @@ import * as spawn from "./server/spawn.js";
 import * as workspace from "./server/workspace.js";
 
 export { rpcContract } from "./contract/index.js";
-export { HOST_TIMEOUT, MIN_INTERVAL_MS, POLL_MS } from "./server/core.js";
+export { EVENTS_READS_MAX, HOST_TIMEOUT, MIN_INTERVAL_MS, POLL_MS } from "./server/core.js";
 
 export default async function plugin(bb: BbPluginApi) {
   const core = createCore(bb);

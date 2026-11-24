@@ -5,7 +5,7 @@
 // server/<feature>.ts; server.ts composes them.
 import { experimental_PluginRpcRefusal, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { hostContract, hostSignals, REALTIME_CHANGED, type snapshot as snapshotSchema } from "../contract/index.js";
+import { CHANGED_FILES_MAX, hostContract, hostSignals, REALTIME_CHANGED, type snapshot as snapshotSchema } from "../contract/index.js";
 import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
 import { withEvents, type EventsSaid } from "../model/events.js";
@@ -24,6 +24,8 @@ export const POLL_MS = 15_000;
  * "never within 5 s of the last" gave way to this.)
  */
 export const MIN_INTERVAL_MS = 1_000;
+/** The most `oats instance events` reads alive at once, for all instances together (the event path: `askEvents`). */
+export const EVENTS_READS_MAX = 2;
 /** How long the answers behind the four pages are reused. */
 const PAGE_TTL_MS = 30_000;
 /** A client that asked for the snapshot this recently counts as connected, beside the watched reads. */
@@ -127,7 +129,12 @@ export function createCore(bb: BbPluginApi) {
   let cached: Snapshot | null = null;
   /** What the kernel printed behind the last roster read: its root, and each instance's rows; null before any. */
   let rawRows: { at: string; root: string; rows: ReadonlyMap<string, RawRow> } | null = null;
-  /** The last roster read, kept while OATS cannot be read (it is `cached` while that is a roster). */
+  /**
+   * The last roster read, as the status read answered it, kept while OATS cannot be read. (While
+   * the snapshot is a roster, `cached` is this with the event path's patches over it: a status
+   * read that FAILS shows this one, so a patch leaves the screen with it: what is then shown is
+   * the last thing `oats status` said.)
+   */
   let lastRoster: Extract<Snapshot, { ok: true }> | null = null;
   let comparable = "";
   let lastStart = 0;
@@ -153,6 +160,8 @@ export function createCore(bb: BbPluginApi) {
   let lastToken = 0;
   /** The instances whose events are being read now; `again`: a signal named it meanwhile, and one more read follows. */
   const eventsReads = new Map<string, { again: boolean }>();
+  /** The instances that wait for their events to be read, in the order they were named (each once). */
+  const eventsLine: string[] = [];
   let watchers = 0;
   let clientSeenAt = 0;
   const pages = new Map<string, { at: number; value: Promise<unknown> }>();
@@ -375,24 +384,46 @@ export function createCore(bb: BbPluginApi) {
       .join(", ") || "the row";
 
   /**
-   * Reads one instance's events and applies what they say to its row. Never two reads at once for
-   * one instance: a signal that names it meanwhile makes one more read when this one ends.
+   * Asks for one instance's events to be read. Never two reads at once for one instance (a signal
+   * that names it meanwhile makes one more read, when this one has ended), and never more than
+   * EVENTS_READS_MAX `oats` at once for all of them: a sweep or a mass stop writes many instances'
+   * files in separate batches, and the plugin must not start a process per agent on a host that
+   * is loaded already (what the status read's pause is for). The others wait in line, in the
+   * order they were named, each once. A line of more than CHANGED_FILES_MAX is dropped whole:
+   * the status read, which every signal asks for, carries them.
    */
-  async function readEvents(instance: string): Promise<void> {
+  function askEvents(instance: string): void {
     const reading = eventsReads.get(instance);
     if (reading !== undefined) {
       reading.again = true;
       return;
     }
+    if (eventsLine.includes(instance)) return;
+    if (eventsReads.size < EVENTS_READS_MAX && eventsLine.length === 0) void readEvents(instance);
+    else inLine(instance);
+  }
+  function inLine(instance: string): void {
+    eventsLine.push(instance);
+    if (eventsLine.length > CHANGED_FILES_MAX) {
+      bb.log.debug(`the event path: ${eventsLine.length} instances wait for their events to be read: none of them is read, the status read carries them`);
+      eventsLine.length = 0;
+    }
+  }
+  /** Reads one instance's events, and then the next in line. */
+  async function readEvents(instance: string): Promise<void> {
     const mine = { again: false };
     eventsReads.set(instance, mine);
     try {
-      do {
-        mine.again = false;
-        await readEventsOnce(instance);
-      } while (mine.again && !lifetime.signal.aborted);
+      await readEventsOnce(instance);
     } finally {
       eventsReads.delete(instance);
+      if (!lifetime.signal.aborted) {
+        // Named again meanwhile: one more read, behind those that wait already.
+        if (mine.again) inLine(instance);
+        // The place this read leaves is the next in line's.
+        const next = eventsLine.shift();
+        if (next !== undefined) void readEvents(next);
+      }
     }
   }
   async function readEventsOnce(instance: string): Promise<void> {
@@ -430,7 +461,8 @@ export function createCore(bb: BbPluginApi) {
     const next = agents.find((candidate) => candidate.instance === instance);
     const patchedSnapshot: Snapshot = { ...now, agents };
     const key = keyOf(patchedSnapshot, rawRows?.root ?? "", rawRows?.rows ?? null);
-    if (next === undefined || key === comparable) return dropped(`its events say what is shown (read in ${took} ms)`);
+    if (next === undefined) throw new Error(`the event path: ${instance} is in the snapshot and not among the status read's own agents`); // (one block of read() sets both)
+    if (key === comparable) return dropped(`its events say what is shown (read in ${took} ms)`);
     cached = patchedSnapshot;
     comparable = key;
     bb.log.debug(`the event path: ${instance}: ${patchSaid(shown, next)}, from its events read in ${took} ms`);
@@ -618,7 +650,7 @@ export function createCore(bb: BbPluginApi) {
       // The event path: each instance the watch named is read by itself; the status read follows as before.
       for (const file of payload.files) {
         const instance = agentOfFile(file);
-        if (instance !== null) void readEvents(instance);
+        if (instance !== null) askEvents(instance);
       }
       rereadSoon();
     });
@@ -639,6 +671,7 @@ export function createCore(bb: BbPluginApi) {
       comparable = "";
       patches.clear();
       statusAgents = null;
+      eventsLine.length = 0;
       lastRoster = null;
       rawRows = null;
       target = null;

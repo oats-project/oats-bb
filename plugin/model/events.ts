@@ -28,12 +28,12 @@ const LIFECYCLE: ReadonlySet<string> = new Set(["stopped", "launched", "restarte
  *
  * THE CLAIM is read from the answer's top level, never from one `waiting` row (a producer's later
  * row, another producer's claim and the session's boundary all decide, and the kernel has decided):
- * - `waitingOnYou` is a claim, on a row the kernel does not say is not running: the row waits,
- *   with its reason (the row's own rule: "attention" where the kernel names none), its message
- *   and since when. On a row that does not run (`running: false`) a claim is NOT set: `oats
- *   status` names a claim only of a home that may be there to wait (a harness that died while it
- *   waited keeps its claim in the log, and the status read shows none), and this must not show
- *   what the status read withholds;
+ * - `waitingOnYou` is a claim, on a row for which `oats status` itself would name one (`mayWait`,
+ *   the status read's own gate: a tmux row the kernel says runs; a provider's row it does not say
+ *   is not running; never a row it could not reach): the row waits, with its reason (the row's
+ *   own rule: "attention" where the kernel names none), its message and since when. On any other
+ *   row a claim is NOT set: a harness that died while it waited keeps its claim in the log, the
+ *   status read shows none, and this must not show what the status read withholds;
  * - `waitingOnYou` is null, no producer's claim is live (`waitingClaims` holds none with
  *   `waiting: true`), the answer is whole (`truncated` false) and it knows its incarnation: the
  *   row does not wait. (An answer with `incarnation: null` could not read the home's
@@ -42,17 +42,35 @@ const LIFECYCLE: ReadonlySet<string> = new Set(["stopped", "launched", "restarte
  *
  * STOPPED: the newest event of a kind that says where the session is, WRITTEN BY THE KERNEL (a
  * home's log is the agent's to write too: a row of another producer says nothing of the
- * session), in the answer's incarnation and after `readAt` (the start of the status read the row came from: an older event
- * is in that read already), is `stopped`: the row does not run and its session ended by an
- * operator's stop. A provider's row then carries the kernel's word "stopped"; a tmux row keeps
- * the word it has (the kernel prints "shell" for it: its window is left at a shell), and
- * `sessionEnd` is what `recordedStopped` reads.
+ * session), in the answer's incarnation and after `readAt` (the start of the status read the row
+ * came from: an older event is in that read already), is `stopped`: the row does not run, and
+ * its session ended by a stop. A provider's row then carries the kernel's word "stopped"; a tmux
+ * row keeps the word it has (the kernel prints "shell" for it: its window is left at a shell),
+ * and its `sessionEnd` is what says that it stopped (model/view.ts reads it).
+ * WHAT THE EVENT CANNOT SAY: whether the stop was an operator's or the host's own (`oats host
+ * run` stopping its homes as it goes down writes the same row). The status read says
+ * `sessionEnd: "lost"` of the second, which OATS resumes by itself; until it answers, such a
+ * row reads as an operator's stop. Accepted: it is the lesser error for a moment, and a tmux
+ * row with no `sessionEnd` would have no word to read Stopped by.
+ * Rows of one millisecond are in the order they were written (the kernel's rule): the later one decides.
+ * CLOCKS: an event's time is the host's, `readAt` the server's. On one machine they are one
+ * clock. A host behind the server's by d never has a stop within d of a status read's start
+ * applied (the status read carries it); one ahead has an event the status read already holds
+ * applied again, which changes nothing. Neither outlives the next status read.
  *
  * A START (`launched`, `restarted`) newer than that is NOT applied: the event names the backend
  * and not the thread (a restart of a bb agent is on a new thread), and does not say that a
  * harness runs. It only keeps an older `stopped` from being applied: the status read places it.
  * A kind this function does not know says nothing.
  */
+/**
+ * Whether `oats status` itself would name a claim of this row (awebai/oats lib/instance-listing.mjs,
+ * lib/session-inspect.mjs `providerMayWait`): a tmux home only while the kernel says it runs; a
+ * provider's home unless the kernel says it does not run; no home the kernel could not reach.
+ */
+export const mayWait = (agent: Pick<Agent, "backend" | "running" | "runtimeState">): boolean =>
+  agent.runtimeState !== "unreachable" && (agent.backend === "tmux" ? agent.running === true : agent.running !== false);
+
 export function withEvents(agent: Agent, said: EventsSaid, readAt: string): Agent {
   let next = agent;
   const change = (fields: Partial<Agent>) => {
@@ -61,7 +79,7 @@ export function withEvents(agent: Agent, said: EventsSaid, readAt: string): Agen
 
   // The claim.
   if (said.waitingOnYou !== null) {
-    if (agent.running !== false) {
+    if (mayWait(agent)) {
       const waiting = { reason: said.waitingOnYou.reason ?? "attention", message: said.waitingOnYou.message, since: said.waitingOnYou.since };
       if (agent.waiting === null || agent.waiting.reason !== waiting.reason || agent.waiting.message !== waiting.message || agent.waiting.since !== waiting.since) change({ waiting });
     }

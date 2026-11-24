@@ -1,6 +1,6 @@
 // The server entry on bb's fake plugin host, with the real host entry behind it (bb's host-entry
 // harness) and the fake `oats` behind that: the whole backend, from an RPC to a process and back.
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createFakePluginHost, makeHostResponse, type FakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { experimental_createHostEntryHarness } from "@get-bb/plugin-sdk/testing/host";
@@ -12,7 +12,7 @@ import { host as workspaceHost } from "../contract/workspace.js";
 import { createHostEntry } from "../host.js";
 import { codes, timeouts } from "../kernel/index.js";
 import { isUnconfirmed } from "../contract/shared.js";
-import plugin, { HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
+import plugin, { EVENTS_READS_MAX, HOST_TIMEOUT, MIN_INTERVAL_MS } from "../server.js";
 import { alive, FIXTURES, installFakeOats, type FakeOats } from "./support/fake-oats.js";
 
 let fake: FakeOats;
@@ -475,7 +475,8 @@ describe("the event path", () => {
 
   it("never two events reads at once for one instance: signals meanwhile make one more read, when the first has ended", async () => {
     await rpc("snapshot");
-    await fake.behave({ status: { sleepMs: 6_000 }, [EVENTS]: { stdout: eventsAnswer(), sleepMs: 700 } });
+    const HELD_MS = 2_500; // long enough that the three signals below land in it, on any host
+    await fake.behave({ status: { sleepMs: 8_000 }, [EVENTS]: { stdout: eventsAnswer(), sleepMs: HELD_MS } });
     await named();
     await until(async () => (await calls(EVENTS)).length === 1, "the first events read started");
     await named();
@@ -484,8 +485,79 @@ describe("the event path", () => {
     await until(() => eventPath().length >= 2, "both reads have ended");
     const reads = await calls(EVENTS);
     expect(reads).toHaveLength(2); // three signals during the first read: ONE more read
-    // The second started after the first had ended: no sooner than the 700 ms the first was held.
-    expect(Date.parse(reads[1]!.at) - Date.parse(reads[0]!.at)).toBeGreaterThanOrEqual(700 - 50);
+    // The second started after the first had ended: no sooner than the time the first was held.
+    expect(Date.parse(reads[1]!.at) - Date.parse(reads[0]!.at)).toBeGreaterThanOrEqual(HELD_MS - 50);
+  }, 40_000);
+
+  /** The fixtures' roster with `count` more agents beside the lead, each a copy of its row under a name of its own (shaped: for the line of events reads). */
+  const rosterOf = async (count: number) => {
+    const status = JSON.parse(await readFile(join(FIXTURES, "roster", "status.json"), "utf8")) as { agents: { name: string; instances: { instance: string; home: string }[] }[] };
+    const group = status.agents.find((candidate) => candidate.instances.some((instance) => instance.instance === LEAD))!;
+    const row = group.instances.find((instance) => instance.instance === LEAD)!;
+    const names = Array.from({ length: count }, (_, n) => `line-${n}-lead`);
+    for (const name of names) group.instances.push({ ...structuredClone(row), instance: name, home: row.home.replace(LEAD, name) });
+    return { stdout: JSON.stringify(status), names, files: names.map((name) => `${group.name}--${name}.jsonl`) };
+  };
+  /** The most events reads alive at once, sampled until `done()`. */
+  const mostAlive = async (done: () => boolean | Promise<boolean>) => {
+    let most = 0;
+    const deadline = Date.now() + 60_000;
+    while (!(await done())) {
+      if (Date.now() > deadline) throw new Error("never: the events reads ended");
+      const living = (await Promise.all((await calls(EVENTS)).map((call) => alive(call.pid)))).filter(Boolean).length;
+      most = Math.max(most, living);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+    }
+    return most;
+  };
+
+  it("ten instances named in ten signals: never more than two events reads alive, each read in the order it was named, and all ten are patched", async () => {
+    const roster = await rosterOf(10);
+    await fake.behave({ status: { stdout: roster.stdout } });
+    const first = await rpc<Shown>("snapshot");
+    expect(first.agents.filter((agent) => roster.names.includes(agent.instance))).toHaveLength(10);
+    await fake.behave({ status: { stdout: roster.stdout, sleepMs: 15_000 }, [EVENTS]: { stdout: claimed(), sleepMs: 400 } });
+    for (const file of roster.files) await named([file]); // ten batches, as a mass stop writes them
+    const patchedAll = async () => (await rpc<Shown>("snapshot")).agents.filter((agent) => roster.names.includes(agent.instance) && agent.waiting !== null).length === 10;
+    const most = await mostAlive(patchedAll);
+    expect(most).toBeLessThanOrEqual(EVENTS_READS_MAX);
+    const reads = await calls(EVENTS);
+    // Each once, in the order they were named (two are read at a time, and the fake logs the two of a pair as they happen to start: one place apart at most).
+    const order = reads.map((call) => call.argv[2]!);
+    expect([...order].sort()).toEqual([...roster.names].sort());
+    expect(roster.names.map((name, at) => Math.abs(order.indexOf(name) - at) <= 1)).toEqual(roster.names.map(() => true));
+    expect((await rpc<Shown>("snapshot")).at).toBe(first.at); // all from their events: the status read is still held
+  }, 90_000);
+
+  it("a line of more than eight is dropped whole: those instances are left to the status read, which was asked for all the while", async () => {
+    const roster = await rosterOf(12);
+    await fake.behave({ status: { stdout: roster.stdout } });
+    const first = await rpc<Shown>("snapshot");
+    await fake.behave({ status: { stdout: roster.stdout, sleepMs: 4_000 }, [EVENTS]: { stdout: claimed(), sleepMs: 3_000 } });
+    for (const file of roster.files) await named([file]); // two are read, eight wait, the eleventh makes nine: the line is dropped; the twelfth waits alone
+    await until(() => eventPath().some((line) => line === "the event path: 9 instances wait for their events to be read: none of them is read, the status read carries them"), "the line is dropped");
+    const most = await mostAlive(async () => (await calls(EVENTS)).length === 3 && eventPath().filter((line) => line.includes("from its events read")).length === 3);
+    expect(most).toBeLessThanOrEqual(EVENTS_READS_MAX);
+    expect((await calls(EVENTS)).map((call) => call.argv[2]).sort()).toEqual([roster.names[0], roster.names[1], roster.names[11]].sort());
+    // None is lost: the status read the signals asked for answers, for every one of them.
+    await until(async () => (await rpc<Shown>("snapshot")).at !== first.at, "the status read answers");
+    expect((await calls("status")).length).toBeGreaterThanOrEqual(2);
+  }, 90_000);
+
+  it("an events answer read under settings that changed meanwhile is dropped: it is not this deployment's", async () => {
+    await rpc<Shown>("snapshot");
+    // Another deployment, whose roster has an agent of the same name (the fake answers the same roster anywhere).
+    const other = join(fake.deployment, "another");
+    await mkdir(other, { recursive: true });
+    await writeFile(join(other, "oats-local.yaml"), "# another deployment, for this test\n");
+    await fake.behave({ [EVENTS]: { stdout: claimed(), sleepMs: 3_000 } });
+    await named();
+    await until(async () => (await calls(EVENTS)).length === 1, "the events read started");
+    await server.harness.setSettings({ deployment: other });
+    await until(() => eventPath().length >= 1, "the events answer is dropped");
+    expect(eventPath()).toEqual([`the event path: ${LEAD}: nothing changed: the settings changed while its events were read`]);
+    const now = await rpc<Shown>("snapshot");
+    expect(lead(now).waiting).toBeNull();
   }, 40_000);
 
   it("stopped: the row reads stopped at once, and an act for that agent goes to the kernel as before (nothing of the lifecycle reads the patch)", async () => {

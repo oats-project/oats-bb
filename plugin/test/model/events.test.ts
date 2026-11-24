@@ -51,8 +51,33 @@ describe("what an instance's events say of its row", () => {
     const dead = agent({ running: false, runtimeState: "unknown" });
     expect(withEvents(dead, said({ waitingOnYou: claim, waitingClaims: [{ waiting: true }] }), READ_AT)).toBe(dead);
     expect(state(withEvents(dead, said({ waitingOnYou: claim, waitingClaims: [{ waiting: true }] }), READ_AT), null)).toBe(state(dead, null));
-    // One the kernel says runs, or says nothing of, may wait.
+    // A provider's row the kernel says runs, or says nothing of beside a word that is not "unreachable", may wait.
     expect(withEvents(agent({ running: null }), said({ waitingOnYou: claim, waitingClaims: [{ waiting: true }] }), READ_AT).waiting).not.toBeNull();
+    // A row the kernel could not reach is given no claim by the status read, on either backend: none here.
+    for (const backend of ["bb", "tmux"]) {
+      const unreachable = agent({ backend, running: null, runtimeState: "unreachable" });
+      expect(withEvents(unreachable, said({ waitingOnYou: claim, waitingClaims: [{ waiting: true }] }), READ_AT), backend).toBe(unreachable);
+      expect(state(unreachable, null), backend).toBe("unreachable");
+    }
+    // A tmux row waits only while the kernel says it runs: not one it says nothing of.
+    const onTmux = (running: boolean | null) => agent({ backend: "tmux", threadId: null, running, runtimeState: null });
+    const quiet = onTmux(null);
+    expect(withEvents(quiet, said({ waitingOnYou: claim, waitingClaims: [{ waiting: true }] }), READ_AT)).toBe(quiet);
+    expect(withEvents(onTmux(true), said({ waitingOnYou: claim, waitingClaims: [{ waiting: true }] }), READ_AT).waiting).not.toBeNull();
+  });
+
+  it("a stop with the host is written as any stop: it reads as an operator's stop until the status read says the session was lost", () => {
+    // `oats host run` going down stops its homes with the same `stopped` row; `oats status` then says sessionEnd "lost". The event cannot tell: pinned, not hidden.
+    const next = withEvents(agent(), said({ events: [event("stopped", after)] }), READ_AT);
+    expect(next.sessionEnd).toBe("stopped");
+  });
+
+  it("rows of one millisecond count in the order they were written: the later one decides", () => {
+    const row = agent();
+    // Stopped, then started again, in one millisecond: not stopped.
+    expect(withEvents(row, said({ events: [event("stopped", after), event("launched", after)] }), READ_AT)).toBe(row);
+    // Started (an older session's row), then stopped, in one millisecond: stopped.
+    expect(withEvents(row, said({ events: [event("launched", after), event("stopped", after)] }), READ_AT).running).toBe(false);
   });
 
   it("a claim cleared: no claim, when the answer is whole and no producer's claim is live", () => {

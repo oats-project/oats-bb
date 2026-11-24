@@ -590,6 +590,17 @@ test("when the roster cannot be read again, an open panel keeps what it read, wi
   expect(slot.getByTestId("oats-panel-work")).not.toBeNull();
 });
 
+// Behind a lifecycle result that says the agent changed, the header says "Reading…": what the agent asked BEFORE the
+// act is not drawn under it (ruled with L13's form); it is back with the roster read after the act's end.
+test("behind a result the panel does not draw the claim from before the act under its \"Reading…\" header", async () => {
+  const { noteActed } = await import("../../app/roster/reading");
+  const slot = panel({ threadId: CHILD_THREAD });
+  await slot.findByTestId("oats-panel-waiting");
+  act(() => noteActed([CHILD], panelSnapshot().at));
+  await waitFor(() => expect(slot.queryByTestId("oats-panel-waiting")).toBeNull());
+  expect(slot.getByTestId("oats-panel").textContent).toContain("Reading…");
+});
+
 // ---- the panel as a page of its own
 async function agentPage(subPath: string, options: RenderSlotOptions<Contract> = {}) {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });

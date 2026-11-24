@@ -231,7 +231,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
         <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
+        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} />}
       </div>
     </>
   );
@@ -291,7 +291,7 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
   );
 }
 
-function InstancePage({ oats, agent, read, now, state: readState, status, held }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; status: AgentState; /** the roster is the last one read: the acts are held */ held: boolean }) {
+function InstancePage({ oats, agent, read, now, state: readState, status, held, reading }: { oats: Roster; agent: Agent; read: InstanceRead; now: number; state: ReactNode; status: AgentState; /** the roster is the last one read: the acts are held */ held: boolean; /** behind a result that says the agent changed: what it asked BEFORE the act is not drawn under a "Reading…" header */ reading: boolean }) {
   const facts = read.data?.facts;
   const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
@@ -303,7 +303,7 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held }
           for an agent the roster draws on no thread, what happened. The acts are the header's
           (`AgentActs`, above); the block adds one only where the header offers none. */}
       <OutsideAgent agent={agent} roster={oats} held={held} />
-      {claim === null ? null : (
+      {claim === null || reading ? null : (
         // What the agent asks, first on the page, under no heading: the header two lines up says
         // "Needs you" and how long it has waited, once (the claim's instant is the Activity's, in its "Waiting claim" row).
         <section data-testid="oats-panel-waiting" aria-label="Needs input" className="flex min-w-0 flex-col gap-2">

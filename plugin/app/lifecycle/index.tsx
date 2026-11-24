@@ -9,7 +9,7 @@ import { rest } from "../../model/rest";
 import { recordedStopped, state } from "../../model/view";
 import { useOats } from "../oats";
 import { onWindowReset } from "../store";
-import { useReading } from "../roster/reading";
+import { READING, readingNow, useActed, useReading } from "../roster/reading";
 import { failureWords } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import { Button } from "../ui";
@@ -139,6 +139,8 @@ const READING_AFTER_MS = 1_000;
 type ActionData = { oats: Oats; /** the first read has been in flight for more than READING_AFTER_MS */ slow: boolean };
 function useActionData(): ActionData {
   const oats = useOats();
+  // (The menu's entries ask whether an agent is behind a result, `readingNow`: drawn again when such a mark comes or goes.)
+  useActed();
   const reading = oats.phase === "loading";
   const [slow, setSlow] = useState(false);
   useEffect(() => {
@@ -177,6 +179,9 @@ function runCommand(verb: Verb, threadId: string | null): void {
   if (node === undefined) return say(NO_TARGET);
   if (roster.stale !== null) return say(`Stop, Start, Restart and Retire come back when OATS is read again.`);
   const { state, agent } = node;
+  // Behind a result that says this agent changed: its acts are off until the roster is read again, and a key does
+  // nothing meanwhile (and says nothing: the thread's line says "Reading…").
+  if (readingNow(roster, agent.instance)) return;
   // (An agent that runs outside OATS runs: its harness does, whatever OATS recorded. Never "is stopped" of it.)
   // And never "is already running" of a row that says no harness is loaded.
   const why = cannotAct(verb, agent.instance, { running: state === "outside" || ((state === "working" || state === "idle" || state === "needs-you") && !atRest(agent)), known: state !== "unreachable" });
@@ -190,7 +195,10 @@ function runCommand(verb: Verb, threadId: string | null): void {
  * settings (the Desktop's D-174, with bb's own keys: no leader). It acts on the agent whose thread
  * is in view. It is listed everywhere, as on the Desktop: where it cannot act (no thread in view, a
  * thread that is no agent's, a state the act does not apply to) its key says why in one line, and
- * never does nothing.
+ * never does nothing. ONE exception, ruled with L13's form (24 Nov 2026): behind a result that says
+ * the agent changed, until the roster is read again, the key does nothing AND says nothing: every
+ * act of that agent is off for those seconds, and no sentence was to be added for it (its thread's
+ * line says "Reading…").
  */
 export const commands: readonly PluginCommandRegistration[] = ACTS.map((act) => ({
   id: `agent-${act.verb}`,
@@ -222,7 +230,9 @@ export function register(app: PluginAppBuilder): void {
     useData: useActionData,
     item: ({ thread, data }: PluginThreadActionItemInput<ActionData>): PluginThreadAction | null => {
       const node = data.oats.phase === "ready" ? data.oats.nodeByThread.get(thread.id) : undefined;
-      return node === undefined ? null : { label: `${agentName(node.agent.instance)} · ${STATE[node.state].word}`, icon: ICON.oats, disabled: true, run: () => undefined };
+      if (node === undefined) return null;
+      // Behind a result that says the agent changed, until the roster is read again: never the state of before, stated plainly (app/roster/reading.tsx).
+      return { label: `${agentName(node.agent.instance)} · ${readingNow(data.oats, node.agent.instance) ? READING : STATE[node.state].word}`, icon: ICON.oats, disabled: true, run: () => undefined };
     },
   });
 
@@ -246,6 +256,8 @@ export function register(app: PluginAppBuilder): void {
         // the entry stays where it was, off, so that a person sees that the act exists and does not
         // reach for bb's own Stop. A menu has no place for a reason: the roster's notice says "Acts are off.", with Retry.
         if (oats.stale !== null) return { label: act.menu, icon: act.icon, variant, disabled: true, run: () => undefined };
+        // And behind a result that says this agent changed: every act of it is off until the roster is read again (the row over them says "Reading…").
+        if (readingNow(oats, node.agent.instance)) return { label: act.menu, icon: act.icon, variant, disabled: true, run: () => undefined };
         return { label: act.menu, icon: act.icon, variant, run: () => openAct(act.verb, node.agent.instance) };
       },
     });

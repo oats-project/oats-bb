@@ -30,7 +30,7 @@ describe("the Soul tab's read", () => {
       ok: true,
       value: {
         name: "oats-expert",
-        commit: "0ab9f62d3d27913d0fda74c372860b1a90cce147",
+        commit: "ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea",
         repo: "oats-real",
         teams: [],
         core: [
@@ -39,7 +39,7 @@ describe("the Soul tab's read", () => {
           { slot: "tasks", reported: true, id: null, source: null, why: null, team: null },
         ],
         capabilities: [
-          { name: "oats.bb", why: "default", team: null, reason: null, overrides: null, source: { kind: "package", name: "oats.bb", version: "a3cca8511461e92c25d86f693365ec250b7c4684" } },
+          { name: "oats.bb", why: "default", team: null, reason: null, overrides: null, source: { kind: "package", name: "oats.bb", version: "ce546bb879b58d1a16400eccc0e964c9487f4621" } },
           { name: "oats.core", why: "default", team: null, reason: null, overrides: null, source: { kind: "package", name: "oats.framework", version: "1.26.0" } },
         ],
         modules: 2,
@@ -72,7 +72,7 @@ describe("the Soul tab's read", () => {
     delete document.capabilitiesOff;
     const answer = parsePanelSoul(document);
     expect(answer.ok && answer.value?.capabilities).toEqual([
-      { name: "oats.bb", why: "default", team: null, reason: null, overrides: null, source: { kind: "package", name: "oats.bb", version: "a3cca8511461e92c25d86f693365ec250b7c4684" } },
+      { name: "oats.bb", why: "default", team: null, reason: null, overrides: null, source: { kind: "package", name: "oats.bb", version: "ce546bb879b58d1a16400eccc0e964c9487f4621" } },
       { name: "oats.core", why: "soul", team: null, reason: null, overrides: null, source: { kind: "package", name: "oats.framework", version: "1.26.0" } },
       { name: "nw.review", why: "soul", team: null, reason: null, overrides: null, source: { kind: "home", name: "agents", version: "latest" } },
       { name: "oats.jira", why: "off", team: null, reason: "off", overrides: null, source: null },

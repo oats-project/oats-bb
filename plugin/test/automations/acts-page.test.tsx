@@ -10,6 +10,11 @@ import { parseHostInstall, parseScheduleReconcile, parseScheduleRun, parseTest }
 import { TestCard } from "../../app/automations/acts";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
+import { experimental_PluginRpcCallError as PluginRpcCallError } from "@get-bb/plugin-sdk/app";
+import { failureOf } from "../../app/automations/acts";
+import { RunningContext } from "../../app/automations/here";
+import { UNCONFIRMED_ISSUE } from "../../contract/shared";
+import { failedTitle, summaryFailed } from "../../app/automations/words";
 import { AT, OATS } from "./handlers";
 import { answer, rowOf, schedules, triggers } from "./fixtures";
 
@@ -44,6 +49,11 @@ const value = <T,>(parsed: { ok: true; value: T } | { ok: false; error: unknown 
 const refuse = (message: string) => (): never => {
   throw new Error(message);
 };
+/** The plugin's server turning a request down before any process, as it reaches the app: bb's code `invalid`, and no code leading the message. */
+const turnedDown = (message: string) => (): never => {
+  throw new PluginRpcCallError({ code: "invalid", message });
+};
+const NOT_LISTED = '"local/daily-review" is not a schedule of this OATS deployment\'s current list';
 const result = async (slot: Slot) => (await slot.findByTestId("oats-automations-result")).textContent;
 
 describe("a row's menu (D-271)", () => {
@@ -104,6 +114,84 @@ describe("on and off on this computer (D-272)", () => {
     (await menu(slot, "oats-real/nightly-digest")).press("Turn off here");
     expect(await result(slot)).toBe("nightly-digest was not turned off hereoats-local.yaml is being changed by another commandE_LOCAL_BUSYDismiss");
     expect(within(slot.getByTestId("oats-automations-result")).getByTestId("oats-result").dataset.tone).toBe("failed");
+  });
+});
+
+// An act whose answer was lost may have happened: only a refusal says it did not. One rule for every act.
+describe("a failure that is not a refusal claims nothing", () => {
+  const LOST = "OATS_TIMEOUT: `oats` did not answer within 60 s and was stopped";
+  const said = "`oats` did not answer within 60 s and was stoppedOATS_TIMEOUTDismiss";
+  const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
+
+  it("what a failure was, read from the error: refused by the kernel, turned down by the plugin's server, or an answer that was lost", () => {
+    const of = (error: unknown) => failureOf(error);
+    // the kernel's own no
+    expect(of(new Error("E_AUTOMATION_NOT_HERE: it does not run on this host"))).toEqual({ code: "E_AUTOMATION_NOT_HERE", message: "it does not run on this host", refused: true });
+    // the plugin's server turning the request down before any process: bb's code, no code leading the message
+    expect(of(new PluginRpcCallError({ code: "invalid", message: NOT_LISTED }))).toEqual({ code: null, message: NOT_LISTED, refused: true });
+    // an answer that was lost, by each of the plugin's own codes; and a call nobody answered
+    for (const code of ["OATS_TIMEOUT", "OATS_BAD_ANSWER", "OATS_NOT_JSON", "OATS_FAILED"]) expect(of(new Error(`${code}: lost`)).refused).toBe(false);
+    expect(of(new PluginRpcCallError({ code: "transport_error", message: "the server did not answer" })).refused).toBe(false);
+    expect(of(new Error("the server did not answer")).refused).toBe(false);
+    // the kernel's marker that it could not confirm what is left: not a plain no
+    expect(of(Object.assign(new Error("E_SCHEDULE_HOST: the timer was written, and the service manager failed"), { issues: [UNCONFIRMED_ISSUE] }))).toMatchObject({ code: "E_SCHEDULE_HOST", refused: false });
+    const failed = { no: "x was not run", maybe: "x may not have been run" };
+    expect([failedTitle(true, failed), failedTitle(false, failed)]).toEqual(["x was not run", "x may not have been run"]);
+  });
+
+  it("the plugin's server turning the request down: the act did not happen, and the page says so", async () => {
+    const slot = await page("", { scheduleRun: turnedDown(NOT_LISTED) });
+    (await menu(slot, "local/daily-review")).press("Run now");
+    expect(await result(slot)).toBe(`daily-review was not run${NOT_LISTED}Dismiss`);
+  });
+
+  it("the plugin's server turning a test down: the test did not run", async () => {
+    const slot = await page("schedules/local/daily-review", { automationTest: turnedDown(NOT_LISTED) });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    expect((await slot.findByTestId("oats-automation-test")).textContent).toBe(`Test resultThe test did not run.${NOT_LISTED}`);
+  });
+
+  it("the switch", async () => {
+    const slot = await page("", { automationEnable: refuse(LOST) });
+    (await menu(slot, "oats-real/nightly-digest")).press("Turn off here");
+    expect(await result(slot)).toBe(`nightly-digest may not have been turned off here${said}`);
+  });
+
+  it("Run now", async () => {
+    const slot = await page("", { scheduleRun: refuse(LOST) });
+    (await menu(slot, "local/daily-review")).press("Run now");
+    expect(await result(slot)).toBe(`daily-review may not have been run${said}`);
+  });
+
+  it("Check run state", async () => {
+    const slot = await page("schedules/local/status-check", { scheduleReconcile: refuse(LOST) });
+    fireEvent.click(await slot.findByTestId("oats-automation-reconcile"));
+    expect(await result(slot)).toBe(`The run state of status-check may not have been checked${said}`);
+  });
+
+  it("Delete", async () => {
+    const slot = await page("", { scheduleRemove: refuse(LOST) });
+    (await menu(slot, "local/daily-review")).press("Delete…");
+    const dialog = await slot.findByRole("dialog");
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+    await waitFor(() => expect(dialog.textContent).toContain("daily-review may not have been deleted"));
+    expect(dialog.textContent).not.toContain("was not deleted");
+  });
+
+  it("Enable scheduler", async () => {
+    const slot = await page("", { automations: off, schedulerEnable: refuse(LOST) });
+    fireEvent.click(await slot.findByTestId("oats-automations-enable-scheduler"));
+    const dialog = await slot.findByRole("dialog");
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+    await waitFor(() => expect(dialog.textContent).toContain("The scheduler may not have been enabled"));
+  });
+
+  it("Enable scheduler turned down before any process: nothing was enabled", async () => {
+    const slot = await page("", { automations: off, schedulerEnable: turnedDown("the schedules of this deployment could not be read") });
+    fireEvent.click(await slot.findByTestId("oats-automations-enable-scheduler"));
+    const dialog = await slot.findByRole("dialog");
+    fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
+    await waitFor(() => expect(dialog.textContent).toContain("The scheduler was not enabled"));
   });
 });
 
@@ -169,6 +257,26 @@ describe("Test (D-281, D-282)", () => {
     expect(calls(slot, "automationTest")).toEqual([{ kind: "schedule", id: "local/daily-review" }]);
   });
 
+  it("under a scheduler that is off the card says ready once it is on, and no due time", async () => {
+    const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
+    const slot = await page("schedules/local/daily-review", { automations: off, automationTest: tested("schedule-test.json", "schedule", null) });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    expect(await card(slot)).toBe("Test resultReady once the scheduler is on.");
+    // The card alone, both ways: the kernel's test knows nothing of the timer, the page does.
+    const test = value(parseTest(answer("schedule-test.json"), "schedule", null));
+    const drawn = (running: boolean) => {
+      const view = render(
+        <RunningContext.Provider value={running}>
+          <TestCard tested={{ test }} now={Date.parse(test.nextDue!) - 2 * 3600e3} />
+        </RunningContext.Provider>,
+      );
+      const text = within(view.container).getByTestId("oats-automation-test").textContent;
+      view.unmount();
+      return text;
+    };
+    expect([drawn(true), drawn(false)]).toEqual(["Test resultReady: it would run here.Next due in 2 h", "Test resultReady once the scheduler is on."]);
+  });
+
   it("a due time ahead is next; one that has passed was due, and is never called next", () => {
     const test = value(parseTest(answer("schedule-test.json"), "schedule", null));
     const due = Date.parse(test.nextDue!);
@@ -185,6 +293,13 @@ describe("Test (D-281, D-282)", () => {
     expect(drawn(due + 2 * 86400e3)).not.toContain("Next");
   });
 
+  // A failure that is not a refusal claims nothing: the command may have run, the write may have landed.
+  it("a test whose answer cannot be read does not say it did not run", async () => {
+    const slot = await page("triggers/oats-real/proposal-review", { automationTest: refuse("OATS_BAD_ANSWER: `oats trigger test` answered with a document the plugin cannot read") });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    expect(await card(slot)).toBe("Test resultThe test gave no answer the plugin can read.`oats trigger test` answered with a document the plugin cannot readOATS_BAD_ANSWER");
+  });
+
   it("one placed elsewhere is not ready here, and says why", async () => {
     const slot = await page("schedules/oats-real/weekly-report", { automationTest: tested("schedule-test-elsewhere.json", "schedule", null) });
     fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
@@ -196,6 +311,12 @@ describe("Test (D-281, D-282)", () => {
     fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
     expect(await card(slot)).toBe("Test resultReady: it would run here.gh acts as anaWould fire now:#41 → oats-developer-review-pr-41#42 → oats-developer-review-pr-42#43 → oats-developer-review-pr-43 (held: concurrency.max 2 reached (2 live))");
     expect(calls(slot, "automationTest")).toEqual([{ kind: "trigger", id: "oats-real/proposal-review" }]);
+  });
+
+  it("a test the kernel refuses leads with a person's words: that it did not run, the kernel's message, its code after", async () => {
+    const slot = await page("triggers/oats-real/proposal-review", { automationTest: refuse('E_TRIGGER_UNKNOWN: no trigger "oats-real/proposal-review" in /abs/deployment') });
+    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    expect(await card(slot)).toBe('Test resultThe test did not run.no trigger "oats-real/proposal-review" in /abs/deploymentE_TRIGGER_UNKNOWN');
   });
 
   it("a test that does not answer in time says so, and that nothing was recorded", async () => {
@@ -274,7 +395,13 @@ describe("Edit summary (D-278)", () => {
     fireEvent.change(input, { target: { value: "" } });
     fireEvent.click(within(dialog).getByTestId("oats-automation-summary-save"));
     await waitFor(() => expect(calls(slot, "automationDescribe")).toEqual([{ kind: "trigger", id: "local/graph-watch", description: "" }]));
-    await waitFor(() => expect(dialog.textContent).toContain("E_AUTOMATION_WORKSPACE: local/graph-watch changed under this edit"));
+    await waitFor(() => expect(dialog.textContent).toContain("The summary was not saved: local/graph-watch changed under this edit (E_AUTOMATION_WORKSPACE)"));
+    // A write whose answer is lost may have landed: the dialog does not say it was not saved.
+    expect([summaryFailed(false, "OATS_TIMEOUT", "`oats` did not answer within 15 s and was stopped"), summaryFailed(true, null, NOT_LISTED), summaryFailed(false, null, "the server did not answer")]).toEqual([
+      "The summary may not have been saved: `oats` did not answer within 15 s and was stopped (OATS_TIMEOUT)",
+      `The summary was not saved: ${NOT_LISTED}`,
+      "The summary may not have been saved: the server did not answer",
+    ]);
     fireEvent.click(within(dialog).getByTestId("oats-automation-summary-cancel"));
     expect(slot.queryByRole("dialog")).toBeNull();
   });
@@ -313,6 +440,19 @@ describe("Delete (D-276)", () => {
 describe("Enable scheduler (D-270)", () => {
   const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
 
+  it("names the machine bb chose, which need not be the one the person sits at: the notice, the confirmation, the rows and their switches", async () => {
+    const slot = await page("", { automations: () => ({ ...off(), machine: "falcon" }) });
+    expect((await slot.findByTestId("oats-automations-scheduler-off")).textContent).toContain("The scheduler is not running on falcon");
+    expect(slot.container.textContent).toContain("Set to run on falcon");
+    expect(slot.container.textContent).not.toMatch(/this (computer|machine)/i);
+    expect(within(await row(slot, "local/daily-review")).getByRole("switch").getAttribute("aria-label")).toBe("local/daily-review enabled on falcon");
+    fireEvent.click(await slot.findByTestId("oats-automations-enable-scheduler"));
+    const dialog = await slot.findByRole("dialog");
+    expect(dialog.textContent).toContain("OATS installs its scheduler's timer on falcon, for the account bb's machine runs as:");
+    expect(dialog.textContent).toContain("Nothing else on falcon is changed.");
+    expect(dialog.textContent).not.toMatch(/this (computer|machine)/i);
+  });
+
   it("is offered where the scheduler is off, says what it installs on this computer, and installs nothing before the press", async () => {
     const slot = await page("", { automations: off, schedulerEnable: () => value(parseHostInstall(answer("host-install.json"))) });
     fireEvent.click(await slot.findByTestId("oats-automations-enable-scheduler"));
@@ -331,7 +471,9 @@ describe("Enable scheduler (D-270)", () => {
     fireEvent.click(await slot.findByTestId("oats-automations-enable-scheduler"));
     const dialog = await slot.findByRole("dialog");
     fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
-    await waitFor(() => expect(dialog.textContent).toContain("The scheduler was not enabled"));
+    // The kernel's code here comes after part of the install: the dialog does not say nothing was enabled.
+    await waitFor(() => expect(dialog.textContent).toContain("The scheduler may not have been enabled"));
+    expect(dialog.textContent).not.toContain("was not enabled");
     expect(dialog.textContent).toContain("systemctl --user daemon-reload failed: Failed to connect to bus: No medium found");
     expect(dialog.textContent).toContain("E_SCHEDULE_HOST");
   });

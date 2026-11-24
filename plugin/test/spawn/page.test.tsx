@@ -4,7 +4,7 @@
 // reason when it is off, a refusal in a person's words, the held state, the keys.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { notified } from "../../app/ui";
@@ -60,9 +60,11 @@ const fieldset = (slot: Slot) => slot.getByTestId("oats-spawn-form").querySelect
 const reason = (slot: Slot) => slot.queryByTestId("oats-disabled-reason")?.textContent ?? null;
 const column = (slot: Slot) => slot.getByTestId("oats-spawn-preview");
 /** The form with a soul chosen, once its first preview is on screen. */
-async function ready(over: Partial<Handlers> = previews(), options: Options = {}) {
+async function ready(over: Partial<Handlers> = previews(), options: Options = {}, settled = true) {
   const slot = await form("oats-developer", over, options);
   await waitFor(() => expect(column(slot).textContent).toContain("numbered by the kernel"));
+  // And bb's list of models for the harness has answered: until then Spawn is off ("Reading defaults…").
+  if (settled) await waitFor(() => expect(reason(slot)).not.toBe("Reading defaults…"));
   return slot;
 }
 
@@ -183,8 +185,9 @@ test("while the provider's harnesses are read the field is in its place, off and
 
 test("the model: Default says what the kernel resolved and passes nothing; a suggestion of bb's or a typed id is passed", async () => {
   const bbModel = (model: string, displayName = model) => ({ id: model, model, displayName, description: "", isDefault: false, defaultReasoningEffort: "medium" });
-  const slot = await ready(previews(), { models: () => ({ modelLoadError: null, models: [bbModel("anthropic/claude-sonnet-5", "Claude Sonnet 5")] }) });
-  await waitFor(() => expect(options(slot, "oats-spawn-model")).toEqual([["Default · github-copilot/claude-fable-5.1", null], ["Claude Sonnet 5 · anthropic/claude-sonnet-5", null], ["Custom…", "Type a model ID"]]));
+  // (bb serves the soul's own model and the one typed below: a model bb does not serve is held, in the tests after this one.)
+  const slot = await ready(previews(), { models: () => ({ modelLoadError: null, models: [bbModel("anthropic/claude-sonnet-5", "Claude Sonnet 5"), bbModel("github-copilot/claude-fable-5.1"), bbModel("openai/o3")] }) });
+  await waitFor(() => expect(options(slot, "oats-spawn-model")).toEqual([["Default · github-copilot/claude-fable-5.1", null], ["Claude Sonnet 5 · anthropic/claude-sonnet-5", null], ["github-copilot/claude-fable-5.1", null], ["openai/o3", null], ["Custom…", "Type a model ID"]]));
   choose(slot, "oats-spawn-model", "anthropic/claude-sonnet-5");
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", model: "anthropic/claude-sonnet-5" }));
   // Custom…: a field for the id; until one is typed Spawn is off and says why.
@@ -210,6 +213,234 @@ test("a harness the kernel resolved no model for: the preview and the model fiel
   set(slot, "oats-spawn-model-id", "anthropic/claude-sonnet-5");
   await waitFor(() => expect(harnessRow()).toMatch(/^pi · anthropic\/claude-sonnet-5/));
   expect(slot.getByTestId("oats-spawn-form").textContent).not.toContain("No model is set for pi here");
+});
+
+test("a harness the person chose, for which the kernel resolves no model: Spawn is held until one is picked, the field marked with one word, and no default promised", async () => {
+  const unset = { ...recorded, harness: "claude", model: null, modelSource: null };
+  // The preview of the values on screen: the soul's own launch (pi, its model) until a harness is chosen; then that harness, with the model picked or none.
+  const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts(input.harness === undefined ? recorded : input.model === undefined ? unset : { ...unset, model: input.model }, { name: input.name ?? null }), revision: REVISION }) });
+  const harnessRow = () => Array.from(column(slot).querySelectorAll('[data-testid="oats-fact"]')).find((fact) => fact.querySelector("dt")!.textContent === "Harness")!.querySelector("dd")!.textContent;
+  const modelError = () => slot.getByTestId("oats-spawn-model").closest('[data-testid="oats-field"]')!.querySelector('[role="alert"]')?.textContent ?? null;
+  expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]);
+  choose(slot, "oats-spawn-harness", "claude");
+  await waitFor(() => expect(harnessRow()).toMatch(/^Claude Code(?! ·)/));
+  // Held, with the one word, on the field and beside the button; nothing says bb's default, in the column, the field or its list.
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Required", "Required"]));
+  expect(slot.getByTestId("oats-spawn-model").getAttribute("aria-invalid")).toBe("true");
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/bb’s default|No model is set|harness’s own|harness's own/);
+  // The field itself promises nothing: its first entry is "Default" alone.
+  expect(slot.getByTestId("oats-spawn-model").textContent).toBe("Default▾");
+  fireEvent.click(submit(slot));
+  expect(calls(slot, "spawn")).toHaveLength(0);
+  // Another field changed: while its preview is read, the mark stays and the column still promises no default.
+  set(slot, "oats-spawn-task", "do it");
+  expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Reading defaults…", "Required"]);
+  expect(harnessRow()).toMatch(/^Claude Code(?! ·)/);
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/bb’s default/);
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "do it", harness: "claude" }));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Required", "Required"]));
+  // A model picked: armed, and the mark goes.
+  choose(slot, "oats-spawn-model", "__custom__");
+  set(slot, "oats-spawn-model-id", "claude-opus-5-5");
+  await waitFor(() => expect(harnessRow()).toMatch(/^Claude Code · claude-opus-5-5/));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+});
+
+test("the soul's own harness picked in the form, with no model declared, is still the soul's decision: not held, on bb's default", async () => {
+  // The soul's own harness is pi and it declares no model: the same preview with pi chosen or not.
+  const unset = { ...recorded, harness: "pi", model: null, modelSource: null };
+  const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts(input.model === undefined ? unset : { ...unset, model: input.model }, { name: input.name ?? null }), revision: REVISION }) });
+  const harnessRow = () => Array.from(column(slot).querySelectorAll('[data-testid="oats-fact"]')).find((fact) => fact.querySelector("dt")!.textContent === "Harness")!.querySelector("dd")!.textContent;
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
+  choose(slot, "oats-spawn-harness", "pi");
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", harness: "pi" }));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
+  expect(harnessRow()).toMatch(/^pi · bb’s default for pi/);
+});
+
+test("the same values arm or hold Spawn whatever the order of the clicks: a harness picked before the soul is read against the soul's own, asked once", async () => {
+  // The soul's own harness is pi and it declares no model.
+  const unset = { ...recorded, harness: "pi", model: null, modelSource: null };
+  const claude = { ...recorded, harness: "claude", model: null, modelSource: null };
+  const slot = await form("", { spawnPlan: (input) => ({ facts: formFacts(input.harness === "claude" ? claude : unset, { name: input.name ?? null }), revision: REVISION }) });
+  await waitFor(() => expect((slot.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
+  const modelError = () => slot.getByTestId("oats-spawn-model").closest('[data-testid="oats-field"]')!.querySelector('[role="alert"]')?.textContent ?? null;
+  // The soul's own harness, picked first: no preview without a harness is ever asked for the values on screen.
+  choose(slot, "oats-spawn-harness", "pi");
+  choose(slot, "oats-spawn-soul", "oats-developer");
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+  // The form asked the kernel for the soul's own harness once, beside the preview of the values on screen.
+  expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toEqual([{ soul: "oats-developer", task: "" }]);
+  // Another harness, not the soul's own: held, and "Required" is said only once the answer is there.
+  choose(slot, "oats-spawn-harness", "claude");
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Required", "Required"]));
+  expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toHaveLength(1);
+});
+
+test("a list of models bb never gives does not hold the form: after 10 seconds it reads as not read and Spawn goes on the kernel's answer; a list that answers later is read by the rule", async () => {
+  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium" });
+  let answer: (list: unknown) => void = () => undefined;
+  const pending = new Promise((resolve) => {
+    answer = resolve;
+  });
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts({ ...recorded, model: input.model ?? "claude-fable-5.1" }, { name: input.name ?? null }), revision: REVISION }) }, { models: () => pending }, false);
+    await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading defaults…"]));
+    // Short of the ten seconds: still read.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8_000);
+    });
+    expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading defaults…"]);
+    // Past them: not read, and the kernel's answer stands.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+    expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]);
+    // The list answers after all, and two providers serve the soul's bare model: held by the rule.
+    await act(async () => {
+      answer({ modelLoadError: null, models: ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1"].map((model) => ({ ...bbModel(model), routeProviderId: model.slice(0, model.indexOf("/")) })) });
+    });
+    await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Pick provider"]));
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("the soul's own harness asked and not answered is not an answer: held meanwhile, and asked again when the form's values change", async () => {
+  // The soul's own harness is pi and it declares no model; the kernel fails once on the soul asked alone.
+  const unset = { ...recorded, harness: "pi", model: null, modelSource: null };
+  let fail = true;
+  const slot = await form("", {
+    spawnPlan: (input) => {
+      if (input.harness === undefined && fail) throw new Error("OATS_TIMEOUT: oats did not answer in time");
+      return { facts: formFacts(unset, { name: input.name ?? null }), revision: REVISION };
+    },
+  });
+  await waitFor(() => expect((slot.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
+  choose(slot, "oats-spawn-harness", "pi");
+  choose(slot, "oats-spawn-soul", "oats-developer");
+  // Not known: a chosen harness is held for a model.
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Required"]));
+  expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toHaveLength(1);
+  // The values change: asked again, answered, and the soul's own harness is not held.
+  fail = false;
+  set(slot, "oats-spawn-task", "do it");
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
+  expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toHaveLength(2);
+});
+
+test("while bb's list of models for the harness is being read, Spawn is off with the form's own \"Reading defaults…\": whether bb serves the model is not known yet", async () => {
+  let answer: (list: unknown) => void = () => undefined;
+  const pending = new Promise((resolve) => {
+    answer = resolve;
+  });
+  const slot = await ready(previews(), { models: () => pending }, false);
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading defaults…"]));
+  fireEvent.click(submit(slot));
+  expect(calls(slot, "spawn")).toHaveLength(0);
+  await act(async () => {
+    answer({ modelLoadError: null, models: [] });
+  });
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
+});
+
+test("a bare model that several of bb's listed models serve: pick the provider, in two words, with exactly those offered; a model nobody lists is armed: the provider judges it", async () => {
+  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium", routeProviderId: model.slice(0, model.indexOf("/")) });
+  const LISTED = ["github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1", "openai/sol-5"];
+  // The soul's own model as the preview resolves it; a model picked replaces it.
+  const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts({ ...recorded, model: input.model ?? "claude-fable-5.1" }, { name: input.name ?? null }), revision: REVISION }) }, { models: () => ({ modelLoadError: null, models: LISTED.map(bbModel) }) });
+  const modelError = () => slot.getByTestId("oats-spawn-model").closest('[data-testid="oats-field"]')!.querySelector('[role="alert"]')?.textContent ?? null;
+  // The soul's bare model is served by two providers: held, and the two are what is offered.
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Pick provider", "Pick provider"]));
+  expect(options(slot, "oats-spawn-model").map(([label]) => label)).toEqual(["Default · claude-fable-5.1", "github-copilot/claude-fable-5.1", "anthropic/claude-fable-5.1", "Custom…"]);
+  fireEvent.click(submit(slot));
+  expect(calls(slot, "spawn")).toHaveLength(0);
+  // Another field changed, on the soul's default harness: the mark stays while its preview is read.
+  set(slot, "oats-spawn-task", "do it");
+  expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Reading defaults…", "Pick provider"]);
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Pick provider", "Pick provider"]));
+  // One of them picked: armed.
+  choose(slot, "oats-spawn-model", "anthropic/claude-fable-5.1");
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+  // An id no listed model serves, typed: ARMED. Whether pi has it is the provider's to say, at the launch.
+  choose(slot, "oats-spawn-model", "__custom__");
+  set(slot, "oats-spawn-model-id", "mistral-large");
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "do it", model: "mistral-large" }));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Not found/);
+  // A bare id one provider serves: it goes.
+  set(slot, "oats-spawn-model-id", "sol-5");
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "do it", model: "sol-5" }));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+});
+
+test("a model bb's pi does not have is refused by the provider at the press: the kernel's whole message once under the result's title, the Model field not marked, nothing held, the form editable again", async () => {
+  // The real kernel's answer to that spawn (test/fixtures/spawn/README.md): refused, rolled back, nothing left.
+  const refused = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-pi-model-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;
+  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium", routeProviderId: model.slice(0, model.indexOf("/")) });
+  const slot = await ready(
+    {
+      // The preview passes for a model nobody serves: a planned launch carries no model at this kernel.
+      spawnPlan: (input) => ({ facts: formFacts({ ...recorded, model: input.model ?? "claude-fable-5.2" }, { name: input.name ?? null }), revision: REVISION }),
+      spawn: () => {
+        throw new Error(`${refused.code}: ${refused.message}`);
+      },
+    },
+    { models: () => ({ modelLoadError: null, models: ["github-copilot/claude-fable-5.2", "openai/sol-5"].map(bbModel) }) },
+  );
+  const modelError = () => slot.getByTestId("oats-spawn-model").closest('[data-testid="oats-field"]')!.querySelector('[role="alert"]')?.textContent ?? null;
+  choose(slot, "oats-spawn-model", "__custom__");
+  set(slot, "oats-spawn-model-id", "claude-fable-9");
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", model: "claude-fable-9" }));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+  fireEvent.click(submit(slot));
+  const result = await slot.findByTestId("oats-result");
+  expect(result.getAttribute("role")).toBe("alert");
+  expect(result.querySelector("h3")!.textContent).toBe("The agent was not spawned");
+  // The kernel's message, whole, once: the result's sentence, and no Details repeating it.
+  const MESSAGE = "session backend bb refused to launch shape-refused: pi has no model \"claude-fable-9\" (if you just added it to pi, try again in a minute) — spawn rolled back";
+  expect(result.querySelector("p")!.textContent).toBe(MESSAGE);
+  expect(Array.from(result.querySelectorAll(":scope > p")).at(-1)!.textContent).toBe("E_BACKEND_LAUNCH_ARG");
+  expect(slot.queryByTestId("oats-spawn-details")).toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").textContent!.split(MESSAGE)).toHaveLength(2);
+  // Nothing says an instance exists, nothing is held, no field is marked, and nothing was opened.
+  expect(result.textContent).not.toMatch(/was created|Check result|Open /);
+  expect([modelError(), slot.getByTestId("oats-spawn-model").getAttribute("aria-invalid")]).toEqual([null, null]);
+  expect(fieldset(slot).disabled).toBe(false);
+  expect(slot.inspection.navigateCalls).toEqual([]);
+  expect([submit(slot).disabled, submit(slot).textContent]).toEqual([false, "Spawn"]);
+  // Another model typed: the refusal about the old one goes, and the spawn can be asked again.
+  set(slot, "oats-spawn-model-id", "sol-5");
+  expect(slot.queryByTestId("oats-result")).toBeNull();
+});
+
+test("where bb's list cannot decide, nothing is held for the model: no list read, or a list that names no provider (Claude Code's)", async () => {
+  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium" });
+  const unknown = { spawnPlan: (input: { model?: string; name?: string }) => ({ facts: formFacts({ ...recorded, model: input.model ?? "a-model-nobody-lists" }, { name: input.name ?? null }), revision: REVISION }) };
+  // bb reports no model for the harness.
+  const none = await ready(unknown);
+  await waitFor(() => expect(none.getByTestId("oats-spawn-form").textContent).toContain("No model suggestions reported."));
+  expect([submit(none).disabled, reason(none)]).toEqual([false, null]);
+  none.unmount();
+  resetApp();
+  // A list of bare ids: no provider to be served by.
+  const bare = await ready(unknown, { models: () => ({ modelLoadError: null, models: [bbModel("claude-opus-5-5"), bbModel("claude-sonnet-5")] }) });
+  await waitFor(() => expect(options(bare, "oats-spawn-model").map(([label]) => label)).toContain("claude-opus-5-5"));
+  expect([submit(bare).disabled, reason(bare)]).toEqual([false, null]);
+});
+
+test("a soul that declares its own launch (shaped from a real answer): the column reads its harness and model from the soul, Spawn is armed, and no model is asked for", async () => {
+  // SHAPED, every name invented: test/fixtures/spawn/README.md.
+  const declared = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-soul-launch.json"), "utf8")) as { result: Record<string, unknown> }).result;
+  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium" });
+  const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts(declared, { name: input.name ?? null }), revision: REVISION }) }, { models: () => ({ modelLoadError: null, models: [bbModel("github-copilot/claude-fable-5.1"), bbModel("openai/sol-5")] }) });
+  const harnessRow = () => Array.from(column(slot).querySelectorAll('[data-testid="oats-fact"]')).find((fact) => fact.querySelector("dt")!.textContent === "Harness")!.querySelector("dd")!.textContent;
+  await waitFor(() => expect(harnessRow()).toBe("pi · claude-fable-5.1the soul's preference"));
+  await waitFor(() => expect(options(slot, "oats-spawn-model").map(([label]) => label)).toContain("openai/sol-5"));
+  expect(slot.getByTestId("oats-spawn-model").textContent).toBe("Default · claude-fable-5.1▾");
+  expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]);
+  expect(calls(slot, "spawnPlan").every((call) => (call as { model?: string }).model === undefined && (call as { harness?: string }).harness === undefined)).toBe(true);
 });
 
 test("with no model bb reports, the field is Default and Custom…, and says any id can be typed", async () => {
@@ -697,7 +928,8 @@ test("a preview the kernel refuses: a person's words first, the code after, the 
   refuse = false;
   fireEvent.click(slot.getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(column(slot).textContent).toContain("numbered by the kernel"));
-  expect(submit(slot).disabled).toBe(false);
+  // (Once bb's list of models for the harness the kernel now resolved has answered.)
+  await waitFor(() => expect(submit(slot).disabled).toBe(false));
 });
 
 test("a preview the provider refuses (from OATS 0.70.1 it refuses as the spawn does) is drawn as a refusal, with Spawn off for that reason: not as a preview still to come, nor as a failed read", async () => {

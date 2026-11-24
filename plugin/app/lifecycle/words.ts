@@ -528,6 +528,16 @@ export const START = {
   starting: "Starting…",
   restarting: "Restarting…",
   alreadyRunning: "This instance is already running.",
+  /**
+   * A RESTART is held on a model the person changed unless bb's list for the harness serves it
+   * exactly once (model/restart-model.ts: the kernel stops the running session before the provider
+   * judges the model). The word on the Model field and beside the button.
+   */
+  notFound: "Not found",
+  pickProvider: "Pick provider",
+  required: "Required",
+  /** Under the field's Details, only while it says "Not found": the way to a model bb does not list. */
+  unlisted: "To use a model bb does not list: stop it, then start it with that model.",
   unknownState: "Could not verify whether this instance is running. Refresh its status before starting.",
 } as const;
 /**

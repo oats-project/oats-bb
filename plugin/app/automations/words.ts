@@ -9,16 +9,31 @@ import { displayLine, MAX_DISPLAY_LINE, refusalCode } from "../ui/text";
 export const TITLES: Record<AutomationKind, string> = { schedule: "Schedules", trigger: "Triggers" };
 export const NOUNS: Record<AutomationKind, string> = { schedule: "schedule", trigger: "trigger" };
 
-// ---- groups, the filter and the search ----
-export const GROUPS = [
-  { id: "here", title: "Runs on this computer" },
-  { id: "attention", title: "Needs attention here" },
-  { id: "elsewhere", title: "Runs elsewhere" },
-] as const;
+// ---- the machine the page is about ----
+/**
+ * The machine that holds the deployment, as the page names it: bb's name for it, as the sidebar
+ * does. "Here" on this page is that machine, which need not be the computer the person sits at,
+ * so where the Desktop says "this computer" (it runs on the computer it is on) the page says the
+ * name, in one form everywhere. Only while bb gives no name does it keep the Desktop's words.
+ * `on` stands inside a sentence, `name` where it starts one or is a label.
+ */
+export type Here = { on: string; name: string };
+export function hereOf(machine: string | null | undefined): Here {
+  const name = displayLine(machine);
+  return name === null ? { on: "this computer", name: "This computer" } : { on: name, name };
+}
+/** The machine while bb has not named it. */
+export const HERE: Here = hereOf(null);
 
-/** The groups in page order, each with its rows; a group with no row is left out. */
-export function groupRows(rows: readonly AutomationRow[]) {
-  return GROUPS.map((group) => ({ ...group, rows: rows.filter((row) => row.group === group.id) })).filter((group) => group.rows.length > 0);
+// ---- groups, the filter and the search ----
+export const GROUPS = [{ id: "here" }, { id: "attention" }, { id: "elsewhere" }] as const;
+/** The first group's heading while the host scheduler is off: nothing runs here then, and the page never says it does. */
+export const hereWhileOff = (here: Here = HERE): string => `Set to run on ${here.on}`;
+export const groupTitle = (id: (typeof GROUPS)[number]["id"], running: boolean, here: Here): string =>
+  id === "here" ? (running ? `Runs on ${here.on}` : hereWhileOff(here)) : id === "attention" ? "Needs attention here" : "Runs elsewhere";
+/** The groups in page order, each with its rows; a group with no row is left out. `running` is false while the host scheduler is off. */
+export function groupRows(rows: readonly AutomationRow[], running = true, here: Here = HERE) {
+  return GROUPS.map((group) => ({ ...group, title: groupTitle(group.id, running, here), rows: rows.filter((row) => row.group === group.id) })).filter((group) => group.rows.length > 0);
 }
 
 export type OriginFilter = "all" | "workspace" | "local";
@@ -98,7 +113,16 @@ export function relativeTime(iso: string | null, now: number): { label: string; 
   const size = Math.abs(delta);
   const future = delta > 0;
   const unit = size < 60e3 ? null : size < 3600e3 ? `${Math.round(size / 60e3)} min` : size < 86400e3 ? `${Math.round(size / 3600e3)} h` : `${Math.round(size / 86400e3)} d`;
-  return { label: unit === null ? (future ? "in under a minute" : "just now") : future ? `in ${unit}` : `${unit} ago`, title: new Date(at).toLocaleString() };
+  return { label: unit === null ? (future ? "in under a minute" : "less than a minute ago") : future ? `in ${unit}` : `${unit} ago`, title: new Date(at).toLocaleString() };
+}
+/**
+ * When something that has happened did (a run, a fire, a poll, a check), relative to now. It is
+ * never said to lie ahead: a time the kernel stamped a moment after the page's own clock (two
+ * clocks, or a page drawn from an older tick) reads as less than a minute ago.
+ */
+export function pastTime(iso: string | null, now: number): { label: string; title: string } | null {
+  const at = Date.parse(iso ?? "");
+  return relativeTime(iso, Number.isFinite(at) ? Math.max(now, at) : now);
 }
 
 // ---- a trigger's source ----
@@ -236,14 +260,23 @@ export function hostLogin(host: AutomationHost, owner: string | null): string | 
 /** The tone of a placement: it runs here (ok), it cannot (bad), it is off here or another computer's (muted). */
 export type Tone = "ok" | "bad" | "muted";
 /** Where a row runs, in words, with the tone of its dot and the detail behind it. */
-export function placementText(row: AutomationRow, host: AutomationHost): { label: string; tone: Tone; detail: string | null } {
-  if (row.origin.kind === "local") return { label: "This computer", tone: row.enabledHere ? "ok" : "muted", detail: "Local: runs on this computer as its own gh login" };
+export function placementText(row: AutomationRow, host: AutomationHost, running = true, here: Here = HERE): { label: string; tone: Tone; detail: string | null } {
+  const placed = placedText(row, host, here);
+  // A row that would run here does not while the host scheduler is off: its mark is not the one of a thing that runs.
+  return placed.tone === "ok" && !running ? { ...placed, tone: "muted", detail: schedulerOff(here).title } : placed;
+}
+function placedText(row: AutomationRow, host: AutomationHost, here: Here): { label: string; tone: Tone; detail: string | null } {
+  if (row.origin.kind === "local") {
+    // A local row that is on but cannot run (its definition is invalid or unreadable) is not drawn as one that runs: it says what it is.
+    if (row.enabledHere && !row.runsHere) return { label: row.unreadable !== null ? "Unreadable" : row.invalid !== null ? "Invalid" : "Doesn't run here", tone: "bad", detail: row.reasonDetail ?? row.unreadable?.message ?? row.invalid?.message ?? null };
+    return { label: here.name, tone: row.enabledHere ? "ok" : "muted", detail: `Local: runs on ${here.on} as its own gh login` };
+  }
   if (row.reason === "owner-mismatch") return { label: "Wrong account here", tone: "bad", detail: row.reasonDetail };
   if (row.reason === "untrusted") return { label: "Not trusted here", tone: "bad", detail: row.reasonDetail };
   if (row.reason === "other") return { label: "Doesn't run here", tone: "bad", detail: row.reasonDetail ?? `reason: ${row.reasonCode}` };
-  if (row.reason === "host-unnamed") return { label: row.runsOn ?? "Not named", tone: "muted", detail: "This computer has no host name" };
+  if (row.reason === "host-unnamed") return { label: row.runsOn ?? "Not named", tone: "muted", detail: hostUnnamed(here).title };
   if (row.reason === "assigned-elsewhere") return { label: row.runsOn ?? "Another host", tone: "muted", detail: row.reasonDetail };
-  return { label: "This computer", tone: row.enabledHere ? "ok" : "muted", detail: host.name !== null ? `This computer is ${host.name}` : null };
+  return { label: here.name, tone: row.enabledHere ? "ok" : "muted", detail: host.name !== null ? `${here.name}'s host name is ${host.name}` : null };
 }
 
 /** Under where it runs: "local", or the account it acts as. */
@@ -259,15 +292,20 @@ export const schedulerOn = (scheduler: AutomationScheduler): boolean => schedule
 /** The header's line: "Scheduler on · checked 2 min ago · up to 5 at once", or "Scheduler off". */
 export function schedulerLine(scheduler: AutomationScheduler, now: number): string {
   if (!schedulerOn(scheduler)) return "Scheduler off";
-  const checked = relativeTime(scheduler.lastTick, now);
+  const checked = pastTime(scheduler.lastTick, now);
   return ["Scheduler on", checked !== null ? `checked ${checked.label}` : null, scheduler.maxConcurrent !== null ? `up to ${scheduler.maxConcurrent} at once` : null].filter(Boolean).join(" · ");
 }
 // The two notices above a list. The Desktop says each as one sentence in a banner; the plugin's
 // notice has a title, so the sentence's first clause is the title and the rest follows (WORDS.md).
-export const SCHEDULER_OFF = { title: "The scheduler is not running on this computer", detail: "Nothing here runs until it is enabled." } as const;
-export const HOST_UNNAMED = { title: "This computer has no host name" } as const;
+export const schedulerOff = (here: Here = HERE) => ({ title: `The scheduler is not running on ${here.on}`, detail: "Nothing here runs until it is enabled." }) as const;
+export const hostUnnamed = (here: Here = HERE) => ({ title: `${here.name} has no host name in OATS` }) as const;
 export const hostUnnamedDetail = (kind: AutomationKind): string =>
   `It runs none of the workspace's ${TITLES[kind].toLowerCase()}. Name it in this deployment's local settings to take on the ones assigned to it.`;
+/** What helps there, said where the notice is: the plugin has no act for it, so the place and the key are named. */
+export const hostNameHow = (here: Here = HERE): string => `In the deployment's oats-local.yaml on ${here.on}, set host: name: to the name it goes by in the workspace, then press Refresh.`;
+/** An empty list: creating one from here is not built yet, so the page says how it is done today. */
+export const emptyHow = (kind: AutomationKind, here: Here = HERE): string =>
+  `Commit one to a member repository's ${NOUNS[kind]}s folder to share it with the workspace, or add a local one on ${here.on} with oats ${NOUNS[kind]} add. Creating one from this page is not built yet.`;
 /** The notices a list shows above its rows: this host has no name, and the host timer is off. */
 export function listBanners(list: AutomationList): { hostUnnamed: boolean; schedulerOff: boolean } {
   return {
@@ -307,24 +345,62 @@ export const outcomeWords = (outcome: string | null): string | null => (outcome 
 /** When a run happened: a trigger's fire has `at`, a schedule's run its start, else the minute it was due. */
 export const runTime = (run: AutomationRun | null): string | null => run?.at ?? run?.startedAt ?? run?.scheduledFor ?? null;
 
+/** A run's outcome as a mark for the list: one that did not happen, or whose state nobody knows. */
+export const outcomeTone = (outcome: string | null): "bad" | "warn" | null =>
+  outcome === null ? null : FAILED_OUTCOMES.includes(outcome) ? "bad" : outcome === "unknown" || outcome === "stopped" ? "warn" : null;
+/** What stands where a next run would, for a row that does not run on the machine (it needs attention there, or another host runs it). */
+export const notRunHere = (here: Here = HERE): string => `Does not run on ${here.on}`;
 /**
- * The row's last cell: "Next in 5 min" (or "Off here", "Polls at the next tick", "Next not
- * reported") over "Last 2 h ago · agent launched" (or "Not run yet"). Null for a row another
- * computer runs: runs are recorded where they happen.
+ * A due time as what is so: ahead it is next; one that has passed (a list kept after a read that
+ * failed, a host that was asleep, the moment before the next tick) was due, and is never called
+ * next. The one rule for the list, a row's page and a test's card. Null for no time.
  */
-export function lastNext(row: AutomationRow, now: number): { next: string; nextTitle: string; last: string; lastTitle: string | null } | null {
-  if (!row.runsHere && row.group !== "here") return null;
-  const next = relativeTime(row.nextDue, now);
-  const last = relativeTime(runTime(row.lastRun), now);
-  // A trigger that runs here but has not polled yet polls at the next tick (nextDue null).
-  const nextText = next !== null ? `Next ${next.label}` : !row.enabledHere ? "Off here" : row.runsHere && row.kind === "trigger" ? "Polls at the next tick" : "Next not reported";
+export function dueWords(iso: string | null, now: number): { word: "Next" | "Was due"; label: string; title: string } | null {
+  const at = relativeTime(iso, now);
+  return at === null ? null : { word: Date.parse(iso ?? "") <= now ? "Was due" : "Next", ...at };
+}
+
+/**
+ * The row's last cell: "Next in 5 min" (or "Off here", "Scheduler off", "Was due 3 min ago",
+ * "Polls at the next tick", "Next not reported") over "Last 2 h ago · agent launched" (or "Not
+ * run yet"). A row that does not run on the machine says so in place of a next run, over its last
+ * run there when it has one; with none it is null (the list says it does not run there).
+ */
+export function lastNext(
+  row: AutomationRow,
+  now: number,
+  running = true,
+  here: Here = HERE,
+): { next: string; nextTitle: string; last: string; lastOutcome: string | null; lastTone: "bad" | "warn" | null; lastTitle: string | null } | null {
+  const elsewhere = !row.runsHere && row.group !== "here";
+  if (elsewhere && row.lastRun === null) return null;
+  const next = dueWords(row.nextDue, now);
+  // A run has happened: it is never said to lie ahead, whatever the two clocks say.
+  const last = pastTime(runTime(row.lastRun), now);
+  // What is so, and no more: a row that does not run here has no next run here; under a scheduler
+  // that is off nothing is next. A trigger that runs here but has not polled yet polls at the next
+  // tick (nextDue null).
+  const nextText = elsewhere
+    ? notRunHere(here)
+    : !row.enabledHere
+    ? "Off here"
+    : !running
+      ? "Scheduler off"
+      : next !== null
+        ? `${next.word} ${next.label}`
+        : row.runsHere && row.kind === "trigger"
+          ? "Polls at the next tick"
+          : "Next not reported";
   // A trigger's last fire is named by its event's subject, else its number; a schedule's by its outcome.
   const fired = row.lastRun === null ? null : row.kind === "trigger" ? eventLabel(row.lastRun, row.on?.source ?? null) : row.lastRun.number ? `#${row.lastRun.number}` : null;
   const outcome = outcomeWords(row.lastRun?.outcome ?? null);
   return {
     next: nextText,
-    nextTitle: next !== null ? next.title : nextText,
-    last: last !== null ? `Last ${last.label}${outcome !== null ? ` · ${outcome}` : fired !== null ? ` · ${fired}` : ""}` : "Not run yet",
+    // The whole time is the title only where the text is that time ("Next …", "Was due …"): never behind "Scheduler off" or "Off here".
+    nextTitle: next !== null && nextText === `${next.word} ${next.label}` ? next.title : nextText,
+    last: last !== null ? `Last ${last.label}` : "Not run yet",
+    lastOutcome: last === null ? null : (outcome ?? fired),
+    lastTone: last === null ? null : outcomeTone(row.lastRun?.outcome ?? null),
     lastTitle: last !== null ? last.title : null,
   };
 }
@@ -336,7 +412,7 @@ export type RunState = {
   pendingWake: { scheduledFor: string | null } | null;
 };
 /**
- * A schedule's run state on this computer, from the kernel's row: unknown, running, and a wake
+ * A schedule's run state on the machine, from the kernel's row: unknown, running, and a wake
  * waiting to be delivered. `running` is the job's lock (a host slot), not proof of a launch: an
  * attempt whose effects are unconfirmed keeps its lock, so unknown wins: an attempt with an
  * error, a last run of outcome `unknown`, or an attempt with no lock (a crash before its result).
@@ -401,13 +477,13 @@ export type FileTarget = { kind: "preview"; hostId: string; path: string } | { k
  * What Open file opens, decided in one place: the file on the deployment's machine when the
  * kernel names it there and that machine is known, else its web page, else nothing, with why.
  */
-export function fileTarget(row: AutomationRow, hostId: string | null): { target: FileTarget | null; title: string } {
+export function fileTarget(row: AutomationRow, hostId: string | null, here: Here = HERE): { target: FileTarget | null; title: string } {
   const { localPath, url } = row.origin;
   if (localPath !== null && hostId !== null) return { target: { kind: "preview", hostId, path: localPath }, title: localPath };
   if (url !== null) return { target: { kind: "web", url }, title: url };
   return {
     target: null,
-    title: localPath !== null ? "The machine that holds this deployment did not answer, so its file cannot be opened from here" : "This computer has no clone of this member, and the kernel reports no web address for the file",
+    title: localPath !== null ? "The machine that holds this deployment did not answer, so its file cannot be opened from here" : `${here.name} has no clone of this member, and the kernel reports no web address for the file`,
   };
 }
 
@@ -436,14 +512,31 @@ export const runTone = (run: AutomationRun | null): "done" | "failed" | "unknown
   run === null || run.outcome === null ? "unknown" : run.outcome === "launch-failed" || run.outcome === "invalid" ? "failed" : run.outcome === "unknown" || run.outcome === "stopped" ? "unknown" : "done";
 
 /** What a row's switch says it does (its title), as the Desktop's. */
-export function switchTitle(row: AutomationRow): string {
-  if (row.reason === "untrusted") return `${row.enabledHere ? "On" : "Off"} here, but not trusted on this computer: it runs only once oats-local.yaml trusts it`;
-  return row.enabledHere ? "On here: click to turn it off on this computer" : "Off here: click to turn it on";
+export function switchTitle(row: AutomationRow, here: Here = HERE): string {
+  if (row.reason === "untrusted") return `${row.enabledHere ? "On" : "Off"} here, but not trusted on ${here.on}: it runs only once oats-local.yaml trusts it`;
+  return row.enabledHere ? `On here: click to turn it off on ${here.on}` : "Off here: click to turn it on";
 }
 
 /** A one-click test of a trigger that turned out to watch a capability's source: nothing ran. */
 export const NOTHING_RAN = "Nothing ran. Testing this trigger runs a capability's source command and needs your confirmation.";
+/** A test that found nothing against the row: it would run here; while the host scheduler is off, only once it is on. */
+export const testReady = (running: boolean): string => (running ? "Ready: it would run here." : "Ready once the scheduler is on.");
 export const TEST_TIMED_OUT = "The test did not answer in time. Nothing was recorded.";
+/** What leads a test the kernel refused: a person's words first, the kernel's message after them. */
+export const TEST_REFUSED = "The test did not run.";
+/** A test whose answer did not arrive whole: its command may have run, so nothing is claimed either way. */
+export const TEST_UNREAD = "The test gave no answer the plugin can read.";
+/**
+ * The title of an act that failed, as what is so: `no` ("… was not run") when the act was REFUSED
+ * (the kernel said no, or the plugin's server turned the request down before any process: what
+ * acts.tsx's `failureOf` reads from the error), `maybe` ("… may not have been run") for any other
+ * failure, since a lost answer says nothing about what the kernel did. One rule for every act.
+ */
+export type Failed = { no: string; maybe: string };
+export const failedTitle = (refused: boolean, failed: Failed): string => (refused ? failed.no : failed.maybe);
+/** What leads a summary that failed to save: that it was not saved when it was refused, else that it may not have been. */
+export const summaryFailed = (refused: boolean, code: string | null, message: string): string =>
+  `${refused ? "The summary was not saved" : "The summary may not have been saved"}: ${message}${code === null ? "" : ` (${code})`}`;
 export const NAME_CUT = "The purpose was cut and a hash added so the name fits 64 characters.";
 
 /** A refusal as the server words it, `<code>: <message>`, apart: the message for a person, the code after it. One rule for what a code is (ui/text). */

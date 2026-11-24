@@ -492,5 +492,39 @@
    ],
    "exit": 0
   }
+ },
+ "later": {
+  "oats": "0.70.5",
+  "at": "2026-11-23T06:02:34.127Z",
+  "calls": {
+   "schedule-enable-unknown.json": {
+    "argv": [
+     "schedule",
+     "enable",
+     "weekly-cleanup",
+     "--json"
+    ],
+    "exit": 1
+   },
+   "schedule-describe-unknown.json": {
+    "argv": [
+     "schedule",
+     "update",
+     "weekly-cleanup",
+     "--description=Clean the week's scratch",
+     "--json"
+    ],
+    "exit": 1
+   },
+   "schedule-test-unknown.json": {
+    "argv": [
+     "schedule",
+     "test",
+     "weekly-cleanup",
+     "--json"
+    ],
+    "exit": 1
+   }
+  }
  }
 }

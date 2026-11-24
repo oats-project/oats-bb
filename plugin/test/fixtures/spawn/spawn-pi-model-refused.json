@@ -1,0 +1,1 @@
+{"schemaVersion":1,"ok":false,"error":{"code":"E_BACKEND_LAUNCH_ARG","message":"session backend bb refused to launch shape-refused: pi has no model \"claude-fable-9\" (if you just added it to pi, try again in a minute) — spawn rolled back","details":{"backend":"bb","capability":"oats.bb"}}}

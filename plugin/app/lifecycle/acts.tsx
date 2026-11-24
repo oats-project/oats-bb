@@ -29,6 +29,7 @@ import type { ConfirmProps } from "../ui";
 import { refusalCode, shown } from "../ui/text";
 import { agentName, readAge, showingRead } from "../ui/words";
 import { notify } from "../ui";
+import { restartModel } from "../../model/restart-model";
 import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "../spawn/models";
 import {
   applyRefused,
@@ -602,6 +603,18 @@ type StartState =
   | { phase: "running"; check: Check }
   | { phase: "settled"; check: Check | null; outcome: Outcome; refusal: Refusal | null; threadId: string | null };
 
+/** How long bb's model list may be read before a Restart reads it as no list: it then holds (a restart may not go without the list). */
+const LIST_WAIT_MS = 10_000;
+/** Whether `of` (null: nothing is waited for) has been waited for `ms`, without a break. (An `of` that was overdue and is waited for again is overdue at once: that holds, the safe side.) */
+function useOverdue(of: string | null, ms: number): boolean {
+  const [late, setLate] = useState<string | null>(null);
+  useEffect(() => {
+    if (of === null) return;
+    const timer = setTimeout(() => setLate(of), ms);
+    return () => clearTimeout(timer);
+  }, [of, ms]);
+  return of !== null && late === of;
+}
 /** What a model field may hold: one line that cannot be read as an option (kernel/spawn.ts `checkModel` holds the rule; this says it before any call). */
 const isModel = (model: string): boolean => model.length <= 256 && !model.startsWith("-") && !/[\0\n\r]/.test(model);
 
@@ -706,6 +719,31 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const suggestions = useModelSuggestions(known === null || known.backend !== "bb" ? null : running);
   const held = state.phase === "ready" ? gate(verb, state.check) : null;
 
+  // A RESTART stops the running session before the provider judges the MODEL it was asked for: the kernel's order.
+  // So a model that was CHANGED is sent only when it can be shown to start (model/restart-model.ts): bb's list for
+  // the harness serves it exactly once. Held here, in the app: nothing is sent to the plugin's server. (A start
+  // that is refused harms nothing: the Start dialog holds none of this. A harness bb cannot run is refused by the
+  // kernel BEFORE the stop: nothing is held for it, and its refusal is the dialog's ordinary refused result.)
+  const restarts = verb === "restart" && known !== null && known.backend === "bb";
+  const harnessChanged = known !== null && harness !== "" && harness !== known.harness;
+  // A list bb is still reading says nothing yet; one still unread after LIST_WAIT_MS reads as no list, which holds.
+  const listPending = restarts && typed !== "" && suggestions.status === "loading";
+  const overdue = useOverdue(listPending ? (running ?? "") : null, LIST_WAIT_MS);
+  const hold = !restarts
+    ? null
+    : restartModel({
+        typed,
+        harnessChanged,
+        // pi's models are resolved by their provider; any other harness's list names ids whole.
+        byProvider: running === "pi",
+        listed: suggestions.status === "loading" && !overdue ? { status: "loading" } : { status: "ready", models: suggestions.models.map(({ id, provider }) => ({ id, provider })) },
+      });
+  const heldModel = hold !== null && hold.kind === "held" ? hold : null;
+  /** The word on the Model field and beside the button. */
+  const modelWord = heldModel === null ? null : heldModel.why === "required" ? START.required : heldModel.why === "not-found" ? START.notFound : START.pickProvider;
+  // Beside the button: the held word; while the list is read, off with no word (it answers at once from bb's cache).
+  const notArmed = hold === null || hold.kind === "armed" ? null : hold.kind === "reading" ? "" : modelWord;
+
   // What this start is, from the kernel's row as the check read it. On bb: a new thread, with a harness and a
   // model to choose. On tmux: no thread and no choice; and where its session was LOST, a resume, unless the
   // person turned on the plain start.
@@ -714,7 +752,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const resumes = lost && !fresh;
 
   const start = () => {
-    if (state.phase !== "ready" || held !== null || (onBb && badModel)) return;
+    if (state.phase !== "ready" || held !== null || (onBb && badModel) || notArmed !== null) return;
     const { check: checked } = state;
     setChanged(false);
     setState({ phase: "running", check: checked });
@@ -821,7 +859,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       // thread): the button is off (`held`) with no second copy of the sentence beside it. Beside the button stands
       // only what the person typed wrong.
       held={held !== null}
-      blocked={onBb && badModel ? START.badModel : null}
+      blocked={onBb && badModel ? START.badModel : notArmed}
       notice={
         changed ? (
           // A resume the kernel refused because the row changed: said first, as a plan that changed is.
@@ -897,7 +935,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             label={START.model}
             optional
             hint={START.modelSaved}
-            error={badModel ? START.badModel : null}
+            error={badModel ? START.badModel : modelWord}
           >
             <input
               data-testid="oats-start-model"
@@ -913,9 +951,16 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             />
           </Field>
           )}
+          {heldModel !== null && heldModel.why === "not-found" && !badModel ? (
+            // The one way to a model bb does not list, a press away, only while the field says so.
+            <Disclosure summary="Details" testId="oats-start-unlisted">
+              <p className="text-xs text-muted-foreground">{START.unlisted}</p>
+            </Disclosure>
+          ) : null}
           {!onBb ? null : (
           <datalist id={`oats-start-models-${request.id}`}>
-            {suggestions.models.map((each) => (
+            {/* Several listed models serve the id that was typed: the field offers only those. */}
+            {suggestions.models.filter((each) => heldModel === null || heldModel.why !== "pick-provider" || heldModel.serving.includes(each.id)).map((each) => (
               <option key={each.id} value={each.id} label={shown(each.label)} />
             ))}
           </datalist>

@@ -5,6 +5,37 @@
 import { useId } from "react";
 import { Fact, Facts } from "../ui";
 
+/**
+ * A text whose words are tokens (an id, a path, a label, a flag, an account), each kept whole: a
+ * word moves to the next line as it is, so a line never ends inside one, not even at a hyphen
+ * ("oats-product-" / "expert"); only a word longer than the line itself is broken. The text read
+ * and copied is the text given, its words a space apart. Each word is marked `data-token`, which
+ * is what the live checks look at. A separator ("·") stays with the word before it, so a line
+ * never starts with one.
+ */
+/** One token, whole: the piece `Tokens` makes of each word, and the one home of the mark and the classes the live checks look at. */
+export function Token({ children }: { children: string }) {
+  return (
+    <span data-token="" className="inline-block max-w-full break-words align-bottom">
+      {children}
+    </span>
+  );
+}
+
+export function Tokens({ text }: { text: string }) {
+  const words = text.split(" ").reduce<string[]>((kept, word) => (word === "·" && kept.length > 0 ? [...kept.slice(0, -1), `${kept[kept.length - 1]} ·`] : [...kept, word]), []);
+  return (
+    <>
+      {words.map((word, at) => (
+        <span key={at}>
+          <Token>{word}</Token>
+          {at < words.length - 1 ? " " : null}
+        </span>
+      ))}
+    </>
+  );
+}
+
 export type FactRow = readonly [label: string, value: string | null | undefined, title?: string | null];
 /** Facts from rows of data: one with nothing to say is left out, and with none there is no list. `title` is the whole of a value shown short (a commit id). */
 export function FactList({ facts }: { facts: readonly FactRow[] }) {
@@ -14,7 +45,7 @@ export function FactList({ facts }: { facts: readonly FactRow[] }) {
     <Facts>
       {shown.map(([label, value, title]) => (
         <Fact key={label} label={label} title={title ?? undefined}>
-          {value}
+          <Tokens text={value} />
         </Fact>
       ))}
     </Facts>

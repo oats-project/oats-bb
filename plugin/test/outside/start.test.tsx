@@ -132,8 +132,8 @@ test("the REAL kernel's row of such a home (recorded) is a lost session's row: o
   const listed = { ...thread(), id: agent.threadId!, status: "error" };
   // By the row and bb's sidebar alone: "Stopped · session lost", carried on by a message.
   expect([state(agent, listed), rest(agent, listed), messageResumes(agent, listed), said(agent, "open", true, listed)?.kind]).toEqual(["stopped", "lost", true, "lost-open"]);
-  // With bb's events of that very thread (as the pi run printed them, not a fixture: one system/error, never a turn): Failed, nothing to carry on.
-  const failed = { ...listed, startFailure: startFailureOf([], [{ seq: 9, data: { code: "thread_command_failed", message: "Command thread.start failed", detail: 'Failed to resolve Pi model "mock/echo-20261122"' } }]) };
+  // With bb's events of that very thread (the error's data as the pi run's P6 asserts and shows it; not a fixture: one system/error, never a turn): Failed, nothing to carry on.
+  const failed = { ...listed, startFailure: startFailureOf([], [{ data: { code: "thread_command_failed", message: "Command thread.start failed", detail: 'Failed to resolve Pi model "mock/echo-20261122"' } }]) };
   expect([state(agent, failed), rest(agent, failed), messageResumes(agent, failed), said(agent, "open", true, failed)]).toEqual(["error", "never-started", false, null]);
   expect(agentStatus(agent, failed, 0)).toMatchObject({ word: "Failed", detail: null, bb: 'Failed to resolve Pi model "mock/echo-20261122"' });
 });

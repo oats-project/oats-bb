@@ -18,7 +18,8 @@ are the images, `answers/` (what the kernel printed for the form's preview and s
 two refusals the run makes, and for P6's spawn and `oats status`; the last is the source of a
 fixture copied by hand: "The fixture P6 is the source of", below),
 `kernel.json`, `bridge.json` and `pi.json` (what npm says of the three tarballs), `doctor.txt`, `bb.out`,
-`pi-mock.out` and `pi-mock-requests.jsonl` (the model requests). A run takes about four minutes.
+`pi-mock.out` and `pi-mock-requests.jsonl` (the model requests). A run takes about five and a half
+minutes (338 s from the start of `ci.sh pi` to its end, on 2026-11-24; P6 is about two of them).
 
 The run is of 2026-11-22: OATS 0.70.5 from npm (`@awebai/oats@0.70.5`, gitHead
 `e5e7a2a48db42140718948553e8272fb4e8e3ed4`), `@awebai/oats-pi@0.70.5`, pi 1.5.2
@@ -106,15 +107,18 @@ call the plugin's RPC, as its UI does. After each act it reads `oats status --js
   (`oats-package/capabilities/oats-bb/lib/pi-model.mjs`), a model pi does not have is refused
   before anything starts. One door is left on a real kernel: an id the provider cannot check and
   lets go. The step takes the one that holds whatever else is so, an id that ENDS IN A DATE
-  (`mock/echo-20261122`: bb holds such ids back from its list), and first asserts that bb's list
-  holds no such model. In the New agent form: the harness pi, the model TYPED (Custom…), Spawn.
+  (`mock/echo-20261122`: an id the provider lets go for its date; that bb holds such ids back
+  from its list is the provider's own account, `lib/pi-model.mjs`, not shown here), and first
+  asserts that bb's list holds no such model. In the New agent form: the harness pi, the model TYPED (Custom…), Spawn.
   The kernel says "launched" and nothing refuses; the form stays busy until bb's status of the new
   thread is past its start and then says **"<Name> did not start"**, with bb's reason under
   Details, Open and Close: no submit, nothing that says "Created", and no thread opened. Open
-  leads to the agent's own page. Then, read from the kernel and from bb: WHY it passed (the
-  provider's own rule, the home's copy of `pi-model.mjs`, asked with bb's list taken as whole: the
-  dated id is "unchecked … ends in a date", and the same id without a date would be refused: so
-  the step does not rest on a list that may be partial, "What the run found" below); the kernel's
+  leads to the agent's own page. Then, read from the kernel and from bb: WHY the id passes whatever the
+  list (the provider's own rule, `piModelVerdict` of the home's copy of `pi-model.mjs`, asked with
+  bb's list taken as whole: this id is "unchecked … ends in a date", and an unlisted id with no
+  date is refused. In this run the provider's own word at the launch is another one, the partial
+  list's, after P0b: "What the run found" below; the step does not rest on it); that nothing told
+  a person (the spawn's warnings are empty, and neither answer holds the provider's word); the kernel's
   REAL ROW, a lost session's (`launched: true`, `running: false`, `runtimeState: "stopped"`,
   `sessionEnd: "lost"`, no claim, no `outsideOats`), kept whole as
   `answers/status-failed-at-start.json`; bb's thread in "error" with ONE `system/error`
@@ -159,8 +163,8 @@ make those substitutions.
 - **A thread that failed at its start leaves a lost session's row** (P6): the kernel says
   `launched: true` at the spawn and then reads the home not running, "stopped", `sessionEnd:
   "lost"`. Nothing of the kernel's says that the agent never ran; the provider's warning that it
-  could not check the model reaches no answer (the spawn's `warnings` are empty, and the preview
-  holds none). The plugin tells it from a lost session by bb's events of the thread.
+  could not check the model reaches no answer (P6 asserts it: the spawn's `warnings` are empty,
+  and neither the spawn's answer nor the preview's holds that sentence). The plugin tells it from a lost session by bb's events of the thread.
 - **After P0b, bb's list of pi's models may be partial, and the provider then refuses no model.**
   P0b takes the bridge out of bb's pi configuration and puts it back, after bb started; the
   provider then finds that pi's settings changed after bb started (`piListMayBePartial`), and

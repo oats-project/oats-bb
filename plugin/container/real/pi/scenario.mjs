@@ -531,35 +531,48 @@ try {
   const unstarted = JSON.parse(unstartedSpawn.stdout);
   check(valueAfter(unstartedSpawn.argv, "--harness") === "pi" && valueAfter(unstartedSpawn.argv, "--model") === DATED, "the form's spawn passed --harness pi and the typed model", JSON.stringify(unstartedSpawn.argv));
   check(unstarted.ok === true && unstarted.result.launched === true, "the kernel spawned it and says \"launched\": nothing refused the model", unstartedSpawn.stdout.slice(0, 600));
-  show("the spawn's warnings", unstarted.result?.warnings ?? null);
-  // WHY nothing refused it: the provider's own rule, the very module that judged this launch (the
-  // home's copy), asked with bb's list as a WHOLE list: the dated id is let go for its date, and
-  // the same id without the date would be refused. (In a run the list may also be partial, e.g.
-  // after P0b changed pi's settings, and then any unlisted id is let go: the step does not rest on that.)
-  const { piModelVerdict } = await import(join(UNSTARTED_HOME, ".oats", "modules", "oats.bb", "lib", "pi-model.mjs"));
-  const [dated, undated] = [piModelVerdict(DATED, listedNow), piModelVerdict("mock/echo-undated", listedNow)];
-  check(typeof dated.unchecked === "string" && /ends in a date/.test(dated.unchecked) && typeof undated.refused === "string", "the provider let the model go BECAUSE ITS ID ENDS IN A DATE (its rule, on bb's list taken as whole), and would refuse the same id without a date", JSON.stringify({ dated, undated }));
-  show("the provider's rule", { [DATED]: dated, "mock/echo-undated": undated });
+  check(Array.isArray(unstarted.result?.warnings) && unstarted.result.warnings.length === 0 && !/could not check the model/.test(unstartedSpawn.stdout) && !/could not check the model/.test(recorded(["spawn", SOUL], ["--preview", UNSTARTED])?.stdout ?? ""), "and nothing told a person: the spawn's warnings are empty, and neither the spawn's answer nor the preview's holds the provider's word that it could not check the model", JSON.stringify(unstarted.result?.warnings));
+  // WHY the id passes WHATEVER THE LIST: the provider's own rule (the home's copy of its module,
+  // the same as the one that ran: the row's `moduleCopy`), asked with bb's list taken as WHOLE:
+  // this id is let go for its date alone, and an unlisted id with no date is refused. (At this
+  // launch the provider's own word was another: after P0b changed pi's settings bb's list may be
+  // partial, and it then lets any unlisted id go. The step does not rest on that: with the date's
+  // rule taken out of the provider this check fails.) The provider's function is called by its
+  // name: where it is not there, the check says so.
+  let rule;
+  try {
+    const { piModelVerdict } = await import(join(UNSTARTED_HOME, ".oats", "modules", "oats.bb", "lib", "pi-model.mjs"));
+    rule = { dated: piModelVerdict(DATED, listedNow), undated: piModelVerdict("mock/echo-undated", listedNow) };
+  } catch (cause) {
+    rule = { error: String(cause?.stack ?? cause) };
+  }
+  check(rule.error === undefined, "the provider's rule could be asked (piModelVerdict, lib/pi-model.mjs in the home's copy of the provider)", rule.error);
+  check(rule.error === undefined && typeof rule.dated.unchecked === "string" && /ends in a date/.test(rule.dated.unchecked) && typeof rule.undated.refused === "string", "the provider's rule lets this id go for its date ALONE (on bb's list taken as whole), and refuses an unlisted id with no date", JSON.stringify(rule));
+  show("the provider's rule", rule.error === undefined ? { [DATED]: rule.dated, "mock/echo-undated": rule.undated } : "not asked");
 
-  // The kernel's REAL row of a home whose thread failed at its start.
-  let lostRow = await untilRow(UNSTARTED, "not running, stopped, its session lost", (r) => r.running === false && r.runtimeState === "stopped" && r.sessionEnd === "lost", 60);
-  lostRow = lostRow ?? rowOf(UNSTARTED);
+  // The kernel's REAL row of a home whose thread failed at its start: read from ONE answer of
+  // `oats status --json`, which is also the answer kept (whole, as printed: this agent is the only
+  // one left, P5 retired the other). It is evidence, and the source of
+  // test/fixtures/outside/status-failed-at-start.json, which is copied from it BY HAND (this run
+  // writes no fixture; README.md, "The fixture P6 is the source of").
+  await untilRow(UNSTARTED, "not running, stopped, its session lost", (r) => r.running === false && r.runtimeState === "stopped" && r.sessionEnd === "lost", 60);
+  const printed = oats("status", "--json");
+  const printedRows = printed.exit === 0 ? JSON.parse(printed.stdout).agents.flatMap((group) => group.instances) : [];
+  const lostRow = printedRows.find((each) => each.instance === UNSTARTED);
   check(lostRow !== undefined && lostRow.backend === "bb" && lostRow.harness === "pi" && lostRow.launched === true && lostRow.running === false && lostRow.runtimeState === "stopped" && lostRow.sessionEnd === "lost" && (lostRow.waitingOnYou ?? null) === null && (lostRow.outsideOats ?? null) === null, "oats status: the kernel's row is the row of a LOST session (launched, not running, \"stopped\", sessionEnd \"lost\", no claim, no report): nothing in it says that the agent never ran", JSON.stringify(lostRow && { launched: lostRow.launched, running: lostRow.running, runtimeState: lostRow.runtimeState, sessionEnd: lostRow.sessionEnd, waitingOnYou: lostRow.waitingOnYou, outsideOats: lostRow.outsideOats }));
   show("oats status", `${brief(lostRow)}, sessionEnd ${lostRow?.sessionEnd}, launched ${lostRow?.launched}`);
-  // `oats status --json` as the kernel printed it, whole (this agent is the only one left: P5
-  // retired the other): kept as evidence, and the source of test/fixtures/outside/status-failed-at-start.json,
-  // which is copied from it BY HAND (this run writes no fixture; README.md, "The fixture P6 is the source of").
-  const printed = oats("status", "--json");
-  check(printed.exit === 0 && JSON.parse(printed.stdout).agents.flatMap((group) => group.instances).map((each) => each.instance).join() === UNSTARTED, "oats status --json holds this agent's row and no other: the answer is kept whole", printed.stderr || printed.stdout.slice(0, 300));
-  if (printed.exit === 0) evidence.keep("status-failed-at-start.json", printed.stdout);
+  check(lostRow !== undefined && printedRows.length === 1, "and that answer holds this agent's row and no other: it is kept whole, as printed", printed.stderr || JSON.stringify(printedRows.map((each) => each.instance)));
+  if (lostRow !== undefined && printedRows.length === 1) evidence.keep("status-failed-at-start.json", printed.stdout);
   const unstartedThreadId = lostRow?.session?.threadId;
   const unstartedThread = bbThread(unstartedThreadId);
   const unstartedEvents = unstartedThreadId === undefined ? [] : bbJson("thread", "messages", unstartedThreadId);
   const kinds = unstartedEvents.map((event) => event.type);
   const errors = unstartedEvents.filter((event) => event.type === "system/error");
   check(unstartedThread?.providerId === "pi" && unstartedThread.status === "error" && unstartedThread.archivedAt == null, "bb: its thread is one of the pi provider's, in \"error\", and listed", JSON.stringify(unstartedThread && { id: unstartedThread.id, providerId: unstartedThread.providerId, status: unstartedThread.status, archivedAt: unstartedThread.archivedAt }));
-  check(errors.length === 1 && errors[0].data?.code === "thread_command_failed" && errors[0].data.detail === `Failed to resolve Pi model "${DATED}"` && !kinds.includes("turn/started") && !kinds.includes("thread/identity"), "bb: its events hold ONE system/error (the start's, with bb's reason) and never a turn/started: the thread failed at its start", JSON.stringify({ kinds, errors: errors.map((event) => event.data) }));
+  check(errors.length === 1 && errors[0].data?.code === "thread_command_failed" && errors[0].data.message === "Command thread.start failed" && errors[0].data.detail === `Failed to resolve Pi model "${DATED}"` && !kinds.includes("turn/started") && !kinds.includes("thread/identity"), "bb: its events hold ONE system/error (the start's: code thread_command_failed, \"Command thread.start failed\", bb's reason) and never a turn/started nor a thread/identity: the thread failed at its start", JSON.stringify({ kinds, errors: errors.map((event) => event.data) }));
   show("bb's events", kinds.join(", "));
+  // (The error's own data, and nothing else of the log.)
+  show("bb's error", errors[0]?.data ?? "none");
   check(piTurns().every((request) => !String(request.model ?? "").includes("20261122")), "and the model was never asked: no request of the mock names the dated id");
   const unstartedProject = unstartedThread?.projectId;
 

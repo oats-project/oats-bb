@@ -14,8 +14,9 @@ It is not part of `ci.sh all`: CI runs it as a job of its own (`.github/workflow
 time does not grow. It changes nothing of the main run: it records no
 fixture (`UPDATE_FIXTURES=1` is refused), and its artefacts are in `real/pi/out/` (or
 `real/pi/out.<owner>/`: `../../README.md`): the run's log is what `run.sh` prints, and beside it
-are the images, `answers/` (what the kernel printed for the form's preview and spawn, and for the
-two refusals the run makes),
+are the images, `answers/` (what the kernel printed for the form's preview and spawn, for the
+two refusals the run makes, and for P6's spawn and `oats status`; the last is the source of a
+fixture copied by hand: "The fixture P6 is the source of", below),
 `kernel.json`, `bridge.json` and `pi.json` (what npm says of the three tarballs), `doctor.txt`, `bb.out`,
 `pi-mock.out` and `pi-mock-requests.jsonl` (the model requests). A run takes about four minutes.
 
@@ -101,10 +102,42 @@ call the plugin's RPC, as its UI does. After each act it reads `oats status --js
   `answers/retire-pi-refused.call.json`. With no such pi in the home the run says so in a NOTE and
   keeps neither file.
 
+- **P6 a thread that fails at its start.** Since the provider checks a pi launch's model
+  (`oats-package/capabilities/oats-bb/lib/pi-model.mjs`), a model pi does not have is refused
+  before anything starts. One door is left on a real kernel: an id the provider cannot check and
+  lets go. The step takes the one that holds whatever else is so, an id that ENDS IN A DATE
+  (`mock/echo-20261122`: bb holds such ids back from its list), and first asserts that bb's list
+  holds no such model. In the New agent form: the harness pi, the model TYPED (Custom…), Spawn.
+  The kernel says "launched" and nothing refuses; the form stays busy until bb's status of the new
+  thread is past its start and then says **"<Name> did not start"**, with bb's reason under
+  Details, Open and Close: no submit, nothing that says "Created", and no thread opened. Open
+  leads to the agent's own page. Then, read from the kernel and from bb: WHY it passed (the
+  provider's own rule, the home's copy of `pi-model.mjs`, asked with bb's list taken as whole: the
+  dated id is "unchecked … ends in a date", and the same id without a date would be refused: so
+  the step does not rest on a list that may be partial, "What the run found" below); the kernel's
+  REAL ROW, a lost session's (`launched: true`, `running: false`, `runtimeState: "stopped"`,
+  `sessionEnd: "lost"`, no claim, no `outsideOats`), kept whole as
+  `answers/status-failed-at-start.json`; bb's thread in "error" with ONE `system/error`
+  (`thread_command_failed`, "Failed to resolve Pi model …") and no `turn/started`; and no request
+  of the mock for that model. At each view the plugin says "Failed": the sidebar's row
+  ("Failed · <soul>"), the thread's line (the word alone, Start, and "bb says: …" under Details),
+  the agent's page (Start… and Retire…, no Restart) and the home's count. It is then retired
+  through the plugin, from its plan.
+
 Images, in bb's light theme and its dark one (`…-dark.png`), at 1280x800 and 390x800:
 `real-pi-form-…-preview` (and `-fields` at the phone's width, where the form is two screens),
 `real-pi-idle-…-thread`, `real-pi-needs-you-…-home` and `-thread`, `real-pi-question-…-home` and
-`-thread`. No two are the same image.
+`-thread`, `real-pi-unstarted-…-thread` (its Details open) and `-page`; and one of the form's
+result, `real-pi-unstarted-form-1280x800-result`. No two are the same image.
+
+## The fixture P6 is the source of
+
+The run writes no fixture. `answers/status-failed-at-start.json` is `oats status --json` as the
+kernel printed it in P6, whole (that agent is the only one left by then). The plugin's fixture
+`test/fixtures/outside/status-failed-at-start.json` is copied from it BY HAND, with the main run's
+substitutions for the paths and nothing else changed; its README names each
+(`../../../test/fixtures/outside/README.md`). To record it again: run this run, copy that answer,
+make those substitutions.
 
 ## What the run found
 
@@ -123,3 +156,14 @@ Images, in bb's light theme and its dark one (`…-dark.png`), at 1280x800 and 3
 - **`running` in `oats status` is true from the spawn to the stop**: it says that a harness (pi) is
   loaded, not that the agent works. It is the same while the agent is idle, while its own claim is
   set and while a dialog is open; that the agent is idle is bb's word for the thread.
+- **A thread that failed at its start leaves a lost session's row** (P6): the kernel says
+  `launched: true` at the spawn and then reads the home not running, "stopped", `sessionEnd:
+  "lost"`. Nothing of the kernel's says that the agent never ran; the provider's warning that it
+  could not check the model reaches no answer (the spawn's `warnings` are empty, and the preview
+  holds none). The plugin tells it from a lost session by bb's events of the thread.
+- **After P0b, bb's list of pi's models may be partial, and the provider then refuses no model.**
+  P0b takes the bridge out of bb's pi configuration and puts it back, after bb started; the
+  provider then finds that pi's settings changed after bb started (`piListMayBePartial`), and
+  where the list may be partial it lets an unlisted id go, dated or not. Seen by hand in a kept
+  container of this run, at its end: `--model mock/nosuch` was launched and its thread failed at
+  its start, like the dated id's. P6 does not rest on it (above).

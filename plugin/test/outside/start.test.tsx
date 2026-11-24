@@ -3,7 +3,8 @@
 // sidebar say "error" for it as for a thread whose later turn failed; bb's EVENTS tell them apart
 // (app/outside/threads.ts). From that one fact: "Failed" in every place, bb's reason under
 // Details, Start and Retire, and never that a message carries it on.
-// The events are RECORDED (test/fixtures/outside/events/*.json: the pi run's probe).
+// The events are RECORDED (test/fixtures/outside/events/*.json: the pi run's probe), and so is the
+// kernel's row of such a home (test/fixtures/outside/status-failed-at-start.json: the pi run's P6).
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { useState } from "react";
@@ -24,6 +25,7 @@ import { state } from "../../model/view";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp } from "../helpers/render";
 import type { Contract } from "../helpers/render";
+import { failedAtStartRow } from "./rows";
 
 afterEach(resetApp);
 
@@ -121,6 +123,19 @@ test("a read bb fails after it said that a thread failed at its start keeps that
   fireEvent.click(slot.getByTestId("probe"));
   await waitFor(() => expect(asked.length).toBe(6));
   expect(said()).toBe(FAILED);
+});
+
+test("the REAL kernel's row of such a home (recorded) is a lost session's row: only bb's word of the thread's start makes it \"Failed\"", () => {
+  const agent = failedAtStartRow();
+  // What the kernel printed: nothing in it says that the agent never ran.
+  expect([agent.backend, agent.running, agent.runtimeState, agent.sessionEnd, agent.waiting, agent.outsideOats ?? null]).toEqual(["bb", false, "stopped", "lost", null, null]);
+  const listed = { ...thread(), id: agent.threadId!, status: "error" };
+  // By the row and bb's sidebar alone: "Stopped · session lost", carried on by a message.
+  expect([state(agent, listed), rest(agent, listed), messageResumes(agent, listed), said(agent, "open", true, listed)?.kind]).toEqual(["stopped", "lost", true, "lost-open"]);
+  // With bb's events of that very thread (as the pi run printed them, not a fixture: one system/error, never a turn): Failed, nothing to carry on.
+  const failed = { ...listed, startFailure: startFailureOf([], [{ seq: 9, data: { code: "thread_command_failed", message: "Command thread.start failed", detail: 'Failed to resolve Pi model "mock/echo-20261122"' } }]) };
+  expect([state(agent, failed), rest(agent, failed), messageResumes(agent, failed), said(agent, "open", true, failed)]).toEqual(["error", "never-started", false, null]);
+  expect(agentStatus(agent, failed, 0)).toMatchObject({ word: "Failed", detail: null, bb: 'Failed to resolve Pi model "mock/echo-20261122"' });
 });
 
 async function line(options: RenderSlotOptions<Contract>) {

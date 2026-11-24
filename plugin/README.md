@@ -1019,7 +1019,9 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   provider then refuses leaves the agent stopped, its thread archived and nothing started
   (recorded on OATS 0.70.5 for a model pi does not have; a kernel gap). A refused start or spawn
   harms nothing, so only the RESTART dialog holds, for an agent on bb, by one rule
-  (`model/restart-model.ts`, its table in `test/model/restart-model.test.ts`): the model left
+  (`model/restart-model.ts`, its table in `test/model/restart-model.test.ts`; which listed models
+  serve an id is the plugin's one function, `model/served.ts`, which the New agent form reads too
+  and `test/model/served.contract.test.ts` holds against the provider's own check): the model left
   blank is the agent's own and is sent as before; a model the person CHANGED arms Restart only
   when bb's list for the harness the restart would run on has been read and serves that id
   exactly once, by the bb session provider's own rule for a pi model (its `piModelVerdict`): the
@@ -1029,8 +1031,9 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   names no providers (Claude Code's bare ids) a changed model is armed only if listed whole.
   Otherwise it is held, the word said once, as the Model field's mark (the off button is described
   by it, `aria-describedby`, with no copy beside it): "Not found" (no listed
-  model serves it; and where bb gives no list, an empty one, or none within ten seconds: it cannot
-  be shown to start), "Pick provider" (several serve it: the field then offers only those),
+  model serves it; and where bb gives no list, an empty one, none within ten seconds, or a list
+  the provider's own check cannot read, a model whose id does not begin with its provider among
+  them: nothing can be shown to start, a listed model included), "Pick provider" (several serve it: the field then offers only those),
   "Required" (the harness was changed and no model picked). While the list is read the button is
   off with no word. A harness CHANGED to one whose bb provider is not ready on this machine is NOT
   held: the kernel runs the provider's readiness check before the stop and refuses with nothing

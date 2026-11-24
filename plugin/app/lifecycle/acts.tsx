@@ -739,7 +739,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
         listed: suggestions.status === "loading" && !overdue ? { status: "loading" } : { status: "ready", models: suggestions.models.map(({ id, provider }) => ({ id, provider })) },
       });
   const heldModel = hold !== null && hold.kind === "held" ? hold : null;
-  /** The word on the Model field and beside the button. */
+  /** The word, said once: the Model field's mark. */
   const modelWord = heldModel === null ? null : heldModel.why === "required" ? START.required : heldModel.why === "not-found" ? START.notFound : START.pickProvider;
   // Beside the button: the held word; while the list is read, off with no word (it answers at once from bb's cache).
   /** The id of the Model field's mark: what the off button is described by. */

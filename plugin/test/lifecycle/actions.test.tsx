@@ -2391,7 +2391,6 @@ test("THE HARM ITSELF: a Restart whose changed model is held sends NOTHING to th
     const slot = await restartDialog(listsSdk({ pi: [...PI_LIST, "!my-model"], "claude-code": ["opus"] }));
     if (harness !== null) fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: harness } });
     if (typed !== "") type(slot, typed);
-    // The word, on the Model field and beside the button; the button is off.
     await waitFor(() => expect(modelError(slot), word).toBe(word));
     // The word stands ONCE, as the Model field's mark; the button is off, described by that mark, with no copy beside it (L9).
     expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();

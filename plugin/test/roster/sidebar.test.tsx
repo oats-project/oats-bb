@@ -823,6 +823,36 @@ test("the page of an agent with no bb thread is on screen: the parents of its ro
   expect(slot.queryAllByTestId("oats-agent-row").some((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")).toBe(false);
 });
 
+// The lead's ruling P1 on its reader's report (24 Nov 2026): a thread's row is marked while its thread is open; an agent's
+// own page marked no row, so a person on it could not tell which row it was. The same mark, with or without a thread.
+/** The rows of the tree that are marked as the one on screen: each by its kind and its agent (or its thread). */
+const marked = (slot: Awaited<ReturnType<typeof besidePage>>["slot"]) =>
+  Array.from(slot.getByTestId("oats-tree").querySelectorAll('[aria-current="page"]')).map((row) => [row.getAttribute("data-testid"), row.getAttribute("data-instance") ?? row.getAttribute("data-sidebar-thread-id"), row.className.split(/\s+/).includes("bg-accent")]);
+
+test("the row of the agent whose page is on screen is marked, as the open thread's row is: an agent with no bb thread, and one on a thread; one row, and none with nothing on screen", async () => {
+  // An agent with no bb thread (on tmux, a child's child): its row, and only it.
+  const tmux = await besidePage(nested(), "tmux-grandchild");
+  await waitFor(() => expect(marked(tmux.slot)).toEqual([["oats-agent-row-threadless", "tmux-grandchild", true]]));
+  resetApp();
+  // An agent on a bb thread whose own PAGE is on screen (no thread is open): its thread's row.
+  const onThread = await besidePage(nested(), "desktop-mockups-developer");
+  await waitFor(() => expect(marked(onThread.slot)).toEqual([["oats-agent-row", "thr_mockups", true]]));
+  resetApp();
+  // Nothing on screen: no row is marked.
+  const none = await besidePage(nested(), null);
+  expect(marked(none.slot)).toEqual([]);
+  resetApp();
+  // A thread is open while a page of another agent is still mounted: the thread's row alone, as bb says.
+  const both = await besidePage(nested(), "tmux-grandchild", "thr_mockups");
+  await both.slot.findByTestId("oats-panel");
+  expect(marked(both.slot)).toEqual([["oats-agent-row", "thr_mockups", true]]);
+  resetApp();
+  // Two rows of one name (a workspace may hold it twice), each on its own thread: the open THREAD's row alone, never both by the name.
+  const twin = fixtureAgents().find((agent) => agent.instance === "desktop-mockups-developer")!;
+  const twice = await besidePage([...nested(), { ...twin, threadId: "thr_plain", parent: null }], null, "thr_mockups");
+  expect(marked(twice.slot)).toEqual([["oats-agent-row", "thr_mockups", true]]);
+});
+
 test("with no agent's page on screen nothing is held open; and an open THREAD is the row on screen, whatever page last said its agent", async () => {
   // No page: every parent is closed as the page loads.
   const none = await besidePage(nested(), null);
@@ -851,16 +881,16 @@ test("the ARCHIVED thread of an agent is on screen: its row has no thread of bb'
     );
     await slot.findByTestId("oats-tree");
     const toggle = slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "redesign-ui-lead")!;
-    return { expanded: toggle.getAttribute("aria-expanded"), off: (toggle as HTMLButtonElement).disabled, child: slot.queryAllByTestId("oats-agent-row-threadless").some((row) => row.getAttribute("data-instance") === "harvest-knowledge-helper") };
+    return { expanded: toggle.getAttribute("aria-expanded"), off: (toggle as HTMLButtonElement).disabled, child: slot.queryAllByTestId("oats-agent-row-threadless").some((row) => row.getAttribute("data-instance") === "harvest-knowledge-helper"), marked: marked(slot).filter(([kind]) => kind !== "oats-other-row") };
   };
   // Nothing on screen: the parent is closed, and the row is not in the page.
-  expect(await draw(null)).toEqual({ expanded: "false", off: false, child: false });
+  expect(await draw(null)).toEqual({ expanded: "false", off: false, child: false, marked: [] });
   resetApp();
-  // Its archived thread on screen: the parent is open, held by it, and the row is drawn.
-  expect(await draw("thr_harvest")).toEqual({ expanded: "true", off: true, child: true });
+  // Its archived thread on screen: the parent is open, held by it, and the row is drawn, MARKED as the one on screen.
+  expect(await draw("thr_harvest")).toEqual({ expanded: "true", off: true, child: true, marked: [["oats-agent-row-threadless", "harvest-knowledge-helper", true]] });
   resetApp();
   // A thread that no agent names: nobody is on screen.
-  expect(await draw("thr_plain")).toEqual({ expanded: "false", off: false, child: false });
+  expect(await draw("thr_plain")).toEqual({ expanded: "false", off: false, child: false, marked: [] });
 });
 
 test("two pages in turn: the one that is drawn is the one on screen, and a page that leaves takes away only its own word", async () => {

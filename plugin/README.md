@@ -106,7 +106,10 @@ drawn. The kernel's row names the parent; nothing of bb's is asked. The tree's r
 for all: a cycle is cut at one link, deeper than two steps is drawn at two, and every level is in
 the one order above. Such a row stays what it is: it opens the agent's own page, not a thread; and
 while that page is on screen its parents are open (the page says whose it is:
-`app/roster/open-agent.ts`). A second row of a name the kernel should never list twice is a root of
+`app/roster/open-agent.ts`). The row of what is on screen is MARKED, as bb marks the open
+thread's row: the row of the agent whose own page is open, with or without a thread, and the
+thread-less row whose archived thread is open; with a thread open it is the one row found for
+that thread, never a second row of the same name. A second row of a name the kernel should never list twice is a root of
 its own. `view().roots` is still the tree of the agents on a bb thread alone, for those who read
 threads. The home's list of every agent walks the same tree (`app/home/board.ts`): a thread-less
 agent comes after its parent's rows there.

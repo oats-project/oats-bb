@@ -114,8 +114,10 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * Every thread row: bb's anchor contract, inside bb's own thread menu. `before`: a control of the
    * row's own that is not part of the link (a parent's chevron), drawn over the row's gutter and
    * before the link in the tab order; `onKeyDown`: the row's own keys (a parent's Right and Left).
+   * `onPage`: the agent's own page is what is on screen (no thread is): the row is marked as the
+   * open thread's row is.
    */
-  const threadRow = (thread: PluginSidebarThread, className: string, testId: string, children: ReactNode, before: ReactNode = null, onKeyDown?: (event: KeyboardEvent) => void) => (
+  const threadRow = (thread: PluginSidebarThread, className: string, testId: string, children: ReactNode, before: ReactNode = null, onKeyDown?: (event: KeyboardEvent) => void, onPage = false) => (
     <li key={thread.id} className="relative">
       {before}
       <ThreadActionsContextMenu thread={target(thread)}>
@@ -124,8 +126,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           data-testid={testId}
           data-sidebar-thread-shortcut-target=""
           data-sidebar-thread-id={thread.id}
-          aria-current={thread.id === activeThreadId ? "page" : undefined}
-          className={`${ROW} ${className} ${thread.id === activeThreadId ? "bg-accent" : ""}`}
+          aria-current={thread.id === activeThreadId || onPage ? "page" : undefined}
+          className={`${ROW} ${className} ${thread.id === activeThreadId || onPage ? "bg-accent" : ""}`}
           onClick={(event) => openThread(event, thread.id)}
           onKeyDown={onKeyDown}
         >
@@ -195,6 +197,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           </>,
           toggle,
           keys,
+          onScreen(node.agent),
         ),
       ];
     });
@@ -234,7 +237,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           data-instance={agent.instance}
           data-opens={said?.archived === true && agent.threadId !== null ? "thread" : "page"}
           title={shown(agent.instance)}
-          className={`${ROW} w-full ${(guttered ? GUTTERED : INDENT)[depth]} text-left`}
+          // The row of what is on screen is marked, as bb marks the open thread's: this agent's own page, or its archived thread.
+          aria-current={onScreen(agent) ? "page" : undefined}
+          className={`${ROW} w-full ${(guttered ? GUTTERED : INDENT)[depth]} text-left ${onScreen(agent) ? "bg-accent" : ""}`}
           onKeyDown={onKeyDown}
           onClick={() => {
             // Its archived conversation, where bb keeps one: the thread's own row there says what happened, with the acts.
@@ -297,7 +302,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // Every agent that waits, the ones with no bb thread included (`view.needing`: the home's badge and list count the same).
   // Every agent OATS has is a row.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
-  // The row that is open on screen, by its agent: its parents are open whatever the person left.
+  // The row that is open on screen, by its agent: it is MARKED (the lead's ruling P1: with or without a thread, at every
+  // width), and its parents are open whatever the person left.
   // A thread that is open, by bb's word: the row that is drawn on it; else the row with no thread whose agent NAMES it (its
   // thread is archived in bb: the row itself leads there, and must not be closed away by its parent once a person is on
   // it). The row on the thread first: two agents may name one thread. With no thread open: the agent whose own page is on
@@ -305,6 +311,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const drawnRows = flatten(view.rows);
   const onThread = activeThreadId === null ? undefined : (drawnRows.find((row) => row.thread?.id === activeThreadId) ?? drawnRows.find((row) => row.thread === null && row.agent.threadId === activeThreadId));
   const selected = activeThreadId === null ? openAgent : (onThread?.agent.instance ?? null);
+  // Whether a row is THE one on screen, for its mark: with a thread open, the one row found for it (never a second row
+  // of the same name); with none, the row of the agent whose own page is on screen.
+  const onScreen = (agent: Agent): boolean => (activeThreadId === null ? openAgent === agent.instance : onThread?.agent === agent);
   const guttered = view.rows.some((row) => row.children.length > 0);
   // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a
   // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the row's own state, which is the one its line draws.

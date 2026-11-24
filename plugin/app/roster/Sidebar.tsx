@@ -31,6 +31,7 @@ import type { PageLink } from "../workspace/pages";
 import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
+import { useOpenAgent } from "./open-agent";
 import { LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
 import { useNow } from "./now";
 import { FoldToggle, foldKeys, GUTTERED, useOpened } from "./fold";
@@ -84,6 +85,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const navigate = useBbNavigate();
   const gone: ReadonlySet<string> = oats.phase === "ready" ? oats.gone : NO_ONE;
   const openPath = useOpenPage();
+  const openAgent = useOpenAgent();
   const pageShowsNotice = usePageShowsNotice();
   // The pages this release shows (the plugin's setting `pages`): a page that is not shown has no
   // link here, and no mark.
@@ -293,7 +295,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // Every agent OATS has is a row.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
   // The row that is open on screen, by its agent: its parents are open whatever the person left.
-  const selected = activeThreadId === null ? null : (flatten(view.rows).find((row) => row.thread?.id === activeThreadId)?.agent.instance ?? null);
+  // (A thread that is open, by bb's word; else the agent whose own page is on screen, by that page's: a row with no bb thread is "on screen" then.)
+  const selected = activeThreadId === null ? openAgent : (flatten(view.rows).find((row) => row.thread?.id === activeThreadId)?.agent.instance ?? null);
   const guttered = view.rows.some((row) => row.children.length > 0);
   // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a
   // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the state the row itself draws.

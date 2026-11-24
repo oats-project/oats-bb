@@ -636,6 +636,43 @@ test("an agent on tmux is drawn under its parent, on a thread or not, indented b
   expect(navigated()).toBe(1);
 });
 
+// The row a person is on keeps its parents open (the fold's `selected`). For a row with no bb thread
+// that is its agent's own PAGE: bb tells the sidebar the open thread only, so the page says whose it
+// is (app/roster/open-agent.ts; app/panel AgentPage calls it).
+test("the page of an agent with no bb thread is on screen: the parents of its row are open as the page loads, by chevrons that are off; nothing below it is opened", async () => {
+  const { useSayOpenAgent } = await import("../../app/roster/open-agent");
+  const lead = fixtureAgents().find((agent) => agent.instance === "kernel-fix-developer")!;
+  const agents = [
+    ...fixtureAgents().map((agent) => (agent.instance === "kernel-fix-developer" ? { ...agent, parent: "redesign-ui-lead" } : agent.instance === "weekly-digest-helper" ? { ...agent, parent: "tmux-grandchild" } : agent)),
+    { ...lead, instance: "tmux-grandchild", home: lead.home.replace("kernel-fix-developer", "tmux-grandchild"), alias: "tmux-grandchild", parent: "kernel-fix-developer" },
+  ];
+  const app = await loadApp();
+  const List = app.threadLists[0]!.component;
+  const OnScreen = ({ instance }: { instance: string | null }) => (useSayOpenAgent(instance), null);
+  const draw = (instance: string | null) => (props: PluginThreadListProps) => (
+    <>
+      <List {...props} />
+      <OnScreen instance={instance} />
+    </>
+  );
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    { component: draw("tmux-grandchild") } as never,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    { rpc: handlers({ snapshot: () => fixtureSnapshot(agents) }), sidebarThreads: sidebarThreads() },
+  );
+  await slot.findByTestId("oats-tree");
+  const threadless = () => slot.queryAllByTestId("oats-agent-row-threadless").map((row) => row.getAttribute("data-instance"));
+  // No chevron was pressed: its two parents are open, held open by the row on screen (their chevrons are off), and its row is drawn.
+  await waitFor(() => expect(threadless()).toEqual(["kernel-fix-developer", "tmux-grandchild"]));
+  const toggles = () => slot.getAllByTestId("oats-row-toggle").map((toggle) => [toggle.getAttribute("data-instance"), toggle.getAttribute("aria-expanded"), (toggle as HTMLButtonElement).disabled]);
+  expect(toggles()).toEqual([
+    ["redesign-ui-lead", "true", true],
+    ["kernel-fix-developer", "true", true],
+    ["tmux-grandchild", "false", false], // what is BELOW the row on screen stays as the person left it: closed
+  ]);
+  expect(slot.queryAllByTestId("oats-agent-row").some((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")).toBe(false);
+});
+
 // One rule for a state (model/view.ts `state`), read by the sidebar's row and by the agent's panel:
 // a tmux agent that is stopped, as the kernel prints it (`{ running: false }`, no runtimeState;
 // awebai/oats lib/instance-listing.mjs at 95c7b43b3), says "Stopped" in both, rendered together.

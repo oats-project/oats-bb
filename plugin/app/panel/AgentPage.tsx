@@ -7,6 +7,7 @@ import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useOats } from "../oats";
 import { Button, Empty, Loading } from "../ui";
+import { useSayOpenAgent } from "../roster/open-agent";
 import { InstancePanel } from "./Panel";
 
 /** The page's route under the plugin. */
@@ -32,6 +33,8 @@ export function AgentPage({ subPath }: PluginNavPanelProps) {
   const oats = useOats();
   const navigate = useBbNavigate();
   const instance = instanceOf(subPath);
+  // The sidebar is told whose page this is: its row's parents stay open while the page is on screen (app/roster/open-agent.ts).
+  useSayOpenAgent(instance);
   // The agent as the roster last named it: kept while the roster is read again or cannot be read,
   // as the panel keeps what it showed.
   const [last, setLast] = useState<{ instance: string; threadId: string | null } | null>(null);

@@ -147,6 +147,8 @@ const ARCHIVED_THREE = ["thr_digest", "thr_research", "thr_release"];
  * kernel's row of such a home is the lost session's (shaped: the fake's status).
  */
 const NEVER = "release-070-maintainer";
+/** Its name as words, by the provider's own rule (lib/title.mjs `threadTitle`): every "-" a space, the first character upper-cased. */
+const NEVER_TITLE = NEVER.replace(/-+/g, " ").trim().replace(/^./, (first) => first.toUpperCase());
 /** bb's thread that failed at its start, while the stage runs. */
 let neverStarted;
 
@@ -158,7 +160,11 @@ export const stages = {
     tellsAThread: true,
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
       const own = threads.get("thr_release");
-      neverStarted = bbJson("thread", "spawn", "--provider", "pi", "--model", "no-such-model", "--prompt", "hello", "--project", own.projectId);
+      // With the title the bb session provider gives every thread it makes: the instance's name as
+      // words (`--title`, oats-package/capabilities/oats-bb/lib/launch.mjs and title.mjs). The stage
+      // makes this thread itself, and without it bb would title it from its first message ("hello"),
+      // which the product never shows of an agent's thread.
+      neverStarted = bbJson("thread", "spawn", "--provider", "pi", "--model", "no-such-model", "--prompt", "hello", "--title", NEVER_TITLE, "--project", own.projectId);
       let status = neverStarted.status;
       for (const deadline = Date.now() + 60_000; Date.now() < deadline && status !== "error"; await sleep(1000)) status = bbJson("thread", "show", neverStarted.id).thread?.status;
       if (status !== "error") console.log(`NOTE outside: the thread made to fail at its start reads "${status}" after 60 s, not "error"`);
@@ -282,6 +288,9 @@ export default [
       await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
       const line = await lineOf(page, /^Failed$/);
       check(line !== null && line.state === "error" && line.words === "Failed" && same(line.acts, ["Start…"]) && line.warning === null, `${at} the line: "Failed" and nothing after it, with Start… (it opens its dialog)`, JSON.stringify(line));
+      // The thread's own title in bb is the agent's name, as the provider titles it: bb's header and the line under it name one agent.
+      const titled = bbJson("thread", "show", thread.id).thread?.title;
+      check(titled === NEVER_TITLE, `${at} bb's title of the thread is the agent's name as words ("${NEVER_TITLE}"), as the provider gives it`, String(titled));
       const details = testId("oats-status-bb");
       await page.evaluate(`document.querySelector(${JSON.stringify(`${details} summary`)})?.click()`);
       const reason = await page.until(`(() => { const fold = document.querySelector(${JSON.stringify(details)}); return fold?.open ? (fold.querySelector("p")?.innerText ?? "").trim() : ""; })()`, 10);

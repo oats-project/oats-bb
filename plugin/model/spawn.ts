@@ -160,7 +160,8 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
 }
 /**
  * The preview's facts as the form's column lists them: the Desktop's (`previewFacts`), and three
- * of the plugin's own, each read from the same answer and never assumed: the soul (the Desktop's
+ * of the plugin's own, each read from the same answer (never assumed, but the access where the
+ * answer is silent on it: below): the soul (the Desktop's
  * dialog names it in its title alone), that the session is a bb thread (the Desktop's Session
  * backend is a control; here it is always bb, and said), and the access the agent runs with (the
  * plugin asks for bb's full mode on every spawn: the row says what the kernel decided). The
@@ -172,7 +173,7 @@ export const bbDefaultModel = (harness: string): string => `bb’s default for $
 
 // ---- the Model field: whether a spawn may go with the model it would send ----
 
-/** Why Spawn is held for the model: the field's mark and the reason beside the button, two words at most. */
+/** Why Spawn is held for the model: the field's mark (which the off button is described by), two words at most. */
 export const MODEL_HELD = { required: "Required", ambiguous: "Pick provider" } as const;
 export type ModelCheck = { held: null } | { held: (typeof MODEL_HELD)[keyof typeof MODEL_HELD]; /** the listed ids that serve the bare one, to pick from */ offers: string[] };
 /**
@@ -242,9 +243,13 @@ export function formFacts(preview: unknown, options: { name?: string | null } = 
   if (soul !== null) rows.unshift({ label: "Soul", parts: [{ text: soul }] });
   const decision = record(data.decision) && record(data.decision.effective) ? data.decision.effective : {};
   const backend = text(data.backend);
-  const access = decision.yolo === true ? "full mode: no sandbox" : decision.yolo === false ? "the harness asks before it acts" : null;
+  // What the agent may do: ALWAYS a row (it is the one place the form says it, in view of Spawn). The kernel's own
+  // decision where the preview carries it; where it carries none, what the plugin asks on every spawn (`--yolo`: bb's
+  // full mode): a preview that is silent on it never leaves a Spawn that can be pressed with nothing saying "no sandbox"
+  // (the review of part 7).
+  const access = decision.yolo === false ? "the harness asks before it acts" : "full mode: no sandbox";
   // After the harness: where its session is, then what it may do.
-  if (access !== null) after("Harness", { label: "Access", parts: [{ text: access }] });
+  after("Harness", { label: "Access", parts: [{ text: access }] });
   if (backend !== null) after("Harness", { label: "Session", parts: [{ text: backend === "bb" ? "bb thread" : backend }] });
   return { ...facts, facts: rows };
 }

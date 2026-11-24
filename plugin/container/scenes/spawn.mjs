@@ -170,11 +170,11 @@ export default [
       // The focus order, by Tab from the first field.
       await page.evaluate(`document.querySelector(${q("oats-spawn-soul")}).focus()`);
       const stops = [await page.evaluate(FOCUSED)];
-      for (let i = 0; i < 7; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         await page.press("Tab");
         stops.push(await page.evaluate(FOCUSED));
       }
-      check(JSON.stringify(stops) === JSON.stringify(["oats-spawn-soul", "oats-spawn-task", "oats-spawn-harness", "oats-spawn-model", "Independent", "oats-spawn-name", "oats-spawn-cancel", "oats-spawn-submit"]), `${at} Tab walks the form in its order: the soul, the instruction, the harness, the model, the relationship, the name, Cancel, Spawn`, JSON.stringify(stops));
+      check(JSON.stringify(stops) === JSON.stringify(["oats-spawn-soul", "oats-spawn-task", "oats-spawn-harness", "oats-spawn-model", "Independent", "oats-spawn-name", "▸ Details", "oats-spawn-cancel", "oats-spawn-submit"]), `${at} Tab walks the form in its order: the soul, the instruction, the harness, the model, the relationship, the name, the column's Details, Cancel, Spawn`, JSON.stringify(stops));
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
       await page.evaluate(show("oats-spawn-task"));
       await page.shot(`spawn-${viewport.name}-filled`, { targets: true });
@@ -423,7 +423,7 @@ export default [
       check(await open(page, "oats-developer"), `${at} the form with a soul chosen`, await whole(page));
       check(Boolean(await fillNamed(page)), `${at} the form is filled and its preview read`, await whole(page));
       await page.evaluate(`${SPAWN}.click()`);
-      const SAID = `(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); return JSON.stringify({ tone: r?.getAttribute("data-tone") ?? null, title: r?.querySelector("h3").innerText ?? null, words: r?.querySelector("p").innerText ?? null, code: r ? [...r.querySelectorAll("p, span, code")].some((e) => e.innerText.trim() === "E_BACKEND_NOT_READY") : null, button: ${SPAWN}.innerText.trim(), off: ${SPAWN}.disabled, fields: ${FIELDS}.disabled, cancel: ${textOf(testId("oats-spawn-cancel"))}, path: location.pathname }); })()`;
+      const SAID = `(() => { const r = document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}); return JSON.stringify({ tone: r?.getAttribute("data-tone") ?? null, title: r?.querySelector("h3").innerText ?? null, words: r?.querySelector("p").innerText ?? null, code: r ? [...r.querySelectorAll(${q("oats-spawn-details")} + " p")].some((e) => e.textContent.trim() === "E_BACKEND_NOT_READY") && ![...r.querySelectorAll(":scope > p, :scope > div > p")].some((e) => e.textContent.includes("E_BACKEND_NOT_READY")) : null, button: ${SPAWN}.innerText.trim(), off: ${SPAWN}.disabled, fields: ${FIELDS}.disabled, cancel: ${textOf(testId("oats-spawn-cancel"))}, path: location.pathname }); })()`;
       const said = await page.until(`document.querySelector(${q("oats-spawn-foot")} + " " + ${q("oats-result")}) && ${SPAWN}.innerText.trim() !== "Spawning…" && ${SPAWN}.innerText.trim() !== "Spawn" && ${SAID}`, 30);
       check(
         said ===

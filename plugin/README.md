@@ -191,7 +191,7 @@ while its Terminal tab has the focus.
   mode: no sandbox." (neither act names a mode: the home's recorded choice stands). **Harness**
   starts on "Keep the recorded harness" and passes nothing; one the bb session provider declares
   is passed as `--harness`. With one harness declared there is no choice. **Model** is blank for
-  the recorded or default model, or a model id (that it is "Saved for later starts too." is under
+  the recorded or default model, or a model id ("The model is saved for later starts too." is under
   Details). A start that can
   run says nothing more; an agent the kernel says is running is not started again: Start is off,
   the dialog says why and offers its thread and **Refresh status**.
@@ -699,8 +699,8 @@ finish, a backend that is not installed) is a refusal there, with the kernel's c
   (its placeholder) or marked (the button is described by that mark), the column's refusal, the
   roster's notice ("Acts are off."). The same holds for its key. With no soul chosen, or a value
   that cannot be asked, the column is not drawn: no heading stands over nothing.
-- It applies the decision that preview showed (its revision goes with the call), so "Spawn refuses
-  if this changes before you confirm" is true: a decision that moved is refused by the kernel,
+- It applies the decision that preview showed (its revision goes with the call), so a spawn is
+  refused if the decision changes before the press: a decision that moved is refused by the kernel,
   nothing is created, the preview that was on screen can no longer be pressed, and the column is
   read again and says so.
 - On the press the button reads "Spawning…" and is held, with every field: one press makes one

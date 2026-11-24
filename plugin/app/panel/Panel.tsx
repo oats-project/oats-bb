@@ -599,16 +599,8 @@ function SoulPage({ oats, agent, read, now, state: readState }: { oats: Roster; 
       </header>
       {readState}
       <SoulBody read={soul} now={now} />
+      {/* The agents root is said where it explains something: what the readiness checks observed (the fold of Readiness: "Soul: <key> · <agents root>"). No fold of its own at the tab's foot. */}
       {key === null ? null : <Readiness instance={agent.instance} of="soul" context={answer?.agentsRoot == null ? null : { name: key, root: answer.agentsRoot }} now={now} />}
-      {answer === undefined || answer.agentsRoot === null ? null : (
-        <Disclosure summary="Details" testId="oats-panel-details">
-          <Facts>
-            <Fact label="Agents root">
-              <PathLine path={answer.agentsRoot} copyName="Copy agents root path" testId="oats-panel-agents-root" />
-            </Fact>
-          </Facts>
-        </Disclosure>
-      )}
     </>
   );
 }

@@ -43,7 +43,7 @@ describe("panelInstance", () => {
     // copy, the modules' copies, the composed instructions and skills: none of it is answered.
     const sent = JSON.stringify(answer);
     for (const kept of ["127.0.0.1", "settings", "soulDir", ".oats", "skills", "injects", "launchAt", "integrity", "open", "/abs/home", "/abs/real"]) expect(sent).not.toContain(kept);
-    // The only paths: the instance's home (the Instance tab's Paths) and the roster's agents root (the Soul tab's Details).
+    // The only paths: the instance's home (the Instance tab's Paths) and the roster's agents root (what Readiness says was observed).
     const paths = sent.match(/\/abs\/[^"]*/g) ?? [];
     expect(paths).toEqual(["/abs/deployment/agents/oats-expert/instances/panel-worktree-helper", "/abs/deployment/agents"]);
   });

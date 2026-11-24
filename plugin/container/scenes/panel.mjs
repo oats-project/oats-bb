@@ -348,8 +348,9 @@ const first = [
         const read = await page.evaluate(textOf(inPanel("oats-panel-soul-description")));
         check(read === "OATS expert: answers questions about OATS.", `${at} the Soul tab: the soul's description`, read);
       }
-      const details = await reads(page, inPanel("oats-panel-details"), ["Details", "/agents"]);
-      check(details.includes("Details") && /agents root/i.test(details) && details.includes("/agents"), `${at} Details: the agents root, with its Copy`, details);
+      // No lone "Details" at the tab's foot: the agents root is said under what it explains (Readiness's fold, "Soul: <key> · <agents root>": the unit tests read it).
+      const lone = await page.evaluate(`JSON.stringify({ details: document.querySelector(${JSON.stringify(inPanel("oats-panel-details"))}) !== null, said: /agents root/i.test(document.querySelector(${JSON.stringify(inPanel("oats-panel-page-soul"))})?.innerText ?? "") })`);
+      check(lone === '{"details":false,"said":false}', `${at} the Soul tab has no fold of its own for the agents root at its foot`, lone);
       const offered = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-open-soul"))})?.disabled ?? null`);
       check(offered === false, `${at} Open soul page is offered`, `the button's disabled: ${offered} (null: no such button)`);
       await settled(page, viewport);

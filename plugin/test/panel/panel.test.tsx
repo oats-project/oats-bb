@@ -274,7 +274,7 @@ test("older build: a chip that opens to what moved since the spawn", async () =>
   expect(text(drift)).toContain("Re-spawning picks up the new state; this instance keeps what it was built with.");
 });
 
-test("the soul's name opens the Soul tab: its name, its description, Details with the agents root, and Open soul page", async () => {
+test("the soul's name opens the Soul tab: its name, its description and Open soul page; no lone Details at its foot", async () => {
   const slot = panel();
   const link = await slot.findByTestId("oats-panel-soul-link");
   link.focus();
@@ -287,11 +287,13 @@ test("the soul's name opens the Soul tab: its name, its description, Details wit
   // The soul author's own text, as long as they wrote it: two lines at most here, whole in its title (and on the soul's page).
   expect(slot.getByTestId("oats-panel-soul-description").className).toContain("line-clamp-2");
   expect(slot.getByTestId("oats-panel-soul-description").getAttribute("title")).toBe("OATS expert: answers questions about OATS.");
-  const details = slot.getByTestId("oats-panel-details");
-  expect(text(details.querySelector("summary")!)).toContain("Details");
-  expect(text(within(details).getByTestId("oats-fact").querySelector("dt")!)).toBe("Agents root");
-  expect(text(slot.getByTestId("oats-panel-agents-root"))).toBe("/abs/deployment/agents");
-  expect(copyOf(slot.getByTestId("oats-panel-agents-root")).getAttribute("aria-label")).toBe("Copy agents root path");
+  // No fold of one fact at the tab's foot, with nothing saying of what: the agents root is said under what it
+  // explains, in Readiness's fold ("Soul: oats-expert · /abs/deployment/agents": test/panel/soul-activity-readiness.test.tsx).
+  expect(slot.queryByTestId("oats-panel-details")).toBeNull();
+  expect(slot.queryByTestId("oats-panel-agents-root")).toBeNull();
+  const page = slot.getByTestId("oats-panel-page-soul");
+  expect(Array.from(page.querySelectorAll("details > summary")).map((summary) => summary.textContent).filter((summary) => summary === "▸Details")).toEqual([]);
+  expect(text(page)).not.toContain("Agents root");
   const open = slot.getByTestId("oats-panel-open-soul");
   expect(text(open)).toBe("Open soul page");
   expect(slot.queryByTestId("oats-panel-open-soul-why")).toBeNull();

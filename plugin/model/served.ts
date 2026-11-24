@@ -1,8 +1,14 @@
 // Which of the models bb lists for a harness serve a model id: ONE reading, for every place of the
-// plugin that judges a model before a launch (the New agent form's Model field; the Restart
-// dialog). It is the bb session provider's own resolution (oats-package/capabilities/oats-bb/lib/
+// plugin that judges a model before a launch (the New agent form's Model field reads it; it is
+// written for the Restart dialog too). It is the bb session provider's own resolution (oats-package/capabilities/oats-bb/lib/
 // pi-model.mjs `piModelVerdict`, which is bb's own rule), and test/model/served.contract.test.ts
 // runs one table through both and fails on any difference.
+//
+// The equality is on the rows the plugin holds (app/spawn/models.ts `modelOptions`): a model's id
+// and the provider bb names for it, or none. Two malformed rows of bb's the plugin cannot tell from
+// a model with no provider, and the provider can: a `routeProviderId` that is empty or not a
+// string, and an id that is empty. The provider then reads no list at all and refuses nothing; the
+// plugin drops the row and reads the rest (the contract test names the difference).
 //
 // It answers what the LIST says, no more. What a caller does with the answer is its own rule: the
 // provider knows what bb's list leaves out (a model whose id ends in a date, a list pi's own

@@ -108,6 +108,10 @@ describe("a refusal, in a person's words, with what to do", () => {
       detail: null,
       outcome: "refused",
     });
+    // Where the kernel could NOT undo that spawn (its marker): never "nothing was created", and its message, which
+    // names what to clean up, is under Details: the plugin's sentence sends a person there.
+    const left = spawnProblem({ code: model.code, message: 'session backend bb refused to launch x: pi has no model "claude-fable-9" — rollback INCOMPLETE, clean up manually: instance home /d/x: still present', unconfirmed: true }, "spawn");
+    expect([left.outcome, left.sentence, left.detail]).toEqual(["unconfirmed", "OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.", 'session backend bb refused to launch x: pi has no model "claude-fable-9" — rollback INCOMPLETE, clean up manually: instance home /d/x: still present']);
     // The message goes through the display filter: a control character of direction is not drawn as it came.
     expect(spawnProblem({ code: "E_BACKEND_LAUNCH_ARG", message: "pi has no model \u202Ex" }, "spawn").sentence).toBe("pi has no model \uFFFDx");
     // And one the filter withholds (a credential) is never drawn as the sentence: the stage's general one, and Details (which withholds it too).

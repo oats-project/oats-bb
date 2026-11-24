@@ -95,6 +95,18 @@ describe("the plugin's reading of bb's list is the provider's own", () => {
   });
 });
 
+describe("the one named difference: a malformed row of bb's", () => {
+  // The plugin holds a model's provider as a string or none (app/spawn/models.ts `modelOptions`: an empty or a
+  // non-string routeProviderId is none). The provider's check reads such a row as a list it cannot read, and refuses
+  // nothing; the plugin drops the row and reads the rest, so it can ask for the provider where the provider lets the
+  // launch go. bb is not known to give such a row.
+  test.each([["an empty routeProviderId", ""], ["a routeProviderId that is not a string", 7]])("%s", (_what, odd) => {
+    const rows = [...by("a/x", "b/x"), { id: "weird", routeProviderId: odd as string }];
+    expect(piModelVerdict("x", rows).unchecked).toBe("the list is not one this provider can read");
+    expect(served("x", [{ id: "a/x", provider: "a" }, { id: "b/x", provider: "b" }, { id: "weird", provider: null }], true)).toEqual({ kind: "several", ids: ["a/x", "b/x"] });
+  });
+});
+
 describe("and on lists nobody thought of", () => {
   // A fixed seed: the same lists every run (a failure names its list and id).
   let state = 0x5eed1234;
@@ -149,6 +161,11 @@ describe("the New agent form, against the provider", () => {
     const old = { old: "pi's configuration changed a moment ago" };
     expect(piModelVerdict("claude-opus-5-5", TWO, old).unchecked).toBe(old.old);
     expect(form("claude-opus-5-5", TWO)).toEqual({ held: "Pick provider", offers: ["anthropic/claude-opus-5-5", "openrouter/claude-opus-5-5"] });
+  });
+  test("a harness whose models are not resolved by provider is never held for the list: the provider checks a model for pi alone", () => {
+    const two = [{ id: "a/x", provider: "a" }, { id: "b/x", provider: "b" }];
+    expect(modelCheck({ chosenHarness: null, soulHarness: "claude", picked: "x", resolved: { harness: "claude", model: null }, listed: two, byProvider: false })).toEqual({ held: null });
+    expect(modelCheck({ chosenHarness: null, soulHarness: "pi", picked: "x", resolved: { harness: "pi", model: null }, listed: two, byProvider: true })).toEqual({ held: "Pick provider", offers: ["a/x", "b/x"] });
   });
   test("what the form arms and the provider refuses is refused at the launch, never the reverse: the two refusals the form leaves to it", () => {
     // No listed model serves it: the provider's "pi has no model".

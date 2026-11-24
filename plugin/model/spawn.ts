@@ -187,7 +187,9 @@ export type ModelCheck = { held: null } | { held: (typeof MODEL_HELD)[keyof type
  * - `resolved`: what the kernel's preview resolved for the values on screen; null before it answered.
  * - `listed`: the models bb lists for the harness the spawn would run on; null when bb's list was
  *   not read or cannot be (the kernel's answer then stands).
- * - `byProvider`: that harness's models are resolved by provider (pi): model/served.ts.
+ * - `byProvider`: that harness's models are resolved by provider (pi: model/served.ts), which is
+ *   where the bb session provider checks a model at all; for any other harness nothing is held
+ *   for the list.
  *
  * The model the spawn WOULD SEND is the one picked, else the one the kernel resolved from the soul.
  * 1. None at all, for a harness the person chose that is NOT the soul's own: REQUIRED. The soul's
@@ -209,8 +211,9 @@ export type ModelCheck = { held: null } | { held: (typeof MODEL_HELD)[keyof type
 export function modelCheck({ chosenHarness, soulHarness, picked, resolved, listed, byProvider }: { chosenHarness: string | null; soulHarness: string | null; picked: string | null; resolved: { harness: string | null; model: string | null } | null; listed: readonly ListedModel[] | null; byProvider: boolean }): ModelCheck {
   const sent = picked ?? resolved?.model ?? null;
   if (sent === null) return chosenHarness !== null && chosenHarness !== soulHarness && resolved !== null ? { held: MODEL_HELD.required, offers: [] } : { held: null };
-  if (listed === null || sent.includes("/")) return { held: null };
-  const answer = served(sent, listed, byProvider);
+  // Only where the provider checks a model at all (a harness whose models are resolved by provider: pi).
+  if (listed === null || !byProvider || sent.includes("/")) return { held: null };
+  const answer = served(sent, listed, true);
   return answer.kind === "several" ? { held: MODEL_HELD.ambiguous, offers: answer.ids } : { held: null };
 }
 /** The column's rows with no default promised for the harness: its row names the harness alone (where a model is required of the person). */
@@ -463,5 +466,7 @@ export function spawnProblem(
   const tail = BY_CODE[code] ?? null;
   const after = words.next === null ? null : words.next !== "change-options" ? NEXT[words.next] : tail !== null && !harnessField && HARNESS_TAILS.has(code) ? (NO_HARNESS_FIELD[code] ?? SEE_DETAILS) : tail;
   const sentence = dashed !== null ? `${words.fact.replace(/\.$/, "")} — ${dashed}` : after === null ? words.fact : `${words.fact} ${after}`;
-  return { sentence, next: words.next, code, detail: message === "" || (launchArg && kernelWords !== null) ? null : message, outcome };
+  // The message is not drawn twice: where it IS the sentence, no Details repeats it. (Where the kernel could not undo
+  // the spawn the sentence is the plugin's, and Details holds the kernel's message: what to clean up.)
+  return { sentence, next: words.next, code, detail: message === "" || (kernelWords !== null && words === kernelWords && launchArg) ? null : message, outcome };
 }

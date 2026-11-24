@@ -173,6 +173,79 @@ export function flatten(roots: readonly Node[]): Node[] {
 }
 
 /**
+ * What the fold reads of a row of the tree: who it is (the fold is keyed by the agent's INSTANCE,
+ * never a thread's id: an agent on tmux has none), its own state, and its children. `Node` is one;
+ * so is any row of a tree that holds agents with no bb thread.
+ */
+export type Foldable<T> = { agent: Pick<Agent, "instance">; state: AgentState; children: readonly T[] };
+
+/**
+ * One row the roster's tree draws: the row, whether it is a parent (it has children, so it
+ * carries the chevron), whether it is open, and for a CLOSED parent the mark it carries after its
+ * own state: the state of the most urgent row its subtree hides, or null.
+ */
+export type TreeRow<T> = { node: T; parent: boolean; open: boolean; inside: AgentState | null };
+
+/** The instances above one in the tree (its parent, its parent's parent, …), or none where it is a root or not in the tree. */
+export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance: string): Set<string> {
+  const found = new Set<string>();
+  const walk = (nodes: readonly T[], above: readonly string[]): boolean => {
+    for (const node of nodes) {
+      if (node.agent.instance === instance) {
+        for (const each of above) found.add(each);
+        return true;
+      }
+      if (walk(node.children, [...above, node.agent.instance])) return true;
+    }
+    return false;
+  };
+  walk(roots, []);
+  return found;
+}
+
+/**
+ * What a closed parent says of the rows it hides: the state of the most urgent one, where one
+ * needs a person (rank 0) or must be looked at (rank 1); the first of them in the tree's order
+ * among equals. Null where every hidden row is quiet (rank 2). The parent's own state is never
+ * part of it: its own word and mark stay its own.
+ */
+export function insideOf<T extends Foldable<T>>(node: T): AgentState | null {
+  let found: AgentState | null = null;
+  const walk = (nodes: readonly T[]) => {
+    for (const each of nodes) {
+      if (RANK[each.state] < 2 && (found === null || RANK[each.state] < RANK[found])) found = each.state;
+      walk(each.children);
+    }
+  };
+  walk(node.children);
+  return found;
+}
+
+/**
+ * The rows the roster's tree draws (Joan's word of 24 Nov 2026: children collapsed by default).
+ * A parent's children are drawn only while it is OPEN, and a parent is open when:
+ * - the person opened it (`opened`, by instance: the window's memory, empty when the page loads); or
+ * - it is above the row that is open on screen (`selected`, an instance): a parent is never
+ *   closed over the row a person is on.
+ * Every other parent is closed: its children are not drawn, and it carries `inside` (`insideOf`).
+ * The order is the tree's own (`view().roots`, already in the roster's one order). Pure.
+ */
+export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: ReadonlySet<string>, selected: string | null = null): TreeRow<T>[] {
+  const above = selected === null ? new Set<string>() : ancestorsOf(roots, selected);
+  const out: TreeRow<T>[] = [];
+  const walk = (nodes: readonly T[]) => {
+    for (const node of nodes) {
+      const parent = node.children.length > 0;
+      const open = parent && (opened.has(node.agent.instance) || above.has(node.agent.instance));
+      out.push({ node, parent, open, inside: parent && !open ? insideOf(node) : null });
+      if (open) walk(node.children);
+    }
+  };
+  walk(roots);
+  return out;
+}
+
+/**
  * Joins the kernel's agents to bb's threads, by `agent.threadId === thread.id` only (the ids are
  * the same strings in every bb API; never bb's environment id, which threads on one path share).
  */

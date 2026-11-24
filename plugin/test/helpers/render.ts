@@ -5,6 +5,7 @@ import { loadPluginApp } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginRpcTestHandlers } from "@get-bb/plugin-sdk/testing/app";
 import type { rpcContract } from "../../contract";
 import { resetWindow } from "../../app/store";
+import { forgetOpened } from "../../app/roster/fold";
 import { PAGE_IDS, showEveryPageWhenUnset } from "../../app/workspace/pages";
 import type { Agent } from "../../model/types";
 import * as automations from "../automations/handlers";
@@ -27,10 +28,11 @@ export type Handlers = PluginRpcTestHandlers<Contract>;
 
 export const loadApp = () => loadPluginApp(() => import("../../app"));
 
-/** After each test: unmount, then forget the app window's shared reads and requests. */
+/** After each test: unmount, then forget the app window's shared reads and requests, and which parents of the tree were opened. */
 export function resetApp(): void {
   cleanup();
   resetWindow();
+  forgetOpened();
 }
 
 export { SOULS } from "../workspace/handlers";

@@ -1,8 +1,8 @@
 // The sidebar's thread list (experimental_threadList): the workspace's name, the roster (every agent
-// OATS has, as a tree), at its foot who waits (when someone does) and New agent, the plugin's pages under "Workspace",
+// OATS has, as a tree whose parents open), under it New agent, the plugin's pages under "Workspace",
 // then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
 import { Fragment } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
   experimental_ThreadActionsContextMenu as ThreadActionsContextMenu,
@@ -17,8 +17,9 @@ import type {
   PluginThreadActionTarget,
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
-import type { Agent, Node } from "../../model/types";
-import { flatten, isListed } from "../../model/view";
+import type { Agent, AgentState, Node } from "../../model/types";
+import { flatten, isListed, treeRows } from "../../model/view";
+import type { TreeRow } from "../../model/view";
 import { count } from "../format";
 import { useOats } from "../oats";
 import { outsideOf, rowParts } from "../outside";
@@ -32,6 +33,7 @@ import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
 import { useNow } from "./now";
+import { FoldToggle, foldKeys, GUTTERED, useOpened } from "./fold";
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
   return {
@@ -90,6 +92,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const newAgentShown = hasNewAgent(pagesNow.has("souls"));
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
+  const opened = useOpened();
 
   const openThread = (event: MouseEvent, threadId: string) => {
     if (!plainClick(event)) return;
@@ -102,9 +105,14 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     onNavigate();
   };
 
-  /** Every thread row: bb's anchor contract, inside bb's own thread menu. */
-  const threadRow = (thread: PluginSidebarThread, className: string, testId: string, children: ReactNode) => (
-    <li key={thread.id}>
+  /**
+   * Every thread row: bb's anchor contract, inside bb's own thread menu. `before`: a control of the
+   * row's own that is not part of the link (a parent's chevron), drawn over the row's gutter and
+   * before the link in the tab order; `onKeyDown`: the row's own keys (a parent's Right and Left).
+   */
+  const threadRow = (thread: PluginSidebarThread, className: string, testId: string, children: ReactNode, before: ReactNode = null, onKeyDown?: (event: KeyboardEvent) => void) => (
+    <li key={thread.id} className="relative">
+      {before}
       <ThreadActionsContextMenu thread={target(thread)}>
         <a
           href={thread.href}
@@ -114,6 +122,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           aria-current={thread.id === activeThreadId ? "page" : undefined}
           className={`${ROW} ${className} ${thread.id === activeThreadId ? "bg-accent" : ""}`}
           onClick={(event) => openThread(event, thread.id)}
+          onKeyDown={onKeyDown}
         >
           {children}
         </a>
@@ -134,7 +143,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    *   never cut and never pushed out. Nothing is drawn past the row (the block clips), and the
    *   whole line is its title. (The machine is not on a row: the instance panel says it.)
    */
-  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string }, full: string) => {
+  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** a closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word */ inside?: AgentState | null }, full: string) => {
     // In this order, "·" between: the state, the reason if any, the soul, where it is. When the line does not fit the
     // SOUL gives way, down to room for its "…": it is the ONE part that shrinks; the state, the reason and the glyph never do.
     const all: { kind: "state" | "reason" | "soul" | "where"; text: string; className: string }[] = [
@@ -159,6 +168,13 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
               <span data-phrase={part.kind} className={part.className}>
                 {part.kind === "where" && part.text === TMUX ? <TmuxMark /> : part.text}
               </span>
+              {/* A closed parent that hides a row that needs a person, or one a person must look at: that row's mark, named,
+                  after the parent's own word, which stays what the parent itself is doing. */}
+              {part.kind === "state" && phrases.inside != null ? (
+                <span data-testid="oats-row-inside" className="ml-1.5 inline-flex shrink-0 items-center">
+                  <StateMark state={phrases.inside} />
+                </span>
+              ) : null}
             </Fragment>
           ))}
         </span>
@@ -166,10 +182,20 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     );
   };
 
-  const agentRows = (nodes: readonly Node[]): ReactNode[] =>
-    nodes.flatMap((node) => {
+  /**
+   * The tree's rows (model/view.ts `treeRows`): a parent's children are drawn only while it is
+   * open, and it is closed when the page loads. A parent has ONE chevron before its mark, a button
+   * of its own (not part of the row's link) that says whose agents it shows or hides; Right on the
+   * row opens it and Left closes it, as a tree's keys do. A closed parent's children are not in the
+   * page at all: nothing of them takes the focus.
+   */
+  const agentRows = (rows: readonly TreeRow<Node>[], guttered: boolean): ReactNode[] =>
+    rows.flatMap(({ node, parent, open, inside }) => {
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
+      const called = agentName(node.agent.instance);
+      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} depth={node.depth} /> : null;
+      const keys = parent ? foldKeys(node.agent.instance, open) : undefined;
       const status = agentStatus(node.agent, node.thread, now);
       const drawn = rowState(status, gone.has(node.agent.instance));
       // What happened to it outside OATS (app/outside): the reason follows the state's word on the
@@ -180,15 +206,16 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
       return [
         threadRow(
           thread,
-          INDENT[node.depth],
+          (guttered ? GUTTERED : INDENT)[node.depth],
           "oats-agent-row",
           <>
             <StateMark state={drawn.state} hidden tone={reason.tone} />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, soul: shown(oats.soulOf(node.agent)), reason: reason.note }, shown(node.agent.instance))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: drawn.word, soul: shown(oats.soulOf(node.agent)), reason: reason.note, inside }, shown(node.agent.instance))}
           </>,
+          toggle,
+          keys,
         ),
-        ...agentRows(node.children),
       ];
     });
 
@@ -200,7 +227,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * on tmux; `said` is what the outside feature says of it (app/outside): where its thread is, and
    * what happened to it.
    */
-  const threadlessRow = (agent: Agent, where: string | undefined, said: Said | null = null) => {
+  const threadlessRow = (agent: Agent, where: string | undefined, said: Said | null = null, guttered = false) => {
     const status = agentStatus(agent, null, now);
     const drawn = rowState(status, gone.has(agent.instance));
     const name = agentName(agent.instance);
@@ -214,7 +241,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           data-instance={agent.instance}
           data-opens={said?.archived === true && agent.threadId !== null ? "thread" : "page"}
           title={shown(agent.instance)}
-          className={`${ROW} w-full pl-2 text-left`}
+          className={`${ROW} w-full ${guttered ? GUTTERED[0] : INDENT[0]} text-left`}
           onClick={() => {
             // Its archived conversation, where bb keeps one: the thread's own row there says what happened, with the acts.
             if (said?.archived === true && agent.threadId !== null) navigate.toThread(agent.threadId);
@@ -276,6 +303,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // Every agent that waits, the ones with no bb thread included (`view.needing`: the home's badge and list count the same).
   // Every agent OATS has is a row.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
+  // The row that is open on screen, by its agent: its parents are open whatever the person left.
+  const selected = flatten(view.roots).find((node) => node.thread.id === activeThreadId)?.agent.instance ?? null;
+  const guttered = view.roots.some((node) => node.children.length > 0);
   return (
     // `data-pages`: whether bb has given the settings that say which pages are shown. With nobody
     // waiting the foot has no line, so nothing drawn says it: a live check that asserts an absence
@@ -300,7 +330,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
               with no bb thread, which is a root in that same order.
               - no thread bb lists: where its thread is, by bb's own answer, after the state's word; nothing until bb has answered;
               - on tmux: where it is; one whose session was lost says so first ("Stopped · session lost"): nobody stopped it. */}
-          {view.rows.map((top) => ("node" in top ? agentRows([top.node]) : threadlessRow(top.agent, top.where === "tmux" ? TMUX : undefined, outside.of(top.agent))))}
+          {view.rows.map((top) => ("node" in top ? agentRows(treeRows([top.node], opened, selected), guttered) : threadlessRow(top.agent, top.where === "tmux" ? TMUX : undefined, outside.of(top.agent), guttered)))}
         </ul>
       )}
       {/* No line counts who waits on a person: the rows that wait are marked, and bb's badge on the

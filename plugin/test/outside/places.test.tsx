@@ -45,6 +45,19 @@ async function sidebar(options: RenderSlotOptions<Contract>) {
 }
 const threadless = (slot: Awaited<ReturnType<typeof sidebar>>["slot"]) => slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === DIGEST)!;
 const rowFacts = (row: HTMLElement) => within(row).getByTestId("oats-row-facts").textContent;
+
+/**
+ * Every parent of the tree opened, as a person does with its chevron: a parent's children are
+ * closed when the page loads (test/roster/sidebar.test.tsx pins that), and a test that reads a child's row opens them first.
+ */
+async function openParents(slot: { findByTestId: (id: string) => Promise<HTMLElement>; container: HTMLElement }) {
+  await slot.findByTestId("oats-tree");
+  for (;;) {
+    const closed = slot.container.querySelector<HTMLElement>('[data-testid="oats-row-toggle"][aria-expanded="false"]');
+    if (closed === null) return;
+    fireEvent.click(closed);
+  }
+}
 /** A row's mark: the state it draws, and its tone ("warning" for a stopped agent that needs a remedy). */
 const markOf = (row: HTMLElement) => [row.querySelector("[data-mark]")!.getAttribute("data-state"), row.querySelector("[data-mark]")!.getAttribute("data-tone")];
 
@@ -293,6 +306,7 @@ test("bb holds a question on the thread of an agent that is not loaded, or whose
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === DIGEST ? { ...agent, sessionEnd: "lost" } : agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown" } : agent));
   // The rows: the soul after "Needs you", never "Needs you · session lost" or "Needs you · not loaded".
   const side = await sidebar({ rpc: handlers({}, agents), sidebarThreads: asking });
+  await openParents(side.slot);
   const factsOf = (thread: string) => rowFacts(side.slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === thread)!);
   expect([factsOf("thr_digest"), factsOf("thr_harvest")]).toEqual(["Needs you · oats-expert", "Needs you · knowledge-harvester"]);
   resetApp();
@@ -340,6 +354,7 @@ test("an agent that is not loaded, on a thread bb says works (a turn runs): the 
   const active = { status: "ready" as const, threads: fixtureThreads().map((thread) => (thread.id === "thr_harvest" ? { ...thread, status: "active" as const, hasPendingInteraction: false } : thread)) };
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown", waiting: null } : agent));
   const side = await sidebar({ rpc: handlers({}, agents), sidebarThreads: active });
+  await openParents(side.slot);
   await waitFor(() => expect(rowFacts(side.slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_harvest")!)).toBe("Working · knowledge-harvester"));
   resetApp();
   const unloaded = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: active });

@@ -436,6 +436,8 @@ provider's own tests hold its side). A dash is a field the row does not carry, o
 | its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | (no recording of the kernel's row here; bb's events of such a thread are recorded: test/fixtures/outside/events/) |
 | the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
 
+**One read behind** (`model/view.ts` `state`, the outside feature's `messageResumes`). An agent that does not run and that nobody stopped (its session lost, ended by itself, or no harness loaded), on its own listed bb thread, carries on by a message. From the moment a person sends it bb runs a turn, and the kernel's row says the old thing until OATS is read again. Where bb says such a thread works, bb's word stands: **Working**, never "Stopped · session lost" or "Failed · session ended" over bb's own turn. Not after an operator's stop (there the kernel's report, "Running outside OATS", or the warning says it), not on tmux, and not where bb lists no thread.
+
 What comes after the state's word (the reason, the tone, the acts) is the table at the head of
 this section; this one holds only what the two functions must agree on. One row is the plugin's
 own reading: "its thread failed at its start in bb" has the kernel's four fields of "its session

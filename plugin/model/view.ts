@@ -1,5 +1,7 @@
 // Pure functions from (agents, bbThreads) to what each slot draws. No bb or React import.
 import type { Agent, AgentState, BbThread, Node, Row, View } from "./types";
+// (model/rest.ts reads two functions of this file: a cycle of two modules, of functions that are only called later.)
+import { messageResumes } from "./rest";
 
 /**
  * Whether the kernel's row says the agent is STOPPED. The one predicate of the claim's gate and of
@@ -112,6 +114,12 @@ export function state(agent: Agent, thread: BbThread | null): AgentState {
   // ran, whatever the row says of how its session ended (the kernel reads such a home "stopped",
   // its session "lost"). Failed, in every place. Not of a row the kernel does not call at rest.
   if (failedAtStart(agent, thread)) return "error";
+  // A message is the designed way on (model/rest.ts `messageResumes`: its session lost, ended by
+  // itself, or no harness loaded, on its own listed bb thread; never after an operator's stop,
+  // never on tmux) and bb says the thread works: someone sent it, the agent works, and the
+  // kernel's row is one read behind. bb's word stands: "Working", never "Stopped · session lost"
+  // or "Failed · session ended" over bb's own turn (the lead's ruling T4, 24 Nov 2026).
+  if (thread !== null && threadWorks(thread) && messageResumes(agent, thread)) return "working";
   // A row that does not run and says how its session ended: that decides (`recordedStopped`): an
   // operator's stop and a lost session are stopped beside any word; a harness that ended by itself failed.
   if (recordedStopped(agent)) return "stopped";

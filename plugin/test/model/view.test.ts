@@ -207,6 +207,32 @@ describe("A2 state(): first match wins", () => {
     expect(on("active", false)).toBe("working");
     expect(on("idle", false)).toBe("idle");
   });
+  // The lead's ruling T4 (24 Nov 2026), the outside feature's rule: such an agent carries on by a MESSAGE in its thread;
+  // from the moment a person sends it bb runs a turn, and the kernel's row says the old thing until OATS is read again.
+  test("where a message is the way on and bb says the thread works, bb's word stands: Working, not the row's Stopped or Failed; at rest, and after an operator's stop, the row decides as before", () => {
+    const rows = {
+      lost: { running: false, runtimeState: "stopped", sessionEnd: "lost" },
+      exited: { running: false, runtimeState: null, sessionEnd: "exited" },
+      shell: { running: false, runtimeState: "shell" },
+      "operator's stop": { running: false, runtimeState: "stopped", sessionEnd: "stopped" },
+      "stopped, no word how": { running: false, runtimeState: "stopped" },
+    } as const;
+    const read = (over: Partial<Agent>, status: string, queuedWork = "none") => state(agent("a", over), thread("t", { status, queuedWork } as Partial<BbThread>));
+    expect(Object.entries(rows).map(([name, row]) => [name, read(row, "active"), read(row, "idle")])).toEqual([
+      ["lost", "working", "stopped"],
+      ["exited", "working", "error"],
+      ["shell", "working", "error"],
+      ["operator's stop", "stopped", "stopped"], // the kernel's report ("Running outside OATS") or the warning says the rest
+      ["stopped, no word how", "stopped", "stopped"],
+    ]);
+    // A turn bb holds in line is work too (the same rule as a thread at rest with a message waiting to start).
+    expect(read(rows.lost, "idle", "waiting")).toBe(state(agent("a", { running: null }), thread("t", { status: "idle", queuedWork: "waiting" } as Partial<BbThread>)));
+    // Never on tmux (bb cannot write to it), never with no thread listed, never over what comes first: a claim, an unreachable session, a thread that failed at its start.
+    expect(state(agent("a", { ...rows.lost, backend: "tmux" }), thread("t", { status: "active" }))).toBe("stopped");
+    expect(state(agent("a", rows.lost), null)).toBe("stopped");
+    expect(state(agent("a", { ...rows.lost, runtimeState: "unreachable" }), thread("t", { status: "active" }))).toBe("unreachable");
+    expect(state(agent("a", rows.lost), thread("t", { status: "active", hasPendingInteraction: true }))).toBe("needs-you");
+  });
   test("a tmux agent's activity is the kernel's own word; a provider's agent whose thread bb does not list is idle, a loaded harness or not", () => {
     expect(state(agent("a", { backend: "tmux", running: true, runtimeState: null }), null)).toBe("working");
     expect(state(agent("a", { backend: "tmux", running: null, runtimeState: null }), null)).toBe("idle");

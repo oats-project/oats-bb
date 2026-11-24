@@ -50,7 +50,10 @@ test("an agent that waits says how long and what about; the others say only what
   const working = agents.find((agent) => agent.instance === "desktop-mockups-developer")!; // one of the two whose thread bb's fixture calls active, named: `running` does not say that an agent works
   const quiet = { ...of(working.instance).thread, hasPendingInteraction: false };
   expect(agentStatus(working, quiet, now)).toEqual({ state: "working", word: "Working", since: null, detail: null, kernel: null });
-  expect(agentStatus({ ...working, running: false, runtimeState: "shell" }, quiet, now)).toEqual({ state: "error", word: "Failed", since: null, detail: "session ended", kernel: null });
+  // Its session ended, on a thread at rest: Failed, and why. On a thread bb says works (a person sent it a message, which is
+  // the way on; the kernel's row is one read behind) bb's word stands: Working, with nothing after it (the lead's ruling T4).
+  expect(agentStatus({ ...working, running: false, runtimeState: "shell" }, { ...quiet, status: "idle", queuedWork: "none" }, now)).toEqual({ state: "error", word: "Failed", since: null, detail: "session ended", kernel: null });
+  expect(agentStatus({ ...working, running: false, runtimeState: "shell" }, quiet, now)).toEqual({ state: "working", word: "Working", since: null, detail: null, kernel: null });
   expect(agentStatus({ ...working, running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" }, quiet, now)).toEqual({ state: "unreachable", word: "Unreachable", since: null, detail: null, kernel: "bb did not answer" });
   // An agent with no bb thread that runs in tmux: the kernel's word alone, and it says that it RUNS, nothing of a
   // turn: "Running", the state unchanged (the lead's ruling T4). The word is by the backend, in the one function.

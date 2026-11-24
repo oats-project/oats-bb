@@ -183,7 +183,7 @@ const dialogOf = (): HTMLElement | null => document.querySelector<HTMLElement>('
 
 /**
  * The focus when a dialog that was reading becomes ready: on the control the pattern marks (Cancel
- * for a destructive act, a form's first field, else the act), if it was left on the dialog itself
+ * for a destructive act and for one that cuts a turn, else the act), if it was left on the dialog itself
  * because that control was not there, or was off, while the kernel was asked.
  */
 function useFocusWhenReady(ready: boolean): void {
@@ -949,7 +949,6 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                 testId="oats-start-harness"
                 value={harness}
                 disabled={!editable}
-                autofocus={editable && !interrupts}
                 placeholder={shown(resolvedLabel(KEEP_HARNESS, recorded))}
                 filterLabel={START.harness}
                 options={[{ id: "", label: shown(resolvedLabel(KEEP_HARNESS, recorded)) }, ...known.harnesses.map((id) => ({ id, label: shown(harnessLabel(id)) }))]}
@@ -973,7 +972,6 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
               spellCheck={false}
               value={model}
               disabled={!editable}
-              {...(editable && !interrupts && known.harnesses.length <= 1 ? { "data-autofocus": "" } : {})}
               placeholder={running !== null && running === recorded && known.model !== null ? shown(known.model) : "Harness default"}
               onChange={(event) => setModel(event.currentTarget.value)}
             />

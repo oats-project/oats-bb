@@ -602,7 +602,7 @@ export default [
         await page.shot(`lifecycle-${viewport.name}-start-harness-open`);
         await page.press("Escape");
         check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-harness-options"))}) === null`, 10)), `${at} Escape closes the list again, and the dialog stays`);
-        check(before.act === "Start" && before.off === false && before.focus === "oats-start-harness", `${at} the focus starts on the form's first field`, JSON.stringify(before));
+        check(before.act === "Start" && before.off === false && before.focus === "oats-confirm-act", `${at} the focus starts on the dialog's primary button, Start: not on a field`, JSON.stringify(before));
         const startFold = JSON.parse(await page.evaluate(folded("oats-start-details")));
         check(startFold !== null && startFold.open === false && startFold.text.includes("Runs in bb's full mode: no sandbox.") && startFold.text.includes("Machine") && startFold.text.includes("Home"), `${at} under Details, closed: that the agent runs in bb's full mode, with no sandbox, its machine and its home`, JSON.stringify(startFold));
         await shot("before");
@@ -865,10 +865,10 @@ export default [
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
         check(before.title === "Restart Weekly digest helper" && (await page.evaluate(saysNow)) === JSON.stringify(["Starts a new conversation."]) && !/full mode|stays readable|Save any in-progress|Stops what it is doing/.test(before.body) && (({ text }) => /Runs in bb's full mode: no sandbox\./.test(text) && !/Starts a new conversation/.test(text))(JSON.parse(await page.evaluate(folded("oats-start-details")))) && before.act === "Restart" && before.off === false, `${at} Restart opens its dialog and restarts nothing: its line says that it starts a new conversation (of an agent that is idle nothing is said to be stopped); bb's full mode is under Details`, JSON.stringify(before));
-        check(before.focus === "oats-start-harness", `${at} the focus STARTS on the form's first field`, before.focus);
+        check(before.focus === "oats-confirm-act", `${at} the focus STARTS on the dialog's primary button, Restart (nothing is being done that it would cut): not on a field`, before.focus);
         await shot("before");
         const order = await walk(page, 5);
-        check(order.length === 5 && same(order.slice(0, 3), ["oats-start-model", "oats-confirm-cancel", "oats-confirm-act"]) && order[3].endsWith("Details") && order[4] === "oats-start-harness", `${at} Tab walks the model, Cancel, Restart, Details and round again (no Refresh status: it is for a Restart that is off)`, JSON.stringify(order));
+        check(order.length === 5 && order[0].endsWith("Details") && same(order.slice(1), ["oats-start-harness", "oats-start-model", "oats-confirm-cancel", "oats-confirm-act"]), `${at} Tab walks Details, the harness, the model, Cancel, Restart and round again (no Refresh status: it is for a Restart that is off)`, JSON.stringify(order));
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         check((await dialog(page)).body.includes("Restarting…"), `${at} while it restarts the dialog says so`);

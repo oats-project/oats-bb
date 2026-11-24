@@ -170,7 +170,7 @@ while its Terminal tab has the focus.
   for this agent.") and never drawn under that name.
 - **Where the focus starts.** On Cancel in a Stop, a Retire, and a RESTART of an agent that works on
   a turn now (it cuts the turn; its button keeps the plain look: nothing is deleted); else on the
-  dialog's first field. The Harness field of Start and Restart is the plugin's own choice (the New
+  dialog's primary button (Start, Restart), never on a field. The Harness field of Start and Restart is the plugin's own choice (the New
   agent form's `Choice`: a button that opens a list), never the browser's select; Escape in its
   open list closes the list alone.
 - **Stop** and **Retire** read the kernel's plan. In view: the consequence line, and the facts that are a reason not to confirm, set

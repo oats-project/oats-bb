@@ -678,7 +678,8 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   expect(slot.queryByTestId("oats-start-status")).toBeNull();
   expect(slot.queryByTestId("oats-start-refresh")).toBeNull();
   expect(button(slot, "oats-confirm-act").disabled).toBe(false);
-  // The harness field starts on the recorded harness; the focus on the form's first field.
+  // The harness field starts on the recorded harness. The focus starts on the dialog's primary button, Start: never on a field.
+  await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-act")));
   // The plugin's own choice, never the browser's select: a button that shows what is chosen and opens its list.
   const harness = slot.getByTestId("oats-start-harness");
   expect(harness.tagName).toBe("BUTTON");
@@ -718,13 +719,14 @@ test("a chosen harness and a typed model are passed; a model that is no model na
   expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper", harness: "pi", model: "anthropic/claude-opus-5-5" }]);
 });
 
-test("with one harness declared no choice is shown, and the focus starts on the model", async () => {
+test("with one harness declared no choice is shown; the focus starts on Start, not on the model", async () => {
   const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance, { harnesses: ["claude"] }) });
   await pick("start");
   await ready(slot);
   expect(slot.queryByTestId("oats-start-harness")).toBeNull();
   expect(under(slot, "oats-start-details", "dt, dd").slice(0, 2)).toEqual(["Harness", "Claude Code"]); // the recorded one, as a fact, under Details
-  await waitFor(() => expect(document.activeElement).toBe(slot.getByTestId("oats-start-model")));
+  await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-act")));
+  expect(slot.getByTestId("oats-start-model").hasAttribute("data-autofocus")).toBe(false);
 });
 
 test("Restart opens its dialog with what it does: for an agent that works now, that it stops what it is doing, then that it starts a new conversation; and nothing restarts until its button is pressed", async () => {
@@ -1361,8 +1363,8 @@ test("Restart ALWAYS says that it starts a new conversation (it never resumes); 
   await idle.pick("restart");
   await ready(idle.slot);
   expect(says(idle.slot)).toEqual(["Starts a new conversation."]);
-  // Nothing is cut: the focus starts on the form's first field, as before.
-  await waitFor(() => expect(document.activeElement).toBe(idle.slot.getByTestId("oats-start-harness")));
+  // Nothing is cut: the focus starts on the dialog's primary button, Restart.
+  await waitFor(() => expect(document.activeElement).toBe(button(idle.slot, "oats-confirm-act")));
   resetApp();
   // bb's thread says a turn runs, and the kernel says the agent does not run: the kernel's word decides, nothing is being done.
   const ended = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, { running: false, runtimeState: "shell", sessionEnd: null }) });

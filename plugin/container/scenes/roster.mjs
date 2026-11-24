@@ -559,7 +559,8 @@ export default [
         fake({ status: { stdout: tmuxStatus({ [CHILD]: "waiting" }, PILOT_ROSTER) } });
         const marked = await page.until(`(() => { const rows = ${rowsOf}; const first = rows[0]; return first?.getAttribute("data-instance") === ${JSON.stringify(PARENT)} && first.querySelector(${JSON.stringify(`${testId("oats-row-inside")} [data-mark][data-state="needs-you"]`)}) !== null ? String(rows.length) : ""; })()`, 60);
         const parentSaid = await page.evaluate(factsOf(PARENT));
-        check(marked === String(roots.length) && parentSaid.startsWith("Stopped · session lost"), `${at} with ${CHILD} waiting and its parent closed: ${PARENT} is the first of the seven rows, says what it is itself ("Stopped · session lost") and carries the mark of the agent that waits under it`, `${marked}; ${parentSaid}`);
+        // (The hidden row's mark, "!", stands after the parent's own word: the line reads "Stopped ! · session lost · …".)
+        check(marked === String(roots.length) && parentSaid.startsWith("Stopped ! · session lost"), `${at} with ${CHILD} waiting and its parent closed: ${PARENT} is the first of the seven rows, says what it is itself ("Stopped", "session lost") and carries the mark of the agent that waits under it after its own word`, `${marked}; ${parentSaid}`);
         await page.shot(`pilot-roster-${viewport.name}-child-waits-closed`, { targets: true });
         await page.evaluate(toggleOf(PARENT));
         const waits = await page.until(`(() => ${factsOf(CHILD)}.startsWith("Needs you") ? JSON.stringify(${rowsOf}.slice(0, 2).map((row) => row.getAttribute("data-instance"))) : "")()`, 15);

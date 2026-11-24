@@ -213,7 +213,8 @@ export async function showSidebar(page, viewport) {
   if (await page.until(visible(testId("oats-sidebar")), viewport.mobile ? 4 : 30)) return true;
   if (!viewport.mobile) return false;
   await page.evaluate(
-    `(() => { const b = [...document.querySelectorAll("button")].find((b) => /sidebar|menu|navigation/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0); b?.click(); return b?.getAttribute("aria-label") ?? null; })()`,
+    // bb's own button, never one of the plugin's: a parent's chevron is named for its agent ("Show Desktop sidebar developer's agents"), and pressing it would open that parent, not the drawer.
+    `(() => { const b = [...document.querySelectorAll("button")].find((b) => /sidebar|menu|navigation/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0 && b.closest(${JSON.stringify(testId("oats-sidebar"))}) === null); b?.click(); return b?.getAttribute("aria-label") ?? null; })()`,
   );
   await sleep(600); // the drawer slides in
   return Boolean(await page.until(visible(testId("oats-sidebar")), 15));

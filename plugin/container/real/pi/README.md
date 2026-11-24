@@ -16,7 +16,8 @@ fixture (`UPDATE_FIXTURES=1` is refused), and its artefacts are in `real/pi/out/
 `real/pi/out.<owner>/`: `../../README.md`): the run's log is what `run.sh` prints, and beside it
 are the images, `answers/` (what the kernel printed for the form's preview and spawn, and for the
 two refusals the run makes),
-`kernel.json`, `bridge.json` and `pi.json` (what npm says of the three tarballs), `doctor.txt`, `bb.out`,
+`kernel.json` and `bridge.json` (what npm says of those two tarballs), `pi.json` (what pi's lock
+says of pi's own tarball, and how many packages it names), `doctor.txt`, `bb.out`,
 `pi-mock.out` and `pi-mock-requests.jsonl` (the model requests). A run takes about four minutes.
 
 The run is of 2026-11-22: OATS 0.70.5 from npm (`@awebai/oats@0.70.5`, gitHead
@@ -35,15 +36,15 @@ OATS_PI_INTEGRITY=… plugin/container/ci.sh pi`.
 |---|---|---|
 | `KERNEL_NPM`, `KERNEL_INTEGRITY` | the main run's (`0.70.5`, that tarball's integrity) | the kernel of this run: the same pin |
 | `OATS_PI_INTEGRITY` | the integrity of `@awebai/oats-pi@0.70.5`, for that version; none for another | the bridge's tarball, checked before pi installs it; what pi installed is then compared with that tarball, file by file. The bridge's VERSION is never chosen: it is the installed kernel's (the two are released together and tested only as a pair). A kernel that is on no release has no bridge, and this run stops there |
-| `PI_VERSION` | `1.5.2` | pi: the version the bb session provider is checked against |
-| `PI_INTEGRITY` | the integrity of `@earendil-works/pi-coding-agent@1.5.2`, for that version; none for another | pi's own tarball, checked before it is installed (that file is what is installed; its dependencies come from the registry). A mismatch stops the setup |
+| `PI_VERSION` | `1.5.2` | pi: the version the bb session provider is checked against. pi is installed from its committed lock (`../../locks/pi`, `../../locks/README.md`): its own tarball and every package under it, nothing resolved at run time. Another version here fails the setup until the lock is written again for it (`plugin/container/relock.sh pi`) |
+| `PI_INTEGRITY` | the integrity of `@earendil-works/pi-coding-agent@1.5.2`, for that version; none for another | pi's own tarball: the lock's line for it must say this integrity, checked before anything is installed (npm then checks every package of the lock against its own). A mismatch stops the setup |
 | the others | as the main run | `REQUIRE_REAL_FLOOR`, `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` |
 
 ## What is in the container, beside the main run's
 
 | File | Runs | Does |
 |---|---|---|
-| `setup.sh` | by `../setup.sh` when `REAL_PI=1`, after the kernel is installed and before bb starts | installs pi; checks the bridge's tarball, installs the bridge into bb's pi configuration (`~/.pi/agent`) and compares what was installed with that tarball; stops if `@awebai/pi` is listed there; writes the mock model's provider (`models.json`); copies `ask-dialog.ts`; starts `mock-openai.mjs` |
+| `setup.sh` | by `../setup.sh` when `REAL_PI=1`, after the kernel is installed and before bb starts | installs pi from its lock (`../../locked-install.sh pi`); checks the bridge's tarball, installs the bridge into bb's pi configuration (`~/.pi/agent`) and compares what was installed with that tarball; stops if `@awebai/pi` is listed there; writes the mock model's provider (`models.json`); copies `ask-dialog.ts`; starts `mock-openai.mjs` |
 | `mock-openai.mjs` | in the container, on 9998 | the mock model for pi: one line of text for every turn, and one tool call where a person's message says so (`MOCK-CALL:<json>`) |
 | `ask-dialog.ts` | by pi, as an extension of bb's pi configuration | one tool, `ask_person`, that opens one of pi's dialogs (`ctx.ui.confirm`) |
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the images |

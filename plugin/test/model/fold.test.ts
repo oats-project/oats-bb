@@ -21,9 +21,9 @@ const tree = (states: Partial<Record<string, AgentState>> = {}): Row[] => {
     row("boss", of("boss"), [row("aide", of("aide"))]),
   ];
 };
-/** What is drawn, top to bottom: "name" for a leaf, "name+" a closed parent, "name-" an open one, and after "!" the mark a closed parent carries. */
-const drawn = (roots: Row[], opened: string[] = [], selected: string | null = null): string[] =>
-  treeRows(roots, new Set(opened), selected).map(({ node, parent, open, inside }) => `${node.agent.instance}${parent ? (open ? "-" : "+") : ""}${inside === null ? "" : `!${inside}`}`);
+/** What is drawn, top to bottom: "name" for a leaf, "name+" a closed parent, "name-" an open one, after "!" the mark a closed parent carries, and "~warning" where that mark is in the warning tone. */
+const drawn = (roots: Row[], opened: string[] = [], selected: string | null = null, warns?: string[]): string[] =>
+  treeRows(roots, new Set(opened), selected, warns === undefined ? undefined : (node) => warns.includes(node.agent.instance)).map(({ node, parent, open, inside, insideTone }) => `${node.agent.instance}${parent ? (open ? "-" : "+") : ""}${inside === null ? "" : `!${inside}`}${insideTone === null ? "" : "~warning"}`);
 
 describe("the rows drawn for a tree and the parents a person opened", () => {
   test.each<[string, string[], string | null, string[]]>([
@@ -74,10 +74,26 @@ describe("the mark of a closed parent: the most urgent row its subtree hides, af
     expect(drawn(tree(states), opened)).toEqual(rows);
   });
 
-  test("insideOf, alone: null for a leaf and for quiet children; a rank 0 or 1 state otherwise", () => {
-    expect(insideOf(row("a", "needs-you"))).toBeNull();
-    expect(insideOf(row("a", "working", [row("b", "idle"), row("c", "stopped")]))).toBeNull();
-    expect(insideOf(row("a", "working", [row("b", "idle", [row("c", "error")])]))).toBe("error");
+  test("insideOf, alone: nothing for a leaf and for quiet children; a rank 0 or 1 state otherwise", () => {
+    expect(insideOf(row("a", "needs-you"))).toEqual({ state: null, tone: null });
+    expect(insideOf(row("a", "working", [row("b", "idle"), row("c", "stopped")]))).toEqual({ state: null, tone: null });
+    expect(insideOf(row("a", "working", [row("b", "idle", [row("c", "error")])]))).toEqual({ state: "error", tone: null });
+  });
+
+  // ONE principle: a closed parent carries a mark for any row inside it that itself carries one. A row whose own mark
+  // is in the warning tone (the outside feature's: archived in bb while it ran) is one, though its state is quiet:
+  // the caller says which rows warn (the model cannot tell), and a warning ranks with "must be looked at".
+  test.each<[string, Partial<Record<string, AgentState>>, string[], string[], string[]]>([
+    ["a hidden row that warns, its state quiet: its own state, in the warning tone", { helper: "stopped" }, ["helper"], [], ["lead+!stopped~warning", "solo", "boss+"]],
+    ["a hidden GRANDchild that warns", { reviewer: "idle" }, ["reviewer"], [], ["lead+!idle~warning", "solo", "boss+"]],
+    ["one that warns and one that waits: needs-you wins, in its own tone", { dev: "stopped", helper: "needs-you" }, ["dev"], [], ["lead+!needs-you", "solo", "boss+"]],
+    ["one that warns before one that failed: of one rank, the first in the tree's order, with its own tone", { dev: "stopped", helper: "error" }, ["dev"], [], ["lead+!stopped~warning", "solo", "boss+"]],
+    ["one that failed before one that warns: the failed one, plain", { dev: "error", helper: "stopped" }, ["helper"], [], ["lead+!error", "solo", "boss+"]],
+    ["a row that carries no mark of its own (stopped, plainly archived: it does not warn) marks nothing", { helper: "stopped", aide: "stopped" }, [], [], ["lead+", "solo", "boss+"]],
+    ["the parent's own warning is its own mark, never the one it carries", { lead: "stopped" }, ["lead"], [], ["lead+", "solo", "boss+"]],
+    ["open: none", { helper: "stopped" }, ["helper"], ["lead"], ["lead-", "dev+", "helper", "solo", "boss+"]],
+  ])("a row that warns: %s", (_name, states, warns, opened, rows) => {
+    expect(drawn(tree(states), opened, null, warns)).toEqual(rows);
   });
 });
 

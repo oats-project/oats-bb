@@ -106,9 +106,10 @@ shows or hides ("Show Redesign ui lead's agents", "Hide …") and whether they a
 the page loads, and stays as the person left it while the window lives: the open set is the
 window's memory (it outlives bb's drawer, which draws the sidebar anew), and nothing of it is
 stored. A closed parent's children are not in the page, so nothing of them takes the focus. A
-closed parent keeps its own state, mark and word, and where its subtree hides a row that needs a
-person, or one a person must look at, it carries that row's mark after its own word, named for a
-screen reader. The parents of the thread that is on screen are open, and are never closed over it.
+closed parent keeps its own state, mark and word, and carries after its own word, named for a
+screen reader, the mark of any row its subtree hides that itself carries one: a row that needs a
+person, one a person must look at (it runs outside OATS, or failed), and one whose own mark is in
+the warning tone (archived in bb while it ran), in that tone. Of several, the most urgent. The parents of the thread that is on screen are open, and are never closed over it.
 A roster with a parent in it keeps a gutter before every row, so every mark stands in one column.
 
 ## Stopping, starting, restarting and retiring an agent

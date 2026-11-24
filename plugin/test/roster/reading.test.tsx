@@ -45,7 +45,9 @@ describe("whether the window still shows an agent as it was before an act (pure:
   const SENT = "2026-11-19T12:30:00.000Z";
   const LATER = "2026-11-19T12:30:02.000Z";
   test.each<[string, { was: "working" | "stopped" | null }, string | null, "working" | "stopped" | "idle" | null, boolean]>([
-    ["the roster of the send: before, whatever the state", { was: "working" }, SENT, "working", true],
+    ["the roster of the send, the state as at the send: before", { was: "working" }, SENT, "working", true],
+    ["the roster of the send (the same stamp), patched from the agent's own events to another state (#74): read", { was: "working" }, SENT, "stopped", false],
+    ["an older roster that arrives late, the state as at the send: before", { was: "working" }, "2026-11-19T12:29:59.000Z", "working", true],
     ["a later roster that still says what the send's said (it arrived mid-act): before", { was: "working" }, LATER, "working", true],
     ["a later roster that says another state: read", { was: "working" }, LATER, "stopped", false],
     ["a later roster with no such agent (retired): read", { was: "working" }, LATER, null, false],

@@ -522,7 +522,8 @@ export const START = {
   harness: "Harness",
   model: "Model",
   /** Under the model field: the choice outlives this start. */
-  modelSaved: "Saved for later starts too.",
+  // (Under Details, away from the Model field: the line names what is saved.)
+  modelSaved: "The model is saved for later starts too.",
   badModel: "Enter a model name, not a command-line option.",
   refresh: "Refresh status",
   starting: "Starting…",

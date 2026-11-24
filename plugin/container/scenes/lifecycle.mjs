@@ -295,7 +295,7 @@ export default [
         // The dialog is there only once bb's own menu has left the screen: it never lies under the menu's closing frames.
         check(await page.evaluate(`[...document.querySelectorAll('[role="menuitem"]')].every((entry) => { const box = entry.getBoundingClientRect(); return !(box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < innerHeight); })`), `${at} the dialog opens after bb's menu has left the screen (at this width bb keeps a closed sheet in the page, below the window)`);
         const reading = await dialog(page);
-        check(reading.phase === "reading" && reading.title === "Stop an agent" && reading.body.includes("Checking…") && reading.off === true, `${at} while the plan is read the dialog says that it checks, names no agent in its title yet, and cannot be confirmed`, JSON.stringify(reading));
+        check(reading.phase === "reading" && reading.title === "Stop Redesign ui lead?" && reading.body.includes("Checking…") && reading.off === true, `${at} while the plan is read the dialog says that it checks, names the agent that was asked for in its title, and cannot be confirmed`, JSON.stringify(reading));
         await shot("reading");
         await page.until(phaseIs("ready"), 30);
         await page.evaluate(click("oats-confirm-cancel"));
@@ -451,7 +451,7 @@ export default [
         check(await open(), `${at} Retire is asked again from the thread's menu`);
         await page.until(phaseIs("failed"), 30);
         const left = await dialog(page);
-        check(left.title === "Retire an agent" && left.body.includes("Weekly digest helper is not in OATS any more") && left.body.includes("Nothing was changed.") && left.act === "" && !left.body.includes("Review again"), `${at} a plan refused for an agent the kernel does not know: the dialog names no agent in its title, says it is not in OATS any more, and offers nothing to confirm or to try again`, JSON.stringify(left));
+        check(left.title === "Retire Weekly digest helper" && left.body.includes("Weekly digest helper is not in OATS any more") && left.body.includes("Nothing was changed.") && left.act === "" && !left.body.includes("Review again"), `${at} a plan refused for an agent the kernel does not know: the dialog names no agent in its title, says it is not in OATS any more, and offers nothing to confirm or to try again`, JSON.stringify(left));
         await shot("gone");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);

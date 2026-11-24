@@ -180,7 +180,7 @@ export default [
       const leadLine = await statusOf(page, "working");
       check(leadLine !== null && leadLine.act === "Stop…", `${at} a working agent's line offers Stop…`, JSON.stringify(leadLine));
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-status-act")}`)}).click()`);
-      // The dialog is titled with the agent the kernel's plan names, once the plan is read ("Stop an agent" until then).
+      // The dialog is titled with the agent that was asked for, from its opening; the plan is read under it.
       const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return /^Stop .+\\?$/.test(t) ? t : ""; })()`, 20);
       check(asked === "Stop Redesign ui lead?", `${at} Stop on the thread's line opens the stop confirmation of that agent, by its one name, once the plan is read`, asked ?? (await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-modal"))})?.innerText.slice(0, 300) ?? "no dialog"`)));
       await page.shot(`a13-${viewport.name}-thread-stop-asked`, { targets: true });

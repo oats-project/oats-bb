@@ -19,15 +19,15 @@ const stopPlan = (): StopPlan => value(parseStopPlan(fixture("stop-plan.json").r
 const retirePlan = (change: Partial<RetirePlan> = {}): RetirePlan => ({ ...value(parseRetirePlan(fixture("retire-plan.json").result)), ...change });
 
 describe("a dialog's title", () => {
-  it("names the act and the agent as the kernel names it, as words; no agent before the kernel has named one", () => {
-    expect(titleOf("retire", "weekly-digest-helper", true)).toBe("Retire Weekly digest helper?");
-    expect(titleOf("stop", "redesign-ui-lead", true)).toBe("Stop Redesign ui lead?");
+  it("names the act and the agent that was asked for, as words, in every state: a question until the dialog has settled", () => {
+    expect(titleOf("retire", "weekly-digest-helper")).toBe("Retire Weekly digest helper?");
+    expect(titleOf("stop", "redesign-ui-lead")).toBe("Stop Redesign ui lead?");
+    expect(titleOf("start", "weekly-digest-helper")).toBe("Start Weekly digest helper");
+    expect(titleOf("restart", "weekly-digest-helper")).toBe("Restart Weekly digest helper");
+    // Once the dialog has settled (a result, a refusal, a plan that cannot be read) the title asks nothing.
+    expect(titleOf("retire", "weekly-digest-helper", true)).toBe("Retire Weekly digest helper");
+    expect(titleOf("stop", "redesign-ui-lead", true)).toBe("Stop Redesign ui lead");
     expect(titleOf("start", "weekly-digest-helper", true)).toBe("Start Weekly digest helper");
-    expect(titleOf("restart", "weekly-digest-helper", true)).toBe("Restart Weekly digest helper");
-    expect(titleOf("stop", null, false)).toBe("Stop an agent");
-    expect(titleOf("stop", null, true)).toBe("Stop this agent?");
-    // Once the act has a result the title asks nothing.
-    expect(titleOf("retire", "weekly-digest-helper", true, true)).toBe("Retire Weekly digest helper");
   });
 });
 

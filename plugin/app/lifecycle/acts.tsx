@@ -483,9 +483,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
 
   return (
     <Confirm
-      // The agent is named from the kernel's plan, never from the row that was pressed: the roster
-      // on screen may be older than what the kernel knows. Until a plan is read no agent is named.
-      title={titleOf(verb, shownFor, plan !== null, state.phase === "settled" && state.sent !== null)}
+      // The title names the agent that was ASKED for, in every state (reading, unreadable, gone, the result). The
+      // PLAN is the kernel's: one it answers for another agent, or for none, is refused below (`about` against
+      // `shownFor`) and never drawn under this name; the roster on screen may be older than what the kernel knows.
+      title={titleOf(verb, instance, state.phase === "settled")}
       about={instance}
       shownFor={shownFor}
       // Once the act has an answer the plan gives way to it, a refusal as a result: what it would do, over
@@ -852,8 +853,9 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
 
   return (
     <Confirm
-      // Named from the kernel's row as read for this dialog, never from the row that was pressed.
-      title={titleOf(verb, known?.instance ?? null, known !== null)}
+      // The title names the agent that was ASKED for, in every state; the row the kernel answered for another agent
+      // is refused (`about` against `shownFor`), never drawn under this name.
+      title={titleOf(verb, instance)}
       about={instance}
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.

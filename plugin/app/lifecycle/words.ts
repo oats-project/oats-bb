@@ -215,12 +215,18 @@ export function retirePlanView(plan: RetirePlan, discardWorktree: boolean): Plan
 // ---- the dialog's own lines ----
 
 const ACT = { stop: "Stop", retire: "Retire", start: "Start", restart: "Restart" } as const;
-/** The dialog's title: the act and the agent as the KERNEL names it; no agent is named before the kernel has. */
-export function titleOf(verb: Verb, instance: string | null, named: boolean, settled = false): string {
-  // A plan is a question until it is answered: once the act has a result, the title asks nothing.
+/**
+ * The dialog's title: the act and the agent, in EVERY state of the dialog: while its plan is read,
+ * where it cannot be read, where the agent is gone, and over its result. The agent is the one that
+ * was ASKED for (the place that was pressed): a person always sees whom the dialog is about. What
+ * guards against another agent's plan is not the title: a plan the kernel answers for another
+ * instance, or for none, is REFUSED and never drawn under this name (the Confirm pattern's
+ * `about` against `shownFor`).
+ */
+export function titleOf(verb: Verb, instance: string, settled = false): string {
+  // A plan is a question until it is answered: once the dialog has settled (a result, a refusal), the title asks nothing.
   const ask = (verb === "stop" || verb === "retire") && !settled ? "?" : "";
-  if (instance !== null) return `${ACT[verb]} ${agentName(instance)}${ask}`;
-  return named ? `${ACT[verb]} this agent${ask}` : `${ACT[verb]} an agent`;
+  return `${ACT[verb]} ${agentName(instance)}${ask}`;
 }
 /** While the plan is read, for the first time, for a choice, or again: the title names the act and the agent. */
 export const CHECKING = "Checking…";

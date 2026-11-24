@@ -345,26 +345,28 @@ test("Cancel calls neither apply; Escape cancels too", async () => {
   expect(calls(slot, "stopApply", "retireApply")).toEqual([]);
 });
 
-test("until the plan is read the dialog names no agent, says what it checks, and cannot be confirmed", async () => {
+test("until the plan is read the dialog names the agent that was asked for, says what it checks, and cannot be confirmed", async () => {
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
   const { slot, pick } = await menu("thr_redesign", { stopPlan: () => held.then(() => stopPlanOf()) });
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
-  expect(dialog.querySelector("h2")!.textContent).toBe("Stop an agent");
+  expect(dialog.querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
   release();
   await ready(slot);
   expect(button(slot, "oats-confirm-act").disabled).toBe(false);
 });
 
-test("the dialog names the agent from the kernel's plan, never from the row that was pressed; a plan that is another agent's is not shown and cannot be confirmed", async () => {
+test("the dialog names the agent that was asked for; a plan the kernel answers for ANOTHER agent is refused: it is not shown under that name, and cannot be confirmed", async () => {
   const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf("flaky-ci-developer") });
   await pick("stop");
   const dialog = await slot.findByRole("dialog");
   await ready(slot);
-  expect(dialog.querySelector("h2")!.textContent).toBe("Stop Flaky ci developer?");
+  // The title is the agent that was asked for; the other agent is named only by the refusal.
+  expect(dialog.querySelector("h2")!.textContent).toBe("Stop Redesign ui lead?");
   expect(dialog.textContent).toContain("This is not the plan for this agent.");
+  expect(dialog.textContent).toContain("OATS answered for flaky-ci-developer. Nothing was done.");
   // Nothing of the other agent's plan is drawn: no consequence line, no facts, no Details.
   expect(slot.queryByTestId("oats-confirm-says")).toBeNull();
   expect(slot.queryByTestId("oats-plan")).toBeNull();
@@ -798,13 +800,17 @@ test("Start on an agent whose state the kernel cannot tell is held until its sta
   await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
 });
 
-test("the Start dialog is titled from the kernel's answer; an answer for another agent is not shown and cannot be confirmed", async () => {
+test("the Start dialog is titled with the agent that was asked for; the kernel's answer for ANOTHER agent is refused: not shown under that name, and cannot be confirmed", async () => {
   const { slot, pick } = await menu("thr_digest", { startCheck: () => startCheckOf("flaky-ci-developer") });
   await pick("start");
   const dialog = await slot.findByRole("dialog");
   await ready(slot);
-  expect(dialog.querySelector("h2")!.textContent).toBe("Start Flaky ci developer");
+  expect(dialog.querySelector("h2")!.textContent).toBe("Start Weekly digest helper");
   expect(dialog.textContent).toContain("This is not the plan for this agent.");
+  expect(dialog.textContent).toContain("OATS answered for flaky-ci-developer. Nothing was done.");
+  // Nothing of the other agent's row is drawn: no consequence line, no field.
+  expect(slot.queryByTestId("oats-confirm-says")).toBeNull();
+  expect(slot.queryByTestId("oats-start-model")).toBeNull();
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
 });
 
@@ -1227,7 +1233,8 @@ test("a start whose check failed says nothing of what a start does: only what co
   await pick("start");
   await phase(slot, "failed");
   const dialog = slot.getByRole("dialog");
-  expect(dialog.querySelector("h2")!.textContent).toBe("Start an agent");
+  // Named all the same: the agent that was asked for.
+  expect(dialog.querySelector("h2")!.textContent).toBe("Start Weekly digest helper");
   // No consequence line, no field, no Details of an agent that could not be checked.
   expect(slot.queryByTestId("oats-confirm-says")).toBeNull();
   expect(slot.queryByTestId("oats-start")).toBeNull();

@@ -147,8 +147,12 @@ while its Terminal tab has the focus.
   "Starts a new conversation." too (a restart never resumes, on bb or on tmux), and before it,
   only where bb says the agent works on a turn now, "Stops what it is doing now.". Where others are stopped too, "Also stops: <names>." is the
   second and last line.
-- **Stop** and **Retire** read the kernel's plan, for the agent the PLAN names (never the row that
-  was pressed). In view: the consequence line, and the facts that are a reason not to confirm, set
+- **Every dialog's title names the agent that was asked for**, in every state: while its plan is
+  read, where it cannot be read, where the agent is gone, and over the result ("Stop Redesign ui
+  lead?", a question until the dialog has settled). What the dialog SHOWS is the kernel's: a plan
+  or a check the kernel answers for another agent, or for none, is refused ("This is not the plan
+  for this agent.") and never drawn under that name.
+- **Stop** and **Retire** read the kernel's plan. In view: the consequence line, and the facts that are a reason not to confirm, set
   apart, only when true. For a stop that is ONE fact, said from bb's word on its thread and never from the plan's
   `midTask` (reported activity: true for every session that runs, an idle one too): "<Name> ·
   mid-turn", what the stop cuts; an agent that is not in a turn gets no line. Uncommitted work is

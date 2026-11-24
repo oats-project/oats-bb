@@ -74,10 +74,11 @@ export const HELD_REASON = "Comes back when OATS is read again";
 export function Unreadable({ failure, machine, at, now, onRetry, compact = false, inSidebar = false }: { failure: Failure; machine: string | null; at?: string; now?: number; onRetry: () => void; compact?: boolean; inSidebar?: boolean }) {
   const words = failureWords(failure, machine);
   const settings = useSettingsHref();
-  // A PAGE that draws the full notice over a roster kept as last read says so (whoever draws it:
-  // the home, a soul's page, Teams), so that the sidebar beside it says one line and not the same
-  // notice a second time. The sidebar's own notice (`inSidebar`) and the thread row's line do not count.
-  const fullOnPage = !compact && !inSidebar && at !== undefined;
+  // A PANE that draws the notice over a roster kept as last read says so (whoever draws it: the home,
+  // a soul's page, Teams; and the thread's own line or an agent's page, whose notice is the `compact`
+  // one), so that the sidebar beside it says one line and not the same notice a second time (the
+  // lead's T3: the notice ONCE, in the pane a person is looking at). The sidebar's own (`inSidebar`) does not count.
+  const fullOnPage = !inSidebar && at !== undefined;
   useEffect(() => {
     if (!fullOnPage) return;
     pagesWithNotice += 1;

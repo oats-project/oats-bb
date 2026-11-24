@@ -8,20 +8,19 @@ import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
 import type { PanelInstance } from "../../kernel/panel-instance";
-import { isKernelCode } from "../../kernel/result";
 import type { Agent, AgentState, BbThread, Node, ThreadWhere } from "../../model/types";
 import { claimOf, isListed } from "../../model/view";
 import { AgentActs } from "../lifecycle";
 import { ReadingLine, useReading } from "../roster/reading";
 import { agentStatus, stoppedAt } from "../roster/status";
-import { HELD, Unreadable, failureWords, useSettingsHref } from "../roster/unreadable";
+import { Unreadable } from "../roster/unreadable";
 import { failureLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
 import { Button, Card, Chip, Code, CopyButton, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
-import { agentName, readAge, showingRead, waitingClock, waitingLabel } from "../ui/words";
+import { agentName, readAge, waitingClock, waitingLabel } from "../ui/words";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { Activity } from "./Activity";
 import { CommandText, PathLine, SoulMark } from "./parts";
@@ -130,7 +129,7 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
       {/* What the panel draws is as wide as the part of it that is in the window (`useVisibleWidth`). */}
       <div data-testid="oats-panel-visible" className="flex min-h-0 min-w-0 flex-1 flex-col" style={visible === null ? undefined : { width: visible }}>
         {/* One instance at a time: another agent starts from its own read. */}
-        <Pages key={held.agent.instance} oats={roster} agent={held.agent} node={held.node} thread={thread} tab={tab} failure={failure} />
+        <Pages page={threadId === undefined} key={held.agent.instance} oats={roster} agent={held.agent} node={held.node} thread={thread} tab={tab} failure={failure} />
       </div>
     </div>
   );
@@ -170,10 +169,12 @@ function useVisibleWidth(element: HTMLElement | null): number | null {
   return width;
 }
 
-function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agent: Agent; node: Node | undefined; thread: BbThread | null; tab: TabId; failure: RosterFailure | null }) {
+function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster; agent: Agent; node: Node | undefined; thread: BbThread | null; tab: TabId; failure: RosterFailure | null; /** the panel is an agent's page, not the tab beside its thread */ page: boolean }) {
   const read = usePanelInstance(agent.instance);
   const now = useNow();
-  const state = <ReadState read={read} now={now} failure={failure} />;
+  // Beside a thread (the tab: `threadId`) the thread's own line says that the roster is the last one read; on an
+  // agent's page this panel IS the pane a person is looking at, and says it itself, once.
+  const state = <ReadState read={read} now={now} failure={failure} page={page} />;
   // Where the agent is, by the one function every place reads (app/roster/status.ts): the same
   // word, since when and reason as the sidebar's row and the thread's line say. An agent with no
   // bb thread has none to give it (`thread`, from InstancePanel).
@@ -241,8 +242,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
  * that failed, or (the roster's failure first: it is why the instance cannot be read either) what
  * was read earlier, with its age. Nothing when the read is there and current.
  */
-function ReadState({ read, now, failure }: { read: InstanceRead; now: number; failure: RosterFailure | null }) {
-  const settings = useSettingsHref();
+function ReadState({ read, now, failure, page }: { read: InstanceRead; now: number; failure: RosterFailure | null; /** the panel is an agent's page, not the tab beside its thread */ page: boolean }) {
   const refusal = failure !== null ? failure.line : read.status === "error" ? read.error : null;
   // Retry asks for the roster again where that is what failed, and for the instance in either case:
   // the server answers it from the roster it holds then, and says when a newer one lands.
@@ -253,40 +253,15 @@ function ReadState({ read, now, failure }: { read: InstanceRead; now: number; fa
   if (refusal === null) return read.status === "loading" ? <Loading>Reading…</Loading> : null;
   // Nothing was ever read: the notice every place of the plugin shows when OATS cannot be read, whole.
   if (failure !== null && read.data === undefined) return <Unreadable failure={failure} machine={failure.machine} onRetry={again} />;
-  // Why, in the words every place says it (the sidebar's notice, the thread's row) where it is OATS that cannot be read.
-  const words = failure === null ? null : failureWords(failure, failure.machine);
-  const code = failure !== null ? (isKernelCode(failure.code) ? failure.code : null) : codeOf(refusal);
+  // The ROSTER is the last one read, and the panel keeps what it read. The notice stands ONCE, in the pane a person
+  // is looking at (the lead's T3). Beside a thread that is the thread's own line: the panel draws none and only holds
+  // its buttons. On an agent's page the panel is that pane: the notice every place shows, whole, with the age of what
+  // is shown and that the acts are off (the sidebar beside it then says one line).
+  if (failure !== null) return page ? <Unreadable failure={failure} machine={failure.machine} at={read.data?.at} now={now} onRetry={again} /> : null;
   const kept = read.data !== undefined;
   return (
-    // One drawing for a read that failed, with or without something read earlier under it: with it, how old that is, once.
-    <Notice
-      title={words !== null ? words.title : kept ? "This instance could not be read again" : "This instance could not be read"}
-      tone="error"
-      // Where it is OATS that cannot be read, the code is under Details with the refusal, as in the sidebar's notice.
-      code={words === null ? code : null}
-      // What to do in a sentence is one press away, over the refusal itself (as in the sidebar's notice).
-      details={[words === null || isKernelCode(failure?.code ?? "") ? null : words.sentence, refusal]}
-      // Where it is the ROSTER that is the last one read, the header's acts are off: the notice's one line says so
-      // beside the age, as the sidebar's and the thread's line do (an act that is off is never alone on the page).
-      {...(read.data === undefined || failure !== null ? {} : { age: readAge(read.data.at, now) })}
-      actions={
-        <>
-          {words === null || words.retry ? <Button onClick={again}>{read.fetching ? "Reading…" : "Retry"}</Button> : null}
-          {/* The sidebar's notice for this cause offers the settings: the same here. */}
-          {words !== null && words.settings ? (
-            <a data-testid="oats-panel-open-settings" className={`${TARGET} ${LINK} inline-flex items-center`} href={settings}>
-              Open settings
-            </a>
-          ) : null}
-        </>
-      }
-    >
-      {failure === null || read.data === undefined ? null : (
-        <p className="text-xs text-muted-foreground">
-          {showingRead(readAge(read.data.at, now))} <span data-testid="oats-held">{HELD}</span>
-        </p>
-      )}
-    </Notice>
+    // The INSTANCE's own read failed (the roster reads): one drawing, with or without something read earlier under it: with it, how old that is, once.
+    <Notice title={kept ? "This instance could not be read again" : "This instance could not be read"} tone="error" code={codeOf(refusal)} details={[refusal]} {...(read.data === undefined ? {} : { age: readAge(read.data.at, now) })} actions={<Button onClick={again}>{read.fetching ? "Reading…" : "Retry"}</Button>} />
   );
 }
 

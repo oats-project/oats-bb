@@ -430,9 +430,14 @@ export default [
       const TMUX = "kernel-fix-developer";
       const drawer = async (what) => {
         check(await open(page, within("oats-home-needs")), `${at} ${what}: the home (the plugin's page, with the default pages)`, await page.evaluate(textOf(PAGE)));
-        // The roster is not on the page at this width: it is in bb's drawer, behind bb's own toggle.
-        const hidden = await page.evaluate(`(() => { const side = document.querySelector(${JSON.stringify(SIDE)}); if (!side) return true; const box = side.getBoundingClientRect(); return box.width === 0 || box.right <= 0 || box.left >= innerWidth; })()`);
-        check(hidden === true, `${at} ${what}: the sidebar is not on screen beside the home at this width`, String(hidden));
+        // The roster is not on the page at this width: it is in bb's drawer, behind bb's own toggle. bb keeps the
+        // drawer as a person left it (a scene before this one, or the press before, may have left it open): it is
+        // closed first, with bb's own toggle, so that what follows proves the toggle OPENS it from the plugin's page.
+        const HIDDEN = `(() => { const side = document.querySelector(${JSON.stringify(SIDE)}); if (!side) return true; const box = side.getBoundingClientRect(); return box.width === 0 || box.right <= 0 || box.left >= innerWidth; })()`;
+        const TOGGLE = `(() => { const b = [...document.querySelectorAll("button")].find((b) => /sidebar|menu|navigation/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0); b?.click(); return b?.getAttribute("aria-label") ?? null; })()`;
+        if ((await page.evaluate(HIDDEN)) !== true) await page.evaluate(TOGGLE);
+        const hidden = await page.until(`${HIDDEN} === true`, 10);
+        check(Boolean(hidden), `${at} ${what}: with bb's drawer closed the sidebar is not on screen beside the home at this width`, String(await page.evaluate(HIDDEN)));
         check(await showSidebar(page, viewport), `${at} ${what}: bb's own toggle opens its drawer over the plugin's home, and the roster is in it`, await page.evaluate(`JSON.stringify([...document.querySelectorAll("button")].filter((b) => b.getBoundingClientRect().width > 0).map((b) => b.getAttribute("aria-label") ?? b.innerText.trim()).slice(0, 12))`));
         return page.until(`(() => { const rows = ${roster}; return rows !== "" && JSON.parse(rows).length >= 8 ? rows : ""; })()`, 20);
       };

@@ -5,7 +5,7 @@ import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { showSidebar, testId, textOf, texts, visible, textsNamed, tmuxMarks } from "../browser.mjs";
-import { TMUX_ROSTER } from "../tmux-roster.mjs";
+import { PILOT_ROSTER, TMUX_ROSTER } from "../tmux-roster.mjs";
 import { click, closed, dialog, phaseIs, saysNow } from "./lifecycle.mjs";
 
 // The machine's name, as the checks' container was given it (ci.sh: MACHINE_NAME, the container's
@@ -34,6 +34,41 @@ const statusOf = async (page, state, want = null) => {
  * (`soulCut` and `soulGone` count a soul's phrase: a row has none, so both are 0; `whereCut`: the last phrase cut; `edgeCut`: something past the
  * row's edge, or the state's word cut; `untitled`: a name with no title holding it whole).
  */
+/**
+ * The roster's tree as it is drawn, top to bottom: each visible row of an agent, by its instance
+ * (a thread-less row) or its bb thread's id, with how far in it is (0, 1 or 2: the row's indent).
+ */
+const treeRows = (page) =>
+  page.evaluate(
+    `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})].filter((row) => row.getClientRects().length > 0).map((row) => { const left = parseFloat(getComputedStyle(row).paddingLeft); return { who: row.getAttribute("data-instance") ?? row.getAttribute("data-sidebar-thread-id"), left }; }))`,
+  );
+/** `treeRows` with each row's depth: the indents drawn, smallest first, are depth 0, 1, 2. */
+const depths = (rows) => {
+  const lefts = [...new Set(rows.map((row) => row.left))].sort((a, b) => a - b);
+  return rows.map((row) => ({ who: row.who, depth: lefts.indexOf(row.left) }));
+};
+/**
+ * What is wrong in a drawn tree, against who is whose parent (`parentOf`: by instance; only the
+ * agents it names are looked at): a child that is not drawn one step in from its parent, or not
+ * in its parent's own block of rows (the rows after the parent that are further in than it).
+ */
+const misplaced = (drawn, parentOf, cap = 2) => {
+  const at = new Map(drawn.map((row, index) => [row.who, index]));
+  const off = [];
+  for (const [child, parent] of Object.entries(parentOf)) {
+    const c = at.get(child);
+    const p = at.get(parent);
+    if (c === undefined || p === undefined) {
+      off.push(`${child}: ${c === undefined ? "not drawn" : `its parent ${parent} is not drawn`}`);
+      continue;
+    }
+    const wanted = Math.min(drawn[p].depth + 1, cap);
+    if (drawn[c].depth !== wanted) off.push(`${child}: at depth ${drawn[c].depth}, not ${wanted}`);
+    if (c < p || drawn.slice(p + 1, c).some((row) => row.depth <= drawn[p].depth)) off.push(`${child}: not in the rows under ${parent}`);
+  }
+  return off;
+};
+
 const rowLines = (page) =>
   page.evaluate(
     `(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const rows = [...s.querySelectorAll(${JSON.stringify(`${testId("oats-agent-row")}, ${testId("oats-agent-row-threadless")}`)})].filter((r) => r.getClientRects().length > 0); const linesOf = (e) => Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)); const cutOf = (e) => e.scrollWidth > e.clientWidth + 1; let over = 0, wrapped = 0, nameCut = 0, soulCut = 0, soulGone = 0, whereCut = 0, edgeCut = 0, untitled = 0; for (const row of rows) { const name = row.querySelector(${JSON.stringify(testId("oats-row-name"))}); const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const n = linesOf(name), f = linesOf(facts); if (n + f > 3 || n > 2) over += 1; if (f !== 1) wrapped += 1; if (name.scrollHeight > name.clientHeight + 1) nameCut += 1; if (!name.getAttribute("title")) untitled += 1; const soul = facts.querySelector('[data-phrase="soul"]'); if (soul && cutOf(soul)) soulCut += 1; if (soul && soul.getBoundingClientRect().width < 8) soulGone += 1; if ([...facts.querySelectorAll('[data-phrase="where"]')].some(cutOf)) whereCut += 1; const right = facts.getBoundingClientRect().right; if ([...facts.querySelectorAll("[data-phrase], [data-sep]")].some((p) => p.getBoundingClientRect().right > right + 1) || cutOf(facts.querySelector('[data-phrase="state"]'))) edgeCut += 1; } return JSON.stringify({ rows: rows.length, over, wrapped, nameCut, soulCut, soulGone, whereCut, edgeCut, untitled }); })()`,
@@ -343,6 +378,11 @@ export default [
       const wanted = tmux.map(([instance, , , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : how === "lost" ? "Stopped · session lost" : "Working"} · tmux`]);
       const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
       check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, then "tmux", and no soul`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      // ONE tree: each tmux agent that has a parent is drawn under it, one step in (deeper than 2 at 2), in its parent's own block of rows.
+      const parents = Object.fromEntries(tmux.filter(([, , parent]) => parent !== null).map(([instance, , parent]) => [instance, parent]));
+      const tree = depths(JSON.parse(await treeRows(page)));
+      const off = misplaced(tree, parents);
+      check(off.length === 0 && tree.filter((row) => row.depth === 2).length >= 1, `${at} each of the ${Object.keys(parents).length} tmux agents that has a parent is drawn under it, one step in, a child's child two steps in`, off.join("; ") || JSON.stringify(tree));
       // ("tmux" in that reading is the glyph's name: every tmux row draws bb's terminal glyph, named, and no word.)
       const glyphs = JSON.parse(await page.evaluate(tmuxMarks));
       check(glyphs.marks === tmux.length && glyphs.glyphs === tmux.length && glyphs.named === tmux.length && glyphs.drawn === tmux.length, `${at} on each of the ${tmux.length} rows "tmux" is bb's terminal glyph, named "tmux"`, JSON.stringify(glyphs));
@@ -437,6 +477,45 @@ export default [
         // The stage's own roster again, for the next theme and width: the agent's session lost.
         fake({ status: { stdout: tmuxStatus() } });
         await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)}); return facts && /session lost/.test(facts.innerText) ? "1" : ""; })()`, 60);
+      }
+    },
+  },
+  {
+    // The pilot's own roster shape (tmux-roster.mjs PILOT_ROSTER): eight agents on tmux, every session lost, one a
+    // child of another. Before the one tree every one of the eight was a flat root, and a fold had nothing to fold.
+    stage: "tmux-roster",
+    name: "the pilot's own roster shape: eight agents on tmux, one a child of another: seven roots and the child under its parent; a child that waits carries its parent to the top",
+    run: async ({ page, at, viewport, check, fake, tmuxStatus }) => {
+      const names = PILOT_ROSTER.tmux.map(([instance]) => instance);
+      const [CHILD, , PARENT] = PILOT_ROSTER.tmux.find(([, , parent]) => parent !== null);
+      const rowsOf = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})]`;
+      const factsOf = (instance) => `((document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${instance}"] ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim())`;
+      try {
+        fake({ status: { stdout: tmuxStatus({}, PILOT_ROSTER) } });
+        await page.goto("/");
+        check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
+        // Waited for: the roster is the eight, and nobody else (the stage's own agents are gone from it).
+        const eight = await page.until(`(() => { const rows = ${rowsOf}; const who = rows.map((row) => row.getAttribute("data-instance")); return rows.length === ${names.length} && ${JSON.stringify(names)}.every((name) => who.includes(name)) ? "1" : ""; })()`, 60);
+        check(Boolean(eight), `${at} the roster is the pilot's eight agents, each a row`, eight ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        const tree = depths(JSON.parse(await treeRows(page)));
+        const wanted = names.filter((name) => name !== CHILD).flatMap((name) => (name === PARENT ? [{ who: name, depth: 0 }, { who: CHILD, depth: 1 }] : [{ who: name, depth: 0 }]));
+        check(JSON.stringify(tree) === JSON.stringify(wanted), `${at} seven roots in the kernel's order, and ${CHILD} under ${PARENT}, one step in`, JSON.stringify(tree));
+        const said = JSON.parse(await page.evaluate(`JSON.stringify([${factsOf(PARENT)}, ${factsOf(CHILD)}])`));
+        check(said.every((line) => line.startsWith("Stopped · session lost")), `${at} the parent and its child each say "Stopped · session lost"`, JSON.stringify(said));
+        const measured = JSON.parse(await rowLines(page));
+        check(measured.over === 0 && measured.wrapped === 0 && measured.edgeCut === 0 && measured.whereCut === 0 && measured.untitled === 0, `${at} a row under its parent keeps to its lines: nothing past its edge, its last phrase whole`, JSON.stringify(measured));
+        await page.shot(`pilot-roster-${viewport.name}-tree`, { targets: true });
+        // The child waits on a person (its session runs again and carries a claim): its parent, itself still stopped, stands first with it.
+        fake({ status: { stdout: tmuxStatus({ [CHILD]: "waiting" }, PILOT_ROSTER) } });
+        const waits = await page.until(`(() => ${factsOf(CHILD)}.startsWith("Needs you") ? JSON.stringify(${rowsOf}.filter((row) => row.getClientRects().length > 0).slice(0, 2).map((row) => row.getAttribute("data-instance"))) : "")()`, 60);
+        check(waits === JSON.stringify([PARENT, CHILD]), `${at} with ${CHILD} waiting, ${PARENT} and its child are the first two rows`, waits ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        const parentSaid = await page.evaluate(factsOf(PARENT));
+        check(parentSaid.startsWith("Stopped · session lost"), `${at} the parent's own row still says what it is: "Stopped · session lost"`, parentSaid);
+        await page.shot(`pilot-roster-${viewport.name}-child-waits`, { targets: true });
+      } finally {
+        // The stage's own roster again, for the next theme and width.
+        fake({ status: { stdout: tmuxStatus() } });
+        await page.until(`${rowsOf}.length >= ${TMUX_ROSTER.tmux.length} ? "1" : ""`, 60);
       }
     },
   },

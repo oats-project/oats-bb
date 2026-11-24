@@ -279,14 +279,15 @@ function statusWithRealIds(threads, changes = {}) {
  * runtimeState word (README).
  */
 /** `as`: by instance, another `how` than the roster's own (a scene that starts a lost agent draws it running after). */
-function tmuxRoster(threads, as = {}) {
+/** `roster`: another set of agents than the stage's own, in the shape of `TMUX_ROSTER` (a scene that draws one of its own, and puts the stage's back). */
+function tmuxRoster(threads, as = {}, roster = TMUX_ROSTER) {
   const status = JSON.parse(statusWithRealIds(threads));
   const rows = status.agents.flatMap((group) => group.instances);
   const model = rows.find((row) => row.instance === "kernel-fix-developer");
   const claim = rows.find((row) => row.instance === "release-070-maintainer").waitingOnYou;
-  for (const group of status.agents) group.instances = group.instances.filter((row) => TMUX_ROSTER.bb.includes(row.instance));
-  for (const row of status.agents.flatMap((group) => group.instances)) row.instance = TMUX_ROSTER.renamed[row.instance] ?? row.instance;
-  for (const [instance, soul, parent, listed] of TMUX_ROSTER.tmux) {
+  for (const group of status.agents) group.instances = group.instances.filter((row) => roster.bb.includes(row.instance));
+  for (const row of status.agents.flatMap((group) => group.instances)) row.instance = roster.renamed[row.instance] ?? row.instance;
+  for (const [instance, soul, parent, listed] of roster.tmux) {
     const how = as[instance] ?? listed;
     const row = structuredClone(model);
     Object.assign(row, { agent: soul, instance, home: model.home.replace("/oats-developer/instances/kernel-fix-developer", `/${soul}/instances/${instance}`), parentInstance: parent, waitingOnYou: how === "waiting" ? structuredClone(claim) : null });
@@ -583,7 +584,7 @@ try {
           const page = await themedPage(browser, viewport, theme, at);
           try {
             for (const scene of mine) {
-              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as) => tmuxRoster(threads, as) };
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster) };
               if (!PILOT) await scene.run(given);
               else {
                 // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.

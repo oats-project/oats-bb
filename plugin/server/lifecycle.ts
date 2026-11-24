@@ -26,8 +26,9 @@ function within<Answer>(ms: number, asked: Promise<Answer>): Promise<Answer | nu
 /**
  * When an act ended: this server's clock at the instant its `oats` command returned. The roster's
  * `at` is the same clock at the start of a status read (core.ts), and every act asks for a read
- * when it ends (`rereadSoon`, which queues a new read behind one in flight): so a roster whose
- * `at` is later than this was read after the act, and the window compares the two (contract/lifecycle.ts `endedAt`).
+ * when it ends (`rereadAfterAct`, which queues a new read behind one in flight and has its roster
+ * published also when it says nothing new): so a roster whose `at` is later than this was read
+ * after the act, it reaches the window, and the window compares the two (contract/lifecycle.ts `endedAt`).
  */
 const ended = (): string => new Date().toISOString();
 
@@ -64,7 +65,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       // The act ended when its command returned (not after the wait for the new thread, below).
       endedAt = ended();
     } finally {
-      core.rereadSoon();
+      core.rereadAfterAct();
     }
     // A home on bb is in a new thread after the act; any other has no bb thread, and none is waited for.
     return { ...started, endedAt, threadId: agent.backend === "bb" ? await core.threadOf(instance, started.threadId, verb === "start" ? "Started" : "Restarted") : null };
@@ -87,7 +88,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         const receipt = await core.call("stopApply", { instance, revision, key, ...given({ recursive }) }, HOST_TIMEOUT.act, core.signal);
         return { ...receipt, endedAt: ended() };
       } finally {
-        core.rereadSoon();
+        core.rereadAfterAct();
       }
     },
     /**
@@ -136,7 +137,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         const receipt = await core.call("retireApply", { instance, revision, key, ...given({ discardWorktree }) }, HOST_TIMEOUT.long, core.signal);
         return { ...receipt, endedAt: ended() };
       } finally {
-        core.rereadSoon();
+        core.rereadAfterAct();
       }
     },
   };

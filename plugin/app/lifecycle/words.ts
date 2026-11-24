@@ -554,7 +554,7 @@ export const START = {
   /**
    * A RESTART is held on a model the person changed unless bb's list for the harness serves it
    * exactly once (model/restart-model.ts: the kernel stops the running session before the provider
-   * judges the model). The word on the Model field and beside the button: the New agent form's words.
+   * judges the model). The word on the Model field and beside the button.
    */
   notFound: "Not found",
   pickProvider: "Pick provider",

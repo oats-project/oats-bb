@@ -3,15 +3,21 @@
 // provider judges the model, so a restart whose model the provider then refuses leaves the agent
 // stopped with nothing started. A refused start or spawn harms nothing; a refused restart does.
 // So a changed model is sent only when bb's own list for the harness has been READ and serves
-// that id exactly once. Everything else is held here, before any call.
+// that id exactly once, BY THE PROVIDER'S OWN RULE (below). Everything else is held here, before
+// any call.
 // The same harm has a second door, held by the same reading: a harness that was CHANGED to one
 // whose bb provider is not ready on this machine (not installed, not signed in): the provider
 // refuses that launch too, after the stop.
 // Pure: the field's text, whether the harness was changed, bb's list as it was read, and what bb
 // says of the changed harness's provider.
 
-/** bb's models for the harness the restart would run on: not read yet, or the ids it listed (none: bb gave no list, or an empty one). */
-export type ListedModels = { status: "loading" } | { status: "ready"; ids: readonly string[] };
+/**
+ * One model of bb's list: its id as bb lists it, and the provider bb routes it by
+ * (`routeProviderId`; null: bb names none). For pi the id is `<provider>/<id>`.
+ */
+export type ListedModel = { id: string; provider: string | null };
+/** bb's models for the harness the restart would run on: not read yet, or what it listed (none: bb gave no list, or an empty one). */
+export type ListedModels = { status: "loading" } | { status: "ready"; models: readonly ListedModel[] };
 
 export type RestartModel =
   /** Send it: with the typed model, or with none (the field is blank and the harness is the agent's own: nothing was changed). */
@@ -28,29 +34,44 @@ export type RestartModel =
   | { kind: "held"; why: "harness-not-ready" | "required" | "not-found" | "pick-provider"; serving: string[] };
 
 /**
- * The listed ids that serve `id`: the id listed whole, and, for a BARE id (no "/"), every listed
- * `<provider>/<id>` that ends in it. An id that names a provider is served only whole: nothing is
- * guessed about a provider it did not name. A list of bare ids (a harness whose bb provider names
- * no providers) therefore serves an id only when it lists it whole.
+ * The listed models that serve `id`, as the bb session provider's own check resolves one
+ * (oats-package/capabilities/oats-bb/lib/pi-model.mjs `piModelVerdict`, which is bb's own rule):
+ * - the model listed under exactly that id is that model, alone;
+ * - else every model whose BARE id is `id`: its id minus `<provider>/`, the provider being the one
+ *   bb routes it by. A bare id may itself hold a slash (`openrouter/openai/gpt-6` is the provider
+ *   `openrouter` and the bare id `openai/gpt-6`), so nothing is matched by what an id ends in.
+ * Nothing is matched loosely: no prefix, no suffix, no other case.
+ * A model bb lists with NO provider (one a person added to bb's own list) has no bare id. For a
+ * harness whose models are resolved by provider (`byProvider`: pi) the provider's check does not
+ * count it at all, so it serves nothing here either; for any other harness (Claude Code's bare
+ * ids) it serves its own id, whole.
  */
-export function serving(id: string, ids: readonly string[]): string[] {
+export function serving(id: string, models: readonly ListedModel[], byProvider: boolean): string[] {
   if (id === "") return [];
-  const bare = !id.includes("/");
-  return [...new Set(ids)].filter((listed) => listed === id || (bare && listed.endsWith(`/${id}`)));
+  const rows = new Map<string, string | null>(); // id -> its bare id (null: none)
+  for (const { id: listed, provider } of models) {
+    const prefix = provider === null || provider === "" ? null : `${provider}/`;
+    const routed = prefix !== null && listed.startsWith(prefix) && listed.length > prefix.length;
+    if (byProvider && !routed) continue;
+    if (!rows.has(listed)) rows.set(listed, routed ? listed.slice(prefix.length) : null);
+  }
+  if (rows.has(id)) return [id];
+  return [...rows].filter(([, bare]) => bare === id).map(([listed]) => listed);
 }
 
 /**
  * `typed`: the Model field's text, trimmed ("" is the field as the dialog opens it: the agent's
  * own model, unchanged). `harnessChanged`: another harness than the agent's own was picked.
- * `listed`: bb's models for the harness the restart would run on. `harnessReady`: false when bb
- * says the provider of the harness that was picked is not ready; read only for a CHANGED harness
- * (the agent runs on its own), and anything bb did not say is not held.
+ * `listed`: bb's models for the harness the restart would run on. `byProvider`: that harness's
+ * models are resolved by provider (pi). `harnessReady`: false when bb says the provider of the
+ * harness that was picked is not ready; read only for a CHANGED harness (the agent runs on its
+ * own), and anything bb did not say is not held.
  */
-export function restartModel({ typed, harnessChanged, listed, harnessReady = true }: { typed: string; harnessChanged: boolean; listed: ListedModels; harnessReady?: boolean }): RestartModel {
+export function restartModel({ typed, harnessChanged, listed, byProvider, harnessReady = true }: { typed: string; harnessChanged: boolean; listed: ListedModels; byProvider: boolean; harnessReady?: boolean }): RestartModel {
   if (harnessChanged && !harnessReady) return { kind: "held", why: "harness-not-ready", serving: [] };
   if (typed === "") return harnessChanged ? { kind: "held", why: "required", serving: [] } : { kind: "armed", model: null };
   if (listed.status === "loading") return { kind: "reading" };
-  const by = serving(typed, listed.ids);
+  const by = serving(typed, listed.models, byProvider);
   if (by.length === 1) return { kind: "armed", model: typed };
   return by.length === 0 ? { kind: "held", why: "not-found", serving: [] } : { kind: "held", why: "pick-provider", serving: by };
 }

@@ -890,7 +890,11 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   (`model/restart-model.ts`, its table in `test/model/restart-model.test.ts`): the model left
   blank is the agent's own and is sent as before; a model the person CHANGED arms Restart only
   when bb's list for the harness the restart would run on has been read and serves that id
-  exactly once (listed whole, or a bare id that exactly one listed `<provider>/<id>` ends in).
+  exactly once, by the bb session provider's own rule for a pi model (its `piModelVerdict`): the
+  model listed under exactly that id, else the one model whose BARE id it is (its id minus the
+  provider bb routes it by; a bare id may itself hold a slash, so nothing is matched by what an id
+  ends in, and a model bb lists for pi with no provider serves nothing). For a harness whose list
+  names no providers (Claude Code's bare ids) a changed model is armed only if listed whole.
   Otherwise it is held, the word on the Model field and beside the button: "Not found" (no listed
   model serves it; and where bb gives no list, an empty one, or none within ten seconds: it cannot
   be shown to start), "Pick provider" (several serve it: the field then offers only those),
@@ -901,7 +905,10 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   form's sentence is not drawn there (it speaks of a spawn). The agent's own harness never holds
   (it runs on it), and in the instant before bb has said its providers' states that door does not
   hold either: the model's rule does. That second hold follows from the kernel's order of a
-  restart and is not recorded on a kernel. THE HOLD IS THE APP'S: the plugin's server
+  restart and is not recorded on a kernel; it holds only on what bb ANSWERED (where the read of
+  its providers' states is pending or failed, a changed harness is not held by it). And "shown
+  to start" rests on bb's list as the app reads it (bb may serve one it kept): a model removed
+  from pi since is still listed, and the provider then judges. THE HOLD IS THE APP'S: the plugin's server
   cannot read bb's model list or its providers' states (only the app's SDK can), so a caller past
   the app (the plugin's rpc by hand) still reaches the kernel. An agent on tmux has no harness
   and no model field, and the server refuses both for it: the trap cannot be reached there.

@@ -573,10 +573,9 @@ type StartState =
   | { phase: "running"; check: Check }
   | { phase: "settled"; check: Check | null; outcome: Outcome; refusal: Refusal | null; threadId: string | null };
 
-/** What a model field may hold: one line that cannot be read as an option (kernel/spawn.ts `checkModel` holds the rule; this says it before any call). */
-/** How long bb's model list may be read before a Restart reads it as no list (the New agent form's bound for the same read). */
+/** How long bb's model list may be read before a Restart reads it as no list: it then holds (a restart may not go without the list). */
 const LIST_WAIT_MS = 10_000;
-/** Whether `of` (null: nothing is waited for) has stayed the same for `ms`. A wait that ends, or changes, starts over. */
+/** Whether `of` (null: nothing is waited for) has been waited for `ms`, without a break. (An `of` that was overdue and is waited for again is overdue at once: that holds, the safe side.) */
 function useOverdue(of: string | null, ms: number): boolean {
   const [late, setLate] = useState<string | null>(null);
   useEffect(() => {
@@ -586,6 +585,7 @@ function useOverdue(of: string | null, ms: number): boolean {
   }, [of, ms]);
   return of !== null && late === of;
 }
+/** What a model field may hold: one line that cannot be read as an option (kernel/spawn.ts `checkModel` holds the rule; this says it before any call). */
 const isModel = (model: string): boolean => model.length <= 256 && !model.startsWith("-") && !/[\0\n\r]/.test(model);
 
 /** Why the agent cannot be started now, by the kernel's own row (the Desktop's start gate); null when it can. */
@@ -710,7 +710,14 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const overdue = useOverdue(listPending ? `${running ?? ""}` : null, LIST_WAIT_MS);
   const hold = !restarts
     ? null
-    : restartModel({ typed, harnessChanged, harnessReady: notReady === null, listed: suggestions.status === "loading" && !overdue ? { status: "loading" } : { status: "ready", ids: suggestions.models.map((each) => each.id) } });
+    : restartModel({
+        typed,
+        harnessChanged,
+        harnessReady: notReady === null,
+        // pi's models are resolved by their provider; any other harness's list names ids whole.
+        byProvider: running === "pi",
+        listed: suggestions.status === "loading" && !overdue ? { status: "loading" } : { status: "ready", models: suggestions.models.map(({ id, provider }) => ({ id, provider })) },
+      });
   const heldModel = hold !== null && hold.kind === "held" ? hold : null;
   /**
    * The word on the Model field and beside the button. For a harness bb cannot run: the New agent form's own MARK

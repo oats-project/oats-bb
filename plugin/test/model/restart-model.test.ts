@@ -1,89 +1,141 @@
 // The one reading of "may this restart be sent with the model the person changed": the table.
 // A restart whose model the provider refuses leaves a running agent stopped (the kernel stops the
-// session first), so a changed model is armed only when bb's list, READ, serves it exactly once.
+// session first), so a changed model is armed only when bb's list, READ, serves it exactly once,
+// by the provider's own rule (oats-package/capabilities/oats-bb/lib/pi-model.mjs piModelVerdict):
+// the last block holds the two side by side, on the cases a review found them apart.
 import { describe, expect, test } from "vitest";
-import { restartModel, serving } from "../../model/restart-model";
+import { restartModel, serving, type ListedModel } from "../../model/restart-model";
 
-const ready = (...ids: string[]) => ({ status: "ready" as const, ids });
+/** pi's models as bb lists them: `<provider>/<id>`, routed by that provider. */
+const routed = (...ids: string[]): ListedModel[] => ids.map((id) => ({ id, provider: id.slice(0, id.indexOf("/")) }));
+/** Models bb lists with no provider: Claude Code's bare ids; for pi, a model a person added to bb's own list. */
+const unrouted = (...ids: string[]): ListedModel[] => ids.map((id) => ({ id, provider: null }));
+const ready = (models: ListedModel[]) => ({ status: "ready" as const, models });
 const loading = { status: "loading" as const };
-/** pi's list, as bb gives it: every id under a provider. */
-const pi = ready("anthropic/claude-opus-5-5", "openrouter/claude-opus-5-5", "anthropic/claude-haiku-5", "openai/gpt-6", "openrouter/openai/gpt-6");
-/** Claude Code's list: bare ids, no providers. */
-const claude = ready("claude-opus-5-5", "claude-haiku-5", "opus");
+const PI = routed("anthropic/claude-opus-5-5", "openrouter/claude-opus-5-5", "anthropic/claude-haiku-5", "openai/gpt-6", "openrouter/openai/gpt-6", "openrouter/meta/llama-9");
+const CLAUDE = unrouted("claude-opus-5-5", "claude-haiku-5", "opus");
 const held = (why: "harness-not-ready" | "required" | "not-found" | "pick-provider", by: string[] = []) => ({ kind: "held", why, serving: by });
+/** A restart of an agent on pi, the harness unchanged. */
+const pi = (typed: string, models: ListedModel[] | "loading" = PI) => restartModel({ typed, harnessChanged: false, byProvider: true, listed: models === "loading" ? loading : ready(models) });
+const claude = (typed: string, models: ListedModel[] = CLAUDE) => restartModel({ typed, harnessChanged: false, byProvider: false, listed: ready(models) });
 
 describe("a restart with the model unchanged is sent as today, whatever bb lists", () => {
-  test.each([["a list", pi], ["an empty list", ready()], ["a list not read yet", loading]])("the field blank, the harness the agent's own, %s", (_, listed) => {
-    expect(restartModel({ typed: "", harnessChanged: false, listed })).toEqual({ kind: "armed", model: null });
+  test.each([["a list", PI], ["an empty list", []], ["a list not read yet", "loading" as const]])("the field blank, the harness the agent's own, %s", (_, models) => {
+    expect(pi("", models)).toEqual({ kind: "armed", model: null });
   });
 });
 
 describe("a changed model is armed only when bb's list, read, serves it exactly once", () => {
   test("listed whole", () => {
-    expect(restartModel({ typed: "anthropic/claude-opus-5-5", harnessChanged: false, listed: pi })).toEqual({ kind: "armed", model: "anthropic/claude-opus-5-5" });
-    expect(restartModel({ typed: "claude-haiku-5", harnessChanged: false, listed: claude })).toEqual({ kind: "armed", model: "claude-haiku-5" });
+    expect(pi("anthropic/claude-opus-5-5")).toEqual({ kind: "armed", model: "anthropic/claude-opus-5-5" });
+    expect(claude("claude-haiku-5")).toEqual({ kind: "armed", model: "claude-haiku-5" });
   });
-  test("a bare id that exactly one listed <provider>/<id> ends in: sent as typed", () => {
-    expect(restartModel({ typed: "claude-haiku-5", harnessChanged: false, listed: pi })).toEqual({ kind: "armed", model: "claude-haiku-5" });
+  test("a bare id that exactly one listed <provider>/<id> is: sent as typed", () => {
+    expect(pi("claude-haiku-5")).toEqual({ kind: "armed", model: "claude-haiku-5" });
   });
-  test("a bare id that several listed models end in: Pick provider, with those, whole", () => {
-    expect(restartModel({ typed: "claude-opus-5-5", harnessChanged: false, listed: pi })).toEqual(held("pick-provider", ["anthropic/claude-opus-5-5", "openrouter/claude-opus-5-5"]));
-    // An id listed whole AND under a provider is served twice, too: nothing is guessed about which one the provider would take.
-    expect(restartModel({ typed: "opus", harnessChanged: false, listed: ready("opus", "anthropic/opus") })).toEqual(held("pick-provider", ["opus", "anthropic/opus"]));
+  test("a bare id is everything after the PROVIDER, and may itself hold a slash", () => {
+    expect(pi("meta/llama-9")).toEqual({ kind: "armed", model: "meta/llama-9" }); // openrouter/meta/llama-9
+    expect(pi("llama-9")).toEqual(held("not-found")); // no model's bare id: what an id ENDS in is not its id
+    // "openai/gpt-6" is a model listed whole: that one, alone, though openrouter's bare id is the same.
+    expect(pi("openai/gpt-6")).toEqual({ kind: "armed", model: "openai/gpt-6" });
+    // "gpt-6" is openai's bare id and nobody else's (openrouter's is "openai/gpt-6").
+    expect(pi("gpt-6")).toEqual({ kind: "armed", model: "gpt-6" });
   });
-  test("served by none: Not found", () => {
-    expect(restartModel({ typed: "claude-opus-9", harnessChanged: false, listed: pi })).toEqual(held("not-found"));
-    // A part of an id is not the id: no prefix, no middle, no other case, no id that merely ends in the same letters.
-    for (const near of ["claude", "opus-5-5", "Claude-Opus-5-5", "anthropic", "anthropic/", "/claude-opus-5-5", "5"]) expect(restartModel({ typed: near, harnessChanged: false, listed: pi }), near).toEqual(held("not-found"));
+  test("a bare id that several providers serve: Pick provider, with those, whole", () => {
+    expect(pi("claude-opus-5-5")).toEqual(held("pick-provider", ["anthropic/claude-opus-5-5", "openrouter/claude-opus-5-5"]));
+    expect(pi("openai/gpt-7", routed("openrouter/openai/gpt-7", "requesty/openai/gpt-7"))).toEqual(held("pick-provider", ["openrouter/openai/gpt-7", "requesty/openai/gpt-7"]));
   });
-  test("an id that names a provider is served only whole: nothing is guessed about a provider it did not name", () => {
-    // "openai/gpt-6" is listed whole (once); "openrouter/openai/gpt-6" ends in it and does not make it two.
-    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: false, listed: pi })).toEqual({ kind: "armed", model: "openai/gpt-6" });
-    expect(restartModel({ typed: "openai/gpt-7", harnessChanged: false, listed: ready("openrouter/openai/gpt-7") })).toEqual(held("not-found"));
+  test("served by none: Not found; a part of an id is not the id", () => {
+    expect(pi("claude-opus-9")).toEqual(held("not-found"));
+    for (const near of ["claude", "opus-5-5", "Claude-Opus-5-5", "anthropic", "anthropic/", "/claude-opus-5-5", "5", "openrouter"]) expect(pi(near), near).toEqual(held("not-found"));
   });
   test("the list not read yet: nothing is sent, and nothing is said to be wrong", () => {
-    expect(restartModel({ typed: "anthropic/claude-opus-5-5", harnessChanged: false, listed: loading })).toEqual({ kind: "reading" });
+    expect(pi("anthropic/claude-opus-5-5", "loading")).toEqual({ kind: "reading" });
   });
   test("bb gives no list, or an empty one: it cannot be shown to start: Not found", () => {
-    expect(restartModel({ typed: "anthropic/claude-opus-5-5", harnessChanged: false, listed: ready() })).toEqual(held("not-found"));
+    expect(pi("anthropic/claude-opus-5-5", [])).toEqual(held("not-found"));
   });
   test("a list without providers (Claude Code's bare ids) cannot place an id by provider: a changed model is armed only if listed whole", () => {
-    expect(restartModel({ typed: "opus", harnessChanged: false, listed: claude })).toEqual({ kind: "armed", model: "opus" });
-    expect(restartModel({ typed: "anthropic/claude-opus-5-5", harnessChanged: false, listed: claude })).toEqual(held("not-found"));
-    expect(restartModel({ typed: "sonnet", harnessChanged: false, listed: claude })).toEqual(held("not-found"));
+    expect(claude("opus")).toEqual({ kind: "armed", model: "opus" });
+    expect(claude("anthropic/claude-opus-5-5")).toEqual(held("not-found"));
+    expect(claude("sonnet")).toEqual(held("not-found"));
   });
-  test("a list that names an id twice serves it once", () => {
-    expect(restartModel({ typed: "opus", harnessChanged: false, listed: ready("opus", "opus") })).toEqual({ kind: "armed", model: "opus" });
+  test("for pi, a model bb lists with no provider (one a person added to bb's own list) serves nothing: pi resolves among its own models only", () => {
+    expect(pi("my-model", [...unrouted("my-model"), ...PI])).toEqual(held("not-found"));
+    // And a row whose id does not begin with its provider is not one of pi's models either.
+    expect(pi("odd", [{ id: "odd", provider: "openai" }])).toEqual(held("not-found"));
+    expect(pi("openai/", [{ id: "openai/", provider: "openai" }])).toEqual(held("not-found"));
+  });
+  test("a list that names a model twice serves it once", () => {
+    expect(claude("opus", unrouted("opus", "opus"))).toEqual({ kind: "armed", model: "opus" });
+    expect(pi("gpt-6", routed("openai/gpt-6", "openai/gpt-6"))).toEqual({ kind: "armed", model: "gpt-6" });
   });
 });
 
 describe("a harness that was changed", () => {
   test("with no model picked: Required, whatever bb lists", () => {
-    for (const listed of [pi, ready(), loading]) expect(restartModel({ typed: "", harnessChanged: true, listed })).toEqual(held("required"));
+    for (const listed of [ready(PI), ready([]), loading]) expect(restartModel({ typed: "", harnessChanged: true, byProvider: true, listed })).toEqual(held("required"));
   });
   test("with a model: the same rule, on the list of the harness the restart would run on", () => {
-    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: true, listed: pi })).toEqual({ kind: "armed", model: "openai/gpt-6" });
-    expect(restartModel({ typed: "gpt-9", harnessChanged: true, listed: pi })).toEqual(held("not-found"));
-    expect(restartModel({ typed: "gpt-6", harnessChanged: true, listed: loading })).toEqual({ kind: "reading" });
+    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: true, byProvider: true, listed: ready(PI) })).toEqual({ kind: "armed", model: "openai/gpt-6" });
+    expect(restartModel({ typed: "gpt-9", harnessChanged: true, byProvider: true, listed: ready(PI) })).toEqual(held("not-found"));
+    expect(restartModel({ typed: "gpt-6", harnessChanged: true, byProvider: true, listed: loading })).toEqual({ kind: "reading" });
   });
 });
 
 describe("a harness changed to one whose bb provider is not ready (the same harm by another door)", () => {
   test("held whatever the model and the list: no model makes it start", () => {
-    for (const typed of ["", "openai/gpt-6", "gpt-9"]) for (const listed of [pi, ready(), loading]) expect(restartModel({ typed, harnessChanged: true, listed, harnessReady: false }), typed).toEqual(held("harness-not-ready"));
+    for (const typed of ["", "openai/gpt-6", "gpt-9"]) for (const listed of [ready(PI), ready([]), loading]) expect(restartModel({ typed, harnessChanged: true, byProvider: true, listed, harnessReady: false }), typed).toEqual(held("harness-not-ready"));
   });
   test("never for the agent's own harness, left unchanged: it runs on it", () => {
-    expect(restartModel({ typed: "", harnessChanged: false, listed: pi, harnessReady: false })).toEqual({ kind: "armed", model: null });
-    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: false, listed: pi, harnessReady: false })).toEqual({ kind: "armed", model: "openai/gpt-6" });
+    expect(restartModel({ typed: "", harnessChanged: false, byProvider: true, listed: ready(PI), harnessReady: false })).toEqual({ kind: "armed", model: null });
+    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: false, byProvider: true, listed: ready(PI), harnessReady: false })).toEqual({ kind: "armed", model: "openai/gpt-6" });
   });
   test("a changed harness bb says nothing against goes by the model's rule", () => {
-    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: true, listed: pi, harnessReady: true })).toEqual({ kind: "armed", model: "openai/gpt-6" });
-    expect(restartModel({ typed: "", harnessChanged: true, listed: pi, harnessReady: true })).toEqual(held("required"));
+    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: true, byProvider: true, listed: ready(PI), harnessReady: true })).toEqual({ kind: "armed", model: "openai/gpt-6" });
+    expect(restartModel({ typed: "", harnessChanged: true, byProvider: true, listed: ready(PI), harnessReady: true })).toEqual(held("required"));
   });
 });
 
-test("which listed ids serve an id: whole, or a bare id under a provider; in the list's order, each once", () => {
-  expect(serving("gpt-6", ["openai/gpt-6", "x", "openrouter/openai/gpt-6", "openai/gpt-6"])).toEqual(["openai/gpt-6", "openrouter/openai/gpt-6"]);
-  expect(serving("openai/gpt-6", ["openai/gpt-6", "openrouter/openai/gpt-6"])).toEqual(["openai/gpt-6"]);
-  expect(serving("", ["a/", "b"])).toEqual([]);
+test("which listed models serve an id: the one listed under it, else those whose bare id it is; in the list's order, each once", () => {
+  expect(serving("gpt-6", routed("openai/gpt-6", "x/y", "openrouter/gpt-6", "openai/gpt-6"), true)).toEqual(["openai/gpt-6", "openrouter/gpt-6"]);
+  expect(serving("openai/gpt-6", routed("openai/gpt-6", "openrouter/openai/gpt-6"), true)).toEqual(["openai/gpt-6"]);
+  expect(serving("", routed("a/b"), true)).toEqual([]);
+});
+
+// The rule this must never be looser than: the bb session provider's own check of a pi model
+// (pi-model.mjs `piModelVerdict`: an id that is exactly one model's `<provider>/<id>` is that
+// model; otherwise the one model with that bare id; two or more is refused, none is refused).
+// Restated here in its own words, since the plugin does not import the provider: where it REFUSES,
+// the Restart dialog must HOLD. (Where it cannot check, the launch goes on and bb judges at the
+// thread's start: the dialog holds those too: it arms only what the list shows.)
+describe("never armed where the provider's check would refuse", () => {
+  const provider = (model: string, list: { id: string; routeProviderId?: string }[]): "ok" | "refused" => {
+    const rows = list.filter((row) => row.routeProviderId !== undefined).map((row) => ({ id: row.id, bare: row.id.slice(`${row.routeProviderId}/`.length) }));
+    if (rows.some((row) => row.id === model)) return "ok";
+    return rows.filter((row) => row.bare === model).length === 1 ? "ok" : "refused";
+  };
+  const lists: { id: string; routeProviderId?: string }[][] = [
+    [{ id: "openrouter/openai/gpt-6", routeProviderId: "openrouter" }, { id: "anthropic/claude-haiku-5", routeProviderId: "anthropic" }],
+    [{ id: "openai/gpt-6", routeProviderId: "openai" }, { id: "openrouter/openai/gpt-6", routeProviderId: "openrouter" }],
+    [{ id: "my-model" }, { id: "mock/echo", routeProviderId: "mock" }],
+    [{ id: "anthropic/claude-opus-5-5", routeProviderId: "anthropic" }, { id: "openrouter/claude-opus-5-5", routeProviderId: "openrouter" }],
+    [],
+  ];
+  const typed = ["gpt-6", "openai/gpt-6", "openrouter/openai/gpt-6", "my-model", "echo", "mock/echo", "claude-opus-5-5", "claude-haiku-5", "haiku-5", "nosuchmodel", "openrouter", "openai"];
+  test.each(lists.map((list, index) => [index, list] as const))("list %i", (_, list) => {
+    for (const model of typed) {
+      const here = restartModel({ typed: model, harnessChanged: false, byProvider: true, listed: ready(list.map((row) => ({ id: row.id, provider: row.routeProviderId ?? null }))) });
+      // The same answer, both ways: armed exactly where the provider passes it.
+      expect(here.kind === "armed" ? "ok" : "refused", `${model} in ${JSON.stringify(list.map((row) => row.id))}`).toBe(provider(model, list));
+    }
+  });
+  test("the three a review ran against the provider's own file", () => {
+    // A bare id that a listed id merely ENDS in: pi has no such model.
+    expect(pi("gpt-6", routed("openrouter/openai/gpt-6", "anthropic/claude-haiku-5"))).toEqual(held("not-found"));
+    // One provider's bare id, though another's id ends in it: that one model.
+    expect(pi("gpt-6", routed("openai/gpt-6", "openrouter/openai/gpt-6"))).toEqual({ kind: "armed", model: "gpt-6" });
+    // A bare id that holds a slash.
+    expect(pi("openai/gpt-6", routed("openrouter/openai/gpt-6"))).toEqual({ kind: "armed", model: "openai/gpt-6" });
+  });
 });

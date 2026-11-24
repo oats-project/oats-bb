@@ -177,10 +177,20 @@ many, and the remedy. Remove old archived threads of that project in bb: for eac
 > restore-environment <id>`, which bb's own refusal names), and send it a message. And
 > where the retire **archived only** (the cases under "Retires"), Unarchive and a
 > message are enough. A session revived that way runs with NO OATS around it: no status
-> row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not
-> released (a team leave waiting for its controller, a retained seat, an alias held), it
-> can send mail as the retired agent. Retire bb agents the ordinary way, which removes
-> the home: then nothing can start.
+> row, no hooks OATS runs for it, no stop by OATS. Retire bb agents the ordinary way,
+> which removes the home: then nothing can start.
+>
+> **Whether such a session can send mail as the retired agent** depends on the oats.aweb
+> that retired the home:
+> - **oats.aweb 1.49.0 or later:** not through `aw`'s ordinary lookup. A retire whose
+>   answer exits 0 removes the home's aweb keys, and one that fails holds them aside for
+>   the retry (`aw` then answers "not initialized"). That too is a step in the way, not
+>   a boundary: held keys stay in the home's `.oats-aweb/held/`, readable by the
+>   session's own user, and a retire that crashed leaves them in place (oats.aweb's
+>   README, "What retire does with the key material").
+> - **An older oats.aweb:** the home keeps its keys. Where its aweb identity was not
+>   released (a team leave waiting for its controller, a retained seat, an alias held), a
+>   revived session can send mail as the retired agent.
 
 bb has no "stopped" status: a stopped thread reads `idle`, like one that finished its
 turn. The kernel records its own stop and answers "stopped" itself, and the provider's

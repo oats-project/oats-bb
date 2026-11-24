@@ -56,7 +56,7 @@ describe("a harness's model suggestions", () => {
   it("are bb's own list for that harness's bb provider, on the machine that holds the deployment, asked without a project", async () => {
     const { read, asked } = probe("pi", {}, () => ({ modelLoadError: null, models: [bbModel("anthropic/claude-sonnet-5", "Claude Sonnet 5"), bbModel("openai/o3")] }));
     await waitFor(() => expect(read().models.status).toBe("ready"));
-    expect(read().models).toEqual({ status: "ready", models: [{ id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5 · anthropic/claude-sonnet-5" }, { id: "openai/o3", label: "openai/o3" }], note: null });
+    expect(read().models).toEqual({ status: "ready", models: [{ id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5 · anthropic/claude-sonnet-5", provider: null }, { id: "openai/o3", label: "openai/o3", provider: null }], note: null });
     expect(asked).toEqual([{ hostId: "host_falcon", providerId: "pi", preferCached: true }]);
     expect(asked.every((args) => !("projectId" in args))).toBe(true);
   });
@@ -90,7 +90,13 @@ describe("a harness's model suggestions", () => {
   });
 
   it("bb's answer as suggestions: each model once, none that could be read as an option, nothing from a shape that is not the list", () => {
-    expect(modelOptions({ models: [bbModel("a"), bbModel("a", "Again"), bbModel("--model"), bbModel(""), { displayName: "no id" }, null, bbModel("b", "B")] })).toEqual([{ id: "a", label: "a" }, { id: "b", label: "B · b" }]);
+    expect(modelOptions({ models: [bbModel("a"), bbModel("a", "Again"), bbModel("--model"), bbModel(""), { displayName: "no id" }, null, bbModel("b", "B")] })).toEqual([{ id: "a", label: "a", provider: null }, { id: "b", label: "B · b", provider: null }]);
+    // Each model carries the provider bb routes it by, where bb names one (pi's `<provider>/<id>`).
+    expect(modelOptions({ models: [{ model: "openrouter/openai/gpt-6", displayName: "GPT 6", routeProviderId: "openrouter" }, { model: "mine", routeProviderId: "" }, { model: "odd", routeProviderId: 7 }] })).toEqual([
+      { id: "openrouter/openai/gpt-6", label: "GPT 6 · openrouter/openai/gpt-6", provider: "openrouter" },
+      { id: "mine", label: "mine", provider: null },
+      { id: "odd", label: "odd", provider: null },
+    ]);
     expect(modelOptions(null)).toEqual([]);
     expect(modelOptions({ models: "x" })).toEqual([]);
   });

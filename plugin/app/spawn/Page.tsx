@@ -15,15 +15,17 @@
 //     did not, never a second.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
+import { useBbNavigate, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import { isUnconfirmed } from "../../contract/shared";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
-import { bbDefaultModel, harnessLabel, PREVIEW_FOOT, spawnProblem } from "../../model/spawn";
+import { bbDefaultModel, harnessLabel, modelCheck, MODEL_HELD, PREVIEW_FOOT, spawnProblem, withoutDefault } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
 import { newKey } from "../keys";
+import { openAgentPage } from "../home/agent-tab";
 import { useOats } from "../oats";
+import { startOutcome } from "../outside/threads";
 import { HELD_REASON, RosterNotice } from "../roster/unreadable";
 import { errorMessage, onWindowReset, useRead } from "../store";
 import type { Contract, Result as Answer } from "../store";
@@ -32,7 +34,7 @@ import { Button, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading,
 import { refusalCode, refusalLines, shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { Choice } from "./Choice";
-import { MODEL_DEFAULT, resolvedLabel, SOUL_DEFAULT, useHarnesses, useHarnessStates, useModelSuggestions } from "./models";
+import { BB_PROVIDER, MODEL_DEFAULT, resolvedLabel, SOUL_DEFAULT, useHarnesses, useHarnessStates, useModelSuggestions } from "./models";
 import * as W from "./words";
 
 type Soul = Answer<"souls">["souls"][number];
@@ -95,7 +97,9 @@ function useFlight(): { soul: string } | null {
   return flight;
 }
 
-type Preview = { key: string; facts: SpawnFacts; revision: string };
+/** How long Spawn waits for bb's list of models before it goes without it (the wait a thread's start is given too). */
+const MODELS_WAIT_MS = 10_000;
+type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
 type Refused = { key: string; problem: SpawnProblem };
 
 /** A part of a line through the display filter, with the blank it leads or ends with kept: the parts are read as one line. */
@@ -231,6 +235,7 @@ function Created({ facts, machine }: { facts: SpawnFacts; machine: string | null
 export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const rpc = useRpc<Contract>();
   const navigate = useBbNavigate();
+  const sdk = useSdk();
   const oats = useOats();
   const souls = useRead("souls");
   const harnesses = useHarnesses();
@@ -304,7 +309,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           (answer) => {
             // An answer for values that are no longer on screen is dropped, never drawn under the new ones.
             if (serial.current !== ticket) return;
-            setSettled({ key, facts: answer.facts, revision: answer.revision });
+            setSettled({ key, input: asked.input!, facts: answer.facts, revision: answer.revision });
             setRefused(null);
             setReading(false);
           },
@@ -325,10 +330,65 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // What the kernel resolved, through the display filter like every text of the kernel's: a model is a soul's own text.
   const kernelResolved = preview?.facts.resolved ?? null;
   const resolved = kernelResolved === null ? null : { harness: shown(kernelResolved.harness) || null, model: shown(kernelResolved.model) || null };
-  const effectiveHarness = harness !== "" ? harness : (resolved?.harness ?? null);
+  // The answer the model is read on: the kernel's for the values on screen, and, while another field's change is
+  // read, the last one if it was for this soul, harness and model: the harness whose list bb gives, the mark and the
+  // column stay as they are until the new answer lands.
+  const modelAnswer = preview ?? (settled !== null && input !== null && settled.input.soul === input.soul && settled.input.harness === input.harness && settled.input.model === input.model ? settled : null);
+  const effectiveHarness = harness !== "" ? harness : shown(modelAnswer?.facts.resolved?.harness ?? "") || null;
   const suggestions = useModelSuggestions(effectiveHarness);
-  // The kernel resolved a harness and no model for it, and none is chosen: bb will start it on bb's own default.
-  const unsetModel = model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
+  // The soul's own harness: what the kernel resolves for this soul with no harness chosen. It is kept from the
+  // preview with none chosen; where none was asked for this soul (a harness picked before the soul, or kept while
+  // the soul changes), it is asked once, so that the same values hold or arm Spawn whatever the order of the clicks.
+  const [own, setOwn] = useState<{ soul: string; harness: string | null } | null>(null);
+  useEffect(() => {
+    if (kernelResolved !== null && harness === "" && soul !== "") setOwn({ soul, harness: kernelResolved.harness });
+  }, [kernelResolved, harness, soul]);
+  const ownKnown = own !== null && own.soul === soul;
+  // An ask the kernel refused is not an answer: it is asked again when the form's values change, or with Retry.
+  const ownTry = `${key}\n${again}`;
+  const [ownFailed, setOwnFailed] = useState<string | null>(null);
+  const ownTryNow = useRef(ownTry);
+  ownTryNow.current = ownTry;
+  const ownAsked = input !== null && !held && harness !== "" && harnesses.choice && !ownKnown && ownFailed !== ownTry;
+  useEffect(() => {
+    if (!ownAsked) return;
+    let current = true;
+    rpc.call("spawnPlan", { soul, task: "" }).then(
+      (answer) => {
+        if (current) setOwn({ soul, harness: answer.facts.resolved?.harness ?? null });
+      },
+      // The kernel did not answer for this soul on its own: its harness stays unknown, and a chosen one is held for a model.
+      () => {
+        if (current) setOwnFailed(ownTryNow.current);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [rpc, ownAsked, soul]);
+  const soulHarness = ownKnown ? own.harness : null;
+  // Whether a spawn may go with the model it would send (model/spawn.ts `modelCheck`): a model is required for a
+  // harness the person chose that is not the soul's own, and a bare id that several of bb's listed models serve needs
+  // its provider picked. That no listed model serves it is the provider's to judge, at the launch.
+  // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
+  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models : null, byProvider: effectiveHarness !== null && BB_PROVIDER[effectiveHarness] === "pi" });
+  // The "Required" mark waits for the soul's own harness to be known: until then Spawn is off as for any read.
+  const modelMark = ownAsked && modelHeld.held === MODEL_HELD.required ? null : modelHeld.held;
+  // bb's list for the harness is being read: until it answers, whether bb serves the model is not known.
+  // A list bb has not given after MODELS_WAIT_MS reads as not read: Spawn goes on the kernel's answer, as where bb
+  // gives no list, and the rule is read on the list if it answers later. A call of bb's that never settles does not
+  // hold the form.
+  const listLoading = suggestions.status === "loading";
+  const [listLate, setListLate] = useState(false);
+  useEffect(() => {
+    setListLate(false);
+    if (!listLoading) return;
+    const timer = setTimeout(() => setListLate(true), MODELS_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [listLoading, effectiveHarness]);
+  const modelsReading = listLoading && !listLate;
+  // The kernel resolved a harness and no model for it, and none is chosen: for the soul's own harness bb will start it on bb's own default.
+  const unsetModel = modelHeld.held !== MODEL_HELD.required && model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
   // What bb says of the harness this spawn would run on, when bb cannot run it here: said under the field, before any press.
   const notReady = harnessState(effectiveHarness);
 
@@ -339,6 +399,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const [phase, setPhase] = useState<"idle" | "spawning" | "created" | "unknown" | "incomplete">("idle");
   const [failure, setFailure] = useState<SpawnProblem | null>(null);
   const [made, setMade] = useState<{ instance: string; threadId: string } | null>(null);
+  /** The agent was made and its thread FAILED AT ITS START in bb: bb's own reason (app/outside/threads.ts). Never "Created" of it. */
+  const [unstarted, setUnstarted] = useState<{ instance: string; threadId: string; reason: string } | null>(null);
   /** The spawn that was pressed: the values and the decision the person saw, and the key that makes it one spawn however often it is asked. */
   const intent = useRef<{ input: Input; revision: string; key: string } | null>(null);
   /** The key of the last press, by its values and its decision: the same ones pressed again are the same spawn to the kernel, which answers it once. */
@@ -361,17 +423,31 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
       .then(() => rpc.call("spawn", { ...asked.input, key: asked.key, revision: asked.revision }))
       .then(
         (answer) => {
-          setFlight(null);
           intent.current = null;
-          // Said where the person will be: in bb's own toaster, which stays when the thread opens, and
-          // reaches a person who left the form meanwhile, with the way to the agent.
-          const created = agentName(answer.instance);
-          notify({ tone: "done", title: W.createdNotice(created), open: { label: W.openAgent(created), run: () => navigate.toThread(answer.threadId) } });
-          if (!alive.current) return;
-          // Created: the form stays held, says so, and opens the agent's thread.
-          setMade(answer);
-          setPhase("created");
-          navigate.toThread(answer.threadId);
+          // The kernel says "launched" before the thread has started in bb: "Created" is said once
+          // bb's own status of the thread is past its start (or after 10 s), the form busy meanwhile.
+          // A thread that FAILED AT ITS START is never called created.
+          return startOutcome(sdk, answer.threadId).then((failed) => {
+            setFlight(null);
+            const created = agentName(answer.instance);
+            if (failed !== null) {
+              const open = () => void (openAgentPage(navigate, answer.instance) || navigate.toThread(answer.threadId));
+              // The person left the form: told where they are, and it stays until dismissed (a failure's notification does).
+              if (!alive.current) return notify({ tone: "failed", title: W.didNotStart(created), open: { label: W.OPEN, run: open } });
+              // An instance exists: the form stays held, so that no second one is made from it.
+              setUnstarted({ ...answer, reason: failed.detail ?? failed.message });
+              setPhase("incomplete");
+              return;
+            }
+            // Said where the person will be: in bb's own toaster, which stays when the thread opens, and
+            // reaches a person who left the form meanwhile, with the way to the agent.
+            notify({ tone: "done", title: W.createdNotice(created), open: { label: W.openAgent(created), run: () => navigate.toThread(answer.threadId) } });
+            if (!alive.current) return;
+            // Created: the form stays held, says so, and opens the agent's thread.
+            setMade(answer);
+            setPhase("created");
+            navigate.toThread(answer.threadId);
+          });
         },
         (cause: unknown) => {
           setFlight(null);
@@ -403,7 +479,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           }
         },
       );
-  }, [rpc, navigate]);
+  }, [rpc, navigate, sdk]);
 
   // A refusal about the values that were on screen goes when they change.
   // Only while the form can be changed: held, the values can vanish for a moment (the roster being read again) without anyone changing them.
@@ -429,9 +505,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               ? nameRefusal !== null
                 ? W.OFF.name
                 : W.OFF.refused
-              : preview === null
+              : preview === null || modelsReading || ownAsked
                 ? W.READING
-                : null;
+                : modelMark; // the Model field's own words: it is marked with them too
   const canSpawn = phase === "idle" && reason === null && preview !== null && input !== null;
   const press = () => {
     if (phase === "unknown") {
@@ -469,6 +545,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
 
   // ---- drawing ----
   const title = chosen === undefined ? W.TITLE : W.titleFor(shown(chosen.name), oats.phase === "ready" ? shown(oats.deployment.workspace) : null);
+  // A model is required of the person: the column promises no default for the harness.
+  const heldHarness = modelHeld.held === MODEL_HELD.required ? (modelAnswer?.facts.resolved?.harness ?? null) : null;
+  const withoutModelDefault = (facts: SpawnFacts): SpawnFacts => (heldHarness === null ? facts : { ...facts, facts: withoutDefault(facts.facts, heldHarness) });
   let column: ReactNode;
   if (chosen === undefined) column = <p className="text-sm text-muted-foreground">{W.COLUMN_NO_SOUL}</p>;
   // Held: only the facts of the values on screen stay; those of other values are not drawn as theirs.
@@ -480,9 +559,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
       </Notice>
     );
   else if (off !== null || nameRefusal !== null) column = <p className="text-sm text-muted-foreground">{W.COLUMN_FIX_FIRST}</p>;
-  else if (preview !== null) column = <Created facts={preview.facts} machine={machine} />;
+  else if (preview !== null) column = <Created facts={withoutModelDefault(preview.facts)} machine={machine} />;
   // Until the values on screen are answered for, the last facts stay, marked as being read again.
-  else if (settled !== null) column = <Created facts={settled.facts} machine={machine} />;
+  else if (settled !== null) column = <Created facts={modelAnswer === settled ? withoutModelDefault(settled.facts) : settled.facts} machine={machine} />;
   else column = <Loading>{W.READING}</Loading>;
   // Marked whenever something stays in the column while it is read again: the last facts, or a refusal after Retry.
   const updating = reading && chosen !== undefined && !held && (settled !== null || refusal !== null);
@@ -572,6 +651,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             )}
             <Field
               label={W.MODEL_LABEL}
+              error={modelAnswer === null ? null : modelMark}
               hint={
                 unsetModel === null && suggestions.note === null ? null : (
                   <>
@@ -588,8 +668,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 placeholder={MODEL_DEFAULT}
                 filterLabel={W.FILTER_MODELS}
                 options={[
-                  { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined) },
-                  ...suggestions.models.map((option) => ({ id: option.id, label: shown(option.label) })),
+                  // (Required of the person: the first entry promises nothing, "Default" alone.)
+                  { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null && modelHeld.held !== MODEL_HELD.required ? resolved.model : undefined) },
+                  // The ids that serve a bare model more than once are the ones offered: one of them is what to pick.
+                  ...suggestions.models.filter((option) => modelHeld.held !== MODEL_HELD.ambiguous || modelHeld.offers.includes(option.id)).map((option) => ({ id: option.id, label: shown(option.label) })),
                   // A model picked before the harness changed stays what is sent, and is said.
                   ...(modelPick !== "" && modelPick !== CUSTOM && !suggestions.models.some((option) => option.id === modelPick) ? [{ id: modelPick, label: shown(modelPick) }] : []),
                   { id: CUSTOM, label: W.MODEL_CUSTOM, detail: W.MODEL_CUSTOM_PLACEHOLDER },
@@ -672,6 +754,21 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 <p>{W.OPENING}</p>
               </Result>
             ) : null}
+            {unstarted === null ? null : (
+              <Result
+                title={W.didNotStart(agentName(unstarted.instance))}
+                tone="failed"
+                actions={
+                  <Button data-testid="oats-spawn-open" onClick={() => void (openAgentPage(navigate, unstarted.instance) || navigate.toThread(unstarted.threadId))}>
+                    {W.OPEN}
+                  </Button>
+                }
+              >
+                <Disclosure summary="Details" testId="oats-spawn-start-details">
+                  <p className="text-xs text-muted-foreground">{shown(unstarted.reason)}</p>
+                </Disclosure>
+              </Result>
+            )}
             {failure === null ? null : (
               <Result title={W.FAILURE_TITLE[failure.outcome]} tone={failure.outcome === "refused" || failure.outcome === "unconfirmed" ? "failed" : "unknown"} code={failure.code}>
                 <p>{failure.sentence}</p>
@@ -691,22 +788,26 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               <Button data-testid="oats-spawn-cancel" onClick={cancel} disabled={phase === "spawning"}>
                 {phase === "created" || phase === "incomplete" ? W.CLOSE : W.CANCEL}
               </Button>
-              <Button
-                variant="primary"
-                data-testid="oats-spawn-submit"
-                aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`}
-                aria-busy={phase === "spawning"}
-                disabled={!(canSpawn || (phase === "unknown" && !held))}
-                onClick={press}
-              >
-                {spawnWord}
-              </Button>
+              {/* A thread that failed at its start: the result has its title, Details, Open and Close, and nothing
+                  that is off. The submit is not drawn there (a control that cannot be used and tells nothing new). */}
+              {unstarted !== null ? null : (
+                <Button
+                  variant="primary"
+                  data-testid="oats-spawn-submit"
+                  aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`}
+                  aria-busy={phase === "spawning"}
+                  disabled={!(canSpawn || (phase === "unknown" && !held))}
+                  onClick={press}
+                >
+                  {spawnWord}
+                </Button>
+              )}
               {phase === "idle" || phase === "unknown" ? (
                 <kbd data-testid="oats-spawn-key" aria-hidden="true" className="rounded border border-border px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
                   {mac ? "⌘ Enter" : "Ctrl+Enter"}
                 </kbd>
               ) : null}
-              {reason === null ? null : <DisabledReason>{reason}</DisabledReason>}
+              {reason === null || unstarted !== null ? null : <DisabledReason>{reason}</DisabledReason>}
             </div>
             {/* What a person waits on, announced once: the read, the spawn. */}
             <span role="status" data-testid="oats-spawn-status" className="sr-only">

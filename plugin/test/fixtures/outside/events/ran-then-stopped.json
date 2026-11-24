@@ -1,0 +1,16 @@
+[
+ {
+  "id": "evt_kehfy94hp3",
+  "scope": {
+   "kind": "turn",
+   "turnId": "daaeb96786-t1"
+  },
+  "threadId": "thr_95ttzahpyq",
+  "seq": 11,
+  "createdAt": 1795462216741,
+  "type": "turn/started",
+  "data": {
+   "providerThreadId": "pi_a4b56859-cdcc-4a96-a552-29e0069ebb1c"
+  }
+ }
+]

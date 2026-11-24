@@ -469,10 +469,10 @@ const second = [
       check(/^activity load$/i.test(before), `${at} the activity is not read until asked: its heading and Load`, before);
       await page.evaluate(click(inPanel("oats-panel-activity-load")));
       const summary = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))}`, 30);
-      check(/^Waiting claim · (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d$/.test(summary ?? ""), `${at} Load reads it: the newest row's kind and its instant in the plugin's one form; nothing of what the agent waits for (the header says that)`, summary);
+      check(/^Last: Waiting claim · (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d$/.test(summary ?? ""), `${at} Load reads it: "Last:", the newest row's kind and its instant in the plugin's one form; nothing of what the agent waits for (the header says that)`, summary);
       {
         const read = await page.until(`(() => { const face = ${textOf(inPanel("oats-panel-activity"))}; return /Refresh$/.test(face) && document.querySelector(${JSON.stringify(inPanel("oats-panel-activity-status"))}) === null ? face : ""; })()`, 15);
-        check(/^activity Waiting claim · .+ ▸ ?Events Refresh$/i.test(read ?? ""), `${at} and the block is then its heading, the newest event, the fold "Events" and Refresh: no line says that it was loaded`, read ?? (await page.evaluate(textOf(inPanel("oats-panel-activity")))));
+        check(/^activity Last: Waiting claim · .+ ▸ ?Events Refresh$/i.test(read ?? ""), `${at} and the block is then its heading, the newest event, the fold "Events" and Refresh: no line says that it was loaded`, read ?? (await page.evaluate(textOf(inPanel("oats-panel-activity")))));
       }
       const rows = ["What OATS recorded about this agent, newest first. It is history, not what the agent does now.", "8 displayed / 8 observed rows. This is address history, not current runtime state.", "Spawned", "Work mode worktree", "Reading this starts nothing and allows nothing."];
       const list = await reads(page, inPanel("oats-panel-activity-list"), rows);

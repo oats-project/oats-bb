@@ -328,7 +328,7 @@ its meaning now. A row above that was shortened says its new words there, and ke
 | "Runs in tmux on <machine>. Attach from a terminal:" | over the attach command | "Attach:" |
 | "Messaging & Teams" | a heading over one fact | the fact stands under Lineage |
 | "Instance readiness" / "Soul readiness"; "Ready — every required check passes or is not applicable."; "Refresh readiness"; "Readiness updated" | the readiness block | "Readiness"; "Ready"; "Refresh"; nothing |
-| "Reported lifecycle activity"; "Load activity" / "Refresh activity"; "Last recorded: Stopped · 18:23"; "Recent lifecycle events"; "No recorded lifecycle events in this observed window." | the activity block | "Activity"; "Load" / "Refresh"; "Stopped · 18:23"; "Events"; "No events" |
+| "Reported lifecycle activity"; "Load activity" / "Refresh activity"; "Last recorded: Stopped · 18:23"; "Recent lifecycle events"; "No recorded lifecycle events in this observed window." | the activity block | "Activity"; "Load" / "Refresh"; "Last: Stopped · 18:23" (one word that says it is the past: without it "Waiting claim · Nov 21" read as the state of a stopped agent; the lead's L12, 24 Nov 2026); "Events"; "No events" |
 | "Reported observation loaded. Runtime state is shown separately." / "Last observation retained; refresh required." | beside the activity's button | nothing: what was read stands there |
 | "OATS knows more than one agent by this name here, so it cannot say which one this is." | a refused read | "OATS knows more than one agent by this name." |
 | "It may have been retired: the sidebar lists the agents OATS has." and the other sentences of what to do next | on the face of a refusal's notice | under the notice's Details |

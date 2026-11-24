@@ -81,8 +81,8 @@ describe("the recorded activity's words", () => {
     expect(windowLine(events)).toBe("8 displayed / 8 observed rows. This is address history, not current runtime state.");
     expect(windowLine({ returned: 100, count: 250, truncated: true })).toBe("100 displayed / 250 observed rows · truncated. This is address history, not current runtime state.");
     expect(sourcesLine(events)).toMatch(/^home: ok \(\d+ bytes reported\) · workspace: ok \(\d+ bytes reported\)$/);
-    // The last event alone: what the agent waits for is said by the panel's header, from the roster as it is now.
-    expect(activitySummary(events, NOW)).toBe(`Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
+    // The last event alone, said as the past ("Last:"): what the agent waits for is said by the panel's header, from the roster as it is now.
+    expect(activitySummary(events, NOW)).toBe(`Last: Waiting claim · ${whenText("2026-11-21T18:23:39.829Z", NOW)}`);
     expect(activitySummary({ ...events, events: [], waitingOnYou: null }, NOW)).toBe("No events");
   });
   it("says when the evidence is not whole", () => {

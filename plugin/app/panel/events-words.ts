@@ -17,6 +17,8 @@ export const HISTORY_PLAIN = "What OATS recorded about this agent, newest first.
 export const PROVENANCE_PLAIN = "Reading this starts nothing and allows nothing.";
 export const RECENT = "Events";
 export const NO_EVENTS = "No events";
+/** Before the newest recorded event, on the activity's one line: it is the last thing recorded, not what the agent does now. */
+export const LAST = "Last:";
 
 const TITLES: Record<string, string> = {
   spawned: "Spawned", launched: "Launched", restarted: "Restarted", stopped: "Stopped", "stop-refused": "Stop refused", "retire-planned": "Retirement planned", retired: "Retired",
@@ -74,8 +76,10 @@ export const sourcesLine = (events: Pick<PanelEvents, "integrity">): string => e
  */
 export function summaryLine(events: PanelEvents, now: number): string {
   const last = events.events[events.events.length - 1];
-  // What it is, in words: the newest row of the record, not what the agent does now. Which incarnation it is of is the row's to say.
-  return last === undefined ? NO_EVENTS : `${eventTitle(last.kind)} · ${whenText(last.at, now)}`;
+  // What it is, in words: the newest row of the record, not what the agent does now: "Last:" says that it is
+  // the past ("Waiting claim · Nov 21" alone read as the state of an agent that is stopped: the lead's L12, 24 Nov 2026).
+  // Which incarnation it is of is the row's to say.
+  return last === undefined ? NO_EVENTS : `${LAST} ${eventTitle(last.kind)} · ${whenText(last.at, now)}`;
 }
 
 // ---- what a blocked launch's screen differed in

@@ -772,7 +772,7 @@ test("while bb is still reading the settings no page is known to be shown or hid
 
 // One full notice on a screen (the home read's ruling): beside a page that shows the notice over
 // what it keeps, the sidebar says one line, how old the roster is and Retry; alone, it is the notice.
-test("on the last roster read, beside a page that shows the full notice the sidebar says one line: \"Read <age>.\" and Retry", async () => {
+test("on the last roster read, beside a page that shows the full notice the sidebar says one line: \"Read <age>. Acts are off.\" and Retry", async () => {
   const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
   const failed = { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last }) };
   const { slot } = await sidebar(failed);
@@ -786,11 +786,12 @@ test("on the last roster read, beside a page that shows the full notice the side
   const page = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(failed), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(within(page.container).getByTestId("oats-held")).toBeTruthy());
   const line = await waitFor(() => within(slot.container).getByTestId("oats-last-observation"));
-  expect(line.textContent).toBe("Read 2 min ago.Retry");
-  expect(within(slot.container).queryByTestId("oats-held")).toBeNull();
+  // The line says that the acts are off itself: at a phone's width the sidebar is bb's drawer, over the page and its notice.
+  expect(line.textContent).toBe("Read 2 min ago. Acts are off.Retry");
+  expect(within(slot.container).queryByTestId("oats-held")).toBeNull(); // (one line, not the full notice)
   expect(within(slot.container).queryByRole("alert")).toBeNull();
   // With the sidebar's notice down to one line, New agent stays off and still says no reason of its
-  // own, in words or in a title: the page's full notice beside it says why, with "Acts are off.".
+  // own, in words or in a title: the line over it says "Acts are off.", and so does the page's full notice beside it.
   const heldNew = within(slot.container).getByTestId("oats-new-agent") as HTMLButtonElement;
   expect([heldNew.disabled, heldNew.title, heldNew.getAttribute("aria-describedby")]).toEqual([true, "", null]);
   expect(within(slot.container).queryByTestId("oats-new-agent-held")).toBeNull();

@@ -22,7 +22,7 @@ import type { Contract, Result as Answer } from "../store";
 import { RPC_FAILED, useOats } from "../oats";
 import { markGone, planSaysGone } from "../roster/gone";
 import { useNow } from "../roster/now";
-import { noteActed } from "../roster/reading";
+import { noteActed, stateIn } from "../roster/reading";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, Code, Confirm, CopyButton, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
 import type { ConfirmProps } from "../ui";
@@ -262,7 +262,7 @@ function settledPhase(outcome: Outcome, actions: ReactNode): ConfirmProps["phase
   );
   // A result that is not confirmed is neither done nor failed: the pattern draws it as that.
   // (A done result whose title is a warning is drawn in the warning tone, which the pattern has for a result that is not confirmed.)
-  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, actions: next };
+  if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, warns: outcome.warns === true, actions: next };
   return { kind: "failed", title: outcome.title, refusal: outcome.lines.join("\n"), actions: next };
 }
 
@@ -328,8 +328,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const navigate = useBbNavigate();
   const oats = useOats();
   const rosterAt = useRef<string | null>(null);
+  const oatsNow = useRef(oats);
   useEffect(() => {
     rosterAt.current = oats.phase === "ready" ? oats.at : null;
+    oatsNow.current = oats;
   });
   const { verb, instance } = request;
   // When the plan on screen was read, by the window's clock; and the clock (the age is said under Details).
@@ -388,8 +390,11 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     // The roster the window holds as the act is sent: a result that says the agents changed is true of them
     // before that roster is read again, and the places that say their state say "Reading…" until it is (app/roster/reading.tsx).
     const sentAt = rosterAt.current;
+    const acted = plan.action === "stop" ? plan.targets.map((target) => target.instance) : [plan.instance ?? instance];
+    // (And each agent's state in that roster: a roster that reaches the window during the act can still say it.)
+    const was = new Map(acted.map((each) => [each, stateIn(oatsNow.current, each)]));
     const settle = (outcome: Outcome, refusal: Refusal | null) => {
-      if (outcome.tone === "done") noteActed(plan.action === "stop" ? plan.targets.map((target) => target.instance) : [plan.instance ?? instance], sentAt);
+      if (outcome.tone === "done") noteActed(acted, sentAt, was);
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
       // The person moved on (they left the dialog, or another act's took its place): the result reaches them
       // where they are, and what a toast cannot hold is one press away ("Show result").
@@ -619,8 +624,10 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const navigate = useBbNavigate();
   const oats = useOats();
   const rosterAt = useRef<string | null>(null);
+  const oatsNow = useRef(oats);
   useEffect(() => {
     rosterAt.current = oats.phase === "ready" ? oats.at : null;
+    oatsNow.current = oats;
   });
   const { verb, instance } = request;
   const rowThread = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
@@ -711,13 +718,15 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     const { check: checked } = state;
     setChanged(false);
     setState({ phase: "running", check: checked });
-    // (As for a stop: the roster held as the act is sent; app/roster/reading.tsx.)
+    // (As for a stop: the roster held as the act is sent, and for a start the agent's state in it; a restart's
+    // state is the same word before and after, so the roster's stamp alone decides; app/roster/reading.tsx.)
     const sentAt = rosterAt.current;
+    const was = new Map(verb === "start" ? [[checked.instance, stateIn(oatsNow.current, checked.instance)] as const] : []);
     const asked = verb === "start" && resumes ? { instance, resume: true as const } : { instance, ...(onBb && harness !== "" ? { harness } : {}), ...(onBb && typed !== "" ? { model: typed } : {}) };
     rpc.call(verb, asked).then(
       (started) => {
         const outcome = startOutcome(verb, started.instance ?? checked.instance, started);
-        if (outcome.tone === "done") noteActed([checked.instance], sentAt);
+        if (outcome.tone === "done") noteActed([checked.instance], sentAt, was);
         const threadId = started.threadId;
         // A home that is not on bb has no thread to open: its result says where it is.
         const open = threadId === null ? null : { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(threadId) };
@@ -808,7 +817,11 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       // And once the start has an answer, none of it either: a refusal is not read under what it would have done.
       says={known === null || state.phase === "settled" ? [] : startSays(verb, { resumes })}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
-      blocked={held?.reason ?? (onBb && badModel ? START.badModel : null)}
+      // Why Start is off is said ONCE, on the status line under the fields (with Refresh status, or the way to its
+      // thread): the button is off (`held`) with no second copy of the sentence beside it. Beside the button stands
+      // only what the person typed wrong.
+      held={held !== null}
+      blocked={onBb && badModel ? START.badModel : null}
       notice={
         changed ? (
           // A resume the kernel refused because the row changed: said first, as a plan that changed is.
@@ -907,7 +920,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             ))}
           </datalist>
           )}
-          {/* Only where Start is off: why (beside the button too), and the way to read its status again. A start that can run says nothing here. */}
+          {/* Only where Start is off: why, said here and nowhere else in the dialog, and the way to read its status again. A start that can run says nothing here. */}
           {state.phase === "ready" && held !== null ? (
             <p role="status" data-testid="oats-start-status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{held.reason}</span>

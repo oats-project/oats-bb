@@ -282,8 +282,10 @@ test("Stop applies the plan with its revision, a key and its choice; the act in 
   await phase(slot, "done");
   const result = slot.getByTestId("oats-result");
   expect(result.querySelector("h3")!.textContent).toBe("3 sessions stopped.");
-  // The title is the result: no row for a session that stopped. One line more, since bb did not archive the thread: the warning.
+  // The title is the result: no row for a session that stopped. One line more, since bb did not archive the thread: the
+  // warning, in the warning tone as the dialog's one line was; the result itself is done.
   expect(texts(result, "p")).toEqual(["A message in its thread starts it outside OATS."]);
+  expect([result.getAttribute("data-tone"), result.querySelector("p")!.getAttribute("data-tone")]).toEqual(["done", "warning"]);
   await waitFor(() => expect(document.activeElement).toBe(button(slot, "oats-confirm-close"))); // (the focus moves in an effect, after the phase is drawn)
   const made = calls(slot, "stopPlan", "stopApply");
   expect(made.map((call) => call.method)).toEqual(["stopPlan", "stopApply"]);
@@ -768,7 +770,10 @@ test("Start on an agent the kernel says runs is held: the dialog says so and off
   await pick("start");
   await ready(slot);
   expect(button(slot, "oats-confirm-act").disabled).toBe(true);
-  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("This instance is already running.");
+  // Why it is off is said ONCE in the dialog: on the status line, with the way to its thread; never a second time beside the button.
+  expect(slot.getByTestId("oats-start-status").querySelector("span")!.textContent).toBe("This instance is already running.");
+  expect(slot.queryByTestId("oats-confirm-blocked")).toBeNull();
+  expect(slot.getByTestId("oats-confirm").textContent!.split("This instance is already running.")).toHaveLength(2);
   fireEvent.click(within(slot.getByTestId("oats-start-status")).getByText("Open Weekly digest helper"));
   expect(slot.queryByRole("dialog")).toBeNull();
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_digest" }]);
@@ -780,7 +785,8 @@ test("Start on an agent whose state the kernel cannot tell is held until its sta
   const { slot, pick } = await menu("thr_digest", { startCheck: ({ instance }) => (known ? startCheckOf(instance) : startCheckOf(instance, { running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" })) });
   await pick("start");
   await ready(slot);
-  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("Could not verify whether this instance is running. Refresh its status before starting.");
+  expect(slot.getByTestId("oats-start-status").querySelector("span")!.textContent).toBe("Could not verify whether this instance is running. Refresh its status before starting.");
+  expect([button(slot, "oats-confirm-act").disabled, slot.queryByTestId("oats-confirm-blocked")]).toEqual([true, null]); // off, and the reason said once
   known = true;
   fireEvent.click(button(slot, "oats-start-refresh"));
   await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
@@ -1120,7 +1126,9 @@ test("the Start gate is the Desktop's: running is already running; what is not k
     const { slot, pick } = await menu(verb === "start" ? "thr_digest" : "thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance, change) });
     await pick(verb);
     await ready(slot);
-    const reason = slot.queryByTestId("oats-confirm-blocked")?.textContent ?? null;
+    // The gate's reason, in its one place (the status line); the button is off exactly when there is one, with no copy beside it.
+    const reason = slot.queryByTestId("oats-start-status")?.querySelector("span")?.textContent ?? null;
+    expect([button(slot, "oats-confirm-act").disabled, slot.queryByTestId("oats-confirm-blocked")]).toEqual([reason !== null, null]);
     resetApp();
     return reason;
   };
@@ -2336,7 +2344,7 @@ test("a resume left while it runs that the kernel refuses because the session is
 // (test/roster/reading.test.tsx). A result that says nothing changed marks nothing.
 
 test("a result that says the agents stopped marks every agent of the plan, with the roster's stamp from when the act was sent; nothing before the result", async () => {
-  const { actedAt } = await import("../../app/roster/reading");
+  const { actedAt, actedWas } = await import("../../app/roster/reading");
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
   const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held.then(() => stopReceiptOf()) });
@@ -2345,22 +2353,27 @@ test("a result that says the agents stopped marks every agent of the plan, with 
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
   const TARGETS = ["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"];
+  const WAS = ["working", "working", "idle"]; // their states in the sample's roster, as every place says them
   expect(TARGETS.map(actedAt)).toEqual([null, null, null]); // the act runs: nothing is said of its end yet
   release();
   await phase(slot, "done");
   expect(TARGETS.map(actedAt)).toEqual([fixtureSnapshot().at, fixtureSnapshot().at, fixtureSnapshot().at]); // the server's stamp of the roster, never the window's clock
   expect(actedAt("weekly-digest-helper")).toBeNull(); // no agent the plan did not stop
+  // And each agent's state in that roster (a roster that reaches the window during the act can still say it of an agent).
+  expect(TARGETS.map(actedWas).map((was) => was !== null)).toEqual([true, true, true]);
+  expect(TARGETS.map(actedWas)).toEqual(WAS);
 });
 
 test("a start and a retire that are done mark their agent; a refused apply marks nothing", async () => {
   const { actedAt } = await import("../../app/roster/reading");
+  const { actedWas } = await import("../../app/roster/reading");
   const start = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
   await start.pick("start");
   await ready(start.slot);
   expect(actedAt("weekly-digest-helper")).toBeNull();
   fireEvent.click(button(start.slot, "oats-confirm-act"));
   await phase(start.slot, "done");
-  expect(actedAt("weekly-digest-helper")).toBe(fixtureSnapshot().at);
+  expect([actedAt("weekly-digest-helper"), actedWas("weekly-digest-helper")]).toEqual([fixtureSnapshot().at, "stopped"]); // a start keeps the state at the send
   resetApp();
   expect(actedAt("weekly-digest-helper")).toBeNull();
   const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => retireReceiptOf() });

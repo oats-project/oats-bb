@@ -440,7 +440,7 @@ export default [
       // One full notice on a screen: beside the page's notice the sidebar says one line, how old the roster is, and Retry.
       if (viewport.mobile) check(await showSidebar(page, viewport), `${at} the sidebar opens over the home`);
       const oneLine = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); const l = s?.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ line: l.innerText.replace(/\\s+/g, " ").trim(), full: s.querySelector(${JSON.stringify(testId("oats-held"))}) !== null, why: s.querySelector(${JSON.stringify(testId("oats-new-agent-held"))})?.innerText.trim() ?? null, off: s.querySelector(${JSON.stringify(testId("oats-new-agent"))})?.disabled ?? null }) : ""; })()`, 15);
-      check(oneLine !== null && new RegExp(`^\\{"line":"Read ${AGE}\\. Retry","full":false,"why":null,"off":true\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Read <age>." and Retry; New agent stays off, with no reason under it (the page's notice says why)`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(oneLine !== null && new RegExp(`^\\{"line":"Read ${AGE}\\. Acts are off\\. Retry","full":false,"why":null,"off":true\\}$`).test(oneLine), `${at} beside the home's full notice the sidebar says one line: "Read <age>. Acts are off." and Retry; New agent stays off under it, with no reason of its own (in bb's drawer, over the page, the line itself says why)`, oneLine ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // (The home's image, below, holds the sidebar's one line beside the page's notice.)
       // (The home's own controls are measured when the home is rebuilt, in its piece: no size check on this image.)
       await page.shot(`a14-${viewport.name}-home`);
@@ -605,7 +605,7 @@ export default [
       const before = await dialog(page);
       const says = await page.evaluate(saysNow);
       check(before.about === LOST && before.act === "Start" && before.off === false && says === JSON.stringify(["Tries to continue its last conversation; else starts fresh."]) && !/full mode|Claude may|how to load/.test(before.body), `${at} Start… opens the dialog for that agent: its one line says that it tries to continue its last conversation, else starts fresh; nothing of bb's full mode`, JSON.stringify({ before, says }));
-      const dialogGaps = JSON.parse(await page.evaluate(gapsIn(testId("oats-modal"))));
+      const dialogGaps = JSON.parse(await page.evaluate(gapsIn(`${testId("oats-modal")} [role="dialog"]`))); // (the dialog's own box: oats-modal is the screen's veil)
       check(dialogGaps.length === 1 && tight(dialogGaps), `${at} the dialog is as high as what it holds: no gap over ${MAX_GAP} px between two of its lines or at its edges (${dialogGaps[0]?.height} px)`, loose(dialogGaps));
       await page.shot(`tmux-roster-${viewport.name}-lost-start-before`, { targets: true });
       // The press: the kernel's recorded answer to a resume that brought the conversation back (test/fixtures/lifecycle/tmux-start-resume.json,

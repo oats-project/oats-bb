@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { act } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
-import { BOUND_MS, READING, actedAt, beforeAct, noteActed } from "../../app/roster/reading";
+import { BOUND_MS, READING, actedAt, actedWas, beforeAct, fromBefore, noteActed } from "../../app/roster/reading";
 import { fixtureAgents, fixtureSnapshot } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract } from "../helpers/render";
@@ -34,6 +34,28 @@ describe("whether the window's roster is still from before an act (pure: two ros
   });
   test("an act sent over a stamp that is no time stands only while the roster is that very one", () => {
     expect([beforeAct("t", "t"), beforeAct("t", "2026-11-19T12:30:00.000Z")]).toEqual([true, false]);
+  });
+});
+
+// A roster can reach the window DURING an act that takes seconds (a stop of three agents changes the roster at each
+// stop). Its stamp is after the send, and it can still say of an agent what the roster at the send said: the window
+// then still shows the agent as it was before the act (found by the first review round: "Working" stood behind
+// "3 sessions stopped."). So the agent's state at the send is kept too; a restart keeps none (the same word after).
+describe("whether the window still shows an agent as it was before an act (pure: two rosters, no clock)", () => {
+  const SENT = "2026-11-19T12:30:00.000Z";
+  const LATER = "2026-11-19T12:30:02.000Z";
+  test.each<[string, { was: "working" | "stopped" | null }, string | null, "working" | "stopped" | "idle" | null, boolean]>([
+    ["the roster of the send: before, whatever the state", { was: "working" }, SENT, "working", true],
+    ["a later roster that still says what the send's said (it arrived mid-act): before", { was: "working" }, LATER, "working", true],
+    ["a later roster that says another state: read", { was: "working" }, LATER, "stopped", false],
+    ["a later roster with no such agent (retired): read", { was: "working" }, LATER, null, false],
+    ["a start: stopped at the send, still stopped in a later roster: before", { was: "stopped" }, LATER, "stopped", true],
+    ["a start: a later roster says it is idle: read", { was: "stopped" }, LATER, "idle", false],
+    ["no state kept (a restart): the stamp alone decides: a later roster is read", { was: null }, LATER, "working", false],
+    ["no state kept, the roster of the send: before", { was: null }, SENT, "working", true],
+    ["no roster in the window: not before (nothing is left standing on nothing)", { was: "working" }, null, null, false],
+  ])("%s", (_name, acted, rosterAt, now, before) => {
+    expect(fromBefore({ sentAt: SENT, ...acted }, rosterAt, now)).toBe(before);
   });
 });
 
@@ -75,6 +97,23 @@ test("behind a result that says the agent changed, its thread's line says \"Read
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: AT }));
   expect(read().reading).toBe(READING);
   // A roster read after the act: the state is what it says, at once.
+  answer.now = { ...fixtureSnapshot(started(fixtureAgents())), at: LATER };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: LATER }));
+  await vi.waitFor(() => expect(read().reading).toBeNull());
+  expect(read().state).not.toBe("Stopped");
+});
+
+test("a roster that reaches the window during the act and still says what the send's said does not end \"Reading…\": the roster that says another state does", async () => {
+  const { slot, answer, read } = await line("thr_digest");
+  // The result of a start: the agent was stopped in the roster held at the send.
+  act(() => noteActed([DIGEST], AT, new Map([[DIGEST, "stopped"]])));
+  expect([read().reading, actedWas(DIGEST)]).toEqual([READING, "stopped"]);
+  // A roster stamped AFTER the send, in which the agent is still stopped (another agent's change, or one of the act's own steps).
+  answer.now = { ...fixtureSnapshot(fixtureAgents()), at: "2026-11-19T12:30:02.000Z" };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: answer.now.at }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(read()).toMatchObject({ reading: READING, state: null, acts: [["Start…", true]] }); // never "Stopped" behind "… started."
+  // The roster that says it runs: the state is what it says.
   answer.now = { ...fixtureSnapshot(started(fixtureAgents())), at: LATER };
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: LATER }));
   await vi.waitFor(() => expect(read().reading).toBeNull());

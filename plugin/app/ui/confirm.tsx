@@ -59,7 +59,7 @@ export type ConfirmProps = {
      * lost): neither done nor failed, drawn as such, with the next step ("Check again") in
      * `actions`. `code` is the kernel's or the plugin's code, after the words.
      */
-    | { kind: "done"; tone?: "done" | "unknown"; title: string; lines?: readonly string[]; code?: string | null; actions?: ReactNode }
+    | { kind: "done"; tone?: "done" | "unknown"; title: string; lines?: readonly string[]; /** the first line is a warning: drawn in the warning tone, as the dialog's one line is (`saysWarns`) */ warns?: boolean; code?: string | null; actions?: ReactNode }
     /** A refusal or a failure: a person's words (`title`, `refusal`), then the kernel's code (`code`, or leading `refusal`), and the next step. */
     | { kind: "failed"; title: string; refusal: string; code?: string | null; actions?: ReactNode };
   onConfirm: () => void;
@@ -179,7 +179,9 @@ export function Confirm({ title, about, shownFor, says = [], saysWarns = false, 
         {phase.kind === "done" ? (
           <Result title={phase.title} tone={phase.tone ?? "done"} code={phase.code} actions={phase.actions}>
             {(phase.lines ?? []).map((line, index) => (
-              <p key={index}>{shown(line)}</p>
+              <p key={index} {...(index === 0 && phase.warns === true ? { "data-tone": "warning", className: "font-semibold text-warning-text" } : {})}>
+                {shown(line)}
+              </p>
             ))}
           </Result>
         ) : null}

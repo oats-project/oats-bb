@@ -1,7 +1,8 @@
 // The OATS home: what needs you, and what you have, on one screen. As the OATS Desktop's Home
-// (packages/desktop/renderer/views/home.mjs): the agents that wait on the person, a summary line,
-// the workspace's tiles, the agents at work, and Home › Agents, every agent OATS has. A full page
-// (navPanel `home`, the phone's page and the target of "N need you") and, on desktop, the same view
+// (packages/desktop/renderer/views/home.mjs): the agents that wait on the person, the tiles of the
+// pages that are shown, the agents at work, and Home › Agents, every agent OATS has, with the one
+// count line (reached by its address alone). A full page
+// (navPanel `home`, the phone's page, where bb's badge on the plugin's entry leads) and, on desktop, the same view
 // in a thread's fixed tab. Drawn with the patterns of app/ui.tsx.
 //
 // Answering is the person's act through bb's SDK: a choice bb offers, or a message sent as the
@@ -730,7 +731,7 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
 /** The sub-path of Home › Agents on the home's page. */
 const AGENTS = "agents";
 
-/** The full page: the phone's home, and where "N need you" leads. `/plugins/oats/home/agents` is Home › Agents. */
+/** The full page: the phone's home, and where bb's badge on the plugin's entry leads. `/plugins/oats/home/agents` is Home › Agents. */
 export function HomePage({ subPath }: PluginNavPanelProps) {
   const oats = useOats();
   const navigate = useBbNavigate();

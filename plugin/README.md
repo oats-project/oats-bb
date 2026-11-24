@@ -216,8 +216,10 @@ stopped or was retired is true of the agent before the roster the window holds i
 it is, the places that say that agent's state (its page, its panel, its thread's line) say
 **Reading…** in the state's place and its acts are off: never the old state stated plainly beside
 "… started.". Rosters are compared, never clocks: the dialog notes the server's stamp of the roster
-the window held when the act was SENT, and "Reading…" stands while the window's roster is still
-that one or an older one. It is bounded: after ten seconds the roster's own state is drawn whatever
+the window held when the act was SENT, and each agent's state in it; "Reading…" stands while the
+window's roster is still that one or an older one, and also while a later roster still says of the
+agent what the one at the send said (a roster can reach the window during an act that takes
+seconds; a restart keeps the stamp's rule alone, its state being the same word after). It is bounded: after ten seconds the roster's own state is drawn whatever
 it says. Nothing of it while OATS cannot be read (the last roster's notice says that).
 
 **What is of an earlier moment says so.** A Stop or Retire plan is of the moment it was read: under
@@ -368,8 +370,8 @@ stopped agent gets the same sentence before and after): `say.ts` marks the place
 
 On the home, an agent that runs outside OATS is one of those that need you: its card
 (`OutsideCard`, `app/home/Home.tsx`) holds this feature's notice with its Stop and Start, and no
-choice and no reply, and the badge, the heading and the count line's "N need you" (Home › Agents) count it as the
-sidebar's foot does (`view.needing`).
+choice and no reply, and the badge, the heading and the count line's "N need you" (Home › Agents) count it among those
+that need a person (`view.needing`; the sidebar has no line that counts them: its rows are marked).
 
 Not there yet: the line of a thread that belonged to a RETIRED agent.
 The rows are recorded live and proven against the real run's kernel (0.70.5, the provider at

@@ -7,12 +7,21 @@
 //
 // Rosters are compared, never clocks: the roster's `at` is the server's stamp, and the window's
 // clock is another machine's. What is kept is the `at` of the roster the window held when the act
-// was SENT: "Reading…" stands while the window's roster is still that one, or an older one.
+// was SENT, and the STATE each agent of the act had in it. "Reading…" stands while the window's
+// roster is still that one, or an older one; and also while a later roster still says of the agent
+// what the one at the send said (a roster can reach the window DURING an act that takes seconds: a
+// stop of three agents changes the roster at each, and the first of those rosters still says that
+// the last one runs: without this the header behind "3 sessions stopped." said "Working"; found
+// by the first review round). A restart keeps the first rule alone: its agent's state is the same
+// word before and after.
 // And it is bounded: after BOUND_MS the roster's own state is drawn whatever it says (a watch that
 // died must not leave "Reading…" on a page). The window's memory only.
 import { useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
+import type { AgentState } from "../../model/types";
+import { state as stateOf } from "../../model/view";
 import { useOats } from "../oats";
+import type { Oats } from "../oats";
 
 /** The Loading pattern's own word. */
 export const READING = "Reading…";
@@ -31,7 +40,26 @@ export function beforeAct(sentAt: string, rosterAt: string | null): boolean {
   return !Number.isNaN(sent) && !Number.isNaN(held) && held <= sent;
 }
 
-type Acted = { sentAt: string; timer: ReturnType<typeof setTimeout> };
+/**
+ * Whether the window still shows an agent as it was before an act. Pure. `sentAt` and `was`: the
+ * stamp of the roster held when the act was sent, and the agent's state in it (null: not kept: a
+ * restart); `rosterAt` and `now`: the stamp of the roster the window holds, and the agent's state
+ * in it (null: it is not in the roster any more).
+ */
+export function fromBefore(acted: { sentAt: string; was: AgentState | null }, rosterAt: string | null, now: AgentState | null): boolean {
+  return beforeAct(acted.sentAt, rosterAt) || (rosterAt !== null && acted.was !== null && now === acted.was);
+}
+
+/** An agent's state in the roster the window holds, as every place says it; null where the roster has no such agent (or none is read). */
+export function stateIn(oats: Oats, instance: string): AgentState | null {
+  if (oats.phase !== "ready") return null;
+  const node = oats.nodeByInstance.get(instance);
+  if (node !== undefined) return node.state;
+  const agent = oats.agents.find((each) => each.instance === instance);
+  return agent === undefined ? null : stateOf(agent, null);
+}
+
+type Acted = { sentAt: string; was: AgentState | null; timer: ReturnType<typeof setTimeout> };
 let acted: ReadonlyMap<string, Acted> = new Map();
 const watchers = new Set<() => void>();
 const set = (next: ReadonlyMap<string, Acted>) => {
@@ -47,15 +75,17 @@ const drop = (instance: string, entry: Acted) => {
 
 /**
  * A lifecycle result says these agents started, restarted, stopped or were retired. `sentAt`: the
- * stamp of the roster the window held when the act was sent (null: it held none: nothing to mark).
+ * stamp of the roster the window held when the act was sent (null: it held none: nothing to mark);
+ * `was`: each agent's state in that roster (absent, or with no entry for an agent: the stamp alone
+ * decides, as for a restart).
  */
-export function noteActed(instances: readonly string[], sentAt: string | null): void {
+export function noteActed(instances: readonly string[], sentAt: string | null, was: ReadonlyMap<string, AgentState | null> = new Map()): void {
   if (sentAt === null || instances.length === 0) return;
   const next = new Map(acted);
   for (const instance of instances) {
     const before = next.get(instance);
     if (before !== undefined) clearTimeout(before.timer);
-    const entry: Acted = { sentAt, timer: setTimeout(() => drop(instance, entry), BOUND_MS) };
+    const entry: Acted = { sentAt, was: was.get(instance) ?? null, timer: setTimeout(() => drop(instance, entry), BOUND_MS) };
     next.set(instance, entry);
   }
   set(next);
@@ -63,6 +93,8 @@ export function noteActed(instances: readonly string[], sentAt: string | null): 
 
 /** The stamp noted for an agent a result said changed, while it stands (until the bound): null for an agent with none. */
 export const actedAt = (instance: string): string | null => acted.get(instance)?.sentAt ?? null;
+/** The state kept for that agent, as it was when the act was sent; null where none is kept (no mark, or a restart). */
+export const actedWas = (instance: string): AgentState | null => acted.get(instance)?.was ?? null;
 
 /** For a test: the page loads again. */
 export function forgetActed(): void {
@@ -85,7 +117,7 @@ export function useReading(instance: string | null): boolean {
     () => acted,
   );
   const entry = instance === null ? undefined : all.get(instance);
-  return entry !== undefined && oats.phase === "ready" && oats.stale === null && beforeAct(entry.sentAt, oats.at);
+  return entry !== undefined && instance !== null && oats.phase === "ready" && oats.stale === null && fromBefore(entry, oats.at, stateIn(oats, instance));
 }
 
 /** The status line's place while the agent's state is being read again: the word, and the place's own buttons (off, where they are acts). */

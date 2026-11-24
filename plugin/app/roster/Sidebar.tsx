@@ -19,7 +19,6 @@ import type {
 import type { Agent, AgentState, Node } from "../../model/types";
 import { flatten, isListed, treeRows } from "../../model/view";
 import type { TreeRow } from "../../model/view";
-import { count } from "../format";
 import { useOats } from "../oats";
 import { outsideOf, rowParts, rowWords } from "../outside";
 import type { Said } from "../outside";

@@ -23,7 +23,10 @@ export { askPlan, asked, openAct, run } from "./acts";
 export type { Verb } from "./words";
 
 /** Checked at runtime on bb-app 0.50.1 (app.tsx says why). */
-const ICON = { stop: "Square", start: "Play", restart: "RotateCcw", retire: "Trash2", oats: "Bot" } as const;
+// (bb draws a name it does not know as its default mark. Retire is NOT a bin: bb's own Delete, two rows below it in
+// the same menu, is the red bin, and a person who means Retire must not find two of them. Its mark is the folder
+// with a minus: a retire deletes the agent's home. The entry keeps its destructive tone.)
+const ICON = { stop: "Square", start: "Play", restart: "RotateCcw", retire: "FolderMinus", oats: "Bot" } as const;
 
 /**
  * The kernel says that no harness is loaded for it (`running: false` beside a session that is

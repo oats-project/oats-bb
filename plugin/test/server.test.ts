@@ -607,6 +607,43 @@ describe("the event path", () => {
     expect(tokens()).toHaveLength(1);
   }, 60_000);
 
+  // The stamp is for the roster's `at` and an act's end ALONE. The server's pacing and the poll a client's snapshot
+  // asks for compare a read's start with the bare clock, and must go on doing so when the stamp runs ahead of it: a
+  // read is in flight, the clock is set back (a time sync), and the read that follows at once takes a stamp LATER
+  // than the one before, ahead of the clock by the whole step. Fifteen seconds of the clock later a client's snapshot
+  // must still ask for its poll.
+  it("the clock is set back while a read is in flight: the next roster's `at` is still later than the one before, and the snapshot's poll still fires after its fifteen seconds of the clock", async () => {
+    const real = Date.now.bind(Date);
+    const status = async () => (await fake.calls()).filter((call) => call.verb === "status").length;
+    const seen = async (more: () => Promise<boolean>) => {
+      for (let tries = 0; tries < 400; tries += 1) {
+        if (await more()) return true;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      return false;
+    };
+    await rpc<Shown>("snapshot");
+    await fake.behave({ status: { sleepMs: 800 } });
+    const before = await status();
+    const one = rpc<{ at: string }>("refresh");
+    expect(await seen(async () => (await status()) > before)).toBe(true); // that read is in flight
+    let offset = -60_000; // the clock is set back a minute
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => real() + offset);
+    try {
+      const two = rpc<{ at: string }>("refresh"); // asked while the first is in flight: it follows it
+      const [first, second] = [await one, await two];
+      expect(Date.parse(second.at)).toBeGreaterThan(Date.parse(first.at)); // the stamp: later, though the clock went back
+      expect(Date.parse(second.at)).toBeGreaterThan(Date.now() + 30_000); // and so ahead of the clock, by most of the step
+      await fake.behave({});
+      const settled = await status();
+      offset += 20_000; // twenty seconds of the clock later
+      await rpc<Shown>("snapshot"); // a client asks: more than the poll's fifteen seconds since the last read STARTED, by the clock
+      expect(await seen(async () => (await status()) > settled)).toBe(true); // the poll's read is made
+    } finally {
+      clock.mockRestore();
+    }
+  }, 90_000);
+
   // A client that decides on the roster (the home's card asks `snapshot` at the press, and sends a message only to an
   // agent it sees running) must not be answered, right after a stop, with the roster from before it: the server
   // answers `snapshot` from its cache, and from the act's end until the read the act asked for has ended that cache is

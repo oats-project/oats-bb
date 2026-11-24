@@ -305,8 +305,13 @@ export function createCore(bb: BbPluginApi) {
     // Taken as the read STARTS: a read in flight when the act ended has passed this line, and is not the one owed.
     const forAct = owedToActs;
     owedToActs = false;
-    lastStart = stamp(); // (not the bare clock: a read that starts in the millisecond an act ended is LATER than the act's end)
-    const at = new Date(lastStart).toISOString();
+    // Two clocks, on purpose. `lastStart` is the BARE clock: the pacing (`reread`), the poll a client's snapshot asks
+    // for and the patches' order all compare it with `Date.now()`, as they did before there was a stamp. The roster's
+    // `at` is the STAMP: a read that starts in the millisecond an act ended is later than the act's end. (With one
+    // value for both, a stamp that ran ahead of a clock set back held the poll off until the clock caught up, and a
+    // read's length came out negative, which reads as "answered fast": the next read then followed at once.)
+    lastStart = Date.now();
+    const at = new Date(stamp()).toISOString();
     let next: Snapshot;
     let rows: Map<string, RawRow> | null = null;
     let root = "";
@@ -428,7 +433,8 @@ export function createCore(bb: BbPluginApi) {
    * than the act's end: app/roster/reading.tsx), and both are whole milliseconds: a read that
    * starts in the very millisecond the act ended would be a tie, read as "before", with no later
    * read owed. One strictly increasing stamp for both: of two events on this server the later has
-   * the later stamp, always. (It can run a millisecond ahead of the clock in such a tie, and by the
+   * the later stamp, always. It stamps the roster's `at` and an act's end ONLY: the pacing and the
+   * poll read the bare clock (`lastStart`). (It can run a millisecond ahead of the clock in such a tie, and by the
    * whole step after the clock is set back, until the clock catches up; nothing reads it as a wall
    * time but the roster's age, in minutes. While it is ahead, an events answer, stamped by the bare
    * clock, is dropped as older than the status read: fail safe, the status read carries it.)

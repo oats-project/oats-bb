@@ -675,8 +675,8 @@ const second = [
           result.events.push({ ...result.events[1], at: "2026-11-21T18:40:00.000Z", kind: "launch-prompt", data: { status: "blocked", class: "development-channel", differed: { nearest: "claude-folder-trust-2", firstDifference: { index: 12, expected: "Do you trust the files in this folder?", found: "" } } } });
         }));
         await page.evaluate(click(inPanel("oats-panel-activity-load")));
-        const blocked = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))}.startsWith("Launch prompt · ")`, 30);
-        check(Boolean(blocked), `${at} the activity's summary leads with the last row: a launch prompt`, await page.evaluate(textOf(inPanel("oats-panel-activity-summary"))));
+        const blocked = await page.until(`${textOf(inPanel("oats-panel-activity-summary"))}.startsWith("Last: Launch prompt · ")`, 30);
+        check(Boolean(blocked), `${at} the activity's summary says "Last:" and the last row: a launch prompt`, await page.evaluate(textOf(inPanel("oats-panel-activity-summary"))));
         const incompleteLine = await reads(page, inPanel("oats-panel-activity-incomplete"), ["Incomplete evidence"]);
         check(incompleteLine === "Incomplete evidence: 1 unreadable rows · 0 foreign rows · window or source truncated.", `${at} an incomplete window says what is missing`, incompleteLine);
         const differed = await reads(page, inPanel("oats-panel-event-differed"), ["Where the screen first differed"]);
@@ -690,7 +690,7 @@ const second = [
         await page.evaluate(click(inPanel("oats-tab-soul")));
         await page.until(visible(inPanel("oats-panel-soul-body")), 15);
         await page.evaluate(click(inPanel("oats-tab-instance")));
-        const kept = await page.until(`(() => { const summary = ${textOf(inPanel("oats-panel-activity-summary"))}; return summary.startsWith("Launch prompt · ") ? JSON.stringify({ status: document.querySelector(${JSON.stringify(inPanel("oats-panel-activity-status"))}) !== null, said: /Last observation retained|Reported observation loaded/.test(document.querySelector(${JSON.stringify(inPanel("oats-panel-activity"))}).innerText) }) : ""; })()`, 15);
+        const kept = await page.until(`(() => { const summary = ${textOf(inPanel("oats-panel-activity-summary"))}; return summary.startsWith("Last: Launch prompt · ") ? JSON.stringify({ status: document.querySelector(${JSON.stringify(inPanel("oats-panel-activity-status"))}) !== null, said: /Last observation retained|Reported observation loaded/.test(document.querySelector(${JSON.stringify(inPanel("oats-panel-activity"))}).innerText) }) : ""; })()`, 15);
         const button = await page.evaluate(textOf(inPanel("oats-panel-activity-load")));
         check(kept === JSON.stringify({ status: false, said: false }) && button === "Refresh", `${at} back on the tab, the activity read earlier is shown again, with Refresh, and no line about it`, `read: ${JSON.stringify(kept)}; the button: ${JSON.stringify(button)}`);
 

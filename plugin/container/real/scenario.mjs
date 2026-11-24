@@ -492,7 +492,7 @@ async function archivedShots(scene, { instance, soul, threadId }) {
       check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
       const row = `${testId("oats-agent-row-threadless")}[data-instance=${JSON.stringify(instance)}]`;
       // The row's words and where it opens come with bb's own answer for the thread, after the roster: both are waited for.
-      const ROW = `(() => { const e = document.querySelector(${JSON.stringify(row)}); return JSON.stringify({ facts: (e?.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText ?? "").replace(/\\s+/g, " ").trim(), opens: e?.getAttribute("data-opens") ?? null, mark: e?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null, tone: e?.querySelector("[data-mark]")?.getAttribute("data-tone") ?? null, onItsThread: document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"]`)}) !== null }); })()`;
+      const ROW = `(() => { const e = document.querySelector(${JSON.stringify(row)}); return JSON.stringify({ facts: e?.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.getAttribute("title") ?? "", opens: e?.getAttribute("data-opens") ?? null, mark: e?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null, tone: e?.querySelector("[data-mark]")?.getAttribute("data-tone") ?? null, onItsThread: document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"]`)}) !== null }); })()`;
       const wanted = JSON.stringify({ facts: `Stopped · ${soul}`, opens: "thread", mark: "stopped", tone: null, onItsThread: false });
       const drawn = (await page.until(`(() => { const read = ${ROW}; return read === ${JSON.stringify(wanted)} ? read : ""; })()`, 30)) || (await page.evaluate(ROW));
       check(drawn === wanted, `${at}: ${instance} keeps its row in the roster, on no thread: "Stopped" and its soul, no reason, the plain tone, and it opens its archived thread`, `${drawn}; the sidebar: ${await page.evaluate(textOf(testId("oats-sidebar")))}`);
@@ -570,8 +570,8 @@ async function missingShots(scene, { instance, soul }) {
       // and the reason: bb has no thread of that id (app/outside). The read waits on that row's words
       // (bb's own answer for the id arrives after the roster).
       const row = `${testId("oats-agent-row-threadless")}[data-instance=${JSON.stringify(instance)}]`;
-      const factsNow = `(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
-      const DELETED = `Stopped · deleted in bb · ${soul}`; // the state, the reason, then the soul
+      const factsNow = `(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.getAttribute("title") ?? "")`;
+      const DELETED = `Stopped · ${soul} · deleted in bb`; // the state, the reason, then the soul
       const facts = (await page.until(`(() => { const facts = ${factsNow}; return facts === ${JSON.stringify(DELETED)} ? facts : ""; })()`, 30)) || (await page.evaluate(factsNow));
       check(facts === DELETED, `${at}: ${instance} stays in the roster: "Stopped", then the reason, "deleted in bb", then its soul`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       show("row", facts);

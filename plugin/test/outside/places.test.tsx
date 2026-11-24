@@ -82,7 +82,7 @@ test("stopped, its thread deleted in bb: the row says it was deleted, and opens 
   const { sdk } = bb([]);
   const { slot } = await sidebar({ rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: withoutDigest(), sdk });
   setAgentPage((navigate, instance) => navigate.toPluginPanel("agent", { subPath: instance }));
-  await waitFor(() => expect(rowFacts(threadless(slot))).toBe("Stopped · deleted in bb · oats-expert"));
+  await waitFor(() => expect(rowFacts(threadless(slot))).toBe("Stopped · oats-expert · deleted in bb"));
   expect(markOf(threadless(slot))).toEqual(["stopped", "warning"]); // a remedy is needed: Start, for a new conversation
   fireEvent.click(threadless(slot));
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: DIGEST } }]);
@@ -91,11 +91,11 @@ test("stopped, its thread deleted in bb: the row says it was deleted, and opens 
 test("a session OATS lost: \"Stopped\" in the warning tone, then the reason, by bb's answer for the same row; never a state of its own", async () => {
   const lost = () => facts({ [DIGEST]: { sessionEnd: "lost" } });
   const archived = await sidebar({ rpc: lost(), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
-  await waitFor(() => expect(rowFacts(threadless(archived.slot))).toBe("Stopped · archived in bb · oats-expert"));
+  await waitFor(() => expect(rowFacts(threadless(archived.slot))).toBe("Stopped · oats-expert · archived in bb"));
   expect(markOf(threadless(archived.slot))).toEqual(["stopped", "warning"]);
   resetApp();
   const deleted = await sidebar({ rpc: lost(), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
-  await waitFor(() => expect(rowFacts(threadless(deleted.slot))).toBe("Stopped · deleted in bb · oats-expert"));
+  await waitFor(() => expect(rowFacts(threadless(deleted.slot))).toBe("Stopped · oats-expert · deleted in bb"));
   expect(markOf(threadless(deleted.slot))).toEqual(["stopped", "warning"]);
 });
 
@@ -236,8 +236,8 @@ test("three agents whose thread bb has archived, side by side: an operator's sto
   await waitFor(() => expect([DIGEST, RANKER, HARVEST].map((instance) => rowOf(instance).getAttribute("data-opens"))).toEqual(["thread", "thread", "thread"]));
   expect([DIGEST, RANKER, HARVEST].map((instance) => [rowFacts(rowOf(instance)), ...markOf(rowOf(instance))])).toEqual([
     ["Stopped · oats-expert", "stopped", null],
-    ["Stopped · archived in bb · research-expert", "stopped", "warning"],
-    ["Idle · archived in bb · knowledge-harvester", "idle", "warning"],
+    ["Stopped · research-expert · archived in bb", "stopped", "warning"],
+    ["Idle · knowledge-harvester · archived in bb", "idle", "warning"],
   ]);
 });
 
@@ -326,7 +326,7 @@ test("a lost session says \"session lost\" on bb and on tmux, side by side; an a
   const { slot } = await sidebar({ rpc: handlers({}, lostRows), sidebarThreads: sidebarThreads() });
   const onBb = () => rowFacts(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")!);
   const onTmux = (from: typeof slot) => from.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === TMUX)!;
-  await waitFor(() => expect([onBb(), rowFacts(onTmux(slot))]).toEqual(["Stopped · session lost · oats-expert", "Stopped · session lost · oats-developer · tmux"]));
+  await waitFor(() => expect([onBb(), rowFacts(onTmux(slot))]).toEqual(["Stopped · oats-expert · session lost", "Stopped · oats-developer · session lost · tmux"]));
   expect(markOf(onTmux(slot))).toEqual(["stopped", null]); // plain: nobody did anything wrong
   resetApp();
   // The bb agent's line: the reason alone; no sentence, no time (the kernel records none of the loss), no cause, no promise.

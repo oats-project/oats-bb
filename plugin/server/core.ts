@@ -183,6 +183,15 @@ export function createCore(bb: BbPluginApi) {
   let lastStartedAtOnce = false;
   let running: Promise<Snapshot> | null = null;
   let queued: Promise<Snapshot> | null = null;
+  /**
+   * An act that ENDED asked for a status read (`rereadAfterAct`): the first read that STARTS from
+   * now is published whether or not it differs. The window holds "Reading…" over an agent until it
+   * has a roster read after the act's end (app/roster/reading.tsx: the roster's `at` against the
+   * act's `endedAt`), and a read that says nothing new is not published otherwise: the kernel
+   * writes its event before the act's command returns, so a read that started before the act's end
+   * can already hold the final state, and the window would never learn that a later one was made.
+   */
+  let owedToActs = false;
   // ---- the event path (below, "between two status reads") ----
   /**
    * Per instance, the last events answer applied to its row, and when the read that brought it
@@ -285,6 +294,9 @@ export function createCore(bb: BbPluginApi) {
   async function read(): Promise<Snapshot> {
     // A read that began under other settings must not bring their roster back once they changed.
     const generation = settingsGeneration;
+    // Taken as the read STARTS: a read in flight when the act ended has passed this line, and is not the one owed.
+    const forAct = owedToActs;
+    owedToActs = false;
     lastStart = Date.now();
     const at = new Date(lastStart).toISOString();
     let next: Snapshot;
@@ -344,6 +356,7 @@ export function createCore(bb: BbPluginApi) {
     if (generation !== settingsGeneration) {
       lastEnd = Date.now();
       lastAnsweredInMs = null;
+      if (forAct) owedToActs = true; // not this deployment's answer: the read the change queued owes the act its publish
       return next;
     }
     // The event path's patches that are NEWER than this read (their events read started after this
@@ -360,7 +373,8 @@ export function createCore(bb: BbPluginApi) {
     // slowly. After a read that failed (a timeout, an unreachable machine, no oats) the next one
     // waits the floor, so Retry and the watch are not held back by the failure's own length.
     lastAnsweredInMs = next.ok ? lastEnd - lastStart : null;
-    if (changed && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: token(lastStart) });
+    // Published when it differs; and, the same or not, when an act that ended is owed it (`owedToActs`).
+    if ((changed || forAct) && !lifetime.signal.aborted) bb.realtime.publish(REALTIME_CHANGED, { at: token(lastStart) });
     return next;
   }
 
@@ -558,6 +572,15 @@ export function createCore(bb: BbPluginApi) {
   }
   const rereadSoon = () => {
     if (!lifetime.signal.aborted) void reread();
+  };
+  /**
+   * For an ACT that has ended (a stop, a start, a restart, a retire): a status read that starts
+   * from now on, as `rereadSoon` asks (the queued one, or a new one behind the one in flight), and
+   * whose roster is PUBLISHED also when it says nothing new (`owedToActs`): the window waits for it.
+   */
+  const rereadAfterAct = () => {
+    owedToActs = true;
+    rereadSoon();
   };
 
   /**
@@ -767,6 +790,7 @@ export function createCore(bb: BbPluginApi) {
     page,
     reread,
     rereadSoon,
+    rereadAfterAct,
     agentOf,
     agentForAct,
     rowOf,

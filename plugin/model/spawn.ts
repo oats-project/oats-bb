@@ -160,7 +160,8 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
 }
 /**
  * The preview's facts as the form's column lists them: the Desktop's (`previewFacts`), and three
- * of the plugin's own, each read from the same answer and never assumed: the soul (the Desktop's
+ * of the plugin's own, each read from the same answer (never assumed, but the access where the
+ * answer is silent on it: below): the soul (the Desktop's
  * dialog names it in its title alone), that the session is a bb thread (the Desktop's Session
  * backend is a control; here it is always bb, and said), and the access the agent runs with (the
  * plugin asks for bb's full mode on every spawn: the row says what the kernel decided). The
@@ -172,7 +173,7 @@ export const bbDefaultModel = (harness: string): string => `bb’s default for $
 
 // ---- the Model field: whether a spawn may go with the model it would send ----
 
-/** Why Spawn is held for the model: the field's mark and the reason beside the button, two words at most. */
+/** Why Spawn is held for the model: the field's mark (which the off button is described by), two words at most. */
 export const MODEL_HELD = { required: "Required", ambiguous: "Pick provider" } as const;
 export type ModelCheck = { held: null } | { held: (typeof MODEL_HELD)[keyof typeof MODEL_HELD]; /** the listed ids that serve the bare one, to pick from */ offers: string[] };
 /**

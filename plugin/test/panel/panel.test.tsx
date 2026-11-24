@@ -653,6 +653,27 @@ test("the page keeps the agent and its way back while the roster cannot be read 
   expect(text(slot.getByTestId("oats-panel-work-sentence"))).toBe("worktree · agents/panel-worktree-helper");
 });
 
+// The roster is the last one read AND this panel has read nothing yet (an agent opened meanwhile, its read in flight):
+// the same rule as over what it read (the first review round of the T3 change). An agent's PAGE says the notice, with
+// the roster's age (so it counts as the pane's and the sidebar says its line); the TAB beside a thread draws none.
+test("the roster is the last one read and the panel's own first read is in flight: an agent's page says the notice with the roster's age; the tab beside a thread draws none, and reads", async () => {
+  const read = panelSnapshot();
+  const stale = { ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here", last: { at: read.at, deployment: read.deployment, agents: read.agents } };
+  const never = () => new Promise<never>(() => undefined);
+  const page = await agentPage(CHILD, { rpc: handlers({ snapshot: () => stale, panelInstance: never }) });
+  const notice = await within(await page.findByTestId("oats-panel")).findByRole("alert");
+  expect(text(notice)).toMatch(/^OATS could not read this deploymentRead .+\. Acts are off\.▸DetailsE_LOCAL_MISSING: no oats-local.yaml hereRetry$/);
+  expect(within(notice).getAllByRole("button", { name: "Retry" })).toHaveLength(1);
+  page.unmount();
+  resetApp();
+  const tab = panel({ threadId: CHILD_THREAD }, {}, { rpc: handlers({ snapshot: () => stale, panelInstance: never }) });
+  await tab.findByTestId("oats-panel");
+  await act(async () => {});
+  expect(within(tab.getByTestId("oats-panel")).queryByRole("alert")).toBeNull();
+  expect(within(tab.getByTestId("oats-panel")).queryByRole("button", { name: "Retry" })).toBeNull();
+  expect(tab.getByTestId("oats-panel").textContent).toContain("Reading…");
+});
+
 test("with the last roster the server kept: the page shows the agent as last read, and says OATS could not be read again, with its code", async () => {
   // The server answers a failed read with the last roster it read (`last`): the roster stays on
   // screen as it was, and the panel says why what it shows is old.

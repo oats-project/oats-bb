@@ -507,6 +507,13 @@ export default [
         await page.goto(HOME);
         const failed = await page.until(`(() => { const notice = document.querySelector(${JSON.stringify(`${PAGE} ${testId("oats-notice")}`)}); return notice ? notice.querySelector("h3").innerText.trim() + " | " + notice.innerText.replace(/\\s+/g, " ").trim() : ""; })()`, 30);
         check(Boolean(failed) && /Retry/.test(failed) && !/\bRead .+ ago|Last read|Acts are off/.test(failed) && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-tiles"))}) === null`)) === true, `${at} a first read that failed: one titled notice with Retry, no age of anything kept, and no roster drawn`, failed ?? (await page.evaluate(textOf(PAGE))));
+        // THE NOTICE ONCE where OATS was never read too (the lead's T3, ruled for this state): ONE Retry on the screen, the
+        // page's; the sidebar beside it (where bb shows it: not a drawer) says one line, the notice's title alone, nothing to press.
+        const RETRIES = `[...document.querySelectorAll("button")].filter((b) => b.innerText.trim() === "Retry" && b.getClientRects().length > 0).length`;
+        const beside = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s) return ${JSON.stringify(JSON.stringify({ sidebar: false }))}; const l = s.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ sidebar: true, line: l.innerText.replace(/\\s+/g, " ").trim(), whole: s.querySelector(${JSON.stringify(testId("oats-unreadable"))}) !== null, press: l.querySelectorAll("button, a").length }) : ""; })()`, 15);
+        const title = (failed ?? "").split(" | ")[0];
+        check(beside === JSON.stringify({ sidebar: false }) || beside === JSON.stringify({ sidebar: true, line: title, whole: false, press: 0 }), `${at} beside the home's notice the sidebar says one line, the notice's title alone ("${title}"), with nothing to press (or is not drawn: bb's drawer)`, beside ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        check((await page.evaluate(RETRIES)) === 1, `${at} OATS never read: ONE Retry on the screen, the page's`, String(await page.evaluate(RETRIES)));
         await sound(page, viewport, check, at, "the home that could not be read");
         if (Boolean(failed) && !/\bRead .+ ago|Last read/.test(failed)) await page.shot(`home-${viewport.name}-unreadable`);
       } finally {

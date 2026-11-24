@@ -8,7 +8,7 @@
 import { describe, expect, test } from "vitest";
 import type { Agent, BbThread, Row } from "../../model/types";
 import { board } from "../../app/home/board";
-import { flatten, view } from "../../model/view";
+import { flatten, treeRows, view } from "../../model/view";
 
 const agent = (instance: string, over: Partial<Agent> = {}): Agent => ({
   instance,
@@ -136,6 +136,20 @@ describe("one tree, whatever the backend of a parent or of its child", () => {
     expect(rows.map((row) => [row.agent.instance, row.state, row.children.length])).toEqual([
       ["twin", "working", 1], // of one rank, in the kernel's order: the first, which holds the child
       ["twin", "stopped", 0], // then the second, alone
+    ]);
+  });
+});
+
+describe("a name the kernel listed twice, and the row on screen", () => {
+  test("the page of that name holds open the parent of the row that HAS one, though its other row, a root, stands before it", () => {
+    const agents = [tmux("kid", { parent: "lead" }), tmux("kid"), tmux("lead")];
+    const { rows } = view(agents, []);
+    expect(drawn(rows)).toBe("kid lead[kid]"); // the second row is a root; the first is under its parent
+    const shown = treeRows(rows, new Set(), "kid");
+    expect(shown.map((row) => [row.node.agent.instance, row.parent, row.open])).toEqual([
+      ["kid", false, false],
+      ["lead", true, true],
+      ["kid", false, false],
     ]);
   });
 });

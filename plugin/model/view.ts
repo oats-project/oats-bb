@@ -193,7 +193,8 @@ export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance
   const found = new Set<string>();
   const walk = (nodes: readonly T[], above: readonly string[]): boolean => {
     for (const node of nodes) {
-      if (node.agent.instance === instance) {
+      // (A match that is a root has nobody above it: the walk goes on, for a name the kernel listed twice, whose other row may be under a parent.)
+      if (node.agent.instance === instance && above.length > 0) {
         for (const each of above) found.add(each);
         return true;
       }
@@ -360,7 +361,8 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     if (over === undefined) rows.push(row);
     else over.children.push(row);
   }
-  // After the named rows: of one rank, a name's second row is drawn after its first (the sort is stable), as the kernel lists them.
+  // After the named rows: among the roots of one rank, a name's second row is drawn after its first (the sort is stable), as
+  // the kernel lists them. (Where the first is under a parent the second, a root, may stand before that parent.)
   rows.push(...twice);
   // Children first: a row's `urgent` is its own state, or that of the most urgent row under it
   // (the first in the order, where two are of one rank), and each level is sorted by it.

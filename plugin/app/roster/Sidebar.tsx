@@ -295,8 +295,13 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // Every agent OATS has is a row.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
   // The row that is open on screen, by its agent: its parents are open whatever the person left.
-  // (A thread that is open, by bb's word; else the agent whose own page is on screen, by that page's: a row with no bb thread is "on screen" then.)
-  const selected = activeThreadId === null ? openAgent : (flatten(view.rows).find((row) => row.thread?.id === activeThreadId)?.agent.instance ?? null);
+  // A thread that is open, by bb's word: the row that is drawn on it; else the row with no thread whose agent NAMES it (its
+  // thread is archived in bb: the row itself leads there, and must not be closed away by its parent once a person is on
+  // it). The row on the thread first: two agents may name one thread. With no thread open: the agent whose own page is on
+  // screen, by that page's word.
+  const drawnRows = flatten(view.rows);
+  const onThread = activeThreadId === null ? undefined : (drawnRows.find((row) => row.thread?.id === activeThreadId) ?? drawnRows.find((row) => row.thread === null && row.agent.threadId === activeThreadId));
+  const selected = activeThreadId === null ? openAgent : (onThread?.agent.instance ?? null);
   const guttered = view.rows.some((row) => row.children.length > 0);
   // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a
   // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the row's own state, which is the one its line draws.

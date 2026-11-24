@@ -547,21 +547,23 @@ export default [
       check(Boolean(opened), `${at} the row of ${instance} opens that agent's own page`, opened ?? (await page.evaluate("location.pathname")));
       await page.until(visible(testId("oats-panel")), 30);
       await page.shot(`tmux-roster-${viewport.name}-agent-page`);
-      // The page of an agent with no bb thread IS the row on screen: loaded anew on the page of a child's child (no chevron
-      // was pressed: the page loads with every parent closed), its two parents are open, by chevrons that are off, and its row is drawn.
-      const [deep, , over] = tmux.find(([, , parent]) => parent !== null && tmux.some(([instance, , above]) => instance === parent && above !== null));
-      const [, , top] = tmux.find(([instance]) => instance === over);
-      await page.goto(opened.replace(`/agent/${instance}`, `/agent/${deep}`));
-      await page.until(visible(testId("oats-panel")), 30);
-      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the sidebar is shown beside the page of ${deep}`);
-      const held = await page.until(
-        `(() => { const side = document.querySelector(${side}); const row = side?.querySelector(${JSON.stringify(`${testId("oats-agent-row-threadless")}[data-instance="${deep}"]`)}); if (!row) return ""; const toggles = Object.fromEntries([...side.querySelectorAll(${JSON.stringify(testId("oats-row-toggle"))})].map((toggle) => [toggle.getAttribute("data-instance"), [toggle.getAttribute("aria-expanded"), toggle.disabled]])); return JSON.stringify([toggles[${JSON.stringify(top)}] ?? null, toggles[${JSON.stringify(over)}] ?? null]); })()`,
-        30,
-      );
-      check(held === JSON.stringify([["true", true], ["true", true]]), `${at} on the page of ${deep}, loaded anew, its row is drawn and its parents ${top} and ${over} are open, held by it: their chevrons are off`, held ?? (await folds(page)));
-      const others = JSON.parse(await folds(page));
-      check(others.parents - others.closed === 2, `${at} no other parent is open: every one but those two is as the page loaded it, closed`, JSON.stringify(others));
-      await page.shot(`tmux-roster-${viewport.name}-child-page-parents-open`, { targets: true });
+      if (opened) {
+        // The page of an agent with no bb thread IS the row on screen: loaded anew on the page of a child's child (no chevron
+        // was pressed: the page loads with every parent closed), its two parents are open, by chevrons that are off, and its row is drawn.
+        const [deep, , over] = tmux.find(([, , parent]) => parent !== null && tmux.some(([instance, , above]) => instance === parent && above !== null));
+        const [, , top] = tmux.find(([instance]) => instance === over);
+        await page.goto(opened.replace(`/agent/${instance}`, `/agent/${deep}`));
+        await page.until(visible(testId("oats-panel")), 30);
+        check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the sidebar is shown beside the page of ${deep}`);
+        const held = await page.until(
+          `(() => { const side = document.querySelector(${side}); const row = side?.querySelector(${JSON.stringify(`${testId("oats-agent-row-threadless")}[data-instance="${deep}"]`)}); if (!row) return ""; const toggles = Object.fromEntries([...side.querySelectorAll(${JSON.stringify(testId("oats-row-toggle"))})].map((toggle) => [toggle.getAttribute("data-instance"), [toggle.getAttribute("aria-expanded"), toggle.disabled]])); return JSON.stringify([toggles[${JSON.stringify(top)}] ?? null, toggles[${JSON.stringify(over)}] ?? null]); })()`,
+          30,
+        );
+        check(held === JSON.stringify([["true", true], ["true", true]]), `${at} on the page of ${deep}, loaded anew, its row is drawn and its parents ${top} and ${over} are open, held by it: their chevrons are off`, held ?? (await folds(page)));
+        const others = JSON.parse(await folds(page));
+        check(others.parents - others.closed === 2, `${at} no other parent is open: every one but those two is as the page loaded it, closed`, JSON.stringify(others));
+        await page.shot(`tmux-roster-${viewport.name}-child-page-parents-open`, { targets: true });
+      }
     },
   },
   {

@@ -725,6 +725,30 @@ test("with no agent's page on screen nothing is held open; and an open THREAD is
   ]);
 });
 
+test("the ARCHIVED thread of an agent is on screen: its row has no thread of bb's list, it names that thread, and its parent is held open over it", async () => {
+  // harvest-knowledge-helper is a child of redesign-ui-lead; bb no longer lists its thread (archived): its row is one
+  // with no bb thread, and it leads to that archived thread. A person who is there is on that row.
+  const draw = async (activeThreadId: string | null) => {
+    const app = await loadApp();
+    const slot = renderSlot<PluginThreadListProps, Contract>(
+      app.threadLists[0]!,
+      { activeThreadId, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+      { rpc: handlers({}), sidebarThreads: { status: "ready" as const, threads: fixtureThreads().filter((thread) => thread.id !== "thr_harvest") } },
+    );
+    await slot.findByTestId("oats-tree");
+    const toggle = slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "redesign-ui-lead")!;
+    return { expanded: toggle.getAttribute("aria-expanded"), off: (toggle as HTMLButtonElement).disabled, child: slot.queryAllByTestId("oats-agent-row-threadless").some((row) => row.getAttribute("data-instance") === "harvest-knowledge-helper") };
+  };
+  // Nothing on screen: the parent is closed, and the row is not in the page.
+  expect(await draw(null)).toEqual({ expanded: "false", off: false, child: false });
+  resetApp();
+  // Its archived thread on screen: the parent is open, held by it, and the row is drawn.
+  expect(await draw("thr_harvest")).toEqual({ expanded: "true", off: true, child: true });
+  resetApp();
+  // A thread that no agent names: nobody is on screen.
+  expect(await draw("thr_plain")).toEqual({ expanded: "false", off: false, child: false });
+});
+
 test("two pages in turn: the one that is drawn is the one on screen, and a page that leaves takes away only its own word", async () => {
   const { useOpenAgent, useSayOpenAgent } = await import("../../app/roster/open-agent");
   const Says = ({ instance }: { instance: string | null }) => (useSayOpenAgent(instance), null);

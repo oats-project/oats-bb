@@ -157,6 +157,10 @@ describe("the rows that warn (`rowWarns`): what a closed parent of the roster ca
     expect([said(operator, "missing", false)?.kind, warns(operator, "missing")]).toEqual(["deleted", true]);
     expect([said(lost, "missing", false)?.kind, warns(lost, "missing")]).toEqual(["deleted", true]);
   });
+  it("only with the state the reason follows: a lost session whose thread is archived, on a row that says another state (bb's own question makes it \"Needs you\"), draws no warning, so it warns nobody", () => {
+    const lostArchived = said(lost, "archived", false);
+    expect([lostArchived?.rowTone, rowWarns(lostArchived, "stopped"), rowWarns(lostArchived, "needs-you")]).toEqual(["warning", true, false]);
+  });
   it("never an operator's stop with its thread archived, an idle agent bb has not answered for, or a row on tmux", () => {
     expect([said(operator, "archived", false)?.kind, warns(operator, "archived")]).toEqual(["stopped-archived", false]);
     expect(warns(unloaded, "unknown")).toBe(false);

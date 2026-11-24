@@ -199,7 +199,7 @@ async function needsYou(scene, { instance, soul, threadId, projectId, text, choi
     await page.goto("/plugins/oats/home");
     const card = await page.until(CARD(text, choices.length), 30);
     const read = JSON.parse(card || "{}");
-    check(read.question === text && JSON.stringify(read.choices) === JSON.stringify(choices) && !read.card.includes(soul), `${at}: the home's card of ${instance} says what it waits for, and no soul${choices.length > 0 ? `, with ${choices.length} choice(s)` : ""}`, card || (await page.evaluate(textOf(testId("oats-home-needs")))));
+    check(read.question === text && JSON.stringify(read.choices) === JSON.stringify(choices) && read.card.split(soul).length === 2, `${at}: the home's card of ${instance} says what it waits for, and its soul once (the agent's type is kept on a card: Joan's direction of 24 Nov 2026, L10)${choices.length > 0 ? `, with ${choices.length} choice(s)` : ""}`, card || (await page.evaluate(textOf(testId("oats-home-needs")))));
     show("card", read.card ?? "none");
     await page.until(TILES_COUNTED, 20);
     await page.evaluate(`(${cardOf(text)})?.scrollIntoView({ block: "center" })`);

@@ -149,6 +149,27 @@ test("a Stop of a Working agent: bb no longer says its thread works and the rost
   expect(read().state).toBe("Stopped");
 });
 
+// THE RULE HAS TWO HALVES. The window's: "before" while the roster's `at` <= the act's `endedAt`, and the bound. The
+// SERVER's: the status read an act asks for as it ends is PUBLISHED whether or not it differs from the last one
+// (server/core.ts; the roster developer's mend and its server test). Without the second, this case stood ten seconds:
+// a read that STARTED mid-act (the kernel writes the agent's event before its command returns) already holds the final
+// state and is published; the act's own read, after the end, says the SAME, and a read that says nothing new was not
+// published: the window kept a roster stamped before the end, over a row that was right. Here, the window's side of it.
+test("the final state is already on a roster read BEFORE the act ended: \"Reading…\" stands (that read cannot be trusted); the act's own read says the SAME and is published: \"Reading…\" leaves with it", async () => {
+  const { slot, answer, read } = await line("thr_digest");
+  act(() => noteActed([DIGEST], "2026-11-19T12:30:03.000Z")); // a start whose command returned at 12:30:03
+  // A read that started at 12:30:02, mid-act, and already says the agent runs: published (it differs), and in the window.
+  answer.now = { ...fixtureSnapshot(started(fixtureAgents())), at: "2026-11-19T12:30:02.000Z" };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: answer.now.at }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(read()).toMatchObject({ reading: READING, state: null });
+  // The act's own read, started after its end: the SAME agents, a later stamp. Published all the same: the window takes it.
+  answer.now = { ...fixtureSnapshot(started(fixtureAgents())), at: "2026-11-19T12:30:03.200Z" };
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: answer.now.at }));
+  await vi.waitFor(() => expect(read().reading).toBeNull());
+  expect(read().state).not.toBe("Stopped");
+});
+
 // Behind a result EVERY act of that agent is off (ruled with L13's form): also "Answer", which answers a claim from
 // BEFORE the act.
 test("behind a result the line's Answer is off too: the claim it answers is from before the act", async () => {

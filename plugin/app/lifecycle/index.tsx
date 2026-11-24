@@ -195,7 +195,10 @@ function runCommand(verb: Verb, threadId: string | null): void {
  * settings (the Desktop's D-174, with bb's own keys: no leader). It acts on the agent whose thread
  * is in view. It is listed everywhere, as on the Desktop: where it cannot act (no thread in view, a
  * thread that is no agent's, a state the act does not apply to) its key says why in one line, and
- * never does nothing.
+ * never does nothing. ONE exception, ruled with L13's form (24 Nov 2026): behind a result that says
+ * the agent changed, until the roster is read again, the key does nothing AND says nothing: every
+ * act of that agent is off for those seconds, and no sentence was to be added for it (its thread's
+ * line says "Reading…").
  */
 export const commands: readonly PluginCommandRegistration[] = ACTS.map((act) => ({
   id: `agent-${act.verb}`,

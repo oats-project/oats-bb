@@ -46,7 +46,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     // the server's own words for it, which name the machine and what to do: no list is asked for.
     if (!snapshot.ok && !isKernelCode(snapshot.code)) {
       const lack: ListAnswer = { ok: false, code: snapshot.code, message: snapshot.message };
-      return { at: snapshot.at, hostId: null, oats: null, schedule: lack, trigger: lack };
+      return { at: snapshot.at, hostId: null, machine: snapshot.machine ?? null, oats: null, schedule: lack, trigger: lack };
     }
     // Never two reads at once: with a kernel whose lists are slow and a roster that keeps changing,
     // each ask would start another pair of processes. One read runs and one waits behind it.
@@ -70,7 +70,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const supported = oats === null || (oats.features.includes("automations") && oats.automationsApi === 1);
       const none: ListAnswer = { ok: false, code: NO_AUTOMATIONS, message: `OATS ${oats?.version ?? ""} has no automations lists: they need OATS 0.29 or later.` };
       const [schedule, trigger] = supported ? await Promise.all([read("scheduleList"), read("triggerList")]) : [none, none];
-      return { at: new Date().toISOString(), hostId: core.target()?.hostId ?? null, oats, schedule, trigger };
+      return { at: new Date().toISOString(), hostId: core.target()?.hostId ?? null, machine: core.target()?.machine ?? null, oats, schedule, trigger };
     })();
     const entry = { at: Date.now(), roster, value, settled: false, stale: false };
     const done = () => {

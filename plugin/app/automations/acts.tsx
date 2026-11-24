@@ -1,11 +1,14 @@
-// Acting on a row of the Automations page, and on this computer's scheduler: on and off, Run now,
+// Acting on a row of the Automations page, and on the machine's scheduler: on and off, Run now,
 // Test (a capability source's only after a confirmation that says what will run), Edit summary,
 // Delete, Check run state, Enable scheduler. Each goes through the plugin's server to the kernel's
 // own verb; what it answered or refused is said where the person is looking. The names of the
 // acts and their sentences are the Desktop's (views/automations.mjs, views/schedules.mjs).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { experimental_PluginRpcCallError as PluginRpcCallError } from "@get-bb/plugin-sdk/app";
 import type { AutomationRow, AutomationTest } from "../../contract/automations";
+import { isUnconfirmed } from "../../contract/shared";
+import { isKernelCode } from "../../kernel/result";
 import { DESCRIPTION_MAX, DESCRIPTION_RULE, descriptionValid } from "../../model/automations";
 import { attempt, errorMessage } from "../store";
 import type { Rpc } from "../store";
@@ -13,6 +16,7 @@ import { Button, Card, Confirm, Field, INPUT, Lines, Loading, Modal, Result, Swi
 import type { ConfirmProps, MenuItem } from "../ui";
 import { displayLine, shown } from "../ui/text";
 import type { DetailProps } from "./Detail";
+import { useHere, useRunning } from "./here";
 import { FactList, Quote } from "./parts";
 import {
   capabilitySource,
@@ -23,7 +27,6 @@ import {
   NAME_CUT,
   NOTHING_RAN,
   refusalParts,
-  relativeTime,
   ruleWords,
   runState,
   runTone,
@@ -31,12 +34,36 @@ import {
   scheduleOutcome,
   sourceParams,
   switchTitle,
+  dueWords,
+  failedTitle,
+  summaryFailed,
+  TEST_REFUSED,
+  testReady,
   TEST_TIMED_OUT,
+  HERE,
+  TEST_UNREAD,
 } from "./words";
-import type { CapabilitySource, FileTarget } from "./words";
+import type { CapabilitySource, Failed, FileTarget, Here } from "./words";
 
 /** A test's answer, or why there is none. */
-type Tested = { test: AutomationTest } | { error: string; code: string | null };
+/** bb's codes for a call the plugin's server ANSWERED with a no (as app/lifecycle/acts.tsx reads them). */
+const ANSWERED = new Set(["conflict", "invalid", "invalid_input", "forbidden", "not_found", "unknown_method"]);
+/**
+ * A failed act, as what it was: the code that leads its message (the kernel's, or one of the
+ * plugin's own) and the message; and whether it was REFUSED, so that it did not happen. Refused
+ * is the kernel's own no (an `E_…` code it did not mark as unconfirmed), or the plugin's server
+ * turning the request down before any process: bb's code for an answered no, with no code leading
+ * the message. Anything else (no answer in time, an answer that cannot be read, a process that
+ * died, a call nobody answered) may have happened all the same.
+ */
+export function failureOf(error: unknown): { code: string | null; message: string; refused: boolean } {
+  const { code, message } = refusalParts(errorMessage(error));
+  const confirmed = !isUnconfirmed(error);
+  if (code !== null) return { code, message, refused: confirmed && isKernelCode(code) };
+  return { code, message, refused: confirmed && error instanceof PluginRpcCallError && ANSWERED.has(error.code) };
+}
+
+type Tested = { test: AutomationTest } | { error: string; code: string | null; /** the kernel's own message, where `error` is the plugin's sentence for it */ says?: string };
 /** A test's answer as it is kept: for the row as it was tested (its signature), with the number of its arrival. */
 type Kept = { tested: Tested; signature: string; arrival: number };
 type Said = { title: string; tone: "done" | "failed" | "unknown"; lines: string[]; code: string | null };
@@ -128,6 +155,9 @@ function SourceLists({ source }: { source: NonNullable<AutomationTest["source"]>
 
 /** The Test result card. A capability source's speaks of the source first; another's of whether it would run here. */
 export function TestCard({ tested, now }: { tested: Tested; now: number }) {
+  const here = useHere();
+  // The kernel's test knows nothing of the host timer: while it is off nothing is due, and the card does not say a run is.
+  const running = useRunning();
   const warn = `${LINE} text-destructive-text`;
   if ("error" in tested) {
     return (
@@ -135,6 +165,11 @@ export function TestCard({ tested, now }: { tested: Tested; now: number }) {
         <p className={warn}>
           <Lines text={tested.error} />
         </p>
+        {tested.says === undefined ? null : (
+          <p className={LINE}>
+            <Lines text={tested.says} />
+          </p>
+        )}
         {tested.code === null ? null : <p className="text-xs text-muted-foreground">{shown(tested.code)}</p>}
       </Card>
     );
@@ -143,11 +178,11 @@ export function TestCard({ tested, now }: { tested: Tested; now: number }) {
   const ran = test.source;
   const soul = test.soul !== null && !test.soul.resolves && test.problems.length === 0 ? <p className={warn}>{shown(`The soul does not resolve${test.soul.error !== null ? `: ${test.soul.error}` : ""}`)}</p> : null;
   const account = test.account === null ? null : <p className={LINE}>{shown(`gh acts as ${test.account}`)}</p>;
-  const due = relativeTime(test.nextDue, now);
+  const due = dueWords(test.nextDue, now);
   if (ran === null) {
     return (
       <Card title="Test result" testId="oats-automation-test">
-        <p className={test.ok ? LINE : warn}>{test.ok ? "Ready: it would run here." : "Not ready on this computer."}</p>
+        <p className={test.ok ? LINE : warn}>{test.ok ? testReady(running) : `Not ready on ${here.on}.`}</p>
         {test.problems.map((problem, at) => (
           <p key={`p${at}`} className={warn}>
             {shown(problem)}
@@ -162,11 +197,11 @@ export function TestCard({ tested, now }: { tested: Tested; now: number }) {
         {account}
         <FireList test={test} />
         {/* Only what is so: a due time that has passed (a list kept, or the moment before the next tick) was due, it is not next. */}
-        {due === null ? null : <p className={LINE}>{`${Date.parse(test.nextDue ?? "") <= now ? "Was due" : "Next due"} ${due.label}`}</p>}
+        {due === null || !running ? null : <p className={LINE}>{`${due.word === "Next" ? "Next due" : due.word} ${due.label}`}</p>}
       </Card>
     );
   }
-  // A capability source: first what the source did (not whether this computer is ready), then the
+  // A capability source: first what the source did (not whether the machine is ready), then the
   // placement as the kernel reports it, its warnings, and what would fire when the source answered.
   return (
     <Card title="Test result" testId="oats-automation-test">
@@ -192,7 +227,7 @@ export function TestCard({ tested, now }: { tested: Tested; now: number }) {
           {ran.says === null ? null : <Quote leadIn={LEAD_INS.source(ran.capability, ran.name)} lines={[{ text: [ran.says.code, ran.says.message] }]} />}
         </>
       )}
-      {/* A manual test runs the source whatever this computer's trust and the trigger's host say: "would run here" is said only when the kernel found nothing against it. */}
+      {/* A manual test runs the source whatever the machine's trust and the trigger's host say: "would run here" is said only when the kernel found nothing against it. */}
       {test.ok && test.problems.length === 0 ? <p className={LINE}>Would run here on its own</p> : test.problems.length > 0 ? <p className={LINE}>Tested by hand</p> : null}
       {test.problems.map((problem, at) => (
         <p key={`p${at}`} className={warn}>
@@ -213,6 +248,7 @@ export function TestCard({ tested, now }: { tested: Tested; now: number }) {
 
 /** The Test confirm of a capability source's trigger: what pressing Run test does, said before it does it. It offers Run test and Cancel, and nothing that trusts, enables, starts or schedules the trigger. */
 function SourceConfirm({ row, source, host, running, disabled, onRun, onCancel }: { row: AutomationRow; source: CapabilitySource; host: string | null; /** This test is on its way. */ running: boolean; /** An act is on its way, this one or another. */ disabled: boolean; onRun: () => void; onCancel: () => void }) {
+  const here = useHere();
   const params = sourceParams(row.on);
   const elsewhere = row.reason === "assigned-elsewhere" || (row.runsOn !== null && row.runsOn !== host);
   return (
@@ -220,9 +256,9 @@ function SourceConfirm({ row, source, host, running, disabled, onRun, onCancel }
       <p className={LINE}>
         {"This runs "}
         {source.capability === null ? "the capability" : <code className="font-mono text-xs">{source.capability}</code>}
-        {"'s source command on this computer, now, once. Nothing is recorded and nothing is spawned."}
+        {`'s source command on ${here.on}, now, once. Nothing is recorded and nothing is spawned.`}
       </p>
-      {row.reason === "untrusted" ? <p className={LINE}>This trigger isn't trusted on this computer. Testing doesn't trust it or start it.</p> : null}
+      {row.reason === "untrusted" ? <p className={LINE}>{`This trigger isn't trusted on ${here.on}. Testing doesn't trust it or start it.`}</p> : null}
       {elsewhere ? (
         <p className={LINE}>
           {"The test runs here, not on "}
@@ -255,7 +291,7 @@ function SourceConfirm({ row, source, host, running, disabled, onRun, onCancel }
 export type Acts = {
   /** What the last act did or why it was refused, above the list or the row's page. */
   result: ReactNode;
-  /** A row's switch: on or off on this computer. Nothing for a row another computer runs. */
+  /** A row's switch: on or off on the machine. Nothing for a row another computer runs. */
   switchOf(row: AutomationRow): ReactNode;
   /** A row's menu, after Open. */
   menuOf(row: AutomationRow): MenuItem[];
@@ -267,8 +303,10 @@ export type Acts = {
   dialog: ReactNode;
 };
 
-export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onOpenFile, hostId, onRemoved, neighbourOf }: {
+export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onOpenFile, hostId, onRemoved, neighbourOf, here = HERE }: {
   rpc: Rpc;
+  /** The machine that holds the deployment, as the page names it. */
+  here?: Here;
   /** Reads the lists again. */
   refresh: () => void;
   /** This OATS writes summaries (feature automation-descriptions). */
@@ -333,12 +371,12 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
     to?.focus();
   });
   const switchOfRow = (row: AutomationRow) => () =>
-    Array.from(document.querySelectorAll<HTMLElement>('[role="switch"]')).find((control) => control.getAttribute("aria-label") === `${row.id} enabled on this computer`) ?? null;
+    Array.from(document.querySelectorAll<HTMLElement>('[role="switch"]')).find((control) => control.getAttribute("aria-label") === `${row.id} enabled on ${here.on}`) ?? null;
   const first = () => document.querySelector<HTMLElement>('[data-testid="oats-automation-back"], [data-testid="oats-automations"] [role="tab"][aria-selected="true"]');
 
-  const refused = (what: string, error: unknown): Said => {
-    const { code, message } = refusalParts(errorMessage(error));
-    return { title: what, tone: "failed", lines: [message], code };
+  const refused = (what: Failed, error: unknown): Said => {
+    const { code, message, refused: no } = failureOf(error);
+    return { title: failedTitle(no, what), tone: "failed", lines: [message], code };
   };
   /**
    * One act at a time. While it runs the page says so in words; then what it answered (`done`) or
@@ -364,7 +402,7 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
     [refresh],
   );
   /** An act whose answer is said above the list or the row's page. */
-  const say = <Value,>(words: string, call: () => Promise<Value>, done: (value: Value) => Said | null, failed: string) => {
+  const say = <Value,>(words: string, call: () => Promise<Value>, done: (value: Value) => Said | null, failed: Failed) => {
     const put = (answer: Said | null) => setSaid(answer === null ? null : { ...answer, arrival: arrival() });
     return act(words, call, (value) => put(done(value)), (error) => put(refused(failed, error)));
   };
@@ -386,21 +424,23 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
         back.current = switchOfRow(row);
         return null;
       },
-      row.enabledHere ? `${row.name} was not turned off here` : `${row.name} was not turned on here`,
+      row.enabledHere
+        ? { no: `${row.name} was not turned off here`, maybe: `${row.name} may not have been turned off here` }
+        : { no: `${row.name} was not turned on here`, maybe: `${row.name} may not have been turned on here` },
     );
   const runNow = (row: AutomationRow) =>
     say(
       `Running ${row.name}…`,
       () => rpc.call("scheduleRun", { id: row.id }),
       ({ run }) => ({ title: `${row.id}: ${scheduleOutcome(run)}`, tone: runTone(run), lines: runWhy(run), code: run?.errorCode ?? null }),
-      `${row.name} was not run`,
+      { no: `${row.name} was not run`, maybe: `${row.name} may not have been run` },
     );
   const reconcile = (row: AutomationRow) =>
     say(
       `Checking the run state of ${row.name}…`,
       () => rpc.call("scheduleReconcile", { id: row.id }),
       ({ reconciled, remedy }) => ({ title: reconciled === "unknown" ? "Run state is still unknown." : `Run state: ${reconciled ?? "checked"}.`, tone: reconciled === "unknown" ? "unknown" : "done", lines: remedy === null ? [] : [remedy], code: null }),
-      `The run state of ${row.name} was not checked`,
+      { no: `The run state of ${row.name} was not checked`, maybe: `The run state of ${row.name} may not have been checked` },
     );
   /**
    * A test's answer is kept for its row and shown on the row's page, so a test from the list's menu
@@ -435,9 +475,9 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
       },
       (error) => {
         setConfirming(null);
-        const { code, message } = refusalParts(errorMessage(error));
+        const { code, message, refused: no } = failureOf(error);
         if (!runSource && code === "E_TRIGGER_SOURCE_RUN") nothing();
-        else keep(row, code === "OATS_TIMEOUT" ? { error: TEST_TIMED_OUT, code } : { error: message, code });
+        else keep(row, code === "OATS_TIMEOUT" ? { error: TEST_TIMED_OUT, code } : { error: no ? TEST_REFUSED : TEST_UNREAD, says: message, code });
       },
       key,
     );
@@ -456,7 +496,9 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
       setDialog(null);
       refresh();
     } catch (error) {
-      setDialog({ kind: "summary", row, value, saving: false, error: errorMessage(error) });
+      // A failure leads with a person's words (not saved when it was refused; else it may have been); the message follows, its code last.
+      const { code, message, refused: no } = failureOf(error);
+      setDialog({ kind: "summary", row, value, saving: false, error: summaryFailed(no, code, message) });
       refresh();
     }
   };
@@ -468,11 +510,12 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
     setDialog({ ...dialog, phase: { kind: "running", doing: "Deleting…" } });
     try {
       await attempt(() => rpc.call("scheduleRemove", { id: row.id }));
-      setDialog({ kind: "delete", row, phase: { kind: "done", title: `${shown(row.name)} was deleted`, lines: ["It is removed from this computer and no longer runs here."] } });
+      setDialog({ kind: "delete", row, phase: { kind: "done", title: `${shown(row.name)} was deleted`, lines: [`It is removed from ${here.on} and no longer runs here.`] } });
       onRemoved(row);
       refresh();
     } catch (error) {
-      setDialog({ kind: "delete", row, phase: { kind: "failed", title: `${shown(row.name)} was not deleted`, refusal: errorMessage(error) } });
+      const title = failedTitle(failureOf(error).refused, { no: `${shown(row.name)} was not deleted`, maybe: `${shown(row.name)} may not have been deleted` });
+      setDialog({ kind: "delete", row, phase: { kind: "failed", title, refusal: errorMessage(error) } });
       refresh();
     }
   };
@@ -484,7 +527,10 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
       const on = scheduler.installed && scheduler.active && scheduler.registered !== false;
       setDialog({ kind: "scheduler", phase: { kind: "done", title: on ? "The scheduler is on" : "The timer was installed, and the scheduler is not running yet", lines: warnings } });
     } catch (error) {
-      setDialog({ kind: "scheduler", phase: { kind: "failed", title: "The scheduler was not enabled", refusal: errorMessage(error) } });
+      // The kernel's own E_SCHEDULE_HOST can come after part of the install (the timer written, the service manager then failing): only a refusal before any of it says nothing was enabled.
+      const failure = failureOf(error);
+      const title = failure.code === "E_SCHEDULE_HOST" ? "The scheduler may not have been enabled" : failedTitle(failure.refused, { no: "The scheduler was not enabled", maybe: "The scheduler may not have been enabled" });
+      setDialog({ kind: "scheduler", phase: { kind: "failed", title, refusal: errorMessage(error) } });
     } finally {
       refresh();
     }
@@ -504,7 +550,7 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
     items.push({ id: "test", label: "Test", disabled, onSelect: () => test(row) });
     if (canRun(row)) items.push({ id: "run", label: "Run now", disabled, onSelect: () => void runNow(row) });
     if (row.group !== "elsewhere") items.push({ id: "toggle", label: row.enabledHere ? "Turn off here" : "Turn on here", disabled, onSelect: () => void toggle(row) });
-    const file = fileTarget(row, hostId).target;
+    const file = fileTarget(row, hostId, here).target;
     if (onOpenFile !== undefined && file !== null) items.push({ id: "file", label: "Open file", onSelect: () => onOpenFile(file) });
     if (canDescribe(row)) items.push({ id: "describe", label: "Edit summary", disabled, onSelect: () => describe(row) });
     if (canReconcile(row)) items.push({ id: "reconcile", label: "Check run state", disabled, onSelect: () => void reconcile(row) });
@@ -514,7 +560,7 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
 
   const switchOf = (row: AutomationRow): ReactNode =>
     row.group === "elsewhere" ? null : (
-      <Switch label="This computer" name={`${row.id} enabled on this computer`} title={held[row.kind] ?? switchTitle(row)} checked={row.enabledHere} disabled={off(row)} onChange={() => void toggle(row)} />
+      <Switch label={here.name} name={`${row.id} enabled on ${here.on}`} title={held[row.kind] ?? switchTitle(row, here)} checked={row.enabledHere} disabled={off(row)} onChange={() => void toggle(row)} />
     );
 
   const rowParts: Acts["rowParts"] = (row, now, host) => {
@@ -648,7 +694,7 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
         title="Delete schedule"
         about={dialog.row.name}
         shownFor={dialog.row.name}
-        happens={[`${dialog.row.name} is removed from this computer and stops running here.`]}
+        happens={[`${dialog.row.name} is removed from ${here.on} and stops running here.`]}
         confirmLabel="Delete schedule"
         destructive
         phase={dialog.phase}
@@ -660,13 +706,13 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
     ) : dialog.kind === "scheduler" ? (
       <Confirm
         title="Enable scheduler"
-        about="this computer"
-        shownFor="this computer"
+        about={here.on}
+        shownFor={here.on}
         happens={[
-          "OATS installs its scheduler's timer on this computer, for the account bb's machine runs as: a systemd user timer (oats-schedule-tick.timer) on Linux, a launchd agent (ai.oats.schedule-tick) on macOS.",
+          `OATS installs its scheduler's timer on ${here.on}, for the account bb's machine runs as: a systemd user timer (oats-schedule-tick.timer) on Linux, a launchd agent (ai.oats.schedule-tick) on macOS.`,
           "Every minute the timer runs `oats schedule tick`, which launches what this deployment's schedules and triggers say is due.",
         ]}
-        kept={["Nothing else on this computer is changed. `oats schedule host uninstall`, run in the deployment, removes the timer."]}
+        kept={[`Nothing else on ${here.on} is changed. \`oats schedule host uninstall\`, run in the deployment, removes the timer.`]}
         confirmLabel="Enable scheduler"
         phase={dialog.phase}
         onConfirm={() => void confirmScheduler()}

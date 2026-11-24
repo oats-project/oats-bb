@@ -248,8 +248,8 @@ test("the soul is a link to its page where that page is shown, and its name alon
 });
 
 test("a stopped agent says since when from its last recorded \"stopped\" event, read for this thread's agent alone", async () => {
-  const slot = await render("thr_digest", fixtureAgents()); // the recorded events: stopped at 2026-11-21T18:23:24.196Z
-  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-21T18:23:24.196Z")}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
+  const slot = await render("thr_digest", fixtureAgents()); // the recorded events: stopped at 2026-11-23T18:01:33.424Z
+  await vi.waitFor(() => expect(slot.getByTestId("oats-status-line").textContent).toBe(`Stopped· since ${waitingClock("2026-11-23T18:01:33.424Z")}· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel`));
   expect(slot.inspection.rpcCalls.filter((call) => call.method === "panelEvents").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper" }]);
   slot.unmount();
   resetApp();
@@ -289,8 +289,8 @@ test("a stopped agent that was started and stopped again says the time of this s
 });
 
 test("events read before the session's start hold no time for this stop: the line says none, never an earlier stop's", async () => {
-  const agents = fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, startedAt: "2026-11-22T08:00:00.000Z" } : agent));
-  const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-21T18:23:24.196Z, before that start
+  const agents = fixtureAgents().map((agent) => (agent.instance === "weekly-digest-helper" ? { ...agent, startedAt: "2026-11-24T08:00:00.000Z" } : agent));
+  const slot = await render("thr_digest", agents); // the recorded events: stopped at 2026-11-23T18:01:33.424Z, before that start
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "panelEvents")).toBe(true));
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(slot.getByTestId("oats-status-line").textContent).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");

@@ -685,18 +685,26 @@ front for them and never uses bb's own automations. The page is the OATS Desktop
 page, in its words.
 
 - **Two tabs, Schedules and Triggers**, each with its count. A list groups its rows by where they
-  run, because the first question is what this computer does: **Runs on this computer**, **Needs
-  attention here** (wrong account here, not trusted here, an invalid or unreadable definition) and
+  run, because the first question is what the machine that holds the deployment does: **Runs on
+  <machine>** (by bb's name for it, since the browser that draws the page may be anywhere; the
+  Desktop's "this computer" stands only while bb gives no name), **Needs attention here** (wrong account here, not trusted here, an invalid or unreadable definition) and
   **Runs elsewhere**. All / Workspace / Local filters by where the definition lives; the search
   reads the id, the soul, the task or wake message, the summary, the host and the account.
 - **A row** says its name and where it is from, its summary (or the first line of its prompt, in
   italics), its soul, when it runs in words, where it runs and as whom, and its last and next run.
+  A last run that failed is marked as a failure, one whose launch is not known as a warning, each
+  with its word. A next run whose time has passed reads "Was due <age>", and while the host
+  scheduler is off no row is drawn as one that runs: the group is "Set to run on <machine>", the
+  mark is muted and "Scheduler off" stands where the next run would be.
   The kernel places every row (`runsHere`, `reason`, `enabledHere`); the plugin reads those facts
   and derives none.
 - **A row's page** shows what it sends, whole (the prompt, the wake message, the command's argv,
   the operation), when it runs or what it watches, what it spawns, its recent runs or fires on
-  this computer, what is wrong with it, its run state, where it runs and where it comes from. A run
-  that did not happen says why in the kernel's words. **Open file** previews the definition from
+  that machine, what is wrong with it, its run state, where it runs and where it comes from, as
+  cards of equal width; a schedule whose agent is woken again has a **Recurring wake-up** card.
+  What is wrong (an invalid or unreadable definition, a source check that failed, an unknown run
+  state, a failed poll) is one sentence in a person's words, with the kernel's own message, code
+  and field under **Details**. A run that did not happen says why in the kernel's words. **Open file** previews the definition from
   the machine that holds the deployment, or opens its web page for a member with no clone here. A schedule's or a trigger's Prompt and a wake's message are
   the one exception to the display filter: they are drawn whole, as the Desktop draws them (their
   lines, blank lines and indentation kept, nothing withheld, nothing cut), because they are the
@@ -724,7 +732,7 @@ asked: the page says which OATS it needs.
 **Acting on a row** goes through the kernel's own verbs, for a row the current list names:
 
 - **The switch** (and Turn off here / Turn on here in the row's ⋯ menu) turns a row on or off on
-  this computer: a local item's own switch, a workspace item's entry in this host's opt-outs.
+  that machine: a local item's own switch, a workspace item's entry in this host's opt-outs.
 - **Run now** (a schedule that runs here) says what the run did in words: Agent launched, Launch
   failed with the kernel's reason, Launch state unknown. **Check run state** asks the kernel about
   a run whose state is unknown.
@@ -925,6 +933,32 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   harness list and model suggestions the dialog has are the bb session provider's, which say
   nothing of a tmux home, so the kernel starts it with the launch its home recorded. The
   sentences of a resume are this plugin's own (the Desktop resumes without a screen; WORDS.md).
+- **Restart does not stop what it cannot start.** The kernel's `session restart` stops the running
+  session BEFORE the provider judges the MODEL it was asked for: a restart the
+  provider then refuses leaves the agent stopped, its thread archived and nothing started
+  (recorded on OATS 0.70.5 for a model pi does not have; a kernel gap). A refused start or spawn
+  harms nothing, so only the RESTART dialog holds, for an agent on bb, by one rule
+  (`model/restart-model.ts`, its table in `test/model/restart-model.test.ts`): the model left
+  blank is the agent's own and is sent as before; a model the person CHANGED arms Restart only
+  when bb's list for the harness the restart would run on has been read and serves that id
+  exactly once, by the bb session provider's own rule for a pi model (its `piModelVerdict`): the
+  model listed under exactly that id, else the one model whose BARE id it is (its id minus the
+  provider bb routes it by; a bare id may itself hold a slash, so nothing is matched by what an id
+  ends in, and a model bb lists for pi with no provider serves nothing). For a harness whose list
+  names no providers (Claude Code's bare ids) a changed model is armed only if listed whole.
+  Otherwise it is held, the word on the Model field and beside the button: "Not found" (no listed
+  model serves it; and where bb gives no list, an empty one, or none within ten seconds: it cannot
+  be shown to start), "Pick provider" (several serve it: the field then offers only those),
+  "Required" (the harness was changed and no model picked). While the list is read the button is
+  off with no word. A harness CHANGED to one whose bb provider is not ready on this machine is NOT
+  held: the kernel runs the provider's readiness check before the stop and refuses with nothing
+  stopped (`E_BACKEND_NOT_READY`, recorded on OATS 0.70.5: the agent still runs), so the dialog's
+  ordinary refusal is the answer; that check is handed no model, which is why a bad model still
+  stops first. "Shown to start" rests on bb's list as the app reads it (bb may serve one it kept): a model removed
+  from pi since is still listed, and the provider then judges. THE HOLD IS THE APP'S: the plugin's server
+  cannot read bb's model list (only the app's SDK can), so a caller past
+  the app (the plugin's rpc by hand) still reaches the kernel. An agent on tmux has no harness
+  and no model field, and the server refuses both for it: the trap cannot be reached there.
 - **A start begins a new conversation.** A Start, and a Restart, always make a NEW bb thread; the
   launch stops and archives the one the agent had (the bb session provider's
   `oats-package/capabilities/oats-bb/lib/launch.mjs`). Both dialogs

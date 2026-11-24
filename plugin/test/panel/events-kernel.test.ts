@@ -9,8 +9,8 @@ import { panelEvents, panelEventsArgv, parsePanelEvents } from "../../kernel/pan
 type Answer = { events: Record<string, unknown>[] } & Record<string, unknown>;
 const recorded = (): Answer => structuredClone((JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures/panel/events.json"), "utf8")) as { result: Answer }).result);
 const HOME = "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper";
-const row = (kind: string, data: unknown, incarnation: string | null = "2026-11-21T18:13:36.478Z") => ({
-  eventsApi: 2, at: "2026-11-21T18:30:00.000Z", instance: "panel-worktree-helper", home: HOME, incarnation, producer: "kernel", kind, data,
+const row = (kind: string, data: unknown, incarnation: string | null = "2026-11-23T18:00:56.149Z") => ({
+  eventsApi: 2, at: "2026-11-23T18:17:26.000Z", instance: "panel-worktree-helper", home: HOME, incarnation, producer: "kernel", kind, data,
 });
 const only = (kind: string, data: unknown, incarnation?: string | null) => {
   const document = recorded();
@@ -35,15 +35,15 @@ describe("the activity read", () => {
     expect(answer.value).toMatchObject({
       count: 8, returned: 8, truncated: false,
       integrity: { unreadableRows: 0, foreignRows: 0, sources: [{ path: "home", status: "ok" }, { path: "workspace", status: "ok" }] },
-      waitingOnYou: { producer: "oats.board", since: "2026-11-21T18:23:39.829Z", message: "Which base branch?" },
-      waitingClaims: [{ producer: "oats.board", waiting: true, since: "2026-11-21T18:23:39.829Z", reason: "attention" }],
+      waitingOnYou: { producer: "oats.board", since: "2026-11-23T18:01:45.726Z", message: "Which base branch?" },
+      waitingClaims: [{ producer: "oats.board", waiting: true, since: "2026-11-23T18:01:45.726Z", reason: "attention" }],
     });
     expect(answer.value.events.map((event) => `${event.kind} ${event.producer} ${event.incarnation}`)).toEqual([
       "spawned kernel current", "launched kernel current", "waiting oats.board current", "restarted kernel current", "launched kernel current", "stopped kernel current",
       "launched kernel current", "waiting oats.board current",
     ]);
     expect(answer.value.events[0]).toEqual({
-      at: "2026-11-21T18:13:37.962Z", kind: "spawned", producer: "kernel", incarnation: "current",
+      at: "2026-11-23T18:00:58.151Z", kind: "spawned", producer: "kernel", incarnation: "current",
       facts: [
         { key: "agent", value: "oats-expert" }, { key: "work", value: "worktree" }, { key: "branch", value: "agents/panel-worktree-helper" }, { key: "model", value: "claude-opus-5-5" },
         { key: "parentInstance", value: "redesign-ui-lead" }, { key: "relation", value: "child" }, { key: "harness", value: "claude" }, { key: "launched", value: true },
@@ -52,8 +52,8 @@ describe("the activity read", () => {
     });
     expect(answer.value.events[1]?.facts).toEqual([{ key: "backend", value: "bb" }, { key: "launchConfig", value: null }, { key: "harness", value: "claude" }]);
     expect(answer.value.events[2]?.facts).toEqual([{ key: "waitingOnYou", value: true }, { key: "reason", value: "attention" }, { key: "message", value: "How should I merge the pull request?" }]);
-    expect(answer.value.events[3]?.facts).toEqual([{ key: "phase", value: "restart-stop" }, { key: "signal", value: null }, { key: "waitedMs", value: 2064 }, { key: "stillRunningCount", value: 0 }]);
-    expect(answer.value.events[5]?.facts).toEqual([{ key: "signal", value: null }, { key: "state", value: "stopped" }, { key: "waitedMs", value: 2149 }, { key: "stillRunningCount", value: 0 }]);
+    expect(answer.value.events[3]?.facts).toEqual([{ key: "phase", value: "restart-stop" }, { key: "signal", value: null }, { key: "waitedMs", value: 3775 }, { key: "stillRunningCount", value: 0 }]);
+    expect(answer.value.events[5]?.facts).toEqual([{ key: "signal", value: null }, { key: "state", value: "stopped" }, { key: "waitedMs", value: 4436 }, { key: "stillRunningCount", value: 0 }]);
   });
 
   it("processes still running are a count, never their list", () => {

@@ -155,3 +155,28 @@ test("three events in a row once the window has its roster, each while the rerea
   expect(facts()).not.toMatch(/^Needs you/);
   expect(calls).toBe(4); // one read per event after the load: none more
 });
+
+test("the first answer FAILS while an event is owed a read, and a second event comes while that read is on its way: each is owed its read in turn, and the window ends on the new roster", async () => {
+  // Answers: 1 the load, held on its way and then failing; 2 the read owed for the first event, held, made before the second change; 3 the roster after it.
+  let calls = 0;
+  const held: ((fail: boolean) => void)[] = [];
+  const { slot, facts } = await sidebarOver(async () => {
+    calls += 1;
+    if (calls <= 2) {
+      const fail = await new Promise<boolean>((resolve) => held.push(resolve));
+      if (fail) throw new Error("E_OATS_TIMEOUT: oats status did not answer");
+      return fixtureSnapshot(before());
+    }
+    return fixtureSnapshot(after());
+  });
+  await waitFor(() => expect(calls).toBe(1));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.000Z" }));
+  await act(async () => held[0]!(true)); // the first answer fails: the window has no roster yet
+  await waitFor(() => expect(calls).toBe(2)); // the read owed for the first event
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.400Z" }));
+  expect(calls).toBe(2); // nothing beside the read on its way
+  await act(async () => held[1]!(false)); // it answers, with the roster from before the second change
+  await slot.findByTestId("oats-tree");
+  await waitFor(() => expect(facts()).not.toMatch(/^Needs you/)); // the second event was owed a read too: not swallowed
+  expect(calls).toBe(3);
+});

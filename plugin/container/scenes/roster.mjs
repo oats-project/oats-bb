@@ -216,7 +216,7 @@ export default [
           record(CHANGES[load % 2]);
           await page.goto("/");
           const shownSidebar = await showSidebar(page, viewport);
-          const first = await page.until(`${stateNow} === "" ? "" : ${stateNow}`, 30); // what the window drew first: the roster from before the change, or already the new one
+          const first = await page.until(stateNow, 30); // what the window drew first: the roster from before the change, or already the new one
           const ends = shownSidebar && Boolean(await page.until(`${stateNow} === ${JSON.stringify(wanted)}`, 30));
           if (ends) right += 1;
           else wrong.push(`load ${load + 1}: wanted ${wanted}; the window drew "${first ?? "nothing"}" first and holds "${await page.evaluate(stateNow)}" 30 s later`);

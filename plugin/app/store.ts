@@ -95,11 +95,18 @@ export function useRead<Method extends ReadMethod>(
   const rpc = useRpc<Contract>();
   const query = useRpcQuery({ contract: rpcContract, method, input: null, enabled });
   const refetch = useRef(query.refetch);
-  /** Whether the read's FIRST answer is on its way: bb is fetching it and it has none yet. */
-  const first = useRef(query.isFetching && query.data === undefined);
+  /**
+   * Whether the read's FIRST answer is on its way: bb is fetching it and it has none yet. Set as the
+   * read is drawn (not in an effect, which runs a moment later): an event that comes between a
+   * draw and its effect would else see the read as it was before. What is left is the moment
+   * between bb's notice of an answer and the draw it causes: an event in it sees the read from
+   * before that answer, which costs one read too many (the answer had just come) or, for a read
+   * whose first answer FAILED and that an event restarts, is handed that restarted read once.
+   */
+  const first = useRef(false);
+  first.current = query.isFetching && query.data === undefined;
   useEffect(() => {
     refetch.current = query.refetch;
-    first.current = query.isFetching && query.data === undefined;
   });
 
   useRealtime(REALTIME_CHANGED, (payload) => {

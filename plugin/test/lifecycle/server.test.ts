@@ -73,12 +73,13 @@ describe("stop", () => {
     const receipt = await rpc<{ endedAt: string; ok: boolean }>("stopApply", { instance: "redesign-ui-lead", revision: plan.revision, key: "stop-7f3a9c2e41b8" });
     expect(new Date(receipt.endedAt).toISOString()).toBe(receipt.endedAt); // an ISO instant
     expect(Date.parse(before.at)).toBeLessThanOrEqual(Date.parse(receipt.endedAt)); // read before the act: "before"
-    // The read the act asked for: its roster's stamp is later than the act's end.
-    let after = before;
-    for (let tries = 0; tries < 100 && Date.parse(after.at) <= Date.parse(receipt.endedAt); tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      after = await rpc<{ at: string }>("snapshot");
-    }
+    // The read the act asked for is PUBLISHED (a window reads the roster again only on a publish: this test does not poll
+    // `snapshot` for it, which no window does), and the roster it then gets has a stamp later than the act's end.
+    const signals = () => backend!.server.harness.realtimeSignals.length;
+    const publishedBefore = signals();
+    for (let tries = 0; tries < 100 && signals() === publishedBefore; tries += 1) await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(signals()).toBeGreaterThan(publishedBefore);
+    const after = await rpc<{ at: string }>("snapshot"); // as the window does, on that publish
     expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(receipt.endedAt));
     // The same stamp on a start's answer.
     const started = await rpc<{ endedAt: string }>("start", { instance: "weekly-digest-helper" });

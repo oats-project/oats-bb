@@ -2561,6 +2561,29 @@ test("a Stop that did not stop them all: the sessions that DID stop are marked (
   expect(partial.results.map((row) => [row.ok, actedAt(row.instance)])).toEqual(partial.results.map((row) => [row.ok, row.ok ? ENDED : null]));
 });
 
+// "Check again" asks for the receipt of an act the kernel already did: a REPLAYED receipt. The act is not new, and the
+// server's stamp on a replay is when the replay returned, not when the act ended: it marks nobody (ruled from the fourth
+// review round: each press held the agents ten seconds for nothing).
+test("a REPLAYED receipt marks nobody: neither a stop's sessions nor a retire's agent and children", async () => {
+  const { actedAt } = await import("../../app/roster/reading");
+  const stop = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => ({ ...stopReceiptOf(), replayed: true, endedAt: ENDED }) });
+  await stop.pick("stop");
+  await ready(stop.slot);
+  fireEvent.click(button(stop.slot, "oats-confirm-act"));
+  await waitFor(() => expect(stop.slot.getByTestId("oats-confirm").getAttribute("data-phase")).not.toBe("running"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"].map(actedAt)).toEqual([null, null, null]);
+  resetApp();
+  const stoppedChild = { instance: "digest-links-helper", ok: true, alreadyIdle: false, code: null, stillRunning: null, detail: null };
+  const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => ({ ...retireReceiptOf(), replayed: true, children: [stoppedChild], endedAt: ENDED }) });
+  await retire.pick("retire");
+  await ready(retire.slot);
+  fireEvent.click(button(retire.slot, "oats-confirm-act"));
+  await waitFor(() => expect(retire.slot.getByTestId("oats-confirm").getAttribute("data-phase")).not.toBe("running"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect([actedAt("weekly-digest-helper"), actedAt("digest-links-helper")]).toEqual([null, null]);
+});
+
 test("a Start, a Restart and a Retire that are done mark their agent with the act's end (mid-act roster: before; one read after it: read); a Retire marks the children it stopped too; a refused apply marks nothing", async () => {
   const { actedAt, beforeEnd } = await import("../../app/roster/reading");
   const judged = (instance: string) => [actedAt(instance), beforeEnd(actedAt(instance) ?? "", MID_ACT), beforeEnd(actedAt(instance) ?? "", AFTER)];

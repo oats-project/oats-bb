@@ -225,7 +225,10 @@ same clock at the act's END (`endedAt`, stamped by the server when its `oats` co
 has `at` <= `endedAt`: a status read that started before the act ended cannot be trusted to hold
 what the act did. One process, one clock: the window's clock is in neither, and is never compared.
 Nothing else is asked: no state is kept, no word, no row, no case per act (four earlier forms
-answered the question by proxy, and each was found short). Every agent a result names is marked:
+answered the question by proxy, and each was found short). The home's cards of an agent that runs outside OATS and of a stopped agent that asks read the same
+rule (asked of the roster the card is drawn from: a card reads nothing of its own); the Souls
+page's detached agents do not (not a pilot screen). A REPLAYED receipt ("Check again") marks
+nobody: the act is not new. Every agent a result names is marked:
 a stop's sessions (also those that did stop in a stop that did not stop them all), a retire's
 agent and the children it stopped. Every act asks the server for a status read as it ends, so a
 roster read after the end follows within a second or two; a row the server patched from the

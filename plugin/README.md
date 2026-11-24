@@ -1126,7 +1126,10 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   the pause after every read and spends at most half its time on status (the first spec's "never
   within 5 s of the last" gave way to this). The server says in its log, at debug level, which rule
   each read asked for mid-read took. Each
-  reread that differs publishes `oats/changed`, and the app refetches. A harness that exits by
+  reread that differs publishes `oats/changed`, and the app refetches. One reread is published
+  also when it says nothing new: the one a stop, a start, a restart or a retire asks for as it
+  ends (`rereadAfterAct`), because the window holds "Reading…" over the agent until it has a
+  roster read after the act's end (`app/roster/reading.tsx`). A harness that exits by
   itself writes no event: the 15 s poll carries it. The watch dies with the host worker; it is
   asserted again at every start of the plugin's service, after a worker exit, and after any read
   that finds it gone.

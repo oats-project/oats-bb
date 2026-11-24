@@ -454,7 +454,9 @@ try {
   act("stop apply", "stopApply", { instance: NAME, revision: stopPlan?.revision, key: "stop-a1b2c3d4e5f6" });
   row = await untilRow(NAME, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");
   show("oats status", brief(row));
-  // (P4b's last word: a restart sent by its press would have ended by now, and would be recorded.)
+  // (P4b's last word: a restart sent by its press is expected to have ended by now, and would then be recorded.
+  // Not certain: this waits for the stop, not for that call, and a call the plugin killed leaves no record. The
+  // page is the proof that nothing was sent; this read is a second witness.)
   check(restartsSinceHold().length === 0, "the wrapper recorded NO `oats session restart` between the held Restart dialog and this stop", JSON.stringify(restartsSinceHold()));
   // What the stop left of the pi thread, by provider (../scenario.mjs, stopLeft): archived (a provider that archives at stop), or there and not active.
   const stoppedOn = bbThread(threadId);

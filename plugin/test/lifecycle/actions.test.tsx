@@ -2415,7 +2415,7 @@ test("a harness changed to one bb cannot run here is NOT held: the kernel refuse
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "failed");
   expect(calls(slot, "restart").map((call) => call.input)).toEqual([{ instance: "redesign-ui-lead", harness: "claude", model: "opus" }]);
-  // The refusal, as the kernel said it: under Details, whole.
+  // The refusal, as the kernel said it: under Details (its last clause is what matters here: nothing was stopped).
   expect(slot.getByTestId("oats-act-details").textContent).toContain("bb did not report its claude-code provider's status (no claude-code entry); nothing was stopped or started");
 });
 

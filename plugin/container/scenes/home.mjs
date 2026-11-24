@@ -555,14 +555,14 @@ export default [
     run: async ({ page, at, check: plain, record }) => {
       const check = printing(plain);
       check(await open(page, within("oats-home-working")), `${at} the home lists who works`, await page.evaluate(textOf(PAGE)));
-      const before = await page.until(`(() => { const text = ${headingOf("oats-home-working")}; return /^working \\d+$/i.test(text) ? text : ""; })()`, 30);
+      const before = await page.until(`(() => { const text = ${headingOf("oats-home-working")}; return /^running \\d+$/i.test(text) ? text : ""; })()`, 30); // (the list's heading: "Running N": the lead's T4)
       const n = Number(String(before ?? "").split(" ")[1]);
       check(Number.isInteger(n) && n > 1, `${at} before the change the home counts who works`, before);
       const stopped = record({ "redesign-ui-lead": { running: false, runtimeState: "stopped" } });
-      const fewer = (await page.until(heading("oats-home-working", `working ${n - 1}`), 15)) ? Date.now() - stopped : null;
-      check(fewer !== null && fewer <= 3000, `${at} the home lists ${n - 1} working ${fewer === null ? "never" : `${fewer} ms`} after the kernel recorded the stop (3 s at most)`, await page.evaluate(headingOf("oats-home-working")));
+      const fewer = (await page.until(heading("oats-home-working", `running ${n - 1}`), 15)) ? Date.now() - stopped : null;
+      check(fewer !== null && fewer <= 3000, `${at} the home lists ${n - 1} running ${fewer === null ? "never" : `${fewer} ms`} after the kernel recorded the stop (3 s at most)`, await page.evaluate(headingOf("oats-home-working")));
       const back = record();
-      const again = (await page.until(heading("oats-home-working", `working ${n}`), 15)) ? Date.now() - back : null;
+      const again = (await page.until(heading("oats-home-working", `running ${n}`), 15)) ? Date.now() - back : null;
       check(again !== null && again <= 3000, `${at} and ${n} again ${again === null ? "never" : `${again} ms`} after the kernel recorded that (3 s at most)`, await page.evaluate(headingOf("oats-home-working")));
     },
   },

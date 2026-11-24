@@ -193,10 +193,10 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * page at all: nothing of them takes the focus.
    */
   const agentRows = (rows: readonly TreeRow<Row>[], guttered: boolean): ReactNode[] =>
-    rows.flatMap(({ node, parent, open, inside, insideTone }) => {
+    rows.flatMap(({ node, parent, open, pinned, inside, insideTone }) => {
       const called = agentName(node.agent.instance);
-      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} depth={node.depth} /> : null;
-      const keys = parent ? foldKeys(node.agent.instance, open) : undefined;
+      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} /> : null;
+      const keys = parent ? foldKeys(node.agent.instance, open, pinned) : undefined;
       if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), guttered, node.depth, toggle, keys, inside, insideTone)];
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];

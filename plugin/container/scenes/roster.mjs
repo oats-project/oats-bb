@@ -132,7 +132,7 @@ export default [
       const expected = fixtureThreads.filter((thread) => thread.id !== "thr_plain").map((thread) => threads.get(thread.id).id);
       check(rows.length === 7 && expected.every((id) => rows.includes(id)), `${at} the tree draws the 7 bb agents, joined by bb's own thread ids`, JSON.stringify(rows));
       const child = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_mockups").id}"]`;
-      check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.split(/\s+/).includes("pl-10") === true && document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_redesign").id}"]`)})?.className.split(/\s+/).includes("pl-6") === true`), `${at} a child is indented one step under its parent (the roster's gutter for the chevron is every row's)`);
+      check(await page.evaluate(`document.querySelector(${JSON.stringify(child)})?.className.split(/\\s+/).includes("pl-10") === true && document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threads.get("thr_redesign").id}"]`)})?.className.split(/\\s+/).includes("pl-6") === true`), `${at} a child is indented one step under its parent (the roster's gutter for the chevron is every row's)`);
       // The machine is shown by the name bb gives it, which is the host's own (G1): a name, never an id.
       check(!/^[0-9a-f]{12}$/.test(MACHINE), `${at} the machine the checks run on has a name (${MACHINE}), not a container's id: start the container through ci.sh, or with --hostname and MACHINE_NAME`);
       // The workspace's name alone heads the roster: no machine, no count, and no heading "Agents" under it.
@@ -315,9 +315,10 @@ export default [
       check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is shown beside the child's thread`);
       const onScreen = await page.until(`(() => { const row = document.querySelector(${JSON.stringify(child)}); return row && row.getAttribute("aria-current") === "page" ? document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? "" : ""; })()`, 30);
       check(onScreen === "true", `${at} with the child's thread on screen its parent is open on load`, String(onScreen));
-      await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
-      const kept = await page.evaluate(`JSON.stringify([document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, document.querySelector(${JSON.stringify(child)}) !== null])`);
-      check(kept === JSON.stringify(["true", true]), `${at} a parent is never closed over the row on screen`, kept);
+      // Its chevron is OFF while it holds the row on screen: disabled, out of the tab order, named as open; a press does nothing.
+      const off = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(toggle)}); b.focus(); const focused = document.activeElement === b; b.click(); return JSON.stringify({ disabled: b.disabled, aria: b.getAttribute("aria-disabled"), name: b.getAttribute("aria-label"), focused, open: document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") ?? null, child: document.querySelector(${JSON.stringify(child)}) !== null, muted: Number(getComputedStyle(b).opacity) < 1 }); })()`);
+      check(off === JSON.stringify({ disabled: true, aria: "true", name: "Redesign ui lead's agents shown", focused: false, open: "true", child: true, muted: true }), `${at} the chevron of the parent that holds the row on screen is drawn open and off (disabled, muted, no focus), named "Redesign ui lead's agents shown": a parent is never closed over the row on screen, and no button swallows a press`, off);
+      await page.shot(`a13-${viewport.name}-sidebar-parent-of-open-thread`);
       // And back, so the scenes after this one draw the fixtures.
       record();
       await page.goto("/");

@@ -183,9 +183,10 @@ export type Foldable<T> = { agent: Pick<Agent, "instance">; state: AgentState; c
  * One row the roster's tree draws: the row, whether it is a parent (it has children, so it
  * carries the chevron), whether it is open, and for a CLOSED parent the mark it carries after its
  * own state: the state of the most urgent row its subtree hides, or null; and that mark's tone,
- * "warning" where the hidden row is one the caller says warns (`insideOf`).
+ * "warning" where the hidden row is one the caller says warns (`insideOf`). `pinned`: it is open
+ * because it is above the row on screen, whatever the person left: it cannot be closed now.
  */
-export type TreeRow<T> = { node: T; parent: boolean; open: boolean; inside: AgentState | null; insideTone: "warning" | null };
+export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null };
 
 /** The instances above one in the tree (its parent, its parent's parent, …), or none where it is a root or not in the tree. */
 export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance: string): Set<string> {
@@ -246,9 +247,10 @@ export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: Rea
   const walk = (nodes: readonly T[]) => {
     for (const node of nodes) {
       const parent = node.children.length > 0;
-      const open = parent && (opened.has(node.agent.instance) || above.has(node.agent.instance));
+      const pinned = parent && above.has(node.agent.instance);
+      const open = parent && (pinned || opened.has(node.agent.instance));
       const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null };
-      out.push({ node, parent, open, inside: inside.state, insideTone: inside.tone });
+      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone });
       if (open) walk(node.children);
     }
   };

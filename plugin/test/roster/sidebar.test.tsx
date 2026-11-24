@@ -1088,6 +1088,19 @@ test("T3, OATS never read, an agent's thread with its panel's tab shown: the thr
   expect([retries(line.container).length, retries(tab.container).length]).toEqual([1, 0]);
 });
 
+// Where OATS was never read, every thread's line says the notice: the home in that thread's tab does not say it a
+// second time, and is never an empty pane: ONE line, the notice's title alone, with nothing to press (ruled).
+test("T3, OATS never read, a thread with the home's tab shown: the line says the notice with the ONE Retry; the tab's home says the title alone", async () => {
+  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: null }) };
+  const app = await loadApp();
+  const line = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(app.threadHeaderRows[0]! as never, { threadId: "thr_no_agent", projectId: "p", environment: null }, { rpc: handlers(never), sidebarThreads: sidebarThreads() });
+  await within(line.container).findByTestId("oats-unreadable");
+  const tab = renderSlot<{ threadId: string; environment: null }, Contract>(app.tabs[0]! as never, { threadId: "thr_no_agent", environment: null }, { rpc: handlers(never), sidebarThreads: sidebarThreads(), tabVisible: true });
+  const said = await waitFor(() => within(tab.container).getByTestId("oats-last-observation"));
+  expect([said.textContent, said.querySelectorAll("button, a").length, within(tab.container).queryByTestId("oats-unreadable")]).toEqual(["OATS did not answer on falcon", 0, null]);
+  expect([retries(line.container).length, retries(tab.container).length]).toEqual([1, 0]);
+});
+
 // The first review round of this change: bb keeps the plugin's fixed tab MOUNTED while its side panel is closed (or
 // another tab is chosen). A notice in a place nobody sees is no pane's notice: it must not take the sidebar's Retry.
 test("T3, a thread that is no agent's, the home's tab HIDDEN (bb keeps it mounted): the tab says no notice and the sidebar keeps its own, whole, with the one Retry; shown, the tab says it and the sidebar says its line", async () => {

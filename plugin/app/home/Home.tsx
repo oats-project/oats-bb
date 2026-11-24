@@ -23,7 +23,7 @@ import { lineActs, lineParts, LOST_WORD, outsideOf, OutsideWarning, rowParts, ro
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
 import { READING as READING_WORD, useReading } from "../roster/reading";
-import { RosterNotice, useLineShowsNotice } from "../roster/unreadable";
+import { LastObservation, RosterNotice, useLineShowsNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { TMUX } from "../ui";
 import { RowFacts } from "../ui/row-facts";
@@ -701,7 +701,10 @@ function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; 
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is. The page has no heading of its own:
   // bb's bar over it names it.
-  if (oats.phase === "loading" || oats.phase === "failed") return oats.phase === "loading" ? <Loading>{READING}</Loading> : <RosterNotice oats={oats} seen={says} />;
+  if (oats.phase === "loading") return <Loading>{READING}</Loading>;
+  // OATS was never read: the notice, whole. Where this place does not say it (a thread's tab, beside that thread's own
+  // line, which says it with the one Retry), ONE line, the notice's title alone, with nothing to press: never an empty pane.
+  if (oats.phase === "failed") return says ? <RosterNotice oats={oats} /> : <LastObservation failure={oats} machine={oats.machine} />;
   const made = board(oats.view, now);
   const held = oats.stale !== null;
   // The agents whose session was lost (not the ones a person stopped), in the roster's order.

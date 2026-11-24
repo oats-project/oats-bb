@@ -558,7 +558,7 @@ test("while no roster is read the lifecycle offers no act: the block of an agent
   // The panel holds the agent it showed while the roster is not read, and its header's `AgentActs` then draws
   // nothing. The block is drawn with what the panel gives it then (`held`: true once the read has FAILED, false
   // while it is still being read), beside the header's own acts.
-  const { OutsideAgent } = await import("../../app/outside");
+  const { OutsideAgent, OutsideAgentDetails } = await import("../../app/outside");
   const { AgentActs } = await import("../../app/lifecycle");
   const report = (backend: string) => ({ ...REPORT, backend });
   const drawn = async (threads: RenderSlotOptions<Contract>["sidebarThreads"], held: boolean, backend = "bb") => {
@@ -572,6 +572,10 @@ test("while no roster is read the lifecycle offers no act: the block of an agent
             <>
               <div data-testid="header-acts">
                 <AgentActs instance={DIGEST} />
+              </div>
+              {/* (As the panel's header has it: the report's Details under the state it explains.) */}
+              <div data-testid="header-details">
+                <OutsideAgentDetails agent={agent} roster={{ nodeByInstance: new Map(), whereOf: () => "unknown" }} />
               </div>
               <OutsideAgent agent={agent} roster={{ nodeByInstance: new Map(), whereOf: () => "unknown" }} held={held} />
             </>
@@ -605,22 +609,23 @@ test("while no roster is read the lifecycle offers no act: the block of an agent
   expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
   loading.unmount();
   resetApp();
-  // The roster read: the header has them, and the notice draws none.
+  // The roster read: the header has them, and this feature draws none: no block under the tabs at all (its Details is in the header).
   const read = await drawn(sidebarThreads(), false);
   await waitFor(() => expect(actsIn(read.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
-  expect(actsIn(read.getByTestId("oats-outside-agent-block"))).toEqual([]);
+  expect(read.queryByTestId("oats-outside-agent-block")).toBeNull();
+  expect(within(read.getByTestId("header-details")).getByTestId("oats-outside-details")).toBeTruthy();
   read.unmount();
   resetApp();
   // Act by act: an agent on another session provider has no Start of the lifecycle's. The header has Stop, so the
   // notice draws none; and it draws no Start, which the lifecycle does not offer for it. No act is there twice.
   const other = await drawn(sidebarThreads(), false, "other");
   await waitFor(() => expect(actsIn(other.getByTestId("header-acts"))).toEqual(["Stop…", "Retire…"]));
-  expect(actsIn(other.getByTestId("oats-outside-agent-block"))).toEqual([]);
-  // No box and no title; under Details, for it: a sentence that does not say to start it (then the kernel's own).
-  expect(other.getByTestId("oats-outside-agent-block").querySelector("h3")).toBeNull();
-  expect(within(other.getByTestId("oats-outside-agent-block")).queryByTestId("oats-notice")).toBeNull();
-  const sentenceOf = (block: HTMLElement) => block.querySelector('[data-testid="oats-outside-details"] p')!.textContent;
-  expect(sentenceOf(other.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
+  expect(other.queryByTestId("oats-outside-agent-block")).toBeNull();
+  // No box and no title; under Details (in the header, under the state), for it: a sentence that does not say to start it (then the kernel's own).
+  expect(other.getByTestId("header-details").querySelector("h3")).toBeNull();
+  expect(within(other.getByTestId("header-details")).queryByTestId("oats-notice")).toBeNull();
+  const sentenceOf = (place: HTMLElement) => place.querySelector('[data-testid="oats-outside-details"] p')!.textContent;
+  expect(sentenceOf(other.getByTestId("header-details"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
   other.unmount();
   resetApp();
   // The same agent with the read failed: the header has none, so the notice has its own Stop, held (off), and still no Start.
@@ -628,26 +633,29 @@ test("while no roster is read the lifecycle offers no act: the block of an agent
   const otherBlock = await otherFailed.findByTestId("oats-outside-agent-block");
   expect(actsIn(otherFailed.getByTestId("header-acts"))).toEqual([]);
   expect(buttons(otherBlock)).toEqual([["Stop…", true, ""]]);
-  expect(sentenceOf(otherBlock)).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
+  // The block holds the act alone: Details is in the header, once.
+  expect(otherBlock.querySelector("details")).toBeNull();
+  expect(sentenceOf(otherFailed.getByTestId("header-details"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
   otherFailed.unmount();
   resetApp();
   // An agent on bb has both in its header (the cases above), and its Details says to stop it or to start it from OATS.
   const onBb = await drawn(sidebarThreads(), false);
   await waitFor(() => expect(actsIn(onBb.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
-  expect(sentenceOf(onBb.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message in bb. Stop it to bring it back.");
-  expect(onBb.getByTestId("oats-outside-agent-block").textContent).not.toMatch(/stops the harness|in a new conversation|but OATS recorded it as stopped/);
+  expect(sentenceOf(onBb.getByTestId("header-details"))).toBe("Someone sent it a message in bb. Stop it to bring it back.");
+  expect(onBb.getByTestId("header-details").textContent).not.toMatch(/stops the harness|in a new conversation|but OATS recorded it as stopped/);
 });
 
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {
   const reported = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(reported).kind).toBe("outside"));
-  // The header has the lifecycle's acts; under it the block is ONE fold, Details, with no box, no title and no second button.
-  expect(header(reported)).toMatchObject({ state: "Running outside OATS", sentence: null, acts: [], headed: ["Stop…", "Start…", "Retire…"] });
-  const block = header(reported).block!;
-  expect(within(block).queryByTestId("oats-notice")).toBeNull();
-  expect(block.querySelector("h3")).toBeNull();
-  expect(block.querySelectorAll("details")).toHaveLength(1);
-  expect(Array.from(within(block).getByTestId("oats-outside-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop it to bring it back.", `running-outside-oats: ${MESSAGE}`]);
+  // The header has the lifecycle's acts, and UNDER ITS STATE the ONE fold, Details (the state it explains is there): no box, no title, no second button; and nothing of it under the tabs.
+  expect(header(reported)).toMatchObject({ state: "Running outside OATS", sentence: null, acts: [], headed: ["Stop…", "Start…", "Retire…"], block: null });
+  const state = within(header(reported).head).getByTestId("oats-panel-state");
+  expect(within(state).queryByTestId("oats-notice")).toBeNull();
+  expect(state.querySelector("h3")).toBeNull();
+  expect(state.querySelectorAll("details")).toHaveLength(1);
+  expect(reported.getByTestId("oats-agent-page").querySelectorAll('[data-testid="oats-outside-details"]')).toHaveLength(1);
+  expect(Array.from(within(state).getByTestId("oats-outside-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop it to bring it back.", `running-outside-oats: ${MESSAGE}`]);
   resetApp();
   const plain = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(plain)).toMatchObject({ state: "Stopped" })); // the page is drawn, in its state

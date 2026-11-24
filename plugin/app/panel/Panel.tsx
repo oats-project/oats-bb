@@ -3,7 +3,7 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { OutsideAgent, pageParts } from "../outside";
+import { OutsideAgent, OutsideAgentDetails, pageParts } from "../outside";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
@@ -202,6 +202,8 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
             <>
               <StatusLine state={status.state} since={line.since} tone={line.tone} detail={status.state === "needs-you" && claimOf(agent) !== null ? line.reason : line.detail} />
               <KernelSays text={status.kernel} bb={status.bb} />
+              {/* The kernel's report that it runs outside OATS: its Details, under the state it explains (app/outside). */}
+              <OutsideAgentDetails agent={agent} roster={oats} />
             </>
           )}
         </div>

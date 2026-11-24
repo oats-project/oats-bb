@@ -355,8 +355,10 @@ says what happened after the state's word, as the row does ("Stopped · session 
 for every reason a row can say: one that is only where the thread is stands after the roster's own
 words ("Failed · session ended · archived in bb", "Stopped · no bb thread"), so a reason that left
 a narrow row is whole on the page.
-The kernel's report, and the one act the header lacks, stand first on the Instance tab
-(`OutsideAgent`; the header over the tabs does not scroll, so that block is on the page). They are the lifecycle's buttons for the agent's state
+The kernel's report's Details is in the header too, under the state it explains
+(`OutsideAgentDetails`: one closed fold, the same place as under a thread's line and the home
+card's line; the lead's read of 24 Nov 2026, P19); only an act the header lacks stands first on the
+Instance tab (`OutsideAgent`). The acts are the lifecycle's buttons for the agent's state
 (`AgentActs`: Start… and Retire… for a stopped agent), but where a process runs, or may, with no
 thread a person can see: a session lost to bb's Archive and an agent archived while it ran have
 Stop and Retire on the archived thread's row (Start comes once it is stopped), and the kernel's
@@ -374,7 +376,7 @@ state, the feature is one pure function (`said`, `app/outside/say.ts`: an agent,
 whether the tree draws it on its thread in; the reason, its tone, the row's words, its acts and
 the kernel's report out), `outsideOf(oats)` that gives it its inputs from the caller's own roster,
 and its drawings (`OutsideWarning`: the notice; `OutsideThreadRow`: the thread's own row on a
-thread bb has archived; `OutsideAgent`: the block on the agent's page; `lineParts` and `lineActs`:
+thread bb has archived; `OutsideDetails`: its one fold, and `OutsideAgentDetails`: that fold for the agent's page's header; `OutsideAgent`: the block on the agent's page, for an act the header lacks; `lineParts` and `lineActs`:
 what a status line says and offers; `rowParts`: what a sidebar's row says after its state, only
 where the reason follows that state). It registers no slot and has no read and no `oats` verb of
 its own: the roster's row and line (`app/roster/Sidebar.tsx`, `IdentityRow.tsx`) and the instance

@@ -177,10 +177,10 @@ const reportActs = (said: Said): Act[] => (said.warning !== null && said.warning
  * kernel reports it of a provider home): for an agent of another session provider the fold
  * names Stop alone (`reportActs`), so that nothing is named that cannot be pressed.
  */
-export function OutsideWarning({ said, instance, held, own = [] }: { said: Said | null; instance: string; held: boolean; own?: readonly Act[] }) {
+export function OutsideWarning({ said, instance, held, own = [], fold = true }: { said: Said | null; instance: string; held: boolean; own?: readonly Act[]; /** false: the fold is drawn elsewhere, under the state it explains (the agent's page: `OutsideAgentDetails` in its header), and this draws the buttons alone */ fold?: boolean }) {
   if (said === null || said.warning === null) return null;
-  const startable = said.warning.backend === "bb";
   const acts = own.filter((act) => reportActs(said).includes(act));
+  if (!fold && acts.length === 0) return null;
   return (
     <div data-testid="oats-outside-warning" data-instance={instance} className="flex min-w-0 flex-col gap-1.5">
       {acts.length === 0 ? null : (
@@ -188,12 +188,38 @@ export function OutsideWarning({ said, instance, held, own = [] }: { said: Said 
           <OutsideActs instance={instance} acts={acts} held={held} primary={REPORT_PRIMARY} />
         </div>
       )}
-      <Disclosure summary="Details" testId="oats-outside-details">
-        <p className="m-0 break-words">{startable ? OUTSIDE_WHAT : OUTSIDE_WHAT_STOP}</p>
-        <p className="m-0 break-words text-xs text-muted-foreground">{shown(`${said.warning.code}: ${said.warning.message}`)}</p>
-      </Disclosure>
+      {fold ? <OutsideDetails said={said} /> : null}
     </div>
   );
+}
+
+/**
+ * The ONE fold of the kernel's report, "Details": what happened and what to do in a person's
+ * words, then the kernel's own code and sentence, through the display filter. Drawn UNDER THE
+ * STATE IT EXPLAINS, on every page (the lead's read of 24 Nov 2026, P19): under the thread's line
+ * and the home card's line (`OutsideWarning`), and under the header's state on the agent's page
+ * (`OutsideAgentDetails`). Nothing where the kernel reports nothing.
+ */
+export function OutsideDetails({ said }: { said: Said | null }) {
+  if (said === null || said.warning === null) return null;
+  return (
+    <Disclosure summary="Details" testId="oats-outside-details">
+      <p className="m-0 break-words">{said.warning.backend === "bb" ? OUTSIDE_WHAT : OUTSIDE_WHAT_STOP}</p>
+      <p className="m-0 break-words text-xs text-muted-foreground">{shown(`${said.warning.code}: ${said.warning.message}`)}</p>
+    </Disclosure>
+  );
+}
+
+/**
+ * The same fold for the place that shows ONE agent and is not its thread (the instance panel, the
+ * agent's own page): in its HEADER, under the state's line, where the state it explains is; the
+ * block under the tabs (`OutsideAgent`) keeps only an act the header lacks. `roster` is what the
+ * place holds of the roster (`Oats`' own `nodeByInstance` and `whereOf`).
+ */
+export function OutsideAgentDetails({ agent, roster }: { agent: Agent; roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent; thread?: { startFailure?: unknown } }>; whereOf(agent: Agent): ThreadWhere } }) {
+  const node = roster.nodeByInstance.get(agent.instance);
+  const attached = node?.agent === agent;
+  return <OutsideDetails said={sayOf(agent, roster.whereOf(agent), attached, attached ? (node?.thread ?? null) : null)} />;
 }
 
 const FRAME = "flex flex-col gap-1.5 border-b border-border px-3 py-2 text-sm text-foreground";
@@ -258,7 +284,8 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
 export function pageParts(agent: Agent, roster: { nodeByInstance: ReadonlyMap<string, { agent: Agent }>; whereOf(agent: Agent): ThreadWhere }, status: { state: AgentState; since: string | null; detail: string | null }): { since: string | null; detail: string | null; tone: "warning" | undefined; reason: string | null; kind: Said["kind"] | null } {
   const attached = roster.nodeByInstance.get(agent.instance)?.agent === agent;
   const said = attached ? null : sayOf(agent, roster.whereOf(agent), attached);
-  const kind = said === null ? null : said.kind;
+  // (The kernel's report is this feature's case on its thread too: its Details is under this line, `OutsideAgentDetails`.)
+  const kind = said !== null ? said.kind : agent.backend !== "tmux" && agent.outsideOats != null ? "outside" : null;
   const parts = lineParts(said !== null && said.warning === null ? said : null, status);
   // A reason with no sentence: where the thread is, as the row says it (the same function), after the roster's own words.
   const row = said !== null && said.warning === null && said.sentence === null ? rowParts(said, status.state) : null;
@@ -288,11 +315,14 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
   // The header's own acts for this agent now (`AgentActs` draws exactly these).
   const headed = actsFor(useOats(), agent.instance).map((act) => act.verb);
   // Nothing to draw: an agent with no report, but for the one act the header lacks (what happened
-  // to it is on the header's status line, and the other acts are the header's).
+  // to it is on the header's status line, and the other acts are the header's); and an agent with
+  // the report whose two acts the header has (its Details is in the header, under its state).
   if (said === null || (said.warning === null && (attached || said.kind !== "lost-archived"))) return null;
+  const own = BOTH.filter((act) => !headed.includes(act));
+  if (said.warning !== null && own.filter((act) => reportActs(said).includes(act)).length === 0) return null;
   return (
     <div data-testid="oats-outside-agent-block" data-outside={said.kind} className="flex min-w-0 flex-col gap-2 text-sm text-foreground">
-      {/* (The kernel's report says what happened in its notice; its fact "stopped in OATS" is the thread's line's.) */}
+      {/* (The kernel's report says what happened under Details, which is in the header, under the state it explains: `OutsideAgentDetails`.) */}
       {/* The panel's header has the lifecycle's acts for the agent's state (`AgentActs`). One act is not among
           them: Stop for a session OATS lost (it reads stopped, and its process may run): it is here. */}
       {attached || said.kind !== "lost-archived" ? null : (
@@ -302,7 +332,7 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
       )}
       {/* Act by act: one the header has is the header's (the notice says what it does); one it lacks is the notice's own
           button. Start is the lifecycle's for an agent on bb or on tmux, and the report is never a tmux agent's, so the notice draws none for another provider's. */}
-      <OutsideWarning said={said} instance={agent.instance} held={held} own={BOTH.filter((act) => !headed.includes(act))} />
+      <OutsideWarning said={said} instance={agent.instance} held={held} own={own} fold={false} />
     </div>
   );
 }

@@ -599,7 +599,7 @@ test("Home › Agents: every agent OATS has, in the sidebar's order, each with i
   expect(heading(section)).toBe(`Agents${agents.length}`); // the word of the tile that opened it
   // The one count line of the home, here: by state, every agent once; how many there are in all is the heading's count.
   const summary = within(section).getByTestId("oats-home-summary").textContent!;
-  expect(summary).toMatch(/^\d+ working · 4 need you/);
+  expect(summary).toMatch(/^\d+ running · 4 need you/);
   expect(summary).not.toMatch(/agents/);
   expect(summary.split(" · ").map((part) => Number(part.split(" ")[0])).reduce((sum, n) => sum + n, 0)).toBe(agents.length);
   const rows = within(section).getAllByTestId("oats-home-agent-row");
@@ -1092,7 +1092,7 @@ test("the Lost section holds the agents whose roster row says \"Lost\", and no o
   expect(stale.getByTestId("oats-unreadable").textContent).toContain("Acts are off.");
 });
 
-/** The one count line of the home, on Home › Agents ("2 working · 4 need you · …"), for a roster. */
+/** The one count line of the home, on Home › Agents ("2 running · 4 need you · …"), for a roster. */
 async function agentsLine(agents: Agent[]): Promise<string> {
   const app = await loadApp();
   const panel = app.navPanels.find((candidate) => candidate.id === "home")!;

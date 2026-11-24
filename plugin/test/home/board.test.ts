@@ -117,12 +117,12 @@ describe("what the home may send to an agent's thread", () => {
 });
 
 describe("the home's words", () => {
-  it("the count line: every agent once, by the plugin's state words, with no total (the heading over it counts the agents); a state with no agent left out but for working and needs you", () => {
-    expect(summaryLine({ "needs-you": 1, working: 2, idle: 3, stopped: 1, error: 1, unreachable: 0, outside: 0 })).toBe("2 working · 1 need you · 3 idle · 1 stopped · 1 failed");
-    expect(summaryLine({ "needs-you": 3, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 2, outside: 0 })).toBe("0 working · 3 need you · 2 unreachable");
-    expect(summaryLine({ "needs-you": 0, working: 1, idle: 0, stopped: 0, error: 0, unreachable: 0, outside: 0 })).toBe("1 working · 0 need you");
+  it("the count line: every agent once, by the plugin's state words, with no total (the heading over it counts the agents); a state with no agent left out but for working and needs you; those that work are counted as running, the word of the home's list (true of a tmux agent that runs too: the lead's T4)", () => {
+    expect(summaryLine({ "needs-you": 1, working: 2, idle: 3, stopped: 1, error: 1, unreachable: 0, outside: 0 })).toBe("2 running · 1 need you · 3 idle · 1 stopped · 1 failed");
+    expect(summaryLine({ "needs-you": 3, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 2, outside: 0 })).toBe("0 running · 3 need you · 2 unreachable");
+    expect(summaryLine({ "needs-you": 0, working: 1, idle: 0, stopped: 0, error: 0, unreachable: 0, outside: 0 })).toBe("1 running · 0 need you");
     // An agent that runs outside OATS is one of those that need you (the sidebar's foot counts it so): counted once, there.
-    expect(summaryLine({ "needs-you": 1, working: 1, idle: 0, stopped: 2, error: 0, unreachable: 0, outside: 1 })).toBe("1 working · 2 need you · 2 stopped");
+    expect(summaryLine({ "needs-you": 1, working: 1, idle: 0, stopped: 2, error: 0, unreachable: 0, outside: 1 })).toBe("1 running · 2 need you · 2 stopped");
   });
   it("a tile's count; where an agent on tmux is, the one word of the home's own (what became of a thread is the outside feature's answer); who started it is the panel's Lineage: no row says it", () => {
     expect([tileCount(4), tileCount("loading"), tileCount("failed")]).toEqual(["4", "Counting…", "Couldn't count"]);

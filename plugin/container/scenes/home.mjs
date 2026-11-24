@@ -320,7 +320,7 @@ export default [
       // The one count line of the home is here: by state, each agent once; how many there are is the heading's count.
       const summary = await page.evaluate(textOf(within("oats-home-summary")));
       const counted = summary.split(" · ").map((part) => Number(part.split(" ")[0]));
-      check(/^\d+ working · 3 need you/.test(summary) && !/agents/.test(summary) && counted.reduce((sum, n) => sum + n, 0) === 8, `${at} the count line counts each of the 8 agents once, by its state, with no total`, summary);
+      check(/^\d+ running · 3 need you/.test(summary) && !/agents/.test(summary) && counted.reduce((sum, n) => sum + n, 0) === 8, `${at} the count line counts each of the 8 agents once, by its state, with no total`, summary);
       const backWord = await page.evaluate(textOf(within("oats-home-back")));
       check(backWord === "‹ Home", `${at} the way back reads "‹ Home"`, backWord);
       check((await page.evaluate(`document.activeElement?.getAttribute("data-testid") ?? ""`)) === "oats-home-back", `${at} the keyboard is on ‹ Home`, await page.evaluate(`document.activeElement?.getAttribute("data-testid") ?? ""`));

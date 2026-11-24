@@ -579,6 +579,9 @@ async function retireWith(t, script, { launched = true } = {}) {
 }
 // The retire's last read: the env bb holds for the home's project (what a pi launch wrote), to remove it.
 const ENV_READ = "machine env";
+// And the look at the bb environment the home's archived threads are on (contract r32, A17;
+// test/unit/retire-environment.test.mjs): here one bb has destroyed already, so nothing more is asked.
+const ENVIRONMENT_READ = "environment show";
 
 test("retire archives the live threads of the home's project, and only those", async (t) => {
   const { run, last, calls } = await retireWith(t, (home) => ({
@@ -613,7 +616,7 @@ test("retire withdraws what bb holds in line for a thread, stops it and archives
   // The receipt names every thread of the home that is archived in bb when the hook ends:
   // the one it archived, then the one it found archived already.
   assert.deepEqual(last, { meta: { retired: true, archived: ["thr_a", "thr_arch"] } });
-  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "thread list --archived", "thread stop", "thread list --archived", "thread list", ENV_READ]);
+  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread queue list", "thread queue delete", "thread stop", "thread show", "thread queue list", "thread show", "thread archive", "thread list --archived", "thread stop", "thread list --archived", "thread list", ENV_READ, ENVIRONMENT_READ]);
   assert.deepEqual(calls.filter((c) => c.argv[1] === "stop").map((c) => c.argv[2]), ["thr_a", "thr_arch"]);
 });
 
@@ -628,7 +631,7 @@ test("retire with nothing live still stops the home's archived threads, and its 
     "thread list --archived": { stdout: [threadRow("thr_arch", "proj_a", "idle", { archivedAt: 5 })] }, "thread stop": { stdout: { ok: true } },
   }));
   assert.deepEqual(last, { meta: { retired: true, archived: ["thr_arch"] } });
-  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread list --archived", "thread stop", "thread list --archived", "thread list", ENV_READ]);
+  assert.deepEqual(verbs(calls), ["project list", "thread list", "thread list --archived", "thread stop", "thread list --archived", "thread list", ENV_READ, ENVIRONMENT_READ]);
 });
 
 test("retire archives only a thread it has seen stopped: one that will not stop is left, named, and the retire goes on", async (t) => {

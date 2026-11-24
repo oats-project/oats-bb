@@ -105,11 +105,16 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
   }
 
   /** Restart bb: end its server (bb-app, which ends its host daemon with it), wait until
-   *  nothing answers on its port, and start it again on the same data directory. */
+   *  nothing answers on its port and its process is gone, and start it again on the same
+   *  data directory. (The process outlives its port by a few seconds, and removes its
+   *  record of its start, bb-app-runtime.json in the data directory, as it leaves: a bb
+   *  started before that would lose the record it had just written.) */
   async function restartBb() {
     // By the start of its command line (`node …/bb-app --data-dir`), which this shell's own does not have.
-    await sh(`for p in /proc/[0-9]*; do case "$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)" in "node "*"/bb-app --data-dir"*) kill \${p#/proc/} ;; esac; done`);
+    const BB_APP = `case "$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)" in "node "*"/bb-app --data-dir"*)`;
+    await sh(`for p in /proc/[0-9]*; do ${BB_APP} kill \${p#/proc/} ;; esac; done`);
     await waitFor("bb to be gone", async () => (await sh("bb project list --json >/dev/null 2>&1 && echo up || echo down")).trim() === "down", { timeoutMs: 60_000 });
+    await waitFor("bb's process to be gone", async () => (await sh(`n=0; for p in /proc/[0-9]*; do ${BB_APP} n=$((n+1)) ;; esac; done; echo $n`)).trim() === "0", { timeoutMs: 60_000 });
     await startBb();
   }
 

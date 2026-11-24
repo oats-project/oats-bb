@@ -93,7 +93,7 @@ if [ -n "${LOCAL_STATUS:-}" ]; then
   LOCAL_ENV="-e LIVE_UI_STATUS_FILE=/tmp/local-status.json"
 fi
 # LIVE_THEMES is passed by name: only when it is set here, so that one left unset draws both themes.
-run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e LIVE_THEMES $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
+run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e LIVE_THEMES -e LIVE_WINDOW_LOADS $LOCAL_ENV -w /home/node/plugin "$NAME" "$@"; }
 (cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out --exclude './container/real/pi/out.*' .) | docker exec -i -u node "$NAME" tar -x -C /home/node/plugin
 # The provider's two manifests, beside the plugin as they are in the repository: a unit test holds
 # the plugin's OATS floor against theirs (test/kernel-compat.test.ts). And its check of a pi model id

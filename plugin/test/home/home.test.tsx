@@ -936,9 +936,9 @@ test("Home › Agents says where an agent the roster draws on no thread is, from
   await waitFor(() => expect(stopped.list.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "thr_digest" }));
   stopped.list.unmount();
   resetApp();
-  // A session lost with its thread archived: the reason, as on the sidebar's row.
+  // A session lost with its thread archived: the reason, as on the sidebar's row: that it may still run.
   const lost = await rowOf(withEnd("lost"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb("thr_digest") });
-  await waitFor(() => expect(lost.words()).toBe("oats-expert · archived in bb"));
+  await waitFor(() => expect(lost.words()).toBe("oats-expert · may still run"));
   lost.list.unmount();
   resetApp();
   // bb answers that it has no thread of that id: deleted.
@@ -985,7 +985,7 @@ test("the card of an agent that asks and that bb lists no thread of says what be
   resetApp();
   // bb has it archived (and the agent still runs): the button leads to the archived thread, and its name says so.
   const archived = await cardOn(fixtureAgents(), bb("thr_ci"));
-  await waitFor(() => expect(archived.where()).toBe("oats-developer · archived in bb"));
+  await waitFor(() => expect(archived.where()).toBe("oats-developer · may still run")); // (the reason of its row: it runs, and bb has its thread archived)
   quiet(archived.card);
   expect(archived.leads()).toBe("Open thread: Flaky ci developer");
   fireEvent.click(within(archived.card).getByTestId("oats-needs-open"));

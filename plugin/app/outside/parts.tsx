@@ -19,7 +19,7 @@ import type { Agent, AgentState, ThreadWhere } from "../../model/types";
 import { said as sayOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
-import { MESSAGE_CONTINUES, LOST_NOTE, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, STOPPED_OPEN_ASKING } from "./words";
+import { LOST_ARCHIVED, MAY_RUN_NOTE, MESSAGE_CONTINUES, LOST_NOTE, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, STOPPED_OPEN_ASKING } from "./words";
 
 /** On a button: with the dots, since each opens its dialog and nothing runs on the press. */
 const BUTTON: Record<Act, string> = { stop: "Stop…", start: "Start…", retire: "Retire…" };
@@ -97,13 +97,14 @@ export const rowWarns = (said: Said | null, state: AgentState): boolean => rowPa
  * word in the state's place. The agent's STATE is untouched: it is stopped (its mark, Start, its
  * place in the order); and the thread's line, the agent's page and the row's own title keep
  * "Stopped · session lost" (`title`: the words the title says, whole).
- * A lost session whose thread bb archived or deleted has another reason on its row ("archived in
- * bb", "deleted in bb", in the warning tone): that is what needs a person, so its row reads
+ * A lost session whose thread bb archived or deleted has another reason on its row ("may still
+ * run", "deleted in bb", in the warning tone): that is what needs a person, so its row reads
  * "Stopped" and that reason, never "Lost".
  */
 export const LOST_WORD = "Lost";
 export function rowWords(word: string, state: AgentState, note: string | null): { state: string; reason: string | null; title: { state: string; reason: string | null } } {
-  const title = { state: word, reason: note };
+  // (A row that says "may still run" says in its title the whole of it: where its thread is, too.)
+  const title = { state: word, reason: note === MAY_RUN_NOTE ? LOST_ARCHIVED : note };
   return state === "stopped" && note === LOST_NOTE ? { state: LOST_WORD, reason: null, title } : { state: word, reason: note, title };
 }
 

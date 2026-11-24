@@ -37,7 +37,7 @@ const SAYS = {
   outsideRecorded: "stopped in OATS",
   outsideWhat: "Someone sent it a message in bb. Stop it to bring it back.",
   archivedWhileRunning: "Archived in bb while running: it may still run.",
-  archivedRow: "archived in bb",
+  archivedRow: "may still run", // (the row's reason, in the warning tone; its title and the line say the whole: archivedWhileRunning)
 };
 
 export default async (run) => {

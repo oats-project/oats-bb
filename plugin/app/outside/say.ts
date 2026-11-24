@@ -23,6 +23,7 @@ import {
   DELETED_NOTE,
   FAILED_OPEN,
   LOST_ARCHIVED,
+  MAY_RUN_NOTE,
   NO_THREAD_NOTE,
   NOT_LOADED,
   NOT_LOADED_NOTE,
@@ -175,7 +176,7 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
   // and the kernel does not say that no harness is loaded (`running: false`).
   const cannotRun = agent.runtimeState === "shell" || how === "unreachable" || agent.running === false;
   if (archived && !attached && (is === "idle" || is === "needs-you") && !cannotRun) {
-    return { ...base, kind: "running-archived", sentence: LOST_ARCHIVED, tone: "warning", note: ARCHIVED_NOTE, rowTone: "warning", acts: ["stop"], archived };
+    return { ...base, kind: "running-archived", sentence: LOST_ARCHIVED, tone: "warning", note: MAY_RUN_NOTE, rowTone: "warning", acts: ["stop"], archived };
   }
   switch (is) {
     case "outside":
@@ -189,7 +190,7 @@ export function said(agent: Agent, where: ThreadWhere, attached: boolean, thread
       if (where === "missing") return { ...base, kind: "deleted", sentence: DELETED, tone: "warning", note: DELETED_NOTE, rowTone: "warning" };
       const lost = how === "lost";
       if (where === "archived") {
-        if (lost) return { ...base, kind: "lost-archived", sentence: LOST_ARCHIVED, tone: "warning", note: ARCHIVED_NOTE, rowTone: "warning", acts: ["stop"], archived };
+        if (lost) return { ...base, kind: "lost-archived", sentence: LOST_ARCHIVED, tone: "warning", note: MAY_RUN_NOTE, rowTone: "warning", acts: ["stop"], archived };
         // The row keeps the soul beside "Stopped", in the plain tone: once the provider archives at
         // stop this is EVERY stopped agent, and nothing is wrong with it (the spec's author's ruling).
         // The row opens the archived thread, whose own row says since when and that it is archived.

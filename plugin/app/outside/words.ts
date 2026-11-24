@@ -42,6 +42,14 @@ export const ARCHIVED_FACT = ARCHIVED_NOTE;
 
 /** OATS lost its session, and bb has the thread archived: bb's Archive never ends the harness. */
 export const LOST_ARCHIVED = "Archived in bb while running: it may still run.";
+/**
+ * The same on a ROW, in the reason's place and in the warning tone: what a person must not miss
+ * is that its process may run, not where its thread is. A row whose state reads "Stopped" (the
+ * kernel's row: not running, its session lost) then says both halves, "Stopped · may still run";
+ * the line and the row's own title say the whole ("Archived in bb while running: it may still
+ * run."). The state word is unchanged. (The lead's ruling on the read of 24 Nov 2026, T8.)
+ */
+export const MAY_RUN_NOTE = "may still run";
 
 /** bb has no thread of its id (deleted in bb), whether OATS stopped it or lost its session: bb's Delete ends the harness. */
 /** The reason, on a row and on its page, for every agent whose thread bb no longer has (Start is the button). */

@@ -319,13 +319,13 @@ export default [
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       // bb's own answer arrives after the roster: the rows are waited for, by what they say.
       const all = `JSON.stringify({ digest: ${rowOf(threadless("weekly-digest-helper"))}, ranker: ${rowOf(threadless("ranker-v3-probe"))}, flaky: ${rowOf(threadless("flaky-ci-developer"))}, outside: ${rowOf(onThread(threads.get("thr_harvest").id))}, failed: ${rowOf(onThread(threads.get("thr_mockups").id))}, unreachable: ${rowOf(onThread(threads.get("thr_redesign").id))}, open: ${rowOf(onThread(threads.get("thr_release").id))}, tree: ${textOf(testId("oats-tree"))}, outsides: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark][data-state="outside"]`)}).length, words: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
-      const settled = await page.until(`(() => { const now = ${all}; return /archived in bb/.test(now) && /deleted in bb/.test(now) && /Running outside OATS/.test(now) ? now : ""; })()`, 30);
+      const settled = await page.until(`(() => { const now = ${all}; return /may still run/.test(now) && /deleted in bb/.test(now) && /Running outside OATS/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       // The reason follows the state's word on a row and the soul follows it: each of these rows' second line is ONE line, never two.
       const digestOpens = await page.until(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.getAttribute("data-opens") === "thread"`, 15);
       check(same(rows.digest, { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 }) && Boolean(digestOpens), `${at} stopped, its thread archived in bb: "Stopped" and its soul, no reason, in the plain tone, and the row opens the archived thread`, JSON.stringify(rows.digest));
       check(same(rows.outside, { facts: "Running outside OATS · knowledge-harvester", state: "outside", tone: null, lines: 1 }) && rows.outsides === 1, `${at} the kernel's outsideOats: the state IS "Running outside OATS", with its mark, then its soul, on that row alone; no "Stopped" beside it`, JSON.stringify([rows.outside, rows.outsides]));
-      check(same(rows.ranker, { facts: "Stopped · research-expert · archived in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
+      check(same(rows.ranker, { facts: "Stopped · research-expert · may still run", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: its row says "may still run" in the reason's place: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
       check(same(rows.flaky, { facts: "Stopped · oats-developer · deleted in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));
       // Every row's state word is one of the set: "Archived in bb" and "Deleted in bb" are reasons after a state, never states.
       const SET = ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"];
@@ -619,10 +619,10 @@ export default [
         Boolean(answered) &&
           same(rows, [
             { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 },
-            { facts: "Stopped · research-expert · archived in bb", state: "stopped", tone: "warning", lines: 1 },
-            { facts: "Idle · oats-maintainer · archived in bb", state: "idle", tone: "warning", lines: 1 },
+            { facts: "Stopped · research-expert · may still run", state: "stopped", tone: "warning", lines: 1 },
+            { facts: "Idle · oats-maintainer · may still run", state: "idle", tone: "warning", lines: 1 },
           ]),
-        `${at} the three rows (each with its soul after these words): "Stopped" with no reason, plain (an operator's stop); "Stopped · archived in bb" with the warning mark (a session lost); "Idle · archived in bb" with the warning mark (it still runs); each opens its archived thread`,
+        `${at} the three rows (each with its soul after these words): "Stopped" with no reason, plain (an operator's stop); "Stopped · may still run" with the warning mark (a session lost); "Idle · may still run" with the warning mark (it still runs); each opens its archived thread`,
         JSON.stringify(rows),
       );
       const stoppedTmux = JSON.parse(await page.evaluate(`JSON.stringify(${rowOf(threadless("kernel-fix-developer"))})`));

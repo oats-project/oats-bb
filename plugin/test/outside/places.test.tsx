@@ -91,7 +91,9 @@ test("stopped, its thread deleted in bb: the row says it was deleted, and opens 
 test("a session OATS lost: \"Stopped\" in the warning tone, then the reason, by bb's answer for the same row; never a state of its own", async () => {
   const lost = () => facts({ [DIGEST]: { sessionEnd: "lost" } });
   const archived = await sidebar({ rpc: lost(), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
-  await waitFor(() => expect(rowFacts(threadless(archived.slot))).toBe("Stopped · oats-expert · archived in bb"));
+  await waitFor(() => expect(rowFacts(threadless(archived.slot))).toBe("Stopped · oats-expert · may still run"));
+  // The row's title says the whole: where its thread is, and that it may still run.
+  expect(threadless(archived.slot).querySelector('[data-testid="oats-row-facts"]')!.getAttribute("title")).toBe("Stopped · oats-expert · Archived in bb while running: it may still run.");
   expect(markOf(threadless(archived.slot))).toEqual(["stopped", "warning"]);
   resetApp();
   const deleted = await sidebar({ rpc: lost(), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
@@ -234,7 +236,7 @@ test("the archived thread of a stopped agent has its own row: who it is, \"Stopp
   expect(asked()).toEqual({ verb: "start", instance: DIGEST });
 });
 
-test("three agents whose thread bb has archived, side by side: an operator's stop says its state alone, plain; a lost session and one that still runs say \"archived in bb\" with the warning mark", async () => {
+test("three agents whose thread bb has archived, side by side: an operator's stop says its state alone, plain; a lost session and one that still runs say \"may still run\" with the warning mark", async () => {
   const HARVEST = "harvest-knowledge-helper";
   const RANKER = "ranker-v3-probe";
   const gone = new Set(["thr_digest", "thr_harvest", "thr_research"]);
@@ -246,8 +248,8 @@ test("three agents whose thread bb has archived, side by side: an operator's sto
   await waitFor(() => expect([DIGEST, RANKER, HARVEST].map((instance) => rowOf(instance).getAttribute("data-opens"))).toEqual(["thread", "thread", "thread"]));
   expect([DIGEST, RANKER, HARVEST].map((instance) => [rowFacts(rowOf(instance)), ...markOf(rowOf(instance))])).toEqual([
     ["Stopped · oats-expert", "stopped", null],
-    ["Stopped · research-expert · archived in bb", "stopped", "warning"],
-    ["Idle · knowledge-harvester · archived in bb", "idle", "warning"],
+    ["Stopped · research-expert · may still run", "stopped", "warning"],
+    ["Idle · knowledge-harvester · may still run", "idle", "warning"],
   ]);
 });
 
@@ -340,6 +342,8 @@ test("what a row draws in the state's place (rowWords): a lost session reads \"L
   // A lost session whose thread bb archived, or deleted: its row's reason is where the thread is, in the warning tone
   // (that is what needs a person: its process may still run), so it reads "Stopped" and that reason, never "Lost".
   expect(rowWords("Stopped", "stopped", "archived in bb")).toEqual({ state: "Stopped", reason: "archived in bb", title: whole("Stopped", "archived in bb") });
+  // "may still run" stays "Stopped" (no word of its own in the state's place), and its title says the whole sentence.
+  expect(rowWords("Stopped", "stopped", "may still run")).toEqual({ state: "Stopped", reason: "may still run", title: whole("Stopped", "Archived in bb while running: it may still run.") });
   expect(rowWords("Stopped", "stopped", "deleted in bb").state).toBe("Stopped");
   // Nothing else gets a word of its own in the state's place: not another reason, and not "session lost" after another state.
   expect(rowWords("Idle", "idle", "not loaded")).toEqual({ state: "Idle", reason: "not loaded", title: whole("Idle", "not loaded") });

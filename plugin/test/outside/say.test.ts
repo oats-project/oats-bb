@@ -91,7 +91,7 @@ describe("a session OATS lost (sessionEnd \"lost\")", () => {
   it("its thread archived in bb: \"Stopped\" in the warning tone, that its process may still run, and Stop", () => {
     expect(said(lost, "archived", false)).toEqual({
       ...PLAIN, kind: "lost-archived", sentence: "Archived in bb while running: it may still run.",
-      tone: "warning", note: "archived in bb", rowTone: "warning", acts: ["stop"], archived: true,
+      tone: "warning", note: "may still run", rowTone: "warning", acts: ["stop"], archived: true,
     });
   });
   it("its thread deleted in bb: the same reason as for a stopped one, as a warning", () => {
@@ -125,7 +125,8 @@ describe("the word \"stopped\" with no word that the row does not run, on a row 
 describe("a row that still says it runs, and bb has its thread archived", () => {
   // A person archived the conversation of an agent whose process goes on: bb's Archive never touches the harness.
   const SENTENCE = "Archived in bb while running: it may still run.";
-  const WARNS = { ...PLAIN, kind: "running-archived", sentence: SENTENCE, tone: "warning", note: "archived in bb", rowTone: "warning", acts: ["stop"], archived: true };
+  // (On its row, in the reason's place: "may still run", what a person must not miss; the line says the whole.)
+  const WARNS = { ...PLAIN, kind: "running-archived", sentence: SENTENCE, tone: "warning", note: "may still run", rowTone: "warning", acts: ["stop"], archived: true };
   it("the warning, the reason after its state's word, and Stop: for a harness the kernel says is loaded, and for one it cannot tell", () => {
     for (const running of [true, null]) {
       const runs = sample("harvest-knowledge-helper", { running });
@@ -265,6 +266,6 @@ describe("failed, unreachable, and what is not this feature's", () => {
     for (const where of WHERES) expect(said(tmux, where, false)).toBeNull();
   });
   it("a row the tree does not draw on its thread says where the thread is, once bb has answered; \"its bb thread is gone\" is said of none", () => {
-    expect(WHERES.map((where) => said(recorded("working"), where, false)?.note ?? null)).toEqual(["thread not shown in bb", "archived in bb", "deleted in bb", "no bb thread", null]);
+    expect(WHERES.map((where) => said(recorded("working"), where, false)?.note ?? null)).toEqual(["thread not shown in bb", "may still run", "deleted in bb", "no bb thread", null]); // (it runs, and bb has its thread archived: its row says that it may still run)
   });
 });

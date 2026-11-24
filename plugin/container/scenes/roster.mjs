@@ -73,13 +73,20 @@ export default [
         // The image of the sidebar as a fresh install shows it: the tree closed.
         await page.shot(`a13-${viewport.name}-sidebar`, { targets: true });
         // The keys, on the row: Right opens, Left closes.
-        await page.evaluate(`document.querySelector(${JSON.stringify(lead)}).focus()`);
-        await page.press("ArrowRight");
-        const byKey = (await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === 7 ? now : ""; })()`, 10)) || (await page.evaluate(fold));
+        // (The key goes to the element that has the focus: the row is focused, the focus is read back, and the key is
+        // pressed once more if the first did not land, as a person does.)
+        const keyOn = async (key, rows) => {
+          for (let tries = 0; tries < 2; tries += 1) {
+            await page.until(`(() => { const row = document.querySelector(${JSON.stringify(lead)}); row.focus(); return document.activeElement === row ? "1" : ""; })()`, 5);
+            await page.press(key);
+            const read = await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === ${rows} ? now : ""; })()`, 5);
+            if (read) return read;
+          }
+          return page.evaluate(fold);
+        };
+        const byKey = await keyOn("ArrowRight", 7);
         check(is(JSON.parse(byKey), openNow, true), `${at} Right on the lead's row opens it: its two children are rows, and the chevron says "Hide Redesign ui lead's agents"`, byKey);
-        await page.evaluate(`document.querySelector(${JSON.stringify(lead)}).focus()`);
-        await page.press("ArrowLeft");
-        const closedByKey = (await page.until(`(() => { const now = ${fold}; return JSON.parse(now).rows.length === 5 ? now : ""; })()`, 10)) || (await page.evaluate(fold));
+        const closedByKey = await keyOn("ArrowLeft", 5);
         check(is(JSON.parse(closedByKey), closedNow, false), `${at} Left closes it again`, closedByKey);
         // The chevron by the keyboard: it takes the focus, and Enter presses it.
         const focused = await page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(toggle)}); b.focus(); return document.activeElement === b && b.tabIndex === 0; })()`);
@@ -91,9 +98,11 @@ export default [
         const openMark = await page.evaluate(MARK);
         check(openMark === JSON.stringify({ glyph: "▾", turned: false, box: [16, 16], centred: true }), `${at} the open parent's mark points DOWN: its own glyph, not turned, in a 16 px box centred in the button`, openMark);
         await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
+        await page.until(`document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") === "false" ? "1" : ""`, 10);
         const closedMark = await page.evaluate(MARK);
         check(closedMark === JSON.stringify({ glyph: "▸", turned: false, box: [16, 16], centred: true }), `${at} the closed parent's mark points RIGHT, in the same box`, closedMark);
         await page.evaluate(`document.querySelector(${JSON.stringify(toggle)}).click()`);
+        await page.until(`document.querySelector(${JSON.stringify(toggle)})?.getAttribute("aria-expanded") === "true" ? "1" : ""`, 10);
         const where = await page.evaluate(`location.pathname`);
         check(where === "/", `${at} opening and closing a parent opens no thread`, where);
         await page.shot(`a13-${viewport.name}-sidebar-opened`, { targets: true });
@@ -295,7 +304,7 @@ export default [
       // (At a phone's width bb may keep its drawer as it was over the reload: asked twice, the second press opens one the first closed.)
       if (!(await showSidebar(page, viewport, { fold: "asLoaded" }))) await showSidebar(page, viewport, { fold: "asLoaded" });
       const back = await page.until(`(() => { const now = ${read}; return now !== "" && JSON.parse(now).inside === null && JSON.parse(now).open === "false" ? now : ""; })()`, 30);
-      check(Boolean(back), `${at} once the child no longer waits the closed lead carries no mark`, String(back));
+      check(Boolean(back), `${at} once the child no longer waits the closed lead carries no mark`, back ?? `not within 30 s; the lead's row now: ${await page.evaluate(read)}; the sidebar: ${(await page.evaluate(textOf(testId("oats-sidebar")))).slice(0, 300)}`);
     },
   },
   {

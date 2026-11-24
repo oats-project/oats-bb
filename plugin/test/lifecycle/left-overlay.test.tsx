@@ -91,6 +91,8 @@ test("the thread was archived by a stop through OATS (the row read after says an
   expect(notified()).toEqual([]);
 });
 
+/** When an act ended, on the server's clock (on its answer): before the rosters this file's server reads. */
+const ENDED = "2026-11-24T18:00:00.500Z";
 const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 const press = (slot: Awaited<ReturnType<typeof overlay>>, id: string) => fireEvent.click(slot.getByTestId(id));
 const phaseIs = (slot: Awaited<ReturnType<typeof overlay>>, kind: string) => waitFor(() => expect(slot.getByTestId("oats-confirm").getAttribute("data-phase")).toBe(kind));
@@ -111,8 +113,9 @@ test("while a dialog of ours is on screen nothing is asked or told of a thread t
 });
 
 test("while a stop of ours is in flight, its dialog left, nothing is asked or told; when it lands and the row says the stop, only the stop's own result is told", async () => {
-  let land!: (receipt: ReturnType<typeof stopReceiptOf>) => void;
-  const held = new Promise<ReturnType<typeof stopReceiptOf>>((resolve) => (land = resolve));
+  type Stopped = ReturnType<typeof stopReceiptOf> & { endedAt: string };
+  let land!: (receipt: Stopped) => void;
+  const held = new Promise<Stopped>((resolve) => (land = resolve));
   // The window's roster says that the agent runs until the stop has landed (it had not read the row of the stop yet).
   let landed = false;
   const slot = await overlay(() => (landed ? { running: false, runtimeState: "stopped", sessionEnd: "stopped" } : null), { stopApply: () => held });
@@ -127,7 +130,7 @@ test("while a stop of ours is in flight, its dialog left, nothing is asked or to
   await settle();
   expect([refreshes(slot), notified()]).toEqual([0, []]);
   landed = true;
-  await act(async () => land(stopReceiptOf()));
+  await act(async () => land({ ...stopReceiptOf(), endedAt: ENDED }));
   // The stop landed: the look asks OATS, the row read after says an operator stopped it, and the one thing told is the stop's result.
   await waitFor(() => expect(refreshes(slot)).toBeGreaterThanOrEqual(2));
   await waitFor(() => expect(notified()).toHaveLength(1));
@@ -137,8 +140,8 @@ test("while a stop of ours is in flight, its dialog left, nothing is asked or to
 });
 
 test.each([
-  ["a retire", "retire", (held: Promise<void>): Partial<Handlers> => ({ retireApply: () => held.then(() => retireReceiptOf()) })],
-  ["a start", "start", (held: Promise<void>): Partial<Handlers> => ({ start: () => held.then(() => startedIn("thr_digest_2")) })],
+  ["a retire", "retire", (held: Promise<void>): Partial<Handlers> => ({ retireApply: () => held.then(() => ({ ...retireReceiptOf(), endedAt: ENDED })) })],
+  ["a start", "start", (held: Promise<void>): Partial<Handlers> => ({ start: () => held.then(() => ({ ...startedIn("thr_digest_2"), endedAt: ENDED })) })],
 ] as const)("%s of ours in flight on ANOTHER agent holds the look as well (any act of ours may be what archives a thread: a parent's stop archives its children's); once it lands OATS is asked, and an agent that still runs is told of", async (_name, verb, answers) => {
   let land!: () => void;
   const held = new Promise<void>((resolve) => (land = resolve));

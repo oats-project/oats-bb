@@ -252,16 +252,27 @@ the roster draws on no thread ([Outside OATS](#outside-oats)).
 
 **Behind a result** (`app/roster/reading.tsx`). A result that says an agent started, restarted,
 stopped or was retired is true of the agent before the roster the window holds is read again. Until
-it is, the places that say that agent's state (its page, its panel, its thread's line) say
-**Reading…** in the state's place and its acts are off: never the old state stated plainly beside
-"… started.". Rosters are compared, never clocks: the dialog notes the server's stamp of the roster
-the window held when the act was SENT, and each agent's state in it where the act must change that
-word (a stop of an agent that was not stopped; a start of one that was stopped or had failed; a
-retire); "Reading…" stands while the
-window's roster is still that one or an older one, and also while a later roster still says of the
-agent what the one at the send said (a roster can reach the window during an act that takes
-seconds; a restart keeps the stamp's rule alone, its state being the same word after). It is bounded: after ten seconds the roster's own state is drawn whatever
-it says. Nothing of it while OATS cannot be read (the last roster's notice says that).
+it is, the places that say that agent's state (its page, its panel, its thread's line, its
+thread's menu) say **Reading…** in the state's place and EVERY act of it is off there (the line's
+Answer too; the panel does not draw what it asked before the act; a command's key does nothing for
+it): never the old state stated plainly beside "… started.". ONE question decides, about the
+roster and not about the agent: was this roster READ AFTER THE ACT ENDED? The roster's `at` is the
+plugin server's clock at the START of the status read that made it; the act's answer carries the
+same clock at the act's END (`endedAt`, stamped by the server when its `oats` command returned:
+`contract/lifecycle.ts`, `server/lifecycle.ts`). The window is "before" while the roster it holds
+has `at` <= `endedAt`: a status read that started before the act ended cannot be trusted to hold
+what the act did. One process, one clock: the window's clock is in neither, and is never compared.
+Nothing else is asked: no state is kept, no word, no row, no case per act (four earlier forms
+answered the question by proxy, and each was found short). The home's cards of an agent that runs outside OATS and of a stopped agent that asks read the same
+rule (asked of the roster the card is drawn from: a card reads nothing of its own); the Souls
+page's detached agents do not (not a pilot screen). A REPLAYED receipt ("Check again") marks
+nobody: the act is not new. Every agent a result names is marked:
+a stop's sessions (also those that did stop in a stop that did not stop them all), a retire's
+agent and the children it stopped. Every act asks the server for a status read as it ends, so a
+roster read after the end follows within a second or two; a row the server patched from the
+agent's own events on an older roster stays "Reading…" until then (a moment late over a row that
+is already right: the safe side). It is bounded: after ten seconds the roster's own state is drawn
+whatever it says. Nothing of it while OATS cannot be read (the last roster's notice says that).
 
 **What is of an earlier moment says so.** A Stop or Retire plan is of the moment it was read: under
 its Details, before **Check again**, "Read <age>." (the form of every content read earlier, by the
@@ -428,7 +439,9 @@ harness process it finds in the home), and the plugin, which says the state from
 and from bb's own word on the thread (`state` and `threadWorks`, `model/view.ts`). `running` is
 endpoint activity: true while a harness is loaded, an idle agent's too; it never says that an
 agent works. Each row below that names a recording is the kernel's row as printed: the five
-of `outside/` on that provider (OATS 0.70.5, the provider at oats-bb #40), the two of
+of `outside/` on that provider (OATS 0.70.5, the provider at oats-bb #40), the row of a thread
+that failed at its start from the pi run (`outside/status-failed-at-start.json`: OATS 0.70.5, pi
+1.5.2, the provider of the checkout that recorded it; `container/real/pi/README.md`, P6), the two of
 `roster/status-recorded.json` on the earlier recording (OATS 0.70.0, the provider before #40:
 those two rows read the same on both). A test reads every recorded row against this table (`test/model/cases.test.ts`): the row's four fields, and the state the plugin says of
 it with the thread as the column gives it. That test holds the plugin's side alone: the
@@ -448,13 +461,14 @@ provider's own tests hold its side). A dash is a field the row does not carry, o
 | its thread deleted in bb | false | stopped | lost | - | deleted | Stopped | `roster/status-recorded.json#threadDeleted` |
 | its session lost, its thread open | false | stopped | lost | - | at rest | Stopped | (no recording) |
 | its session ended in a shell | false | shell | - | - | at rest | Failed | (no recording) |
-| its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | (no recording of the kernel's row here; bb's events of such a thread are recorded: test/fixtures/outside/events/) |
+| its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | `outside/status-failed-at-start.json` |
 | the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
 
 What comes after the state's word (the reason, the tone, the acts) is the table at the head of
 this section; this one holds only what the two functions must agree on. One row is the plugin's
 own reading: "its thread failed at its start in bb" has the kernel's four fields of "its session
-lost, its thread open", and is told apart from it by bb's events of the thread, not by the row. An agent on tmux is not
+lost, its thread open" (its recording shows it: a real kernel prints a lost session's row for it),
+and is told apart from it by bb's events of the thread, not by the row. An agent on tmux is not
 in it: its row has no `runtimeState` while it runs, and the kernel's `running` is its own word
 for whether it works.
 
@@ -482,6 +496,10 @@ answer it, the Start dialog has no carry-on line), bb's reason (the event's `dat
   what it last said of the thread stands (nothing, if it never answered): a row that said
   "Failed" does not go back to "Stopped · session lost" for a read that failed.
 - Never of an agent the kernel says runs (one started again since), nor of an agent on tmux.
+- Proven against a real kernel by the pi run's step P6 (`container/real/pi/README.md`): a pi agent
+  spawned through the form with a model id that ends in a date (the provider lets it go, bb's pi
+  cannot resolve it). The kernel's row of that home is recorded
+  (`test/fixtures/outside/status-failed-at-start.json`): a lost session's row.
 
 ## The home
 
@@ -1156,7 +1174,13 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   the pause after every read and spends at most half its time on status (the first spec's "never
   within 5 s of the last" gave way to this). The server says in its log, at debug level, which rule
   each read asked for mid-read took. Each
-  reread that differs publishes `oats/changed`, and the app refetches. A window that LOADS while
+  reread that differs publishes `oats/changed`, and the app refetches. One reread is published
+  also when it says nothing new: the one a stop, a start, a restart or a retire asks for as it
+  ends (`rereadAfterAct`), because the window holds "Reading…" over the agent until it has a
+  roster read after the act's end (`app/roster/reading.tsx`): the app reads the snapshot again on
+  `oats/changed` and takes the new roster's `at`, also when nothing else in it differs. A read's
+  start and an act's end are ONE strictly increasing stamp of the server (`stamp()`), so the two
+  are never the same instant. A window that LOADS while
   the server reads a change is given the roster from before it (the server answers from its
   cache at once) and hears the change published while that first answer is still on its way: the
   app then reads once more when the first answer is here (`app/store.ts` `useRead`), so the window

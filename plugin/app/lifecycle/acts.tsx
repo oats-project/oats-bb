@@ -22,7 +22,7 @@ import type { Contract, Result as Answer } from "../store";
 import { RPC_FAILED, useOats } from "../oats";
 import { markGone, planSaysGone } from "../roster/gone";
 import { useNow } from "../roster/now";
-import { keptState, noteActed, stateIn } from "../roster/reading";
+import { noteActed } from "../roster/reading";
 import { isUnreadable, Unreadable } from "../roster/unreadable";
 import { Button, Code, Confirm, CopyButton, Disclosure, Fact, Facts, Field, INPUT, Lines, Notice, Switch } from "../ui";
 import type { ConfirmProps } from "../ui";
@@ -354,12 +354,6 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const sdk = useSdk();
   const navigate = useBbNavigate();
   const oats = useOats();
-  const rosterAt = useRef<string | null>(null);
-  const oatsNow = useRef(oats);
-  useEffect(() => {
-    rosterAt.current = oats.phase === "ready" ? oats.at : null;
-    oatsNow.current = oats;
-  });
   const { verb, instance } = request;
   // When the plan on screen was read, by the window's clock; and the clock (the age is said under Details).
   const [readAt, setReadAt] = useState<number | null>(null);
@@ -414,15 +408,14 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   const send = (plan: Plan, key: string, again = false) => {
     setState({ phase: "applying", plan, key });
     const sent = { plan, key };
-    // The roster the window holds as the act is sent: a result that says the agents changed is true of them
-    // before that roster is read again, and the places that say their state say "Reading…" until it is (app/roster/reading.tsx).
-    const sentAt = rosterAt.current;
-    const acted = plan.action === "stop" ? plan.targets.map((target) => target.instance) : [plan.instance ?? instance];
-    // (And each agent's state in that roster: a roster that reaches the window during the act can still say it.)
-    const act = plan.action === "stop" ? ("stop" as const) : ("retire" as const);
-    const was = new Map(acted.map((each) => [each, keptState(act, stateIn(oatsNow.current, each))]));
-    const settle = (outcome: Outcome, refusal: Refusal | null) => {
-      if (outcome.tone === "done") noteActed(acted, sentAt, { verb: act, was });
+    // A receipt says agents stopped or were retired: that is true of them before the roster is read again, and the
+    // places that say their state say "Reading…" until the window holds a roster READ AFTER THE ACT ENDED (the
+    // receipt's `endedAt`; app/roster/reading.tsx). EVERY agent the receipt names is marked: each session a stop
+    // stopped (also in a stop that did not stop them all), a retire's agent, and the children a retire stopped.
+    // A REPLAYED receipt ("Check again": the kernel answers the receipt of an act it already did) marks nobody: the
+    // act is not new, and the server's stamp on a replay is when the REPLAY returned, not when the act ended.
+    const settle = (outcome: Outcome, refusal: Refusal | null, changed: { agents: readonly string[]; endedAt: string } | null = null) => {
+      if (changed !== null) noteActed(changed.agents, changed.endedAt);
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
       // The person moved on (they left the dialog, or another act's took its place): the result reaches them
       // where they are, and what a toast cannot hold is one press away ("Show result").
@@ -434,11 +427,15 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
             const onBb = plan.targets.some((target) => target.backend === "bb");
             // What the stop left of the agent's thread is what bb SHOWS of it now, where bb answers; else what the confirmation said.
             const archived = receipt.ok && onBb && threadId !== null ? await threadArchived(sdk, threadId) : null;
-            return stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? stopArchivesThread(versionOf(plan)));
+            return { outcome: stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? stopArchivesThread(versionOf(plan))), changed: receipt.replayed ? null : { agents: receipt.results.filter((row) => row.ok).map((row) => row.instance), endedAt: receipt.endedAt } };
           })
-        : flying(rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard })).then((receipt) => retireOutcome(receipt, plan));
+        : flying(rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard })).then((receipt) => {
+            const outcome = retireOutcome(receipt, plan);
+            // (A retire that was only accepted, or did not finish, does not say its agent was retired: the children it stopped are named all the same.)
+            return { outcome, changed: receipt.replayed ? null : { agents: [...(outcome.tone === "done" ? [receipt.instance] : []), ...receipt.children.filter((row) => row.ok).map((row) => row.instance)], endedAt: receipt.endedAt } };
+          });
     answered.then(
-      (outcome) => settle(outcome, null),
+      ({ outcome, changed }) => settle(outcome, null, changed),
       (cause: unknown) => {
         const refusal = refusalOf(cause);
         // The plan changed under the confirmation: back to review with the plan as it is now.
@@ -658,12 +655,6 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const rpc = useRpc<Contract>();
   const navigate = useBbNavigate();
   const oats = useOats();
-  const rosterAt = useRef<string | null>(null);
-  const oatsNow = useRef(oats);
-  useEffect(() => {
-    rosterAt.current = oats.phase === "ready" ? oats.at : null;
-    oatsNow.current = oats;
-  });
   const { verb, instance } = request;
   const rowThread = oats.phase === "ready" ? (oats.nodeByInstance.get(instance)?.thread.id ?? null) : null;
   const returnFocus = useRowFocus(rowThread);
@@ -786,15 +777,12 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     const { check: checked } = state;
     setChanged(false);
     setState({ phase: "running", check: checked });
-    // (As for a stop: the roster held as the act is sent, and for a start the agent's state in it; a restart's
-    // state is the same word before and after, so the roster's stamp alone decides; app/roster/reading.tsx.)
-    const sentAt = rosterAt.current;
-    const was = new Map([[checked.instance, keptState(verb, stateIn(oatsNow.current, checked.instance))] as const]);
     const asked = verb === "start" && resumes ? { instance, resume: true as const } : { instance, ...(onBb && harness !== "" ? { harness } : {}), ...(onBb && typed !== "" ? { model: typed } : {}) };
     flying(rpc.call(verb, asked)).then(
       (started) => {
         const outcome = startOutcome(verb, started.instance ?? checked.instance, started);
-        if (outcome.tone === "done") noteActed([checked.instance], sentAt, { verb, was });
+        // (As for a stop: "Reading…" for this agent until the window holds a roster read after the act ended: app/roster/reading.tsx.)
+        if (outcome.tone === "done") noteActed([checked.instance], started.endedAt);
         const threadId = started.threadId;
         // A home that is not on bb has no thread to open: its result says where it is.
         const open = threadId === null ? null : { label: `Open ${agentName(checked.instance)}`, run: () => navigate.toThread(threadId) };

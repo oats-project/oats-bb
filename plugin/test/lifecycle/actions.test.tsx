@@ -12,7 +12,7 @@ import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import { UNCONFIRMED_ISSUE } from "../../contract/shared";
 import { modelsSdk, retirePlanOf, retireReceiptOf, startCheckOf, startedIn, stopPlanOf, stopReceiptOf } from "./handlers";
 import { notified } from "../../app/ui";
-import type { Contract, Handlers } from "../helpers/render";
+import type { Contract, GivenHandlers as Handlers } from "../helpers/render";
 import type { Agent } from "../../model/types";
 
 afterEach(resetApp);
@@ -2587,49 +2587,95 @@ test("the Start dialog holds none of it: a refused start harms nothing, so a mod
   expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: "weekly-digest-helper", model: "a-model-bb-does-not-list" }]);
 });
 
-// ---- behind a result (the lead's L13): a result that says the agents changed marks them, with the stamp of the roster the
-// window held when the act was SENT; the places that say their state then say "Reading…" until the roster is read again
-// (test/roster/reading.test.tsx). A result that says nothing changed marks nothing.
+// ---- behind a result (the lead's L13): a result that says agents changed marks EVERY agent it names with WHEN THE
+// ACT ENDED, on the server's clock (`endedAt`, on the act's answer); the places that say their state then say
+// "Reading…" until the window holds a roster read after that end (test/roster/reading.test.tsx). One rule for the
+// four acts: the roster's stamp against the act's end, nothing else. A result that says nothing changed marks nothing.
+const ENDED = "2026-11-19T12:30:03.000Z"; // the act's command returned, on the server's clock
+const MID_ACT = "2026-11-19T12:30:02.000Z"; // a roster whose read started after the send and BEFORE the act ended
+const AFTER = "2026-11-19T12:30:03.400Z"; // a roster whose read started after the act ended
 
-test("a result that says the agents stopped marks every agent of the plan, with the roster's stamp from when the act was sent; nothing before the result", async () => {
-  const { actedAt, actedWas } = await import("../../app/roster/reading");
+test("a Stop: nothing is marked before the result; then every session the receipt says stopped carries the act's end: a roster read mid-act is still before, the first one read after it is read", async () => {
+  const { actedAt, beforeEnd } = await import("../../app/roster/reading");
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
-  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held.then(() => stopReceiptOf()) });
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => held.then(() => ({ ...stopReceiptOf(), endedAt: ENDED })) });
   await pick("stop");
   await ready(slot);
   fireEvent.click(button(slot, "oats-confirm-act"));
   await phase(slot, "running");
   const TARGETS = ["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"];
-  const WAS = ["working", "working", "idle"]; // their states in the sample's roster, as every place says them
   expect(TARGETS.map(actedAt)).toEqual([null, null, null]); // the act runs: nothing is said of its end yet
   release();
   await phase(slot, "done");
-  expect(TARGETS.map(actedAt)).toEqual([fixtureSnapshot().at, fixtureSnapshot().at, fixtureSnapshot().at]); // the server's stamp of the roster, never the window's clock
-  expect(actedAt("weekly-digest-helper")).toBeNull(); // no agent the plan did not stop
-  // And each agent's state in that roster (a roster that reaches the window during the act can still say it of an agent).
-  expect(TARGETS.map(actedWas).map((was) => was !== null)).toEqual([true, true, true]);
-  expect(TARGETS.map(actedWas)).toEqual(WAS);
+  expect(TARGETS.map(actedAt)).toEqual([ENDED, ENDED, ENDED]); // the server's clock at the act's end, never the window's
+  expect(actedAt("weekly-digest-helper")).toBeNull(); // no agent the receipt does not name
+  expect(TARGETS.map((each) => [beforeEnd(actedAt(each)!, fixtureSnapshot().at), beforeEnd(actedAt(each)!, MID_ACT), beforeEnd(actedAt(each)!, AFTER)])).toEqual([[true, true, false], [true, true, false], [true, true, false]]);
 });
 
-test("a start and a retire that are done mark their agent; a refused apply marks nothing", async () => {
+test("a Stop that did not stop them all: the sessions that DID stop are marked (their lines must not say Working with Stop… on behind it); the one that did not is not", async () => {
   const { actedAt } = await import("../../app/roster/reading");
-  const { actedWas } = await import("../../app/roster/reading");
-  const start = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => startedIn("thr_digest_2") });
+  const whole = stopReceiptOf();
+  const partial = { ...whole, ok: false, results: whole.results.map((row, index) => (index === 0 ? { ...row, ok: false, code: "E_STOP_FAILED", detail: "did not stop" } : row)), endedAt: ENDED };
+  const { slot, pick } = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => partial });
+  await pick("stop");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await waitFor(() => expect(slot.getByTestId("oats-confirm").getAttribute("data-phase")).not.toBe("running"));
+  expect(partial.results.map((row) => [row.ok, actedAt(row.instance)])).toEqual(partial.results.map((row) => [row.ok, row.ok ? ENDED : null]));
+});
+
+// "Check again" asks for the receipt of an act the kernel already did: a REPLAYED receipt. The act is not new, and the
+// server's stamp on a replay is when the replay returned, not when the act ended: it marks nobody (ruled from the fourth
+// review round: each press held the agents ten seconds for nothing).
+test("a REPLAYED receipt marks nobody: neither a stop's sessions nor a retire's agent and children", async () => {
+  const { actedAt } = await import("../../app/roster/reading");
+  const stop = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => ({ ...stopReceiptOf(), replayed: true, endedAt: ENDED }) });
+  await stop.pick("stop");
+  await ready(stop.slot);
+  fireEvent.click(button(stop.slot, "oats-confirm-act"));
+  await waitFor(() => expect(stop.slot.getByTestId("oats-confirm").getAttribute("data-phase")).not.toBe("running"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"].map(actedAt)).toEqual([null, null, null]);
+  resetApp();
+  const stoppedChild = { instance: "digest-links-helper", ok: true, alreadyIdle: false, code: null, stillRunning: null, detail: null };
+  const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => ({ ...retireReceiptOf(), replayed: true, children: [stoppedChild], endedAt: ENDED }) });
+  await retire.pick("retire");
+  await ready(retire.slot);
+  fireEvent.click(button(retire.slot, "oats-confirm-act"));
+  await waitFor(() => expect(retire.slot.getByTestId("oats-confirm").getAttribute("data-phase")).not.toBe("running"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect([actedAt("weekly-digest-helper"), actedAt("digest-links-helper")]).toEqual([null, null]);
+});
+
+test("a Start, a Restart and a Retire that are done mark their agent with the act's end (mid-act roster: before; one read after it: read); a Retire marks the children it stopped too; a refused apply marks nothing", async () => {
+  const { actedAt, beforeEnd } = await import("../../app/roster/reading");
+  const judged = (instance: string) => [actedAt(instance), beforeEnd(actedAt(instance) ?? "", MID_ACT), beforeEnd(actedAt(instance) ?? "", AFTER)];
+  const start = await menu("thr_digest", { startCheck: ({ instance }) => startCheckOf(instance), start: () => ({ ...startedIn("thr_digest_2"), endedAt: ENDED }) });
   await start.pick("start");
   await ready(start.slot);
   expect(actedAt("weekly-digest-helper")).toBeNull();
   fireEvent.click(button(start.slot, "oats-confirm-act"));
   await phase(start.slot, "done");
-  expect([actedAt("weekly-digest-helper"), actedWas("weekly-digest-helper")]).toEqual([fixtureSnapshot().at, "stopped"]); // a start keeps the state at the send
+  expect(judged("weekly-digest-helper")).toEqual([ENDED, true, false]);
   resetApp();
   expect(actedAt("weekly-digest-helper")).toBeNull();
-  const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => retireReceiptOf() });
+  // A Restart: no word of the agent is kept or asked (its state can be the same word before and after, or Failed before): the same rule.
+  const restart = await menu("thr_redesign", { startCheck: ({ instance }) => startCheckOf(instance), restart: () => ({ ...startedIn("thr_redesign_2", "redesign-ui-lead"), endedAt: ENDED }) });
+  await restart.pick("restart");
+  await ready(restart.slot);
+  fireEvent.click(button(restart.slot, "oats-confirm-act"));
+  await phase(restart.slot, "done");
+  expect(judged("redesign-ui-lead")).toEqual([ENDED, true, false]);
+  resetApp();
+  // A Retire, whose receipt names a child it stopped: both are marked.
+  const stoppedChild = { instance: "digest-links-helper", ok: true, alreadyIdle: false, code: null, stillRunning: null, detail: null };
+  const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => ({ ...retireReceiptOf(), children: [stoppedChild], endedAt: ENDED }) });
   await retire.pick("retire");
   await ready(retire.slot);
   fireEvent.click(button(retire.slot, "oats-confirm-act"));
   await phase(retire.slot, "done");
-  expect(actedAt("weekly-digest-helper")).toBe(fixtureSnapshot().at);
+  expect([judged("weekly-digest-helper"), judged("digest-links-helper")]).toEqual([[ENDED, true, false], [ENDED, true, false]]);
   resetApp();
   const refused = await menu("thr_digest", {
     retirePlan: () => retirePlanOf(),
@@ -2642,6 +2688,26 @@ test("a start and a retire that are done mark their agent; a refused apply marks
   fireEvent.click(button(refused.slot, "oats-confirm-act"));
   await phase(refused.slot, "failed");
   expect(actedAt("weekly-digest-helper")).toBeNull();
+});
+
+// Behind a result EVERY act of that agent is off, wherever it is offered (ruled with L13's form): the thread's menu
+// says "Reading…" in the state's place on its name row and its lifecycle entries stay where they are, off; and a
+// command's key does nothing for that agent, and says nothing (the thread's line says "Reading…").
+test("behind a result the thread's MENU says \"Reading…\" for that agent and its entries are off; a roster read after the act's end brings them back", async () => {
+  const { noteActed } = await import("../../app/roster/reading");
+  const view = await menu("thr_redesign");
+  expect([view.label("agent"), view.item("stop")?.disabled ?? false, view.item("restart")?.disabled ?? false]).toEqual(["Redesign ui lead · Working", false, false]);
+  act(() => noteActed(["redesign-ui-lead"], fixtureSnapshot().at)); // an act ended; the window's roster was read before that
+  await waitFor(() => expect(view.label("agent")).toBe("Redesign ui lead · Reading…"));
+  expect(view.shown()).toEqual(["stop", "restart", "retire"]); // in their place
+  expect(["stop", "restart", "retire"].map((id) => view.item(id)!.disabled)).toEqual([true, true, true]);
+  // A press all the same opens nothing; nor does the command's key, which says nothing either.
+  view.pick("stop");
+  const { commands } = await import("../../app/lifecycle");
+  const said = notified().length;
+  commands.find((each) => each.id === "agent-stop")!.run({ threadId: "thr_redesign", projectId: null, experimental_panel: {} as never });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect([view.slot.queryByRole("dialog"), notified().length]).toEqual([null, said]);
 });
 
 // ---- a plan is of the moment it was read (the pass for what reads as present, 24 Nov 2026): its age is said under

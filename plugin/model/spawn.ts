@@ -242,15 +242,16 @@ export function formFacts(preview: unknown, options: { name?: string | null } = 
   if (soul !== null) rows.unshift({ label: "Soul", parts: [{ text: soul }] });
   const decision = record(data.decision) && record(data.decision.effective) ? data.decision.effective : {};
   const backend = text(data.backend);
-  const access = decision.yolo === true ? "full mode: no sandbox" : decision.yolo === false ? "the harness asks before it acts" : null;
+  // What the agent may do: ALWAYS a row (it is the one place the form says it, in view of Spawn). The kernel's own
+  // decision where the preview carries it; where it carries none, what the plugin asks on every spawn (`--yolo`: bb's
+  // full mode): a preview that is silent on it never leaves a Spawn that can be pressed with nothing saying "no sandbox"
+  // (the review of part 7).
+  const access = decision.yolo === false ? "the harness asks before it acts" : "full mode: no sandbox";
   // After the harness: where its session is, then what it may do.
-  if (access !== null) after("Harness", { label: "Access", parts: [{ text: access }] });
+  after("Harness", { label: "Access", parts: [{ text: access }] });
   if (backend !== null) after("Harness", { label: "Session", parts: [{ text: backend === "bb" ? "bb thread" : backend }] });
   return { ...facts, facts: rows };
 }
-
-/** Under the column: who resolved it, and what the spawn does if it moves (the Desktop's sentence). */
-export const PREVIEW_FOOT = "Resolved by the installed CLI. Spawn refuses if this changes before you confirm.";
 
 // ---- a refusal, in a person's words ----
 /** The act that follows a refusal, where its sentence names one. */
@@ -329,7 +330,7 @@ const SPAWN_FAILED = said("OATS couldn’t complete the spawn.", "details");
 // (Spawn, Details, the fields above), as the Desktop's name the Desktop's (spawn-words.mjs).
 const NEXT: Record<Exclude<SpawnNext, null | "change-options">, string> = {
   "review-again": "Check the values and press Spawn again.",
-  "check-result": "Press Check result: it asks OATS again, and starts nothing twice.",
+  "check-result": "Press Check result: nothing starts twice.",
   "update-oats": "Update OATS, then open this form again.",
   "sync-workspace": "Run oats sync in the deployment, then try again.",
   details: "Try again, or see Details.",
@@ -401,8 +402,8 @@ export type SpawnReason = { code: string | null; message: string | null; unconfi
 const CREATED: ReadonlySet<string> = new Set(["E_SPAWN_INCOMPLETE", "E_INSTANCE_GONE", "NO_THREAD_NAMED"]);
 /** The plugin's own codes for a call that never ran `oats spawn`: nothing was asked of the kernel. */
 const NEVER_RAN: ReadonlySet<string> = new Set(["INVALID_INPUT", "OATS_NOT_FOUND", "NO_DEPLOYMENT", "CHOOSE_HOST", "HOST_NOT_FOUND", "NO_HOST"]);
-const UNKNOWN = said("OATS didn’t say whether the instance was created.", "check-result");
-const UNCONFIRMED = said("OATS refused the spawn and could not undo all of it: part of the instance may still be there. Details says what to clean up; don’t spawn again before it is.");
+const UNKNOWN = said("OATS didn’t say whether it was created.", "check-result");
+const UNCONFIRMED = said("Part of the instance may remain. See Details before spawning again.");
 /**
  * What is known of the instance after a failure, in the order the safety rule is read (`SpawnOutcome`):
  * `code` is the failure's own (null when it has none), `named` what the tables say of it.

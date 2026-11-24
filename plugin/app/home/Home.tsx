@@ -597,18 +597,21 @@ function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; 
       {checking ? CHECKING : CHECK_AGAIN}
     </Button>
   );
+  const found = <Fact label={DETECTED}>{detected(cli.version === null ? null : shown(cli.version))}</Fact>;
   const facts = (
     <Facts>
-      <Fact label={DETECTED}>{detected(cli.version === null ? null : shown(cli.version))}</Fact>
+      {found}
       <Fact label={REQUIRED}>{required(OATS_FLOOR)}</Fact>
     </Facts>
   );
   if (cli.state === "newer-api") {
+    // The CLI is too NEW for the plugin: the floor ("<floor> or newer") is not the bound that is broken, and beside a
+    // newer version it reads as a denial of the title. The card says what was found, and what to do; no "Required" row.
     return (
       <div data-testid="oats-home-cli" data-state={cli.state}>
         <Notice title={CLI_NEWER_API} tone="warning" actions={again}>
           <p className="m-0">{NEWER_API_WHY}</p>
-          {facts}
+          <Facts>{found}</Facts>
           {failed}
         </Notice>
       </div>

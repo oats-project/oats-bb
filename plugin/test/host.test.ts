@@ -8,18 +8,19 @@ import type { ExperimentalHostWatchListener } from "@get-bb/plugin-sdk";
 import { experimental_createHostEntryHarness } from "@get-bb/plugin-sdk/testing/host";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHostEntry } from "../host.js";
+import { changedFiles } from "../host/roster.js";
 import { codes } from "../kernel/index.js";
 import { alive, gone, installFakeOats, type Call, type FakeOats } from "./support/fake-oats.js";
 
 let fake: FakeOats;
-let watches: { rootPath: string; listener: ExperimentalHostWatchListener; disposed: boolean }[];
+let watches: { rootPath: string; debounceMs: number | undefined; maxWaitMs: number | undefined; listener: ExperimentalHostWatchListener; disposed: boolean }[];
 let harness: ReturnType<typeof makeHarness>;
 
 function makeHarness() {
   return experimental_createHostEntryHarness(createHostEntry(), {
     experimental_paths: { dataDir: join(fake.deployment, "data"), tempDir: fake.tempDir },
     experimental_watch: (options, listener) => {
-      const watch = { rootPath: options.rootPath, listener, disposed: false };
+      const watch = { rootPath: options.rootPath, debounceMs: options.debounceMs, maxWaitMs: options.maxWaitMs, listener, disposed: false };
       watches.push(watch);
       return { dispose: async () => void (watch.disposed = true) };
     },
@@ -225,9 +226,30 @@ describe("watch", () => {
     await watches[0]!.listener({ kind: "changed", changes: [{ path: join(events(), "dev--dev-1.jsonl"), type: "update" }] });
     await watches[0]!.listener({ kind: "rescan-required" });
     expect(harness.experimental_getSignals()).toEqual([
-      { signal: "changed", payload: { reason: "changed" } },
-      { signal: "changed", payload: { reason: "rescan-required" } },
+      { signal: "changed", payload: { reason: "changed", files: ["dev--dev-1.jsonl"] } },
+      { signal: "changed", payload: { reason: "rescan-required", files: [] } },
     ]);
+    // The watch waits as bb's own default does: its wait is part of how soon a claim is on the screen.
+    expect([watches[0]!.debounceMs, watches[0]!.maxWaitMs]).toEqual([75, 500]);
+  });
+
+  it("names the instances' files a batch changed: base names, each once, only names of the log's form; none for a batch of more than eight", async () => {
+    await mkdir(events(), { recursive: true });
+    await harness.experimental_call("watch", { deployment: fake.deployment });
+    const batch = async (paths: string[]) => {
+      const before = harness.experimental_getSignals().length;
+      await watches[0]!.listener({ kind: "changed", changes: paths.map((path) => ({ path, type: "update" as const })) });
+      return harness.experimental_getSignals().slice(before).map((signal) => signal.payload);
+    };
+    // A path absolute or relative to the watched directory: the base name either way; a name said twice, once.
+    expect(await batch([join(events(), "oats-developer--flaky-ci-developer.jsonl"), "oats-developer--flaky-ci-developer.jsonl", "oats-expert--dialogs-1-helper.jsonl"])).toEqual([
+      { reason: "changed", files: ["oats-developer--flaky-ci-developer.jsonl", "oats-expert--dialogs-1-helper.jsonl"] },
+    ]);
+    // Anything that is not an instance's file of the log is not passed on: another file, a path that climbs, a name with no agent.
+    expect(await batch([join(events(), ".DS_Store"), join(events(), "notes.txt"), "../../etc/passwd", "--only-instance.jsonl", join(events(), "dev--Dev 1.jsonl")])).toEqual([{ reason: "changed", files: [] }]);
+    // A sweep: more than eight instances at once name none; the status read carries them.
+    expect(changedFiles(Array.from({ length: 8 }, (_, n) => ({ path: `dev--dev-${n}.jsonl` })))).toHaveLength(8);
+    expect(await batch(Array.from({ length: 9 }, (_, n) => `dev--dev-${n}.jsonl`))).toEqual([{ reason: "changed", files: [] }]);
   });
 
   it("answers null while the deployment has no event log, and watches once it has", async () => {
@@ -244,7 +266,7 @@ describe("watch", () => {
     await harness.experimental_call("watch", { deployment: fake.deployment });
     await watches[0]!.listener({ kind: "watch-error", message: "inotify limit" });
     expect(watches[0]!.disposed).toBe(true);
-    expect(harness.experimental_getSignals()).toEqual([{ signal: "changed", payload: { reason: "watch-error" } }]);
+    expect(harness.experimental_getSignals()).toEqual([{ signal: "changed", payload: { reason: "watch-error", files: [] } }]);
     await harness.experimental_call("watch", { deployment: fake.deployment });
     expect(watches).toHaveLength(2);
   });

@@ -755,9 +755,11 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
         listed: suggestions.status === "loading" && !overdue ? { status: "loading" } : { status: "ready", models: suggestions.models.map(({ id, provider }) => ({ id, provider })) },
       });
   const heldModel = hold !== null && hold.kind === "held" ? hold : null;
-  /** The word on the Model field and beside the button. */
+  /** The word, said once: the Model field's mark. */
   const modelWord = heldModel === null ? null : heldModel.why === "required" ? START.required : heldModel.why === "not-found" ? START.notFound : START.pickProvider;
   // Beside the button: the held word; while the list is read, off with no word (it answers at once from bb's cache).
+  /** The id of the Model field's mark: what the off button is described by. */
+  const modelMark = `oats-start-model-mark-${request.id}`;
   const notArmed = hold === null || hold.kind === "armed" ? null : hold.kind === "reading" ? "" : modelWord;
 
   // What this start is, from the kernel's row as the check read it. On bb: a new thread, with a harness and a
@@ -883,8 +885,12 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
       // Why Start is off is said ONCE, on the status line under the fields (with Refresh status, or the way to its
       // thread): the button is off (`held`) with no second copy of the sentence beside it. Beside the button stands
       // only what the person typed wrong.
-      held={held !== null}
-      blocked={onBb && badModel ? START.badModel : notArmed}
+      // Held on what is in the Model field: a model name that is none, or in a Restart a changed model bb's list does
+      // not serve (#77). The word stands ONCE, as the field's mark ("Enter a model name, …", "Not found", "Required",
+      // "Pick provider"); the button is off and described by that mark, with no copy of the word beside it (the
+      // lead's L9). While bb's list is still read it is off with no word at all.
+      held={held !== null || notArmed !== null || (onBb && badModel)}
+      describedBy={(onBb && badModel) || (notArmed !== null && notArmed !== "") ? modelMark : undefined}
       notice={
         changed ? (
           // A resume the kernel refused because the row changed: said first, as a plan that changed is.
@@ -917,6 +923,12 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
                   {line}
                 </p>
               ))}
+              {/* The one way to a model bb does not list, only while the field says "Not found": in the dialog's ONE fold (never a second "Details"). */}
+              {heldModel !== null && heldModel.why === "not-found" && !badModel ? (
+                <p data-testid="oats-start-unlisted" className="break-words">
+                  {START.unlisted}
+                </p>
+              ) : null}
               <Facts>
                 {/* With a choice of harness, the field's first entry says which one is recorded: it is not said twice. */}
                 {onBb && known.harnesses.length > 1 ? null : <Fact label="Harness">{recorded === null ? "Harness not reported" : shown(harnessLabel(recorded))}</Fact>}
@@ -961,7 +973,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           <Field
             label={START.model}
             optional
-            hint={START.modelSaved}
+            errorId={modelMark}
             error={badModel ? START.badModel : modelWord}
           >
             <input
@@ -977,12 +989,6 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             />
           </Field>
           )}
-          {heldModel !== null && heldModel.why === "not-found" && !badModel ? (
-            // The one way to a model bb does not list, a press away, only while the field says so.
-            <Disclosure summary="Details" testId="oats-start-unlisted">
-              <p className="text-xs text-muted-foreground">{START.unlisted}</p>
-            </Disclosure>
-          ) : null}
           {!onBb ? null : (
           <datalist id={`oats-start-models-${request.id}`}>
             {/* Several listed models serve the id that was typed: the field offers only those. */}

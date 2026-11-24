@@ -546,7 +546,8 @@ export const START = {
   harness: "Harness",
   model: "Model",
   /** Under the model field: the choice outlives this start. */
-  modelSaved: "Saved for later starts too.",
+  // (Under Details, away from the Model field: the line names what is saved.)
+  modelSaved: "The model is saved for later starts too.",
   badModel: "Enter a model name, not a command-line option.",
   refresh: "Refresh status",
   starting: "Starting…",
@@ -618,7 +619,9 @@ export function startSays(verb: RunVerb, { resumes, working = false }: { resumes
  * said in view where an agent is made, the New agent form, and here one press away).
  */
 export function startDetails(_verb: RunVerb, { onBb }: { onBb: boolean }): string[] {
-  return onBb ? [FULL_MODE] : [];
+  // (On bb the dialog has a Model field: that its choice outlives this start is said here, not under the field: the lead's L9.)
+  // (That a restart starts a new conversation is said in view, with the dialog's lines: `startSays`.)
+  return onBb ? [START.modelSaved, FULL_MODE] : [];
 }
 /** Why a resume started fresh, in words, for each reason the kernel names (docs/desktop-cli-api.md, "Resume a lost session"). */
 const FRESH_BECAUSE: Readonly<Record<string, string>> = {

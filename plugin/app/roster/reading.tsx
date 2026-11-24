@@ -47,7 +47,10 @@ export function beforeAct(sentAt: string, rosterAt: string | null): boolean {
  * in it (null: it is not in the roster any more).
  */
 export function fromBefore(acted: { sentAt: string; was: AgentState | null }, rosterAt: string | null, now: AgentState | null): boolean {
-  return beforeAct(acted.sentAt, rosterAt) || (rosterAt !== null && acted.was !== null && now === acted.was);
+  // Where a state is kept it decides ALONE: the plugin's server patches a row from the instance's own events and
+  // keeps the roster's stamp (#74), so a roster with the stamp of the send can already say the new state: that is
+  // read, not "before". The stamp's rule serves only what keeps no state (a restart; a stop of a stopped target).
+  return acted.was !== null ? rosterAt !== null && now === acted.was : beforeAct(acted.sentAt, rosterAt);
 }
 
 /**

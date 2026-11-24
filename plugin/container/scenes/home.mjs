@@ -392,7 +392,7 @@ export default [
         installed({ version: "0.74.0", desktopApi: 2 });
         check(await open(page, within("oats-home-cli")), `${at} an oats that speaks a newer desktop API draws the card`, await page.evaluate(textOf(PAGE)));
         const newerApi = await page.until(`(() => { const text = ${cardText}; return text.startsWith("newer-api") ? text : ""; })()`, 15);
-        check(Boolean(newerApi) && newerApi === `newer-api | This plugin is older than the installed oats CLI Update the OATS plugin. Detected 0.74.0 Required ${FLOOR} or newer Check again`, `${at} the card names the plugin as the older one, says what to do in four words, and offers no npm command`, newerApi ?? (await page.evaluate(cardText)));
+        check(Boolean(newerApi) && newerApi === "newer-api | This plugin is older than the installed oats CLI Update the OATS plugin. Detected 0.74.0 Check again", `${at} the card names the plugin as the older one, says what to do in four words, and offers no npm command`, newerApi ?? (await page.evaluate(cardText)));
         await sound(page, viewport, check, at, "the newer-API card");
         await page.shot(`home-${viewport.name}-cli-newer-api`);
 

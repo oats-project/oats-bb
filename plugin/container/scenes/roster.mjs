@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openParents, showSidebar, testId, textOf, texts, visible, textsNamed, tmuxMarks } from "../browser.mjs";
+import { gapsIn, loose, MAX_GAP, openParents, showSidebar, testId, textOf, texts, tight, visible, textsNamed, tmuxMarks } from "../browser.mjs";
 import { PILOT_ROSTER, TMUX_ROSTER } from "../tmux-roster.mjs";
 import { click, closed, dialog, phaseIs, saysNow } from "./lifecycle.mjs";
 
@@ -672,6 +672,9 @@ export default [
       check(read.state === "Stopped" && read.kind === "lost-tmux" && read.reason === "session lost" && read.alone === false && read.times === 1 && read.sentence === false, `${at} its page says "Stopped · session lost" on its header's state line, once: nothing of it alone under the tabs, no sentence, and no "Last started"`, JSON.stringify(read));
       check(JSON.stringify(read.acts) === JSON.stringify(["Start…", "Retire…"]), `${at} its acts are Start… and Retire…, and no Restart (nothing runs)`, JSON.stringify(read.acts));
       check(/^SESSION\b/i.test(read.session) && /Runs in tmux/.test(read.session) && !/Last started|Stopped/.test(read.session), `${at} its Session card: that it runs in tmux, and no "Stopped <time>" (the kernel records no time of a loss, and an earlier stop's is not this one's)`, read.session);
+      // The page's header and its Session card are as high as what they hold: no empty room between two lines.
+      const pageGaps = JSON.parse(await page.evaluate(gapsIn(`${testId("oats-panel-header")}, ${testId("oats-panel-session")}`)));
+      check(pageGaps.length === 2 && tight(pageGaps), `${at} the page's header and its Session card hold no gap over ${MAX_GAP} px between two of their lines (heights ${pageGaps.map((block) => block.height).join(", ")} px)`, loose(pageGaps));
       await page.shot(`tmux-roster-${viewport.name}-lost-page`, { targets: true });
       // Start…: the dialog's ONE consequence line for a lost tmux agent; nothing starts on the press.
       await page.evaluate(click("oats-agent-act-start"));
@@ -679,6 +682,8 @@ export default [
       const before = await dialog(page);
       const says = await page.evaluate(saysNow);
       check(before.about === LOST && before.act === "Start" && before.off === false && says === JSON.stringify(["Tries to continue its last conversation; else starts fresh."]) && !/full mode|Claude may|how to load/.test(before.body), `${at} Start… opens the dialog for that agent: its one line says that it tries to continue its last conversation, else starts fresh; nothing of bb's full mode`, JSON.stringify({ before, says }));
+      const dialogGaps = JSON.parse(await page.evaluate(gapsIn(testId("oats-modal"))));
+      check(dialogGaps.length === 1 && tight(dialogGaps), `${at} the dialog is as high as what it holds: no gap over ${MAX_GAP} px between two of its lines or at its edges (${dialogGaps[0]?.height} px)`, loose(dialogGaps));
       await page.shot(`tmux-roster-${viewport.name}-lost-start-before`, { targets: true });
       // The press: the kernel's recorded answer to a resume that brought the conversation back (test/fixtures/lifecycle/tmux-start-resume.json,
       // for this agent's name). The result says what the kernel answered, with the command that attaches; no thread opens.

@@ -183,6 +183,24 @@ const CONTROL = 'button, a[href], input, select, textarea, summary, [role="tab"]
 export const lowTargets = (min) =>
   `JSON.stringify([...document.querySelectorAll('[data-testid^="oats-"]')].flatMap((root) => [root, ...root.querySelectorAll('${CONTROL}')]).filter((e, i, all) => all.indexOf(e) === i && e.matches('${CONTROL}')).filter((e) => getComputedStyle(e).display !== "inline").map((e) => [e, e.getBoundingClientRect()]).filter(([, r]) => r.width > 0 && r.height > 0 && r.height < ${min} - 0.5).map(([e, r]) => (e.getAttribute("data-testid") || e.getAttribute("aria-label") || (e.innerText ?? "").trim().slice(0, 30) || e.tagName.toLowerCase()) + " " + Math.round(r.height) + "px"))`;
 
+/**
+ * Every block `selector` finds that is drawn, measured for EMPTY ROOM: a block is as high as what it
+ * holds. Its content boxes are the elements that hold text of their own, the controls and the marks;
+ * `worst` is the largest empty gap between two vertical neighbours among them, `edge` the largest
+ * at its top or bottom (its padding), `boxes` each box as [top, bottom, its first words], for a
+ * failing check to print. A line stretched to ten times its height, or a row kept for something that
+ * was cut, shows as a gap: no check of words can see it.
+ * → JSON `[{ worst, edge, height, boxes }]`.
+ */
+export const gapsIn = (selector) =>
+  `JSON.stringify([...document.querySelectorAll(${JSON.stringify(selector)})].filter((root) => root.getClientRects().length > 0).map((root) => { const boxes = [...root.querySelectorAll("*")].filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== "hidden" && ([...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() !== "") || e.matches("button, input, textarea, select, [data-mark]"))).map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom), ((e.innerText ?? "").replace(/\\s+/g, " ").trim() || e.getAttribute("placeholder") || e.tagName.toLowerCase()).slice(0, 28)]; }).filter(([top, bottom]) => bottom > top).sort((a, b) => a[0] - b[0]); const r = root.getBoundingClientRect(); let reach = boxes.length ? boxes[0][1] : r.top; let worst = 0; for (const [top, bottom] of boxes) { worst = Math.max(worst, top - reach); reach = Math.max(reach, bottom); } const edge = boxes.length ? Math.max(boxes[0][0] - r.top, r.bottom - reach) : 0; return { worst: Math.round(worst), edge: Math.round(edge), height: Math.round(r.height), boxes }; }))`;
+/** The most empty room a block may hold between two of its lines, or at an edge: a gap of the pattern book's, never a line's height or more. */
+export const MAX_GAP = 24;
+/** Whether every measured block (`gapsIn`) holds no gap over MAX_GAP, and there is at least one. */
+export const tight = (measured) => measured.length > 0 && measured.every((block) => block.worst <= MAX_GAP && block.edge <= MAX_GAP);
+/** The blocks that are not tight, for a failing check to print. */
+export const loose = (measured) => JSON.stringify(measured.filter((block) => block.worst > MAX_GAP || block.edge > MAX_GAP));
+
 /** On screen and not covered: the point at the element's middle (clamped to the viewport) is its own. */
 export const visible = (selector) =>
   `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; const r = e.getBoundingClientRect(); if (r.width === 0 || r.height === 0) return false; const x = Math.min(Math.max(r.left + r.width / 2, 0), innerWidth - 1), y = Math.min(Math.max(r.top + Math.min(r.height / 2, 40), 0), innerHeight - 1); const top = document.elementFromPoint(x, y); return top !== null && (e.contains(top) || top.contains(e)); })()`;

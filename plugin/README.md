@@ -473,7 +473,7 @@ with, the version of the kernel's JSON answers it reads), and only the home says
 |---|---|
 | from the floor up to the tested minor | nothing |
 | older than the floor, or its version cannot be read | a card, **Compatible oats CLI required**: what was detected, what is required, and the command to copy (`npm install -g @awebai/oats@<tested minor>`); the home's New agent is off behind it (the card is why) |
-| its JSON answers are of a later version than the plugin reads (`desktopApi`) | a card, **This plugin is older than the installed oats CLI**, "Update the OATS plugin.", with no npm command |
+| its JSON answers are of a later version than the plugin reads (`desktopApi`) | a card, **This plugin is older than the installed oats CLI**, "Update the OATS plugin.", the version detected, with no npm command and no "Required" row (the floor is not the bound that is broken) |
 | of a later minor than the plugin was tested with | nothing: no act is turned off, so there is nothing to say |
 | it runs (the roster reads) and its version could not be read, also at the home's one more try | nothing; New agent stays on (the roster proves `oats` runs, and the kernel refuses a spawn it cannot make) |
 

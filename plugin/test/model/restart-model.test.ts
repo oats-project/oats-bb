@@ -14,7 +14,7 @@ const ready = (models: ListedModel[]) => ({ status: "ready" as const, models });
 const loading = { status: "loading" as const };
 const PI = routed("anthropic/claude-opus-5-5", "openrouter/claude-opus-5-5", "anthropic/claude-haiku-5", "openai/gpt-6", "openrouter/openai/gpt-6", "openrouter/meta/llama-9");
 const CLAUDE = unrouted("claude-opus-5-5", "claude-haiku-5", "opus");
-const held = (why: "harness-not-ready" | "required" | "not-found" | "pick-provider", by: string[] = []) => ({ kind: "held", why, serving: by });
+const held = (why: "required" | "not-found" | "pick-provider", by: string[] = []) => ({ kind: "held", why, serving: by });
 /** A restart of an agent on pi, the harness unchanged. */
 const pi = (typed: string, models: ListedModel[] | "loading" = PI) => restartModel({ typed, harnessChanged: false, byProvider: true, listed: models === "loading" ? loading : ready(models) });
 const claude = (typed: string, models: ListedModel[] = CLAUDE) => restartModel({ typed, harnessChanged: false, byProvider: false, listed: ready(models) });
@@ -87,20 +87,6 @@ describe("a harness that was changed", () => {
   });
 });
 
-describe("a harness changed to one whose bb provider is not ready (the same harm by another door)", () => {
-  test("held whatever the model and the list: no model makes it start", () => {
-    for (const typed of ["", "openai/gpt-6", "gpt-9"]) for (const listed of [ready(PI), ready([]), loading]) expect(restartModel({ typed, harnessChanged: true, byProvider: true, listed, harnessReady: false }), typed).toEqual(held("harness-not-ready"));
-  });
-  test("never for the agent's own harness, left unchanged: it runs on it", () => {
-    expect(restartModel({ typed: "", harnessChanged: false, byProvider: true, listed: ready(PI), harnessReady: false })).toEqual({ kind: "armed", model: null });
-    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: false, byProvider: true, listed: ready(PI), harnessReady: false })).toEqual({ kind: "armed", model: "openai/gpt-6" });
-  });
-  test("a changed harness bb says nothing against goes by the model's rule", () => {
-    expect(restartModel({ typed: "openai/gpt-6", harnessChanged: true, byProvider: true, listed: ready(PI), harnessReady: true })).toEqual({ kind: "armed", model: "openai/gpt-6" });
-    expect(restartModel({ typed: "", harnessChanged: true, byProvider: true, listed: ready(PI), harnessReady: true })).toEqual(held("required"));
-  });
-});
-
 test("which listed models serve an id: the one listed under it, else every ROW whose bare id it is, in the list's order", () => {
   expect(serving("gpt-6", routed("openai/gpt-6", "x/y", "openrouter/gpt-6", "openai/gpt-6"), true)).toEqual(["openai/gpt-6", "openrouter/gpt-6", "openai/gpt-6"]);
   expect(serving("openai/gpt-6", routed("openai/gpt-6", "openrouter/openai/gpt-6"), true)).toEqual(["openai/gpt-6"]);
@@ -111,8 +97,10 @@ test("which listed models serve an id: the one listed under it, else every ROW w
 // (pi-model.mjs `piModelVerdict`: an id that is exactly one model's `<provider>/<id>` is that
 // model; otherwise the one model with that bare id; two or more is refused, none is refused).
 // Restated here in its own words, since the plugin does not import the provider: where it REFUSES,
-// the Restart dialog must HOLD. (Where it cannot check, the launch goes on and bb judges at the
-// thread's start: the dialog holds those too: it arms only what the list shows.)
+// the Restart dialog must HOLD. (Where it cannot check an id the list does not show, a dated id or an
+// empty list, the launch goes on and bb judges at the thread's start: the dialog holds those, since it arms
+// only what the list shows. One case apart, not seen from bb: a list with a row the provider cannot read,
+// which it does not check at all, and whose readable rows arm here.)
 describe("never armed where the provider's check would refuse", () => {
   const provider = (model: string, list: { id: string; routeProviderId?: string }[]): "ok" | "refused" => {
     const rows = list.filter((row) => row.routeProviderId !== undefined).map((row) => ({ id: row.id, bare: row.id.slice(`${row.routeProviderId}/`.length) }));

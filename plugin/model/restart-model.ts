@@ -5,11 +5,10 @@
 // So a changed model is sent only when bb's own list for the harness has been READ and serves
 // that id exactly once, BY THE PROVIDER'S OWN RULE (below). Everything else is held here, before
 // any call.
-// The same harm has a second door, held by the same reading: a harness that was CHANGED to one
-// whose bb provider is not ready on this machine (not installed, not signed in): the provider
-// refuses that launch too, after the stop.
-// Pure: the field's text, whether the harness was changed, bb's list as it was read, and what bb
-// says of the changed harness's provider.
+// (A harness changed to one whose bb provider is not ready is NOT held here: the kernel runs the
+// provider's readiness check BEFORE the stop and refuses with nothing stopped; recorded on OATS
+// 0.70.5. The check is handed no model, which is why a bad model still stops first.)
+// Pure: the field's text, whether the harness was changed, and bb's list as it was read.
 
 /**
  * One model of bb's list: its id as bb lists it, and the provider bb routes it by
@@ -25,13 +24,12 @@ export type RestartModel =
   /** A model was typed and bb's list is not read yet: nothing is sent, and nothing is said to be wrong. */
   | { kind: "reading" }
   /**
-   * Held. `harness-not-ready`: the harness was changed to one bb cannot run here (said first: no
-   * model makes it start). `required`: the harness was changed and no model picked. `not-found`:
-   * no listed model serves the id (and where bb lists none, it cannot be shown to start).
-   * `pick-provider`: several listed models serve the bare id; `serving` holds them, whole, for the
-   * field to offer.
+   * Held. `required`: the harness was changed and no model picked (a start on bb's default for a
+   * harness the soul never named can die at its start, after the stop). `not-found`: no listed
+   * model serves the id (and where bb lists none, it cannot be shown to start). `pick-provider`:
+   * several listed models serve the bare id; `serving` holds them, whole, for the field to offer.
    */
-  | { kind: "held"; why: "harness-not-ready" | "required" | "not-found" | "pick-provider"; serving: string[] };
+  | { kind: "held"; why: "required" | "not-found" | "pick-provider"; serving: string[] };
 
 /**
  * The listed models that serve `id`, as the bb session provider's own check resolves one
@@ -67,12 +65,9 @@ export function serving(id: string, models: readonly ListedModel[], byProvider: 
  * `typed`: the Model field's text, trimmed ("" is the field as the dialog opens it: the agent's
  * own model, unchanged). `harnessChanged`: another harness than the agent's own was picked.
  * `listed`: bb's models for the harness the restart would run on. `byProvider`: that harness's
- * models are resolved by provider (pi). `harnessReady`: false when bb says the provider of the
- * harness that was picked is not ready; read only for a CHANGED harness (the agent runs on its
- * own), and anything bb did not say is not held.
+ * models are resolved by provider (pi).
  */
-export function restartModel({ typed, harnessChanged, listed, byProvider, harnessReady = true }: { typed: string; harnessChanged: boolean; listed: ListedModels; byProvider: boolean; harnessReady?: boolean }): RestartModel {
-  if (harnessChanged && !harnessReady) return { kind: "held", why: "harness-not-ready", serving: [] };
+export function restartModel({ typed, harnessChanged, listed, byProvider }: { typed: string; harnessChanged: boolean; listed: ListedModels; byProvider: boolean }): RestartModel {
   if (typed === "") return harnessChanged ? { kind: "held", why: "required", serving: [] } : { kind: "armed", model: null };
   if (listed.status === "loading") return { kind: "reading" };
   const by = serving(typed, listed.models, byProvider);

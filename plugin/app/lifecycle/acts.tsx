@@ -27,7 +27,7 @@ import { refusalCode, shown } from "../ui/text";
 import { agentName, readAge } from "../ui/words";
 import { notify } from "../ui";
 import { restartModel } from "../../model/restart-model";
-import { harnessLabel, KEEP_HARNESS, resolvedLabel, useHarnessStates, useModelSuggestions } from "../spawn/models";
+import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "../spawn/models";
 import {
   applyRefused,
   applying,
@@ -697,14 +697,13 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   const suggestions = useModelSuggestions(known === null || known.backend !== "bb" ? null : running);
   const held = state.phase === "ready" ? gate(verb, state.check) : null;
 
-  // A RESTART stops the running session before the provider judges what was asked of it: the kernel's order. So
-  // what was CHANGED is sent only when it can be shown to start (model/restart-model.ts): a model bb's list for the
-  // harness serves exactly once, on a harness bb can run here. Held here, in the app: nothing is sent to the plugin's
-  // server. (A start that is refused harms nothing: the Start dialog holds none of this.)
+  // A RESTART stops the running session before the provider judges the MODEL it was asked for: the kernel's order.
+  // So a model that was CHANGED is sent only when it can be shown to start (model/restart-model.ts): bb's list for
+  // the harness serves it exactly once. Held here, in the app: nothing is sent to the plugin's server. (A start
+  // that is refused harms nothing: the Start dialog holds none of this. A harness bb cannot run is refused by the
+  // kernel BEFORE the stop: nothing is held for it, and its refusal is the dialog's ordinary refused result.)
   const restarts = verb === "restart" && known !== null && known.backend === "bb";
   const harnessChanged = known !== null && harness !== "" && harness !== known.harness;
-  const stateOf = useHarnessStates();
-  const notReady = restarts && harnessChanged ? stateOf(harness) : null;
   // A list bb is still reading says nothing yet; one still unread after LIST_WAIT_MS reads as no list, which holds.
   const listPending = restarts && typed !== "" && suggestions.status === "loading";
   const overdue = useOverdue(listPending ? (running ?? "") : null, LIST_WAIT_MS);
@@ -713,21 +712,15 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     : restartModel({
         typed,
         harnessChanged,
-        harnessReady: notReady === null,
         // pi's models are resolved by their provider; any other harness's list names ids whole.
         byProvider: running === "pi",
         listed: suggestions.status === "loading" && !overdue ? { status: "loading" } : { status: "ready", models: suggestions.models.map(({ id, provider }) => ({ id, provider })) },
       });
   const heldModel = hold !== null && hold.kind === "held" ? hold : null;
-  /**
-   * The word on the Model field and beside the button. For a harness bb cannot run: the New agent form's own MARK
-   * of that state ("not signed in in bb"), on the Harness field and beside the button; its sentence is not drawn
-   * here (it speaks of a spawn).
-   */
-  const modelWord = heldModel === null || heldModel.why === "harness-not-ready" ? null : heldModel.why === "required" ? START.required : heldModel.why === "not-found" ? START.notFound : START.pickProvider;
-  const harnessWord = heldModel !== null && heldModel.why === "harness-not-ready" && notReady !== null ? notReady.mark : null;
+  /** The word on the Model field and beside the button. */
+  const modelWord = heldModel === null ? null : heldModel.why === "required" ? START.required : heldModel.why === "not-found" ? START.notFound : START.pickProvider;
   // Beside the button: the held word; while the list is read, off with no word (it answers at once from bb's cache).
-  const notArmed = hold === null || hold.kind === "armed" ? null : hold.kind === "reading" ? "" : (harnessWord ?? modelWord);
+  const notArmed = hold === null || hold.kind === "armed" ? null : hold.kind === "reading" ? "" : modelWord;
 
   // What this start is, from the kernel's row as the check read it. On bb: a new thread, with a harness and a
   // model to choose. On tmux: no thread and no choice; and where its session was LOST, a resume, unless the
@@ -885,7 +878,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
             </div>
           ) : null}
           {onBb && known.harnesses.length > 1 ? (
-            <Field label={START.harness} error={harnessWord}>
+            <Field label={START.harness}>
               <select data-testid="oats-start-harness" className={INPUT} value={harness} disabled={!editable} {...(editable ? { "data-autofocus": "" } : {})} onChange={(event) => setHarness(event.currentTarget.value)}>
                 <option value="">{shown(resolvedLabel(KEEP_HARNESS, recorded))}</option>
                 {known.harnesses.map((id) => (

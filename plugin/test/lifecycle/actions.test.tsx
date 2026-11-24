@@ -2400,26 +2400,20 @@ test("while bb's list is read a changed model holds Restart with no word and no 
   }
 });
 
-test("the same harm by another door: a harness CHANGED to one bb cannot run here holds Restart, with the form's own mark of that state (never its sentence, which speaks of a spawn), and sends nothing; the agent's own harness is never held by it", async () => {
-  // bb is not signed in to Claude Code, nor to pi (the agent's own, on which it runs).
-  const sdk = () => listsSdk({ pi: PI_LIST, "claude-code": ["opus"] }, { "claude-code": "unauthenticated", pi: "unauthenticated" });
-  const slot = await restartDialog(sdk());
-  // Its own harness, unchanged: armed, whatever bb says of it.
-  expect(button(slot, "oats-confirm-act").disabled).toBe(false);
+test("a harness changed to one bb cannot run here is NOT held: the kernel refuses that restart before it stops anything, and the dialog shows its refusal", async () => {
+  // Recorded on the real kernel (OATS 0.70.5): E_BACKEND_NOT_READY, "nothing was stopped or started", the agent still runs.
+  const slot = await restartDialog(listsSdk({ pi: PI_LIST, "claude-code": ["opus"] }, { "claude-code": "unauthenticated" }), {
+    restart: () => {
+      throw Object.assign(new Error("E_BACKEND_NOT_READY: bb is not signed in to Claude Code; nothing was stopped or started"), { code: "conflict" });
+    },
+  });
   fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "claude" } });
-  type(slot, "opus"); // a model bb lists for it: no model makes it start
-  const harnessError = () => (slot.getByTestId("oats-start-harness").closest('[data-testid="oats-field"]') as HTMLElement).querySelector('[role="alert"]')?.textContent ?? null;
-  await waitFor(() => expect(harnessError()).toBe("not signed in in bb"));
-  expect(slot.getByRole("dialog").textContent).not.toContain("spawn");
-  expect(modelError(slot)).toBeNull();
-  expect(slot.getByTestId("oats-confirm-blocked").textContent).toBe("not signed in in bb");
-  expect(button(slot, "oats-confirm-act").disabled).toBe(true);
-  fireEvent.click(button(slot, "oats-confirm-act"));
-  expect(acted(slot)).toEqual([]);
-  // Back on its own harness: armed again.
-  fireEvent.change(slot.getByTestId("oats-start-harness"), { target: { value: "" } });
-  type(slot, "");
+  type(slot, "opus");
   await waitFor(() => expect(button(slot, "oats-confirm-act").disabled).toBe(false));
+  expect(slot.getByRole("dialog").textContent).not.toContain("not signed in in bb");
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "failed");
+  expect(calls(slot, "restart").map((call) => call.input)).toEqual([{ instance: "redesign-ui-lead", harness: "claude", model: "opus" }]);
 });
 
 test("the Start dialog holds none of it: a refused start harms nothing, so a model bb does not list is sent as before", async () => {

@@ -751,10 +751,8 @@ describe("what a start says before the press, and a tmux start that did not fini
     expect(startSays("start", { resumes: true })).toEqual(["Tries to continue its last conversation; else starts fresh."]);
   });
   it("under Details: for an agent on bb that its model is saved (the dialog has the field) and bb's full mode, never for one on tmux; a restart's new conversation is said in view, not here", () => {
-    expect(startDetails("start", { onBb: true })).toEqual(["The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
-    expect(startDetails("restart", { onBb: true })).toEqual(["The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
-    expect(startDetails("start", { onBb: false })).toEqual([]);
-    expect(startDetails("restart", { onBb: false })).toEqual([]);
+    expect(startDetails({ onBb: true })).toEqual(["The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]);
+    expect(startDetails({ onBb: false })).toEqual([]);
   });
   it("a start the kernel kept unfinished: on bb its thread is where to read it; on tmux there is none, and the sentence names none", () => {
     const kept = { code: "E_SPAWN_INCOMPLETE", message: "launch requires inspection" };

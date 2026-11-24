@@ -923,7 +923,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           {/* The dialog's ONE fold: the access it runs with, and the facts of the agent a person does not decide on. */}
           <Disclosure summary="Details" testId="oats-start-details">
             <div className="flex min-w-0 flex-col gap-2">
-              {startDetails(verb, { onBb }).map((line, index) => (
+              {startDetails({ onBb }).map((line, index) => (
                 <p key={index} className="break-words">
                   {line}
                 </p>

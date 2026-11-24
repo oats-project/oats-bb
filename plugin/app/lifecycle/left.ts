@@ -12,13 +12,18 @@
 // - never for an act through OATS, which archives the thread itself, from this plugin or from a
 //   terminal (a stop, a retire, a restart): bb's list changes before the roster is read, so OATS is
 //   asked again ONCE, and a roster read AFTER that (its stamp is the asked read's, or later) decides,
-//   and only on what the row SAYS: told where it says the agent runs, or that its session was lost
-//   (the two rows a kernel prints after bb's archive); dropped where it says an operator stopped it
+//   and only on what the row SAYS: told where it says that its session was lost (what a kernel with
+//   this repository's provider prints after bb's archive: the provider no longer answers for an
+//   archived thread; recorded, test/fixtures/outside/status-archived-while-running.json) or that the
+//   agent runs (a provider that still answers for it: not recorded); dropped where it says an operator stopped it
 //   (`sessionEnd: "stopped"`), where the agent is gone, on a new thread, or its thread is back; and
 //   where the row says neither (not running with no word how its session ended: a retire on its way;
 //   unreachable: a restart on its way) the look WAITS for a later roster, asking nothing more;
 // - never while an act of ours is in flight or its dialog is on screen: the look waits for it;
 // - once per agent and thread in an app window.
+// Not told, by design: an agent that runs OUTSIDE OATS (OATS recorded it stopped and its harness
+// runs): it is never "seen running" here (its row says an operator stopped it), and its row and its
+// thread's line already warn of it (README, "Outside OATS").
 import { rest } from "../../model/rest";
 import type { Oats } from "../oats";
 import { onWindowReset } from "../store";
@@ -30,10 +35,18 @@ const seen = new Map<string, { threadId: string; ran: boolean }>();
 /**
  * An agent that ran and whose thread bb now says is archived or gone. `after`: the stamp of the read
  * OATS made when it was asked again (null: not asked yet, or the answer is not here yet); `asking`:
- * the question that is out (null: none; an answer to an earlier one is nobody's); `failedAt`: the roster's stamp
- * when the question failed (asked again on a later roster).
+ * the question that is out (null: none; an answer to an earlier one is nobody's); `failedOn`: what the window
+ * held when the question failed: it is asked again once the window holds something newer (below).
  */
-type Candidate = { threadId: string; after: string | null; asking: number | null; failedAt: string | null };
+type Candidate = { threadId: string; after: string | null; asking: number | null; failedOn: Renewal | null };
+/**
+ * What says that the window holds something newer than when a question failed: another roster (its stamp), or
+ * bb's answers for the threads asked anew (`whereOf` is a new function then: at each roster, each change of bb's
+ * list, and each MINUTE, app/outside/threads.ts). A quiet deployment brings no new roster (the server publishes
+ * only a roster that changed): the minute does, so a failed question is asked again within one, and never at each draw.
+ */
+type Renewal = { at: string; whereOf: unknown };
+const renewed = (oats: Ready, since: Renewal): boolean => oats.at !== since.at || oats.whereOf !== since.whereOf;
 let questions = 0;
 const candidates = new Map<string, Candidate>();
 /** Told already in this window, by agent and thread. */
@@ -78,7 +91,7 @@ export function lookForLeft(oats: Oats, { busy, ask, tell }: Look): void {
     if (agent === undefined) seen.delete(instance);
     else if (agent.threadId === was.threadId && left(oats, agent)) {
       seen.delete(instance);
-      if (was.ran && !told.has(keyOf(instance, was.threadId)) && !candidates.has(instance)) candidates.set(instance, { threadId: was.threadId, after: null, asking: null, failedAt: null });
+      if (was.ran && !told.has(keyOf(instance, was.threadId)) && !candidates.has(instance)) candidates.set(instance, { threadId: was.threadId, after: null, asking: null, failedOn: null });
     }
   }
 
@@ -106,16 +119,19 @@ export function lookForLeft(oats: Oats, { busy, ask, tell }: Look): void {
       continue;
     }
     if (candidate.after === null) {
-      if (candidate.asking !== null || candidate.failedAt === oats.at) continue;
+      if (candidate.asking !== null || (candidate.failedOn !== null && !renewed(oats, candidate.failedOn))) continue;
       const question = ++questions;
       candidate.asking = question;
-      const askedOn = oats.at;
+      const askedOn: Renewal = { at: oats.at, whereOf: oats.whereOf };
       void ask().then((at) => {
         // (An act of ours began meanwhile, or a new window: this answer is nobody's.)
         if (candidates.get(instance) !== candidate || candidate.asking !== question) return;
         candidate.asking = null;
-        if (at === null) candidate.failedAt = askedOn;
-        else candidate.after = at;
+        if (at === null) candidate.failedOn = askedOn;
+        else {
+          candidate.failedOn = null;
+          candidate.after = at;
+        }
       });
       continue;
     }
@@ -126,7 +142,7 @@ export function lookForLeft(oats: Oats, { busy, ask, tell }: Look): void {
       candidates.delete(instance);
       continue;
     }
-    // It runs, or its session was lost: the two rows a kernel prints of an agent whose thread bb archived under it.
+    // Its session was lost, or it runs: what a kernel prints of an agent whose thread bb archived under it (the header says which is recorded).
     if (rest(agent) === "runs" || agent.sessionEnd === "lost") {
       candidates.delete(instance);
       told.add(keyOf(instance, candidate.threadId));

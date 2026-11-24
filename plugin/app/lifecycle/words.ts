@@ -618,7 +618,7 @@ export function startSays(verb: RunVerb, { resumes, working = false }: { resumes
  * And under the dialog's Details, as a sentence: on bb, the access it runs with (bb's full mode:
  * said in view where an agent is made, the New agent form, and here one press away).
  */
-export function startDetails(_verb: RunVerb, { onBb }: { onBb: boolean }): string[] {
+export function startDetails({ onBb }: { onBb: boolean }): string[] {
   // (On bb the dialog has a Model field: that its choice outlives this start is said here, not under the field: the lead's L9.)
   // (That a restart starts a new conversation is said in view, with the dialog's lines: `startSays`.)
   return onBb ? [START.modelSaved, FULL_MODE] : [];

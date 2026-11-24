@@ -2,8 +2,10 @@
 // the rule, held to the cases its design names. The roster here is SHAPED by hand from the fields the
 // rule reads (an agent's instance, thread id, backend, `running`, `runtimeState`, `sessionEnd`; bb's
 // answer for its thread; the roster's stamp): no kernel answer is restated. The rows a real kernel
-// prints are: bb's archive under a running agent, test/fixtures/outside/status-archived-while-running.json
-// (it runs) and roster/status-recorded.json#threadDeleted (its session lost); a stop's row,
+// prints are: after bb's archive under a running agent, ONE recorded row, its session lost (two fixtures:
+// test/fixtures/outside/status-archived-while-running.json and roster/status-recorded.json#threadDeleted:
+// this repository's provider no longer answers for an archived thread); a row that still "runs" there is
+// shaped by hand, for a provider that does answer for it; a stop's row,
 // `sessionEnd: "stopped"`; and, read in the kernel's code (@awebai/oats 0.70.5 lib/instance-listing.mjs)
 // and NOT recorded: a retire on its way (not running, how its session ended withheld) and a launch on its
 // way ("unreachable", `running: null`, on the old thread).
@@ -167,6 +169,23 @@ describe("a thread that bb archived or deleted under an agent that ran", () => {
     expect(asks).toBe(2);
     await look(roster([archived()]));
     expect(toldOf).toEqual([LEAD]);
+  });
+
+  it("OATS could not be asked, and the deployment is quiet (no new roster reaches the window): it is asked again when bb's answers are renewed (each minute), and told", async () => {
+    answer = () => null;
+    await look(roster([open()]));
+    const quiet = roster([archived(LOST)]);
+    await look(quiet);
+    await look(quiet);
+    expect([toldOf, asks]).toEqual([[], 1]);
+    // The same roster, its stamp too, drawn at the next minute: bb was asked anew for the threads it does not list.
+    const where = (quiet as Extract<Oats, { phase: "ready" }>).whereOf;
+    const nextMinute = { ...quiet, whereOf: (agent: Agent) => where(agent) } as Oats;
+    answer = () => (quiet as Extract<Oats, { phase: "ready" }>).at; // the read OATS makes says the same: the stamp the window holds
+    await look(nextMinute);
+    expect(asks).toBe(2);
+    await look(nextMinute);
+    expect([toldOf, asks]).toEqual([[LEAD], 2]);
   });
 
   it("an agent that did not run when its thread was last listed: nothing", async () => {

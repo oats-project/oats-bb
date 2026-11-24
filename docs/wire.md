@@ -620,9 +620,13 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
   environment at the kept home again, a new one made from the destroyed one's recorded
   path, and a message then starts the harness there. Where the hook archived only,
   Unarchive and a message are enough. Such a session runs with NO OATS around it: no
-  status row, no hooks OATS runs for it, no stop by OATS. Where its aweb identity was not
-  released (a team leave waiting for its controller, a retained seat, an alias held), it
-  can send mail as the retired agent. Retire bb agents the ordinary way, which removes
-  the home: then nothing can start. The hook's warning reaches CLI users only: the
+  status row, no hooks OATS runs for it, no stop by OATS. Whether it can send mail as the
+  retired agent depends on the oats.aweb that retired the home. From oats.aweb 1.49.0 it
+  cannot: a retire that succeeds removes the home's aweb keys, and one that fails holds
+  them aside for the retry (`aw` then answers "not initialized"). A home retired with an
+  older oats.aweb keeps its keys: where its aweb identity was not released (a team leave
+  waiting for its controller, a retained seat, an alias held), a revived session can
+  send mail as the retired agent. Retire bb agents the ordinary way, which removes the
+  home: then nothing can start. The hook's warning reaches CLI users only: the
   Desktop's Retire dialog shows no plan warnings and no hook output (oats#2102). A home
   spawned before the record existed has none and is archived only: not a failure.

@@ -25,6 +25,13 @@
     launch warns on its standard error, and that thread is unmarked. The retire hook
     removes the record once it has decided. No other command reads it. A launch in a
     sandboxed mode denies the directory to the agent's tools.
+  - **A launch in a sandboxed mode is refused where that directory's path cannot be
+    written as a deny rule** (`E_BACKEND_SANDBOX_PATH`): an `XDG_STATE_HOME` (or, with
+    it unset, a user home) whose path holds a wildcard, a parenthesis, a backslash or a
+    control character. A rule silently missing would leave the record writable by the
+    agent's tools. Move the state directory to a path without them, or launch in full
+    mode (`--yolo`), which writes no deny rules. (The provider's command takes no
+    sandboxed launch today; the check of a planned one says the same.)
   - **A home spawned before this release has no record, and is archived only at its
     retire.** That is not a failure: no record is made up afterwards. The warning says
     so. A home started again with this release gets a record of its new threads only;
@@ -49,8 +56,13 @@
     still start a retired agent from bb by three acts: Unarchive, Restore its
     environment (`bb thread restore-environment`), and a message; where the retire
     archived only, by two. Such a session runs with NO OATS around it (no status row, no
-    hooks, no stop by OATS), and where its aweb identity was not released it can send
-    mail as the retired agent. Retire bb agents the ordinary way, which removes the home.
+    hooks, no stop by OATS). Retire bb agents the ordinary way, which removes the home.
+  - Whether such a session can send mail as the retired agent depends on the oats.aweb
+    that retired the home. From oats.aweb 1.49.0 it cannot: a retire that succeeds
+    removes the home's aweb keys, and one that fails holds them aside for the retry
+    (`aw` then answers "not initialized"). A home retired with an older oats.aweb keeps
+    its keys, and where its aweb identity was not released a revived session can send
+    mail as the retired agent.
   - The retire's warning reaches CLI users only: the Desktop's Retire dialog shows no
     plan warnings and no hook output (oats#2102).
 

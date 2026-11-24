@@ -95,7 +95,7 @@ function useFlight(): { soul: string } | null {
   return flight;
 }
 
-type Preview = { key: string; facts: SpawnFacts; revision: string };
+type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
 type Refused = { key: string; problem: SpawnProblem };
 
 /** A part of a line through the display filter, with the blank it leads or ends with kept: the parts are read as one line. */
@@ -304,7 +304,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           (answer) => {
             // An answer for values that are no longer on screen is dropped, never drawn under the new ones.
             if (serial.current !== ticket) return;
-            setSettled({ key, facts: answer.facts, revision: answer.revision });
+            setSettled({ key, input: asked.input!, facts: answer.facts, revision: answer.revision });
             setRefused(null);
             setReading(false);
           },
@@ -327,16 +327,41 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const resolved = kernelResolved === null ? null : { harness: shown(kernelResolved.harness) || null, model: shown(kernelResolved.model) || null };
   const effectiveHarness = harness !== "" ? harness : (resolved?.harness ?? null);
   const suggestions = useModelSuggestions(effectiveHarness);
-  // Whether a spawn may go with the model it would send (model/spawn.ts `modelCheck`): a model is required for a
-  // harness the person chose, and it must be one bb serves exactly once where bb lists its models by provider.
-  // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
-  // The soul's own harness: what the kernel resolved the last time this soul was previewed with none chosen.
+  // The soul's own harness: what the kernel resolves for this soul with no harness chosen. It is kept from the
+  // preview with none chosen; where none was asked for this soul (a harness picked before the soul, or kept while
+  // the soul changes), it is asked once, so that the same values hold or arm Spawn whatever the order of the clicks.
   const [own, setOwn] = useState<{ soul: string; harness: string | null } | null>(null);
   useEffect(() => {
     if (kernelResolved !== null && harness === "" && soul !== "") setOwn({ soul, harness: kernelResolved.harness });
   }, [kernelResolved, harness, soul]);
-  const soulHarness = own !== null && own.soul === soul ? own.harness : null;
-  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: kernelResolved, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models.map((option) => option.id) : null });
+  const ownKnown = own !== null && own.soul === soul;
+  const ownAsked = input !== null && !held && harness !== "" && harnesses.choice && !ownKnown;
+  useEffect(() => {
+    if (!ownAsked) return;
+    let current = true;
+    rpc.call("spawnPlan", { soul, task: "" }).then(
+      (answer) => {
+        if (current) setOwn({ soul, harness: answer.facts.resolved?.harness ?? null });
+      },
+      // The kernel would not preview this soul on its own: its harness stays unknown, and a chosen one is held for a model.
+      () => {
+        if (current) setOwn({ soul, harness: null });
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [rpc, ownAsked, soul]);
+  const soulHarness = ownKnown ? own.harness : null;
+  // Whether a spawn may go with the model it would send (model/spawn.ts `modelCheck`): a model is required for a
+  // harness the person chose that is not the soul's own, and it must be one bb serves exactly once where bb lists
+  // its models by provider. It is decided on the kernel's answer for the values on screen, and, while another field's
+  // change is read, on the last answer if it was for this soul, harness and model: the mark and the column stay.
+  const modelAnswer = preview ?? (settled !== null && input !== null && settled.input.soul === input.soul && settled.input.harness === input.harness && settled.input.model === input.model ? settled : null);
+  // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
+  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models.map((option) => option.id) : null });
+  // The "Required" mark waits for the soul's own harness to be known: until then Spawn is off as for any read.
+  const modelMark = ownAsked && modelHeld.held === MODEL_HELD.required ? null : modelHeld.held;
   // bb's list for the harness is being read: until it answers, whether bb serves the model is not known.
   const modelsReading = suggestions.status === "loading";
   // The kernel resolved a harness and no model for it, and none is chosen: for the soul's own harness bb will start it on bb's own default.
@@ -441,9 +466,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               ? nameRefusal !== null
                 ? W.OFF.name
                 : W.OFF.refused
-              : preview === null || modelsReading
+              : preview === null || modelsReading || ownAsked
                 ? W.READING
-                : modelHeld.held; // the Model field's own words: it is marked with them too
+                : modelMark; // the Model field's own words: it is marked with them too
   const canSpawn = phase === "idle" && reason === null && preview !== null && input !== null;
   const press = () => {
     if (phase === "unknown") {
@@ -481,6 +506,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
 
   // ---- drawing ----
   const title = chosen === undefined ? W.TITLE : W.titleFor(shown(chosen.name), oats.phase === "ready" ? shown(oats.deployment.workspace) : null);
+  // A model is required of the person: the column promises no default for the harness.
+  const heldHarness = modelHeld.held === MODEL_HELD.required ? (modelAnswer?.facts.resolved?.harness ?? null) : null;
+  const withoutModelDefault = (facts: SpawnFacts): SpawnFacts => (heldHarness === null ? facts : { ...facts, facts: withoutDefault(facts.facts, heldHarness) });
   let column: ReactNode;
   if (chosen === undefined) column = <p className="text-sm text-muted-foreground">{W.COLUMN_NO_SOUL}</p>;
   // Held: only the facts of the values on screen stay; those of other values are not drawn as theirs.
@@ -492,10 +520,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
       </Notice>
     );
   else if (off !== null || nameRefusal !== null) column = <p className="text-sm text-muted-foreground">{W.COLUMN_FIX_FIRST}</p>;
-  // A model is required of the person: the column promises no default for the harness.
-  else if (preview !== null) column = <Created facts={modelHeld.held === MODEL_HELD.required && kernelResolved?.harness != null ? { ...preview.facts, facts: withoutDefault(preview.facts.facts, kernelResolved.harness) } : preview.facts} machine={machine} />;
+  else if (preview !== null) column = <Created facts={withoutModelDefault(preview.facts)} machine={machine} />;
   // Until the values on screen are answered for, the last facts stay, marked as being read again.
-  else if (settled !== null) column = <Created facts={settled.facts} machine={machine} />;
+  else if (settled !== null) column = <Created facts={modelAnswer === settled ? withoutModelDefault(settled.facts) : settled.facts} machine={machine} />;
   else column = <Loading>{W.READING}</Loading>;
   // Marked whenever something stays in the column while it is read again: the last facts, or a refusal after Retry.
   const updating = reading && chosen !== undefined && !held && (settled !== null || refusal !== null);
@@ -585,7 +612,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             )}
             <Field
               label={W.MODEL_LABEL}
-              error={preview === null ? null : modelHeld.held}
+              error={modelAnswer === null ? null : modelMark}
               hint={
                 unsetModel === null && suggestions.note === null ? null : (
                   <>

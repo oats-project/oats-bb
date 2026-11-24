@@ -232,6 +232,13 @@ test("a harness the person chose, for which the kernel resolves no model: Spawn 
   expect(slot.getByTestId("oats-spawn-model").textContent).toBe("Default▾");
   fireEvent.click(submit(slot));
   expect(calls(slot, "spawn")).toHaveLength(0);
+  // Another field changed: while its preview is read, the mark stays and the column still promises no default.
+  set(slot, "oats-spawn-task", "do it");
+  expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Reading defaults…", "Required"]);
+  expect(harnessRow()).toMatch(/^Claude Code(?! ·)/);
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/bb’s default/);
+  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "do it", harness: "claude" }));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Required", "Required"]));
   // A model picked: armed, and the mark goes.
   choose(slot, "oats-spawn-model", "__custom__");
   set(slot, "oats-spawn-model-id", "claude-opus-5-5");
@@ -249,6 +256,25 @@ test("the soul's own harness picked in the form, with no model declared, is stil
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", harness: "pi" }));
   await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
   expect(harnessRow()).toMatch(/^pi · bb’s default for pi/);
+});
+
+test("the same values arm or hold Spawn whatever the order of the clicks: a harness picked before the soul is read against the soul's own, asked once", async () => {
+  // The soul's own harness is pi and it declares no model.
+  const unset = { ...recorded, harness: "pi", model: null, modelSource: null };
+  const claude = { ...recorded, harness: "claude", model: null, modelSource: null };
+  const slot = await form("", { spawnPlan: (input) => ({ facts: formFacts(input.harness === "claude" ? claude : unset, { name: input.name ?? null }), revision: REVISION }) });
+  await waitFor(() => expect((slot.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
+  const modelError = () => slot.getByTestId("oats-spawn-model").closest('[data-testid="oats-field"]')!.querySelector('[role="alert"]')?.textContent ?? null;
+  // The soul's own harness, picked first: no preview without a harness is ever asked for the values on screen.
+  choose(slot, "oats-spawn-harness", "pi");
+  choose(slot, "oats-spawn-soul", "oats-developer");
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+  // The form asked the kernel for the soul's own harness once, beside the preview of the values on screen.
+  expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toEqual([{ soul: "oats-developer", task: "" }]);
+  // Another harness, not the soul's own: held, and "Required" is said only once the answer is there.
+  choose(slot, "oats-spawn-harness", "claude");
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([true, "Required", "Required"]));
+  expect(calls(slot, "spawnPlan").filter((call) => call.harness === undefined)).toHaveLength(1);
 });
 
 test("while bb's list of models for the harness is being read, Spawn is off with the form's own \"Reading defaults…\": whether bb serves the model is not known yet", async () => {

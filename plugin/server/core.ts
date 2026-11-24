@@ -461,7 +461,11 @@ export function createCore(bb: BbPluginApi) {
     const next = agents.find((candidate) => candidate.instance === instance);
     const patchedSnapshot: Snapshot = { ...now, agents };
     const key = keyOf(patchedSnapshot, rawRows?.root ?? "", rawRows?.rows ?? null);
-    if (next === undefined) throw new Error(`the event path: ${instance} is in the snapshot and not among the status read's own agents`); // (one block of read() sets both)
+    if (next === undefined) {
+      // (It cannot be: one block of read() sets both. Said loudly, and nothing changes: this read is not awaited by anyone.)
+      bb.log.warn(`the event path: ${instance} is in the snapshot and not among the status read's own agents: nothing changed`);
+      return;
+    }
     if (key === comparable) return dropped(`its events say what is shown (read in ${took} ms)`);
     cached = patchedSnapshot;
     comparable = key;

@@ -516,8 +516,10 @@ describe("the event path", () => {
     await fake.behave({ status: { stdout: roster.stdout } });
     const first = await rpc<Shown>("snapshot");
     expect(first.agents.filter((agent) => roster.names.includes(agent.instance))).toHaveLength(10);
-    await fake.behave({ status: { stdout: roster.stdout, sleepMs: 15_000 }, [EVENTS]: { stdout: claimed(), sleepMs: 400 } });
+    // The status read is held nearly as long as the kernel's own limit allows: all ten are patched well inside it, on any host.
+    await fake.behave({ status: { stdout: roster.stdout, sleepMs: 19_000 }, [EVENTS]: { stdout: claimed(), sleepMs: 400 } });
     for (const file of roster.files) await named([file]); // ten batches, as a mass stop writes them
+    await named([roster.files[9]!]); // named again while it waits in line: it is in the line once
     const patchedAll = async () => (await rpc<Shown>("snapshot")).agents.filter((agent) => roster.names.includes(agent.instance) && agent.waiting !== null).length === 10;
     const most = await mostAlive(patchedAll);
     expect(most).toBeLessThanOrEqual(EVENTS_READS_MAX);
@@ -543,6 +545,23 @@ describe("the event path", () => {
     await until(async () => (await rpc<Shown>("snapshot")).at !== first.at, "the status read answers");
     expect((await calls("status")).length).toBeGreaterThanOrEqual(2);
   }, 90_000);
+
+  it("a change of settings empties the line: an instance that waited is not read for the deployment that was left", async () => {
+    const roster = await rosterOf(3);
+    await fake.behave({ status: { stdout: roster.stdout } });
+    await rpc<Shown>("snapshot");
+    const other = join(fake.deployment, "another");
+    await mkdir(other, { recursive: true });
+    await writeFile(join(other, "oats-local.yaml"), "# another deployment, for this test\n");
+    await fake.behave({ status: { stdout: roster.stdout }, [EVENTS]: { stdout: claimed(), sleepMs: 3_000 } });
+    for (const file of roster.files) await named([file]); // two are read, the third waits
+    await until(async () => (await calls(EVENTS)).length === 2, "two events reads started");
+    await server.harness.setSettings({ deployment: other });
+    await until(() => eventPath().filter((line) => line.endsWith("the settings changed while its events were read")).length === 2, "both reads in flight are dropped");
+    await until(async () => (await rpc<Shown>("snapshot")).ok === true, "the other deployment's roster is read");
+    await new Promise((resolve) => setTimeout(resolve, 300)); // (time for a read of the third to start, were one made)
+    expect((await calls(EVENTS)).map((call) => call.argv[2]).sort()).toEqual([roster.names[0], roster.names[1]].sort());
+  }, 40_000);
 
   it("an events answer read under settings that changed meanwhile is dropped: it is not this deployment's", async () => {
     await rpc<Shown>("snapshot");

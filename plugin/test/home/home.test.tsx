@@ -975,7 +975,7 @@ test("the home's count of who needs you is the sidebar's: an agent on tmux that 
   expect((await agentsLine(agents)).split(" · ")).toContain("4 need you");
 });
 
-test("an agent that runs outside OATS is one of those that need you, in every place by one number: the badge, the heading, the count line of Home › Agents; its card holds the notice with Stop and Start, and no choice and no reply", async () => {
+test("an agent that runs outside OATS is one of those that need you, in every place by one number: the badge, the heading, the count line of Home › Agents; its card says so on its line, with Stop… and Start… as the line's acts and Details under it (no box), and no choice and no reply", async () => {
   // OATS recorded it stopped and the kernel reports its harness running (`outsideOats`; app/outside).
   const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in weekly-digest-helper on bb, and OATS recorded this instance stopped: stop it with `oats instance stop weekly-digest-helper`, or start it from OATS" };
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, sessionEnd: "stopped", outsideOats: report } : agent));
@@ -997,12 +997,16 @@ test("an agent that runs outside OATS is one of those that need you, in every pl
   const card = await cardOf(slot, "weekly-digest-helper");
   expect(offerOf(card)).toBe("outside");
   expect(within(card).getByTestId("oats-state").textContent).toBe("Running outside OATS");
+  // The same drawing as under the thread's line: the acts on the line, and ONE fold under it; no box, no title that repeats the line.
   const notice = within(card).getByTestId("oats-outside-warning");
-  expect(notice.textContent).toContain("Weekly digest helper is running in bb, but OATS recorded it as stopped.");
-  expect(Array.from(notice.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop…", "Start…"]); // (the dots: each opens its dialog)
+  expect(within(card).queryByTestId("oats-notice")).toBeNull();
+  expect(card.textContent).not.toContain("is running in bb, but OATS recorded it as stopped");
+  expect(within(notice).getByTestId("oats-outside-details").querySelector("summary")!.textContent).toBe("▸Details");
+  expect(notice.querySelectorAll("button")).toHaveLength(0);
+  expect(Array.from(within(card).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop…", "Start…"]); // (the dots: each opens its dialog)
   for (const id of ["oats-needs-choice", "oats-reply-send", "oats-needs-stopped", "oats-needs-message"]) expect(within(card).queryByTestId(id)).toBeNull();
   const { asked } = await import("../../app/lifecycle");
-  fireEvent.click(within(notice).getByRole("button", { name: "Stop…" }));
+  fireEvent.click(within(card).getByRole("button", { name: "Stop…" }));
   expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
 });
 

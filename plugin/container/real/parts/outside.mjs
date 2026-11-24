@@ -35,7 +35,6 @@ const SAYS = {
   notLoadedRow: "Idle · not loaded",
   outsideState: "Running outside OATS",
   outsideRecorded: "recorded stopped",
-  outsideTitle: (called) => `${called} is running in bb, but OATS recorded it as stopped.`,
   outsideWhat: "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.",
   archivedWhileRunning: "Archived in bb while running: it may still run.",
   archivedRow: "archived in bb",
@@ -45,7 +44,6 @@ export default async (run) => {
   const { step, check, show, note, until, oats, bb, rowOf, rpc, act, fixtures, views, DEPLOY, OUT } = run;
   const home = join(DEPLOY, "agents", SOUL, "instances", NAME);
   const CALLED = run.nameOf(NAME); // the instance name as the plugin draws it (scenario.mjs)
-  const TITLE = SAYS.outsideTitle(CALLED);
 
   // ---- the kernel's row, and bb's thread
   const row = () => rowOf(NAME);
@@ -79,7 +77,7 @@ export default async (run) => {
   /** The thread's own row once its words hold every one of `wanted` → { words, acts, notice }. When the wait runs out it is read as it is, for the check to print. */
   const lineOf = async (page, wanted) => {
     const read = (test) =>
-      `(() => { const flat = ${flat}; const r = document.querySelector(${JSON.stringify(IDENTITY)}); if (!r) return ""; const words = flat(r); if (${test} && !${JSON.stringify(wanted)}.every((part) => words.includes(part))) return ""; const warning = r.querySelector('[data-testid="oats-outside-warning"]'); return JSON.stringify({ words, acts: [...r.querySelectorAll('[data-testid="oats-status-act"], [data-testid^="oats-agent-act-"]')].map(flat), notice: warning ? { title: flat(warning.querySelector("h3")), text: flat(warning), acts: [...warning.querySelectorAll("button")].map(flat) } : null }); })()`;
+      `(() => { const flat = ${flat}; const r = document.querySelector(${JSON.stringify(IDENTITY)}); if (!r) return ""; const words = flat(r); if (${test} && !${JSON.stringify(wanted)}.every((part) => words.includes(part))) return ""; const warning = r.querySelector('[data-testid="oats-outside-warning"]'); return JSON.stringify({ words, acts: [...r.querySelectorAll('[data-testid="oats-status-act"], [data-testid^="oats-agent-act-"]')].map(flat), notice: warning ? { boxed: warning.querySelector("h3") !== null, folded: warning.querySelector("details")?.open === false, text: (warning.querySelector("details")?.textContent ?? "").replace(/\\s+/g, " ").trim() } : null }); })()`;
     const found = (await page.until(read(true), 60)) || (await page.evaluate(read(false)));
     return found ? JSON.parse(found) : null;
   };
@@ -178,9 +176,9 @@ export default async (run) => {
     check(facts.startsWith(SAYS.outsideState), `${at} the sidebar's row says "${SAYS.outsideState}"`, facts);
     await shot("outside-row");
     await page.goto(threadPath);
-    let line = await lineOf(page, [SAYS.outsideState, SAYS.outsideRecorded, TITLE]);
-    check(line !== null && line.words.startsWith(`${SAYS.outsideState} · ${SAYS.outsideRecorded}`) && line.notice?.title === TITLE && line.notice.text.includes(SAYS.outsideWhat) && !/running-outside-oats|oats instance stop/.test(line.notice.title), `${at} its thread says "${SAYS.outsideState} · ${SAYS.outsideRecorded}", and under it the notice in a person's words: "${TITLE}" "${SAYS.outsideWhat}"`, JSON.stringify(line));
-    check(Array.isArray(line?.notice?.acts) && line.notice.acts.some((label) => label.startsWith("Stop")) && line.notice.acts.some((label) => label.startsWith("Start")), `${at} the notice offers Stop and Start`, JSON.stringify(line?.notice?.acts));
+    let line = await lineOf(page, [SAYS.outsideState, SAYS.outsideRecorded]);
+    check(line !== null && line.words.startsWith(`${SAYS.outsideState} · ${SAYS.outsideRecorded}`) && line.notice !== null && line.notice.boxed === false && line.notice.folded === true && line.notice.text.includes(SAYS.outsideWhat) && line.notice.text.includes("running-outside-oats") && !line.words.includes(SAYS.outsideWhat), `${at} its thread says "${SAYS.outsideState} · ${SAYS.outsideRecorded}", and under it, with no box, ONE fold (Details, closed) with what happened in a person's words ("${SAYS.outsideWhat}") and the kernel's own`, JSON.stringify(line));
+    check(Array.isArray(line?.acts) && line.acts.some((label) => label.startsWith("Stop")) && line.acts.some((label) => label.startsWith("Start")), `${at} the line offers Stop… and Start…`, JSON.stringify(line?.acts));
     await shot("outside-thread");
     // The notice's Stop: the harness that runs outside OATS is stopped, as OATS recorded it.
     await page.evaluate(`[...document.querySelector(${JSON.stringify(IDENTITY)}).querySelectorAll('[data-testid="oats-outside-warning"] button')].find((button) => button.innerText.trim().startsWith("Stop")).click()`);

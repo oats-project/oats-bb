@@ -11,16 +11,15 @@ import type { Oats } from "../oats";
 import { useNow } from "../roster/now";
 import { agentStatus } from "../roster/status";
 import { Unreadable } from "../roster/unreadable";
-import { Button, Notice, StatusLine } from "../ui";
+import { Button, Disclosure, StatusLine } from "../ui";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import type { Agent, AgentState, ThreadWhere } from "../../model/types";
 import { said as sayOf } from "./say";
 import type { Act, Said } from "./say";
 import type { Outside } from "./use";
-import { OUTSIDE_START, OUTSIDE_STOP, OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, outsideTitle, STOPPED_OPEN_ASKING } from "./words";
+import { OUTSIDE_WHAT, OUTSIDE_WHAT_STOP, STOPPED_OPEN_ASKING } from "./words";
 
-const LABEL: Record<Act, string> = { stop: "Stop", start: "Start", retire: "Retire" };
 /** On a button: with the dots, since each opens its dialog and nothing runs on the press. */
 const BUTTON: Record<Act, string> = { stop: "Stop…", start: "Start…", retire: "Retire…" };
 
@@ -54,15 +53,15 @@ const AFTER: Partial<Record<Said["kind"], AgentState>> = { "stopped-open": "stop
 const follows = (said: Said, state: AgentState): boolean => AFTER[said.kind] === undefined || AFTER[said.kind] === state || said.kind === "stopped-open";
 
 /**
- * The acts of a status line where this feature has something to say of the agent: the buttons;
- * null where what is said carries its own acts (the kernel's report: they are in its notice);
+ * The acts of a status line where this feature has something to say of the agent: the buttons
+ * (for the kernel's report: Stop… and Start…, the line's own acts);
  * undefined where the line keeps the roster's own act for the state: this feature has no acts for
  * it, or the line's state is not the one the reason follows (the sentence that names the act is
  * then not on the line).
  */
 export function lineActs(said: Said | null, instance: string, held: boolean, state: AgentState): ReactNode | null | undefined {
   if (said === null || said.acts === null || !follows(said, state)) return undefined;
-  if (said.warning !== null) return null;
+  if (said.warning !== null) return <OutsideActs instance={instance} acts={reportActs(said)} held={held} />;
   return <OutsideActs instance={instance} acts={said.acts} held={held} />;
 }
 
@@ -118,39 +117,35 @@ export function DetachedActs({ said, instance, held }: { said: Said | null; inst
 /** The two acts the kernel's report names. */
 const BOTH = ["stop", "start"] as const;
 
+/** The acts the kernel's report names, for the agent's session provider: the lifecycle starts an agent on bb only, so another's has Stop alone (nothing is named that cannot be pressed). */
+const reportActs = (said: Said): Act[] => (said.warning !== null && said.warning.backend === "bb" ? ["stop", "start"] : ["stop"]);
+
 /**
- * The kernel's report that a harness runs in a home OATS recorded stopped, as a notice in the
- * warning tone, in a person's words: what is so (its title), what happened and what to do, and the
- * two acts that mend it, each with what it does here. The kernel's own sentence and its code are
- * one press away, under Details, through the display filter: no command is on screen where the two
- * buttons do the same. Nothing where the kernel reports nothing.
- * The lifecycle starts an agent on bb only: for an agent of another session provider the notice
- * names Stop alone (no Start line, and its sentence does not say to start it), so that nothing is
- * named that cannot be pressed.
+ * Under a line that says "Running outside OATS · recorded stopped" (the kernel's report that a
+ * harness runs in a home OATS recorded stopped): no box and no title, which would repeat the line.
+ * ONE fold, "Details", as under an Unreachable line: what happened and what to do in a person's
+ * words, then the kernel's own code and sentence, through the display filter. No command is on
+ * screen: Stop… and Start… do the same, and they are the LINE's own acts (`lineActs`). The mark
+ * and "recorded stopped" keep the warning tone. (The text audit, T21 to T24, as ruled 23 Nov 2026.)
+ * `own`: the acts this draws a button of its own for, over the fold, in a place whose line has no
+ * acts of its own for them (the instance panel, while no roster is read and its header offers none).
+ * Nothing where the kernel reports nothing.
  */
-export function OutsideWarning({ said, instance, held, own = BOTH }: { said: Said | null; instance: string; held: boolean; /** the acts the notice draws a button of its own for (both, by default); for another act it names, it says what the act does, and the place has that act's button over the notice (the panel's header). It names Start only for an agent on bb. */ own?: readonly ("stop" | "start")[] }) {
+export function OutsideWarning({ said, instance, held, own = [] }: { said: Said | null; instance: string; held: boolean; own?: readonly Act[] }) {
   if (said === null || said.warning === null) return null;
   const startable = said.warning.backend === "bb";
+  const acts = own.filter((act) => reportActs(said).includes(act));
   return (
-    <div data-testid="oats-outside-warning" data-instance={instance}>
-      <Notice title={outsideTitle(instance, startable)} tone="warning" details={`${said.warning.code}: ${said.warning.message}`}>
-        <p>{startable ? OUTSIDE_WHAT : OUTSIDE_WHAT_STOP}</p>
-        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-          {(
-            [
-              ["stop", OUTSIDE_STOP],
-              ["start", OUTSIDE_START],
-            ] as const
-          )
-            .filter(([act]) => act === "stop" || startable)
-            .map(([act, does]) => (
-            <li key={act} data-testid="oats-outside-act" className="flex min-w-0 flex-wrap items-center gap-2">
-              {own.includes(act) ? <OutsideActs instance={instance} acts={[act]} held={held} /> : <span className="font-semibold text-foreground">{LABEL[act]}</span>}
-              <span className="min-w-0 break-words text-muted-foreground">{does}</span>
-            </li>
-          ))}
-        </ul>
-      </Notice>
+    <div data-testid="oats-outside-warning" data-instance={instance} className="flex min-w-0 flex-col gap-1.5">
+      {acts.length === 0 ? null : (
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <OutsideActs instance={instance} acts={acts} held={held} />
+        </div>
+      )}
+      <Disclosure summary="Details" testId="oats-outside-details">
+        <p className="m-0 break-words">{startable ? OUTSIDE_WHAT : OUTSIDE_WHAT_STOP}</p>
+        <p className="m-0 break-words text-xs text-muted-foreground">{shown(`${said.warning.code}: ${said.warning.message}`)}</p>
+      </Disclosure>
     </div>
   );
 }
@@ -242,7 +237,7 @@ export function OutsideAgent({ agent, roster, held }: { agent: Agent; roster: { 
       )}
       {/* Act by act: one the header has is the header's (the notice says what it does); one it lacks is the notice's own
           button. Start is the lifecycle's for an agent on bb only, so the notice draws none for another provider's. */}
-      <OutsideWarning said={said} instance={agent.instance} held={held} own={BOTH.filter((act) => !headed.includes(act) && (act === "stop" || agent.backend === "bb"))} />
+      <OutsideWarning said={said} instance={agent.instance} held={held} own={BOTH.filter((act) => !headed.includes(act))} />
     </div>
   );
 }

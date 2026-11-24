@@ -18,7 +18,7 @@ import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
-import { lineParts, outsideOf, OutsideWarning } from "../outside";
+import { lineActs, lineParts, outsideOf, OutsideWarning } from "../outside";
 import type { Said } from "../outside";
 import { useNow } from "../roster/now";
 import { RosterNotice } from "../roster/unreadable";
@@ -216,7 +216,8 @@ function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: b
             {OPEN}
           </Button>
         </div>
-        <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} />
+        {/* The same drawing as under the thread's line: Stop… and Start… are the line's own acts, and Details is under it. */}
+        <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} action={lineActs(said, entry.agent.instance, held, entry.status.state)} />
         <OutsideWarning said={said} instance={entry.agent.instance} held={held} />
       </Card>
     </li>

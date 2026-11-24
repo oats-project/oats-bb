@@ -147,37 +147,38 @@ const acts = (slot: Awaited<ReturnType<typeof line>>, within_ = "oats-identity-r
 const calls = (slot: Awaited<ReturnType<typeof line>>, method: string) => slot.inspection.rpcCalls.filter((call) => call.method === method).map((call) => call.input);
 const noEvents: Partial<Handlers> = { panelEvents: () => ({ events: [] }) as never };
 
-test("the kernel's report on the open thread: one statement, \"Running outside OATS\"; the notice in a person's words, the kernel's sentence behind Details, and what each act does", async () => {
+test("the kernel's report on the open thread: one statement, \"Running outside OATS · recorded stopped\", in the warning tone, with Stop… and Start… as the line's own acts; under it ONE fold, Details: what happened in a person's words, then the kernel's code and sentence; no box, no title", async () => {
   const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   const warning = await slot.findByTestId("oats-outside-warning");
   // The state, then what OATS recorded, as a fact with no time: never "Stopped" as the state of an agent that runs.
   await waitFor(() => expect(words(slot)).toEqual(["Running outside OATS", "recorded stopped"]));
   const status = within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line");
-  expect([status.getAttribute("data-state"), within(status).getByTestId("oats-state").getAttribute("data-tone")]).toEqual(["outside", "warning"]);
-  const notice = within(warning).getByTestId("oats-notice");
-  expect([notice.getAttribute("data-tone"), notice.querySelector("h3")!.textContent]).toEqual(["warning", "Weekly digest helper is running in bb, but OATS recorded it as stopped."]);
-  // What is on screen: a person's words. The kernel's sentence and its code are in the fold, and nothing shown has a backtick or a command.
-  const details = within(notice).getByTestId("oats-notice-details");
+  // The warning tone is the line's: the state's mark, and "recorded stopped".
+  expect([status.getAttribute("data-state"), within(status).getByTestId("oats-state").getAttribute("data-tone"), within(status).getByTestId("oats-status-part").getAttribute("data-tone")]).toEqual(["outside", "warning", "warning"]);
+  // No box and no title under the line: nothing repeats it.
+  expect(within(slot.getByTestId("oats-identity-row")).queryByTestId("oats-notice")).toBeNull();
+  expect(slot.getByTestId("oats-identity-row").textContent).not.toMatch(/is running in bb, but OATS recorded it as stopped|stops the harness|starts it from OATS, in a new conversation/);
+  // ONE fold, closed: a person's words first, then the kernel's code and sentence. Nothing in view has a backtick or a command.
+  const details = within(warning).getByTestId("oats-outside-details");
   expect(details.hasAttribute("open")).toBe(false);
-  expect(details.textContent).toBe(`▸Detailsrunning-outside-oats: ${MESSAGE}`);
-  const shown = notice.cloneNode(true) as HTMLElement;
-  shown.querySelector('[data-testid="oats-notice-details"]')!.remove();
-  expect(shown.textContent).toBe(
-    "Weekly digest helper is running in bb, but OATS recorded it as stopped.Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.Stop…stops the harness that runs outside OATSStart…starts it from OATS, in a new conversation",
-  );
-  expect(shown.textContent).not.toMatch(/`|oats instance/);
-  // Each act says what it does here; they are the notice's, and the line carries no second Start.
-  expect(within(warning).getAllByTestId("oats-outside-act").map((act) => act.textContent)).toEqual(["Stop…stops the harness that runs outside OATS", "Start…starts it from OATS, in a new conversation"]);
-  expect(within(status).queryAllByTestId("oats-status-act")).toEqual([]);
+  expect(Array.from(details.querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.", `running-outside-oats: ${MESSAGE}`]);
+  expect(warning.querySelectorAll("details")).toHaveLength(1);
+  const inView = slot.getByTestId("oats-identity-row").cloneNode(true) as HTMLElement;
+  inView.querySelector('[data-testid="oats-outside-details"]')!.remove();
+  expect(inView.textContent).not.toMatch(/`|oats instance/);
+  // Stop… and Start… are the line's own acts, once each: the fold draws no button.
+  expect(within(status).getAllByTestId("oats-status-act").map((act) => act.textContent)).toEqual(["Stop…", "Start…"]);
+  expect(warning.querySelectorAll("button")).toHaveLength(0);
   // Start is the lifecycle's own act: its dialog is asked for, and nothing runs on one press.
-  fireEvent.click(within(warning).getByRole("button", { name: "Start…" }));
+  fireEvent.click(within(status).getByRole("button", { name: "Start…" }));
   expect(asked()).toEqual({ verb: "start", instance: DIGEST });
   expect(calls(slot, "start")).toEqual([]);
 });
 
-test("Stop on the report opens the lifecycle's Stop dialog for that agent", async () => {
+test("Stop on the report's line opens the lifecycle's Stop dialog for that agent", async () => {
   const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }, noEvents), sidebarThreads: sidebarThreads() });
-  fireEvent.click(within(await slot.findByTestId("oats-outside-warning")).getByRole("button", { name: "Stop…" }));
+  await slot.findByTestId("oats-outside-warning");
+  fireEvent.click(within(slot.getByTestId("oats-identity-row")).getByRole("button", { name: "Stop…" }));
   expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
 });
 
@@ -455,7 +456,7 @@ test("no act is drawn twice on the agent's page: the three agents whose thread b
   expect(verbs(outside)).toEqual(["Stop", "Start", "Retire"]);
 });
 
-test("while no roster is read the lifecycle offers no act: the notice of an agent that runs outside OATS keeps its own Stop and Start, so that neither is named with nothing to press", async () => {
+test("while no roster is read the lifecycle offers no act: the block of an agent that runs outside OATS keeps its own Stop… and Start… over its Details, so that neither is missing with no line to press it on", async () => {
   // The panel holds the agent it showed while the roster is not read, and its header's `AgentActs` then draws
   // nothing. The block is drawn with what the panel gives it then (`held`: true once the read has FAILED, false
   // while it is still being read), beside the header's own acts.
@@ -516,13 +517,12 @@ test("while no roster is read the lifecycle offers no act: the notice of an agen
   // notice draws none; and it draws no Start, which the lifecycle does not offer for it. No act is there twice.
   const other = await drawn(sidebarThreads(), false, "other");
   await waitFor(() => expect(actsIn(other.getByTestId("header-acts"))).toEqual(["Stop…", "Retire…"]));
-  const named = (slot: typeof other) => Array.from(slot.getByTestId("oats-outside-agent-block").querySelectorAll('[data-testid="oats-outside-act"]')).map((act) => act.textContent);
   expect(actsIn(other.getByTestId("oats-outside-agent-block"))).toEqual([]);
-  // What the notice NAMES for it: Stop alone, and a sentence that does not say to start it.
-  expect(named(other)).toEqual(["Stopstops the harness that runs outside OATS"]);
-  expect(other.getByTestId("oats-outside-agent-block").querySelector("h3")!.textContent).toBe("Weekly digest helper is running, but OATS recorded it as stopped."); // "in bb" is said of an agent on bb alone
-  const sentenceOf = (block: HTMLElement) => block.querySelector('[data-testid="oats-notice"] p')!.textContent;
-  expect(sentenceOf(other.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it."); // (the kernel's own sentence stays under Details)
+  // No box and no title; under Details, for it: a sentence that does not say to start it (then the kernel's own).
+  expect(other.getByTestId("oats-outside-agent-block").querySelector("h3")).toBeNull();
+  expect(within(other.getByTestId("oats-outside-agent-block")).queryByTestId("oats-notice")).toBeNull();
+  const sentenceOf = (block: HTMLElement) => block.querySelector('[data-testid="oats-outside-details"] p')!.textContent;
+  expect(sentenceOf(other.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
   other.unmount();
   resetApp();
   // The same agent with the read failed: the header has none, so the notice has its own Stop, held (off), and still no Start.
@@ -530,23 +530,26 @@ test("while no roster is read the lifecycle offers no act: the notice of an agen
   const otherBlock = await otherFailed.findByTestId("oats-outside-agent-block");
   expect(actsIn(otherFailed.getByTestId("header-acts"))).toEqual([]);
   expect(buttons(otherBlock)).toEqual([["Stop…", true, ""]]);
-  expect(named(otherFailed)).toEqual(["Stop…stops the harness that runs outside OATS"]);
   expect(sentenceOf(otherBlock)).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
   otherFailed.unmount();
   resetApp();
-  // An agent on bb is named both, in every state (the cases above): Start is the lifecycle's for it.
+  // An agent on bb has both in its header (the cases above), and its Details says to stop it or to start it from OATS.
   const onBb = await drawn(sidebarThreads(), false);
   await waitFor(() => expect(actsIn(onBb.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
-  expect(named(onBb)).toEqual(["Stopstops the harness that runs outside OATS", "Startstarts it from OATS, in a new conversation"]);
+  expect(sentenceOf(onBb.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.");
+  expect(onBb.getByTestId("oats-outside-agent-block").textContent).not.toMatch(/stops the harness|in a new conversation|but OATS recorded it as stopped/);
 });
 
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {
   const reported = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(reported).kind).toBe("outside"));
-  // The header has the lifecycle's acts; the notice under it says what Stop and Start do, and draws no second button.
+  // The header has the lifecycle's acts; under it the block is ONE fold, Details, with no box, no title and no second button.
   expect(header(reported)).toMatchObject({ state: "Running outside OATS", sentence: null, acts: [], headed: ["Stop…", "Start…", "Retire…"] });
-  expect(Array.from(header(reported).block!.querySelectorAll('[data-testid="oats-outside-act"]')).map((act) => act.textContent)).toEqual(["Stopstops the harness that runs outside OATS", "Startstarts it from OATS, in a new conversation"]);
-  expect(within(header(reported).block!).getByTestId("oats-notice").querySelector("h3")!.textContent).toBe("Weekly digest helper is running in bb, but OATS recorded it as stopped.");
+  const block = header(reported).block!;
+  expect(within(block).queryByTestId("oats-notice")).toBeNull();
+  expect(block.querySelector("h3")).toBeNull();
+  expect(block.querySelectorAll("details")).toHaveLength(1);
+  expect(Array.from(within(block).getByTestId("oats-outside-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.", `running-outside-oats: ${MESSAGE}`]);
   resetApp();
   const plain = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(plain)).toMatchObject({ state: "Stopped" })); // the page is drawn, in its state
@@ -581,8 +584,11 @@ test("on a roster that is the last one read the acts are held, on the archived t
   expect(within(notice).getByRole("button", { name: "Retry" })).toBeTruthy();
   resetApp();
   const open = await line("thr_digest", { rpc: handlers({ ...noEvents, ...stale(roster({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } })) }), sidebarThreads: sidebarThreads() });
-  const buttons = within(await open.findByTestId("oats-outside-warning")).getAllByTestId("oats-status-act") as HTMLButtonElement[];
+  await open.findByTestId("oats-outside-warning");
+  const buttons = within(within(open.getByTestId("oats-identity-row")).getByTestId("oats-status-line")).getAllByTestId("oats-status-act") as HTMLButtonElement[];
   expect(buttons.map((button) => [button.textContent, button.disabled])).toEqual([["Stop…", true], ["Start…", true]]);
+  // Off, and never alone: the row's one-line notice says "Acts are off.", with Retry.
+  expect(within(open.getByTestId("oats-identity-row")).getByTestId("oats-unreadable").textContent).toContain("Acts are off.");
 });
 
 // ---- one state, everywhere

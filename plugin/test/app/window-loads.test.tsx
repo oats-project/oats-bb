@@ -7,6 +7,7 @@ import { afterEach, expect, test } from "vitest";
 import { act, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
+import type { ReactNode } from "react";
 import type { Agent } from "../../model/types";
 import { fixtureAgents, fixtureSnapshot } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
@@ -179,4 +180,84 @@ test("the first answer FAILS while an event is owed a read, and a second event c
   await slot.findByTestId("oats-tree");
   await waitFor(() => expect(facts()).not.toMatch(/^Needs you/)); // the second event was owed a read too: not swallowed
   expect(calls).toBe(3);
+});
+
+// The event path (#74): the server patches the roster it holds from ONE instance's events and publishes the same
+// "oats/changed"; the patched roster is still the status read from before (its `at` does not move). To the window it
+// is one more event: one that arrives while the first answer is on its way is owed a read like any other, and the
+// window must take the patched roster although its `at` is the one it already holds.
+test("a PATCH published while the window's first answer is on its way is not lost: the window ends on the patched roster, whose `at` is the first answer's", async () => {
+  let calls = 0;
+  let deliver: (() => void) | undefined;
+  const first = new Promise<void>((resolve) => (deliver = resolve));
+  const { slot, facts } = await sidebarOver(async () => {
+    calls += 1;
+    if (calls === 1) {
+      await first;
+      return fixtureSnapshot(after()); // the status read, from before the claim: nobody waits
+    }
+    return fixtureSnapshot(before()); // the same read's roster with the events' claim over it: the same `at`
+  });
+  await waitFor(() => expect(calls).toBe(1));
+  expect(fixtureSnapshot(after()).at).toBe(fixtureSnapshot(before()).at);
+  // The server's publish of a patch: the token alone (server/core.ts), later than the read's.
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.250Z" }));
+  await act(async () => deliver!());
+  await slot.findByTestId("oats-tree");
+  await waitFor(() => expect(facts()).toMatch(/^Needs you/));
+  expect(calls).toBe(2);
+});
+
+// Each live read is owed ITS OWN read (app/store.ts `reread`, by the read's key). The sidebar beside the Automations
+// page: two live reads that start together, the roster's and the page's own. Both first answers are on their way when
+// the server publishes; the roster's read, paid first, must not take the page's with it.
+test("two live reads by two keys, both with their first answer on its way when the change is published: each is read once more, and neither pays the other's", async () => {
+  const held = () => {
+    let deliver: (() => void) | undefined;
+    const first = new Promise<void>((resolve) => (deliver = resolve));
+    return { calls: 0, first, deliver: () => deliver!() };
+  };
+  const roster = held();
+  const page = held();
+  const answers = handlers();
+  const app = await loadApp();
+  const List = app.threadLists[0]!.component;
+  const Automations = app.navPanels.find((candidate) => candidate.id === "automations")!.component as (props: { subPath: string }) => ReactNode;
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    {
+      component: (props: PluginThreadListProps) => (
+        <>
+          <List {...props} />
+          <Automations subPath="" />
+        </>
+      ),
+    } as never,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    {
+      rpc: handlers({
+        snapshot: async () => {
+          roster.calls += 1;
+          if (roster.calls === 1) await roster.first;
+          return fixtureSnapshot(after());
+        },
+        automations: async (input) => {
+          page.calls += 1;
+          if (page.calls === 1) await page.first;
+          return answers.automations(input);
+        },
+      }),
+      sidebarThreads: sidebarThreads(),
+    },
+  );
+  // Both first answers are on their way.
+  await waitFor(() => expect([roster.calls, page.calls]).toEqual([1, 1]));
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.000Z" }));
+  // The roster's arrives first, and its owed read is made; the page's is still on its way, and still owed.
+  await act(async () => roster.deliver());
+  await waitFor(() => expect(roster.calls).toBe(2));
+  expect(page.calls).toBe(1);
+  // The page's arrives: its own owed read is made.
+  await act(async () => page.deliver());
+  await waitFor(() => expect(page.calls).toBe(2));
+  expect(roster.calls).toBe(2);
 });

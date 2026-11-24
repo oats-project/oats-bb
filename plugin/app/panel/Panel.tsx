@@ -200,7 +200,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
             <ReadingLine />
           ) : (
             <>
-              <StatusLine state={status.state} since={line.since} tone={line.tone} detail={status.state === "needs-you" && claimOf(agent) !== null ? line.reason : line.detail} />
+              <StatusLine state={status.state} word={status.word} since={line.since} tone={line.tone} detail={status.state === "needs-you" && claimOf(agent) !== null ? line.reason : line.detail} />
               <KernelSays text={status.kernel} bb={status.bb} />
             </>
           )}

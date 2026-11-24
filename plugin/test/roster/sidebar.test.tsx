@@ -109,7 +109,7 @@ test("an agent with no bb thread stays in the roster: one that runs in tmux, and
   expect(rows.map((row) => [row.getAttribute("data-instance"), within(row).getByTestId("oats-row-facts").textContent])).toEqual([
     // Where its thread is (archived in bb, or deleted) is bb's own answer, which the outside feature asks and says (test/outside/places.test.tsx); bb says nothing here.
     // (In the kernel's order, as every row of their rank: the one on tmux is listed before the stopped one.)
-    ["kernel-fix-developer", "Working · oats-developer · tmux"],
+    ["kernel-fix-developer", "Running · oats-developer · tmux"], // on tmux: "Running" (the kernel says that it runs, nothing of a turn)
     ["weekly-digest-helper", "Stopped · oats-expert"],
   ]);
   expect(rows[0]!.textContent).toContain("Kernel fix developer");
@@ -684,7 +684,7 @@ test("a parent with no bb thread is a parent like any other: Left on its row clo
   // As the page loads it is closed: its child is not in the page, and its line says its own word, then the child's mark.
   expect([toggle().getAttribute("aria-expanded"), row("tmux-child")]).toEqual(["false", undefined]);
   expect(inside()).toBe("needs-you");
-  expect(within(row("kernel-fix-developer")!).getByTestId("oats-row-facts").getAttribute("title")).toBe("Working · oats-developer · tmux"); // its own words, whole
+  expect(within(row("kernel-fix-developer")!).getByTestId("oats-row-facts").getAttribute("title")).toBe("Running · oats-developer · tmux"); // its own words, whole
   expect(row("kernel-fix-developer")!.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("working"); // its own mark stays its own
   // Right on its row opens it: the child's row is there, and the parent carries no mark of it any more.
   fireEvent.keyDown(row("kernel-fix-developer")!, { key: "ArrowRight" });

@@ -258,7 +258,11 @@ bb's Delete ends it. The plugin cannot hide those acts. It says what happened, o
 row, on the thread's own line and on the agent's own page, with the one act that mends it.
 
 **The state's word comes first, and it is one of the set**: Needs you, Working, Idle, Stopped,
-Failed, Unreachable, and one more, **Running outside OATS**. After it comes the REASON: two or
+Failed, Unreachable, and one more, **Running outside OATS**. An agent on tmux that runs reads
+**Running** in "Working"'s place, in every place that says its state (`app/roster/status.ts`
+`stateWord`, the one place): the kernel knows that a tmux session runs and nothing of a turn, so
+"Working" would say more than anyone knows. Its state is the same (its mark, its order, its acts,
+its count). After it comes the REASON: two or
 three words, on the thread's line and on the sidebar's row (a row is never three lines). A row's line is STATE · SOUL ·
 REASON · glyph (`app/ui/row-facts.tsx`): when it is short of room the reason shortens with "…", then
 leaves the row (it stays whole in the line's title, on the thread's line and on the agent's page),

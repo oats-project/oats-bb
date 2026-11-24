@@ -240,7 +240,7 @@ describe("an agent on tmux: the three recorded rows (OATS 0.70.5, the real run)"
   });
   it("running: nothing", () => {
     const runningTmux = tmuxRow("tmux-row-running.json");
-    expect([word(runningTmux), said(runningTmux, "none", false)]).toEqual(["Working", null]);
+    expect([word(runningTmux), said(runningTmux, "none", false)]).toEqual(["Running", null]); // on tmux an agent that runs reads "Running": the kernel knows nothing of a turn there
   });
 });
 

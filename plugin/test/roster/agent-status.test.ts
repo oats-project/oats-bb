@@ -1,6 +1,6 @@
 // agentStatus(): where an agent is, in words, for every place that says it.
 import { expect, test } from "vitest";
-import { agentStatus, stoppedAt } from "../../app/roster/status";
+import { agentStatus, stateWord, stoppedAt } from "../../app/roster/status";
 import type { BbThread } from "../../model/types";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 
@@ -52,8 +52,17 @@ test("an agent that waits says how long and what about; the others say only what
   expect(agentStatus(working, quiet, now)).toEqual({ state: "working", word: "Working", since: null, detail: null, kernel: null });
   expect(agentStatus({ ...working, running: false, runtimeState: "shell" }, quiet, now)).toEqual({ state: "error", word: "Failed", since: null, detail: "session ended", kernel: null });
   expect(agentStatus({ ...working, running: null, runtimeState: "unreachable", runtimeError: "bb did not answer" }, quiet, now)).toEqual({ state: "unreachable", word: "Unreachable", since: null, detail: null, kernel: "bb did not answer" });
-  // An agent with no bb thread that runs in tmux: the kernel's word alone.
-  expect(agentStatus({ ...working, backend: "tmux" }, null, now)).toEqual({ state: "working", word: "Working", since: null, detail: null, kernel: null });
+  // An agent with no bb thread that runs in tmux: the kernel's word alone, and it says that it RUNS, nothing of a
+  // turn: "Running", the state unchanged (the lead's ruling T4). The word is by the backend, in the one function.
+  expect(agentStatus({ ...working, backend: "tmux" }, null, now)).toEqual({ state: "working", word: "Running", since: null, detail: null, kernel: null });
+  expect((["working", "idle", "needs-you", "stopped", "error", "unreachable"] as const).map((drawn) => [stateWord({ backend: "tmux" }, drawn), stateWord({ backend: "bb" }, drawn), stateWord({ backend: "local" }, drawn)])).toEqual([
+    ["Running", "Working", "Working"], // tmux alone; every other state's word is the standard's, whatever the backend
+    ["Idle", "Idle", "Idle"],
+    ["Needs you", "Needs you", "Needs you"],
+    ["Stopped", "Stopped", "Stopped"],
+    ["Failed", "Failed", "Failed"],
+    ["Unreachable", "Unreachable", "Unreachable"],
+  ]);
   // The same agent on its bb thread works because bb says its thread does: with the thread idle it is idle, a loaded harness or not.
   expect(agentStatus(working, { ...quiet, status: "idle" }, now).state).toBe("idle");
 });

@@ -466,7 +466,7 @@ export default [
       };
       const first = await drawer("first");
       const rows = Object.fromEntries(JSON.parse(first || (await page.evaluate(roster)) || "[]"));
-      check(Object.keys(rows).length === 8 && rows[idle.id] === "Idle · knowledge-harvester" && rows[stopped.id] === "Stopped · oats-expert" && rows[TMUX] === "Working · oats-developer · tmux", `${at} the drawer holds every agent of the roster, each with its state: an idle one, a stopped one and the one on tmux among the eight`, JSON.stringify(rows));
+      check(Object.keys(rows).length === 8 && rows[idle.id] === "Idle · knowledge-harvester" && rows[stopped.id] === "Stopped · oats-expert" && rows[TMUX] === "Running · oats-developer · tmux", `${at} the drawer holds every agent of the roster, each with its state: an idle one, a stopped one and the one on tmux among the eight`, JSON.stringify(rows));
       await page.shot(`home-${viewport.name}-drawer`);
       // An idle agent's row opens its thread.
       await page.evaluate(`document.querySelector(${JSON.stringify(`${SIDE} ${testId("oats-agent-row")}[data-sidebar-thread-id="${idle.id}"]`)}).click()`);

@@ -165,9 +165,9 @@ export default [
       // What the image's name says: every agent a row, each with its state in a word and its soul; the
       // one that runs in tmux among them; the roster first, then New agent, the pages.
       const drawn = JSON.parse(await page.evaluate(`JSON.stringify({ facts: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-row-facts")}`)})].map((e) => e.getAttribute("title")), order: [...document.querySelectorAll(${JSON.stringify(["oats-tree", "oats-needs-line", "oats-new-agent", "oats-pages"].map(testId).join(", "))})].map((e) => e.getAttribute("data-testid")), marks: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark]`)}).length })`));
-      const WORDS = /^(Needs you|Working|Idle|Stopped|Failed|Unreachable) · [a-z][a-z0-9.\/-]*( · tmux)?$/;
+      const WORDS = /^(Needs you|Working|Idle|Stopped|Failed|Unreachable) · [a-z][a-z0-9.\/-]*$|^(Needs you|Running|Idle|Stopped|Failed|Unreachable) · [a-z][a-z0-9.\/-]* · tmux$/; // on tmux an agent that runs reads "Running", never "Working"
       check(
-        drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Working · oats-developer · tmux") && drawn.facts.includes("Needs you · oats-maintainer") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-new-agent", "oats-pages"]),
+        drawn.facts.length === 8 && drawn.marks === 8 && drawn.facts.every((line) => WORDS.test(line)) && drawn.facts.includes("Running · oats-developer · tmux") && drawn.facts.includes("Needs you · oats-maintainer") && JSON.stringify(drawn.order) === JSON.stringify(["oats-tree", "oats-new-agent", "oats-pages"]),
         `${at} eight agents, eight rows: each its mark, its state in a word and its soul; the one in tmux says "tmux"; then New agent and the pages`,
         JSON.stringify(drawn),
       );
@@ -542,7 +542,7 @@ export default [
       // Every tmux agent is a row, by its one name, and says its state, its soul and "tmux".
       const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), (row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.getAttribute("title") ?? "")])) : ""; })()`, 30);
       const read = rows === null ? [] : JSON.parse(rows);
-      const wanted = tmux.map(([instance, soul, , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : how === "lost" ? "Stopped" : "Working"} · ${soul}${how === "lost" ? " · session lost" : ""} · tmux`]);
+      const wanted = tmux.map(([instance, soul, , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : how === "lost" ? "Stopped" : "Running"} · ${soul}${how === "lost" ? " · session lost" : ""} · tmux`]);
       const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
       check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, its soul, then "tmux"`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // ONE tree: each tmux agent that has a parent is drawn under it, one step in (deeper than 2 at 2), in its parent's own block of rows.
@@ -705,14 +705,14 @@ export default [
         await page.shot(`tmux-roster-${viewport.name}-lost-start-done`, { targets: true });
         // The roster is read again (within the ten seconds "Reading…" can stand): the header says what it says now.
         const settled = await page.until(`(() => { const now = ${header}; return JSON.parse(now).reading === null ? now : ""; })()`, 20);
-        check(settled !== null && JSON.parse(settled).state === "Working" && JSON.parse(settled).acts.every((off) => off === false), `${at} once the roster is read again the header says "Working", with its acts on`, settled ?? (await page.evaluate(header)));
+        check(settled !== null && JSON.parse(settled).state === "Running" && JSON.parse(settled).acts.every((off) => off === false), `${at} once the roster is read again the header says "Running" (on tmux: that it runs is all OATS knows), with its acts on`, settled ?? (await page.evaluate(header)));
         // OATS says it runs: its row says so, at its kernel place, with no reason.
         fake({ status: { stdout: tmuxStatus({ [LOST]: "running" }) } });
         await page.evaluate(click("oats-confirm-close"));
         check(Boolean(await page.until(closed, 10)), `${at} Close closes the dialog`);
         check(await showSidebar(page, viewport), `${at} the sidebar is shown again`);
         const after = await page.until(`(() => { const facts = document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)}); const text = facts ? (facts.getAttribute("title") ?? "") : ""; return text === "Working · oats-contrib-developer · tmux" ? text : ""; })()`, 60);
-        check(after === "Working · oats-contrib-developer · tmux", `${at} its row then says "Working", its soul and where it is: no "session lost" any more`, after ?? (await page.evaluate(textOf(row))));
+        check(after === "Running · oats-contrib-developer · tmux", `${at} its row then says "Running", its soul and where it is: no "session lost" any more`, after ?? (await page.evaluate(textOf(row))));
         await page.evaluate(`document.querySelector(${JSON.stringify(row)})?.scrollIntoView({ block: "center" })`);
         await page.shot(`tmux-roster-${viewport.name}-lost-row-after`);
       } finally {

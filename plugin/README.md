@@ -51,10 +51,12 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 "NEW AGENT" AND "NO AGENTS YET." STAND ONCE ON A SCREEN TOO (the reader's P13; `app/roster/beside.ts`).
 Where the sidebar is BESIDE the home (a wide window) its New agent is the one, and the home draws
 none; where bb keeps the sidebar in a drawer (a phone's width), or the home does not know of a
-sidebar, the home keeps its own: it acts only on a positive fact (a sidebar mounted, which bb says
-is not compact), since a screen with two is better than a screen with none. "No agents yet." is
-the home's while it says it in view, and the sidebar's beside every other pane. On an empty
-workspace the screen's one New agent is the primary button. Whichever is drawn is off while the roster
+sidebar, the home keeps its own: it acts only on a positive fact (a sidebar that bb says is not
+compact AND whose own root is drawn in the window: bb keeps a collapsed desktop sidebar mounted),
+since a screen with two is better than a screen with none. "No agents yet." is
+the home's while it says it in view; the sidebar's own line yields only where the sidebar is
+beside that home (in a drawer, or collapsed, it keeps its line), and stands beside every other
+pane. Beside the empty home the sidebar's New agent is the screen's primary button. Whichever is drawn is off while the roster
 is the last one read; the home's own is off behind its card of an oats CLI the plugin does not
 work with (ONE rule for both buttons, the sidebar's too, comes with the roster's change of the
 sidebar, `newAgentHeld`: it is not this change's).
@@ -526,7 +528,7 @@ the OATS Desktop's Home: what needs you first, then what you have.
 | **Lost** | the agents whose session was lost (their roster row says "Lost"; not the ones a person stopped), in the roster's order, one line each: the name, the soul, where it runs, and its act: **Start…**, which opens that agent's Start dialog (off while the roster shown is the last one read, and behind a done Start until the roster is read again); or, for an agent on bb whose thread bb lists, **Open**, which opens that thread: a message there is the way on (one rule with the thread's line: Start… would begin a new conversation). Headed with the roster's own word and their count ("Lost 8"); not drawn with none. The one place where eight lost agents are eight presses in one list |
 | **Unread** | idle agents whose thread holds something you have not read; not drawn with none |
 | **Home › Agents** | `/plugins/oats/home/agents`, reached by that address alone (nothing on the home, the page or the tab, leads to it: the home has no tile for the agents, and the sidebar lists every one), headed **Agents N**: **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its state in words and, beside its name on one line, its soul, the reason where it has no thread (what became of it: "deleted in bb", "archived in bb", …; "session lost"), and for one on tmux bb's terminal glyph named "tmux" (the row's one order; the reason gives way first); over them the home's one count line, "3 running · 3 need you · 1 idle · 1 stopped" (the word of the list's heading for those that work): every agent counted once, by the state every place says for it (`app/roster/status.ts`), so the numbers are the sidebar's (working and need you are always said; another state only when it has agents); and **‹ Home** (Esc does the same). Its machine and who started it are on an agent's own page |
-| **New agent** | first on every home (the page, Home › Agents, and the tab), where New agent has somewhere to open; off behind the CLI card and while the roster shown is the last one read, with no reason beside it: the card, or the roster's notice, is on the same screen (the card is drawn on Home › Agents too) |
+| **New agent** | first on a home (the page, Home › Agents, and the tab) where no sidebar is shown beside it (a phone's width, bb's sidebar collapsed, or not known: P13, above), and where New agent has somewhere to open; off behind the CLI card and while the roster shown is the last one read, with no reason beside it: the card, or the roster's notice, is on the same screen (the card is drawn on Home › Agents too) |
 | an empty workspace | "No agents yet."; **New agent** is drawn as the one thing to press (the primary button): the home's own, over it, where the sidebar is a drawer; the sidebar's where the sidebar is beside the home |
 
 The page has no heading of its own (bb's bar over it names it) and no summary line: its headings

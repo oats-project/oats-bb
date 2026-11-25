@@ -486,7 +486,7 @@ export default [
       // Read once the home itself says the default has drawn: it has no tile at all (as the home's own
       // scene of this stage waits). The button is drawn under every value of `pages`, so alone it would say nothing of them.
       // (The screen's ONE New agent: the home's own where the sidebar is a drawer, the sidebar's where it is beside the home: the reader's P13.)
-      const NEW = `[...document.querySelectorAll('[data-testid="oats-home-new-agent"], [data-testid="oats-new-agent"]')].filter((b) => b.checkVisibility() && !b.closest("[inert]"))`;
+      const NEW = `[...document.querySelectorAll('[data-testid="oats-home-new-agent"], [data-testid="oats-new-agent"]')].filter((b) => b.checkVisibility({ visibilityProperty: true }) && !b.closest("[inert]") && b.getBoundingClientRect().right > 0)`;
       const HOME = `(() => { const b = ${NEW}[0]; return JSON.stringify({ words: b?.innerText.trim() ?? null, off: b?.disabled ?? null, tiles: [...document.querySelectorAll(${q("oats-home-tiles")} + " button")].map((tile) => tile.getAttribute("data-testid")), links: document.querySelectorAll('[data-testid^="oats-page-link-"]').length }); })()`;
       const onHome = await page.until(`${NEW}.length === 1 && document.querySelectorAll(${q("oats-home-tiles")} + " button").length === 0 && ${HOME}`, 30);
       check(onHome === JSON.stringify({ words: "New agent", off: false, tiles: [], links: 0 }), `${at} with only the home shown (it has no tile), New agent is on the home's screen, once, and pressable`, onHome ?? (await page.evaluate(HOME)));

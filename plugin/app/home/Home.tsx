@@ -355,9 +355,13 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
               soul, the reason where there is one and where it is for an agent on tmux (they give way inside what is left:
               `RowFacts`), then the mark and how long it waits. A wait that says more than its age (a kind of request in
               words; a state that is not "needs you") keeps its own line, under this one. */}
-          <div className="flex min-w-0 flex-1 items-center gap-x-2">
+          {/* Where the line cannot hold them (a phone's width, a long name) the facts go UNDER the name, whole, with the
+              mark and the age after them: they keep a least width, so a reason is never cut to a stump and the soul and the
+              glyph are never squeezed to nothing (the polish's review: at 390 the card's only word on why there is no reply
+              was clipped mid-word). */}
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" />
+            <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" least />
             {waitInline ? <span className="shrink-0">{wait}</span> : null}
           </div>
           {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page.
@@ -466,7 +470,7 @@ function reasonOf(entry: Entry, oats: Ready): { reason: string | null; tone: "wa
   return { reason, tone: said?.rowTone === "warning" ? "warning" : undefined, onTmux };
 }
 
-function AgentFacts({ entry, oats, testId }: { entry: Entry; oats: Ready; testId: string }) {
+function AgentFacts({ entry, oats, testId, least = false }: { entry: Entry; oats: Ready; testId: string; /** on a card: the line keeps a least width (nine rem: a reason that warns, a short soul, the glyph), and wraps under the name where the name's line cannot give it; in a list's row it takes what is left, from nothing, and never wraps (P20) */ least?: boolean }) {
   const { reason, tone, onTmux } = reasonOf(entry, oats);
   // A lost session is said in the state's place on a row ("Lost": app/outside `rowWords`), so its line has no reason to hold; its title keeps it.
   const words = rowWords(entry.status.word, entry.status.state, reason);
@@ -476,7 +480,7 @@ function AgentFacts({ entry, oats, testId }: { entry: Entry; oats: Ready; testId
   // phone's width). It always stands in a ROW, beside a name (a list's row, a card's first line): in a COLUMN a
   // flex base is a HEIGHT (a base of ten rem once made every card's line ten rem tall: an empty gap of about 150 px
   // under the soul; the specialist's finding on the image set of 24 Nov 2026).
-  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} className="min-w-0 flex-1 basis-0" />;
+  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} className={least ? "min-w-0 flex-1 basis-36" : "min-w-0 flex-1 basis-0"} />;
 }
 
 /**
@@ -739,7 +743,7 @@ function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; 
   const held = oats.stale !== null;
   // The agents whose session was lost (not the ones a person stopped), in the roster's order.
   const lost = made.all.filter((entry) => isLost(entry, oats));
-  // New agent is on every home, first on the page (the Desktop's Home has none: its act is the
+  // New agent is on a home with no sidebar shown beside it, first on the page (the Desktop's Home has none: its act is the
   // sidebar's, which bb keeps in a drawer at a phone's width). Offered where it has somewhere to
   // open (the sidebar's rule); off behind the CLI card and while the roster shown is the last one
   // read. Why is said by the notice under it, on the same screen (the CLI card, the roster's

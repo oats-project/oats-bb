@@ -90,7 +90,13 @@ test("a card says who (the name as words, its soul under it, and no machine), wh
   expect(cardFacts.parentElement!.className.split(/\s+/)).not.toContain("flex-col");
   expect(cardFacts.parentElement!.contains(within(release).getByTestId("oats-needs-name"))).toBe(true); // the name's own line
   expect(cardFacts.className.split(/\s+/).filter((name) => /^(h-|min-h-)/.test(name))).toEqual([]);
-  for (const facts of [cardFacts, workerFacts]) expect(facts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-0"]));
+  expect(workerFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-0"]));
+  // On a card the line keeps a LEAST width and the name's line may wrap: where it cannot hold them (a phone's width, a
+  // long name) the facts go under the name whole, never squeezed to nothing nor a reason cut mid-word (the polish's
+  // review; the live scene measures their width at 390). A list's row never wraps (P20): its facts start from nothing.
+  expect(cardFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-36"]));
+  expect(cardFacts.parentElement!.className.split(/\s+/)).toContain("flex-wrap");
+  expect(workerFacts.parentElement!.className.split(/\s+/)).not.toContain("flex-wrap");
   // The mark and the age stand at the end of that line (P5), not on a line of their own.
   expect(cardFacts.parentElement!.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
   expect(release.textContent).not.toMatch(/falcon/);

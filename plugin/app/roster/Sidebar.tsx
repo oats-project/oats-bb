@@ -2,6 +2,7 @@
 // OATS has, as a tree whose parents open), under it New agent, the plugin's pages under "Workspace",
 // then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
 import { useAnnounceSidebar, useHomeSaysEmpty } from "./beside";
+import { useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
@@ -80,8 +81,11 @@ function PageRow({ page, open, onOpen }: { page: PageLink; open: boolean; onOpen
 
 export function Sidebar({ activeThreadId, onNavigate, isCompactViewport }: PluginThreadListProps) {
   // The home beside this sidebar draws no "New agent" of its own, and this sidebar no "No agents yet." while the home says it (app/roster/beside.ts: P13).
-  useAnnounceSidebar(isCompactViewport);
-  const homeSaysEmpty = useHomeSaysEmpty();
+  // (Beside: bb says not compact AND this sidebar's own root is drawn in the window: bb's collapsed desktop sidebar stays mounted.)
+  const [root, setRoot] = useState<HTMLElement | null>(null);
+  const beside = useAnnounceSidebar(root, isCompactViewport);
+  // Its own "No agents yet." yields only where it is beside a home that says it: in a drawer (over the home), or collapsed, it keeps its line.
+  const homeSaysEmpty = useHomeSaysEmpty() && beside;
   const oats = useOats();
   const now = useNow();
   const outside = outsideOf(oats);
@@ -286,7 +290,7 @@ export function Sidebar({ activeThreadId, onNavigate, isCompactViewport }: Plugi
       .filter(isListed)
       .sort((a, b) => b.updatedAt - a.updatedAt);
     return (
-      <div data-testid="oats-sidebar" className="flex flex-col gap-1 p-1">
+      <div ref={setRoot} data-testid="oats-sidebar" className="flex flex-col gap-1 p-1">
         {oats.phase === "loading" ? (
           <div className="px-2">
             <Loading>Reading…</Loading>
@@ -322,7 +326,7 @@ export function Sidebar({ activeThreadId, onNavigate, isCompactViewport }: Plugi
     // `data-pages`: whether bb has given the settings that say which pages are shown. With nobody
     // waiting the foot has no line, so nothing drawn says it: a live check that asserts an absence
     // (no page link, no needs line) waits on this first.
-    <div data-testid="oats-sidebar" data-pages={pagesNow.known ? "known" : "reading"} className="flex flex-col p-1">
+    <div ref={setRoot} data-testid="oats-sidebar" data-pages={pagesNow.known ? "known" : "reading"} className="flex flex-col p-1">
       {/* OATS cannot be read now: the roster stays as last read, with why and how old it is. */}
       {/* Where a pane beside it shows the notice (a page's; a thread's own line), one line here: how old the roster is, that the acts are off. The one Retry is the pane's. */}
       {oats.stale === null ? null : pageShowsNotice ? (
@@ -352,11 +356,12 @@ export function Sidebar({ activeThreadId, onNavigate, isCompactViewport }: Plugi
         <div className="px-2 py-1">
           {/* On the last roster read "New agent" is held with the OATS acts: in its place, off. Why is
               said by the notice over the roster (or the page's, beside it), never beside the button. */}
-          {/* Beside the home of a workspace with no agent it is the screen's one act, as the home's own was: the primary button. */}
+          {/* Beside the home of a workspace with no agent (the home says "No agents yet.") it is the screen's one act, as the
+              home's own was: the primary button. Beside any other pane it is not (the New agent form has its own primary). */}
           <Button
-            variant={shownAgents === 0 && !isCompactViewport ? "primary" : "default"}
+            variant={shownAgents === 0 && homeSaysEmpty ? "primary" : "default"}
             data-testid="oats-new-agent"
-            {...(shownAgents === 0 && !isCompactViewport ? { "data-primary": "" } : {})}
+            {...(shownAgents === 0 && homeSaysEmpty ? { "data-primary": "" } : {})}
             disabled={oats.stale !== null}
             onClick={() => {
               if (openNewAgent(navigate, pagesNow.has("souls"))) onNavigate();

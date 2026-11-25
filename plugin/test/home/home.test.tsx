@@ -1194,9 +1194,11 @@ test("THE FIT, pure: a card's facts stand beside the name only when the WHOLE li
   expect(card({ line: 222.8, name: 70, whole: 228, held: 148.1, wait: 70 })).toBe("split");
   // No mark on this line (a wait that says words has its own): only the facts count.
   expect(card({ line: 259.7, name: 70.1, whole: 181.6, held: 119.1, wait: 0 })).toBe("beside");
-  // Half a pixel of grace, no more: a rounding does not send a line under.
+  // No grace: what fits by its own measure is beside (62.24 + 8 + 120 = 190.24 of 190.27); a fraction over goes under
+  // (the fourth round's card in a tab of 340: 223.47 of 222.83: beside, it lost the difference from its soul).
   expect(card({ line: 190.27, name: 62.24, whole: 120, held: 120, wait: 0 })).toBe("beside");
-  expect(card({ line: 190.27, name: 63.3, whole: 120, held: 120, wait: 0 })).toBe("under");
+  expect(card({ line: 190.27, name: 62.28, whole: 120, held: 120, wait: 0 })).toBe("under");
+  expect(card({ line: 222.83, name: 45.53, whole: 124.6, held: 60, wait: 37.34 })).toBe("under");
 });
 
 test("THE FIT, pure: a row's soul gives way first; a row goes under the name only where it holds a reason that warns or the glyph and the held part does not fit; a row that holds nothing never takes a second line, and with no room at all its facts are not drawn", async () => {

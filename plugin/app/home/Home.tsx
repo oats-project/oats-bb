@@ -337,7 +337,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   /** The mark and the age alone: they stand at the end of the name's line. */
   const waitInline = entry.status.state === "needs-you" && (waitSays ?? "") === "";
   const line = useRef<HTMLDivElement>(null);
-  const fit = useFit(line, "card", "oats-needs-where", true);
+  const fit = useFit(line, "card", "oats-needs-where");
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
@@ -503,8 +503,9 @@ export type Fit = "beside" | "under" | "split" | "none";
  * `holds`: a row holds a reason that warns or the glyph.
  */
 export function factsFit({ kind, line, name, gap, whole, held, least, wait, holds }: { kind: "card" | "row"; line: number; name: number; gap: number; whole: number; held: number; least: number; wait: number; holds: boolean }): Fit {
-  // (Half a pixel of grace: boxes are fractions, and a part that fits by its own measure must not go under by a rounding.)
-  const fits = (needed: number) => needed <= line + 0.5;
+  // (No grace: going under a fraction early costs nothing; staying beside a fraction late takes it from the soul, which
+  // is then cut where a second line would hold it whole.)
+  const fits = (needed: number) => needed <= line;
   if (kind === "card") {
     const tail = wait > 0 ? gap + wait : 0;
     if (fits(name + gap + whole + tail)) return "beside";
@@ -524,7 +525,8 @@ const SOUL_LEAST_EM = 1.5;
  * every draw, when the line's or the name's width changes, and when a font arrives. With no layout (nothing drawn: a
  * test's DOM), "beside".
  */
-function useFit(line: { current: HTMLElement | null }, kind: "card" | "row", factsId: string, card: boolean): Fit {
+function useFit(line: { current: HTMLElement | null }, kind: "card" | "row", factsId: string): Fit {
+  const card = kind === "card";
   const [fit, setFit] = useState<Fit>("beside");
   const measure = () => {
     const element = line.current;
@@ -537,7 +539,21 @@ function useFit(line: { current: HTMLElement | null }, kind: "card" | "row", fac
     }
     const em = parseFloat(getComputedStyle(facts).fontSize) || 12;
     const least = SOUL_LEAST_EM * em;
-    const full = (part: HTMLElement) => Math.max(part.scrollWidth, part.getBoundingClientRect().width);
+    // A part at its FULL width, shortened or not: the width of its WORDS (a range over its contents: a fraction, the
+    // same whether the part is squeezed or not; `scrollWidth` is a whole number and a squeezed box is the squeezed one),
+    // never less than its box (a part that is no text: the glyph).
+    const words = (part: HTMLElement) => {
+      if (typeof document.createRange !== "function") return 0;
+      const range = document.createRange();
+      range.selectNodeContents(part);
+      return typeof range.getBoundingClientRect === "function" ? range.getBoundingClientRect().width : 0;
+    };
+    const full = (part: HTMLElement) => {
+      const said = words(part);
+      // The soul is the one part that is ever squeezed: its words' width where the page can say it, else its scroll width.
+      if (part.getAttribute("data-phrase") === "soul") return said > 0 ? said : part.scrollWidth;
+      return Math.max(said, part.scrollWidth, part.getBoundingClientRect().width);
+    };
     // A reason is held on a card whatever its tone, on a row only where it warns (a plain one shortens, then leaves,
     // before anything else gives way: a row that draws one does not count it. No row of the home holds one today: a
     // guard, for a row that one day does).
@@ -563,6 +579,8 @@ function useFit(line: { current: HTMLElement | null }, kind: "card" | "row", fac
   useLayoutEffect(() => {
     const element = line.current;
     if (element === null) return undefined;
+    // (One frame of a resize can be painted with the fit of before; the next has the new one. Said, not mended: flushing
+    // it at once needs react-dom in the plugin's app, which it does not otherwise import.)
     const sized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     sized?.observe(element);
     if (element.firstElementChild !== null) sized?.observe(element.firstElementChild);
@@ -600,7 +618,7 @@ function AgentFacts({ entry, oats, testId, card = false, fit }: { entry: Entry; 
  */
 function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
   const line = useRef<HTMLSpanElement>(null);
-  const fit = useFit(line, "row", "oats-home-agent-where", false);
+  const fit = useFit(line, "row", "oats-home-agent-where");
   return (
     <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
       {/* ONE line at every width (the reader's P20: at 390 a long name sent its soul to a second line, its neighbours' stayed):

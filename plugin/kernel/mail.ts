@@ -263,7 +263,21 @@ export function parseMail(document: unknown): Result<MailPage> {
   return ok({ messages, unread, older: mail.hasMore && cursorUsable(mail.nextCursor) ? mail.nextCursor : null });
 }
 
+/**
+ * A refusal of the mail read with nothing of what the process PRINTED in it. The plugin's shared
+ * reader (kernel/envelope.ts) says what `oats` said when its output is no JSON document: the first
+ * lines of its stderr, else the first line of its stdout. For this verb that output is mail: an
+ * answer that ended part-way (the process ended by a signal, a pipe closed) is one line of JSON
+ * holding bodies, sent mail and addresses, and it would travel in the refusal's message, unfiltered.
+ * So of those two refusals only how the process ended is kept ("`oats` exited 1", "`oats` did not
+ * answer JSON"). A kernel's own refusal (`E_*`) is the kernel's sentence, which names no mail.
+ */
+export function withoutOutput<Value>(read: Result<Value>): Result<Value> {
+  if (read.ok || (read.error.code !== codes.notJson && read.error.code !== codes.failed)) return read;
+  return err(read.error.code, read.error.message.split(":")[0] ?? "");
+}
+
 export const verbs = (oats: Runner) => ({
   /** `oats operation run messaging:mail --home <abs> --arg limit=50 [--arg cursor=…] --json`: a read, and one that marks nothing read. */
-  mail: (home: string, cursor: string | null, signal?: AbortSignal): Promise<Result<MailPage>> => oats.run(mailArgv(home, cursor), parseMail, MAIL_TIMEOUT_MS, signal),
+  mail: async (home: string, cursor: string | null, signal?: AbortSignal): Promise<Result<MailPage>> => withoutOutput(await oats.run(mailArgv(home, cursor), parseMail, MAIL_TIMEOUT_MS, signal)),
 });

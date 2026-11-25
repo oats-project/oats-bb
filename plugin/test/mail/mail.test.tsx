@@ -267,6 +267,67 @@ test("a page that holds only mail the agent sent, with an older page: the older 
   expect(slot.queryByTestId("oats-mail-empty")).toBeNull();
 });
 
+test("the pages of one press are read one after another, never two at once, and reading stops at the first page that adds received mail", async () => {
+  const first = sentOnly();
+  const second = pending<MailPage>();
+  const asked: (string | null)[] = [];
+  const slot = mail({
+    mail: ({ older }) => {
+      asked.push(older);
+      if (asked.length === 1) return first;
+      if (asked.length === 2) return second.promise;
+      return recordedMail("mail-older-page.json");
+    },
+  });
+  await waitFor(() => expect(asked).toHaveLength(2));
+  // The second page is on its way: the third is not asked for before it answers.
+  await act(async () => void (await Promise.resolve()));
+  expect(asked).toEqual([null, first.older]);
+  // It answers with received mail: no third page is read.
+  await act(async () => second.resolve(recordedMail("mail-older-page.json")));
+  expect(rows(await slot.findByTestId("oats-mail-list"))).toHaveLength(1);
+  expect(asked).toHaveLength(2);
+});
+
+test("a Refresh while a press reads on: the pages of the press it replaced are not read further", async () => {
+  const second = pending<MailPage>();
+  const asked: (string | null)[] = [];
+  const slot = mailOf({
+    mail: ({ instance, older }) => {
+      if (instance !== AGENT) return recordedMail("mail-none.json");
+      asked.push(older);
+      return asked.length === 2 ? second.promise : sentOnly();
+    },
+  });
+  await waitFor(() => expect(asked).toHaveLength(2));
+  // Another agent is shown: the first agent's press is no longer the view's read.
+  act(() => showAgent("desktop-mockups-developer"));
+  await slot.findByTestId("oats-mail-empty");
+  await act(async () => second.resolve(sentOnly()));
+  await act(async () => void (await Promise.resolve()));
+  expect(asked).toHaveLength(2);
+});
+
+test("a message of an older page stays open when a read of the first page lands behind it", async () => {
+  const first = recordedMail("mail-first-page.json");
+  const again = pending<MailPage>();
+  let firsts = 0;
+  const slot = mail({ mail: ({ older }) => (older !== null ? recordedMail("mail-older-page.json") : ++firsts === 1 ? first : again.promise) });
+  await slot.findByTestId("oats-mail-list");
+  fireEvent.click(slot.getByTestId("oats-mail-older"));
+  await waitFor(() => expect(rows(slot.getByTestId("oats-mail-list"))).toHaveLength(3));
+  // The first page is read again (Refresh), and while it is on its way the older page's message is opened.
+  fireEvent.click(slot.getByTestId("oats-mail-refresh"));
+  fireEvent.click(rows(slot.getByTestId("oats-mail-list"))[2] as HTMLElement);
+  const message = await slot.findByTestId("oats-mail-message");
+  expect(text(message.querySelector("h3"))).toBe("Parser ready for a first read");
+  await act(async () => again.resolve(first));
+  // The read replaced the list with the first page alone: the message a person is reading stays.
+  expect(text(slot.getByTestId("oats-mail-message").querySelector("h3"))).toBe("Parser ready for a first read");
+  fireEvent.click(slot.getByTestId("oats-mail-back"));
+  expect(rows(await slot.findByTestId("oats-mail-list"))).toHaveLength(2);
+});
+
 test("pages of sent mail only, one after another: ONE press reads three pages and stops; no empty list is drawn and nothing says there is no mail; Older reads on", async () => {
   const slot = mail({ mail: () => sentOnly() });
   await slot.findByTestId("oats-mail-older");
@@ -380,6 +441,9 @@ test("an older page that cannot be read: the line with Retry, which asks for tha
   expect(text(notice.querySelector("h3"))).toBe("Reading took too long.");
   expect(rows(slot.getByTestId("oats-mail-list"))).toHaveLength(2);
   expect(slot.queryByTestId("oats-mail-older")).toBeNull();
+  // The notice stands where Older was, under the list; the head stays, so the first page can be read again whatever that page's refusal.
+  expect(slot.getByTestId("oats-mail-list").compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect((slot.getByTestId("oats-mail-refresh") as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(within(notice).getByTestId("oats-mail-retry"));
   await waitFor(() => expect(rows(slot.getByTestId("oats-mail-list"))).toHaveLength(3));
   expect(reads(slot).at(-1)).toEqual({ instance: AGENT, older: first.older });

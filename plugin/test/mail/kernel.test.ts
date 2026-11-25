@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { answerOf } from "../../kernel/envelope.js";
-import { MAIL_BODY_BYTES, MAIL_BODY_LINES, MAIL_TIMEOUT_MS, bodyLines, cursorUsable, mailArgv, mailPage, parseMail, verbs } from "../../kernel/mail.js";
+import { MAIL_BODY_BYTES, MAIL_BODY_LINES, MAIL_TIMEOUT_MS, bodyLines, cursorUsable, mailArgv, mailPage, parseMail, verbs, withoutOutput } from "../../kernel/mail.js";
 import type { Runner } from "../../kernel/runner.js";
 
 type Row = Record<string, unknown>;
@@ -305,6 +305,41 @@ describe("an answer outside the contract is refused whole (a recorded answer wit
 
   it.each([null, 1, "mail", [], {}])("%j is no answer", (document) => {
     expect(parseMail(document)).toEqual(BAD);
+  });
+});
+
+describe("an answer that ended part-way (the recorded mail, printed on one line as the kernel prints it, cut 40 characters short)", () => {
+  const cut = JSON.stringify(JSON.parse(file("mail.json"))).slice(0, -40);
+  const outcome = (code: number, signal: NodeJS.Signals | null, stderr = "") => answerOf({ kind: "exit", code, signal, stdout: cut, stderr }, "oats");
+
+  it("the shared reader quotes what the process printed: for this verb that is mail", () => {
+    const read = outcome(0, null);
+    expect(read.ok === false && read.error.code).toBe("OATS_NOT_JSON");
+    expect(JSON.stringify(read)).toContain("The parser is ready for a first read.");
+  });
+
+  it.each([
+    ["exit 0", () => outcome(0, null), { code: "OATS_NOT_JSON", message: "`oats` did not answer JSON" }],
+    ["ended by a signal", () => outcome(1, "SIGKILL"), { code: "OATS_FAILED", message: "`oats` was ended by SIGKILL" }],
+    ["exit 1, with something on stderr", () => outcome(1, null, "oats: internal error\nat a line of a body"), { code: "OATS_FAILED", message: "`oats` exited 1" }],
+  ])("%s: the mail read's refusal says how the process ended, and nothing of what it printed", (_name, read, error) => {
+    const refused = withoutOutput(read());
+    expect(refused).toEqual({ ok: false, error });
+    expect(JSON.stringify(refused)).not.toMatch(/parser|report|mail-writer|bold|body/i);
+  });
+
+  it("a kernel's own refusal, a timeout and an answer that was read are left as they are", () => {
+    const kernel = answered("refused-aw-too-old.json", 1);
+    expect(withoutOutput(kernel)).toBe(kernel);
+    const timeout = answerOf({ kind: "timeout", timeoutMs: 170_000 }, "oats");
+    expect(withoutOutput(timeout)).toBe(timeout);
+    const page = parseMail((answered("mail.json") as { value: unknown }).value);
+    expect(withoutOutput(page)).toBe(page);
+  });
+
+  it("the verb answers through it", async () => {
+    const runner = { run: () => Promise.resolve(outcome(0, null)) } as unknown as Runner;
+    expect(await verbs(runner).mail(HOME, null)).toEqual({ ok: false, error: { code: "OATS_NOT_JSON", message: "`oats` did not answer JSON" } });
   });
 });
 

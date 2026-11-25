@@ -97,11 +97,13 @@ function Message({ message, now, onBack }: { message: MailMessage; now: number; 
 export function Mail({ instance }: { instance: string }) {
   const mail = useMail(instance);
   const now = useNow();
-  const [open, setOpen] = useState<{ instance: string; key: string } | null>(null);
+  // The message a person opened, itself: it stays open whatever a read behind it does to the list (a
+  // first page read again replaces what older pages added, and the message may be of one of those).
+  const [open, setOpen] = useState<{ instance: string; message: MailMessage } | null>(null);
   /** The row a person came back from a message to: it takes the focus once. */
   const [cameFrom, setCameFrom] = useState<string | null>(null);
   const { held, fetching, error } = mail;
-  const shown = open !== null && open.instance === instance ? (held?.messages.find((message) => message.key === open.key) ?? null) : null;
+  const shown = open !== null && open.instance === instance ? open.message : null;
 
   if (shown !== null) {
     return (
@@ -118,7 +120,7 @@ export function Mail({ instance }: { instance: string }) {
     );
   }
 
-  const failed =
+  const notice =
     error === null ? null : (
       <Notice
         title={refusalLine(codeOf(error.text))}
@@ -133,7 +135,12 @@ export function Mail({ instance }: { instance: string }) {
         }
       />
     );
-  if (held === null) return <div data-testid="oats-mail">{failed ?? <Loading>{MAIL.reading}</Loading>}</div>;
+  if (held === null) return <div data-testid="oats-mail">{notice ?? <Loading>{MAIL.reading}</Loading>}</div>;
+  // The first page could not be read again: the notice stands in the head's place, and its Retry is the head's Refresh.
+  // An OLDER page could not be read: the head stays (Refresh reads the first page again, whatever that page's refusal),
+  // and the notice stands at the list's end, where "Older" was, with Retry for that page.
+  const failed = error?.of === "first" ? notice : null;
+  const failedOlder = error?.of === "older" ? notice : null;
 
   const readAgo = readAge(held.readAt, now);
   const old = now - held.readAt >= 60_000;
@@ -160,7 +167,7 @@ export function Mail({ instance }: { instance: string }) {
       ) : (
         <ul aria-label={MAIL.list} data-testid="oats-mail-list" className="flex min-w-0 flex-col">
           {held.messages.map((message) => (
-            <Row key={message.key} message={message} now={now} focus={cameFrom === message.key} onOpen={() => (setCameFrom(null), setOpen({ instance, key: message.key }))} />
+            <Row key={message.key} message={message} now={now} focus={cameFrom === message.key} onOpen={() => (setCameFrom(null), setOpen({ instance, message }))} />
           ))}
         </ul>
       )}
@@ -169,7 +176,8 @@ export function Mail({ instance }: { instance: string }) {
           {unreadLine(unread)}
         </p>
       ))}
-      {held.older === null || error?.of === "older" ? null : (
+      {failedOlder}
+      {held.older === null || failedOlder !== null ? null : (
         <div className="flex justify-end">
           <Button onClick={mail.readOlder} disabled={fetching !== null} data-testid="oats-mail-older">
             {fetching === "older" ? MAIL.reading : MAIL.older}

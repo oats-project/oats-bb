@@ -76,10 +76,10 @@ export function useMail(instance: string): MailRead {
       else {
         asked = flying.get(instance) ?? ask();
         if (!flying.has(instance)) {
-          const mine = asked;
-          flying.set(instance, mine);
-          const landed = () => void (flying.get(instance) === mine && flying.delete(instance));
-          mine.then(landed, landed);
+          const flight = asked;
+          flying.set(instance, flight);
+          const landed = () => void (flying.get(instance) === flight && flying.delete(instance));
+          flight.then(landed, landed);
         }
       }
       /** The pages after the first of this press, while a page added no received mail and an older one is there. */
@@ -87,7 +87,8 @@ export function useMail(instance: string): MailRead {
         const before = kept.get(instance);
         let next: Held = of === "older" && before !== undefined ? merged(before, first) : { messages: first.messages, unread: first.unread, older: first.older, readAt: Date.now() };
         let added = next.messages.length - (of === "older" && before !== undefined ? before.messages.length : 0);
-        for (let pages = 1; added === 0 && next.older !== null && pages < PAGES_A_PRESS; pages++) {
+        // One page after another, never two at once; and none once a newer read of this view took its place (a Refresh, another agent, the view gone).
+        for (let pages = 1; added === 0 && next.older !== null && pages < PAGES_A_PRESS && serial.current === mine; pages++) {
           const from = next.older;
           let page: MailPage;
           try {

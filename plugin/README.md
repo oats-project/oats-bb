@@ -823,7 +823,10 @@ others show. The app draws those lines as text: never markup, never a link. Only
 and only what is drawn, leaves the machine, with one opaque key a message (when it was sent, and
 a hash of its team and id, made on the machine: the app only compares it): no identity, no
 address, no message id, nothing of the
-mail the agent sent, and not the messaging layer's word for why a team's mail could not be read. Nothing of a message is ever logged, and no fixture is taken from a real
+mail the agent sent, and not the messaging layer's word for why a team's mail could not be read.
+Nor does what the process printed travel in a refusal: where `oats` ends with an answer that is
+no JSON (ended part-way), the plugin's other reads quote its first lines; for this read that
+output is mail, so the refusal says only how the process ended (`withoutOutput`). Nothing of a message is ever logged, and no fixture is taken from a real
 workspace (`test/fixtures/mail/README.md`).
 
 **What is said of a message.** "Unverified sender" (the messaging layer says unverified, or does

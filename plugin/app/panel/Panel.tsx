@@ -47,7 +47,7 @@ const TABS: readonly TabItem<TabId>[] = [
   { id: "instance", label: "Instance" },
   { id: "soul", label: "Soul" },
   // The agent's incoming mail, read-only: a view of its own (app/mail) that takes the agent's name and nothing of the panel's.
-  // Drawn only for an agent that has a messaging id (`tabsOf`): what cannot be done is not offered.
+  // Drawn only for an agent that has a messaging id (`NO_MAIL`): what cannot be done is not offered.
   { id: "mail", label: MAIL.tab },
 ];
 const NO_MAIL = TABS.filter((tab) => tab.id !== "mail");

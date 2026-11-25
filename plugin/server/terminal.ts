@@ -14,6 +14,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   async terminalCommand({ instance }, context) {
     const agent = await core.agentOf(instance);
     if (agent.backend !== "tmux") throw invalid(`${instance} does not run on tmux: it has no terminal`);
+    // (The roster this plugin reads names agents of the deployment's own machine alone today, `server: null`
+    // on every row: this holds the rule for a roster that names another.)
     if (agent.server !== null) throw invalid(`${instance} runs on another machine (${agent.server}): its terminal is opened from a terminal of your own`);
     if (agent.running !== true) throw invalid(`${instance} is not running: there is no session to show`);
     const { features } = await core.versionOf();

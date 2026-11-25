@@ -34,6 +34,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join } from "node:path";
 import { fill, launchBrowser, showSidebar, testId, textOf, visible } from "../../browser.mjs";
 import { sameImages } from "../../images.mjs";
+import { atomicWrite, completeLines } from "../../files.mjs";
 import { choose } from "../../scenes/spawn.mjs";
 import { Fixtures } from "../fixtures.mjs";
 
@@ -113,7 +114,7 @@ const untilRow = (instance, what, matches, seconds = 60) =>
 /** The pi mock's log (mock-openai.mjs): one line per request. Its chat requests that offer tools are the agents' turns. */
 const piRequests = () => {
   const file = join(REAL, "mock", "pi-requests.jsonl");
-  return existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+  return existsSync(file) ? completeLines(file).map((line) => JSON.parse(line)) : []; // (the mock appends while this reads)
 };
 const piTurns = () => piRequests().filter((request) => request.event !== "listed" && request.tools > 0);
 
@@ -262,10 +263,11 @@ try {
   const asInstalled = readFileSync(piSettings, "utf8");
   let refusedPreview;
   try {
-    writeFileSync(piSettings, `${JSON.stringify({ ...JSON.parse(asInstalled), packages: [] }, null, 2)}\n`);
+    // (Written whole and renamed into place, both times: bb's pi provider reads this file at every check, by itself.)
+    atomicWrite(piSettings, `${JSON.stringify({ ...JSON.parse(asInstalled), packages: [] }, null, 2)}\n`);
     refusedPreview = rpc("spawnPlan", { soul: SOUL, name: "pi-refused-developer", task: "", harness: "pi", model: MODEL });
   } finally {
-    writeFileSync(piSettings, asInstalled);
+    atomicWrite(piSettings, asInstalled);
   }
   const refusedCall = recorded(["spawn", SOUL], ["--preview", "pi-refused-developer"]);
   let refusal;

@@ -305,7 +305,7 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held, 
       )}
 
       {readState}
-      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} running={agent.running} lost={agent.sessionEnd === "lost"} instance={agent.instance} startedAt={agent.startedAt ?? null} now={now} terminal={agent.server === null ? { held } : null} />}
+      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} running={agent.running} lost={agent.sessionEnd === "lost"} instance={agent.instance} startedAt={agent.startedAt ?? null} now={now} held={held} />}
       <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : { name: agent.instance, root: answerRoot }} now={now} unread={unread} />
       {/* The header's claim is the roster's; a recorded activity that names a newer one asks for the roster again. */}
       <Activity instance={agent.instance} claimSince={agent.waiting?.since ?? null} onNewerClaim={oats.retry} now={now} unread={unread} />
@@ -314,7 +314,7 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held, 
 }
 
 /** `state` is the state the header says: what OATS says of an unreachable session is said there, once, and an agent that does not run was last started, not started. */
-function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt, now, terminal }: { oats: Roster; facts: PanelInstance; /** bb's Terminal tab on its session is offered (an agent on the machine that holds the deployment): `held` as the page's acts are; null: not offered (it runs on another server of OATS: the command to copy is the way) */ terminal: { held: boolean } | null; state: AgentState; /** the kernel's row says its session was lost (`sessionEnd: "lost"`): nobody stopped it */ lost: boolean; /** the kernel's own word of the roster's row, as `state` is read from it */ running: Agent["running"]; instance: string; /** the roster's own time of the session's last start: a stop recorded before it is not this stop */ startedAt: string | null; now: number }) {
+function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt, now, held }: { oats: Roster; facts: PanelInstance; /** the page's acts are off (the roster is the last one read, or it reads "Reading…"): so is Terminal, over the attach command */ held: boolean; state: AgentState; /** the kernel's row says its session was lost (`sessionEnd: "lost"`): nobody stopped it */ lost: boolean; /** the kernel's own word of the roster's row, as `state` is read from it */ running: Agent["running"]; instance: string; /** the roster's own time of the session's last start: a stop recorded before it is not this stop */ startedAt: string | null; now: number }) {
   const unreachable = state === "unreachable";
   // When OATS stopped it: the time of the instance's last recorded "stopped" (also for one that runs
   // outside OATS, which OATS recorded stopped). One read, for this agent, only while it is stopped.
@@ -490,7 +490,7 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
             {attachOffered(where?.where === "tmux session", running, state) ? (
               <div data-testid="oats-panel-attach" className="flex min-w-0 flex-col gap-1">
                 {/* bb's own Terminal tab, attached to its session (app/terminal): the command to copy stays under it, for a person's own terminal. */}
-                {terminal === null ? null : <TerminalButton instance={instance} held={terminal.held} />}
+                <TerminalButton instance={instance} held={held} />
                 <p className="m-0">{ATTACH}</p>
                 <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
                   <CommandText command={attachCommand(facts.home)} />

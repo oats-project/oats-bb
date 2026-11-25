@@ -3,7 +3,7 @@
 // a temporary tmux session linked to the agent's window alone and attaches the caller's terminal
 // to it, so it is never run by the plugin itself: bb's own Terminal tab runs it (app/terminal).
 // Closing the viewer leaves the agent running; typing in it types to the agent.
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 
 /** The kernel's features (`oats version --json`) that gate the viewer's two flags. */
@@ -14,9 +14,9 @@ export const DETACH_KEY = "C-\\";
 
 /**
  * The viewer's command for one home. `bin` is the ABSOLUTE path of `oats` on the machine that
- * holds the home: bb's terminal runs a command with the login shell's PATH, not the one the
- * plugin's host entry has (a spike of 25 Nov 2026: `oats` by name ended with status 127 there).
- * A flag is passed only where the kernel lists its feature.
+ * holds the home: a name is found only where the PATH of bb's terminal holds it, and it need not
+ * (a spike of 25 Nov 2026: `oats` by name ended with status 127 in bb's tab, on a machine whose
+ * plugin ran `oats` by the setting's path). A flag is passed only where the kernel lists its feature.
  */
 export function viewerArgv(bin: string, home: string, features: readonly string[]): string[] {
   return [
@@ -32,8 +32,9 @@ export function viewerArgv(bin: string, home: string, features: readonly string[
 
 /**
  * The absolute path of the `oats` this machine runs: the setting where it is one, else the first
- * executable `oats` on `path` (a PATH: the host entry's own, which is the user's login-shell
- * PATH). Null where there is none.
+ * executable FILE named `oats` on `path` (the host entry's own PATH, the one the plugin's `oats`
+ * is found on: a directory of that name, a checkout beside it, is passed over as a spawn passes
+ * it over). Null where there is none.
  */
 export function resolveBin(bin: string, path: string | undefined, executable: (file: string) => boolean = isExecutable): string | null {
   if (bin !== "") return isAbsolute(bin) && executable(bin) ? bin : null;
@@ -45,10 +46,10 @@ export function resolveBin(bin: string, path: string | undefined, executable: (f
   return null;
 }
 
-function isExecutable(file: string): boolean {
+export function isExecutable(file: string): boolean {
   try {
     accessSync(file, constants.X_OK);
-    return true;
+    return statSync(file).isFile();
   } catch {
     return false;
   }

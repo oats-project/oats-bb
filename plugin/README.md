@@ -785,13 +785,15 @@ its session: what a person sees and types there is the agent's own screen (`app/
   are passed only where `oats version --json` lists `session-attach-detach-key` and
   `session-attach-no-status-line`.
 - **One tab per agent.** The tab is titled with the agent's name; a press while a terminal of
-  that title still runs on that machine shows it again (also after a reload), never a second
-  viewer.
+  that title, in the agent's home, still runs on that machine shows it again (also after a
+  reload), never a second viewer. The title alone is no identity (two names can read the same
+  as words): the home is.
 - **When the tab does not come up** the page says ONE line, "Terminal did not open.", with a
   fold that says which it was: the command ended at once (the terminal is asked how it stands
   right after the open: `terminals.get`; bb's own answer to the open is no witness of a dead
-  terminal), bb showed no tab (the terminal is then closed again, `terminals.close`, so that no
-  viewer stays attached on no tab), or the server's own refusal.
+  terminal), bb showed no tab, or the server's or bb's own refusal. Whatever went wrong after
+  a terminal was created, it is closed again (`terminals.close`) before the page says so: no
+  viewer stays attached on no tab, where it would hold the agent's window to its size unseen.
 - **Only from the page.** bb shows a terminal for a plugin page; a click in the sidebar or the
   app overlay is declined (the terminal probe of 21 Nov 2026). The row of an agent on tmux has
   no menu (it has no bb thread): a click on it opens this page.
@@ -800,9 +802,11 @@ its session: what a person sees and types there is the agent's own screen (`app/
   shell); after a Start, the agent again. It is what the kernel's viewer shows in a person's own
   terminal. A session that is LOST (its window gone) ends the viewer, and bb closes the tab.
   The page's state line says what happened, and the button is gone with the state.
-- **Not offered** for an agent that does not run (no session to show), for one on a bb thread
-  (the kernel has no terminal for it: `E_SESSION_NO_TERMINAL`), and for one on another server
-  of OATS (the command to copy is the way there). The command to copy stays under the button.
+- **Not offered** for an agent that does not run (no session to show) and for one on a bb thread
+  (the kernel has no terminal for it: `E_SESSION_NO_TERMINAL`). The roster this plugin reads
+  names the agents of the machine that holds the deployment alone: none of another server of
+  OATS, so there is none to refuse. The command to copy stays under the button, for a person's
+  own terminal.
 - **Scrolling back:** the OATS tmux server has `mouse off`, so the wheel in bb's tab sends
   arrow keys to the agent; the viewer's own keys scroll (Shift+PageUp, or Ctrl+B then `[`).
 
@@ -1341,7 +1345,8 @@ watched reads), `experimental_useAppPanel` (`openTab`), `experimental_useTabVisi
 `experimental_resolveThreadStatus`, `useBbNavigate().experimental_openFilePreview` (Automations'
 Open file: a file of the machine that holds the deployment, in bb's own preview),
 `useBbNavigate().experimental_openTerminal` (a tmux agent's Terminal: if bb removes it the tab
-is never shown and the page says "Terminal did not open."; the command to copy stays).
+is never shown, the terminal made for it is closed again, and the page says "Terminal did not
+open."; the command to copy stays).
 
 App tests: `renderSlot`'s `experimental_panel`, and its `inspection.experimental_panelCalls`.
 

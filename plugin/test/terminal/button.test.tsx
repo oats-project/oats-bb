@@ -21,7 +21,7 @@ afterEach(() => {
 const CHILD = "panel-worktree-helper";
 const TITLE = "Panel worktree helper";
 
-type Session = { id: string; title: string | null; status: string; exitCode?: number | null };
+type Session = { id: string; title: string | null; status: string; exitCode?: number | null; initialCwd?: string | null };
 /** bb's terminals for the page: what exists, what a created one is when it is asked, and what bb answers to the open. */
 function bb(given: { sessions?: Session[]; after?: { status: string; exitCode?: number | null }; shown?: boolean } = {}) {
   const sessions = [...(given.sessions ?? [])];
@@ -33,7 +33,7 @@ function bb(given: { sessions?: Session[]; after?: { status: string; exitCode?: 
     },
     create: async ({ title, start, scope }: { title: string; start: { argv: string[] }; scope: { hostId: string; cwd: string } }) => {
       calls.push(`create ${scope.hostId} "${title}" ${start.argv.join(" ")}`);
-      const made = { id: "term_new", title, status: "running" };
+      const made = { id: "term_new", title, status: "running", initialCwd: scope.cwd };
       sessions.push(made);
       return made;
     },
@@ -96,6 +96,11 @@ test("no Terminal where there is no session to show: stopped, lost, unreachable,
     expect(button(slot), what).toBeNull();
     resetApp();
   }
+  // On a bb thread (the panel's agent as recorded): its screen is bb's own thread.
+  await loadApp();
+  const onBb = renderSlot<{ instance: string }, Contract>({ component: InstancePanel }, { instance: CHILD }, { rpc: handlers({ snapshot: () => panelSnapshot(panelAgents()), panelInstance: ({ instance }) => instanceAnswer(instance) }), sidebarThreads: panelThreads(panelAgents()) });
+  await onBb.findByTestId("oats-panel-session");
+  expect(button(onBb)).toBeNull();
 });
 
 test("a press asks the server for the command, then bb: one terminal on the deployment's machine, titled with the agent's name, shown; nothing is said", async () => {
@@ -111,7 +116,7 @@ test("a press asks the server for the command, then bb: one terminal on the depl
 });
 
 test("pressed again while its tab is open: the same terminal is shown, none is created", async () => {
-  const { calls, options } = bb({ sessions: [{ id: "term_held", title: TITLE, status: "running" }] });
+  const { calls, options } = bb({ sessions: [{ id: "term_held", title: TITLE, status: "running", initialCwd: commandFor(CHILD).cwd }] });
   const slot = await page({}, options);
   await press(slot);
   expect(calls).toEqual([`list ${HOST}`, "get term_held"]);
@@ -140,6 +145,23 @@ test("bb showed no tab: the same one line, the fold says so, and the terminal is
   expect(within(slot.getByTestId("oats-terminal-failed")).getByTestId("oats-terminal-said").textContent).toBe("Terminal did not open.");
   expect(Array.from(slot.getByTestId("oats-terminal-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual([commandFor(CHILD).argv.join(" "), "bb did not show it."]);
   expect(calls.at(-1)).toBe("close term_new force");
+});
+
+test("two presses of one moment are one open", async () => {
+  const { calls, options } = bb();
+  const slot = await page({}, options);
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  // Both in ONE act: the second lands before the button is drawn off.
+  act(() => {
+    slot.getByTestId("oats-terminal-open").click();
+    slot.getByTestId("oats-terminal-open").click();
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(SETTLE_MS + 50);
+  });
+  vi.useRealTimers();
+  expect(calls.filter((call) => call.startsWith("list"))).toHaveLength(1);
+  expect(calls.filter((call) => call.startsWith("create"))).toHaveLength(1);
 });
 
 test("the server refuses (no oats found on the machine): the same one line, with the server's own words under Details, and bb is not asked", async () => {

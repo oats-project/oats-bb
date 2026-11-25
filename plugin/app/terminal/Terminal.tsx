@@ -9,7 +9,7 @@ import { Button } from "../ui";
 import { Disclosure } from "../ui/patterns";
 import { agentName } from "../ui/words";
 import { openTerminal, type Opened, type TerminalIo } from "./open";
-import { DECLINED_SAID, DID_NOT_OPEN, endedSaid, failedSaid, TERMINAL } from "./words";
+import { DECLINED_SAID, DID_NOT_OPEN, endedSaid, TERMINAL } from "./words";
 
 type Failed = { command: string | null; said: string };
 
@@ -35,6 +35,7 @@ export function TerminalButton({ instance, held }: { instance: string; held: boo
       alive.current = false;
     };
   }, []);
+  // One press is one open: the ref holds a second press of the same moment, before the button is drawn off.
   const going = useRef(false);
   const open = async () => {
     if (going.current) return;
@@ -61,7 +62,7 @@ export function TerminalButton({ instance, held }: { instance: string; held: boo
     if (!alive.current) return;
     setBusy(false);
     if (outcome.kind === "opened") return;
-    setFailed({ command, said: outcome.kind === "ended" ? endedSaid(outcome.status) : outcome.kind === "declined" ? DECLINED_SAID : failedSaid(outcome.message) });
+    setFailed({ command, said: outcome.kind === "ended" ? endedSaid(outcome.status) : outcome.kind === "declined" ? DECLINED_SAID : outcome.message });
   };
   return (
     <div data-testid="oats-terminal" className="flex min-w-0 flex-col gap-1">

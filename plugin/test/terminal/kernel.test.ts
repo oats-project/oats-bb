@@ -1,6 +1,9 @@
 // The viewer's command, and where this machine's `oats` is (kernel/terminal.ts).
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { DETACH_KEY_FEATURE, NO_STATUS_LINE_FEATURE, resolveBin, viewerArgv } from "../../kernel/terminal";
+import { DETACH_KEY_FEATURE, isExecutable, NO_STATUS_LINE_FEATURE, resolveBin, viewerArgv } from "../../kernel/terminal";
 
 const HOME = "/srv/oats/agents/oats-developer/instances/kernel-fix-developer";
 
@@ -29,6 +32,23 @@ describe("where this machine's oats is", () => {
   test("else the first executable `oats` on the PATH, as an absolute path", () => {
     expect(resolveBin("", "/nope:/home/joan/.local/bin:/usr/bin", executable)).toBe("/home/joan/.local/bin/oats");
     expect(resolveBin("", "/usr/bin", executable)).toBe("/usr/bin/oats");
+  });
+  test("on a real disk: an executable FILE is one; a directory of that name is passed over, as a spawn passes it over", () => {
+    const root = mkdtempSync(join(tmpdir(), "bb-plugin-oats-terminal-"));
+    try {
+      // `<root>/work/oats` is a checkout (a directory, which anyone may enter); `<root>/bin/oats` is the command.
+      mkdirSync(join(root, "work", "oats"), { recursive: true });
+      mkdirSync(join(root, "bin"));
+      writeFileSync(join(root, "bin", "oats"), "#!/bin/sh\n");
+      chmodSync(join(root, "bin", "oats"), 0o755);
+      writeFileSync(join(root, "bin", "plain"), "not a command\n");
+      chmodSync(join(root, "bin", "plain"), 0o644);
+      expect([isExecutable(join(root, "work", "oats")), isExecutable(join(root, "bin", "oats")), isExecutable(join(root, "bin", "plain")), isExecutable(join(root, "none"))]).toEqual([false, true, false, false]);
+      expect(resolveBin("", `${join(root, "work")}:${join(root, "bin")}`)).toBe(join(root, "bin", "oats"));
+      expect(resolveBin(join(root, "work", "oats"), "")).toBeNull();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
   test("a relative or empty entry of the PATH is never searched; no oats is null", () => {
     expect(resolveBin("", ".::bin:/nope", executable)).toBeNull();

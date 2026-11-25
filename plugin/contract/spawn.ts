@@ -65,12 +65,7 @@ const plan = z.object({ facts: spawnFacts, revision: z.string() });
  * declares, in its order. `hostId` is the bb machine that holds the deployment, where bb's own
  * list of a harness's models is asked (app/spawn/models.ts); null before it is found.
  */
-export const harnessList = z.object({
-  harnesses: z.array(z.string()),
-  hostId: z.string().nullable(),
-  /** false: the deployment has no bb session provider (the kernel knows no capability `oats.bb`). A spawn there is not a bb thread: no harness to choose, and the kernel decides where it runs. Left out by an older server: there is one. */
-  provider: z.boolean().optional(),
-});
+export const harnessList = z.object({ harnesses: z.array(z.string()), hostId: z.string().nullable() });
 export type HarnessList = z.infer<typeof harnessList>;
 
 export const rpc = defineRpcContract({
@@ -92,24 +87,17 @@ export const rpc = defineRpcContract({
    */
   spawn: {
     input: spawnInput.extend({ key, revision: z.string().min(1).max(128).optional() }).strict(),
-    /** `threadId`: the new agent's bb thread; null for an agent that has none (a deployment with no bb session provider: it runs where the kernel decided). */
-    output: z.object({ instance: z.string(), threadId: z.string().nullable() }),
+    output: z.object({ instance: z.string(), threadId: z.string() }),
   },
 });
 
 /** As the server hands a relation to the host entry: with the anchor's agents root (`--relative-root`), from the home the roster's own row of it names; left out when that home names none. */
 const hostRelation = spawnRelation.extend({ root: z.string().min(1).optional() }).strict();
-const hostSpawn = z.object({
-  ...hostBase,
-  ...spawnInput.shape,
-  relation: hostRelation.optional(),
-  /** false: the deployment has no bb session provider (the server's own read of it): the spawn names no backend. */
-  provider: z.boolean().optional(),
-});
+const hostSpawn = z.object({ ...hostBase, ...spawnInput.shape, relation: hostRelation.optional() });
 
 export const host = defineRpcContract({
   /** `oats capabilities show oats.bb --json`: the harnesses the provider declares, and the provider's own version as the kernel prints it (null when it prints none that can be read). */
-  spawnHarnesses: { experimental_retryable: true, input: z.object(hostBase).strict(), output: answer(z.object({ harnesses: z.array(z.string()), version: z.string().nullable(), /** the deployment has no bb session provider at all */ absent: z.boolean().optional() })) },
+  spawnHarnesses: { experimental_retryable: true, input: z.object(hostBase).strict(), output: answer(z.object({ harnesses: z.array(z.string()), version: z.string().nullable() })) },
   /**
    * `revision` is the kernel's decision revision for these choices; `summary` is for a soul's
    * page, `facts` for the form; `problem` is why this preview is no decision a spawn could apply

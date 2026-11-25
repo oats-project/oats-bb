@@ -54,8 +54,6 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
    */
   const checked = async ({ soul, name, task, harness, model, relation }: Choices): Promise<HostChoices> => {
     if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
-    // A deployment with no bb session provider: the spawn names no backend (and no harness: there is no list to name one of).
-    const absent = (await providerOf(core)).absent === true;
     if (harness !== undefined) {
       const named = checkHarness(harness, await harnessesOf(core));
       if (!named.ok) throw invalid(named.error.message);
@@ -72,13 +70,12 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       anchor = { ...relation, ...(root === null ? {} : { root }) };
     }
     // Only what was chosen goes to the host entry: a call carries no key without a value.
-    return { soul, task, ...(name === undefined ? {} : { name }), ...(harness === undefined ? {} : { harness }), ...(model === undefined ? {} : { model }), ...(anchor === undefined ? {} : { relation: anchor }), ...(absent ? { provider: false } : {}) };
+    return { soul, task, ...(name === undefined ? {} : { name }), ...(harness === undefined ? {} : { harness }), ...(model === undefined ? {} : { model }), ...(anchor === undefined ? {} : { relation: anchor }) };
   };
   return {
     /** What the bb session provider declares: one read for every client and every place that offers the choice. */
     async spawnHarnesses() {
-      const provider = await providerOf(core);
-      return { harnesses: provider.harnesses, hostId: core.target()?.hostId ?? null, provider: provider.absent !== true };
+      return { harnesses: await harnessesOf(core), hostId: core.target()?.hostId ?? null };
     },
     async spawnPreview(input, context) {
       const { summary } = await core.call("spawnPreview", await checked(input), HOST_TIMEOUT.preview, context.experimental_signal);
@@ -116,8 +113,6 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       } finally {
         core.rereadSoon();
       }
-      // Where the deployment has no bb session provider the new agent has no bb thread, and none is asked for: it runs where the kernel decided.
-      if (choices.provider === false) return { instance: spawned.instance, threadId: spawned.threadId };
       return { instance: spawned.instance, threadId: await core.threadOf(spawned.instance, spawned.threadId, "Spawned") };
     },
   };

@@ -39,7 +39,7 @@ describe("the harnesses the bb session provider declares", () => {
   it("the server reads it once for every client and names the machine bb's models are asked of", async () => {
     backend = await startBackend();
     const [first, second] = await Promise.all([backend.rpc<{ harnesses: string[]; hostId: string | null }>("spawnHarnesses"), backend.rpc<{ harnesses: string[]; hostId: string | null }>("spawnHarnesses")]);
-    expect(first).toEqual({ harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true });
+    expect(first).toEqual({ harnesses: ["claude", "pi"], hostId: "host_falcon" });
     expect(second).toEqual(first);
     const calls = (await backend.fake.calls()).filter((call) => call.verb === "capabilities show");
     expect(calls.map((call) => call.argv)).toEqual([["capabilities", "show", "oats.bb", "--json"]]);
@@ -47,33 +47,10 @@ describe("the harnesses the bb session provider declares", () => {
   });
 
   it("the kernel's refusal is shown with its code and message; bb may retry the read", async () => {
-    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_WORKSPACE_INVALID", message: "oats-workspace.yaml: capabilities must be a list" } });
+    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace' } });
     backend = await startBackend({ verbs: { "capabilities show": { stdout: refusal } } });
-    await expect(backend.rpc("spawnHarnesses")).rejects.toThrow("E_WORKSPACE_INVALID: oats-workspace.yaml: capabilities must be a list");
+    await expect(backend.rpc("spawnHarnesses")).rejects.toThrow('E_CAPABILITY_UNKNOWN: no capability "oats.bb" in this workspace');
     expect("experimental_retryable" in host.spawnHarnesses && host.spawnHarnesses.experimental_retryable).toBe(true);
-  });
-
-  // A deployment that does not have the bb session provider at all: the kernel knows no capability `oats.bb`.
-  const ABSENT = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace' } });
-  it("a deployment with NO bb session provider is an answer, not a failed read: no harness, and `provider: false`", async () => {
-    backend = await startBackend({ verbs: { "capabilities show": { stdout: ABSENT } } });
-    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", provider: false });
-  });
-
-  it("there a preview and a spawn name NO backend, no mode and no harness: the kernel decides, as `oats spawn <soul>` does; a harness named is refused before any process", async () => {
-    backend = await startBackend({ verbs: { "capabilities show": { stdout: ABSENT } } });
-    await backend.rpc("spawnPlan", { soul: "oats-developer", task: "" });
-    await backend.rpc("spawn", { soul: "oats-developer", task: "", key: "spawn-0a1b2c3d" });
-    const calls = (await backend.fake.calls()).filter((call) => call.verb === "spawn --preview" || call.verb === "spawn");
-    expect(calls.length).toBeGreaterThanOrEqual(2);
-    for (const call of calls) {
-      expect(call.argv.slice(0, 2), call.verb).toEqual(["spawn", "oats-developer"]);
-      for (const flag of ["--backend", "--yolo", "--harness", "--model"]) expect(call.argv, `${call.verb} ${flag}`).not.toContain(flag);
-    }
-    const before = (await backend.fake.calls()).length;
-    await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", harness: "pi" })).rejects.toThrow('"pi" is not a harness the bb session provider declares (none)');
-    expect((await backend.fake.calls()).filter((call) => call.verb.startsWith("spawn")).length).toBe(calls.length);
-    expect((await backend.fake.calls()).length).toBeGreaterThanOrEqual(before);
   });
 });
 

@@ -755,12 +755,12 @@ test("no bb session provider, while the roster cannot be read: the roster's noti
   expect(slot.queryByTestId("oats-notice")).toBeNull();
 });
 
-test("the bb session provider is pinned and not synced: ONE line with the way on (oats sync), the kernel's sentence under Details, Retry; no preview is asked, the fields and Spawn are held; after the sync, Retry opens the form", async () => {
+test("the bb session provider is pinned and not synced: ONE line, \"bb is not synced. Run oats sync.\", the command in the code face, the kernel's sentence under Details, Retry; no preview is asked, the fields and Spawn are held; after the sync, Retry opens the form", async () => {
   const kernelSays = "package oats.bb is not in the lock — run `oats sync`";
   let synced = false;
   const slot = await form("oats-developer", previews({ spawnHarnesses: () => (synced ? { harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true } : { harnesses: [], hostId: "host_falcon", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: kernelSays } }) }));
   const notice = within(await slot.findByTestId("oats-spawn-not-synced")).getByTestId("oats-notice");
-  expect(notice.querySelector("h3")!.textContent).toBe("bb is not synced for this workspace: run oats sync.");
+  expect([notice.querySelector("h3")!.textContent, notice.querySelector("p")!.textContent, notice.querySelector("p code")!.textContent]).toEqual(["bb is not synced.", "Run oats sync.", "oats sync"]);
   expect(slot.getAllByTestId("oats-notice")).toHaveLength(1);
   // The kernel's own code and sentence, one press away; nothing red, no "could not be read".
   expect(notice.querySelector("details")!.textContent).toContain(`E_CAPABILITY_UNKNOWN: ${kernelSays}`);
@@ -772,7 +772,7 @@ test("the bb session provider is pinned and not synced: ONE line with the way on
   expect(calls(slot, "spawnPlan")).toEqual([]);
   expect(fieldset(slot).disabled).toBe(true);
   expect(submit(slot).disabled).toBe(true);
-  expect(describedBy(slot)).toContain("bb is not synced for this workspace: run oats sync.");
+  expect(describedBy(slot)).toContain("bb is not synced.Run oats sync.");
   // `oats sync` has run: Retry reads again, the line goes and the form asks its preview.
   synced = true;
   fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));

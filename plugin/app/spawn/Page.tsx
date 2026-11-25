@@ -30,7 +30,7 @@ import { RosterNotice } from "../roster/unreadable";
 import { errorMessage, onWindowReset, useRead } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { notify } from "../ui";
-import { Button, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading, Notice, Page, Result, Section, Segmented } from "../ui";
+import { Button, Code, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading, Notice, Page, Result, Section, Segmented } from "../ui";
 import { refusalCode, refusalLines, shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { Choice } from "./Choice";
@@ -680,7 +680,13 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         {/* The provider is pinned and not synced: said ONCE, with the way on; the kernel's own code and sentence under Details; Retry reads again once `oats sync` has run. Spawn is described by it. */}
         {unsynced === null || held ? null : (
           <div id={SAYS.unsynced} data-testid="oats-spawn-not-synced">
-            <Notice title={W.NOT_SYNCED} details={`${unsynced.code}: ${unsynced.message}`} actions={<Button onClick={harnesses.retry}>{W.RETRY_HARNESSES}</Button>} />
+            <Notice title={W.NOT_SYNCED} details={`${unsynced.code}: ${unsynced.message}`} actions={<Button onClick={harnesses.retry}>{W.RETRY_HARNESSES}</Button>}>
+              <p>
+                {W.NOT_SYNCED_WAY.before}
+                <Code>{W.NOT_SYNCED_WAY.command}</Code>
+                {W.NOT_SYNCED_WAY.after}
+              </p>
+            </Notice>
           </div>
         )}
         {/* While OATS cannot be read the roster's notice says so, alone: never a second one for the same cause. */}

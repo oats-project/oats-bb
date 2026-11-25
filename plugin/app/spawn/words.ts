@@ -9,8 +9,12 @@ export const TITLE = "New agent";
 
 export const SOUL_LABEL = "Soul";
 export const CHOOSE_SOUL = "Choose a soul…";
-/** The workspace pins the bb session provider and it is not synced yet: the form's ONE line, with the way on. The kernel's own sentence and code are under its Details. */
-export const NOT_SYNCED = "bb is not synced for this workspace: run oats sync.";
+/**
+ * The workspace pins the bb session provider and it is not synced yet: the form's ONE line, two short sentences (ruled):
+ * "bb is not synced. Run oats sync.", the command in the code face. The kernel's own sentence and code are under its Details.
+ */
+export const NOT_SYNCED = "bb is not synced.";
+export const NOT_SYNCED_WAY = { before: "Run ", command: "oats sync", after: "." } as const;
 /** The Model field where a model is required and nothing is its default: what it wants, as the Soul field says it. */
 export const CHOOSE_MODEL = "Choose a model…";
 export const READING_SOULS = "Reading the souls…";

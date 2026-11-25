@@ -1021,9 +1021,12 @@ export default [
         const all = await page.until(`${cards} >= 11 ? String(${cards}) : ""`, 30);
         check(Number(all) >= 11, `${at} with the rest shown the busy home draws a card for each agent that asks (eleven) and each that runs outside OATS`, all ?? (await page.evaluate(`String(${cards})`)));
         note("the home with every card", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: Math.round((document.scrollingElement?.scrollHeight ?? 0) / window.innerHeight * 10) / 10 })`));
+        // The cards the press added, from the first of them.
+        await page.evaluate(`(() => { const all = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})]; all[Math.min(8, all.length - 1)]?.scrollIntoView({ block: "start" }); return "1"; })()`);
         await page.shot(`busy-${viewport.name}-home-all-cards`);
       }
-      await page.evaluate(`(() => { const all = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})]; all.at(-1)?.scrollIntoView({ block: "start" }); return "1"; })()`);
+      // Under the cards: the rest of the home (its agents, its pages).
+      await page.evaluate(`(() => { const needs = document.querySelector(${JSON.stringify(testId("oats-home-needs"))}); (needs?.nextElementSibling ?? needs)?.scrollIntoView({ block: "start" }); return "1"; })()`);
       await page.shot(`busy-${viewport.name}-home-after-the-cards`);
       // THE BUSY CHAT: the thread of the agent with the long conversation and the full board (nine questions, twelve
       // facts), as its conversation and with the agent's panel (at the phone's width: the agent's own page).
@@ -1037,7 +1040,14 @@ export default [
       const last = chat.turns.at(-1).agent.slice(0, 40);
       const read = await page.until(`document.body.innerText.includes(${JSON.stringify(last)}) ? "1" : ""`, 60);
       check(read === "1", `${at} the busy chat's thread shows its conversation, to its last answer`, "the last answer is not on the page");
-      await page.shot(`busy-${viewport.name}-chat`);
+      // (At the phone's width the contrast read finds nothing of the plugin's on a thread: the sidebar is away.)
+      await page.shot(`busy-${viewport.name}-chat`, { plugin: !viewport.mobile });
+      // Its start: the first message and the first long answer (a list).
+      const first = chat.turns[0].agent.slice(0, 40);
+      await page.evaluate(`(() => { const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let node; while ((node = walker.nextNode())) if (node.textContent.includes(${JSON.stringify(first)})) { node.parentElement.scrollIntoView({ block: "start" }); return "1"; } return ""; })()`);
+      const top = await page.until(`(() => { const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let node; while ((node = walker.nextNode())) if (node.textContent.includes(${JSON.stringify(first)})) { const box = node.parentElement.getBoundingClientRect(); return box.top >= 0 && box.top < window.innerHeight ? "1" : ""; } return ""; })()`, 20);
+      check(top === "1", `${at} the busy chat's first answer is on the page, as the mock model said it`, "the first answer's opening words are not on the screen");
+      await page.shot(`busy-${viewport.name}-chat-start`, { plugin: !viewport.mobile });
       const chip = await page.until(visible(testId("oats-open-panel")), 30);
       check(Boolean(chip), `${at} the busy chat's thread carries the OATS chip`);
       if (!chip) return;

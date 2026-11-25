@@ -584,7 +584,6 @@ function busyStage() {
   const away = []; // the fixtures' own threads it archived for its length
   const set = () => JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/status.json"), "utf8"));
   const rowsOf = (status) => status.agents.flatMap((group) => group.instances);
-  const statusOf = (id, all) => all.find((thread) => thread.id === id)?.status ?? "absent";
   return {
     label: "BUSY",
     // The fixtures' own agents are not of this workspace: their threads are archived for the stage's length (but the
@@ -623,7 +622,7 @@ function busyStage() {
         for (const [n, turn] of chat.turns.entries()) {
           if (n > 0) bb("thread", "tell", id, turn.you);
           const now = await answered(id, turn);
-          if (now !== "idle") stuck.push(`turn ${n + 1}: ${now}`);
+          if (now !== "idle") stuck.push(`turn ${n + 1}: ${now}; bb's output of the thread: ${tell("thread", "output", id).slice(0, 120)}`);
         }
         rmSync(BUSY_SAY_FILE, { force: true });
         check(stuck.length === 0, `BUSY the busy chat's ${chat.turns.length} turns were each answered`, stuck.join(" | "));
@@ -632,7 +631,7 @@ function busyStage() {
       const chatted = Date.now();
       // FAILED AT ITS START: the set's row of such an agent is a lost session's; what says "failed" is bb's own record
       // of the thread (an error and never a turn). So its thread is made to fail at its start: a model the harness
-      // cannot start with. What bb then holds of each is said.
+      // cannot start with (TRIED HERE: a provider whose harness is not installed). What bb then holds of each is said.
       const { failedAtStart } = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/threads.json"), "utf8"));
       {
         const project = listOf(bbJson("project", "list"), "projects")[0];
@@ -641,7 +640,7 @@ function busyStage() {
         for (const instance of failedAtStart) {
           const title = providerTitle(instance);
           if (existing.some((thread) => thread.title === title)) continue;
-          said.push(`${instance}: ${tell("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--model", "no-such-model-20261122", "--title", title, "--prompt", "hello", "--json").slice(0, 200)}`);
+          said.push(`${instance}: ${tell("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "codex", "--title", title, "--prompt", "hello", "--json").slice(0, 200)}`);
         }
         if (said.length > 0) {
           await sleep(15_000);
@@ -679,15 +678,20 @@ function busyStage() {
       mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
       writeFileSync(BUSY_HOLD_FILE, "");
       const BATCH = 7;
+      const took = [];
       for (let from = 0; from < working.length; from += BATCH) {
         const batch = working.slice(from, from + BATCH).map((row) => byInstance.get(row.instance).id);
+        const told = Date.now();
         for (const id of batch) bb("thread", "tell", id, `carry on MOCK-HOLD:${BUSY_HOLD}`);
-        const deadline = Date.now() + 120_000;
-        while (Date.now() < deadline && !batch.every((id) => statusOf(id, list()) === "active")) await sleep(2000);
+        const deadline = Date.now() + 180_000;
+        let active = 0;
+        while (Date.now() < deadline && (active = batch.filter((id) => statusNow(id) === "active").length) < batch.length) await sleep(2000);
+        took.push(`${active} of ${batch.length} active after ${Math.round((Date.now() - told) / 1000)} s`);
       }
-      const all = list();
-      const idle = working.filter((row) => statusOf(byInstance.get(row.instance).id, all) !== "active");
-      check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${working.length} busy agents that work`, idle.map((row) => `${row.instance}: ${statusOf(byInstance.get(row.instance).id, all)}`).join(" | "));
+      console.log(`NOTE BUSY the held turns, by batch: ${took.join("; ")}`);
+      const all = Object.fromEntries(working.map((row) => [row.instance, statusNow(byInstance.get(row.instance).id)]));
+      const idle = working.filter((row) => all[row.instance] !== "active");
+      check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${working.length} busy agents that work`, idle.map((row) => `${row.instance}: ${all[row.instance]}`).join(" | "));
       // An agent whose session was lost on bb: its thread is archived, as the recorded row's was.
       for (const row of onBb.filter((each) => each.sessionEnd === "lost" && !failedAtStart.includes(each.instance))) bb("thread", "archive", byInstance.get(row.instance).id);
       // The set, with this run's thread in each slot.

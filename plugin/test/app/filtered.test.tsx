@@ -104,7 +104,9 @@ test("a soul's page: its description and its problem, and a capability's descrip
   soul.unmount();
   // A refusal keeps its code; what is unsafe in its message is withheld whole.
   const broken = await page("souls", "broken-soul", handlers({ souls: () => ({ souls }) }));
-  expect((await broken.findByTestId("oats-soul-problem")).textContent).toBe("E_SOUL_INVALID: [withheld]");
+  await broken.findByTestId("oats-soul-detail");
+  // (The kernel's words on why it cannot be spawned are under the page's Details.)
+  expect(Array.from(broken.getByTestId("oats-soul-details").querySelectorAll("p")).map((line) => line.textContent)).toContain("E_SOUL_INVALID: [withheld]");
   broken.unmount();
   const capabilities = await page(
     "capabilities",
@@ -114,20 +116,4 @@ test("a soul's page: its description and its problem, and a capability's descrip
   const capability = await capabilities.findByTestId("oats-capability-row");
   expect(capability.querySelector("span")!.textContent).toBe(`oats${GONE}core`);
   expect(capability.querySelector("p")!.textContent).toBe("[withheld]");
-});
-
-test("the spawn preview: each of the kernel's items is one filtered line", async () => {
-  const slot = await page(
-    "souls",
-    "oats-developer",
-    handlers({
-      spawnPreview: () => ({ summary: { modules: ["oats.core\t2.6.0"], teams: [`oats${BIDI}`], launch: "claude ·\nopus", warnings: ["the hook printed token: abc123"], problems: ["no clone\nof the repository"] } }),
-    }),
-  );
-  await slot.findByTestId("oats-spawn-form");
-  fireEvent.change(slot.getByTestId("oats-spawn-name"), { target: { value: "ranker-v4-probe" } });
-  fireEvent.change(slot.getByTestId("oats-spawn-task"), { target: { value: "Sweep." } });
-  fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-  const preview = await slot.findByTestId("oats-preview");
-  await waitFor(() => expect(Array.from(preview.querySelectorAll("li")).map((item) => item.textContent)).toEqual(["no clone of the repository", "[withheld]", "oats.core 2.6.0", `oats${GONE}`, "claude · opus"]));
 });

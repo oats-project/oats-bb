@@ -1,21 +1,26 @@
-// Souls (`oats souls --json`): the deployment's souls, each with its agents here, and the New
-// agent form (app/spawn/) on a soul that can be spawned.
-import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
-import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import { askPlan, run } from "../lifecycle/acts";
-import { count } from "../format";
-import { hasAgentPage, openAgentPage } from "../home/agent-tab";
+// Souls (`oats souls --json`): the deployment's souls, grouped by where they come from, and a
+// soul's own page: what it does, what its agents start with, its teams, its capabilities and why
+// it has each, its agents here, and New agent, which opens the form with that soul chosen.
+// (The audit of the hidden pages and its ruling, 25 Nov 2026: S1 to S8, P1 to P16.)
+import { useState } from "react";
+import { useBbNavigate } from "@get-bb/plugin-sdk/app";
+import type { BbNavigate, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
+import { rest } from "../../model/rest";
+import type { Agent } from "../../model/types";
+import { openAgentPage } from "../home/agent-tab";
+import { useCli } from "../home/cli";
 import { useOats } from "../oats";
-import { RosterNotice } from "../roster/unreadable";
 import type { Oats } from "../oats";
-import { NewAgent } from "../spawn/NewAgent";
-import { openSoul } from "./pages";
+import { DetachedActs, outsideOf, rowParts, rowWords } from "../outside";
+import { agentStatus, rowState } from "../roster/status";
+import { useNow } from "../roster/now";
 import { useRead } from "../store";
-import type { Contract, Result } from "../store";
-import { Button, Chip, Dot, ErrorLine, Heading, Lines, Loading, Note, plainClick } from "../ui";
-import { Frame } from "./Workspace";
+import type { Result } from "../store";
+import { Button, DisabledReason, Disclosure, Fact, Facts, Heading, Lines, Loading, Note, Page, plainClick, SearchField, State, TmuxMark } from "../ui";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
+import { newAgentHeld, openNewAgent, openSoul } from "./pages";
+import { Before, FILTER_FROM, Frame, matches, OneLine } from "./Workspace";
 
 type Soul = Result<"souls">["souls"][number];
 type Ready = Extract<Oats, { phase: "ready" }>;
@@ -38,109 +43,195 @@ function decode(subPath: string): string | null {
     .join("/");
 }
 
-/** This deployment's agents of one soul: in the tree, with a missing thread, or on another backend. */
-function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
-  const rpc = useRpc<Contract>();
+/** A soul's agents are the roster rows under its agent name (`soul.agent`), not under its key. */
+const agentsOf = (soul: Soul, oats: Ready): Agent[] => oats.agents.filter((agent) => agent.soul === soul.agent);
+const ROW = "flex w-full min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent";
+
+// ---- the list ----
+
+/** The souls in groups, by where each comes from, in the order the kernel lists them; one group with no heading where the kernel names no source. */
+function grouped(souls: readonly Soul[]): { label: string | null; souls: Soul[] }[] {
+  const groups: { label: string | null; souls: Soul[] }[] = [];
+  for (const soul of souls) {
+    const label = soul.source?.label ?? null;
+    const group = groups.find((each) => each.label === label);
+    if (group === undefined) groups.push({ label, souls: [soul] });
+    else group.souls.push(soul);
+  }
+  return groups;
+}
+
+function SoulList({ souls, oats }: { souls: readonly Soul[]; oats: Oats }) {
   const navigate = useBbNavigate();
-  const mine = oats.agents.filter((agent) => agent.soul === soul.agent);
-  if (mine.length === 0) return <Note>No agent of this soul in this deployment.</Note>;
-  const detached = new Set(oats.view.detached);
-  // On the last roster read the OATS acts are held: each stays in its place, off, with the reason.
-  const held = oats.stale !== null;
+  const [query, setQuery] = useState("");
+  if (souls.length === 0) return <Note>No souls.</Note>;
+  const found = souls.filter((soul) => matches(query, soul.name, soul.description));
+  const groups = grouped(found);
   return (
-    <ul data-testid="oats-soul-agents" className="flex flex-col gap-1">
-      {mine.map((agent) => {
-        const node = oats.nodeByInstance.get(agent.instance);
-        const thread = node === undefined ? undefined : oats.threadById.get(node.thread.id);
-        if (node !== undefined && thread !== undefined) {
-          return (
-            <li key={agent.instance}>
-              <a
-                data-testid="oats-soul-agent"
-                data-instance={agent.instance}
-                href={thread.href}
-                className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
-                onClick={(event) => {
-                  if (!plainClick(event)) return;
-                  event.preventDefault();
-                  navigate.toThread(thread.id);
-                }}
-              >
-                <Dot state={node.state} />
-                <span className="min-w-0 flex-1 break-words" title={shown(agent.instance)}>
-                  {agentName(agent.instance)}
-                </span>
-              </a>
-            </li>
-          );
-        }
-        if (detached.has(agent)) {
-          return (
-            <li key={agent.instance} data-testid="oats-soul-agent-detached" data-instance={agent.instance} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
-              <span className="min-w-0 flex-1 break-words" title={shown(agent.instance)}>{agentName(agent.instance)}</span>
-              <span className="text-xs text-muted-foreground">thread missing</span>
-              {/* (The dots: each opens its dialog, and nothing runs on the press; one rule for every act of the plugin.) */}
-              <Button data-testid="oats-detached-start" disabled={held} onClick={() => void run("start", agent.instance, rpc, navigate)}>
-                Start…
-              </Button>
-              <Button data-testid="oats-detached-retire" disabled={held} onClick={() => askPlan("retire", agent.instance)}>
-                Retire…
-              </Button>
-            </li>
-          );
-        }
-        return (
-          <li key={agent.instance} data-testid="oats-soul-agent-elsewhere" data-instance={agent.instance} className="flex items-center gap-2 px-2 py-1.5">
-            <span className="min-w-0 flex-1 break-words" title={shown(agent.instance)}>{agentName(agent.instance)}</span>
-            <span className="text-xs text-muted-foreground">{`on ${shown(agent.backend)}`}</span>
-            {/* An agent with no bb thread has its own page, where a feature gives agents one. */}
-            {hasAgentPage() ? (
-              <Button data-testid="oats-soul-agent-open" onClick={() => void openAgentPage(navigate, agent.instance)}>
-                Open
-              </Button>
-            ) : null}
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      {souls.length >= FILTER_FROM ? <SearchField label="Search souls" placeholder="Search souls" value={query} onChange={setQuery} /> : null}
+      {found.length === 0 ? <Note>Nothing matches.</Note> : null}
+      {groups.map((group) => (
+        <section key={group.label ?? ""} data-testid="oats-soul-group" className="flex min-w-0 flex-col gap-1">
+          {/* A heading only where it tells groups apart. */}
+          {group.label === null || (groups.length === 1 && found.length === souls.length && grouped(souls).length === 1) ? null : <Heading n={group.souls.length}>{shown(group.label)}</Heading>}
+          <ul className="flex min-w-0 flex-col">
+            {group.souls.map((soul) => {
+              // How many of its agents RUN: a soul none of whose agents runs says nothing (the soul's page lists them all).
+              const running = oats.phase === "ready" ? agentsOf(soul, oats).filter((agent) => rest(agent) === "runs").length : 0;
+              return (
+                <li key={soul.name}>
+                  <button type="button" data-testid="oats-soul-row" title={shown(soul.name)} className={ROW} onClick={() => openSoul(navigate, soul.name)}>
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      {/* Under its group's heading a soul is its own name; the key is whole in the row's title and on its page. Never cut. */}
+                      <span data-testid="oats-soul-name" className="min-w-0 flex-1 break-words font-semibold">{shown(group.label === null ? soul.name : (soul.shortName ?? soul.name))}</span>
+                      {soul.spawnable ? null : <span data-testid="oats-soul-cannot" className="shrink-0 text-xs text-warning-text">Can't spawn</span>}
+                      {running === 0 ? null : <span data-testid="oats-soul-running" className="shrink-0 text-xs text-muted-foreground">{`${running} running`}</span>}
+                    </span>
+                    {/* What it does, on ONE line; whole on its page (and in this line's title). */}
+                    {soul.description === "" ? null : <OneLine testId="oats-soul-does" text={soul.description} />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </>
+  );
+}
+
+// ---- a soul's page ----
+
+/** The kernel's word for why a soul has a capability, as a person's: its own two, else the kernel's. */
+const WHY: Readonly<Record<string, string>> = { workspace: "workspace", soul: "soul" };
+
+/** One agent of the soul, as the roster says it: its state as a dot AND its word, the reason after it, where it runs; the row opens it. */
+function SoulAgent({ agent, oats }: { agent: Agent; oats: Ready }) {
+  const navigate = useBbNavigate();
+  const now = useNow();
+  const outside = outsideOf(oats);
+  const node = oats.nodeByInstance.get(agent.instance);
+  const thread = node === undefined || node.agent !== agent ? undefined : oats.threadById.get(node.thread.id);
+  const said = oats.gone.has(agent.instance) ? null : outside.of(agent);
+  const status = agentStatus(agent, thread === undefined ? null : (node?.thread ?? null), now);
+  const drawn = rowState(status, oats.gone.has(agent.instance));
+  const reason = rowParts(said, status.state);
+  const words = rowWords(drawn.word, drawn.state, reason.note);
+  const open = () => {
+    if (thread !== undefined) navigate.toThread(thread.id);
+    // An agent with no listed thread: its archived conversation where bb keeps one, else its own page.
+    else if (said?.archived === true && agent.threadId !== null) navigate.toThread(agent.threadId);
+    else void openAgentPage(navigate as BbNavigate, agent.instance);
+  };
+  const line = (
+    <>
+      {/* (The name keeps room of its own: at a phone's width the state goes under it, never the name letter by letter.) */}
+      <span className="min-w-[8rem] flex-1 break-words" title={shown(agent.instance)}>{agentName(agent.instance)}</span>
+      <span data-testid="oats-soul-agent-state" className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <State state={drawn.state} word={words.state} tone={reason.tone} />
+        {words.reason === null || words.reason === "" ? null : <span className={reason.tone === "warning" ? "text-warning-text" : ""}>{`· ${words.reason}`}</span>}
+        {agent.backend === "tmux" ? <TmuxMark /> : null}
+      </span>
+    </>
+  );
+  // An agent bb has no listed thread for and that needs an act (its thread archived or deleted while OATS has it): its acts are here, as on its row elsewhere.
+  const detached = thread === undefined && agent.backend !== "tmux";
+  return (
+    <li data-testid="oats-soul-agent" data-instance={agent.instance} data-where={thread !== undefined ? "thread" : agent.backend === "tmux" ? "tmux" : "detached"} className="flex min-w-0 flex-wrap items-center gap-2">
+      {thread !== undefined ? (
+        <a
+          href={thread.href}
+          className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 hover:bg-accent"
+          onClick={(event) => {
+            if (!plainClick(event)) return;
+            event.preventDefault();
+            open();
+          }}
+        >
+          {line}
+        </a>
+      ) : (
+        <button type="button" className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent" onClick={open}>
+          {line}
+        </button>
+      )}
+      {detached ? <DetachedActs said={said} instance={agent.instance} held={oats.stale !== null} /> : null}
+    </li>
   );
 }
 
 function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
+  const navigate = useBbNavigate();
+  const stale = oats.phase === "ready" && oats.stale !== null;
+  const { cli } = useCli(true, oats.phase === "ready");
+  // Which capabilities fill a core place: they stand first, tagged.
+  const layers = new Map((useRead("capabilities").data?.capabilities ?? []).map((capability) => [capability.id, capability.layer ?? null]));
+  const capabilities = [...soul.capabilities].sort((a, b) => Number(Boolean(layers.get(b))) - Number(Boolean(layers.get(a))));
+  const mine = oats.phase === "ready" ? agentsOf(soul, oats) : null;
+  const launch = [soul.harness, soul.model].filter((part): part is string => typeof part === "string" && part !== "").map((part) => shown(part)).join(" · ");
+  const teams = (soul.teams ?? []).map((team) => shown(team.label)).join(", ");
+  const under = [soul.origin === "" ? null : `from ${soul.origin}`, soul.problem].filter((part): part is string => part !== null && part !== "");
   return (
     <article data-testid="oats-soul-detail" className="flex min-w-0 flex-col gap-4">
-      <header className="flex flex-col gap-1">
-        <h2 className="break-words text-base font-semibold">{shown(soul.name)}</h2>
+      <header className="flex min-w-0 flex-col gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="min-w-0 flex-1 break-words text-base font-semibold">{shown(soul.name)}</h2>
+          {/* A soul that cannot be spawned keeps the button, off, with the one reason beside it; the kernel's own words are under Details. */}
+          {soul.spawnable ? null : <DisabledReason>Can't spawn here</DisabledReason>}
+          <Button variant="primary" data-testid="oats-soul-new-agent" disabled={!soul.spawnable || newAgentHeld(stale, cli)} onClick={() => void openNewAgent(navigate as BbNavigate, true, { soul: soul.name })}>
+            New agent
+          </Button>
+        </div>
         {soul.description === "" ? null : <p className="break-words">{shown(soul.description)}</p>}
-        <p className="break-words text-xs text-muted-foreground">{`from ${shown(soul.origin)}`}</p>
       </header>
-      <section className="flex flex-col gap-2">
-        <Heading n={soul.capabilities.length}>Capabilities</Heading>
-        {soul.capabilities.length === 0 ? (
-          <Note>This soul has no capabilities.</Note>
+      <Facts>
+        <Fact label="Harness · model">{launch}</Fact>
+        <Fact label="Teams">{teams}</Fact>
+      </Facts>
+      <section data-testid="oats-soul-capabilities" className="flex min-w-0 flex-col gap-1">
+        <Heading n={capabilities.length}>Capabilities</Heading>
+        {capabilities.length === 0 ? (
+          <Note>No capabilities.</Note>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {soul.capabilities.map((id) => (
-              <Chip key={id}>{shown(id)}</Chip>
-            ))}
-          </div>
+          <ul className="flex min-w-0 flex-col">
+            {capabilities.map((id) => {
+              const why = soul.why?.[id];
+              return (
+                <li key={id} data-testid="oats-soul-capability" className="flex min-w-0 flex-wrap items-baseline gap-x-2 px-2 py-1">
+                  <span className="min-w-0 break-words font-semibold">{shown(id)}</span>
+                  {layers.get(id) ? <span className="text-xs text-muted-foreground">core</span> : null}
+                  {why === undefined ? null : <span className="text-xs text-muted-foreground">{shown(WHY[why] ?? why)}</span>}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
-      <section className="flex flex-col gap-2">
-        <Heading>Agents</Heading>
+      <section data-testid="oats-soul-agents" className="flex min-w-0 flex-col gap-1">
+        <Heading {...(mine === null ? {} : { n: mine.length })}>Agents</Heading>
         {/* The agents are the roster's, as last read while OATS cannot be read: the page's notice says so. */}
-        {oats.phase === "ready" ? <SoulAgents soul={soul} oats={oats} /> : oats.phase === "loading" ? <Loading>Reading your agents…</Loading> : null}
-      </section>
-      <section className="flex flex-col gap-2">
-        <Heading>New agent</Heading>
-        {soul.spawnable ? (
-          <NewAgent key={soul.name} soul={soul} />
+        {mine === null ? (
+          oats.phase === "loading" ? <Loading>Reading…</Loading> : null
+        ) : mine.length === 0 ? (
+          <Note>No agents.</Note>
         ) : (
-          <p data-testid="oats-soul-problem" role="alert" className="break-words text-destructive-text">
-            <Lines text={soul.problem ?? "This soul cannot be spawned."} />
-          </p>
+          <ul className="flex min-w-0 flex-col gap-1">
+            {mine.map((agent) => (
+              <SoulAgent key={agent.instance} agent={agent} oats={oats as Ready} />
+            ))}
+          </ul>
         )}
       </section>
+      {under.length === 0 ? null : (
+        <Disclosure summary="Details" testId="oats-soul-details">
+          {under.map((text, index) => (
+            <p key={index} className="break-words text-xs text-muted-foreground">
+              <Lines text={text} />
+            </p>
+          ))}
+        </Disclosure>
+      )}
     </article>
   );
 }
@@ -150,62 +241,24 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
   const souls = useRead("souls");
   const navigate = useBbNavigate();
   const picked = decode(subPath);
-
-  if (souls.data === undefined) {
+  // The list: the Souls tab of the Workspace page.
+  if (picked === null) {
     return (
       <Frame tab="souls" testId="oats-souls-page">
-        {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{souls.error}</ErrorLine> : <Note>Reading OATS…</Note>}
+        <Before oats={oats} read={souls} />
+        {souls.data === undefined ? null : <SoulList souls={souls.data.souls} oats={oats} />}
       </Frame>
     );
   }
-  const list = souls.data.souls;
-  const soul = picked === null ? undefined : list.find((candidate) => candidate.name === picked);
-  // A soul's agents are the roster rows under its agent name (`soul.agent`), not under its key.
-  const agentsOf = (soul: Soul) => (oats.phase === "ready" ? oats.agents.filter((agent) => agent.soul === soul.agent).length : null);
-
+  // A soul's own page opens over the list, at every width, with the way back (the Desktop's).
+  const soul = souls.data?.souls.find((candidate) => candidate.name === picked);
   return (
-    <Frame tab="souls" testId="oats-souls-page">
-      {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{souls.error}</ErrorLine> : null}
-      {/* Each soul's count of agents, and a soul's agents, are the roster's: while OATS cannot be read the page says so once, above both. */}
-      <RosterNotice oats={oats} />
-      <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start">
-        {/* At phone width one of the two shows at a time: the list, or the picked soul with Back. */}
-        <nav aria-label="Souls" className={`flex-col gap-1 md:flex md:w-64 md:shrink-0 ${picked === null ? "flex" : "hidden"}`}>
-          <Heading n={list.length}>Souls</Heading>
-          {list.length === 0 ? <Note>This deployment offers no souls.</Note> : null}
-          <ul className="flex flex-col">
-            {list.map((candidate) => {
-              const n = agentsOf(candidate);
-              return (
-                <li key={candidate.name}>
-                  <button
-                    type="button"
-                    data-testid="oats-soul-row"
-                    aria-current={candidate.name === picked ? "true" : undefined}
-                    className={`flex w-full min-w-0 items-baseline gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent ${candidate.name === picked ? "bg-accent" : ""}`}
-                    onClick={() => openSoul(navigate, candidate.name)}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{shown(candidate.name)}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{n === null ? "" : count(n, "agent")}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-        <div className={`min-w-0 flex-1 flex-col gap-3 md:flex ${picked === null ? "hidden" : "flex"}`}>
-          {picked === null ? (
-            <Note>Pick a soul to see it and to start a new agent.</Note>
-          ) : (
-            <>
-              <Button data-testid="oats-back" className="self-start md:hidden" onClick={() => navigate.toPluginPanel("souls")}>
-                ← Souls
-              </Button>
-              {soul === undefined ? <Note>{`This deployment has no soul named ${shown(picked)}.`}</Note> : <SoulDetail soul={soul} oats={oats} />}
-            </>
-          )}
-        </div>
-      </div>
-    </Frame>
+    <Page testId="oats-souls-page">
+      <Button data-testid="oats-back" className="self-start" onClick={() => navigate.toPluginPanel("souls")}>
+        ← Souls
+      </Button>
+      <Before oats={oats} read={souls} />
+      {souls.data === undefined ? null : soul === undefined ? <Note>{`This deployment has no soul named ${shown(picked)}.`}</Note> : <SoulDetail soul={soul} oats={oats} />}
+    </Page>
   );
 }

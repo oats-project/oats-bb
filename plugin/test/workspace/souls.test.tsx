@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-// A11: the Souls page (navPanel `souls`): Preview, Spawn in bb, and a soul that cannot be spawned.
+// The Souls tab of the Workspace page and a soul's own page (navPanel `souls`), by the audit of the
+// hidden pages and its ruling (25 Nov 2026): the list in groups with ONE line of what a soul does,
+// how many of its agents run, and "Can't spawn"; a soul's page with its facts, its capabilities and
+// why, its agents as the roster says them, and New agent, which opens the form with that soul.
 import { afterEach, expect, test } from "vitest";
-import { fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { setAgentPage } from "../../app/home/agent-tab";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
-import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { handlers, loadApp, resetApp } from "../helpers/render";
 import { asked } from "../../app/lifecycle";
 import type { Contract, Handlers } from "../helpers/render";
 import type { Agent } from "../../model/types";
@@ -21,336 +24,297 @@ let agentPage: Parameters<typeof setAgentPage>[0] = null;
 
 async function souls(subPath: string, over: Partial<Handlers> = {}, agents?: Agent[], threads = fixtureThreads()) {
   const app = await loadApp();
-  setAgentPage(agentPage);
+  if (agentPage !== null) setAgentPage(agentPage);
   const panel = app.navPanels.find((candidate) => candidate.id === "souls")!;
-  expect(panel.experimental_hideFromNavigation).toBe(true);
   return renderSlot<{ subPath: string }, Contract>(panel, { subPath }, { rpc: handlers(over, agents), sidebarThreads: { status: "ready", threads } });
 }
+type Slot = Awaited<ReturnType<typeof souls>>;
+const rpcOf = (slot: Slot, method: string) => slot.inspection.rpcCalls.filter((call) => call.method === method);
+const soul = (name: string, over: object = {}) => ({ name, agent: name, description: "", origin: "member github.com/awebai/oats @ e5b6c5ac", capabilities: [], spawnable: true, problem: null, shortName: name, source: { kind: "member", label: "workspace" }, ...over });
+/** The souls as the kernel's fuller answer gives them: two of the workspace, one of a package that cannot be spawned. */
+const LISTED = [
+  soul("oats-developer", { description: "Builds and proves one spec.\nAnd a second line the list does not need.", capabilities: ["oats.developer", "oats.aweb", "oats.core"], harness: "pi", model: "gpt-6-astra", teams: [{ label: "oats", isDefault: true }, { label: "wider", isDefault: false }], why: { "oats.developer": "soul", "oats.aweb": "workspace", "oats.core": "workspace" } }),
+  soul("oats-expert"),
+  soul("oats.okf/knowledge-harvester", { agent: "knowledge-harvester", shortName: "knowledge-harvester", source: { kind: "package", label: "oats.okf 6.2.0" }, description: "Harvests.", spawnable: false, problem: "E_REMOVED: this soul was removed in oats.okf 6.0" }),
+];
+const listed = { souls: () => ({ souls: LISTED }) };
+const rowsOf = (slot: Slot) => slot.getAllByTestId("oats-soul-row").map((row) => ({ name: within(row).getByTestId("oats-soul-name").textContent, does: within(row).queryByTestId("oats-soul-does")?.textContent ?? null, running: within(row).queryByTestId("oats-soul-running")?.textContent ?? null, cannot: within(row).queryByTestId("oats-soul-cannot")?.textContent ?? null }));
 
-function fill(slot: Awaited<ReturnType<typeof souls>>, name: string, task: string) {
-  fireEvent.change(slot.getByTestId("oats-spawn-name"), { target: { value: name } });
-  fireEvent.change(slot.getByTestId("oats-spawn-task"), { target: { value: task } });
-}
-const rpcOf = (slot: Awaited<ReturnType<typeof souls>>, method: string) => slot.inspection.rpcCalls.filter((call) => call.method === method);
+// ---- the list ----
 
-test("the list: each soul with the number of this deployment's agents; a click opens the soul", async () => {
-  const slot = await souls("");
-  const rows = await slot.findAllByTestId("oats-soul-row");
-  await waitFor(() => expect(rows.map((row) => row.textContent)).toEqual(["oats-developer2 agents", "broken-soul0 agents"]));
-  expect(slot.queryByTestId("oats-soul-detail")).toBeNull();
-  fireEvent.click(rows[0]!);
-  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls", options: { subPath: "oats-developer" } }]);
-});
-
-test("the picked soul: description, origin, capabilities, and its agents by where they are", async () => {
-  const slot = await souls("oats-developer");
-  const detail = await slot.findByTestId("oats-soul-detail");
-  expect(detail.textContent).toContain("Builds and proves one spec.");
-  expect(detail.textContent).toContain("from oats.framework 1.12.0");
-  for (const id of ["oats.core", "oats.aweb", "oats.developer"]) expect(detail.textContent).toContain(id);
-  // in the tree: a link to its thread
-  const inTree = await slot.findByTestId("oats-soul-agent");
-  expect(inTree.getAttribute("href")).toBe("/projects/proj_ci/threads/thr_ci");
-  fireEvent.click(inTree);
-  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_ci" }]);
-  // on tmux: labelled with the backend
-  expect(slot.getByTestId("oats-soul-agent-elsewhere").textContent).toBe("Kernel fix developeron tmux");
-});
-
-test("the New agent form says, in words and with no control, that the agent runs in bb's full mode", async () => {
-  const slot = await souls("oats-developer");
-  await slot.findByTestId("oats-spawn-form");
-  const line = slot.getByTestId("oats-spawn-mode");
-  expect(line.textContent).toBe("Runs in bb's full mode: no sandbox.");
-  expect(line.querySelector("input, button, select, textarea, a")).toBeNull();
-  // It is under the heading and above the form's fields.
-  expect(line.compareDocumentPosition(slot.getByTestId("oats-spawn-form")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-});
-
-test("Preview shows what oats spawn --preview would do, and spawns nothing", async () => {
-  const slot = await souls("oats-developer", {
-    spawnPreview: () => ({
-      summary: {
-        modules: ["oats.core 2.6.0", "oats.aweb 1.28.0"],
-        teams: ["oats (default:oats.aweb.ai)"],
-        launch: "claude-opus on bb",
-        warnings: ["channel-dev-confirmation: OATS confirms the development-channel prompt"],
-        problems: [],
-      },
-    }),
-  });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "ranker-v4-probe", "Sweep the learning rate.");
-  fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-  const preview = await slot.findByTestId("oats-preview");
-  for (const text of ["oats.core 2.6.0", "oats (default:oats.aweb.ai)", "claude-opus on bb", "channel-dev-confirmation"]) {
-    expect(preview.textContent).toContain(text);
-  }
-  expect(rpcOf(slot, "spawnPreview").map((call) => call.input)).toEqual([
-    { soul: "oats-developer", name: "ranker-v4-probe", task: "Sweep the learning rate." },
-  ]);
-  expect(rpcOf(slot, "spawn")).toEqual([]);
-  expect(slot.inspection.navigateCalls).toEqual([]);
-});
-
-test("Spawn calls spawn once with { soul, name, task, key } and, on ok, navigates to the returned thread", async () => {
-  const slot = await souls("oats-developer", { spawn: () => ({ instance: "ranker-v4-probe", threadId: "thr_new" }) });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "ranker-v4-probe", "Sweep the learning rate.");
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_new" }]));
-  const calls = rpcOf(slot, "spawn");
-  expect(calls).toHaveLength(1);
-  const input = calls[0]!.input as { soul: string; name: string; task: string; key: string };
-  expect(Object.keys(input).sort()).toEqual(["key", "name", "soul", "task"]);
-  expect(input).toMatchObject({ soul: "oats-developer", name: "ranker-v4-probe", task: "Sweep the learning rate." });
-  expect(input.key).toMatch(/^[0-9a-f]{32}$/);
-});
-
-test("a refusal's code and message are shown, line by line, nothing is navigated, and a retry of the same form reuses the key", async () => {
-  const refusal = "E_INSTANCE_EXISTS: an instance named ranker-v4-probe already exists\n  retire it first: oats retire ranker-v4-probe";
-  let refuse = true;
-  const slot = await souls("oats-developer", {
-    spawn: () => {
-      if (refuse) throw new Error(refusal);
-      return { instance: "ranker-v4-probe", threadId: "thr_new" };
-    },
-  });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "ranker-v4-probe", "Sweep.");
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  // The kernel's code and each of its lines, on a line of its own: no line break is drawn (ui/text.ts).
-  const alert = await slot.findByRole("alert");
-  expect(Array.from(alert.querySelectorAll("span.block")).map((line) => line.textContent)).toEqual([
-    "E_INSTANCE_EXISTS: an instance named ranker-v4-probe already exists",
-    "retire it first: oats retire ranker-v4-probe",
-  ]);
-  expect(slot.inspection.navigateCalls).toEqual([]);
-
-  refuse = false;
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  await waitFor(() => expect(slot.inspection.navigateCalls).toHaveLength(1));
-  const keys = rpcOf(slot, "spawn").map((call) => (call.input as { key: string }).key);
-  expect(keys).toHaveLength(2);
-  expect(keys[0]).toBe(keys[1]);
-});
-
-test("a changed form is a new intent: it gets a new key", async () => {
-  const slot = await souls("oats-developer", {
-    spawn: () => {
-      throw new Error("E_SPAWN_REFUSED: no");
-    },
-  });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "one", "Task.");
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  await slot.findByRole("alert");
-  fill(slot, "two", "Task.");
-  fireEvent.click(slot.getByTestId("oats-spawn-submit"));
-  await waitFor(() => expect(rpcOf(slot, "spawn")).toHaveLength(2));
-  const keys = rpcOf(slot, "spawn").map((call) => (call.input as { key: string }).key);
-  expect(keys[0]).not.toBe(keys[1]);
-});
-
-test("a name the kernel would refuse never leaves the form", async () => {
-  const slot = await souls("oats-developer");
-  await slot.findByTestId("oats-spawn-form");
-  for (const bad of ["Has Space", "with/slash", "Upper", "-leading-dash", "a".repeat(64)]) {
-    fill(slot, bad, "Task.");
-    expect((slot.getByTestId("oats-spawn-submit") as HTMLButtonElement).disabled).toBe(true);
-    expect((slot.getByTestId("oats-spawn-preview") as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.submit(slot.getByTestId("oats-spawn-form"));
-  }
-  fill(slot, "good-name", "   ");
-  expect((slot.getByTestId("oats-spawn-submit") as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.submit(slot.getByTestId("oats-spawn-form"));
-  expect(rpcOf(slot, "spawn")).toEqual([]);
-  expect(rpcOf(slot, "spawnPreview")).toEqual([]);
-});
-
-test("spawnable: false shows the problem and no form", async () => {
-  const slot = await souls("broken-soul");
-  expect((await slot.findByTestId("oats-soul-problem")).textContent).toBe(
-    "E_SOUL_INVALID: soul.yaml names a capability that is not installed: oats.missing",
+test("the Souls tab: the souls in groups by where they come from, each by its own name with ONE line of what it does, how many of its agents run, and \"Can't spawn\"; a press opens the soul", async () => {
+  const slot = await souls("", listed);
+  await slot.findAllByTestId("oats-soul-row");
+  // The groups' headings: the workspace's own, then a package with its version; each with its count.
+  expect(slot.getAllByTestId("oats-soul-group").map((group) => group.querySelector("h2")!.textContent)).toEqual(["workspace2", "oats.okf 6.2.0" + "1"]);
+  await waitFor(() =>
+    expect(rowsOf(slot)).toEqual([
+      // What it does is the soul's whole description as one line of text, clamped to one line by the page (whole in its title).
+      { name: "oats-developer", does: "Builds and proves one spec. And a second line the list does not need.", running: "2 running", cannot: null },
+      // A soul none of whose agents runs says nothing of them: "0 agents" is the ordinary.
+      { name: "oats-expert", does: null, running: null, cannot: null },
+      // A package's soul is its own name under its group; its key is the row's title, whole.
+      { name: "knowledge-harvester", does: "Harvests.", running: "1 running", cannot: "Can't spawn" },
+    ]),
   );
-  expect(slot.queryByTestId("oats-spawn-form")).toBeNull();
-  expect(slot.queryByTestId("oats-spawn-submit")).toBeNull();
-  expect(slot.queryByTestId("oats-spawn-mode")).toBeNull();
+  const does = within(slot.getAllByTestId("oats-soul-row")[0]!).getByTestId("oats-soul-does");
+  expect(does.className).toContain("truncate"); // one line (where the page can measure, cut at a word: the live scene holds that)
+  expect(does.getAttribute("title")).toContain("And a second line");
+  expect(slot.getAllByTestId("oats-soul-row")[2]!.getAttribute("title")).toBe("oats.okf/knowledge-harvester");
+  // No sentence on the page, no heading that repeats the tab, no soul's page beside the list.
+  expect(slot.getByTestId("oats-souls-page").textContent).not.toMatch(/Pick a soul|\d+ agents?\b/);
+  expect(slot.queryByTestId("oats-soul-detail")).toBeNull();
+  expect(slot.getByTestId("oats-tab-souls").getAttribute("aria-selected")).toBe("true");
+  expect(slot.queryByTestId("oats-search")).toBeNull(); // three souls need no filter
+  fireEvent.click(slot.getAllByTestId("oats-soul-row")[2]!);
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls", options: { subPath: "oats.okf/knowledge-harvester" } }]);
 });
 
-test("an agent whose thread is archived shows as thread missing, with Start… and Retire… (each opens its dialog)", async () => {
-  const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
-  const slot = await souls("oats-developer", {}, fixtureAgents(), threads);
-  const missing = await slot.findByTestId("oats-soul-agent-detached");
-  expect(missing.textContent).toBe("Flaky ci developerthread missingStart…Retire…");
-  expect(slot.queryByTestId("oats-soul-agent")).toBeNull();
-  fireEvent.click(slot.getByTestId("oats-detached-start"));
-  // Start opens the act's own dialog (test/lifecycle/actions.test.tsx holds what it does): nothing is started on one press.
-  expect(asked()).toEqual({ verb: "start", instance: "flaky-ci-developer" });
-  expect(rpcOf(slot, "start")).toEqual([]);
-  fireEvent.click(slot.getByTestId("oats-detached-retire"));
-  expect(asked()).toEqual({ verb: "retire", instance: "flaky-ci-developer" });
+test("souls the kernel names no source for are one list with no heading, each by its key", async () => {
+  const slot = await souls("");
+  await slot.findAllByTestId("oats-soul-row");
+  expect(slot.getAllByTestId("oats-soul-group")).toHaveLength(1);
+  expect(slot.getByTestId("oats-soul-group").querySelector("h2")).toBeNull();
+  expect(rowsOf(slot).map((row) => row.name)).toEqual(["oats-developer", "broken-soul"]);
 });
 
-test("a soul name in the URL that the deployment does not have says so", async () => {
-  const slot = await souls("no%20such%20soul");
-  expect((await slot.findByText("This deployment has no soul named no such soul.")).tagName).toBe("P");
+test("from twelve souls on the list has a search field: it narrows by a soul's key and what it does; nothing found says so in two words", async () => {
+  const many = Array.from({ length: 12 }, (_, index) => soul(`soul-${index + 1}`, { description: index === 4 ? "Reviews code." : "" }));
+  const slot = await souls("", { souls: () => ({ souls: many }) });
+  await slot.findAllByTestId("oats-soul-row");
+  const search = slot.getByTestId("oats-search") as HTMLInputElement;
+  expect([search.getAttribute("aria-label"), search.placeholder]).toEqual(["Search souls", "Search souls"]);
+  // One group whole: no heading over it.
+  expect(slot.getByTestId("oats-soul-group").querySelector("h2")).toBeNull();
+  fireEvent.change(search, { target: { value: "REVIEWS" } });
+  expect(rowsOf(slot).map((row) => row.name)).toEqual(["soul-5"]);
+  fireEvent.change(search, { target: { value: "soul-1" } });
+  expect(rowsOf(slot).map((row) => row.name)).toEqual(["soul-1", "soul-10", "soul-11", "soul-12"]);
+  fireEvent.change(search, { target: { value: "nothing like it" } });
+  expect(slot.queryAllByTestId("oats-soul-row")).toEqual([]);
+  expect(slot.getByText("Nothing matches.").tagName).toBe("P");
+  // Eleven souls: no field.
+  slot.unmount();
+  resetApp();
+  const fewer = await souls("", { souls: () => ({ souls: many.slice(0, 11) }) });
+  await fewer.findAllByTestId("oats-soul-row");
+  expect(fewer.queryByTestId("oats-search")).toBeNull();
 });
 
-test("when souls cannot be read: the kernel's message and Retry", async () => {
+test("no soul at all: two words", async () => {
+  const slot = await souls("", { souls: () => ({ souls: [] }) });
+  expect((await slot.findByText("No souls.")).tagName).toBe("P");
+  expect(slot.queryAllByTestId("oats-soul-row")).toEqual([]);
+});
+
+test("while the souls are read the tab says \"Reading…\"; a read that failed is a notice in a person's words with Retry, the kernel's message one press away, never its raw line as the page's face", async () => {
   let failing = true;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
   const slot = await souls("", {
-    souls: () => {
+    souls: async () => {
+      await held;
       if (failing) throw new Error("E_OATS_TIMEOUT: oats souls did not answer in 20 s");
       return handlers().souls(null);
     },
   });
-  expect((await slot.findByRole("alert")).textContent).toBe("E_OATS_TIMEOUT: oats souls did not answer in 20 sRetry");
+  expect(slot.getByTestId("oats-loading").textContent).toBe("Reading…");
+  release();
+  const notice = await slot.findByRole("alert");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS could not be read");
+  const details = within(notice).getByTestId("oats-notice-details") as HTMLDetailsElement;
+  expect([details.open, details.textContent]).toEqual([false, expect.stringContaining("E_OATS_TIMEOUT: oats souls did not answer in 20 s")]);
+  // On the face: the title and Retry, and nothing of the kernel's.
+  expect(Array.from(notice.children).filter((part) => part.tagName !== "DETAILS").map((part) => part.textContent)).toEqual(["OATS could not be read", "Retry"]);
   failing = false;
-  fireEvent.click(slot.getByRole("button", { name: "Retry" }));
+  fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
   expect(await slot.findAllByTestId("oats-soul-row")).toHaveLength(2);
+  expect(slot.queryByRole("alert")).toBeNull();
+});
+
+// ---- a soul's page ----
+
+test("a soul's page opens over the list with the way back: its key, what it does whole, what its agents start with, its teams, and its origin one press away", async () => {
+  const slot = await souls("oats-developer", listed);
+  const detail = await slot.findByTestId("oats-soul-detail");
+  // No list beside it and no tab strip: the page is the soul's, at every width.
+  expect(slot.queryByTestId("oats-soul-row")).toBeNull();
+  expect(slot.queryByTestId("oats-tabs")).toBeNull();
+  expect(slot.getByTestId("oats-back").textContent).toBe("← Souls");
+  expect(detail.querySelector("h2")!.textContent).toBe("oats-developer");
+  expect(detail.querySelector("header p")!.textContent).toBe("Builds and proves one spec. And a second line the list does not need.");
+  expect(Array.from(detail.querySelectorAll('[data-testid="oats-fact"]')).map((fact) => [fact.querySelector("dt")!.textContent, fact.querySelector("dd")!.textContent])).toEqual([
+    ["Harness · model", "pi · gpt-6-astra"],
+    ["Teams", "oats, wider"], // the default first
+  ]);
+  const under = slot.getByTestId("oats-soul-details") as HTMLDetailsElement;
+  expect([under.open, under.querySelector("summary")!.textContent, Array.from(under.querySelectorAll("p")).map((line) => line.textContent)]).toEqual([false, expect.stringContaining("Details"), ["from member github.com/awebai/oats @ e5b6c5ac"]]);
+  // Outside Details the origin is not on the page.
+  expect(Array.from(detail.querySelectorAll("header *")).map((part) => part.textContent).join(" ")).not.toContain("github.com");
+  fireEvent.click(slot.getByTestId("oats-back"));
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls" }]);
+});
+
+test("New agent on a soul's page opens the New agent form with that soul chosen; the earlier short form is gone", async () => {
+  const slot = await souls("oats-developer", listed);
+  await slot.findByTestId("oats-soul-detail");
+  const button = slot.getByTestId("oats-soul-new-agent") as HTMLButtonElement;
+  expect([button.textContent, button.disabled]).toEqual(["New agent", false]);
+  fireEvent.click(button);
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "new-agent", options: { subPath: "oats-developer" } }]);
+  // No field, no Preview, no "Spawn in bb", no sentence of bb's mode: the form is the New agent page's.
+  expect(slot.container.querySelectorAll("input, textarea")).toHaveLength(0);
+  expect(slot.getByTestId("oats-souls-page").textContent).not.toMatch(/Preview|Spawn in bb|full mode|What OATS would do/);
+  expect(rpcOf(slot, "spawn")).toEqual([]);
+});
+
+test("a soul that cannot be spawned keeps New agent, off, with the one reason beside it; the kernel's own words are under Details", async () => {
+  const slot = await souls("oats.okf/knowledge-harvester", listed);
+  const detail = await slot.findByTestId("oats-soul-detail");
+  const button = slot.getByTestId("oats-soul-new-agent") as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  expect(within(detail.querySelector("header")!).getByTestId("oats-disabled-reason").textContent).toBe("Can't spawn here");
+  fireEvent.click(button);
+  expect(slot.inspection.navigateCalls).toEqual([]);
+  expect(Array.from(slot.getByTestId("oats-soul-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["from member github.com/awebai/oats @ e5b6c5ac", "E_REMOVED: this soul was removed in oats.okf 6.0"]);
+  expect(detail.querySelector("header")!.textContent).not.toContain("E_REMOVED");
+});
+
+test("a soul's capabilities are rows: the ones that fill a core place first, tagged, then the rest; each says why the soul has it; none: two words", async () => {
+  const capabilities = () => ({
+    capabilities: [
+      { id: "oats.aweb", description: "", origin: "", souls: 1, layer: "messaging" },
+      { id: "oats.core", description: "", origin: "", souls: 1, layer: null },
+      { id: "oats.developer", description: "", origin: "", souls: 1, layer: null },
+    ],
+  });
+  const slot = await souls("oats-developer", { ...listed, capabilities });
+  await slot.findByTestId("oats-soul-detail");
+  await waitFor(() => expect(slot.getAllByTestId("oats-soul-capability").map((row) => Array.from(row.children).map((part) => part.textContent))).toEqual([["oats.aweb", "core", "workspace"], ["oats.developer", "soul"], ["oats.core", "workspace"]]));
+  expect(within(slot.getByTestId("oats-soul-capabilities")).getByRole("heading").textContent).toBe("Capabilities3");
+  slot.unmount();
+  resetApp();
+  const none = await souls("oats-expert", listed);
+  await none.findByTestId("oats-soul-detail");
+  expect(within(none.getByTestId("oats-soul-capabilities")).getByText("No capabilities.").tagName).toBe("P");
+});
+
+const agentRows = (slot: Slot) => slot.getAllByTestId("oats-soul-agent").map((row) => [row.getAttribute("data-instance"), row.getAttribute("data-where"), within(row).getByTestId("oats-soul-agent-state").textContent]);
+
+test("a soul's agents are the roster's rows: the state as a dot AND its word, where each runs; a row opens its thread, or its own page", async () => {
+  const opened: string[] = [];
+  agentPage = (_navigate, instance) => void opened.push(instance);
+  const slot = await souls("oats-developer", listed);
+  await slot.findByTestId("oats-soul-detail");
+  await waitFor(() => expect(agentRows(slot)).toEqual([["flaky-ci-developer", "thread", expect.stringMatching(/Needs you$/)], ["kernel-fix-developer", "tmux", expect.stringMatching(/(Running|Working)/)]]));
+  expect(within(slot.getByTestId("oats-soul-agents")).getByRole("heading").textContent).toBe("Agents2");
+  // Each state has its mark AND its word (the standard: never a dot alone).
+  for (const row of slot.getAllByTestId("oats-soul-agent")) expect(within(row).getByTestId("oats-state").querySelector("[data-mark]")).not.toBeNull();
+  // On a thread: a link to it.
+  const onThread = slot.getAllByTestId("oats-soul-agent")[0]!.querySelector("a")!;
+  expect(onThread.getAttribute("href")).toBe("/projects/proj_ci/threads/thr_ci");
+  fireEvent.click(onThread);
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toThread", threadId: "thr_ci" }]);
+  // On tmux: the row itself opens the agent's page (no button "Open").
+  const onTmux = slot.getAllByTestId("oats-soul-agent")[1]!;
+  expect(onTmux.textContent).not.toMatch(/Open|on tmux/);
+  fireEvent.click(onTmux.querySelector("button")!);
+  expect(opened).toEqual(["kernel-fix-developer"]);
+  // A soul with no agent here: two words.
+  slot.unmount();
+  resetApp();
+  const none = await souls("oats-expert", { souls: () => ({ souls: [soul("oats-expert", { agent: "nobody" })] }) });
+  await none.findByTestId("oats-soul-detail");
+  expect(await within(none.getByTestId("oats-soul-agents")).findByText("No agents.")).toBeTruthy();
+});
+
+test("an agent whose thread bb has archived while it runs is said in the outside feature's words (\"may still run\"), with its acts, each opening its dialog; \"thread missing\" is said nowhere", async () => {
+  const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
+  const slot = await souls("oats-developer", listed, fixtureAgents(), threads);
+  await slot.findByTestId("oats-soul-detail");
+  await waitFor(() => expect(agentRows(slot)[0]).toEqual(["flaky-ci-developer", "detached", expect.stringMatching(/Needs you· may still run$/)]));
+  const row = slot.getAllByTestId("oats-soul-agent")[0]!;
+  expect(slot.getByTestId("oats-souls-page").textContent).not.toContain("thread missing");
+  const acts = Array.from(row.querySelectorAll<HTMLButtonElement>('[data-testid^="oats-agent-act-"], [data-testid="oats-status-act"]'));
+  expect(acts.length).toBeGreaterThan(0);
+  expect(acts.every((act) => act.textContent!.endsWith("…"))).toBe(true); // each opens a dialog
+  fireEvent.click(acts[0]!);
+  // The act's own dialog is asked for (test/lifecycle/actions.test.tsx holds what it does): nothing runs on one press.
+  expect(asked()?.instance).toBe("flaky-ci-developer");
+  expect(rpcOf(slot, "start")).toEqual([]);
+  expect(rpcOf(slot, "stopApply")).toEqual([]);
+});
+
+test("a soul name in the URL that the deployment does not have says so, with the way back", async () => {
+  const slot = await souls("no%20such%20soul");
+  expect((await slot.findByText("This deployment has no soul named no such soul.")).tagName).toBe("P");
+  expect(slot.getByTestId("oats-back")).toBeTruthy();
 });
 
 test("a package soul's agents are matched by its roster agent name, not by its key", async () => {
   // bb hands the key back as it took it: `/`-separated segments, each percent-encoded
-  const slot = await souls("oats.okf/knowledge-harvester", {
-    souls: () => ({
-      souls: [{ name: "oats.okf/knowledge-harvester", agent: "knowledge-harvester", description: "Harvests.", origin: "oats.okf 2.1.0", capabilities: [], spawnable: true, problem: null }],
-    }),
-  });
-  expect((await slot.findByTestId("oats-soul-agent")).getAttribute("href")).toBe("/projects/proj_harvest/threads/thr_harvest");
-  expect(slot.getByTestId("oats-soul-row").textContent).toBe("oats.okf/knowledge-harvester1 agent");
-  expect(slot.getByTestId("oats-spawn-form")).toBeTruthy();
-  // and the row opens it with the key as bb's unencoded segments
-  fireEvent.click(slot.getByTestId("oats-soul-row"));
-  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls", options: { subPath: "oats.okf/knowledge-harvester" } }]);
+  const slot = await souls("oats.okf/knowledge-harvester", listed);
+  await slot.findByTestId("oats-soul-detail");
+  await waitFor(() => expect(agentRows(slot).map(([instance]) => instance)).toEqual(["harvest-knowledge-helper"]));
+  expect(slot.getByTestId("oats-soul-detail").querySelector("h2")!.textContent).toBe("oats.okf/knowledge-harvester");
 });
 
 test("a soul key with characters bb percent-encodes is decoded segment by segment", async () => {
-  const slot = await souls("my%20pkg/soul%2Fx", {
-    souls: () => ({ souls: [{ name: "my pkg/soul/x", agent: "x", description: "", origin: "o", capabilities: [], spawnable: true, problem: null }] }),
-  });
-  expect((await slot.findByTestId("oats-soul-detail")).textContent).toContain("my pkg/soul/x");
+  const slot = await souls("my%20pkg/soul%2Fx", { souls: () => ({ souls: [soul("my pkg/soul/x", { agent: "x" })] }) });
+  expect((await slot.findByTestId("oats-soul-detail")).querySelector("h2")!.textContent).toBe("my pkg/soul/x");
 });
 
-test("while bb is still listing its threads a soul's agents are not shown as missing", async () => {
+test("while bb is still listing its threads a soul's agents are not drawn at all: none is said to be archived or gone", async () => {
   const app = await loadApp();
-  setAgentPage(agentPage);
   const panel = app.navPanels.find((candidate) => candidate.id === "souls")!;
   const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "oats-developer" }, { rpc: handlers(), sidebarThreads: { status: "loading", threads: [] } });
   await slot.findByTestId("oats-soul-detail");
   await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(slot.queryByTestId("oats-soul-agent-detached")).toBeNull();
-  expect(slot.queryByText("thread missing")).toBeNull();
-});
-
-test("a preview is taken down when the name or the task it answered for changes", async () => {
-  const slot = await souls("oats-developer", {
-    spawnPreview: () => ({ summary: { modules: ["oats.core 2.6.0"], teams: [], launch: null, warnings: [], problems: [] } }),
-  });
-  await slot.findByTestId("oats-spawn-form");
-  for (const change of ["oats-spawn-name", "oats-spawn-task"]) {
-    fill(slot, "a-one", "Task.");
-    fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-    await slot.findByTestId("oats-preview");
-    fireEvent.change(slot.getByTestId(change), { target: { value: "b-two" } });
-    expect(slot.queryByTestId("oats-preview")).toBeNull();
-  }
-});
-
-test("a preview that answers after the name changed is not drawn for the new input", async () => {
-  let release!: () => void;
-  const held = new Promise<void>((resolve) => (release = resolve));
-  const slot = await souls("oats-developer", {
-    spawnPreview: async () => (await held, { summary: { modules: [], teams: [], launch: null, warnings: [], problems: ["E_INSTANCE_EXISTS: first-name exists"] } }),
-  });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "first-name", "Task.");
-  fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-  fireEvent.change(slot.getByTestId("oats-spawn-name"), { target: { value: "second-name" } });
-  release();
-  await waitFor(() => expect(slot.getByTestId("oats-spawn-preview").textContent).toBe("Preview")); // the call is over
-  expect(slot.queryByTestId("oats-preview")).toBeNull();
-});
-
-test("a preview's refusal that arrives after the task changed is dropped too", async () => {
-  let refuse!: (cause: Error) => void;
-  const slot = await souls("oats-developer", { spawnPreview: () => new Promise<never>((_resolve, reject) => (refuse = reject)) });
-  await slot.findByTestId("oats-spawn-form");
-  fill(slot, "a-name", "First task.");
-  fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-  fireEvent.change(slot.getByTestId("oats-spawn-task"), { target: { value: "Second task." } });
-  refuse(new Error("E_TASK_REFUSED: about the first task"));
-  await waitFor(() => expect(slot.getByTestId("oats-spawn-preview").textContent).toBe("Preview"));
-  expect(slot.queryByRole("alert")).toBeNull();
-});
-
-test("an agent with no bb thread opens its own page, where a feature gives agents one", async () => {
-  const opened: string[] = [];
-  const plain = await souls("oats-developer");
-  await plain.findByTestId("oats-soul-agent-elsewhere");
-  expect(plain.queryByTestId("oats-soul-agent-open")).toBeNull(); // no feature has a page: nothing to press
-  plain.unmount();
-  agentPage = (_navigate, instance) => void opened.push(instance);
-  const slot = await souls("oats-developer");
-  fireEvent.click(await slot.findByTestId("oats-soul-agent-open"));
-  expect(opened).toEqual(["kernel-fix-developer"]);
+  expect(slot.queryAllByTestId("oats-soul-agent")).toEqual([]);
+  expect(within(slot.getByTestId("oats-soul-agents")).getByTestId("oats-loading").textContent).toBe("Reading…");
 });
 
 // A soul's agents are the roster's: while OATS cannot be read the page says so with the notice
 // every place shows, above the agents as last read; with no roster ever read, the notice alone.
-test("a soul's page while OATS cannot be read: the notice with the age above its agents as last read; with no roster, the notice and no raw line", async () => {
-  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
-  const failed = (kept: typeof last | null) => () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last: kept });
-  const stale = await souls("oats-developer", { snapshot: failed(last) });
+const last = (minutes: number) => ({ at: new Date(Date.now() - minutes * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() });
+const failed = (kept: ReturnType<typeof last> | null, code = "OATS_NOT_FOUND") => () => ({ ok: false as const, at: new Date().toISOString(), code, message: "oats was not found on falcon: install OATS there", machine: "falcon", last: kept });
+
+test("a soul's page and the Souls tab while OATS cannot be read: ONE notice with the age, above what was last read; with no roster, the notice and nothing of the agents", async () => {
+  const stale = await souls("oats-developer", { snapshot: failed(last(40)) });
   const notice = await stale.findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
   expect(notice.textContent).toContain("Read 40 min ago.");
+  expect(stale.getAllByTestId("oats-unreadable")).toHaveLength(1);
   expect(stale.getByTestId("oats-soul-detail").textContent).toContain("Flaky ci developer");
   stale.unmount();
   resetApp();
   const never = await souls("oats-developer", { snapshot: failed(null) });
-  const alone = await never.findByRole("alert");
-  expect(alone.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
+  expect((await never.findByRole("alert")).querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
   expect(never.getByTestId("oats-soul-detail").textContent).not.toContain("Flaky ci developer");
   expect(never.getByRole("button", { name: "Retry" })).toBeTruthy();
-});
-
-test("the Souls list while OATS cannot be read: the page's one notice, with the age above the counts as last read; with no roster, the notice and no count", async () => {
-  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
-  const failed = (kept: typeof last | null) => () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last: kept });
-  const stale = await souls("", { snapshot: failed(last) });
-  const notice = await stale.findByRole("alert");
-  expect(notice.textContent).toContain("Read 40 min ago.");
-  expect(stale.getAllByTestId("oats-unreadable")).toHaveLength(1);
-  await waitFor(() => expect(stale.getByTestId("oats-souls-page").textContent).toMatch(/oats-developer\s*2 agents/));
-  stale.unmount();
-  resetApp();
-  const never = await souls("", { snapshot: failed(null) });
-  expect((await never.findByRole("alert")).querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
-  expect(never.getByTestId("oats-souls-page").textContent).not.toMatch(/\d+ agents?/);
-  // And with a soul picked there is still one notice for the page, not two.
   never.unmount();
   resetApp();
-  const picked = await souls("oats-developer", { snapshot: failed(last) });
-  await picked.findByRole("alert");
-  expect(picked.getAllByTestId("oats-unreadable")).toHaveLength(1);
+  // The list: the same one notice; the running counts are the last read's.
+  const list = await souls("", { ...listed, snapshot: failed(last(40)) });
+  expect((await list.findByRole("alert")).textContent).toContain("Read 40 min ago.");
+  expect(list.getAllByTestId("oats-unreadable")).toHaveLength(1);
+  await waitFor(() => expect(rowsOf(list)[0]!.running).toBe("2 running"));
 });
 
-// The acts are held on the last roster read (R4), in this place too: Start and Retire of an agent
-// whose thread is missing stay in their place, off, with the reason.
-test("a soul's page on the last roster read: Start and Retire of an agent whose thread is missing are off, with the reason, and press nothing", async () => {
+// The acts are held on the last roster read, in this place too: New agent, and the acts of an
+// agent whose thread bb does not list, stay in their place, off; the page's notice says why.
+test("a soul's page on the last roster read: New agent and the acts of a detached agent are off, and press nothing", async () => {
   const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
-  const last = { at: new Date(Date.now() - 3 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
-  const slot = await souls("oats-developer", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", machine: "falcon", last }) }, fixtureAgents(), threads);
-  await slot.findByTestId("oats-soul-agent-detached");
-  for (const id of ["oats-detached-start", "oats-detached-retire"]) {
-    const button = slot.getByTestId(id) as HTMLButtonElement;
-    expect([id, button.disabled, button.title]).toEqual([id, true, ""]); // off, with no reason of its own: the page's notice says "Acts are off."
+  const slot = await souls("oats-developer", { ...listed, snapshot: failed(last(3), "OATS_TIMEOUT") }, fixtureAgents(), threads);
+  await slot.findByTestId("oats-soul-detail");
+  await waitFor(() => expect(agentRows(slot)[0]![1]).toBe("detached"));
+  const buttons = [slot.getByTestId("oats-soul-new-agent") as HTMLButtonElement, ...Array.from(slot.getAllByTestId("oats-soul-agent")[0]!.querySelectorAll<HTMLButtonElement>('[data-testid^="oats-agent-act-"], [data-testid="oats-status-act"]'))];
+  expect(buttons.length).toBeGreaterThan(1);
+  for (const button of buttons) {
+    expect([button.textContent, button.disabled, button.title]).toEqual([button.textContent, true, ""]); // off, with no reason of its own
     fireEvent.click(button);
   }
-  expect(rpcOf(slot, "start")).toEqual([]);
-  expect(rpcOf(slot, "retirePlan")).toEqual([]);
-  expect(asked()).toBeNull(); // and no dialog was asked for either
+  expect(slot.inspection.navigateCalls).toEqual([]);
+  expect(asked()).toBeNull();
 });

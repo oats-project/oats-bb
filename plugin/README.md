@@ -677,7 +677,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the instance's name as words, with the two letters of that name in a tile beside it (the name's own initials, never its soul's), its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message alone (with none, "approval" for a tool approval). How long it waits is the status line's to say, once ("Needs you · 5 d"); since when, by the clock, is no second line of the page and no tooltip: the Activity's "Waiting claim" row holds the claim's instant. **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the card's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: on the page's face the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; under its fold (**Details**, closed) the owning human and the messaging ID, with its Copy: asked for, not read on every page. |
+| **Instance** | the instance's name as words, with the two letters of that name in a tile beside it (the name's own initials, never its soul's), its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message alone (with none, "approval" for a tool approval). How long it waits is the status line's to say, once ("Needs you · 5 d"); since when, by the clock, is no second line of the page and no tooltip: the Activity's "Waiting claim" row holds the claim's instant. **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the card's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: **Terminal**, which opens bb's own Terminal tab on its session ("A tmux agent's terminal", below), and under it "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`, for a person's own terminal), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: on the page's face the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; under its fold (**Details**, closed) the owning human and the messaging ID, with its Copy: asked for, not read on every page. |
 | **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's: its fold says what was observed, the soul and the agents root). No fold stands alone at the tab's foot. The soul's description is two lines at most here, whole on the soul's page. |
 
 The Instance tab ends with two more sections. **Readiness** (`oats readiness`): one line
@@ -766,6 +766,45 @@ while bb's own connection is down. A soul's readiness is asked by the key the ro
 names, checked against `oats souls` before its process starts.
 Another feature opens the panel on one of its tabs with
 `showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).
+
+### A tmux agent's terminal
+
+An agent on tmux has no bb thread, and its screen is a terminal's. On its own page, while the
+kernel says that it runs, **Terminal** opens bb's own Terminal tab beside the page, attached to
+its session: what a person sees and types there is the agent's own screen (`app/terminal/`).
+
+- **What runs in the tab** is the kernel's own viewer of one instance, `oats session attach
+  --home <its home>` (`kernel/terminal.ts`): a temporary tmux session linked to the agent's window
+  alone. Closing the tab leaves the agent running. It is NOT read-only: keys typed there are
+  typed to the agent. The plugin runs nothing of it: the server answers the command
+  (`terminalCommand`), and bb's terminal runs it.
+- **By absolute path.** bb's terminal runs a command with the login shell's PATH, not the one
+  the plugin's host entry has: `oats` by name ended there with status 127. The machine that
+  holds the deployment answers where its `oats` is: the setting, else the first `oats` on its
+  PATH. `--detach-key` (Ctrl+\ leaves the viewer, and bb closes the tab) and `--no-status-line`
+  are passed only where `oats version --json` lists `session-attach-detach-key` and
+  `session-attach-no-status-line`.
+- **One tab per agent.** The tab is titled with the agent's name; a press while a terminal of
+  that title still runs on that machine shows it again (also after a reload), never a second
+  viewer.
+- **When the tab does not come up** the page says ONE line, "Terminal did not open.", with a
+  fold that says which it was: the command ended at once (the terminal is asked how it stands
+  right after the open: `terminals.get`; bb's own answer to the open is no witness of a dead
+  terminal), bb showed no tab (the terminal is then closed again, `terminals.close`, so that no
+  viewer stays attached on no tab), or the server's own refusal.
+- **Only from the page.** bb shows a terminal for a plugin page; a click in the sidebar or the
+  app overlay is declined (the terminal probe of 21 Nov 2026). The row of an agent on tmux has
+  no menu (it has no bb thread): a click on it opens this page.
+- **When the agent stops while its tab is open** the tab stays and shows the window as it is:
+  after a stop with OATS, a shell in the agent's home (the kernel's stop leaves the window at a
+  shell); after a Start, the agent again. It is what the kernel's viewer shows in a person's own
+  terminal. A session that is LOST (its window gone) ends the viewer, and bb closes the tab.
+  The page's state line says what happened, and the button is gone with the state.
+- **Not offered** for an agent that does not run (no session to show), for one on a bb thread
+  (the kernel has no terminal for it: `E_SESSION_NO_TERMINAL`), and for one on another server
+  of OATS (the command to copy is the way there). The command to copy stays under the button.
+- **Scrolling back:** the OATS tmux server has `mouse off`, so the wheel in bb's tab sends
+  arrow keys to the agent; the viewer's own keys scroll (Shift+PageUp, or Ctrl+B then `[`).
 
 ## The New agent form
 
@@ -1005,7 +1044,7 @@ runs, and `record/` there makes the recording again (its README says what was ar
 
 The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
 `spawn` (the New agent form), `workspace` (the four pages), `lifecycle` (stop, start, restart,
-retire), `automations`, `panel` (the instance panel) and `outside` (what is said when something
+retire), `automations`, `panel` (the instance panel), `terminal` (a tmux agent's terminal in bb's own Terminal tab; no slot: its button is on the panel's page) and `outside` (what is said when something
 happened to an agent outside OATS; no slot, no read and no `oats` verb of its own). Each has one module, or one directory, in
 every layer, and the entry of a layer only composes them:
 
@@ -1300,7 +1339,9 @@ watched reads), `experimental_useAppPanel` (`openTab`), `experimental_useTabVisi
 `experimental_usePluginId`,
 `experimental_ThreadActionsContextMenu`, `experimental_ThreadStatusGlyph`,
 `experimental_resolveThreadStatus`, `useBbNavigate().experimental_openFilePreview` (Automations'
-Open file: a file of the machine that holds the deployment, in bb's own preview).
+Open file: a file of the machine that holds the deployment, in bb's own preview),
+`useBbNavigate().experimental_openTerminal` (a tmux agent's Terminal: if bb removes it the tab
+is never shown and the page says "Terminal did not open."; the command to copy stays).
 
 App tests: `renderSlot`'s `experimental_panel`, and its `inspection.experimental_panelCalls`.
 

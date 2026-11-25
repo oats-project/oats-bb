@@ -624,19 +624,20 @@ describe("the event path", () => {
     expect((await rpc<{ ok: boolean; at: string }>("snapshot")).at).toBe(asked.at);
   }, 60_000);
 
-  // (This test takes about 21 s, and cannot be made shorter with fake timers: the limit it runs into is the kernel
-  // layer's own timer over a REAL child process (kernel/run.ts stops the `oats` it started), and the server's pacing
-  // and this harness's own RPC run on the same real timers: faking them would test the fakes. Nothing here asserts
-  // how long it took: the wait's bound is said in server/core.ts over `afterAct`, and this test's own limit bounds it.)
   it("the read an act is owed NEVER ANSWERS: the wait ends at the kernel call's limit, and the snapshot is answered that failure (OATS_TIMEOUT), not the roster from before", async () => {
     const first = await rpc<Shown>("snapshot");
     const plan = await rpc<{ revision: string }>("stopPlan", { instance: LEAD });
     await fake.behave({ status: { sleepMs: 600_000 } }); // a kernel that hangs
     const receipt = await rpc<{ endedAt: string }>("stopApply", { instance: LEAD, revision: plan.revision, key: "stop-7f3a9c2e41b8" });
+    const started = Date.now();
     const asked = await rpc<{ ok: boolean; at: string; code?: string; last: { at: string } | null }>("snapshot"); // waits: the pause, then the read up to its limit
+    const waited = Date.now() - started;
     expect([asked.ok, asked.code]).toEqual([false, "OATS_TIMEOUT"]);
     expect(Date.parse(asked.at)).toBeGreaterThan(Date.parse(receipt.endedAt));
     expect(asked.last?.at).toBe(first.at);
+    // The bound this case has (said in server/core.ts over `afterAct`): the pause's floor and the kernel call's 20 s limit;
+    // far under the 60 s of the worst case. (Read as a bound on the wait, not as a speed: nothing here is asked to be fast.)
+    expect(waited).toBeLessThan(60_000);
   }, 90_000);
 
   // The stamp is for the roster's `at` and an act's end ALONE. The server's pacing and the poll a client's snapshot

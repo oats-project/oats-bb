@@ -62,10 +62,16 @@ function busy(board) {
     ...question,
     id: `q${index + 3}`,
     question: fill(`Question ${index + 1}: which base branch should the release candidate be cut from, given that main moved twice today and the 0.1 line still carries the fix the pilot needs before Thursday,`, 199) + "?",
-    options: ["main: the default branch, as it stands after today's merges", "release: the 0.1 line, which carries the pilot's fix already", "a new branch from the tag v0.5.0, with the fix picked onto it", "wait: ask the maintainer first and cut nothing until then"],
+    options: ["main: the default branch, as it stands after today's merges", "release: the 0.1 line, which carries the pilot's fix already", "a new branch from the tag v0.5.0, with the fix picked on it", "wait: ask the maintainer first and cut nothing until then"],
     hasContext: true,
     since: new Date(Date.parse(question.since) - index * 600_000).toISOString(),
   }));
+  // Every text within the kernel's bounds: the board leaves out an entry that is over one, and the scene would show less than it says.
+  const over = [
+    ...facts.flatMap((fact) => [[fact.label, 40], [fact.value, 80], [fact.unit ?? "", 16]]),
+    ...questions.flatMap((asked) => [[asked.question, 200], ...asked.options.map((option) => [option, 60])]),
+  ].filter(([text, most]) => text.length > most);
+  if (over.length > 0 || facts.length > 12 || questions.length > 9) throw new Error(`scenes/board.mjs: the busy board is out of the kernel's bounds: ${JSON.stringify(over)}`);
   return { facts, questions };
 }
 /** The detail's answer for a board, in the kernel's documented shape: twenty values a fact, a context of two thousand characters a question. */

@@ -1,5 +1,6 @@
 // The harnesses' files that one process writes and another reads while it runs (container/files.mjs):
 // a whole file is renamed into place, and a log is read by its complete lines.
+import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +10,7 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 interface Files {
   atomicWrite(file: string, content: string): void;
   completeLines(file: string): string[];
+  wholeJson(file: string, seconds?: number): unknown;
 }
 const files = (): Promise<Files> => import(pathToFileURL(join(__dirname, "..", "container", "files.mjs")).href) as Promise<Files>;
 
@@ -53,4 +55,35 @@ test("a complete line that is not a record is not skipped: it is handed on, and 
   const lines = completeLines(log);
   expect(lines).toEqual(['{"n":1}', "not a record"]);
   expect(() => lines.map((line) => JSON.parse(line) as unknown)).toThrow();
+});
+
+test("a file another's process writes is read whole at once when it is whole", async () => {
+  const { wholeJson } = await files();
+  const file = join(dir, "state.json");
+  writeFileSync(file, '{"theme":"dark"}');
+  expect(wholeJson(file)).toEqual({ theme: "dark" });
+});
+
+test("a file found half written is read again until it is whole", () => {
+  // The read waits without a promise, so the writer is another process: it finishes the file 300 ms in.
+  const file = join(dir, "state.json");
+  writeFileSync(file, '{"theme":"da');
+  const reader = `import { spawn } from "node:child_process"; import { pathToFileURL } from "node:url";
+    const { wholeJson } = await import(pathToFileURL(process.argv[2]).href);
+    spawn(process.execPath, ["-e", "setTimeout(() => require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ theme: 'dark' })), 300)", process.argv[3]], { stdio: "ignore" });
+    const started = Date.now(); const value = wholeJson(process.argv[3], 5);
+    console.log(JSON.stringify({ value, waited: Date.now() - started >= 200 }));`;
+  const script = join(dir, "reader.mjs");
+  writeFileSync(script, reader);
+  const out = execFileSync(process.execPath, [script, join(__dirname, "..", "container", "files.mjs"), file], { encoding: "utf8" });
+  expect(JSON.parse(out) as unknown).toEqual({ value: { theme: "dark" }, waited: true });
+});
+
+test("a file that stays broken fails the read, with what it held: it is not skipped, and not taken for an empty one", async () => {
+  const { wholeJson } = await files();
+  const file = join(dir, "state.json");
+  writeFileSync(file, '{"theme":"da');
+  const started = Date.now();
+  expect(() => wholeJson(file, 0.3)).toThrow(/did not parse in 0\.3 s .*It held: "\{\\"theme\\":\\"da"/);
+  expect(Date.now() - started, "it waited its time out first").toBeGreaterThanOrEqual(300);
 });

@@ -34,11 +34,11 @@
 //   the acts   each goes through its dialog, from the agent's page, with the result read: what
 //              happened, where the agent runs, and for a resume what the kernel's `resume` said.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { showSidebar } from "../../browser.mjs";
-import { atomicWrite } from "../../files.mjs";
+import { atomicWrite, wholeJson } from "../../files.mjs";
 import { click, closed, dialog, phaseIs } from "../../scenes/lifecycle.mjs";
 
 const NAME = "lost-tmux-developer";
@@ -100,7 +100,8 @@ export default async (run) => {
     // Claude Code's own first-run screens, answered where it keeps its answers: with neither, a
     // pane stops at the theme chooser, then at "use this API key?", and nothing presses a key there.
     const state = join(homedir(), ".claude.json");
-    const held = existsSync(state) ? JSON.parse(readFileSync(state, "utf8")) : {};
+    // (Claude Code itself rewrites that file while agents of the earlier parts are up: the read waits for a whole one.)
+    const held = existsSync(state) ? wholeJson(state) : {};
     const approved = new Set([...(held.customApiKeyResponses?.approved ?? []), KEY.slice(-20)]);
     atomicWrite(state, JSON.stringify({ ...held, hasCompletedOnboarding: true, customApiKeyResponses: { approved: [...approved], rejected: held.customApiKeyResponses?.rejected ?? [] } }, null, 2));
     // The folder trust, by the kernel's own command (docs/harness-trust.md): it writes one leaf of that file.

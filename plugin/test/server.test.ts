@@ -644,24 +644,6 @@ describe("the event path", () => {
     }
   }, 90_000);
 
-  // A client that decides on the roster (the home's card asks `snapshot` at the press, and sends a message only to an
-  // agent it sees running) must not be answered, right after a stop, with the roster from before it: the server
-  // answers `snapshot` from its cache, and from the act's end until the read the act asked for has ended that cache is
-  // the old one. While that read is owed, `snapshot` waits for it.
-  it("a snapshot asked between an act's end and the end of the read it asked for WAITS for that read: its roster was read after the act's end, never the cached one from before it", async () => {
-    const first = await rpc<Shown>("snapshot");
-    const plan = await rpc<{ revision: string }>("stopPlan", { instance: LEAD });
-    await fake.behave({ status: { sleepMs: 2_500 } }); // the act's own status read is slow: the gap is wide
-    const receipt = await rpc<{ endedAt: string }>("stopApply", { instance: LEAD, revision: plan.revision, key: "stop-7f3a9c2e41b8" });
-    // Asked AT ONCE, as a window's guard would at a press: the answer is the act's own read, not the cache.
-    const asked = await rpc<Shown>("snapshot");
-    expect(asked.at).not.toBe(first.at);
-    expect(Date.parse(asked.at)).toBeGreaterThan(Date.parse(receipt.endedAt));
-    // And with nothing owed a snapshot is the cached one again, at once: the same roster, no new read.
-    const again = await rpc<Shown>("snapshot");
-    expect(again.at).toBe(asked.at);
-  }, 60_000);
-
   // The roster's `at` and an act's `endedAt` are whole milliseconds of this server's clock. A status read that STARTS in
   // the very millisecond the act ended is the read after the act, and the window reads a tie as "before" (`<=`), with no
   // later read owed: "Reading…" to its bound. The server stamps both from ONE strictly increasing stamp: the later
@@ -691,11 +673,9 @@ describe("the event path", () => {
   }, 60_000);
 
   // With the event path: a patch published between the act's end and the act's own read keeps the OLDER read's `at`
-  // (a patch never moves it), so a window that fetched the patched roster would hold one from before the act's end.
-  // It cannot fetch it: a snapshot asked while the act's read is owed waits for that read (`clientSnapshot`), so what
-  // the publish of the patch brings to the window is the act's own read, later than the act's end. (The patch's
-  // change is then on the screen when that read ends, not before: the cost of never answering from before the act.)
-  it("a patch published between an act's end and the act's own read does not pass for that read: the snapshot a window then asks waits for the act's read, and is later than the act's end", async () => {
+  // (a patch never moves it), so the window that fetches the patched roster still holds one from before the act's end:
+  // "Reading…" stays, until the act's own read is published.
+  it("a patch published between an act's end and the act's own read does not pass for that read: its roster's `at` is still from before the act's end", async () => {
     const plan = await rpc<{ revision: string }>("stopPlan", { instance: LEAD });
     await fake.behave({ status: { sleepMs: 4_000 }, [EVENTS]: { stdout: claimed() } });
     const published = server.harness.realtimeSignals.length;
@@ -704,12 +684,13 @@ describe("the event path", () => {
     // The act's own status read is held; the agent's events are named meanwhile, and the patch is published.
     await named();
     await until(() => tokens().length >= 1, "the patch is published");
-    // The window acts on that publish and asks the snapshot: it is answered with the act's own read, not the patched cache.
-    const fetched = await rpc<Shown>("snapshot");
-    expect(Date.parse(fetched.at)).toBeGreaterThan(Date.parse(receipt.endedAt));
-    // The act's own read is published too, with a token of its own.
+    const patched = await rpc<Shown>("snapshot");
+    expect(lead(patched).waiting).not.toBeNull(); // the patch is in the roster the window fetches…
+    expect(Date.parse(patched.at)).toBeLessThanOrEqual(Date.parse(receipt.endedAt)); // …and that roster is still one read before the act's end: the window keeps "Reading…"
+    // The act's own read ends and is published: the roster the window then fetches was read after the act's end.
+    await until(async () => Date.parse((await rpc<Shown>("snapshot")).at) > Date.parse(receipt.endedAt), "the act's own status read answers");
     await until(() => tokens().length >= 2, "the act's own read is published");
-    expect(new Set(tokens()).size).toBe(tokens().length);
+    expect(new Set(tokens()).size).toBe(tokens().length); // each publish its own token
   }, 60_000);
 
   it("fail safe: an events read that errors, answers a shape it does not know, or times out changes nothing and publishes nothing", async () => {

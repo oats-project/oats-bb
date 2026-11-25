@@ -192,12 +192,6 @@ export function createCore(bb: BbPluginApi) {
    * can already hold the final state, and the window would never learn that a later one was made.
    */
   let owedToActs = false;
-  /**
-   * The status read the last act that ended asked for, until it has ENDED; null when none is owed.
-   * While it is there the cached roster was read no later than that act's end: a client is not
-   * answered with it (`clientSnapshot`).
-   */
-  let afterAct: Promise<void> | null = null;
   // ---- the event path (below, "between two status reads") ----
   /**
    * Per instance, the last events answer applied to its row, and when the read that brought it
@@ -612,16 +606,7 @@ export function createCore(bb: BbPluginApi) {
    */
   const rereadAfterAct = () => {
     owedToActs = true;
-    if (lifetime.signal.aborted) return;
-    // (A read that fails still ends: its answer says so. One the plugin's stopping cut short ends too.)
-    const owed = reread().then(
-      () => undefined,
-      () => undefined,
-    );
-    afterAct = owed;
-    void owed.then(() => {
-      if (afterAct === owed) afterAct = null;
-    });
+    rereadSoon();
   };
 
   /**
@@ -743,19 +728,9 @@ export function createCore(bb: BbPluginApi) {
 
   // ---- what a client asks of the snapshot ----
 
-  /**
-   * The snapshot for a client: the cached one, read again behind it when nobody refreshed it for a
-   * while. NEVER a roster read no later than the last act's end: from the end of a stop, a start, a
-   * restart or a retire until the read it asked for has ended, the cache still says what was so
-   * before the act (a stopped agent "runs"), and a client that decides on it would be wrong: the
-   * home's card asks `snapshot` at the press and sends a message to an agent it sees running, and
-   * a message to a stopped agent starts it outside OATS. So while that read is owed the answer
-   * WAITS for it (its roster, or its failure, which a caller treats as "cannot be read now"). The
-   * cost is that read's length for a snapshot asked inside it, for every window.
-   */
+  /** The snapshot for a client: the cached one, read again behind it when nobody refreshed it for a while. */
   async function clientSnapshot(): Promise<Snapshot> {
     clientSeenAt = Date.now();
-    while (afterAct !== null) await afterAct; // (`while`: an act that ended meanwhile owes its own read)
     if (cached && Date.now() - lastStart > POLL_MS) rereadSoon();
     return current();
   }

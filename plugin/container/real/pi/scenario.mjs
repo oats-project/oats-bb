@@ -305,11 +305,14 @@ try {
     const HOLD = `(() => { const field = document.querySelector(${q("oats-spawn-model")}); const mark = field?.closest('[data-testid="oats-field"]')?.querySelector('[role="alert"]'); const submit = document.querySelector(${q("oats-spawn-submit")}); const by = submit?.getAttribute("aria-describedby"); return JSON.stringify({ mark: mark?.innerText.trim() ?? null, off: submit?.disabled ?? null, described: by ? (document.getElementById(by)?.innerText.trim() ?? null) : null, beside: document.querySelector(${q("oats-disabled-reason")})?.innerText.trim() ?? null }); })()`;
     const heldTwin = await page.until(`(() => { const read = ${HOLD}; return JSON.parse(read).mark === "Pick provider" ? read : ""; })()`, 60);
     check(heldTwin === JSON.stringify({ mark: "Pick provider", off: true, described: "Pick provider", beside: null }), `${at}: the bare id ${TWIN}, which two of pi's providers serve, is HELD: "Pick provider" on the Model field, once; Spawn is off and described by that mark`, heldTwin ?? (await page.evaluate(HOLD)));
+    // The hold as a person meets it: the mark under the Model field, Spawn off.
+    await page.evaluate(`document.querySelector(${q("oats-spawn-model")}).scrollIntoView({ block: "center" })`);
+    await shot("pick-provider");
     // Its list, open: the ids that serve it, whole, and no other model of bb's list.
     await page.evaluate(`document.querySelector(${q("oats-spawn-model")}).click()`);
     const offers = await page.until(`(() => { const ids = [...document.querySelectorAll(${q("oats-spawn-model-option")})].map((option) => option.getAttribute("data-value")); return ids.length > 0 ? JSON.stringify(ids) : ""; })()`, 10);
     check(offers === JSON.stringify(["", ...TWINS, "__custom__"]), `${at}: and the field offers exactly the ids that serve it (${TWINS.join(", ")}), with Default and Custom…: no other model of bb's list`, String(offers));
-    await shot("pick-provider");
+    await shot("pick-provider-list");
     // One of them picked: the mark goes, and Spawn is armed once its preview is read.
     check(await page.evaluate(choose("oats-spawn-model", TWINS[1])), `${at}: ${TWINS[1]} is picked from them`, await page.evaluate(textOf(testId("oats-spawn-form"))));
     const armed = await page.until(`(() => { const read = ${HOLD}; const now = JSON.parse(read); return now.mark === null && now.off === false ? read : ""; })()`, 60);

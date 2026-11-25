@@ -4,7 +4,7 @@ Official [OATS](https://github.com/oats-project/oats) package for
 [bb](https://www.npmjs.com/package/bb-app): the bb session provider and plugin, which let OATS
 agents run as bb threads beside the kernel's tmux backend.
 
-The latest release is 0.5.0 ([CHANGELOG.md](CHANGELOG.md)), the pilot's release: the plugin's screens in their pilot form, one tree of agents for every backend, and "Reading…" after every act until OATS has read the agent again. The work arrives as reviewed pull
+The latest release is 0.5.1 ([CHANGELOG.md](CHANGELOG.md)), the pilot's fixes: a pi agent with a grant identity can send its mail, `hostDaemonPort` alone works, readiness says when the pi model check is off, and an asking agent's card is off while "Reading…". The work arrives as reviewed pull
 requests, and it follows the OATS session-provider contract as decided on the OATS side. The lane map
 records how work lands here: <https://github.com/oats-project/oats/issues/1566>.
 
@@ -89,7 +89,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
    ```yaml
    # oats-workspace.yaml
    packages:
-     oats.bb: git:github.com/oats-project/oats-bb@v0.5.0
+     oats.bb: git:github.com/oats-project/oats-bb@v0.5.1
    defaults:
      capabilities:
        oats.bb: { from: package }

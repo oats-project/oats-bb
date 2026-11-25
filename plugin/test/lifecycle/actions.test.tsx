@@ -2058,6 +2058,33 @@ test("a resume that started fresh leads with that, in the warning tone, then the
   expect(waiting.getByTestId("oats-start-waiting").compareDocumentPosition(waiting.getByTestId("oats-start-where")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
+test("a deployment that does not hold the bb session provider (the dialog's read then names NO harness: server/lifecycle.ts): a lost tmux agent's Start opens and resumes; its Restart opens and restarts", async () => {
+  const slot = await tmuxStart({ startCheck: () => lostCheck({ harnesses: [] }), start: () => resumedAs({ resumed: true, reason: null, waiting: null }) });
+  // The dialog is the agent's, armed: nothing says that OATS, or a provider, cannot be read.
+  expect(slot.getByRole("dialog").querySelector("h2")!.textContent).toBe("Start Kernel fix developer");
+  expect(says(slot)).toEqual(["Tries to continue its last conversation; else starts fresh."]);
+  expect(slot.queryByTestId("oats-unreadable")).toBeNull();
+  expect(slot.queryByTestId("oats-start-harness")).toBeNull();
+  expect(button(slot, "oats-confirm-act").disabled).toBe(false);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  expect(calls(slot, "start").map((call) => call.input)).toEqual([{ instance: TMUX, resume: true }]);
+  expect(slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Kernel fix developer is back in its last conversation.");
+  resetApp();
+  // Restart, of the same agent while it runs: no harness to choose, and the press restarts it.
+  const again = await menu("thr_plain", { startCheck: () => startCheckOf(TMUX, { backend: "tmux", harness: "claude", running: true, runtimeState: null, sessionEnd: null, harnesses: [] }), restart: () => ({ threadId: null, instance: TMUX, harness: "claude", model: null, warnings: [], resume: null }) }, lostRoster());
+  const { openAct } = await import("../../app/lifecycle");
+  openAct("restart", TMUX);
+  await ready(again.slot);
+  expect(says(again.slot)).toEqual(["Starts a new conversation."]);
+  expect(again.slot.queryByTestId("oats-start-harness")).toBeNull();
+  expect(button(again.slot, "oats-confirm-act").disabled).toBe(false);
+  fireEvent.click(button(again.slot, "oats-confirm-act"));
+  await phase(again.slot, "done");
+  expect(calls(again.slot, "restart").map((call) => call.input)).toEqual([{ instance: TMUX }]);
+  expect(again.slot.getByTestId("oats-result").querySelector("h3")!.textContent).toBe("Kernel fix developer restarted.");
+});
+
 test("the plain start of a lost tmux agent stays, on purpose: the choice says what it loses, and sends no resume", async () => {
   const slot = await tmuxStart({ startCheck: () => lostCheck(), start: () => ({ threadId: null, instance: TMUX, harness: "claude", model: null, warnings: [], resume: null }) });
   fireEvent.click(within(slot.getByTestId("oats-start-fresh-choice")).getByRole("switch"));

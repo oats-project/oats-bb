@@ -1,0 +1,1 @@
+{"schemaVersion":1,"ok":false,"error":{"code":"E_CAPABILITY_UNKNOWN","message":"no capability \"oats.bb\" in this workspace's catalog (`oats capabilities` lists them; a package's capabilities appear after `oats sync`)","details":{"name":"oats.bb"}}}

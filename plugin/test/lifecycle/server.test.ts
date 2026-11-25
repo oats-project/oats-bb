@@ -185,6 +185,33 @@ describe("start and restart", () => {
     expect((await fake.calls()).filter((each) => each.argv[0] === "session")).toEqual([]);
   }, 20_000);
 
+  it("a deployment that does not hold the bb session provider (its agents run on tmux): the Start and Restart dialogs' read answers, with no harness declared; a tmux home resumes, starts and restarts; a harness that is NAMED is still refused", async () => {
+    // RECORDED: what OATS 0.70.5 answers `oats capabilities show oats.bb --json` in a workspace whose catalog has no
+    // oats.bb (exit 1, E_CAPABILITY_UNKNOWN on stdout): test/fixtures/lifecycle/capabilities-show-no-provider.json.
+    const refused = { "capabilities show": { file: "lifecycle/capabilities-show-no-provider.json", exit: 1 } };
+    expect(JSON.parse(await readFile(join(FIXTURES, "lifecycle/capabilities-show-no-provider.json"), "utf8"))).toMatchObject({ ok: false, error: { code: "E_CAPABILITY_UNKNOWN" } });
+    backend = await startBackend({ verbs: { ...refused, "session start": { file: "lifecycle/tmux-start.json" }, "session restart": { file: "lifecycle/tmux-restart.json" } } });
+    const { rpc, fake } = backend;
+    const TMUX_HOME = "/abs/deployment/agents/oats-developer/instances/kernel-fix-developer";
+    // The dialog's first read: the agent as the kernel has it, and no harness to choose from. It does not fail.
+    expect(await rpc("startCheck", { instance: "kernel-fix-developer" })).toMatchObject({ instance: "kernel-fix-developer", backend: "tmux", home: TMUX_HOME, harnesses: [] });
+    // Its Start (a lost session is resumed), its plain Start and its Restart: each goes to the kernel, with nothing beside it.
+    await rpc("start", { instance: "kernel-fix-developer", resume: true });
+    await rpc("start", { instance: "kernel-fix-developer" });
+    await rpc("restart", { instance: "kernel-fix-developer" });
+    expect((await fake.calls()).filter((each) => each.argv[0] === "session").map((each) => each.argv)).toEqual([
+      ["session", "start", "--home", TMUX_HOME, "--resume", "--json"],
+      ["session", "start", "--home", TMUX_HOME, "--json"],
+      ["session", "restart", "--home", TMUX_HOME, "--json"],
+    ]);
+    // A home on bb is read too (no harness declared: the dialog offers no choice), and a harness that is NAMED for it
+    // is refused before any process: nothing declares it.
+    expect(await rpc("startCheck", { instance: "weekly-digest-helper" })).toMatchObject({ backend: "bb", harnesses: [] });
+    expect(await refusalOf(rpc("start", { instance: "weekly-digest-helper", harness: "pi" }))).toMatchObject({ code: "invalid", message: expect.stringContaining("not a harness the bb session provider declares") });
+    expect(await refusalOf(rpc("restart", { instance: "weekly-digest-helper", harness: "claude" }))).toMatchObject({ code: "invalid" });
+    expect((await fake.calls()).filter((each) => each.argv[0] === "session")).toHaveLength(3);
+  }, 30_000);
+
   it("startCheck reads the roster again and answers the agent as the kernel has it now, with the harnesses the provider declares", async () => {
     backend = await startBackend({ verbs: declares(["claude", "pi"]) });
     const { rpc, verbs } = backend;

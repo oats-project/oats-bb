@@ -40,6 +40,8 @@ export type Agent = {
    * report; on a kernel without the feature its absence says nothing.
    */
   outsideOats?: OutsideOats | null;
+  /** The agent's board holds an open question (the kernel's row `board`): `true`, or absent. The question itself, its options and the facts are the board's own read (app/board). */
+  boardAsks?: true;
 };
 
 export type OutsideOats = { code: "running-outside-oats"; backend: string; message: string };

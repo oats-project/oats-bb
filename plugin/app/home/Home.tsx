@@ -22,6 +22,7 @@ import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideNeeds, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
+import { BoardAsk } from "../board";
 import { guarded, sendText } from "./send";
 import { READING as READING_WORD, ReadingFacts, ReadingLine, readingNow, useActed } from "../roster/reading";
 import { LastObservation, RosterNotice, useLineShowsNotice } from "../roster/unreadable";
@@ -337,6 +338,10 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const line = useRef<HTMLDivElement>(null);
   const fit = useFit(line, "card", "oats-needs-where");
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
+  // The agent's BOARD asks (a question with its options): where the card would offer a reply, it draws THAT question
+  // by the board's own component and answer path (app/board): one thing to a person, here and on the agent's Board tab.
+  // (Whether it asks is the ROSTER's own word of the row, `boardAsks`: a card that mounts reads nothing of its own.)
+  const boardAsks = entry.agent.boardAsks === true && offer === "reply";
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
     <Disclosure summary={MESSAGE_INSTEAD} testId="oats-needs-message">
@@ -374,7 +379,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           </Button>
         </div>
         {waitInline ? null : wait}
-        {message === null ? null : (
+        {message === null || boardAsks ? null : (
           <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
             {shown(message)}
           </p>
@@ -421,7 +426,11 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           // Answered in its thread: the card's button says "Answer" and leads there; a message is not an answer.
           instead
         ) : offer === "reply" ? (
-          reply
+          boardAsks ? (
+            <BoardAsk instance={entry.agent.instance} />
+          ) : (
+            reply
+          )
         ) : entry.agent.backend === "tmux" ? (
           // Nothing can be sent from bb to an agent on tmux: where to answer it. The command that
           // reaches its terminal is on its page, where Open leads.

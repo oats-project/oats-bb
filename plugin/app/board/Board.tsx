@@ -321,6 +321,21 @@ function Questions({ instance, board, claim, detail, now }: { instance: string; 
   );
 }
 
+/**
+ * The agent's open QUESTIONS alone, by the board's own reads and its own answer path: for a place
+ * that says an agent needs a person (the home's card), so that a question of the board is ONE
+ * thing wherever it is drawn: the same options, the same send, the same "Sent." mark. Nothing
+ * where the board has no open question.
+ */
+export function BoardAsk({ instance }: { instance: string }) {
+  const read = useBoard(instance);
+  const now = useNow();
+  const board = read.status === "ready" ? read.board : null;
+  const detail = useBoardDetail(instance, board === null ? null : { ...board, facts: [] }, true);
+  if (read.status !== "ready" || board === null || board.questions.length === 0) return null;
+  return <Questions instance={instance} board={board} claim={read.claim} detail={detail} now={now} />;
+}
+
 /** The agent's board, read and drawn. `instance`: the agent's name; nothing else is asked of the place. */
 export function Board({ instance }: { instance: string }) {
   const read = useBoard(instance);

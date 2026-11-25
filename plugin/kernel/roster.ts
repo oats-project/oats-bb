@@ -1,5 +1,6 @@
 // `oats status --json`: the roster, read into the plugin's Agent rows (the interface agreed with the
 // kernel side, v3). Unknown fields are ignored; a row with no `instance` fails the whole read.
+import { BOARD_FEATURE, boardData } from "../model/board.js";
 import { z } from "zod";
 import type { Agent } from "../model/types.js";
 import { shaped } from "./envelope.js";
@@ -30,6 +31,7 @@ const row = z.looseObject({
   sessionEnd: text,
   // Read with its own schema, only where the kernel lists the feature (kernel/outside.ts): a key of another shape is no report, never a failed read.
   outsideOats: z.unknown().optional(),
+  board: z.unknown().optional(),
 });
 const roster = z.looseObject({
   root: z.string(),
@@ -101,6 +103,9 @@ function toAgent(group: { name: string }, source: z.output<typeof row>, features
     // `features` lists `provider-outside-oats`: on a kernel without it nothing is said of it.
     ...(source.sessionEnd ? { sessionEnd: source.sessionEnd } : {}),
     ...outsideOf(source, features),
+    // Whether the agent's BOARD holds an open question (the row's `board`, read by model/board.ts): only where
+    // this kernel lists the feature. A place that says the agent needs a person then draws that question itself.
+    ...(features.includes(BOARD_FEATURE) && (boardData(source.board)?.questions.length ?? 0) > 0 ? { boardAsks: true as const } : {}),
     waiting: waiting
       ? { reason: waiting.reason ?? "attention", message: waiting.message ?? null, since: waiting.since ?? null }
       : null,

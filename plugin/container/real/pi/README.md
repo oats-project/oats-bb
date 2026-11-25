@@ -78,7 +78,14 @@ call the plugin's RPC, as its UI does. After each act it reads `oats status --js
   name. The form's column reads "Harness pi · mock/echo" from the kernel's preview; the `oats`
   call the form made carries `--harness pi --model mock/echo --backend bb --yolo --preview`, and
   the kernel's answer has the launch on pi. At each view.
-- **P2 the spawn.** Spawn, once: the form opens the new agent's thread, the one the kernel names;
+  First, at each view, **the hold "Pick provider"** on bb's real list: pi's configuration of the run
+  holds one model, `twin`, under two providers (`mock` and `mock2`: `setup.sh`), so bb lists
+  `mock/twin` and `mock2/twin`. The bare id `twin`, typed, is held: "Pick provider" on the Model
+  field, once, Spawn off and described by it, and the field's list holds exactly those two ids
+  (image `real-pi-form-<view>-pick-provider`); one of them picked, Spawn is armed.
+- **P2 the spawn.** Spawn, once: the form opens the new agent's thread, the one the kernel names,
+  with bb's notice "Created Pi form developer." over it (image `real-pi-form-1280x800-created`: one
+  spawn a run, so one view);
   `oats status` has the agent on bb, on pi; bb has a thread of its pi provider; pi asked the model
   with the opening instruction, and the thread is idle. The thread's own row says "Idle", and the
   thread shows pi's answer.

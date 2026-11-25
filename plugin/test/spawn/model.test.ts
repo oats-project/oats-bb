@@ -82,7 +82,7 @@ describe("what will be created, from the kernel's preview", () => {
 
 describe("a refusal, in a person's words, with what to do", () => {
   it("at the preview: the Desktop's sentence, then the form's own words for what follows; the kernel's message for Details", () => {
-    expect(spawnProblem({ code: "E_INSTANCE_NAME_TAKEN", message: "instance flaky-ci-2-developer exists" })).toEqual({ sentence: "An instance with this name already exists. Choose another name.", next: null, code: "E_INSTANCE_NAME_TAKEN", detail: "instance flaky-ci-2-developer exists", outcome: "refused" });
+    expect(spawnProblem({ code: "E_INSTANCE_NAME_TAKEN", message: "instance flaky-ci-2-developer exists" })).toEqual({ sentence: "An agent with this name already exists. Choose another name.", next: null, code: "E_INSTANCE_NAME_TAKEN", detail: "instance flaky-ci-2-developer exists", outcome: "refused" });
     // The form has no Developer settings yet: no sentence names a control that is not there.
     expect(spawnProblem({ code: "E_BRANCH_EXISTS", message: null }).sentence).toBe("That branch already exists. Its name comes from the agent’s: choose another name.");
     expect(spawnProblem({ code: "E_BAD_ARGS", message: "x" }).sentence).toBe("Some of these values can’t be used. Check the values above.");
@@ -136,7 +136,7 @@ describe("a refusal, in a person's words, with what to do", () => {
   });
 
   it("after the press: nothing was created is said, and what to look at before spawning again", () => {
-    expect(spawnProblem({ code: "E_DECISION_STALE", message: null }, "spawn").sentence).toBe("Something changed before the spawn went through. Nothing was created — check the updated values and press Spawn again.");
+    expect(spawnProblem({ code: "E_DECISION_STALE", message: null }, "spawn").sentence).toBe("Nothing was created. Check the values, then Spawn.");
     expect(spawnProblem({ code: "E_PLACEMENT_TAKEN", message: null }, "spawn").sentence).toBe("Another spawn just took this name. Nothing was created — check the new name and press Spawn again.");
     expect(spawnProblem({ code: "E_OUTCOME_UNKNOWN", message: null }, "spawn").sentence).toBe("We couldn’t confirm whether the instance was created. Press Check result: nothing starts twice.");
     expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }, "spawn")).toMatchObject({ sentence: "OATS took too long to answer. The instance may already exist. Press Check result: nothing starts twice.", next: "check-result" });

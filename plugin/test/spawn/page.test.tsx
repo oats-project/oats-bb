@@ -269,8 +269,10 @@ test("a harness the person chose, for which the kernel resolves no model: Spawn 
   expect(slot.getByTestId("oats-spawn-form").textContent!.split("Required")).toHaveLength(2);
   expect(slot.getByTestId("oats-spawn-model").getAttribute("aria-invalid")).toBe("true");
   expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/bb’s default|No model is set|harness’s own|harness's own/);
-  // The field itself promises nothing: its first entry is "Default" alone.
-  expect(slot.getByTestId("oats-spawn-model").textContent).toBe("Default▾");
+  // The field does not say "Default" over "Required": there is none. It says what it wants, and its list offers no entry that sends no model.
+  expect(slot.getByTestId("oats-spawn-model").textContent).toBe("Choose a model…▾");
+  expect(options(slot, "oats-spawn-model").map(([label]) => label)).toEqual(["Custom…"]);
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Default/);
   fireEvent.click(submit(slot));
   expect(calls(slot, "spawn")).toHaveLength(0);
   // Another field changed: while its preview is read, the mark stays and the column still promises no default.
@@ -559,8 +561,8 @@ test("a name the kernel refuses at the preview is said under the name, in a pers
   set(slot, "oats-spawn-name", "flaky-ci-developer");
   // A person's words; the kernel's code is what a pointer shows on them.
   const mark = () => slot.getByTestId("oats-spawn-form").querySelector('[role="alert"]');
-  await waitFor(() => expect([mark()?.textContent, mark()?.getAttribute("title")]).toEqual(["An instance with this name already exists. Choose another name.", "E_INSTANCE_NAME_TAKEN"]));
-  expect([submit(slot).disabled, reason(slot), describedBy(slot)]).toEqual([true, null, "An instance with this name already exists. Choose another name."]);
+  await waitFor(() => expect([mark()?.textContent, mark()?.getAttribute("title")]).toEqual(["An agent with this name already exists. Choose another name.", "E_INSTANCE_NAME_TAKEN"]));
+  expect([submit(slot).disabled, reason(slot), describedBy(slot)]).toEqual([true, null, "An agent with this name already exists. Choose another name."]);
   expect(slot.queryByTestId("oats-spawn-preview")).toBeNull(); // no refusal drawn in a column: the field says it
 });
 
@@ -673,7 +675,7 @@ test("a decision that moved before the spawn: nothing was created, the words say
   hold = true;
   fireEvent.click(submit(slot));
   const result = await slot.findByTestId("oats-result");
-  expect(result.querySelector("p")!.textContent).toBe("Something changed before the spawn went through. Nothing was created — check the updated values and press Spawn again.");
+  expect(result.querySelector("p")!.textContent).toBe("Nothing was created. Check the values, then Spawn.");
   // Until the preview is read again there is nothing to press: the one that was on screen is the one the kernel refused.
   await waitFor(() => expect(waiting).toHaveLength(1));
   expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading…"]);
@@ -735,8 +737,8 @@ test("a spawn that made an instance and did not finish (the kernel says so, or i
     expect([result.getAttribute("data-tone"), result.querySelector("h3")!.textContent, result.querySelector("p")!.textContent], code).toEqual(["unknown", "The agent was created, and its start is not complete", sentence]);
     expect([result.querySelectorAll(":scope > p").length, slot.getByTestId("oats-spawn-details").querySelector("p")!.textContent], code).toEqual([0, code]); // the code: under Details, first
     // Never "not spawned" with the form free: with no name the kernel would number a second agent.
-    expect([fieldset(slot).disabled, submit(slot).textContent, submit(slot).disabled, slot.getByTestId("oats-spawn-cancel").textContent], code).toEqual([true, "Spawn incomplete", true, "Close"]);
-    fireEvent.click(submit(slot));
+    // Nothing that is off is drawn: no held button used as a status (the result's title says it); the foot's one button is Close.
+    expect([fieldset(slot).disabled, slot.queryByTestId("oats-spawn-submit"), slot.getByTestId("oats-spawn-cancel").textContent], code).toEqual([true, null, "Close"]);
     fireEvent.keyDown(slot.getByTestId("oats-spawn-cancel"), { key: "Enter", ctrlKey: true });
     expect(calls(slot, "spawn"), code).toHaveLength(1);
     slot.unmount();
@@ -763,8 +765,7 @@ test("a refusal whose rollback the kernel could not finish is never 'nothing was
     "Part of the instance may remain. See Details before spawning again.",
   ]);
   expect(slot.getByTestId("oats-spawn-details").textContent).toContain("rollback INCOMPLETE, clean up manually");
-  expect([fieldset(slot).disabled, submit(slot).textContent, submit(slot).disabled, slot.getByTestId("oats-spawn-cancel").textContent]).toEqual([true, "Spawn incomplete", true, "Close"]);
-  fireEvent.click(submit(slot));
+  expect([fieldset(slot).disabled, slot.queryByTestId("oats-spawn-submit"), slot.getByTestId("oats-spawn-cancel").textContent]).toEqual([true, null, "Close"]);
   fireEvent.keyDown(slot.getByTestId("oats-spawn-cancel"), { key: "Enter", ctrlKey: true });
   expect(calls(slot, "spawn")).toHaveLength(1);
 });
@@ -782,7 +783,7 @@ test("the marker holds the form whatever the refusal's text leads with: a marked
   fireEvent.click(submit(slot));
   const result = await slot.findByTestId("oats-result");
   expect([result.getAttribute("data-tone"), result.querySelector("h3")!.textContent]).toEqual(["failed", "The spawn was refused, and could not be undone completely"]);
-  expect([fieldset(slot).disabled, submit(slot).textContent, submit(slot).disabled, slot.getByTestId("oats-spawn-cancel").textContent]).toEqual([true, "Spawn incomplete", true, "Close"]);
+  expect([fieldset(slot).disabled, slot.queryByTestId("oats-spawn-submit"), slot.getByTestId("oats-spawn-cancel").textContent]).toEqual([true, null, "Close"]);
 });
 
 test("the same refusal without the kernel's marker is what its code says, whatever its words: refused, the values free again", async () => {
@@ -824,7 +825,7 @@ test("while OATS cannot be read the form draws ONE button named Retry, the notic
   expect(slot.queryByTestId("oats-spawn-harness-retry")).toBeNull();
   expect(named()).toHaveLength(1);
   expect(named()[0]!.closest('[data-testid="oats-unreadable"]')).not.toBeNull();
-  expect(slot.getByTestId("oats-spawn-form").textContent).toContain("Harnesses could not be read"); // the sentence stays
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toContain("Harnesses could not be read"); // nor the form's own red sentence under the roster's notice, which holds the form and says why
   // The roster is read again while the list is still failed: its own Retry is back, and reads it (the way to read the list again is not lost).
   stale = false;
   await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:26.000Z" });

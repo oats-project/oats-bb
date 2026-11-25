@@ -3,7 +3,7 @@
 // line (on an open thread and on an archived one). Each from the kernel's row
 // (the snapshot's `Agent`) and bb's own answer for the thread.
 import { afterEach, expect, test, vi } from "vitest";
-import { fireEvent, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { ExperimentalThreadHeaderRowProps, PluginThreadListProps } from "@get-bb/plugin-sdk/app";
@@ -658,6 +658,14 @@ test("the panel's header of an agent on its thread carries the kernel's report, 
   expect(state.querySelectorAll("details")).toHaveLength(1);
   expect(reported.getByTestId("oats-agent-page").querySelectorAll('[data-testid="oats-outside-details"]')).toHaveLength(1);
   expect(Array.from(within(state).getByTestId("oats-outside-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop, then Start.", `running-outside-oats: ${MESSAGE}`]);
+  // Behind a lifecycle result that says this agent changed, until the roster is read again: "Reading…" in the state's place, and the line's two acts OFF (as every act is then), still there to see.
+  const { noteActed } = await import("../../app/roster/reading");
+  const lineActs = () => within(reported.getByTestId("oats-panel-state")).getAllByTestId("oats-status-act").map((button) => [button.textContent, (button as HTMLButtonElement).disabled]);
+  expect(lineActs()).toEqual([["Stop…", false], ["Start…", false]]);
+  act(() => noteActed([DIGEST], fixtureSnapshot().at));
+  await waitFor(() => expect(within(reported.getByTestId("oats-panel-state")).getByTestId("oats-reading").textContent).toBe("Reading…"));
+  expect(lineActs()).toEqual([["Stop…", true], ["Start…", true]]);
+  expect(reported.getByTestId("oats-panel-state").textContent).not.toMatch(/Running outside OATS/); // never the state of before, stated plainly
   resetApp();
   const plain = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(plain)).toMatchObject({ state: "Stopped" })); // the page is drawn, in its state

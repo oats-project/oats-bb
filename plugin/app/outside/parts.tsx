@@ -5,8 +5,7 @@ import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import type { ReactNode } from "react";
 import { hasAgentPage, openAgentPage } from "../home/agent-tab";
-import { AgentActs, actsFor, openAct } from "../lifecycle";
-import { useOats } from "../oats";
+import { AgentActs, openAct } from "../lifecycle";
 import type { Oats } from "../oats";
 import { useNow } from "../roster/now";
 import { agentStatus } from "../roster/status";
@@ -163,14 +162,11 @@ export function DetachedActs({ said, instance, held }: { said: Said | null; inst
  */
 export const outsideNeeds = (said: Said | null): string | null => (said !== null && said.warning !== null && reportActs(said).includes("start") ? OUTSIDE_NEEDS : null);
 
-/** The two acts the kernel's report names, the primary one first. */
-const BOTH = ["stop", "start"] as const;
 /**
  * Of the two, the one that brings the agent back under OATS: Stop (words.ts `OUTSIDE_NEEDS`: it
  * always works; Start… begins a new conversation and is refused while the outside thread is in a
- * turn). Drawn as the primary button where THIS feature draws the two side by side: the thread's
- * line, the home's card, and its own block while the header has none. (The agent's page and the
- * panel draw them in their header, the lifecycle's `AgentActs`: plain buttons, no primary.)
+ * turn). Drawn as the primary button wherever the two are side by side: the thread's line, the
+ * home's card, and the status line of the agent's page and of the instance panel (`pageActs`).
  */
 const REPORT_PRIMARY: Act = "stop";
 
@@ -184,25 +180,16 @@ const reportActs = (said: Said): Act[] => (said.warning !== null && said.warning
  * words, then the kernel's own code and sentence, through the display filter. No command is on
  * screen: Stop… and Start… do the same, and they are the LINE's own acts (`lineActs`). The mark
  * and "stopped in OATS" keep the warning tone. (The text audit, T21 to T24, as ruled 23 Nov 2026.)
- * `own`: the acts this draws a button of its own for, over the fold, in a place whose line has no
- * acts of its own for them (the instance panel, while no roster is read and its header offers none).
  * Nothing where the kernel reports nothing.
  * The lifecycle starts an agent on bb or on tmux, and the report is never a tmux agent's (the
  * kernel reports it of a provider home): for an agent of another session provider the fold
  * names Stop alone (`reportActs`), so that nothing is named that cannot be pressed.
  */
-export function OutsideWarning({ said, instance, held, own = [], fold = true }: { said: Said | null; instance: string; held: boolean; own?: readonly Act[]; /** false: the fold is drawn elsewhere, under the state it explains (the agent's page: `OutsideAgentDetails` in its header), and this draws the buttons alone */ fold?: boolean }) {
+export function OutsideWarning({ said, instance }: { said: Said | null; instance: string; /** (what its callers pass of the roster's read: this draws no act, so nothing here is held) */ held?: boolean }) {
   if (said === null || said.warning === null) return null;
-  const acts = own.filter((act) => reportActs(said).includes(act));
-  if (!fold && acts.length === 0) return null;
   return (
     <div data-testid="oats-outside-warning" data-instance={instance} className="flex min-w-0 flex-col gap-1.5">
-      {acts.length === 0 ? null : (
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <OutsideActs instance={instance} acts={acts} held={held} primary={REPORT_PRIMARY} />
-        </div>
-      )}
-      {fold ? <OutsideDetails said={said} /> : null}
+      <OutsideDetails said={said} />
     </div>
   );
 }

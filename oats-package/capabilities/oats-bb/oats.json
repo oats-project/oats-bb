@@ -45,7 +45,7 @@
     },
     "daemon": {
       "hostOnly": true,
-      "description": "The bb host daemon's address on this host (its /status says when threads can start). Loopback only. Set it only in oats-local.yaml. Unset: the hostDaemonPort on 127.0.0.1 where that is set, and otherwise bb's own default, http://127.0.0.1:38887. (No default is declared here: one would reach the provider as a daemon the deployment had set, beside its hostDaemonPort.)"
+      "description": "The bb host daemon's address on this host (its /status says when threads can start). Loopback only. Set it only in oats-local.yaml. Unset: the hostDaemonPort on 127.0.0.1 where that is set, and otherwise bb's own default, http://127.0.0.1:38887."
     },
     "hostDaemonPort": {
       "hostOnly": true,

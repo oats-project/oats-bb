@@ -839,3 +839,52 @@ test("a read that answers while its tab is away is noted when the tab is back: t
   const notice = await within(slot.getByTestId("oats-panel-activity")).findByRole("alert");
   expect(text(notice)).toContain("Read 1 min ago.");
 });
+
+// ---- ONE Retry on a screen (the lead's T3; PR E's third review round). While the ROSTER cannot be read, the pane holds
+// the one notice of that with the one Retry (the thread's line, or the agent's page's notice): the panel's parts, whose
+// own reads fail for the same cause, say their sentence WITHOUT a Retry of their own, their Refresh and Load are off,
+// and they are read again by themselves when the roster is.
+const staleOf = () => {
+  const read = panelSnapshot();
+  return { ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last: { at: read.at, deployment: read.deployment, agents: read.agents } };
+};
+const timeout = (): never => {
+  throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
+};
+const retries = (root: HTMLElement) => within(root).queryAllByRole("button", { name: "Retry" }).length;
+
+test("the roster is the last one read and the panel is opened then: readiness, the soul and the activity that fail for that cause say so with NO Retry of their own, and are read again when the roster is", async () => {
+  let fail = true;
+  const slot = panel({ snapshot: () => (fail ? staleOf() : panelSnapshot()), panelReadiness: () => (fail ? timeout() : recordedReadiness("instance")), panelSoul: () => (fail ? timeout() : { soul: recordedSoul() }) });
+  const root = await slot.findByTestId("oats-panel");
+  const failed = () => within(root).queryAllByRole("alert").map((alert) => alert.querySelector("h3")?.textContent);
+  await waitFor(() => expect(failed()).toEqual(["Readiness could not be read"]));
+  // The tab beside a thread: no Retry in it at all (the thread's line has the one); the part's own Refresh is not offered.
+  expect(retries(slot.getByTestId("oats-panel"))).toBe(0);
+  expect(slot.queryByTestId("oats-panel-readiness-refresh")).toBeNull();
+  expect((slot.getByTestId("oats-panel-activity-load") as HTMLButtonElement).disabled).toBe(true);
+  act(() => showPanelTab("soul"));
+  await waitFor(() => expect(text(slot.getByTestId("oats-panel"))).toContain("The soul as spawned could not be read"));
+  expect(retries(slot.getByTestId("oats-panel"))).toBe(0);
+  expect(slot.queryByTestId("oats-panel-soul-again")).toBeNull();
+  // The roster is read again (the one Retry of the screen, pressed elsewhere): the parts are read again with it.
+  act(() => showPanelTab("instance"));
+  const before = calls(slot, "panelReadiness").length;
+  fail = false;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:16:56.000Z" }));
+  await waitFor(() => expect(calls(slot, "panelReadiness").length).toBeGreaterThan(before));
+  await waitFor(() => expect(failed()).toEqual([]));
+  expect((slot.getByTestId("oats-panel-activity-load") as HTMLButtonElement).disabled).toBe(false);
+});
+
+test("the roster turns the last one read over a panel that had read: Refresh is off, and a readiness read that then fails adds no Retry", async () => {
+  let fail = false;
+  const slot = panel({ snapshot: () => (fail ? staleOf() : panelSnapshot()), panelReadiness: () => (fail ? timeout() : recordedReadiness("instance")) });
+  const refresh = (await slot.findByTestId("oats-panel-readiness-refresh")) as HTMLButtonElement;
+  expect(refresh.disabled).toBe(false);
+  fail = true;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:16:26.000Z" }));
+  await waitFor(() => expect((slot.getByTestId("oats-panel-readiness-refresh") as HTMLButtonElement).disabled).toBe(true));
+  expect((slot.getByTestId("oats-panel-activity-load") as HTMLButtonElement).disabled).toBe(true);
+  expect(retries(slot.getByTestId("oats-panel"))).toBe(0);
+});

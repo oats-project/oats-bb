@@ -55,9 +55,27 @@ Details. Where OATS was read before, the
 roster stays as last read under that notice, which says its age once ("Read <age>."), and the
 OATS acts are HELD until OATS is read again, as on the Desktop: Stop, Start, Restart, Retire and
 New agent stay in their place, drawn off, the notice says "Acts are off." with its Retry, and the
-plugin's server takes no act meanwhile. Beside a page
-that shows that notice the sidebar says one line, "Read <age>.", with Retry. What a place still
-shows of an agent (its soul, its events, its readiness) can still be read. Where it never was,
+plugin's server takes no act meanwhile. THE NOTICE STANDS ONCE ON A SCREEN, with ONE Retry (the
+lead's T3): in the pane a person is looking at: a page of the plugin's (the home, an agent's page,
+the New agent form), or an agent's thread, whose own line says it on one line. Beside such a pane
+the sidebar says one line, "Read <age>. Acts are off.", with nothing to press (a pane cannot know
+whether bb shows its sidebar, a drawer at a phone's width: so the Retry is the pane's, and there
+are never two on a screen and never none); where no pane shows the notice, the sidebar's own is
+the whole one, with the Retry. A notice counts as a pane's only while it is SEEN: the home in a
+thread's tab says none while bb keeps that tab mounted out of sight, nor beside a thread whose own
+line says it. The panel in a thread's tab draws none: it holds its buttons; and on an
+agent's page too the panel's parts with a read of their own (readiness, the soul, the activity)
+draw no Retry and hold their Refresh and Load while the roster cannot be read: a part that failed
+is read again on each press of the one Retry, and when the roster is read again. The rule holds on the pilot's screens; on Souls, Teams, Machines, Capabilities and
+Automations a page's own failed read still draws a Retry of its own, which is not counted. Where OATS was NEVER
+read the same rule holds: beside a pane that shows the notice the sidebar says one line, the
+notice's TITLE alone, and so does the home in a thread's tab there (every thread's line says the
+notice then: never an empty pane). A modal dialog is its own place: its own "cannot read" notice
+keeps its Retry over a pane that has one ("one Retry on a screen" counts the panes a person can
+press). A thread's line, the one notice on its screen, has Retry and, where the
+cause offers them, "Open settings". What a place still
+shows of an agent (its soul, its events, its readiness) is still read when the place opens (the
+server answers it from the last roster); reading it AGAIN is held with the other acts. Where it never was,
 bb's threads are listed as usual under the notice. The notice's code:
 
 | Code | When |
@@ -122,8 +140,10 @@ shows or hides ("Show Redesign ui lead's agents", "Hide …") and whether they a
 the page loads, and stays as the person left it while the window lives: the open set is the
 window's memory (it outlives bb's drawer, which draws the sidebar anew), and nothing of it is
 stored. A closed parent's children are not in the page, so nothing of them takes the focus. A
-closed parent keeps its own state, mark and word, and carries after its own word, named for a
-screen reader, the mark of any row its subtree hides that itself carries one: a row that needs a
+closed parent's line says only the parent (its own state, mark and word). The mark of any row its
+subtree hides that itself carries one is ON ITS CHEVRON (the lead's T1: after the state's word it
+read as the parent's own): the chevron takes that mark's colour, and is named with the state's
+name for a screen reader and a pointer ("Show <Name>'s agents: Needs input"): a row that needs a
 person, one a person must look at (it runs outside OATS, or failed), and one whose own mark is in
 the warning tone, in that tone (the outside feature's `rowWarns`: its thread archived in bb while it
 ran, its session lost with its thread archived, its thread deleted in bb; such an agent has no bb
@@ -542,9 +562,10 @@ the OATS Desktop's Home: what needs you first, then what you have.
 |---|---|
 | **Needs you** | one card per agent that waits on you: those you can answer here (they have a thread in bb) first, then those answered elsewhere; within each, the newest claim first. Eight, then **Show all N**. A card says who (the instance's name as words; under it, on one line, its soul, the reason for an agent with no thread in bb ("deleted in bb", "session lost"), and for one on tmux bb's terminal glyph named "tmux"), its state on the shared status line with how long it has waited ("4 d"), what it asks in the agent's own words, and offers the answer its request takes (below). **Open** and the name lead to the agent's thread (to its own page, for an agent with none). With none: "Nothing needs you." |
 | the tiles | **Agents** (Home › Agents) and the plugin's pages, each with its count; "Counting…" while a page is read, "Couldn't count" when that failed (the tile still leads to its page, which says why). A page's tile carries the mark its row in the sidebar carries (Automations, while a run failed), read only while the home is seen |
-| **Working** | the agents at work, five, then **Show all N** / **Show fewer**; each row is the agent's name (the heading says the state) and opens its agent |
+| **Running** | the agents that run (a bb agent that works; a tmux agent that runs: the heading is true of every row), five, then **Show all N** / **Show fewer**; each row is the agent's name (the heading says the state) and opens its agent |
+| **Lost** | the agents whose session was lost (their roster row says "Lost"; not the ones a person stopped), in the roster's order, one line each: the name, the soul, where it runs, and its act: **Start…**, which opens that agent's Start dialog (off while the roster shown is the last one read, and behind a done Start until the roster is read again); or, for an agent on bb whose thread bb lists, **Open**, which opens that thread: a message there is the way on (one rule with the thread's line: Start… would begin a new conversation). Headed with the roster's own word and their count ("Lost 8"); not drawn with none. The one place where eight lost agents are eight presses in one list |
 | **Unread** | idle agents whose thread holds something you have not read; not drawn with none |
-| **Home › Agents** | `/plugins/oats/home/agents`, reached by that address alone (nothing on the home, the page or the tab, leads to it: the home has no tile for the agents, and the sidebar lists every one), headed **Agents N**: **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its state in words and, beside its name on one line, its soul, the reason where it has no thread (what became of it: "deleted in bb", "archived in bb", …; "session lost"), and for one on tmux bb's terminal glyph named "tmux" (the row's one order; the reason gives way first); over them the home's one count line, "3 working · 3 need you · 1 idle · 1 stopped": every agent counted once, by the state every place says for it (`app/roster/status.ts`), so the numbers are the sidebar's (working and need you are always said; another state only when it has agents); and **‹ Home** (Esc does the same). Its machine and who started it are on an agent's own page |
+| **Home › Agents** | `/plugins/oats/home/agents`, reached by that address alone (nothing on the home, the page or the tab, leads to it: the home has no tile for the agents, and the sidebar lists every one), headed **Agents N**: **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its state in words and, beside its name on one line, its soul, the reason where it has no thread (what became of it: "deleted in bb", "archived in bb", …; "session lost"), and for one on tmux bb's terminal glyph named "tmux" (the row's one order; the reason gives way first); over them the home's one count line, "3 running · 3 need you · 1 idle · 1 stopped" (the word of the list's heading for those that work): every agent counted once, by the state every place says for it (`app/roster/status.ts`), so the numbers are the sidebar's (working and need you are always said; another state only when it has agents); and **‹ Home** (Esc does the same). Its machine and who started it are on an agent's own page |
 | **New agent** | first on every home (the page, Home › Agents, and the tab), where New agent has somewhere to open; off behind the CLI card and while the roster shown is the last one read, with no reason beside it: the card, or the roster's notice, is on the same screen (the card is drawn on Home › Agents too) |
 | an empty workspace | "No agents yet."; **New agent**, over it, is drawn as the one thing to press |
 
@@ -676,9 +697,12 @@ that reading again cannot change as things are, the notice offers none, and the 
 way to read again for whoever mended it (Refresh; on the Soul tab, Retry). A read again
 that fails keeps what was read under the same titled notice ("Readiness could not be read again"),
 which says once how old what is shown is, always relative ("Read 12 min ago.").
-When OATS itself cannot be read, the panel says it in the words the sidebar and the thread's row
-say it (`app/roster/unreadable.tsx`: `Unreadable` whole where nothing was ever read, `failureWords`
-in the same notice over what was read).
+When OATS itself cannot be read, the panel as an agent's PAGE says it, whole, in the notice every
+place shows (`app/roster/unreadable.tsx` `Unreadable`, with the age of what it keeps and that the
+acts are off). As the TAB beside a thread it draws no notice of the roster's over what it read:
+the thread's own line says it, once on the screen, and the tab only holds its buttons. Where
+nothing was ever read it shows the notice whole in either place. Its own notice ("This instance
+could not be read again") is for its own read's failure.
 
 Who the agent is and where it is (the soul's mark, its name, the status line, its soul's name, the
 older-build fold) stands over the tabs and does not scroll: a page scrolled to its activity, at any

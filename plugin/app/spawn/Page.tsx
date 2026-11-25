@@ -711,7 +711,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                     onChange={setHarness}
                   />
                 </Field>
-                {harnessFailed ? (
+                {/* Not while the roster cannot be read: its notice has the one Retry of the screen (app/roster/unreadable.tsx). */}
+                {harnessFailed && !held ? (
                   <div>
                     <Button data-testid="oats-spawn-harness-retry" onClick={harnesses.retry}>
                       {W.RETRY_HARNESSES}

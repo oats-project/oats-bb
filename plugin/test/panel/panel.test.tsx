@@ -531,11 +531,13 @@ test("what the kernel's row holds is drawn through the display filter, and copie
   expect(text(await secret.findByTestId("oats-panel-messaging-id"))).toBe("[withheld]");
 });
 
-test("when the roster cannot be read again, an open panel keeps what it read, with its age, the refusal's code and Retry", async () => {
+// (The lead's T3: the notice stands ONCE, in the pane a person is looking at. An agent's PAGE is that pane, and its
+// panel says it; the tab beside a thread says nothing of it: the thread's own line does. The tab's side: the tests below.)
+test("when the roster cannot be read again, an agent's page keeps what it read, with its age, the refusal's code and Retry", async () => {
   let fail = false;
   let refreshed = 0;
   const failing = { ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" };
-  const slot = panel({ threadId: CHILD_THREAD }, {}, {
+  const slot = panel({ instance: CHILD }, {}, {
     rpc: handlers({
       snapshot: () => (fail ? failing : panelSnapshot()),
       refresh: () => {
@@ -657,9 +659,59 @@ test("the page keeps the agent and its way back while the roster cannot be read 
   const stale = await slot.findByRole("alert");
   expect(text(within(stale).getByRole("heading"))).toBe("OATS did not answer on this machine");
   // The roster was read moments ago and the read after it failed: never "just now". What to do in a sentence is under Details.
-  expect(text(stale)).toBe("OATS did not answer on this machineRead less than a minute ago. Acts are off.▸DetailsIt took more than 20 s.`oats` did not answer within 20 s and was stoppedRetry");
+  expect(text(stale)).toBe("OATS did not answer on this machineRead less than a minute ago. Acts are off.▸DetailsIt took more than 20 s.OATS_TIMEOUT: `oats` did not answer within 20 s and was stoppedRetry"); // (the notice every place shows: the code with the line)
   expect(text(slot.getByTestId("oats-agent-back"))).toBe("‹ Thread");
   expect(text(slot.getByTestId("oats-panel-work-sentence"))).toBe("worktree · agents/panel-worktree-helper");
+});
+
+// ONE Retry on a screen (T3; PR E's third review round), on an agent's PAGE: the page's notice has it; the panel's parts
+// whose own reads fail for the same cause add none. And the page of a name the LAST roster does not list says the
+// roster's notice over its title: reading again can change that answer.
+test("an agent's page while the roster is the last one read: ONE Retry on it, the notice's, also where readiness fails for the same cause; the page of a name that roster does not list has the notice and its Retry too", async () => {
+  const read = panelSnapshot();
+  const stale = { ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last: { at: read.at, deployment: read.deployment, agents: read.agents } };
+  const timeout = (): never => {
+    throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
+  };
+  const page = await agentPage(CHILD, { rpc: handlers({ snapshot: () => stale, panelReadiness: timeout }) });
+  await waitFor(() => expect(text(page.getByTestId("oats-agent-page"))).toContain("Readiness could not be read"));
+  const retry = within(page.getByTestId("oats-agent-page")).getAllByRole("button", { name: "Retry" });
+  expect(retry).toHaveLength(1);
+  expect(retry[0]!.closest('[role="alert"]')!.querySelector("h3")!.textContent).not.toContain("Readiness");
+  // That one Retry reads the failed part again too, on the press: the server answers a part from the last roster, so
+  // it can succeed while the roster still cannot be read (the fourth review round).
+  const asked = () => page.inspection.rpcCalls.filter((call) => call.method === "panelReadiness").length;
+  const before = asked();
+  fireEvent.click(retry[0]!);
+  await waitFor(() => expect(asked()).toBeGreaterThan(before));
+  page.unmount();
+  resetApp();
+  const gone = await agentPage("gone-helper", { rpc: handlers({ snapshot: () => stale }) });
+  await waitFor(() => expect(text(gone.getByTestId("oats-agent-page"))).toContain("This agent is not in OATS"));
+  const notice = within(gone.getByTestId("oats-agent-page")).getByRole("alert");
+  expect(text(notice)).toMatch(/Read .+\. Acts are off\./);
+  expect(within(gone.getByTestId("oats-agent-page")).getAllByRole("button", { name: "Retry" })).toHaveLength(1);
+});
+
+// The roster is the last one read AND this panel has read nothing yet (an agent opened meanwhile, its read in flight):
+// the same rule as over what it read (the first review round of the T3 change). An agent's PAGE says the notice, with
+// the roster's age (so it counts as the pane's and the sidebar says its line); the TAB beside a thread draws none.
+test("the roster is the last one read and the panel's own first read is in flight: an agent's page says the notice with the roster's age; the tab beside a thread draws none, and reads", async () => {
+  const read = panelSnapshot();
+  const stale = { ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here", last: { at: read.at, deployment: read.deployment, agents: read.agents } };
+  const never = () => new Promise<never>(() => undefined);
+  const page = await agentPage(CHILD, { rpc: handlers({ snapshot: () => stale, panelInstance: never }) });
+  const notice = await within(await page.findByTestId("oats-panel")).findByRole("alert");
+  expect(text(notice)).toMatch(/^OATS could not read this deploymentRead .+\. Acts are off\.▸DetailsE_LOCAL_MISSING: no oats-local.yaml hereRetry$/);
+  expect(within(notice).getAllByRole("button", { name: "Retry" })).toHaveLength(1);
+  page.unmount();
+  resetApp();
+  const tab = panel({ threadId: CHILD_THREAD }, {}, { rpc: handlers({ snapshot: () => stale, panelInstance: never }) });
+  await tab.findByTestId("oats-panel");
+  await act(async () => {});
+  expect(within(tab.getByTestId("oats-panel")).queryByRole("alert")).toBeNull();
+  expect(within(tab.getByTestId("oats-panel")).queryByRole("button", { name: "Retry" })).toBeNull();
+  expect(tab.getByTestId("oats-panel").textContent).toContain("Reading…");
 });
 
 test("with the last roster the server kept: the page shows the agent as last read, and says OATS could not be read again, with its code", async () => {
@@ -686,7 +738,7 @@ test("with the last roster the server kept: the page shows the agent as last rea
   expect(text(slot.getByTestId("oats-panel-work-sentence"))).toBe("worktree · agents/panel-worktree-helper");
 });
 
-test("the fixed tab keeps the agent's panel when the roster cannot be read again, with its age and why", async () => {
+test("the fixed tab keeps the agent's panel when the roster cannot be read again, and draws no notice of its own: the thread's line beside it says it, once", async () => {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   let fail = false;
   const app = await loadApp();
@@ -704,7 +756,11 @@ test("the fixed tab keeps the agent's panel when the roster cannot be read again
   await slot.findByTestId("oats-panel-work");
   fail = true;
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:16:26.000Z" }));
-  expect(text(await within(await slot.findByTestId("oats-panel")).findByRole("alert"))).toBe("OATS could not read this deploymentRead less than a minute ago. Acts are off.▸DetailsE_LOCAL_MISSING: no oats-local.yaml hereRetry");
+  // No notice in the tab (it stood there a second or third time on the screen), once the failed read has landed.
+  await act(async () => {});
+  await slot.findByTestId("oats-panel");
+  expect(within(slot.getByTestId("oats-panel")).queryByRole("alert")).toBeNull();
+  expect(slot.getByTestId("oats-panel").textContent).not.toMatch(/could not read|Acts are off|Retry/);
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.queryByTestId("oats-home-tab")).toBeNull();
 });
@@ -740,10 +796,24 @@ test("in a ready roster an agent drawn on no thread says Idle in its panel, as i
   await waitFor(() => expect(stateOf(slot)).toMatch(/^Idle/));
 });
 
-test("a panel that opens while the roster cannot be read shows the agent its caller last read, and why nothing more", async () => {
+// (Where OATS was NEVER read. An agent's PAGE is the pane a person looks at: it says the notice, whole. The TAB beside a
+// thread draws none: that thread's own line says it, with the one Retry: the second review round of the T3 change.)
+test("a panel that opens while the roster cannot be read shows the agent its caller last read: as an agent's page with why nothing more, whole; as the tab beside a thread with no notice of its own", async () => {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   const known = panelAgents().find((agent) => agent.instance === CHILD)!;
-  const slot = renderSlot<{ threadId: string; known: Agent }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD, known }, {
+  const never = () => handlers({
+    snapshot: () => ({ ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" }),
+    panelInstance: () => {
+      throw new Error("E_LOCAL_MISSING: no oats-local.yaml here");
+    },
+  });
+  const tab = renderSlot<{ threadId: string; known: Agent }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD, known }, { rpc: never(), sidebarThreads: panelThreads() });
+  await waitFor(() => expect(text(tab.getByTestId("oats-panel-name"))).toBe("Panel worktree helper"));
+  await act(async () => {});
+  expect([within(tab.getByTestId("oats-panel")).queryByRole("alert"), within(tab.getByTestId("oats-panel")).queryByRole("button", { name: "Retry" })]).toEqual([null, null]);
+  tab.unmount();
+  resetApp();
+  const slot = renderSlot<{ instance: string; known: Agent }, Contract>({ component: InstancePanel }, { instance: CHILD, known }, {
     rpc: handlers({
       snapshot: () => ({ ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "E_LOCAL_MISSING", message: "no oats-local.yaml here" }),
       panelInstance: () => {
@@ -845,9 +915,9 @@ test("an agent with several children lists each on a row of its own as high as i
   for (const child of children) expect(child.className).not.toMatch(/-my-/);
 });
 
-test("OATS cannot be found any more, over what was read: the panel's notice offers the settings, as the sidebar's does", async () => {
+test("OATS cannot be found any more, over what was read: the notice of an agent's page offers the settings, as the sidebar's does", async () => {
   let fail = false;
-  const slot = panel({ threadId: CHILD_THREAD }, {}, {
+  const slot = panel({ instance: CHILD }, {}, {
     rpc: handlers({
       snapshot: () => {
         const read = panelSnapshot();
@@ -865,7 +935,7 @@ test("OATS cannot be found any more, over what was read: the panel's notice offe
   const notice = await within(slot.getByTestId("oats-panel")).findByRole("alert");
   await waitFor(() => expect(text(within(notice).getByRole("heading"))).toMatch(/^OATS is not installed on /));
   expect(text(notice)).toContain("Install OATS there, or set the path to oats in the plugin's settings.");
-  expect(text(within(notice).getByTestId("oats-panel-open-settings"))).toBe("Open settings");
+  expect(text(within(notice).getByRole("link", { name: "Open settings" }))).toBe("Open settings");
   expect(within(notice).getByRole("button", { name: "Retry" })).not.toBeNull();
 });
 
@@ -929,7 +999,7 @@ test("an agent with no thread in bb has its acts on its own page: Start and Reti
   expect(actsOf(tmux)).toEqual(["Stop…", "Restart…", "Retire…"]);
 });
 
-test("while the roster is the last one read the acts are off, and the panel's notice says so, with Retry", async () => {
+test("while the roster is the last one read the tab's acts are off, and the tab draws no notice: the thread's line beside it says so, with the one Retry", async () => {
   let fail = false;
   const slot = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, {
     rpc: handlers({
@@ -945,11 +1015,11 @@ test("while the roster is the last one read the acts are off, and the panel's no
   fail = true;
   await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:16:26.000Z" }));
   await waitFor(() => expect(Array.from(slot.getByTestId("oats-agent-acts").querySelectorAll("button")).every((button) => button.disabled)).toBe(true));
-  // Off, and never alone: no reason beside each act; the panel's one notice says "Acts are off." beside the age, with Retry.
+  // Off, with no reason beside each act and no notice in the tab: the tab is beside its thread, whose own line says
+  // "Acts are off." with the age (test/roster/identity-row.test.tsx): the notice stands once on the screen.
   expect(within(slot.getByTestId("oats-agent-acts")).queryByTestId("oats-disabled-reason")).toBeNull();
-  const notice = within(slot.getByTestId("oats-panel")).getByRole("alert");
-  expect(within(notice).getByTestId("oats-held").textContent).toBe("Acts are off.");
-  expect(within(notice).getByRole("button", { name: "Retry" })).toBeTruthy();
+  expect(within(slot.getByTestId("oats-panel")).queryByRole("alert")).toBeNull();
+  expect(within(slot.getByTestId("oats-panel")).queryByTestId("oats-held")).toBeNull();
 });
 
 // ---- when OATS stopped it: a fact of the Session (it left the thread's line and the sidebar's row;

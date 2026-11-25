@@ -6,7 +6,8 @@ import { STATE } from "../ui/words";
 
 export const NEEDS_YOU = "Needs you";
 export const NOTHING_NEEDS_YOU = "Nothing needs you.";
-export const WORKING = "Working";
+/** The heading of the home's list of agents that run: true of every row in it, a bb agent that works and a tmux agent that runs alike (the lead's T4, 24 Nov 2026: OATS cannot tell a tmux agent's work from its rest, and its row says "Running"). */
+export const WORKING = "Running";
 export const FINISHED = "Unread";
 /** Home › Agents: every agent OATS has, under this word (no tile opens it: it is reached by its address). */
 export const EVERY_AGENT = "Agents";
@@ -21,12 +22,14 @@ export const SHOW_FEWER = "Show fewer";
 /** The states the summary names, in its order; the first two always, the others only when they have agents. */
 const SUMMARY: readonly Exclude<AgentState, "outside">[] = ["working", "needs-you", "idle", "stopped", "error", "unreachable"];
 const ALWAYS: ReadonlySet<AgentState> = new Set<AgentState>(["working", "needs-you"]);
-/** A state as the count line counts it: "2 working"; "3 need you", whatever the number (the Desktop's line). */
+/** A state as the count line counts it: "2 running"; "3 need you", whatever the number (the Desktop's line). */
 function counted(state: AgentState, n: number): string {
   if (state === "needs-you") return `${n} need you`;
+  // The word follows the heading of the home's list ("Running"): true of a bb agent that works and of a tmux agent that runs alike (the lead's T4; a bb agent that works still says "Working" on its own row).
+  if (state === "working") return `${n} ${WORKING.toLowerCase()}`;
   return `${n} ${STATE[state].word.toLowerCase()}`;
 }
-/** "2 working · 1 need you · 3 idle · 1 stopped · 1 failed": every agent is counted once. How many there are in all is the heading's count, over the line. */
+/** "2 running · 1 need you · 3 idle · 1 stopped · 1 failed": every agent is counted once. How many there are in all is the heading's count, over the line. */
 export function summaryLine(counts: Record<AgentState, number>): string {
   // "N need you" is the home's heading and its badge too: an agent that runs outside OATS is one of them
   // (`view.needing`), so it is counted there and has no count of its own. Every agent is still counted once.

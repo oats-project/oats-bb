@@ -303,7 +303,7 @@ export default [
       check(mark === "Automations, a run failed", `${at} the Automations tile is marked while a run failed, as its row in the sidebar`, mark);
       const working = await page.evaluate(`JSON.stringify(${texts(within("oats-working-row"))})`);
       const repeats = await page.evaluate(`document.querySelectorAll(${JSON.stringify(`${within("oats-working-row")} ${testId("oats-state")}, ${within("oats-finished-row")} ${testId("oats-state")}`)}).length`);
-      check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => !/Working$/.test(row) && /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(row)) && repeats === 0, `${at} every agent at work is a row under the heading "Working", with its soul beside its name: no row repeats the state's word`, working);
+      check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => !/(Working|Running)$/.test(row) && /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(row)) && repeats === 0, `${at} every agent at work is a row under the heading "Running", with its soul beside its name: no row repeats the state's word`, working);
       const workingGaps = JSON.parse(await page.evaluate(gapsIn(`${within("oats-working-row")}, ${within("oats-finished-row")}`)));
       check(tight(workingGaps), `${at} each row of the Working and the Unread lists is as high as its line: no empty room in it (heights ${[...new Set(workingGaps.map((row) => row.height))].join(", ")} px)`, loose(workingGaps));
       await shown(page, check, at, within("oats-home-tiles"), "the tiles and who works");
@@ -329,7 +329,7 @@ export default [
       // The one count line of the home is here: by state, each agent once; how many there are is the heading's count.
       const summary = await page.evaluate(textOf(within("oats-home-summary")));
       const counted = summary.split(" · ").map((part) => Number(part.split(" ")[0]));
-      check(/^\d+ working · 3 need you/.test(summary) && !/agents/.test(summary) && counted.reduce((sum, n) => sum + n, 0) === 8, `${at} the count line counts each of the 8 agents once, by its state, with no total`, summary);
+      check(/^\d+ running · 3 need you/.test(summary) && !/agents/.test(summary) && counted.reduce((sum, n) => sum + n, 0) === 8, `${at} the count line counts each of the 8 agents once, by its state, with no total`, summary);
       const backWord = await page.evaluate(textOf(within("oats-home-back")));
       check(backWord === "‹ Home", `${at} the way back reads "‹ Home"`, backWord);
       check((await page.evaluate(`document.activeElement?.getAttribute("data-testid") ?? ""`)) === "oats-home-back", `${at} the keyboard is on ‹ Home`, await page.evaluate(`document.activeElement?.getAttribute("data-testid") ?? ""`));
@@ -520,6 +520,13 @@ export default [
         await page.goto(HOME);
         const failed = await page.until(`(() => { const notice = document.querySelector(${JSON.stringify(`${PAGE} ${testId("oats-notice")}`)}); return notice ? notice.querySelector("h3").innerText.trim() + " | " + notice.innerText.replace(/\\s+/g, " ").trim() : ""; })()`, 30);
         check(Boolean(failed) && /Retry/.test(failed) && !/\bRead .+ ago|Last read|Acts are off/.test(failed) && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-tiles"))}) === null`)) === true, `${at} a first read that failed: one titled notice with Retry, no age of anything kept, and no roster drawn`, failed ?? (await page.evaluate(textOf(PAGE))));
+        // THE NOTICE ONCE where OATS was never read too (the lead's T3, ruled for this state): ONE Retry on the screen, the
+        // page's; the sidebar beside it (where bb shows it: not a drawer) says one line, the notice's title alone, nothing to press.
+        const RETRIES = `[...document.querySelectorAll("button")].filter((b) => b.innerText.trim() === "Retry" && b.getClientRects().length > 0).length`;
+        const beside = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s) return ${JSON.stringify(JSON.stringify({ sidebar: false }))}; const l = s.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ sidebar: true, line: l.innerText.replace(/\\s+/g, " ").trim(), whole: s.querySelector(${JSON.stringify(testId("oats-unreadable"))}) !== null, press: l.querySelectorAll("button, a").length }) : ""; })()`, 15);
+        const title = (failed ?? "").split(" | ")[0];
+        check(beside === JSON.stringify({ sidebar: false }) || beside === JSON.stringify({ sidebar: true, line: title, whole: false, press: 0 }), `${at} beside the home's notice the sidebar says one line, the notice's title alone ("${title}"), with nothing to press (or is not drawn: bb's drawer)`, beside ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        check((await page.evaluate(RETRIES)) === 1, `${at} OATS never read: ONE Retry on the screen, the page's`, String(await page.evaluate(RETRIES)));
         await sound(page, viewport, check, at, "the home that could not be read");
         if (Boolean(failed) && !/\bRead .+ ago|Last read/.test(failed)) await page.shot(`home-${viewport.name}-unreadable`);
       } finally {
@@ -561,14 +568,14 @@ export default [
     run: async ({ page, at, check: plain, record }) => {
       const check = printing(plain);
       check(await open(page, within("oats-home-working")), `${at} the home lists who works`, await page.evaluate(textOf(PAGE)));
-      const before = await page.until(`(() => { const text = ${headingOf("oats-home-working")}; return /^working \\d+$/i.test(text) ? text : ""; })()`, 30);
+      const before = await page.until(`(() => { const text = ${headingOf("oats-home-working")}; return /^running \\d+$/i.test(text) ? text : ""; })()`, 30); // (the list's heading: "Running N": the lead's T4)
       const n = Number(String(before ?? "").split(" ")[1]);
       check(Number.isInteger(n) && n > 1, `${at} before the change the home counts who works`, before);
       const stopped = record({ "redesign-ui-lead": { running: false, runtimeState: "stopped" } });
-      const fewer = (await page.until(heading("oats-home-working", `working ${n - 1}`), 15)) ? Date.now() - stopped : null;
-      check(fewer !== null && fewer <= 3000, `${at} the home lists ${n - 1} working ${fewer === null ? "never" : `${fewer} ms`} after the kernel recorded the stop (3 s at most)`, await page.evaluate(headingOf("oats-home-working")));
+      const fewer = (await page.until(heading("oats-home-working", `running ${n - 1}`), 15)) ? Date.now() - stopped : null;
+      check(fewer !== null && fewer <= 3000, `${at} the home lists ${n - 1} running ${fewer === null ? "never" : `${fewer} ms`} after the kernel recorded the stop (3 s at most)`, await page.evaluate(headingOf("oats-home-working")));
       const back = record();
-      const again = (await page.until(heading("oats-home-working", `working ${n}`), 15)) ? Date.now() - back : null;
+      const again = (await page.until(heading("oats-home-working", `running ${n}`), 15)) ? Date.now() - back : null;
       check(again !== null && again <= 3000, `${at} and ${n} again ${again === null ? "never" : `${again} ms`} after the kernel recorded that (3 s at most)`, await page.evaluate(headingOf("oats-home-working")));
     },
   },

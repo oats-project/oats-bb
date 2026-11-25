@@ -19,10 +19,11 @@ import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
-import { lineActs, lineParts, outsideNeeds, outsideOf, OutsideWarning, rowWords } from "../outside";
+import { lineActs, lineParts, LOST_WORD, outsideNeeds, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
+import { messageResumes } from "../../model/rest";
 import { READING as READING_WORD, ReadingLine, readingNow, useActed } from "../roster/reading";
-import { RosterNotice } from "../roster/unreadable";
+import { LastObservation, RosterNotice, useLineShowsNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { TMUX } from "../ui";
 import { RowFacts } from "../ui/row-facts";
@@ -478,7 +479,7 @@ function AgentFacts({ entry, oats, testId, under = false }: { entry: Entry; oats
 /**
  * One agent as a row of a list: its name, then on the same line what `AgentFacts` says of it, and,
  * in the list of every agent, its state in words at the row's end. A list under a heading that
- * says the state ("Working") does not repeat it on every row. No rule between rows: bb's own lists
+ * says it ("Running") does not repeat it on every row. No rule between rows: bb's own lists
  * draw none between theirs.
  */
 function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
@@ -494,6 +495,55 @@ function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oat
           <State state={entry.status.state} word={rowWords(entry.status.word, entry.status.state, reasonOf(entry, oats).reason).state} />
         </span>
       ) : null}
+    </li>
+  );
+}
+
+/**
+ * Whether the roster's row of this agent says "Lost" (its session was lost: nobody stopped it): the row's own words,
+ * asked as the sidebar asks them (`rowParts`, `rowWords`), so the home's list and the roster never disagree on who is in it.
+ */
+const isLost = (entry: Entry, oats: Ready): boolean => rowWords(entry.status.word, entry.status.state, rowParts(outsideOf(oats).of(entry.agent), entry.status.state).note).state === LOST_WORD;
+
+/**
+ * One agent whose session was lost, under the heading that says so: its name, its soul and where it is, and the act
+ * that brings it back. The one place where eight lost agents are eight presses in one list, not eight pages (the
+ * lead's T2). Start… opens the act's dialog, like every Start…; it is off while the roster shown is the last one read.
+ */
+function LostRow({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
+  const onTmux = entry.thread === null && entry.agent.backend === "tmux";
+  // Behind a result that says it started, until the roster is read again (the row is still here, from the roster before): its act is off (L13's rule, app/roster/reading.tsx).
+  // (Asked of the roster this row is drawn from, never by a read of its own: a row that mounts must not read OATS again.)
+  useActed();
+  const reading = readingNow(oats, entry.agent.instance);
+  // ONE rule with the thread's line: where a MESSAGE is the way on (an agent on bb whose thread bb lists: `messageResumes`),
+  // the row's act is Open: it opens that thread, whose line says so. Start… there would begin a NEW conversation where
+  // a message keeps the old one. Every other row (tmux; a bb agent whose thread is archived or gone) has Start….
+  const byMessage = messageResumes(entry.agent, entry.thread);
+  const open = useOpen(oats)(entry);
+  return (
+    <li data-testid="oats-lost-row" data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
+      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+        <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
+        {/* (No reason on the line: the heading says it.) Behind a done Start, until the roster is read again, the line says
+            "Reading…" in its facts' place: its Start… is then off, and an off control is never alone (the Loading pattern's word, L13's). */}
+        {reading ? (
+          <span role="status" data-testid="oats-lost-reading" className="text-xs text-muted-foreground">
+            {READING_WORD}
+          </span>
+        ) : (
+          <RowFacts testId="oats-home-agent-where" soul={shown(oats.soulOf(entry.agent))} where={onTmux ? TMUX : undefined} className="max-w-full flex-1 basis-40" />
+        )}
+      </span>
+      {byMessage ? (
+        <Button data-testid="oats-lost-open" onClick={open.onClick}>
+          {OPEN}
+        </Button>
+      ) : (
+        <Button data-testid="oats-lost-start" disabled={held || reading} onClick={() => openAct("start", entry.agent.instance)}>
+          {START}
+        </Button>
+      )}
     </li>
   );
 }
@@ -657,7 +707,7 @@ function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; 
   );
 }
 
-function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: boolean; agents: boolean; onBack: () => void }) {
+function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; visible: boolean; agents: boolean; onBack: () => void; /** whether this place says the roster's notice: not a tab that is hidden (bb keeps it mounted), nor one beside a thread whose own line says it: the notice stands once on a screen, where a person looks (the lead's T3) */ says?: boolean }) {
   const now = useNow();
   const navigate = useBbNavigate();
   const pages = usePagesShown();
@@ -667,9 +717,14 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is. The page has no heading of its own:
   // bb's bar over it names it.
-  if (oats.phase === "loading" || oats.phase === "failed") return oats.phase === "loading" ? <Loading>{READING}</Loading> : <RosterNotice oats={oats} />;
+  if (oats.phase === "loading") return <Loading>{READING}</Loading>;
+  // OATS was never read: the notice, whole. Where this place does not say it (a thread's tab, beside that thread's own
+  // line, which says it with the one Retry), ONE line, the notice's title alone, with nothing to press: never an empty pane.
+  if (oats.phase === "failed") return says ? <RosterNotice oats={oats} /> : <LastObservation failure={oats} machine={oats.machine} />;
   const made = board(oats.view, now);
   const held = oats.stale !== null;
+  // The agents whose session was lost (not the ones a person stopped), in the roster's order.
+  const lost = made.all.filter((entry) => isLost(entry, oats));
   // New agent is on every home, first on the page (the Desktop's Home has none: its act is the
   // sidebar's, which bb keeps in a drawer at a phone's width). Offered where it has somewhere to
   // open (the sidebar's rule); off behind the CLI card and while the roster shown is the last one
@@ -687,7 +742,7 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
     </div>
   );
   // The one Stale drawing, the roster's: nothing while the roster is the one just read.
-  const stale = <RosterNotice oats={oats} />;
+  const stale = <RosterNotice oats={oats} seen={says} />;
   if (agents) {
     return (
       <>
@@ -734,6 +789,16 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
           </Cropped>
         </Section>
       )}
+      {/* A quiet section, only when it has rows: headed with the roster's own word for them and their count ("Lost 8"). */}
+      {lost.length === 0 ? null : (
+        <Section title={LOST_WORD} n={lost.length} testId="oats-home-lost">
+          <ul className="m-0 flex list-none flex-col p-0">
+            {lost.map((entry) => (
+              <LostRow key={entry.agent.instance} entry={entry} oats={oats} held={held} />
+            ))}
+          </ul>
+        </Section>
+      )}
       {made.finished.length === 0 ? null : (
         <Section title={FINISHED} n={made.finished.length} testId="oats-home-finished">
           <ul className="m-0 flex list-none flex-col p-0">
@@ -769,6 +834,8 @@ export function HomePage({ subPath }: PluginNavPanelProps) {
 export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   const oats = useOats();
   const visible = useTabVisible();
+  // (A thread's own line on this screen says the roster's notice: an agent's archived thread (the outside feature's row); and, where OATS was never read, every thread's line.)
+  const lineSays = useLineShowsNotice();
   const AgentTab = getAgentTab();
   const ready = oats.phase === "ready";
   const node = AgentTab !== null && oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
@@ -792,7 +859,7 @@ export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   return (
     <div data-testid="oats-home-tab" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-3 text-sm text-foreground">
       {/* The tab is the home alone: Home › Agents has an address of the page's, and nothing in the tab leads to it. */}
-      <Sections oats={oats} visible={visible} agents={false} onBack={() => undefined} />
+      <Sections oats={oats} visible={visible} agents={false} onBack={() => undefined} says={visible && !lineSays} />
     </div>
   );
 }

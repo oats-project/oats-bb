@@ -148,11 +148,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    *   first. The state's word and the glyph never shrink. The whole line is its title.
    *   (The machine is not on a row: the instance panel says it.)
    */
-  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** a closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word */ inside?: AgentState | null; /** "warning": the hidden row's own mark is drawn in the warning tone */ insideTone?: "warning" | null; /** "warning": the reason asks a person to look: it stays, and the soul gives way first */ reasonTone?: "warning" | undefined; /** what the line's title says for the state and the reason, where the row draws another word (app/outside `rowWords`) */ said?: { state: string; reason: string | null } }, full: string) => {
+  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** "warning": the reason asks a person to look: it stays, and the soul gives way first */ reasonTone?: "warning" | undefined; /** what the line's title says for the state and the reason, where the row draws another word (app/outside `rowWords`) */ said?: { state: string; reason: string | null } }, full: string) => {
     return (
       <span className="flex min-w-0 flex-1 flex-col">
         <span data-testid="oats-row-name" title={full} className={`line-clamp-2 break-words ${strong ? "font-semibold" : ""}`}>{name}</span>
-        <RowFacts testId="oats-row-facts" state={phrases.state} soul={phrases.soul} reason={phrases.reason} reasonTone={phrases.reasonTone} where={phrases.where} inside={phrases.inside} insideTone={phrases.insideTone} said={phrases.said} />
+        <RowFacts testId="oats-row-facts" state={phrases.state} soul={phrases.soul} reason={phrases.reason} reasonTone={phrases.reasonTone} where={phrases.where} said={phrases.said} />
       </span>
     );
   };
@@ -170,9 +170,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const agentRows = (rows: readonly TreeRow<Row>[], guttered: boolean): ReactNode[] =>
     rows.flatMap(({ node, parent, open, pinned, inside, insideTone }) => {
       const called = agentName(node.agent.instance);
-      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} /> : null;
+      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} inside={inside} insideTone={insideTone} /> : null;
       const keys = parent ? foldKeys(node.agent.instance, open, pinned) : undefined;
-      if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), guttered, node.depth, toggle, keys, inside, insideTone)];
+      if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), guttered, node.depth, toggle, keys)];
       const thread = oats.threadById.get(node.thread.id);
       if (thread === undefined) return [];
       const status = agentStatus(node.agent, node.thread, now);
@@ -192,7 +192,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <>
             <StateMark state={drawn.state} hidden tone={reason.tone} />
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: words.state, soul: shown(oats.soulOf(node.agent)), reason: words.reason, reasonTone: reason.tone, inside, insideTone, said: words.title }, shown(node.agent.instance))}
+            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: words.state, soul: shown(oats.soulOf(node.agent)), reason: words.reason, reasonTone: reason.tone, said: words.title }, shown(node.agent.instance))}
           </>,
           toggle,
           keys,
@@ -215,11 +215,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     said: Said | null,
     guttered: boolean,
     depth: 0 | 1 | 2,
-    /** A parent's chevron and keys, and the state of the most urgent row it hides while it is closed: as on a thread's row. */
+    /** A parent's chevron (which carries the mark of what it hides while it is closed) and keys: as on a thread's row. */
     before: ReactNode = null,
     onKeyDown?: (event: KeyboardEvent) => void,
-    inside?: AgentState | null,
-    insideTone?: "warning" | null,
   ) => {
     const status = agentStatus(agent, null, now);
     const drawn = rowState(status, gone.has(agent.instance));
@@ -249,7 +247,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           }}
         >
           <StateMark state={drawn.state} hidden tone={gone.has(agent.instance) ? undefined : reason.tone} />
-          {lines(name, status.state === "needs-you", { state: words.state, soul: shown(oats.soulOf(agent)), reason: words.reason, reasonTone: gone.has(agent.instance) ? undefined : reason.tone, where, inside, insideTone, said: words.title }, shown(agent.instance))}
+          {lines(name, status.state === "needs-you", { state: words.state, soul: shown(oats.soulOf(agent)), reason: words.reason, reasonTone: gone.has(agent.instance) ? undefined : reason.tone, where, said: words.title }, shown(agent.instance))}
         </button>
       </li>
     );
@@ -289,8 +287,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           <div className="px-2">
             <Loading>Reading…</Loading>
           </div>
+        ) : pageShowsNotice ? (
+          // OATS was never read, and a pane beside this one says so, whole, with the Retry: one line here, the notice's title alone.
+          <LastObservation failure={oats} machine={oats.machine} />
         ) : (
-          <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />
+          <Unreadable inSidebar failure={oats} machine={oats.machine} onRetry={oats.retry} />
         )}
         <ul className="flex flex-col">{listed.map(plainRow)}</ul>
       </div>
@@ -327,9 +328,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     // (no page link, no needs line) waits on this first.
     <div data-testid="oats-sidebar" data-pages={pagesNow.known ? "known" : "reading"} className="flex flex-col p-1">
       {/* OATS cannot be read now: the roster stays as last read, with why and how old it is. */}
-      {/* Where a page beside it shows the full notice, one line here: how old the roster is, and Retry. */}
+      {/* Where a pane beside it shows the notice (a page's; a thread's own line), one line here: how old the roster is, that the acts are off. The one Retry is the pane's. */}
       {oats.stale === null ? null : pageShowsNotice ? (
-        <LastObservation failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
+        <LastObservation failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} />
       ) : (
         <Unreadable inSidebar failure={oats.stale} machine={deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />
       )}

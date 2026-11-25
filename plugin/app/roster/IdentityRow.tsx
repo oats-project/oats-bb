@@ -23,7 +23,7 @@ import { useNow } from "./now";
 import { AgentStatusLine } from "./AgentStatusLine";
 import { useReading } from "./reading";
 import { agentStatus } from "./status";
-import { failureWords, Unreadable } from "./unreadable";
+import { Unreadable } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
 export const HOME_TAB = { id: "home", context: { kind: "thread" }, availability: "fixed" } as const;
@@ -67,9 +67,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   if (oats.phase === "failed") {
     // Whether this thread is an agent's is not known: say that OATS cannot be read, never nothing.
     return (
-      <div data-testid="oats-identity-row" data-unreadable="" role="status" className={`${FRAME} flex-row flex-wrap items-center gap-2`}>
-        <span className="min-w-0 break-words text-muted-foreground">{failureWords(oats, oats.machine).title}</span>
-        <Button onClick={oats.retry}>Retry</Button>
+      // (The one notice's line, as over a roster kept as last read: it counts as this screen's notice, so the sidebar beside it says its title alone.)
+      <div data-testid="oats-identity-row" data-unreadable="" className={`${FRAME} flex-row flex-wrap items-center gap-2`}>
+        <Unreadable compact failure={oats} machine={oats.machine} onRetry={oats.retry} />
       </div>
     );
   }

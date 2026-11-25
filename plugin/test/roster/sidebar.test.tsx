@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // A8: the Sidebar (experimental_threadList) with the pinned fixtures.
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -10,7 +10,10 @@ import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtu
 import { ALL_PAGES, handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 
-afterEach(resetApp);
+afterEach(() => {
+  vi.useRealTimers();
+  resetApp();
+});
 
 async function sidebar(over: Partial<Handlers> = {}, activeThreadId: string | null = null, threads = sidebarThreads()) {
   const app = await loadApp();
@@ -193,30 +196,33 @@ test("Right on a parent's row opens it and Left closes it, as a tree's keys do; 
   expect([open(), rowOn(slot, "thr_mockups")]).toEqual(["false", null]);
 });
 
-test("a closed parent whose subtree holds a row that needs a person carries that row's mark after its own state, which stays its own; open, or over quiet children, it carries none", async () => {
+test("a closed parent whose subtree holds a row that needs a person carries that row's mark ON ITS CHEVRON (the lead's T1), never on its line, which says only the parent; open, or over quiet children, it carries none", async () => {
   const claim = { reason: "attention" as const, message: "Which mockup?", since: "2026-11-19T12:00:00.000Z" };
   const agents = fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, waiting: claim } : agent));
   const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) });
   await slot.findByTestId("oats-tree");
   const lead = rowOn(slot, LEAD)!;
-  // Its own state, mark and word, unchanged: it works. Then the hidden row's mark, named.
+  // Its own state, mark and word, unchanged: it works. The hidden row's mark is the chevron's: its colour, and its name for a screen reader and a pointer.
   expect(within(lead).getByTestId("oats-row-facts").querySelector('[data-phrase="state"]')!.textContent).toBe("Working");
   expect(lead.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("working");
-  const inside = within(lead).getByTestId("oats-row-inside").querySelector("[data-mark]")!;
-  expect([inside.getAttribute("data-state"), inside.getAttribute("role"), inside.getAttribute("aria-label")]).toEqual(["needs-you", "img", "Needs input"]);
-  // It stands after the state's word and before the soul.
-  expect(within(lead).getByTestId("oats-row-inside").previousElementSibling!.getAttribute("data-phrase")).toBe("state");
-  expect(within(lead).getByTestId("oats-row-facts").textContent).toBe("Working! · oats-product-expert");
-  // Opened: the row itself is in sight with its own mark, and the parent carries none.
-  fireEvent.click(toggles(slot)[0]!);
-  expect(within(rowOn(slot, LEAD)!).queryByTestId("oats-row-inside")).toBeNull();
+  const chevron = () => toggles(slot)[0]!;
+  const mark = () => chevron().querySelector<HTMLElement>('[data-testid="oats-row-toggle-mark"]')!;
+  expect([mark().getAttribute("data-inside"), chevron().getAttribute("aria-label"), chevron().getAttribute("title")]).toEqual(["needs-you", "Show Redesign ui lead's agents: Needs input", "Show Redesign ui lead's agents: Needs input"]);
+  expect(mark().className).toContain("text-warning-text");
+  // The parent's line says only the parent: no mark after its state's word.
+  expect(within(lead).queryByTestId("oats-row-inside")).toBeNull();
+  expect(within(lead).getByTestId("oats-row-facts").querySelectorAll("[data-mark]")).toHaveLength(0);
+  expect(within(lead).getByTestId("oats-row-facts").textContent).toBe("Working · oats-product-expert");
+  // Opened: the row itself is in sight with its own mark, and the chevron carries none.
+  fireEvent.click(chevron());
+  expect([mark().getAttribute("data-inside"), chevron().getAttribute("aria-label"), chevron().getAttribute("title"), mark().className.includes("text-warning-text")]).toEqual([null, "Hide Redesign ui lead's agents", null, false]);
   expect(rowOn(slot, "thr_mockups")!.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("needs-you");
   cleanup();
   resetApp();
   // Quiet children (the sample's: one works, one is idle): no mark on the closed parent.
   const quiet = await sidebar();
   await quiet.slot.findByTestId("oats-tree");
-  expect(within(rowOn(quiet.slot, LEAD)!).queryByTestId("oats-row-inside")).toBeNull();
+  expect([toggles(quiet.slot)[0]!.querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside"), toggles(quiet.slot)[0]!.getAttribute("aria-label")]).toEqual([null, "Show Redesign ui lead's agents"]);
 });
 
 // The mark a closed parent carries is computed from the roster on screen at every draw: nothing of it is kept from an
@@ -228,7 +234,7 @@ test("a closed parent's mark follows the roster: it comes when a hidden child st
   let now = { ...fixtureSnapshot(waits(false)), at: "2026-11-19T12:30:00.000Z" };
   const { slot } = await sidebar({ snapshot: () => now });
   await slot.findByTestId("oats-tree");
-  const inside = () => within(rowOn(slot, LEAD)!).queryByTestId("oats-row-inside")?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null;
+  const inside = () => toggles(slot)[0]!.querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside");
   const closed = () => [toggles(slot)[0]!.getAttribute("aria-expanded"), rowOn(slot, "thr_mockups")];
   expect([inside(), ...closed()]).toEqual([null, "false", null]);
   // The child starts to wait: the next roster marks the closed parent.
@@ -679,9 +685,9 @@ test("a parent with no bb thread is a parent like any other: Left on its row clo
   await slot.findByTestId("oats-tree");
   const row = (instance: string) => slot.queryAllByTestId("oats-agent-row-threadless").find((each) => each.getAttribute("data-instance") === instance);
   const toggle = () => slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "kernel-fix-developer")!;
-  /** The mark the parent's line carries for a row it hides: its state; null when it carries none. */
-  const inside = () => within(row("kernel-fix-developer")!).queryByTestId("oats-row-inside")?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null;
-  // As the page loads it is closed: its child is not in the page, and its line says its own word, then the child's mark.
+  /** The mark the parent's chevron carries for a row it hides: its state; null when it carries none. */
+  const inside = () => toggle().querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside");
+  // As the page loads it is closed: its child is not in the page; its line says its own words, and its chevron carries the child's mark.
   expect([toggle().getAttribute("aria-expanded"), row("tmux-child")]).toEqual(["false", undefined]);
   expect(inside()).toBe("needs-you");
   expect(within(row("kernel-fix-developer")!).getByTestId("oats-row-facts").getAttribute("title")).toBe("Running · oats-developer · tmux"); // its own words, whole
@@ -1124,26 +1130,47 @@ test("while bb is still reading the settings no page is known to be shown or hid
   }
 });
 
-// One full notice on a screen (the home read's ruling): beside a page that shows the notice over
-// what it keeps, the sidebar says one line, how old the roster is and Retry; alone, it is the notice.
-test("on the last roster read, beside a page that shows the full notice the sidebar says one line: \"Read <age>. Acts are off.\" and Retry", async () => {
-  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
-  const failed = { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last }) };
+// THE NOTICE ONCE, AND ONE RETRY ON A SCREEN (the lead's T3, 24 Nov 2026; the specialist's form): the notice stands in
+// the pane a person is looking at, with the one Retry. The sidebar beside such a pane says one line, "Read <age>. Acts
+// are off.", with nothing to press; where no pane shows the notice the sidebar's own is the whole one, with the Retry.
+// Never two Retry on a screen, never none. (The tab beside a thread draws no notice: test/panel/panel.test.tsx.)
+// (A fixed clock: the age these tests read, "Read 2 min ago.", is counted from it, never from the real one.)
+const T3_NOW = Date.parse("2026-11-19T12:40:00.000Z");
+const T3_LAST = () => ({ at: new Date(T3_NOW - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() });
+const retries = (...places: HTMLElement[]) => places.flatMap((place) => within(place).queryAllByRole("button", { name: "Retry" }));
+
+test("T3, no pane shows the notice: the sidebar's own notice is the whole one, with the one Retry", async () => {
+  vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
+  const { slot } = await sidebar(failed);
+  await slot.findAllByTestId("oats-agent-row");
+  expect(slot.getByTestId("oats-held").textContent).toBe("Acts are off.");
+  expect(within(slot.container).getByRole("alert").textContent).toContain("OATS did not answer on falcon");
+  expect(slot.queryByTestId("oats-last-observation")).toBeNull();
+  expect(retries(slot.container)).toHaveLength(1);
+  fireEvent.click(retries(slot.container)[0]!);
+  await waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
+});
+
+test("T3, a page shows the notice: the sidebar beside it says one line, \"Read <age>. Acts are off.\", with nothing to press; the ONE Retry is the page's", async () => {
+  vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
   const { slot } = await sidebar(failed);
   await openParents(slot);
   await slot.findAllByTestId("oats-agent-row");
-  expect(slot.getByTestId("oats-held")).toBeTruthy(); // alone: the full notice
-  expect(slot.queryByTestId("oats-last-observation")).toBeNull();
   // A page of the plugin is drawn beside it, with the notice above what it keeps.
   const app = await loadApp();
   const panel = app.navPanels.find((candidate) => candidate.id === "teams")!;
   const page = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(failed), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(within(page.container).getByTestId("oats-held")).toBeTruthy());
   const line = await waitFor(() => within(slot.container).getByTestId("oats-last-observation"));
-  // The line says that the acts are off itself: at a phone's width the sidebar is bb's drawer, over the page and its notice.
-  expect(line.textContent).toBe("Read 2 min ago. Acts are off.Retry");
+  // The line says that the acts are off itself (at a phone's width the sidebar is bb's drawer, over the page and its notice), and has no button and no link.
+  expect(line.textContent).toBe("Read 2 min ago. Acts are off.");
+  expect([line.querySelectorAll("button").length, line.querySelectorAll("a").length]).toEqual([0, 0]);
   expect(within(slot.container).queryByTestId("oats-held")).toBeNull(); // (one line, not the full notice)
   expect(within(slot.container).queryByRole("alert")).toBeNull();
+  // ONE Retry on the screen: the page's.
+  expect([retries(slot.container).length, retries(page.container).length]).toEqual([0, 1]);
   // With the sidebar's notice down to one line, New agent stays off and still says no reason of its
   // own, in words or in a title: the line over it says "Acts are off.", and so does the page's full notice beside it.
   const heldNew = within(slot.container).getByTestId("oats-new-agent") as HTMLButtonElement;
@@ -1152,13 +1179,116 @@ test("on the last roster read, beside a page that shows the full notice the side
   expect(slot.container.textContent).not.toContain("Comes back when OATS is read again");
   expect(within(page.container).getByTestId("oats-held").textContent).toBe("Acts are off.");
   expect(within(slot.container).getAllByTestId("oats-agent-row")).toHaveLength(7); // the roster stays
-  fireEvent.click(within(line).getByRole("button", { name: "Retry" }));
-  await waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
-  // The page leaves: the sidebar is the one place again, and says it whole.
+  fireEvent.click(retries(page.container)[0]!);
+  await waitFor(() => expect(page.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
+  // The page leaves: the sidebar is the one place again, and says it whole, with the Retry.
   page.unmount();
   await waitFor(() => expect(within(slot.container).getByTestId("oats-held")).toBeTruthy());
   expect(within(slot.container).queryByTestId("oats-last-observation")).toBeNull();
   expect(within(slot.container).queryByTestId("oats-new-agent-held")).toBeNull();
+  expect(retries(slot.container)).toHaveLength(1);
+});
+
+test("T3, an agent's thread is on screen: its own line says the notice (the age, that the acts are off, the ONE Retry); the sidebar beside it says its one line, with nothing to press", async () => {
+  vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
+  const { slot } = await sidebar(failed);
+  await slot.findAllByTestId("oats-agent-row");
+  expect(retries(slot.container)).toHaveLength(1); // alone, it is the whole notice
+  const app = await loadApp();
+  const line = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(app.threadHeaderRows[0]! as never, { threadId: "thr_mockups", projectId: "p", environment: null }, { rpc: handlers(failed), sidebarThreads: sidebarThreads() });
+  const said = await within(line.container).findByTestId("oats-unreadable");
+  expect([said.getAttribute("data-compact"), said.textContent]).toEqual(["", "OATS did not answer on falconRead 2 min ago. Acts are off.Retry"]);
+  const beside = await waitFor(() => within(slot.container).getByTestId("oats-last-observation"));
+  expect(beside.textContent).toBe("Read 2 min ago. Acts are off.");
+  expect(within(slot.container).queryByRole("alert")).toBeNull();
+  expect([retries(slot.container).length, retries(line.container).length]).toEqual([0, 1]);
+  // The thread is left: the sidebar says it whole again.
+  line.unmount();
+  await waitFor(() => expect(retries(slot.container)).toHaveLength(1));
+});
+
+// Where OATS was NEVER read (no roster, no age): the same rule. Beside a pane that shows the notice the sidebar says
+// ONE line, the notice's TITLE alone, with nothing to press; alone it keeps the whole notice with the Retry (ruled).
+test("T3, OATS never read: alone the sidebar's notice is whole with the one Retry; beside a page that shows it, the sidebar says its title alone and the ONE Retry is the page's", async () => {
+  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: null }) };
+  const { slot } = await sidebar(never);
+  await within(slot.container).findByTestId("oats-unreadable");
+  expect([retries(slot.container).length, within(slot.container).queryByTestId("oats-last-observation")]).toEqual([1, null]);
+  const app = await loadApp();
+  const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
+  const page = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(never), sidebarThreads: sidebarThreads() });
+  await within(page.container).findByTestId("oats-unreadable");
+  const line = await waitFor(() => within(slot.container).getByTestId("oats-last-observation"));
+  expect(line.textContent).toBe("OATS did not answer on falcon");
+  expect([line.querySelectorAll("button").length, line.querySelectorAll("a").length, within(slot.container).queryByTestId("oats-unreadable")]).toEqual([0, 0, null]);
+  expect([retries(slot.container).length, retries(page.container).length]).toEqual([0, 1]);
+  page.unmount();
+  await waitFor(() => expect(retries(slot.container)).toHaveLength(1));
+});
+
+// The second review round: where OATS was never read, the panel in a thread's TAB drew the roster's notice whole beside
+// the thread's own line: the notice twice, two Retry. The tab draws none there either.
+test("T3, OATS never read, an agent's thread with its panel's tab shown: the thread's line says the notice with the ONE Retry; the tab draws none", async () => {
+  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: null }), panelInstance: () => { throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped"); } };
+  const app = await loadApp();
+  const line = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(app.threadHeaderRows[0]! as never, { threadId: "thr_mockups", projectId: "p", environment: null }, { rpc: handlers(never), sidebarThreads: sidebarThreads() });
+  await within(line.container).findByTestId("oats-unreadable");
+  const { InstancePanel } = await import("../../app/panel/Panel");
+  const known = fixtureAgents().find((agent) => agent.instance === "desktop-mockups-developer")!;
+  const tab = renderSlot<{ threadId: string; known: typeof known }, Contract>({ component: InstancePanel }, { threadId: "thr_mockups", known }, { rpc: handlers(never), sidebarThreads: sidebarThreads() });
+  await within(tab.container).findByTestId("oats-panel");
+  await waitFor(() => expect(within(tab.container).queryByRole("alert")).toBeNull());
+  expect([retries(line.container).length, retries(tab.container).length]).toEqual([1, 0]);
+});
+
+// Where OATS was never read, every thread's line says the notice: the home in that thread's tab does not say it a
+// second time, and is never an empty pane: ONE line, the notice's title alone, with nothing to press (ruled).
+test("T3, OATS never read, a thread with the home's tab shown: the line says the notice with the ONE Retry; the tab's home says the title alone", async () => {
+  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: null }) };
+  const app = await loadApp();
+  const line = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(app.threadHeaderRows[0]! as never, { threadId: "thr_no_agent", projectId: "p", environment: null }, { rpc: handlers(never), sidebarThreads: sidebarThreads() });
+  await within(line.container).findByTestId("oats-unreadable");
+  const tab = renderSlot<{ threadId: string; environment: null }, Contract>(app.tabs[0]! as never, { threadId: "thr_no_agent", environment: null }, { rpc: handlers(never), sidebarThreads: sidebarThreads(), tabVisible: true });
+  const said = await waitFor(() => within(tab.container).getByTestId("oats-last-observation"));
+  expect([said.textContent, said.querySelectorAll("button, a").length, within(tab.container).queryByTestId("oats-unreadable")]).toEqual(["OATS did not answer on falcon", 0, null]);
+  expect([retries(line.container).length, retries(tab.container).length]).toEqual([1, 0]);
+});
+
+// The first review round of this change: bb keeps the plugin's fixed tab MOUNTED while its side panel is closed (or
+// another tab is chosen). A notice in a place nobody sees is no pane's notice: it must not take the sidebar's Retry.
+test("T3, a thread that is no agent's, the home's tab HIDDEN (bb keeps it mounted): the tab says no notice and the sidebar keeps its own, whole, with the one Retry; shown, the tab says it and the sidebar says its line", async () => {
+  vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
+  const { slot } = await sidebar(failed);
+  await slot.findAllByTestId("oats-agent-row");
+  const app = await loadApp();
+  const hidden = renderSlot<{ threadId: string; environment: null }, Contract>(app.tabs[0]! as never, { threadId: "thr_no_agent", environment: null }, { rpc: handlers(failed), sidebarThreads: sidebarThreads(), tabVisible: false });
+  await within(hidden.container).findByTestId("oats-home-needs"); // drawn, out of sight
+  expect(within(hidden.container).queryByTestId("oats-unreadable")).toBeNull();
+  expect(within(slot.container).queryByTestId("oats-last-observation")).toBeNull();
+  expect(within(slot.container).getByTestId("oats-held").textContent).toBe("Acts are off.");
+  expect([retries(slot.container).length, retries(hidden.container).length]).toEqual([1, 0]);
+  hidden.unmount();
+  // The same tab in view: it is the pane a person looks at.
+  const shownTab = renderSlot<{ threadId: string; environment: null }, Contract>(app.tabs[0]! as never, { threadId: "thr_no_agent", environment: null }, { rpc: handlers(failed), sidebarThreads: sidebarThreads(), tabVisible: true });
+  await within(shownTab.container).findByTestId("oats-unreadable");
+  await waitFor(() => expect(within(slot.container).getByTestId("oats-last-observation").textContent).toBe("Read 2 min ago. Acts are off."));
+  expect([retries(slot.container).length, retries(shownTab.container).length]).toEqual([0, 1]);
+});
+
+test("T3, a thread whose own line says the notice, with the home's tab open beside it: the tab's home says none (it would be a second, with a second Retry)", async () => {
+  vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
+  const app = await loadApp();
+  // The home in a thread's tab (shown), and on the same screen a thread's line that says the notice.
+  const tab = renderSlot<{ threadId: string; environment: null }, Contract>(app.tabs[0]! as never, { threadId: "thr_no_agent", environment: null }, { rpc: handlers(failed), sidebarThreads: sidebarThreads(), tabVisible: true });
+  await within(tab.container).findByTestId("oats-unreadable");
+  const line = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(app.threadHeaderRows[0]! as never, { threadId: "thr_mockups", projectId: "p", environment: null }, { rpc: handlers(failed), sidebarThreads: sidebarThreads() });
+  await within(line.container).findByTestId("oats-unreadable");
+  await waitFor(() => expect(within(tab.container).queryByTestId("oats-unreadable")).toBeNull());
+  expect([retries(tab.container).length, retries(line.container).length]).toEqual([0, 1]);
+  expect(within(tab.container).getByTestId("oats-home-needs")).toBeTruthy(); // the home itself stays
 });
 
 // The whole name is one hover away on every row: a name cut after its second line is still there.

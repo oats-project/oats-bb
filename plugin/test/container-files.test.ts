@@ -1,5 +1,6 @@
 // The harnesses' files that one process writes and another reads while it runs (container/files.mjs):
-// a whole file is renamed into place, and a log is read by its complete lines.
+// a whole file is renamed into place, a log is read by its complete lines, and a file a process
+// that is not ours writes is read by a wait for a whole one.
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -79,11 +80,18 @@ test("a file found half written is read again until it is whole", () => {
   expect(JSON.parse(out) as unknown).toEqual({ value: { theme: "dark" }, waited: true });
 });
 
-test("a file that stays broken fails the read, with what it held: it is not skipped, and not taken for an empty one", async () => {
+test("a file that stays broken fails the read, with its length and its end: it is not skipped, and not taken for an empty one", async () => {
   const { wholeJson } = await files();
   const file = join(dir, "state.json");
   writeFileSync(file, '{"theme":"da');
   const started = Date.now();
-  expect(() => wholeJson(file, 0.3)).toThrow(/did not parse in 0\.3 s .*It held: "\{\\"theme\\":\\"da"/);
+  expect(() => wholeJson(file, 0.3)).toThrow(/did not parse in 0\.3 s .*It held 12 characters, ending: "\{\\"theme\\":\\"da"/);
   expect(Date.now() - started, "it waited its time out first").toBeGreaterThanOrEqual(300);
+});
+
+test("a long file that stays broken is said by its end, where a half-written file stops, in 200 characters", async () => {
+  const { wholeJson } = await files();
+  const file = join(dir, "state.json");
+  writeFileSync(file, `{"head":"${"x".repeat(5000)}","tail":"cut he`);
+  expect(() => wholeJson(file, 0)).toThrow(/It held 5025 characters, ending: "x{184}\\",\\"tail\\":\\"cut he"$/);
 });

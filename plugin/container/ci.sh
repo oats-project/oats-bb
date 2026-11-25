@@ -101,7 +101,7 @@ run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e
 # the plugin's OATS floor against theirs (test/kernel-compat.test.ts). And its check of a pi model id
 # with the one file that imports: a unit test holds the plugin's reading of bb's list against it
 # (test/model/served.contract.test.ts).
-(cd "$PLUGIN/.." && tar -c oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json oats-package/capabilities/oats-bb/lib/pi-model.mjs oats-package/capabilities/oats-bb/lib/errors.mjs) | docker exec -i -u node "$NAME" tar -x -C /home/node
+(cd "$PLUGIN/.." && tar -c oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json oats-package/capabilities/oats-bb/lib/pi-model.mjs oats-package/capabilities/oats-bb/lib/errors.mjs oats-package/capabilities/oats-bb/lib/title.mjs) | docker exec -i -u node "$NAME" tar -x -C /home/node
 run mkdir -p /home/node/out
 run sh container/setup.sh
 case "$STAGE" in

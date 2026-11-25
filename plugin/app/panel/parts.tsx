@@ -4,7 +4,7 @@ import { Fragment } from "react";
 import type { ReactNode } from "react";
 import { CopyButton } from "../ui";
 import { DETAIL_WITHHELD, NOT_NOTE_TEXT, UNSAFE, shown } from "../ui/text";
-import { markText } from "./words";
+import { markText, nameMark } from "./words";
 
 /** Every character that is no text (a control, a bidi override): drawn as U+FFFD, as the display filter draws one. */
 const NOT_TEXT = new RegExp(NOT_NOTE_TEXT.source, "gu");
@@ -56,9 +56,21 @@ export function PathLine({ path, copyName, tag, testId }: { path: string; copyNa
  * the tile is neutral.
  */
 export function SoulMark({ soul }: { soul: string }) {
+  return <MarkTile testId="oats-soul-mark" letters={markText(soul)} />;
+}
+/**
+ * An agent's mark, beside its name: the NAME's two letters (`nameMark`), in the same tile. It
+ * repeats the name beside it, so it is hidden from a screen reader. A name with no letter or
+ * digit has no tile.
+ */
+export function AgentMark({ instance }: { instance: string }) {
+  const letters = nameMark(instance);
+  return letters === null ? null : <MarkTile testId="oats-agent-mark" letters={letters} />;
+}
+function MarkTile({ testId, letters }: { testId: string; letters: string }) {
   return (
-    <span aria-hidden="true" data-testid="oats-soul-mark" className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-bold text-foreground">
-      {shown(markText(soul))}
+    <span aria-hidden="true" data-testid={testId} className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-bold text-foreground">
+      {shown(letters)}
     </span>
   );
 }

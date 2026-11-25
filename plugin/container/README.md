@@ -55,11 +55,12 @@ of its own with the same limits, started after the first is gone, and its artefa
 
 | File | Runs | Does |
 |---|---|---|
-| `Dockerfile` | `docker build` | node 22, chromium (the live tests' browser), procps and tmux (the real run's one agent on the tmux backend); no bb and no npm package |
+| `Dockerfile` | `docker build` | node 22, chromium (the live tests' browser), procps and tmux (the real run's one agent on the tmux backend), fd-find and ripgrep (which pi would else download by itself); no bb and no npm package |
 | `ci.sh` | on the host | builds the image, starts the container, copies the plugin's directory in, reads the repository's bb pin, runs the scripts below, copies `out/` back, removes the container |
 | `setup.sh` | in the container | bb-app at the pinned version, from its lock (`locked-install.sh bb-app`); `npm ci` |
 | `locked-install.sh` | in the container | installs a tool from its committed lock (`locks/<tool>/`, `locks/README.md`) with `npm ci` and links its commands onto the PATH: nothing is resolved at run time |
 | `relock.sh` | on the host | writes a tool's lock again (`relock.sh bb-app`, `relock.sh pi`): when its pin moves, and before a release; `relock.sh plugin` writes the plugin's own lock after `package.json` changed, keeping the versions it holds |
+| `no-pi-tools-fetch.sh` | in the container, at the pi run's setup and end | fails when pi does not find `fd` and `rg` on the PATH, or fetched them by itself (it would download their latest releases from github.com): the image holds both |
 | `no-toolchain-fetch.sh` | in the container, after each build and install of the plugin | fails when bb fetched its build toolchain from npm (a `toolchain-*` directory in its data): the proof that bb built with the locked one |
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, the shell test of the real run's wait for a bb plugin's command, `bb plugin build` |
 | `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15, G1 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
@@ -205,10 +206,12 @@ open, a confirmation before its act, in progress, done, refused and with another
   failed, unreachable; and the home's card of the agent that runs outside OATS, counted as the
   roster's foot counts it. OUTH: the three rows that read "not running" side by side (an operator's
   stop, a session lost, idle with no harness loaded), asserting the state word and the
-  tone of each, and that Start on the line of the one that is not loaded opens the lifecycle's
-  Start dialog, which says first that a message in the thread carries the conversation on. OUTA:
+  tone of each, that the lost one and the one that is not loaded say "message to continue" and
+  have no Start… on their line, and that Start… on the page of the one that is not loaded opens
+  the lifecycle's Start dialog, which says first that a message in the thread carries the
+  conversation on. OUTA:
   the three agents whose thread bb has archived, side by side (an operator's stop: plain, with its
-  soul; a session lost, and an agent that still runs: the warning mark and "archived in bb"), and
+  soul; a session lost, and an agent that still runs: the warning mark and "may still run"), and
   the archived thread's own row of the one that still runs. OUTQ:
   the first roster while bb holds a question on the thread of the agent that runs outside OATS.
   What bb says of a thread is true in bb: the stage archives the threads it says

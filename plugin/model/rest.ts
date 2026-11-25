@@ -46,25 +46,46 @@ export function rest(agent: Row, thread: Thread = null): Rest {
 }
 
 /**
- * Whether a message a person sends in the agent's bb thread is the DESIGNED way to carry it on.
- * THE RULE (the spec's author's, 23 Nov 2026): a message is refused only for an agent an OPERATOR
- * stopped, or that is stopped with no word that its session was lost (the kernel's stop: the
- * message would start its harness outside OATS), and where nobody can tell (the kernel cannot
- * reach its session). Everything else that does not run (`running: false`: its session was lost,
- * it ended by itself, or no harness is loaded for it) and is an agent on bb whose thread bb LISTS
- * (not archived, not hidden) carries on by a message: the provider brings its session back, and
- * OATS reads it running at its next read (the kernel's contract for a provider home,
- * docs/desktop-cli-api.md at v0.70.5: a session that a message started reads running at the next
- * status; `outsideOats` is reported only against a recorded stop). A listed thread whose last
- * turn bb calls failed ("error") takes a message as any other: a harness killed in a turn is how
- * a session is lost. Never for an agent on tmux (bb cannot write to it).
+ * Whether a message a person sends in the agent's bb thread is the DESIGNED way to carry it on:
+ * the ONE rule of the thread's line, the home's card and the Start dialog.
+ * THE RULE (the lead's condition of 24 Nov 2026): it is said only where the kernel's or the
+ * provider's fact shows that a message carries the agent on UNDER OATS. Two rows of an agent on
+ * bb whose thread bb LISTS (not archived, not hidden) have such a fact:
+ * - its session was LOST ("lost"): a message makes bb start the harness again in the same
+ *   conversation, and the row then reads running with no `sessionEnd` and no `outsideOats` (the
+ *   kernel side's answer, for a home stopped with the host and for one gone while OATS did not
+ *   stop it; `outsideOats` is only ever for a home an operator stopped);
+ * - no harness is loaded for it ("unloaded"): the real run shows a message carrying the
+ *   conversation on, OATS reading it running at its next read on the same thread.
+ * NOT a harness that ENDED BY ITSELF ("ended": `sessionEnd: "exited"`, or a shell): no provider
+ * prints that row on a bb thread, and nothing shows a message carrying one on; until a recording
+ * does, no place invites one (its line keeps its act, the card offers Start, the dialog has no
+ * carry-on line). Never for an operator's stop, or a stop with no word that its session was lost
+ * (the message would start its harness outside OATS); never where nobody can tell (the kernel
+ * cannot reach its session). A listed thread whose LATER turn bb calls failed ("error") takes a
+ * message as any other: a harness killed in a turn is how a session is lost. Never for an agent
+ * on tmux (bb cannot write to it).
  * Never for a thread that FAILED AT ITS START: nothing ran there, and a message would be a first
- * start outside OATS.
+ * start outside OATS. And never for a thread in "error" bb has NOT YET ANSWERED for (it may be
+ * such a thread): the answer is `null` on the thread once bb says a turn started.
  * `thread` is bb's own row of the thread the roster draws the agent on, or null where bb lists none.
  */
 export function messageResumes(agent: Row, thread: Thread): boolean {
-  if (agent.running !== false || agent.backend === "tmux" || thread === null) return false;
+  // Only an agent on bb: the two facts are the bb session provider's. (A caller that holds the
+  // agent's bb thread and names no backend, the Start dialog, is asking of an agent on bb.)
+  if (agent.running !== false || thread === null || (typeof agent.backend === "string" && agent.backend !== "bb")) return false;
+  // FAIL CLOSED: a thread bb lists in "error" is one whose later turn failed (it takes a message)
+  // or one that FAILED AT ITS START (a message would be a first start outside OATS), and until bb
+  // has answered for its events (`startFailure` absent) nobody knows which. No message is invited
+  // before the answer: not on the line, not by the home's card, not in the Start dialog.
+  if ((thread as { status?: unknown }).status === "error" && startOf(thread)?.startFailure === undefined) return false;
   // (A thread that failed at its start is "never-started": there is no conversation to carry on.)
   const how = rest(agent, thread);
-  return how === "lost" || how === "ended" || how === "unloaded";
+  if (how === "lost") return true;
+  // "No harness loaded" is a POSITIVE match of the row the provider prints (recorded:
+  // test/fixtures/outside/status-not-loaded.json): the word "unknown" and no word how its session
+  // ended. `rest` answers "unloaded" for every other row it does not know, too: none of those is
+  // invited a message (a word of the runtime's or of the session's end this plugin does not know
+  // has no fact behind it: fail closed).
+  return how === "unloaded" && agent.runtimeState === "unknown" && (agent.sessionEnd ?? null) === null;
 }

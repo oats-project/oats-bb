@@ -53,6 +53,8 @@ echo "pi tarball: @earendil-works/pi-coding-agent@$PI_LOCKED_VERSION, integrity 
 [ -z "$PI_INTEGRITY" ] || [ "$PI_LOCKED_INTEGRITY" = "$PI_INTEGRITY" ] || { echo "pi setup: the tarball of @earendil-works/pi-coding-agent@$PI_VERSION is not the one expected (PI_INTEGRITY $PI_INTEGRITY)" >&2; exit 1; }
 [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] || sh "$HERE/../../locked-install.sh" pi
 [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] || { echo "pi setup: pi $PI_VERSION could not be installed" >&2; exit 1; }
+# pi finds fd and ripgrep on the PATH (the image holds them), so it will not fetch them by itself.
+sh "$HERE/../../no-pi-tools-fetch.sh"
 
 echo "== the OATS bridge for pi, @awebai/oats-pi@$OATS_PI_VERSION, in bb's pi configuration ($PI_AGENT_DIR)"
 mkdir -p "$PI_AGENT_DIR/extensions" "$REAL/mock"
@@ -80,7 +82,10 @@ case "$PACKAGES" in *@awebai/pi@* | *'@awebai/pi"'*) echo "pi setup: bb's pi con
 # model that is only LISTED, never run: `nested/echo2`, an id that holds a slash, so that bb lists
 # `mock/nested/echo2`: its bare id is `nested/echo2`, and `echo2` is no model's (the Restart
 # dialog's hold, step P4b: a bare id is the id minus its provider, never what an id ends in).
-printf '{ "providers": { "mock": { "baseUrl": "http://127.0.0.1:%s/v1", "api": "openai-completions", "apiKey": "placeholder-not-a-key", "models": [ { "id": "echo", "name": "Echo (mock)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096, "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } }, { "id": "nested/echo2", "name": "Echo 2 (mock, listed only)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096, "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } } ] } } }\n' "$PI_MOCK_PORT" > "$PI_AGENT_DIR/models.json"
+# And one model that TWO providers serve, listed only, never run: `twin`, of `mock` and of a second
+# provider `mock2` (the same endpoint), so that bb lists `mock/twin` and `mock2/twin`: the bare id
+# `twin` is then served twice (the New agent form's hold "Pick provider", step P1).
+printf '{ "providers": { "mock": { "baseUrl": "http://127.0.0.1:%s/v1", "api": "openai-completions", "apiKey": "placeholder-not-a-key", "models": [ { "id": "echo", "name": "Echo (mock)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096, "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } }, { "id": "nested/echo2", "name": "Echo 2 (mock, listed only)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096, "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } }, { "id": "twin", "name": "Twin (mock, listed only)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096, "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } } ] }, "mock2": { "baseUrl": "http://127.0.0.1:%s/v1", "api": "openai-completions", "apiKey": "placeholder-not-a-key", "models": [ { "id": "twin", "name": "Twin (mock2, listed only)", "reasoning": false, "input": ["text"], "contextWindow": 200000, "maxTokens": 4096, "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 } } ] } } }\n' "$PI_MOCK_PORT" "$PI_MOCK_PORT" > "$PI_AGENT_DIR/models.json"
 install -m 0644 "$HERE/ask-dialog.ts" "$PI_AGENT_DIR/extensions/ask-dialog.ts"
 if ! [ -f "$REAL/pi-mock.pid" ] || ! kill -0 "$(cat "$REAL/pi-mock.pid")" 2> /dev/null; then
   setsid node "$HERE/mock-openai.mjs" "$REAL/mock" "$PI_MOCK_PORT" > "$OUT/pi-mock.out" 2>&1 < /dev/null &

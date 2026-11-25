@@ -3,17 +3,39 @@
 // person asks ("Check again", after an install). Read by a call of its
 // own, not by a kept query: the home has to know when a check ENDS, also when its answer is the
 // same as before (a kept query hands back the same object then, and says nothing).
-import { useCallback, useEffect, useRef, useState } from "react";
+//
+// The sidebar reads it too, the same way, when IT is first seen: its "New agent" is held by the
+// same rule as the home's (app/workspace/pages.ts `newAgentHeld`), and the sidebar is on screen
+// before any home is. The ANSWER is one for the window, whoever read it: a check a person asks on
+// the home moves the sidebar's button with the home's. (Each place still asks once itself; the
+// server keeps the version, so that is one `oats version`.)
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../../contract";
 import { attempt, errorMessage, type Result } from "../store";
 
 export type Cli = Result<"homeCli">;
 
+// The window's one answer: the last one any place read.
+let known: Cli | undefined;
+const heard = new Set<() => void>();
+const say = (answer: Cli | undefined) => {
+  known = answer;
+  for (const hear of heard) hear();
+};
+const hearCli = (hear: () => void) => {
+  heard.add(hear);
+  return () => void heard.delete(hear);
+};
+const knownCli = () => known;
+/** Forgets the window's answer (a test's reset: a module's state outlives a mounted tree). */
+export const forgetCli = (): void => say(undefined);
+
 /**
  * `cli`: the last answer, undefined before the first one and while none was ever read (a read that
  * failed keeps what an earlier one answered). `checking`: a check a person asked for is under way.
- * `failure`: why the last read failed, null when it answered. `unchecked`: no version was ever
+ * `failure`: why the last check A PERSON ASKED FOR failed, null when it answered or none was asked
+ * (a place's own reads that fail say nothing: `read`). `unchecked`: no version was ever
  * read, and the home's own second try failed too: the home then says so, with Check again.
  * `check()`: asks the server to read OATS again (it drops the version it keeps), then reads.
  *
@@ -23,7 +45,7 @@ export type Cli = Result<"homeCli">;
  */
 export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | undefined; checking: boolean; failure: string | null; unchecked: boolean; check(): void } {
   const rpc = useRpc<typeof rpcContract>();
-  const [cli, setCli] = useState<Cli | undefined>(undefined);
+  const cli = useSyncExternalStore(hearCli, knownCli);
   const [checking, setChecking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   /** How the home's own reads stand: none asked, the first under way, the first failed, the second under way, the second failed (answered: `cli` holds it). */
@@ -35,20 +57,24 @@ export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | unde
       alive.current = false;
     };
   }, []);
-  /** One read of the version. → whether it answered. */
+  /**
+   * One read of the version. → whether it answered. `asked`: a person asked for it (Check again):
+   * only then is a failure SAID (`failure`: "Check failed: …" on the card). A read a place makes by
+   * itself (as it is first seen; its one more try) that fails says nothing: the card it would be
+   * said on may be there by another place's answer (the answer is the window's), and nobody pressed.
+   */
   const read = useCallback(
-    (): Promise<boolean> =>
+    (asked = false): Promise<boolean> =>
       attempt(() => rpc.call("homeCli", null)).then(
         (answer) => {
-          if (alive.current) {
-            setCli(answer);
-            setFailure(null);
-          }
+          // The answer is the window's, also when the place that asked has left the screen.
+          say(answer);
+          if (alive.current) setFailure(null);
           return true;
         },
         (cause: unknown) => {
           // The home keeps what it knew of the CLI, and says that the check failed where it shows a notice.
-          if (alive.current) setFailure(errorMessage(cause));
+          if (alive.current && asked) setFailure(errorMessage(cause));
           return false;
         },
       ),
@@ -79,7 +105,7 @@ export function useCli(enabled: boolean, rosterRead: boolean): { cli: Cli | unde
   const check = useCallback(() => {
     if (checking) return;
     setChecking(true);
-    const again = () => read();
+    const again = () => read(true);
     void attempt(() => rpc.call("refresh", null))
       .then(again, again)
       .finally(() => {

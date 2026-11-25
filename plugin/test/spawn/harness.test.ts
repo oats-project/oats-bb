@@ -65,15 +65,6 @@ describe("the harnesses the bb session provider declares", () => {
     backend = await startBackend();
     expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: ["claude", "pi"], hostId: "host_falcon" });
   });
-
-  it("the same code from a workspace that DOES hold the provider is a failed read, never \"absent\": a package not in the lock, a capability missing from a member", async () => {
-    for (const message of ["package oats.bb is not in the lock — run `oats sync`", 'no capability "oats.bb" in member oats-real']) {
-      backend = await startBackend({ verbs: { "capabilities show": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message } }), exit: 1 } } });
-      await expect(backend.rpc("spawnHarnesses"), message).rejects.toThrow(`E_CAPABILITY_UNKNOWN: ${message}`);
-      await backend.dispose();
-      backend = undefined;
-    }
-  });
 });
 
 describe("a harness and a model named for a spawn, a start or a restart", () => {

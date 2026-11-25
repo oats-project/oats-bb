@@ -1,6 +1,6 @@
 // The real run's recording wrapper (container/real/oats-record.mjs) writes each record whole: the
 // run reads the records' directory while the plugin's calls end, and a record it finds parses.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -52,4 +52,35 @@ test("a file still being written is not a record: it is not counted for the next
   expect(names).toContain("0001-1-status.json.writing");
   expect(names.filter((name) => name.endsWith(".writing")), "the wrapper's own file being written is gone: renamed into place").toEqual(["0001-1-status.json.writing"]);
   for (const name of names.filter((each) => each.endsWith(".json"))) expect(() => JSON.parse(readFileSync(join(records, name), "utf8")) as unknown).not.toThrow();
+});
+
+test("the record is written under a name that is not a record's, then renamed into place: no write goes to a .json name", () => {
+  // The two tests above read the directory once the wrapper has left, and a plain write leaves the
+  // same directory as a write and a rename. This one watches what the wrapper DOES: a module loaded
+  // before it says each write and each rename on its standard error.
+  const { wrapper, records } = install("{}");
+  const watch = join(dir, "watch.mjs");
+  writeFileSync(
+    watch,
+    [
+      'import fs from "node:fs";',
+      'import { syncBuiltinESMExports } from "node:module";',
+      "const { writeFileSync, renameSync, writeSync } = fs;",
+      "fs.writeFileSync = (file, ...rest) => { writeSync(2, `write ${file}\\n`); return writeFileSync(file, ...rest); };",
+      "fs.renameSync = (from, to) => { writeSync(2, `rename ${from} ${to}\\n`); return renameSync(from, to); };",
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"),
+  );
+  const run = spawnSync(process.execPath, ["--import", watch, wrapper, "status"], { encoding: "utf8" });
+  expect(run.status, run.stderr).toBe(0);
+  const said = run.stderr.split("\n").filter((line) => line.includes(records));
+  const written = said.filter((line) => line.startsWith("write ")).map((line) => line.slice("write ".length));
+  const renamed = said.filter((line) => line.startsWith("rename ")).map((line) => line.slice("rename ".length).split(" "));
+  expect(written, "one write in the records' directory").toHaveLength(1);
+  expect(written[0], "and not to a record's name: a reader of *.json never finds it half written").toMatch(/\.json\.writing$/);
+  expect(renamed, "one rename").toHaveLength(1);
+  expect(renamed[0]![0], "of the file that was written").toBe(written[0]);
+  expect(renamed[0]![1], "onto the record's own name").toBe(written[0]!.slice(0, -".writing".length));
+  expect(readdirSync(records)).toEqual([renamed[0]![1]!.slice(records.length + 1)]);
 });

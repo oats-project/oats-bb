@@ -236,14 +236,14 @@ export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance
  * home lists under "Needs you"), one a person must look at with nobody asked (it failed; or it
  * WARNS: `warns`, the caller's word for a row whose own mark is drawn in the warning tone, which
  * the model cannot tell: a thread archived in bb while it ran), and one that cannot be reached.
- * Several inside, WHEREVER EACH STANDS: one that asks first, then one that runs outside OATS,
- * then one that failed or warns, then an unreachable one; among equals the first in the tree's
- * order. → that row's own state (and the row), "warning" as the tone where it warns and nobody
- * asks, and `asks`: how many hidden rows need a person. `{ state: null }` where every hidden row is
+ * Several inside, WHEREVER EACH STANDS: one that asks first, then one that failed or cannot be
+ * reached, then one that runs outside OATS or warns; among equals the first in the tree's
+ * order. → that row's own state (and the row), "warning" as the tone for a row of the third kind,
+ * and `asks`: how many hidden rows ASK (their state is needs-you). `{ state: null }` where every hidden row is
  * quiet and none warns. The parent's own state is never part of it: its own word and mark stay
  * its own. (The roster's ORDER, `RANK`, is another thing and is not touched by this.)
  */
-export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null; /** how many hidden rows need a person (they ask, or they run outside OATS: the home lists both under "Needs you") */ asks: number } {
+export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null; /** how many hidden rows ask (their state is needs-you) */ asks: number } {
   // The best so far, in a list of at most one (a local a closure assigns is not narrowed after it).
   const best: { state: AgentState; tone: "warning" | null; rank: number; node: T }[] = [];
   let asks = 0;
@@ -253,14 +253,13 @@ export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boo
       // A row a person must find behind a closed parent: one that needs a person (rank 0), one of rank 1 (outside,
       // failed, or one that warns), and an UNREACHABLE one (the reader's P23: its rank in the ORDER stays 2, with
       // working, idle and stopped; behind a fold it is marked, after every row of rank 0 or 1).
-      // Among them a row that needs a PERSON comes first (one that asks, then one that runs outside OATS: the closed
-      // parent draws that row's own mark beside its chevron, and counts them); then one a person must look at with
-      // nobody asked (failed, or one that warns: the chevron takes the tone); then an unreachable one.
-      const rank = Math.min(RANK[each.state], warned ? 1 : 2);
-      const needs = each.state === "needs-you" || each.state === "outside";
+      // WHICH hidden row the closed parent speaks for, wherever each stands: one that ASKS first (its disc beside the
+      // chevron, and the count); then one that FAILED or cannot be REACHED (the chevron in the failure's tone: a failed
+      // row is never hidden behind a milder one); then one that runs outside OATS, or WARNS (the warning tone).
+      const needs = each.state === "needs-you";
       if (needs) asks += 1;
-      const weight = each.state === "needs-you" ? 0 : each.state === "outside" ? 0.5 : rank < 2 ? 1 : each.state === "unreachable" ? 1.5 : 2;
-      if (weight < 2 && (best[0] === undefined || weight < best[0].rank)) best[0] = { state: each.state, tone: warned && !needs ? "warning" : null, rank: weight, node: each };
+      const weight = needs ? 0 : each.state === "error" || each.state === "unreachable" ? 1 : each.state === "outside" || warned ? 1.5 : 2;
+      if (weight < 2 && (best[0] === undefined || weight < best[0].rank)) best[0] = { state: each.state, tone: weight === 1.5 ? "warning" : null, rank: weight, node: each };
       walk(each.children);
     }
   };

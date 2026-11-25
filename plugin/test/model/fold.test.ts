@@ -67,14 +67,14 @@ describe("the mark of a closed parent: the most urgent row its subtree hides, af
     ["every hidden row is quiet (working, idle, stopped): no mark", { dev: "idle", reviewer: "stopped" }, [], ["lead+", "solo", "boss+"]],
     // (The lead's reader, P23: an UNREACHABLE row behind a fold is one a person must find: it is marked. Its rank in the roster's ORDER stays with working, idle and stopped.)
     ["a hidden row is unreachable: marked", { dev: "idle", reviewer: "stopped", helper: "unreachable" }, [], ["lead+!unreachable", "solo", "boss+"]],
-    ["a row that needs a person, or one of rank 1, comes before an unreachable one", { dev: "unreachable", helper: "error" }, [], ["lead+!error", "solo", "boss+"]],
+    ["a failed row and an unreachable one are equals (the failure's tone): the first in the tree's order", { dev: "unreachable", helper: "error" }, [], ["lead+!unreachable", "solo", "boss+"]],
     ["a hidden child needs a person", { helper: "needs-you" }, [], ["lead+!needs-you", "solo", "boss+"]],
     ["a hidden GRANDchild needs a person: the root says so, and so does its closed parent once the root is open", { reviewer: "needs-you" }, [], ["lead+!needs-you", "solo", "boss+"]],
     ["(the same, the root open)", { reviewer: "needs-you" }, ["lead"], ["lead-", "dev+!needs-you", "helper", "solo", "boss+"]],
     ["a hidden row failed: a person must look", { aide: "error" }, [], ["lead+", "solo", "boss+!error"]],
-    ["a hidden row runs outside OATS: a person must look", { dev: "outside" }, [], ["lead+!outside", "solo", "boss+"]],
+    ["a hidden row runs outside OATS: a person must look: in the warning tone", { dev: "outside" }, [], ["lead+!outside~warning", "solo", "boss+"]],
     ["one that needs a person comes before one that must be looked at, wherever each stands", { dev: "error", reviewer: "outside", helper: "needs-you" }, [], ["lead+!needs-you", "solo", "boss+"]],
-    ["among equals the first in the tree's order", { dev: "outside", helper: "error" }, [], ["lead+!outside", "solo", "boss+"]],
+    ["a FAILED row is never hidden behind a milder one: it comes before one that runs outside OATS, wherever each stands", { dev: "outside", helper: "error" }, [], ["lead+!error", "solo", "boss+"]],
     ["the parent's OWN state is never the mark: a parent that needs a person over quiet children carries none", { lead: "needs-you", boss: "error" }, [], ["lead+", "solo", "boss+"]],
     ["an OPEN parent carries no mark: the row itself is in sight", { helper: "needs-you" }, ["lead"], ["lead-", "dev+", "helper", "solo", "boss+"]],
     ["a leaf carries none", { solo: "needs-you" }, [], ["lead+", "solo", "boss+"]],
@@ -88,12 +88,19 @@ describe("the mark of a closed parent: the most urgent row its subtree hides, af
     const failed = row("c", "error");
     // (With the state: the row it is the state of, so that the caller can name the chevron with that row's own words.)
     expect(insideOf(row("a", "working", [row("b", "idle", [failed])]))).toEqual({ state: "error", tone: null, node: failed, asks: 0 });
-    // HOW MANY hidden rows need a person (they ask, or run outside OATS: the home lists both under "Needs you"): the
-    // toggle's name says the count. A row that needs a person comes before one that failed, wherever each stands.
+    // HOW MANY hidden rows ASK (their state is needs-you): the toggle's name says the count; a row that runs outside
+    // OATS is not one of them. WHICH row the parent speaks for, wherever each stands: one that asks; then one that
+    // failed or cannot be reached (never hidden behind a milder one); then one that runs outside OATS or warns.
     const asking = row("d", "needs-you");
-    expect(insideOf(row("a", "working", [failed, row("b", "idle", [asking, row("e", "outside")]), row("f", "needs-you")]))).toEqual({ state: "needs-you", tone: null, node: asking, asks: 3 });
+    expect(insideOf(row("a", "working", [failed, row("b", "idle", [asking, row("e", "outside")]), row("f", "needs-you")]))).toEqual({ state: "needs-you", tone: null, node: asking, asks: 2 });
     const out = row("g", "outside");
-    expect(insideOf(row("a", "working", [row("h", "error"), out]))).toEqual({ state: "outside", tone: null, node: out, asks: 1 });
+    const broken = row("h", "error");
+    expect(insideOf(row("a", "working", [out, broken]))).toEqual({ state: "error", tone: null, node: broken, asks: 0 }); // the failed row, though the outside one stands first
+    expect(insideOf(row("a", "working", [out]))).toEqual({ state: "outside", tone: "warning", node: out, asks: 0 });
+    const lost = row("i", "unreachable");
+    const warned = row("j", "stopped");
+    expect(insideOf(row("a", "working", [warned, lost]), (each) => each === warned)).toEqual({ state: "unreachable", tone: null, node: lost, asks: 0 }); // an unreachable row before one that warns
+    expect(insideOf(row("a", "working", [warned, out]), (each) => each === warned)).toEqual({ state: "stopped", tone: "warning", node: warned, asks: 0 }); // among equals, the tree's order
   });
 
   // ONE principle: a closed parent carries a mark for any row inside it that itself carries one. A row whose own mark
@@ -103,7 +110,7 @@ describe("the mark of a closed parent: the most urgent row its subtree hides, af
     ["a hidden row that warns, its state quiet: its own state, in the warning tone", { helper: "stopped" }, ["helper"], [], ["lead+!stopped~warning", "solo", "boss+"]],
     ["a hidden GRANDchild that warns", { reviewer: "idle" }, ["reviewer"], [], ["lead+!idle~warning", "solo", "boss+"]],
     ["one that warns and one that waits: needs-you wins, in its own tone", { dev: "stopped", helper: "needs-you" }, ["dev"], [], ["lead+!needs-you", "solo", "boss+"]],
-    ["one that warns before one that failed: of one rank, the first in the tree's order, with its own tone", { dev: "stopped", helper: "error" }, ["dev"], [], ["lead+!stopped~warning", "solo", "boss+"]],
+    ["one that warns standing before one that failed: the FAILED row wins (never hidden behind an amber chevron)", { dev: "stopped", helper: "error" }, ["dev"], [], ["lead+!error", "solo", "boss+"]],
     ["one that failed before one that warns: the failed one, plain", { dev: "error", helper: "stopped" }, ["helper"], [], ["lead+!error", "solo", "boss+"]],
     ["a row that carries no mark of its own (stopped, plainly archived: it does not warn) marks nothing", { helper: "stopped", aide: "stopped" }, [], [], ["lead+", "solo", "boss+"]],
     ["the parent's own warning is its own mark, never the one it carries", { lead: "stopped" }, ["lead"], [], ["lead+", "solo", "boss+"]],

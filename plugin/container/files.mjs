@@ -24,6 +24,10 @@ export function atomicWrite(file, content) {
  * ended by its newline. A last line with no newline yet is a record still being written, and is
  * left for the next read; a complete line that is not what it should be still fails where it is
  * parsed (nothing is skipped for not parsing).
+ *
+ * So this reads what WAS asked. That something was NOT asked (an absence: no line of some kind) is
+ * asserted only after the act it follows has answered: a line being written at that instant is
+ * not in what this returns, and before the act has answered its line may not be written yet.
  */
 export function completeLines(file) {
   const text = readFileSync(file, "utf8");

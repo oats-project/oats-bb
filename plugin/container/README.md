@@ -55,11 +55,12 @@ of its own with the same limits, started after the first is gone, and its artefa
 
 | File | Runs | Does |
 |---|---|---|
-| `Dockerfile` | `docker build` | node 22, chromium (the live tests' browser), procps and tmux (the real run's one agent on the tmux backend); no bb and no npm package |
+| `Dockerfile` | `docker build` | node 22, chromium (the live tests' browser), procps and tmux (the real run's one agent on the tmux backend), fd-find and ripgrep (which pi would else download by itself); no bb and no npm package |
 | `ci.sh` | on the host | builds the image, starts the container, copies the plugin's directory in, reads the repository's bb pin, runs the scripts below, copies `out/` back, removes the container |
 | `setup.sh` | in the container | bb-app at the pinned version, from its lock (`locked-install.sh bb-app`); `npm ci` |
 | `locked-install.sh` | in the container | installs a tool from its committed lock (`locks/<tool>/`, `locks/README.md`) with `npm ci` and links its commands onto the PATH: nothing is resolved at run time |
 | `relock.sh` | on the host | writes a tool's lock again (`relock.sh bb-app`, `relock.sh pi`): when its pin moves, and before a release; `relock.sh plugin` writes the plugin's own lock after `package.json` changed, keeping the versions it holds |
+| `no-pi-tools-fetch.sh` | in the container, at the pi run's setup and end | fails when pi does not find `fd` and `rg` on the PATH, or fetched them by itself (it would download their latest releases from github.com): the image holds both |
 | `no-toolchain-fetch.sh` | in the container, after each build and install of the plugin | fails when bb fetched its build toolchain from npm (a `toolchain-*` directory in its data): the proof that bb built with the locked one |
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, the shell test of the real run's wait for a bb plugin's command, `bb plugin build` |
 | `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15, G1 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
@@ -68,6 +69,7 @@ of its own with the same limits, started after the first is gone, and its artefa
 | `real/` | its own container | the real run: bb-app, OATS from npm, the bb session provider, Claude Code on a mock model and the plugin (`real/README.md`) |
 | `real/pi/` | that container, started with `REAL_PI=1` | the pi run: the same setup and kernel, with pi, the OATS bridge for pi and a mock model, and a pi agent launched from the New agent form (`real/pi/README.md`) |
 | `real/mail/` | by hand only, five containers of its own | the mail part: aweb's local stack (four containers) and one client with a real OATS kernel, the real messaging layer and bb with the plugin; it reads an agent's Mail tab and checks that nothing was marked read. In neither `ci.sh all` nor CI (`real/mail/README.md`) |
+| `files.mjs` | by the live stage and the real and pi runs | the files one process of a run writes and another reads while it runs: a whole file is written beside its place and renamed into it (`atomicWrite`: the fake oats' settings, the recording wrapper's settings, pi's `settings.json` in the pi run, Claude Code's state before the tmux part), and a log another process appends to is read by its complete lines (`completeLines`: the fake oats' log, the mocks' request logs). The wrapper's records are written the same way by the wrapper itself |
 | `images.mjs` | by `live-ui.mjs` and the real run | finds the images of a run that are the same image: none may be in the live checks; in the real run, only two of one state |
 | `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked and logs each call; the verbs it knows and their files are each feature's `test/fixtures/<feature>/verbs.json`; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
 
@@ -199,6 +201,12 @@ open, a confirmation before its act, in progress, done, refused and with another
   Restart); and the agent whose bb thread is gone, which stays in the
   roster and says "deleted in bb".
   With A13's rows, all six states are drawn, each with its word.
+- **A13**, a tmux agent's terminal (`scenes/terminal.mjs`, on the fixtures): the page of the tmux agent
+  that runs has Terminal over its attach command; pressed, bb is asked for a terminal on the command the
+  server answered (the fake `oats` by its absolute path) and refuses it (the fixtures' home is not on
+  the disk), and the page says "Terminal did not open." with its fold: the command, and bb's own words. The live checks have no
+  tmux: that the tab comes up attached, takes keys and is one per agent is the real run's
+  (`real/parts/on-tmux.mjs`).
 - **OUTA**, **OUT**, **OUTH**, **OUTQ** (`scenes/outside.mjs`, in the order they run; stages of its own) every row of the table of
   "Outside OATS" (`../README.md`) on the sidebar's rows, on each thread's line and on the agent's
   own page. OUT, one roster: stopped with its thread archived, stopped on an open thread, the

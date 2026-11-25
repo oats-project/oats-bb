@@ -71,7 +71,10 @@ plugin's build agree with it. So one change moves them all:
   range if the new version falls outside it;
 - the lock the plugin's checks install bb-app from (`plugin/container/locks/bb-app/package.json`,
   then `plugin/container/relock.sh bb-app`), with bb's build toolchain where the new version asks
-  for other versions of it (`plugin/container/locks/README.md`, "When a pin moves").
+  for other versions of it (`plugin/container/locks/README.md`, "When a pin moves");
+- the locks the contract images install bb-app from (`test/contract/locks/claude/package.json` and
+  `test/contract/locks/pi/package.json`, then `test/contract/relock.sh claude` and
+  `test/contract/relock.sh pi`; `test/contract/locks/README.md`).
 
 Review the files of this directory and build a new image.
 

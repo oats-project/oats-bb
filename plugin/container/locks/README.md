@@ -74,17 +74,18 @@ only when its pin moves:
 - **The plugin's dependencies**: `npm ci`, from `plugin/package-lock.json`, as before. bb's own
   install of the plugin from git (the live check G1) runs `npm install --omit=dev` in its clone,
   which holds that same lock: it resolves nothing.
-- **The image** (`../Dockerfile`): `node:22` and three packages of the distribution, at the
+- **The image** (`../Dockerfile`): `node:22` and five packages of the distribution, at the
   image's build. Not npm, and not pinned here.
 
-## Known, and not closed
+## What pi fetches by itself
 
-**pi fetches two tools by itself, from github.com, at their latest release.** pi 1.5.2 downloads
-`fd` and `ripgrep` when its interactive mode starts, or when its `grep` or `find` tool runs, and
-neither is on the PATH (the image has neither). The checks drive pi through bb, without its
-interactive mode, and their mock model calls neither tool: so no check resolves them today. A
-check that did would take whatever was released that minute. It is not npm, and a lock does not
-reach it: the fix is the two packages in the image, a change of its own.
+pi 1.5.2 downloads `fd` and `ripgrep` by itself, from github.com, at their LATEST release, when
+its interactive mode starts or its `grep` or `find` tool runs and it does not find `fd` (or
+`fdfind`) and `rg` on the PATH. It is not npm, and a lock does not reach it. The image holds both
+(`../Dockerfile`: the distribution's `fd-find` and `ripgrep`), so pi finds them and fetches
+nothing; `../no-pi-tools-fetch.sh` asks pi's own code what it finds, at the pi run's setup, and
+fails a pi run after which pi's agent directory holds a binary it fetched. The two come at the
+distribution's versions, at the image's build, as its other packages.
 
 ## When a pin moves
 

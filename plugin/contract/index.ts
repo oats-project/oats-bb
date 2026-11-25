@@ -14,6 +14,7 @@ import * as mail from "./mail.js";
 import * as panel from "./panel.js";
 import * as roster from "./roster.js";
 import * as spawn from "./spawn.js";
+import * as terminal from "./terminal.js";
 import * as workspace from "./workspace.js";
 
 export { instanceName } from "./shared.js";
@@ -32,6 +33,7 @@ export const rpcContract = {
   ...lifecycle.rpc,
   ...automations.rpc,
   ...panel.rpc,
+  ...terminal.rpc,
   ...mail.rpc,
 };
 
@@ -49,6 +51,7 @@ export const hostContract = {
   ...lifecycle.host,
   ...automations.host,
   ...panel.host,
+  ...terminal.host,
   ...mail.host,
 };
 

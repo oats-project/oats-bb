@@ -10,12 +10,12 @@ import assert from "node:assert/strict";
 import { after, afterEach, before, test } from "node:test";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BB_VERSION, rig, sleep, waitFor } from "./rig.mjs";
+import { BB_SERVER, BB_SETTINGS, BB_VERSION, rig, sleep, waitFor } from "./rig.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PROVIDER = "/repo/oats-package/capabilities/oats-bb/bin/oats-bb.mjs";
 const MODEL = "mock/echo";
-const SETTINGS = { version: BB_VERSION, trust: "container", dataDir: "/home/node/bbdata" };
+const SETTINGS = { ...BB_SETTINGS, version: BB_VERSION, trust: "container", dataDir: "/home/node/bbdata" };
 // A check as the kernel makes it before a pi launch: with the launch it plans.
 const PLANNED = { harness: "pi", yolo: true, args: [] };
 
@@ -128,7 +128,7 @@ after(() => box.stop());
 
 test("the image runs the pinned bb-app with pi, and the check of a planned pi launch reads it ready", async () => {
   assert.equal((await sh("bb --version")).trim(), BB_VERSION);
-  const state = JSON.parse(await sh("curl -s 'http://127.0.0.1:38886/api/v1/system/providers/state?providerId=pi'"));
+  const state = JSON.parse(await sh(`curl -s '${BB_SERVER}/api/v1/system/providers/state?providerId=pi'`));
   assert.equal(state.providers.length, 1);
   assert.equal(state.providers[0].providerId, "pi");
   assert.equal(state.providers[0].status, "ready", "what the provider reads: bb's own word for its pi provider");
@@ -162,7 +162,7 @@ test("P1 launch: a pi thread in a project rooted at the home, with the launch's 
   // Idle after its turn, its pi still loaded in the home: it runs. (bb says `idle` of a
   // stopped thread too: `running` is read from the home's own harness process.)
   const inspected = (await provider("inspect", { home, endpoint })).result;
-  assert.deepEqual(inspected, { present: true, state: "unknown", running: true, open: { label: "Open in bb", url: `http://127.0.0.1:38886/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
+  assert.deepEqual(inspected, { present: true, state: "unknown", running: true, open: { label: "Open in bb", url: `${BB_SERVER}/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
 });
 
 test("P1 bb itself runs pi in full mode only, and the provider refuses the same launch before bb is asked", async () => {
@@ -227,7 +227,7 @@ test("bb's list of pi's models, as the model check reads it: every id is its pro
 test("what the model check reads of bb and pi beside the list: bb-app's record of its start in its data directory, and the files that give pi its models in its configuration directory", async () => {
   // bb-app's record: this server, and when it started (after the image's pi settings were written).
   const record = JSON.parse(await sh("cat ~/bbdata/bb-app-runtime.json"));
-  assert.equal(record.serverUrl, "http://127.0.0.1:38886");
+  assert.equal(record.serverUrl, BB_SERVER);
   assert.match(record.startedAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
   const [now, settingsChanged] = (await sh("date +%s; stat -c %Z ~/.pi/agent/settings.json")).trim().split("\n").map(Number);
   const started = Date.parse(record.startedAt) / 1000;
@@ -324,24 +324,69 @@ test("a model added to pi a moment ago is not in bb's list yet, and bb starts a 
   await refusesAgain();
 });
 
-test("P2 the kernel's two variables and the PATH reach the thread's pi and its tools through the project's env, and nothing else of the launch does; the home's skills load", async () => {
+test("P2 the kernel's two variables, the PATH and where the agent's identity is reach the thread's pi and its tools through the project's env, and nothing else of the launch does; the home's skills load", async () => {
   const { home, endpoint, since } = await launched("p2", {
     // As the kernel hands a launch of a home with messaging: oats.aweb's entries beside its own.
     env: [{ name: "OATS_INSTANCE", value: "p2", source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: "/home/node/homes/p2", source: "kernel" },
       { name: "AWEB_DELIVERY", value: "session", source: "capability", capability: "oats.aweb" }, { name: "AWEB_IDENTITY_HOME", value: "/home/node/homes/p2/.aw", source: "capability", capability: "oats.aweb" }],
     unset: ["CONTRACT_AMBIENT"],
   });
-  assert.deepEqual(await projectEnv(endpoint.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"], "only these three ever go into bb's database");
+  assert.deepEqual(await projectEnv(endpoint.projectId), ["AWEB_IDENTITY_HOME", "OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"], "only these four ever go into bb's database");
   // bb shows no value back: nothing of the launch's env can be read out of bb's CLI.
   for (const variable of (await bbJson(`machine env list --project ${endpoint.projectId}`)).variables) assert.equal(variable.value, null, variable.name);
-  // The agent's own shell: the kernel's two variables, and the home's shim found by its
-  // bare name. A capability's entry did not come, and neither did the launch's unset: the
-  // thread's pi inherits what the bb server's own environment holds.
+  // The agent's own shell: the kernel's two variables, the home's shim found by its bare
+  // name, and where the agent's identity is (a capability's entry, a path inside the home:
+  // oats-bb#87). A capability's other entry did not come, and neither did the launch's
+  // unset: the thread's pi inherits what the bb server's own environment holds.
   const seen = await bash(endpoint.threadId, `printf '%s|%s|%s|%s|%s|%s|' "$OATS_INSTANCE" "$OATS_INSTANCE_HOME" "$(contract-shim)" "\${AWEB_DELIVERY-unset}" "\${AWEB_IDENTITY_HOME-unset}" "\${CONTRACT_AMBIENT-unset}"`);
-  assert.ok(seen.includes(`p2|${home}|shim-on-path|unset|unset|from-the-bb-server|`), seen);
+  assert.ok(seen.includes(`p2|${home}|shim-on-path|unset|${home}/.aw|from-the-bb-server|`), seen);
   // @awebai/oats-pi loads the home's composed skills only when OATS_INSTANCE_HOME names the home.
   const first = (await turns())[since];
   assert.ok(first.sys.includes("contract-skill"), "the home's skill is in pi's system prompt");
+});
+
+// oats-bb#87. `aw` finds an identity in `.aw` of the directory it runs in. A seat with a
+// GLOBAL identity through a session grant keeps its identity in `<home>/.aweb-identity`,
+// and oats.aweb says so with AWEB_IDENTITY_HOME in the launch's env: left out of a pi
+// thread, such a seat received mail and could not send ("current directory is not
+// initialized for aw"). The variable now reaches the thread.
+// What this shows, with the real aw (the one @awebai/pi brought into the image's second pi
+// configuration) run by the agent's own shell: without the variable aw answers the issue's
+// very words; with it, aw takes the identity home the launch named, and says so. What it
+// does NOT show is a grant seat sending: that needs aweb's server, its registry and a
+// resident's custody, none of which this container has, so the identity home here is an
+// empty directory and aw stops at reading it.
+test("a grant seat's identity home reaches the pi thread: the agent's own aw takes it from the thread's environment (#87); a launch that names none leaves aw where it was", async () => {
+  const AW = "/home/node/pi-with-aweb/npm/node_modules/.bin/aw";
+  assert.equal((await sh(`test -x ${AW} && echo there || echo none`)).trim(), "there", "the image holds aw, as a dependency of @awebai/pi");
+  const ask = `printf '%s|' "\${AWEB_IDENTITY_HOME-unset}"; ${AW} whoami 2>&1 | head -n 1`;
+  // A seat as it was before: no identity home named, so aw looks in the directory it runs in.
+  const plain = await launched("grant-none");
+  assert.deepEqual(await projectEnv(plain.endpoint.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
+  const before = await bash(plain.endpoint.threadId, ask);
+  assert.ok(before.includes("unset|current directory is not initialized for aw"), before);
+  // A grant seat: its identity is in the home's .aweb-identity, and the launch's env says so, as oats.aweb hands it.
+  const home = await makeHome("grant-seat");
+  await sh(`mkdir -m 700 ${home}/.aweb-identity`);
+  const since = (await turns()).length;
+  const answer = await provider("launch", launchInput(home, "grant-seat", { env: [{ name: "OATS_INSTANCE", value: "grant-seat", source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel" },
+    { name: "AWEB_DELIVERY", value: "session", source: "capability", capability: "oats.aweb" }, { name: "AWEB_IDENTITY_HOME", value: `${home}/.aweb-identity`, source: "capability", capability: "oats.aweb" },
+    { name: "AWID_REGISTRY_URL", value: "https://registry.invalid", source: "capability", capability: "oats.aweb" }] }));
+  assert.equal(answer.ok, true, JSON.stringify(answer));
+  const { endpoint } = answer.result;
+  started.push(endpoint.threadId);
+  await waitFor(`the first turn of ${endpoint.threadId}`, async () => (await turns()).length > since, { timeoutMs: 120_000 });
+  await idle(endpoint.threadId);
+  assert.deepEqual(await projectEnv(endpoint.projectId), ["AWEB_IDENTITY_HOME", "OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
+  const after = await bash(endpoint.threadId, ask);
+  assert.ok(after.includes(`${home}/.aweb-identity|selected identity home ${home}/.aweb-identity:`), after);
+  assert.ok(!after.includes("current directory is not initialized"), after);
+  // bb shows no value of it back, as of the others.
+  for (const variable of (await bbJson(`machine env list --project ${endpoint.projectId}`)).variables) assert.equal(variable.value, null, variable.name);
+  // The retire hook removes it with the rest: the project's env is the provider's, whole.
+  assert.equal((await provider("stop", { home, endpoint, graceSeconds: 10 })).ok, true);
+  await hook("retire-hook", home);
+  assert.deepEqual(await projectEnv(endpoint.projectId), []);
 });
 
 test("P2 without the project's env the home's skills do not load: the env is what carries them", async () => {
@@ -862,12 +907,19 @@ test("K-28 a home moves between the harnesses on bb: claude, then pi, then claud
 // restarted. (Both seen at bb-app 0.50.1, pi 1.5.2, recorded here.) So a model that is not
 // listed is refused only where pi's settings set no enabledModels and have not changed
 // since bb started; otherwise it only warns.
+// That last case is the check's one silent off-switch (every id passes, for every home, and
+// no setting says so): a read with no planned launch, and `oats bb doctor`, say it, as the
+// warning session-provider-pi-model-check-off, until bb is restarted.
 test("with pi's enabledModels set, bb lists only those models, and goes on doing so after the setting is removed, until it is restarted: the bare id a soul names (claude-fable-5.1), left out of them, only warns at the check, and its launch runs", async () => {
   const settingsFile = "/home/node/.pi/agent/settings.json";
   const original = await sh(`cat ${settingsFile}`);
   const listedIds = async () => (await bbJson("provider models pi")).map((model) => model.id).sort();
   const unchecked = async (model) => (await checkModel(model)).warnings.filter((warning) => warning.code === "session-provider-pi-model-unchecked").map((warning) => warning.message);
   const sentence = (model, why) => `could not check the model ${JSON.stringify(model)} against pi's model list: ${why}`;
+  // What a read with no planned launch says of the check itself.
+  const CHECK_OFF = { code: "session-provider-pi-model-check-off", message: "the pi model check is off until bb restarts: bb's pi settings changed after it started (restart bb-app to turn it back on)" };
+  const checkOff = async () => (await provider("check", { home: null, soul: null })).result.warnings.filter((warning) => warning.code === CHECK_OFF.code);
+  assert.deepEqual(await checkOff(), [], "pi's settings are older than this bb's start: nothing is said");
   let restored = false;
   try {
     await sh(`cat > ${settingsFile}`, { input: JSON.stringify({ ...JSON.parse(original), enabledModels: ["mock/echo"] }, null, 2) });
@@ -890,6 +942,8 @@ test("with pi's enabledModels set, bb lists only those models, and goes on doing
     assert.deepEqual((await checkModel("claude-fable-9")).problems, []);
     // The listed model passes with nothing said.
     assert.deepEqual((await checkModel("mock/echo")).warnings, []);
+    // The check is off by the setting here, which a restart of bb does not end: the warning of that is not given.
+    assert.deepEqual(await checkOff(), []);
 
     // The setting removed, and bb not restarted: bb's list is still the narrowed one, and
     // the settings file no longer says so. Still no refusal: the file is newer than bb.
@@ -907,6 +961,13 @@ test("with pi's enabledModels set, bb lists only those models, and goes on doing
     assert.deepEqual((await checkModel("claude-fable-5.1")).problems, []);
     const again = await launched("model-narrowed-stale", { model: "claude-fable-5.1" });
     assert.equal(await threadStatus(again.endpoint.threadId), "idle");
+    // Nothing above said that the check is off for every model and every home: the read with no planned launch does,
+    // as a warning beside a ready status, and so does the doctor.
+    const plain = (await provider("check", { home: null, soul: null })).result;
+    assert.equal(plain.status, "ready", JSON.stringify(plain));
+    assert.deepEqual(plain.warnings.filter((warning) => warning.code === CHECK_OFF.code), [CHECK_OFF]);
+    const doctor = await sh(`OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} doctor`);
+    assert.ok(doctor.split("\n").includes(`  warning ${CHECK_OFF.code}: ${CHECK_OFF.message}`), doctor);
 
     // bb restarted: it lists by the settings as they are, and the check refuses again what pi does not have.
     await box.restartBb();
@@ -915,6 +976,7 @@ test("with pi's enabledModels set, bb lists only those models, and goes on doing
     // (Once the change of the settings is older than bb's list can be.)
     await refusesAgain();
     assert.deepEqual((await checkModel("claude-fable-5.1")).warnings, []);
+    assert.deepEqual(await checkOff(), [], "bb restarted: the check is on again, and the warning is gone");
   } finally {
     if (!restored) {
       await sh(`cat > ${settingsFile}`, { input: original });

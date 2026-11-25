@@ -14,6 +14,7 @@ import * as mail from "./host/mail.js";
 import * as panel from "./host/panel.js";
 import * as roster from "./host/roster.js";
 import * as spawn from "./host/spawn.js";
+import * as terminal from "./host/terminal.js";
 import * as workspace from "./host/workspace.js";
 
 export function createHostEntry() {
@@ -29,6 +30,7 @@ export function createHostEntry() {
       ...lifecycle.handlers(core),
       ...automations.handlers(core),
       ...panel.handlers(core),
+      ...terminal.handlers(core),
       ...mail.handlers(core),
     },
     dispose: core.dispose,

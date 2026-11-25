@@ -240,8 +240,9 @@ test("a closed parent whose subtree holds a row that needs a person carries that
 const OUTSIDE_NAME = "Show Redesign ui lead's agents: 1 running outside OATS";
 // The lead's ruling, the other cases. A hidden row that FAILED or CANNOT BE REACHED, with nobody asked: NO second dot
 // (two dots side by side read as one more state of the parent, told apart by colour alone): the chevron itself takes
-// the tone, and the name says the row's state. A hidden row that runs OUTSIDE OATS needs a person (the home lists it
-// under "Needs you"): its own mark beside the chevron, counted. Two that ask: "2 need you". Pressing the disc opens the row.
+// the tone (the failure's), and the name counts them in the state's own name ("1 failed"). A hidden row that runs
+// OUTSIDE OATS: no second dot either: the chevron in the WARNING tone, named "1 running outside OATS"; it is not counted
+// among those that ask. Two that ask: "2 need you". Pressing the disc opens the row.
 test.each([
   ["failed", { runtimeState: "shell" }, { inside: "error", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: 1 failed" }],
   ["unreachable", { running: null, runtimeState: "unreachable" }, { inside: "unreachable", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: 1 unreachable" }],

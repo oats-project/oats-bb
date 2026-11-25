@@ -64,16 +64,20 @@ new live thread in the home is the launch's, and its endpoint is the answer.
   (`sessionProviders.bb.launchChoices`: `reasoning-level`, `service-tier`), present only
   when one is chosen. The check's planned launch carries the same key. The provider passes
   each to `bb thread spawn` as an option and a value of its own (`--reasoning-level
-  <value>`, `--service-tier <value>`), after it has held it against what bb lists for the
-  launch's `model` (`bb provider models <claude-code|pi> --selected-model <model> --json`,
-  one read, made only where a choice is given: `supportedReasoningEfforts[].reasoningEffort`
-  and `supportedServiceTiers[].id`). Refused before any effect, `E_BACKEND_LAUNCH_ARG`: a
-  `choices` that is no map, a name the provider does not declare, a value that is not
-  `[a-z0-9][a-z0-9_-]{0,39}`, the value `default` (the kernel's word for "none", which it
-  never passes), a level or a tier the model does not have in bb, and any tier for a
-  model bb lists none for. Where the list cannot settle it (unreadable, the model not in
-  it or in it twice, no `model`), the launch goes on with the choice and a warning on
-  the command's standard error; the check gives the warning
+  <value>`, `--service-tier <value>`), after it has held it against bb's own lists, read
+  only where a choice is given: the launch's model's reasoning levels (`bb provider models
+  <claude-code|pi> --selected-model <model> --json`, one read, the one the pi model check
+  makes: `supportedReasoningEfforts[].reasoningEffort`), and, for a tier, the provider's
+  service tiers (`bb provider list --json`, `serviceTiers[].id`, without `default`), or the
+  model's own where its row narrows them (`supportedServiceTiers[].id`). Refused before
+  any effect, `E_BACKEND_LAUNCH_ARG`: a `choices` that is no map, a name the provider does
+  not declare, a value that is not `[a-z0-9][a-z0-9_-]{0,39}`, the value `default` (the
+  kernel's word for "none", which it never passes), a level the model does not have in
+  bb, and a tier its provider does not list or its model's own list leaves out. With no
+  `model`, the plain list is read, and a value no model of the provider has is refused.
+  Where the lists cannot settle it (unreadable, the model not in the list or in it twice,
+  no `model` and a value only some models have), the launch goes on with the choice and a
+  warning on the command's standard error; the check gives the warning
   `session-provider-launch-choice-unchecked`. lib/choices.mjs, and README "Launch choices".
 - **A launch in a sandboxed mode is refused.** With `yolo` not true and no
   `--permission-mode bypassPermissions`, the launch would run in bb's `accept-edits` or
@@ -582,7 +586,7 @@ At the bb-app version in `bb-version`, pinned by `test/contract/`:
 - CLI: `bb --version`, `bb project list`, `bb project create`, `bb thread list` (its rows'
   `archivedAt`, `deletedAt`, `environmentPath`, `queuedWork` and `createdAt`, in milliseconds, included),
   `bb thread show`, `bb thread spawn` (with `--title`, and `--reasoning-level` and
-  `--service-tier` where chosen), `bb provider models <provider> --selected-model <model>`, `bb thread tell`, `bb thread interactions list`,
+  `--service-tier` where chosen), `bb provider models <provider> [--selected-model <model>]`, `bb provider list`, `bb thread tell`, `bb thread interactions list`,
   `bb thread queue list`, `bb thread queue delete`, `bb thread stop` (also of an archived
   thread), `bb thread archive`, and `bb thread list --project <id> --archived`. For the
   retire's delete of a home's environment: `bb environment show <id>` (its `id`, `path`,

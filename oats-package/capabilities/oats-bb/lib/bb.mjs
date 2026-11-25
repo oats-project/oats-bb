@@ -255,14 +255,18 @@ export function bbClient({ cli, server, hostDaemonPort = null, deadline = Infini
     piModels(model) { return this.models("pi", model); },
     /** The models bb lists for one of its providers (claude-code, pi), each with the
      *  reasoning levels and, where it has any, the service tiers it has; `model` as the one
-     *  a launch names, as for piModels. The raw answer (lib/choices.mjs reads it). Read
+     *  a launch names, as for piModels (null: the plain list, for a launch that names
+     *  none). The raw answer (lib/choices.mjs reads it). Read
      *  once for a provider and a model in the life of this client (one command): the pi
      *  model check and the check of the launch's choices read the same list. */
     models(provider, model) {
-      const key = `${provider}\0${model}`;
-      if (!modelReads.has(key)) modelReads.set(key, raw(["provider", "models", provider, "--selected-model", model, "--json"]));
+      const key = `${provider}\0${model ?? ""}`;
+      if (!modelReads.has(key)) modelReads.set(key, raw(["provider", "models", provider, ...(model === null || model === undefined ? [] : ["--selected-model", model]), "--json"]));
       return modelReads.get(key);
     },
+    /** bb's providers, each with the service tiers it has where it has any (`serviceTiers`:
+     *  Claude Code's are `default` and `fast`; pi has none). The raw answer. */
+    providers() { return raw(["provider", "list", "--json"]); },
     /** The environment, or null when bb has none by that id. */
     async environment(id) {
       const answer = await raw(["environment", "show", id, "--json"]);

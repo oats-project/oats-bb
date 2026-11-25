@@ -8,21 +8,28 @@
 // is never passed on). The provider passes each to `bb thread spawn` as an argument of its
 // own, `--reasoning-level <value>` and `--service-tier <value>`: data, never a shell word.
 //
-// bb takes ANY value at the spawn and answers a thread, which runs, and nothing says what
-// became of the choice (seen at bb-app 0.50.1, pinned by test/contract/contract.test.mjs):
-// with a level its model does not have, or the word `default`, Claude Code is started with
-// no effort at all, neither the one asked for nor the one bb gives a thread spawned with no
-// level; with the tier `fast` for a model it lists no tier for, Claude Code is started in
-// its fast mode all the same. A choice is carried or refused, never dropped, and what is
-// carried is what bb itself offers for the model (what a person can pick in bb's composer):
-// so the value is held here against what bb lists for the launch's model (`bb provider
-// models <provider> --json`: `supportedReasoningEfforts[].reasoningEffort`, and
-// `supportedServiceTiers[].id` where the model has tiers) before anything is started.
-// Where that list cannot settle it (bb does not answer, the model is not in it), nothing is
-// refused: the launch goes on with a warning, as for the pi model check (lib/pi-model.mjs).
-// So too where the launch names no model. bb then picks one by a rule of its own that its
-// list does not show (the project's remembered model, then its provider's default: `bb
-// thread spawn --help`), so there is no row to hold the choice against: left open, and said.
+// What bb does with a value, which is why each is held against bb's own lists before
+// anything is started (seen at bb-app 0.50.1, pinned by test/contract/):
+// - A reasoning level is the model's: `bb provider models <provider> --json` lists each
+//   model's (`supportedReasoningEfforts[].reasoningEffort`). bb takes ANY level at the
+//   spawn and answers a thread, which runs, and nothing says what became of the level:
+//   with one its model does not have, or the word `default`, Claude Code is started with
+//   no effort at all, neither the one asked for nor the one bb gives a thread spawned with
+//   no level. A choice is carried or refused, never dropped: so it is refused here.
+// - A service tier is the provider's: `bb provider list --json` lists each provider's
+//   (`serviceTiers[].id`; Claude Code's are `default` and `fast`, pi has none). A model may
+//   narrow them (`supportedServiceTiers[].id` in its row); a row with no such list takes
+//   every tier of its provider (`bb guide providers`). bb itself refuses a tier its
+//   provider does not list, at the spawn ("Provider claude-code does not support the …
+//   service tier"): by then a launch has stopped the home's earlier thread and made its
+//   project, so it is refused here first, with nothing started.
+// Where those lists cannot settle it (bb does not answer, the model is not in its list),
+// nothing is refused: the launch goes on with a warning, as for the pi model check
+// (lib/pi-model.mjs). Where the launch names no model, bb picks one by a rule of its own
+// that its list does not show (the project's remembered model, then its provider's
+// default: `bb thread spawn --help`), so there is no one row to hold the choice against:
+// a value NO model of the provider has is refused, one EVERY model has is carried, and one
+// only some have is left open, with the warning.
 import { fail, isObject } from "./errors.mjs";
 import { BB_PROVIDER } from "./mode.mjs";
 
@@ -71,8 +78,8 @@ function rowOf(rows, model, harness) {
   return bare.length === 1 ? bare[0] : null;
 }
 
-/** The ids of one of a model's lists (its reasoning levels, its service tiers), or null
- *  where the list is not one this provider can read. */
+/** The ids of one of bb's lists (a model's reasoning levels, its service tiers, a
+ *  provider's service tiers), or null where the list is not one this provider can read. */
 function idsOf(list, key) {
   if (!Array.isArray(list)) return null;
   const ids = [];
@@ -83,43 +90,98 @@ function idsOf(list, key) {
   return ids;
 }
 
-/** What bb's list says of the choices for this model.
+/** The reasoning levels a model has in bb, or null where its row does not say. */
+const levelsOf = (row) => idsOf(row.supportedReasoningEfforts, "reasoningEffort");
+/** The service tiers a model takes: its own list where its row has one, else every tier of
+ *  its provider (`providerTiers`: ids, or null where bb's providers could not be read). */
+const tiersOf = (row, providerTiers) => (row.supportedServiceTiers === undefined || row.supportedServiceTiers === null ? providerTiers : idsOf(row.supportedServiceTiers, "id"));
+
+/** The service tiers bb's provider has, from `bb provider list --json`: [] for a provider
+ *  that lists none (pi), null where the answer is not one this provider can read. `default`
+ *  is left out: it is the provider's standard tier, what a launch with no choice runs on,
+ *  and never a value a launch is handed. */
+export function providerTiers(value, bbProvider) {
+  if (!Array.isArray(value)) return null;
+  const provider = value.find((entry) => isObject(entry) && entry.id === bbProvider);
+  if (provider === undefined) return null;
+  if (provider.serviceTiers === undefined || provider.serviceTiers === null) return [];
+  return idsOf(provider.serviceTiers, "id")?.filter((id) => id !== "default") ?? null;
+}
+
+const CHOOSE = { "reasoning-level": "--launch-choice reasoning-level=<level>", "service-tier": "--launch-choice service-tier=<tier>" };
+const KIND = { "reasoning-level": "reasoning level", "service-tier": "service tier" };
+/** What to do about a value that is refused: choose one of those there are, or clear the choice. */
+const remedy = (name, ids) => `${ids.length > 0 ? `Choose one of them (${CHOOSE[name]}), or clear` : "Clear"} the choice (${clear(name)})`;
+
+/** What bb's lists say of the choices for the launch's model. `value`: bb's list of the
+ *  provider's models. `tiers`: the provider's own service tiers (providerTiers), read only
+ *  where a tier is chosen. `bbProvider`: bb's name for the provider, for a sentence.
  *  → { ok: true } | { refused: <sentence> } | { unchecked: <short why> }. */
-export function choicesVerdict(choices, model, harness, value) {
+export function choicesVerdict(choices, model, harness, value, { tiers = null, bbProvider = BB_PROVIDER[harness] } = {}) {
   if (!Array.isArray(value) || value.some((row) => !isObject(row) || typeof row.id !== "string" || row.id === "")) return { unchecked: "the list is not one this provider can read" };
+  const level = choices["reasoning-level"], tier = choices["service-tier"];
+  // A tier the provider does not have is refused whatever the model: bb refuses it too.
+  if (tier !== undefined && tiers !== null && !tiers.includes(tier)) {
+    return { refused: `bb's ${bbProvider} has no service tier ${JSON.stringify(tier)}: ${tiers.length > 0 ? `it has ${listed(tiers.map((id) => JSON.stringify(id)))}` : "it has no service tiers"}. ${remedy("service-tier", tiers)}` };
+  }
+  if (typeof model !== "string" || model === "") return noModelVerdict(choices, value, tiers, bbProvider);
   const row = rowOf(value, model, harness);
   if (row === null) return { unchecked: `bb's list does not hold the model ${JSON.stringify(model)}, or holds it more than once` };
-  const level = choices["reasoning-level"];
   if (level !== undefined) {
-    const levels = idsOf(row.supportedReasoningEfforts, "reasoningEffort");
+    const levels = levelsOf(row);
     if (levels === null) return { unchecked: `bb's list does not say which reasoning levels ${row.id} has` };
-    if (!levels.includes(level)) return { refused: `the model ${row.id} has no reasoning level ${JSON.stringify(level)} in bb: ${has(levels, "reasoning level")}. ${levels.length > 0 ? "Choose one of them (--launch-choice reasoning-level=<level>), or clear" : "Clear"} the choice (${clear("reasoning-level")})` };
+    if (!levels.includes(level)) return { refused: `the model ${row.id} has no reasoning level ${JSON.stringify(level)} in bb: ${has(levels, "reasoning level")}. ${remedy("reasoning-level", levels)}` };
   }
-  const tier = choices["service-tier"];
   if (tier !== undefined) {
-    // A model with no tiers has no such list at all (bb's own shape: `supportedServiceTiers?`).
-    const tiers = row.supportedServiceTiers === undefined || row.supportedServiceTiers === null ? [] : idsOf(row.supportedServiceTiers, "id");
-    if (tiers === null) return { unchecked: `bb's list does not say which service tiers ${row.id} has` };
-    if (!tiers.includes(tier)) return { refused: `the model ${row.id} has no service tier ${JSON.stringify(tier)} in bb: ${has(tiers, "service tier")}. ${tiers.length > 0 ? "Choose one of them (--launch-choice service-tier=<tier>), or clear" : "Clear"} the choice (${clear("service-tier")})` };
+    const own = tiersOf(row, tiers);
+    if (own === null) return { unchecked: row.supportedServiceTiers === undefined || row.supportedServiceTiers === null ? `bb's list of its providers does not say which service tiers ${bbProvider} has` : `bb's list does not say which service tiers ${row.id} has` };
+    const offered = own.filter((id) => id !== "default");
+    if (!offered.includes(tier)) return { refused: `the model ${row.id} has no service tier ${JSON.stringify(tier)} in bb: ${has(offered, "service tier")}. ${remedy("service-tier", offered)}` };
   }
   return { ok: true };
 }
 
-/** The check of one launch's choices: one read of bb's list of its provider's models.
- *  `choices`: as readChoices returns them. `bb`: a client (lib/bb.mjs). → null (nothing
- *  chosen, or every choice is one the model has), { problem: {code, message, status} }
- *  (refused: nothing may be started), or { warning: {code, message} } (it could not be
- *  checked: the launch goes on). Never throws for anything bb did or did not answer. */
+/** The same for a launch that names no model: bb picks one by a rule its list does not
+ *  show, so each choice is held against every model of the provider. One no model has is
+ *  refused (bb would drop it, whichever it picks), one every model has is carried, and one
+ *  only some have cannot be settled. */
+function noModelVerdict(choices, rows, tiers, bbProvider) {
+  let open = null;
+  for (const name of Object.keys(LAUNCH_CHOICES)) {
+    const chosen = choices[name];
+    if (chosen === undefined) continue;
+    const lists = rows.map((row) => (name === "reasoning-level" ? levelsOf(row) : tiersOf(row, tiers)));
+    if (rows.length === 0 || lists.some((list) => list === null)) { open ??= `the launch names no model, and bb's lists do not say which ${KIND[name]}s every model of ${bbProvider} has`; continue; }
+    const having = lists.filter((list) => list.includes(chosen)).length;
+    if (having === 0) return { refused: `the launch names no model, and no model bb lists for ${bbProvider} has the ${KIND[name]} ${JSON.stringify(chosen)}: name a model that has it, or clear the choice (${clear(name)})` };
+    if (having < rows.length) open ??= `the launch names no model, and only some of the models bb lists for ${bbProvider} have the ${KIND[name]} ${JSON.stringify(chosen)}: bb picks the model by a rule its list does not show`;
+  }
+  return open === null ? { ok: true } : { unchecked: open };
+}
+
+/** The check of one launch's choices: one read of bb's list of its provider's models, and,
+ *  where a tier is chosen, one of its providers. `choices`: as readChoices returns them.
+ *  `bb`: a client (lib/bb.mjs). → null (nothing chosen, or every choice is one the model
+ *  has), { problem: {code, message, status} } (refused: nothing may be started), or
+ *  { warning: {code, message} } (it could not be checked: the launch goes on). Never
+ *  throws for anything bb did or did not answer. */
 export async function choicesFinding(choices, model, harness, bb) {
   const names = Object.keys(choices);
   if (names.length === 0) return null;
-  const unchecked = (why) => ({ warning: { code: CHOICE_UNCHECKED, message: `could not check the launch ${names.length > 1 ? "choices" : "choice"} ${listed(names)} against bb's model list: ${brief(why)}` } });
-  if (typeof model !== "string" || model === "") return unchecked("the launch names no model, and bb then picks one by a rule its list does not show");
-  const answer = await bb.models(BB_PROVIDER[harness], model);
+  const unchecked = (why) => ({ warning: { code: CHOICE_UNCHECKED, message: `could not check the launch ${names.length > 1 ? "choices" : "choice"} ${listed(names)} against bb's lists: ${brief(why)}` } });
+  const named = typeof model === "string" && model !== "" ? model : null;
+  const bbProvider = BB_PROVIDER[harness];
+  // The provider's own tiers, where one is chosen: null where bb's providers cannot be read.
+  let tiers = null;
+  if (choices["service-tier"] !== undefined) {
+    const providers = await bb.providers();
+    tiers = providers.ok ? providerTiers(providers.value, bbProvider) : null;
+  }
+  const answer = await bb.models(bbProvider, named);
   if (!answer.ok) return unchecked(answer.timedOut ? "no answer in time" : answer.message);
   const notLoaded = (answer.said ?? "").split("\n").find((line) => /could not load models/i.test(line));
   if (notLoaded !== undefined) return unchecked(notLoaded);
-  const verdict = choicesVerdict(choices, model, harness, answer.value);
+  const verdict = choicesVerdict(choices, named, harness, answer.value, { tiers, bbProvider });
   if (verdict.ok) return null;
   if (verdict.unchecked !== undefined) return unchecked(verdict.unchecked);
   return { problem: { code: CHOICE_REFUSED, message: verdict.refused, status: "needs-configuration" } };

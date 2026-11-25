@@ -27,8 +27,9 @@ const HARNESSES = ["claude", "codex", "pi"];
 // name and a description a client shows as text.
 const CHOICE_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 const MAX_CHOICES = 8;
-// One line of safe text: no control character, no bidi control, no zero-width or tag character.
-const UNSAFE_TEXT = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069\u200b\u2060\ufeff]|[\u{e0000}-\u{e007f}]/u;
+// One line of safe text: no control character, no line or paragraph separator, no bidi control or mark,
+// no zero-width character (space, joiner, non-joiner, word joiner, BOM), no tag character.
+const UNSAFE_TEXT = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\u200b-\u200d\u2060\ufeff]|[\u{e0000}-\u{e007f}]/u;
 
 /** A command's script: a regular file inside the capability (no link, no way out). */
 function checkScript(capDir, command, at) {
@@ -72,7 +73,7 @@ const versionOf = (range) => /^>=(\d+)\.(\d+)\.(\d+)$/.exec(range ?? "")?.slice(
 const below = (a, b) => { for (let i = 0; i < 3; i += 1) if (a[i] !== b[i]) return a[i] < b[i]; return false; };
 /** The floor a manifest that declares launch choices must have. */
 function launchChoicesFloor(manifest, at) {
-  if (LAUNCH_CHOICES_FLOOR === null) { report(at, "launch choices are declared, and the OATS release with the feature launch-choices is not named yet: set LAUNCH_CHOICES_FLOOR in scripts/validate-manifests.mjs to that release, and raise compatibility.oats to it in oats-package.json and in the capability's oats.json"); return; }
+  if (LAUNCH_CHOICES_FLOOR === null) { report(at, "launch choices are declared, and the OATS release with the feature launch-choices is not named yet: set LAUNCH_CHOICES_FLOOR in scripts/validate-manifests.mjs to that release, raise compatibility.oats to it in oats-package.json and in the capability's oats.json, and name it in CHANGELOG.md's entry for the launch choices"); return; }
   const [has, needs] = [versionOf(manifest.compatibility?.oats), versionOf(`>=${LAUNCH_CHOICES_FLOOR}`)];
   if (has === null || needs === null || below(has, needs)) report(at, `compatibility.oats is ${JSON.stringify(manifest.compatibility?.oats)}, and launch choices need OATS ${LAUNCH_CHOICES_FLOOR} or later (the release with the feature launch-choices): an older kernel takes the session provider for malformed`);
 }

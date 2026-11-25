@@ -292,19 +292,22 @@ test("a spawn bb's server refuses: the CLI's envelope carries the server's 4xx, 
 
 // The launch choices (lib/choices.mjs): bb's reasoning level and service tier. What bb does
 // with them is pinned here, since the provider's check rests on it (seen at bb-app 0.50.1):
-// - `bb provider models claude-code --json` lists each model's levels, and no service tiers
-//   for the models this bb has;
-// - a thread spawned with no level starts Claude Code with bb's own (`--effort=medium`), and
-//   one spawned with a level the model has with that one (`--effort=<level>`). Nothing is
-//   remembered from one spawn of a project to the next;
-// - `bb thread spawn` takes ANY level and any tier and answers a thread, which runs its turn
-//   all the same, and nothing says what became of the choice: with a level the model does
-//   not have, and with the word `default`, Claude Code is started with NO effort at all
-//   (neither the one asked for nor bb's own); with the tier `fast` for a model bb lists no
-//   tier for, Claude Code is started in its fast mode all the same (`fastMode: true`).
-// So the provider refuses, before anything starts, a level bb would drop and a tier bb does
-// not list for the model: what a launch carries is what bb itself offers for the model.
-test("a launch choice is carried to bb's thread or refused, never dropped: a reasoning level the model has reaches its Claude; one it has not, a service tier it has none of, and `default` are refused with nothing started", async () => {
+// - a reasoning level is the model's: `bb provider models claude-code --json` lists each
+//   model's. A thread spawned with no level starts Claude Code with bb's own
+//   (`--effort=medium`), and one spawned with a level the model has with that one
+//   (`--effort=<level>`). Nothing is remembered from one spawn of a project to the next;
+// - `bb thread spawn` takes ANY level and answers a thread, which runs its turn all the
+//   same, and nothing says what became of the level: with one the model does not have,
+//   and with the word `default`, Claude Code is started with NO effort at all (neither
+//   the one asked for nor bb's own);
+// - a service tier is the provider's: `bb provider list --json` lists Claude Code's,
+//   `default` and `fast`, and no model's row here narrows them. With `fast`, Claude Code
+//   is started in its fast mode (`fastMode: true`). A tier the provider does not list is
+//   refused by bb itself, at the spawn ("Provider claude-code does not support the …
+//   service tier").
+// So the provider refuses, before anything starts, a level bb would drop and a tier bb
+// would refuse once the launch had changed it: what a launch carries is what bb lists.
+test("a launch choice is carried to bb's thread or refused, never dropped: a reasoning level the model has and a service tier its provider lists reach its Claude; a level it has not, a tier the provider does not list, and `default` are refused with nothing started", async () => {
   /** The words of the command line of each Claude that carries the thread's id. */
   const claudeWords = async (threadId) => (await sh(`for p in /proc/[0-9]*; do if [ "$(cat $p/comm 2>/dev/null)" = claude ] && tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${threadId}'; then tr '\\0' '\\n' < $p/cmdline; fi; done`)).split("\n").filter(Boolean);
   /** Its `--effort` arguments, each once (bb may hold more than one process of a thread's Claude). */
@@ -315,7 +318,9 @@ test("a launch choice is carried to bb's thread or refused, never dropped: a rea
   assert.ok(listedModel, JSON.stringify(listedModels.map((row) => row.id)));
   const levelsOf = listedModel.supportedReasoningEfforts.map((entry) => entry.reasoningEffort);
   assert.ok(levelsOf.includes("low") && !levelsOf.includes("bogus") && !levelsOf.includes("default"), levelsOf.join(", "));
-  assert.equal(listedModel.supportedServiceTiers, undefined, "this bb lists no service tier for the model");
+  assert.equal(listedModel.supportedServiceTiers, undefined, "the model's row narrows no tier: it takes every tier of its provider");
+  const claudeCode = (await bbJson("provider list")).find((entry) => entry.id === "claude-code");
+  assert.deepEqual(claudeCode.serviceTiers.map((tier) => tier.id), ["default", "fast"]);
   const dropHome = await makeHome("choice-bb-drops");
   const project = await bbJson(`project create --name choice-bb-drops --root ${dropHome}`);
   for (const [flags, effort] of [["", ["--effort=medium"]], ["--reasoning-level low", ["--effort=low"]], ["", ["--effort=medium"]], ["--reasoning-level bogus", []], ["--reasoning-level default", []], ["--service-tier fast", ["--effort=medium"]]]) {
@@ -325,31 +330,42 @@ test("a launch choice is carried to bb's thread or refused, never dropped: a rea
     await waitFor(`bb's own thread with "${flags}" to run its turn`, async () => (await modelRequests()).length > since, { timeoutMs: 120_000 });
     await waitStatus(thread.id, "idle");
     assert.deepEqual(await efforts(thread.id), effort, `bb's own spawn with "${flags}"`);
-    // Claude Code's fast mode: off, but for the tier bb was asked for, which it lists for no model here and applies all the same.
+    // Claude Code's fast mode: off, but with the provider's tier `fast`.
     const words = await claudeWords(thread.id);
     assert.equal(JSON.parse(words[words.indexOf("--settings") + 1]).fastMode, flags.includes("--service-tier"), words.join(" "));
     await sh(`bb thread stop ${thread.id} --json >/dev/null`);
   }
+  // A tier the provider does not list: bb's own no, at the spawn, with no thread made.
+  const threadsBefore = (await bbJson("thread list --include-hidden --include-archived")).length;
+  const noTier = await bbJson(`thread spawn --project ${project.id} --provider claude-code --model ${MODEL} --environment ${dropHome} --prompt-file ${dropHome}/TASK.md --permission-mode full --service-tier ultrafast`, { ok: false });
+  assert.equal(noTier.ok, false, JSON.stringify(noTier));
+  assert.match(noTier.error.message, /Provider claude-code does not support the ultrafast service tier\. Supported service tiers: default, fast\./);
+  assert.equal((await bbJson("thread list --include-hidden --include-archived")).length, threadsBefore);
 
-  // Through the provider: a level the model has reaches the thread's Claude.
-  const { home, endpoint } = await launched("choice-level", { choices: { "reasoning-level": "low" } });
+  // Through the provider: a level the model has and a tier its provider lists reach the thread's Claude.
+  const carried = { "reasoning-level": "low", "service-tier": "fast" };
+  const { home, endpoint } = await launched("choice-level", { choices: carried });
   await waitStatus(endpoint.threadId, "idle");
   assert.deepEqual(await efforts(endpoint.threadId), ["--effort=low"]);
-  const planned = (await provider("check", { home, soul: null, launch: { harness: "claude", yolo: true, args: [], model: MODEL, choices: { "reasoning-level": "low" } } })).result;
+  const carriedWords = await claudeWords(endpoint.threadId);
+  assert.equal(JSON.parse(carriedWords[carriedWords.indexOf("--settings") + 1]).fastMode, true, carriedWords.join(" "));
+  const planned = (await provider("check", { home, soul: null, launch: { harness: "claude", yolo: true, args: [], model: MODEL, choices: carried } })).result;
   assert.deepEqual([planned.status, planned.problems], ["ready", []]);
   assert.deepEqual(planned.warnings.filter((warning) => warning.code === "session-provider-launch-choice-unchecked"), []);
   // And a launch with none starts its Claude with bb's own, as before.
   const plain = await launched("choice-none");
   await waitStatus(plain.endpoint.threadId, "idle");
   assert.deepEqual(await efforts(plain.endpoint.threadId), ["--effort=medium"]);
+  const plainWords = await claudeWords(plain.endpoint.threadId);
+  assert.equal(JSON.parse(plainWords[plainWords.indexOf("--settings") + 1]).fastMode, false);
 
-  // What bb would drop is refused, at the check of the planned launch and at the launch, and nothing is made in bb.
+  // What bb would drop, or refuse too late, is refused at the check of the planned launch and at the launch, and nothing is made in bb.
   const refusedHome = await makeHome("choice-refused");
   const count = async () => [(await bbJson("project list")).length, (await bbJson("thread list --include-hidden --include-archived")).length];
   const before = await count();
   for (const [choices, sentence] of [
     [{ "reasoning-level": "bogus" }, `the model ${MODEL} has no reasoning level "bogus" in bb: it has ${levelsOf.slice(0, -1).map((level) => `"${level}"`).join(", ")} and "${levelsOf[levelsOf.length - 1]}". Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)`],
-    [{ "service-tier": "fast" }, `the model ${MODEL} has no service tier "fast" in bb: bb lists no service tier for it. Clear the choice (--launch-choice service-tier=default)`],
+    [{ "service-tier": "ultrafast" }, 'bb\'s claude-code has no service tier "ultrafast": it has "fast". Choose one of them (--launch-choice service-tier=<tier>), or clear the choice (--launch-choice service-tier=default)'],
     [{ "reasoning-level": "default" }, 'the launch choice reasoning-level is "default", which is no value to ask bb for: it is how a recorded choice is cleared (--launch-choice reasoning-level=default), and the launch then carries none'],
   ]) {
     const checked = (await provider("check", { home: refusedHome, soul: null, launch: { harness: "claude", yolo: true, args: [], model: MODEL, choices } })).result;

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { LAUNCH_CHOICES, choiceArgs, choicesVerdict, readChoices } from "../../oats-package/capabilities/oats-bb/lib/choices.mjs";
+import { LAUNCH_CHOICES, choiceArgs, choicesVerdict, providerTiers, readChoices } from "../../oats-package/capabilities/oats-bb/lib/choices.mjs";
 import { piModelVerdict } from "../../oats-package/capabilities/oats-bb/lib/pi-model.mjs";
 import { VERSION, call, callSeen, capabilityDir, fakeBackend, fakeBbIn, laterBin, piModelRow, projectRow, scratch } from "../fixtures/harness.mjs";
 
@@ -15,9 +15,16 @@ const levels = (...ids) => ids.map((id) => ({ reasoningEffort: id, description: 
 // One of bb's Claude models, as bb-app 0.50.1 lists one (copied from a real server's answer,
 // trimmed): no provider prefix, no service tiers.
 const claudeRow = (id, extra = {}) => ({ id, model: id, displayName: id, description: "a model", reasoningDiscovery: "known", supportedReasoningEfforts: levels("low", "medium", "high", "xhigh", "ultracode", "max"), defaultReasoningEffort: "high", isDefault: false, ...extra });
-// bb's own shape for a model with service tiers (`bb guide json`: supportedServiceTiers?), which no model of the contract image has.
-const tiers = (...ids) => ids.map((id) => ({ id, displayName: id }));
-const CLAUDE = [claudeRow("claude-opus-5-5"), claudeRow("claude-fast-5", { supportedServiceTiers: tiers("standard", "fast") })];
+// A service tier is the provider's (`bb provider list --json`, copied from a real server's answer, trimmed): Claude
+// Code's are default and fast, pi has none. A model's row may narrow them (`supportedServiceTiers`, which no model of
+// the contract image has: bb's own shape, `bb guide json`); a row with none takes every tier of its provider.
+const tiers = (...ids) => ids.map((id) => ({ id, label: id }));
+const PROVIDERS = [
+  { id: "codex", displayName: "Codex", available: true, capabilities: { supportsServiceTier: true }, reasoningLevels: [], serviceTiers: tiers("default", "fast", "ultrafast") },
+  { id: "claude-code", displayName: "Claude Code", available: true, capabilities: { supportsServiceTier: true }, reasoningLevels: [], serviceTiers: tiers("default", "fast") },
+  { id: "pi", displayName: "Pi", available: true, capabilities: { supportsServiceTier: false }, reasoningLevels: [] },
+];
+const CLAUDE = [claudeRow("claude-opus-5-5"), claudeRow("claude-standard-5", { supportedServiceTiers: tiers("default"), supportedReasoningEfforts: levels("low", "medium", "high") })];
 const PI = [
   piModelRow("anthropic", "claude-opus-5-5", { supportedReasoningEfforts: levels("low", "medium", "high"), defaultReasoningEffort: "medium" }),
   piModelRow("mock", "echo"), piModelRow("mock", "twin"), piModelRow("mock-b", "twin"),
@@ -37,6 +44,7 @@ async function setup(t, { harness = "claude", script = {} } = {}) {
     "machine env list": { stdout: envList([]) }, "machine env set": { stdout: envList([]) }, "machine env unset": { stdout: envList([]) },
     "provider models claude-code": { stdout: CLAUDE },
     "provider models pi": { stdout: PI },
+    "provider list": { stdout: PROVIDERS },
     ...script,
   });
   const model = harness === "pi" ? "anthropic/claude-opus-5-5" : "claude-opus-5-5";
@@ -61,7 +69,7 @@ async function setup(t, { harness = "claude", script = {} } = {}) {
   /** Not checked: the launch goes on with the choices and this warning, and the check warns the same. */
   const warnsBoth = async (choices, why, extra = {}) => {
     const names = Object.keys(choices);
-    const message = `could not check the launch ${names.length > 1 ? "choices" : "choice"} ${names.join(" and ")} against bb's model list: ${why}`;
+    const message = `could not check the launch ${names.length > 1 ? "choices" : "choice"} ${names.join(" and ")} against bb's lists: ${why}`;
     const { doc, stderr } = await launch(choices, extra);
     assert.equal(doc.ok, true, JSON.stringify(doc));
     assert.ok(stderr.split("\n").includes(`oats bb: warning: ${message}`), stderr);
@@ -78,7 +86,7 @@ test("the manifest declares the choices the provider takes, each with a descript
   assert.deepEqual(Object.keys(LAUNCH_CHOICES), ["reasoning-level", "service-tier"]);
   for (const [name, choice] of Object.entries(declared)) {
     assert.deepEqual(Object.keys(choice), ["description"], name);
-    assert.ok(choice.description.length > 0 && [...choice.description].length <= 200 && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/.test(choice.description), name);
+    assert.ok(choice.description.length > 0 && [...choice.description].length <= 200 && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/.test(choice.description), name);
   }
 });
 
@@ -113,12 +121,17 @@ test("a launch with no choice passes none, and reads nothing of bb for it: as be
   }
 });
 
-test("both choices are carried, each as an option and a value of its own, where the model has both", async (t) => {
-  const { bb, launch } = await setup(t);
-  const { doc } = await launch({ "service-tier": "fast", "reasoning-level": "low" }, { model: "claude-fast-5" });
+test("both choices are carried, each as an option and a value of its own: a tier of the provider's, for a model whose row narrows none; the check reads ready", async (t) => {
+  const { bb, launch, check } = await setup(t);
+  const { doc, stderr } = await launch({ "service-tier": "fast", "reasoning-level": "low" });
   assert.equal(doc.ok, true, JSON.stringify(doc));
+  assert.equal(stderr, "");
   const argv = spawnOf(bb);
   assert.deepEqual(argv.slice(argv.indexOf("--reasoning-level")), ["--reasoning-level", "low", "--service-tier", "fast", "--json"]);
+  // The provider's tiers are read only where a tier is chosen: one more read of bb.
+  assert.deepEqual(modelReads(bb), ["provider list --json", "provider models claude-code --selected-model claude-opus-5-5 --json"]);
+  const planned = await check({ "service-tier": "fast", "reasoning-level": "low" });
+  assert.deepEqual([planned.status, planned.problems, planned.warnings.filter((warning) => warning.code === UNCHECKED)], ["ready", [], []]);
 });
 
 test("a reasoning level the model does not have in bb is refused, at the launch and at the check, naming the levels it has: bb would run the thread without it", async (t) => {
@@ -129,10 +142,14 @@ test("a reasoning level the model does not have in bb is refused, at the launch 
   await pi.refusedBoth({ "reasoning-level": "xhigh" }, 'the model anthropic/claude-opus-5-5 has no reasoning level "xhigh" in bb: it has "low", "medium" and "high". Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)');
 });
 
-test("a service tier where the model lists none is refused, and one the model does not list too", async (t) => {
+test("a service tier is the provider's: one bb's provider does not list is refused, and so is any tier where the provider has none (pi), and one a model's own list leaves out", async (t) => {
   const { refusedBoth } = await setup(t);
-  await refusedBoth({ "service-tier": "fast" }, 'the model claude-opus-5-5 has no service tier "fast" in bb: bb lists no service tier for it. Clear the choice (--launch-choice service-tier=default)');
-  await refusedBoth({ "service-tier": "priority" }, 'the model claude-fast-5 has no service tier "priority" in bb: it has "standard" and "fast". Choose one of them (--launch-choice service-tier=<tier>), or clear the choice (--launch-choice service-tier=default)', { model: "claude-fast-5" });
+  // bb itself refuses this one, at the spawn: by then a launch has changed bb. Refused here first.
+  await refusedBoth({ "service-tier": "ultrafast" }, 'bb\'s claude-code has no service tier "ultrafast": it has "fast". Choose one of them (--launch-choice service-tier=<tier>), or clear the choice (--launch-choice service-tier=default)');
+  // A model whose row narrows its provider's tiers to the standard one.
+  await refusedBoth({ "service-tier": "fast" }, 'the model claude-standard-5 has no service tier "fast" in bb: bb lists no service tier for it. Clear the choice (--launch-choice service-tier=default)', { model: "claude-standard-5" });
+  const pi = await setup(t, { harness: "pi" });
+  await pi.refusedBoth({ "service-tier": "fast" }, 'bb\'s pi has no service tier "fast": it has no service tiers. Clear the choice (--launch-choice service-tier=default)');
 });
 
 test("the value `default` is refused, for either choice: it is the kernel's word for none, and bb would take it for a level", async (t) => {
@@ -182,12 +199,32 @@ test("where bb's list cannot settle it, nothing is refused: the launch goes on w
     const argv = spawnOf(bb);
     assert.deepEqual(argv.slice(argv.indexOf("--reasoning-level"), argv.indexOf("--reasoning-level") + 2), ["--reasoning-level", "high"], "the choice is carried, not dropped");
   }
-  // A tier list of a shape this provider cannot read, and a launch that names no model (bb then starts on a default of its own).
+  // A tier list of a shape this provider cannot read, in the model's row and in bb's providers.
   const odd = await setup(t, { script: { "provider models claude-code": { stdout: [claudeRow("claude-opus-5-5", { supportedServiceTiers: ["fast"] })] } } });
   await odd.warnsBoth({ "service-tier": "fast" }, "bb's list does not say which service tiers claude-opus-5-5 has");
-  const bare = await setup(t);
-  await bare.warnsBoth({ "reasoning-level": "high", "service-tier": "fast" }, "the launch names no model, and bb then picks one by a rule its list does not show", { model: null });
-  assert.deepEqual(modelReads(bare.bb), [], "with no model there is nothing to ask bb");
+  for (const providers of [{ error: { code: "error", message: "boom" } }, { stdout: { providers: PROVIDERS } }, { stdout: [{ id: "codex" }] }, { stdout: [{ id: "claude-code", serviceTiers: ["fast"] }] }]) {
+    const blind = await setup(t, { script: { "provider list": providers } });
+    await blind.warnsBoth({ "service-tier": "fast" }, "bb's list of its providers does not say which service tiers claude-code has");
+  }
+});
+
+test("a launch that names no model: bb picks one by a rule its list does not show, so a value no model of the provider has is refused, one every model has is carried, and one only some have is left open with a warning", async (t) => {
+  const { refusedBoth, warnsBoth, launch, check, bb } = await setup(t);
+  const none = { model: null };
+  await refusedBoth({ "reasoning-level": "bogus" }, 'the launch names no model, and no model bb lists for claude-code has the reasoning level "bogus": name a model that has it, or clear the choice (--launch-choice reasoning-level=default)', none);
+  await refusedBoth({ "service-tier": "ultrafast" }, 'bb\'s claude-code has no service tier "ultrafast": it has "fast". Choose one of them (--launch-choice service-tier=<tier>), or clear the choice (--launch-choice service-tier=default)', none);
+  // Every model has it: carried, and nothing said. The list is read plain, with no model named.
+  const before = bb.calls().length;
+  const { doc, stderr } = await launch({ "reasoning-level": "high" }, none);
+  assert.equal(doc.ok, true, JSON.stringify(doc));
+  assert.equal(stderr, "");
+  assert.deepEqual(bb.calls().slice(before).filter((c) => c.argv[0] === "provider").map((c) => c.argv.join(" ")), ["provider models claude-code --json"]);
+  const argv = spawnOf(bb);
+  assert.ok(!argv.includes("--model") && argv.includes("--reasoning-level"), argv.join(" "));
+  assert.deepEqual((await check({ "reasoning-level": "high" }, none)).warnings.filter((warning) => warning.code === UNCHECKED), []);
+  // Only some models have it (xhigh; and fast, which one model's own list leaves out): left open.
+  await warnsBoth({ "reasoning-level": "xhigh" }, 'the launch names no model, and only some of the models bb lists for claude-code have the reasoning level "xhigh": bb picks the model by a rule its list does not show', none);
+  await warnsBoth({ "service-tier": "fast" }, 'the launch names no model, and only some of the models bb lists for claude-code have the service tier "fast": bb picks the model by a rule its list does not show', none);
 });
 
 test("a pi model written with pi's own `:<level>` is refused, at the launch and at the check, naming the model and the launch choice that carries the level", async (t) => {
@@ -237,4 +274,13 @@ test("readChoices, choiceArgs and choicesVerdict, each by itself", () => {
   // A level bb calls `none` is a level like another: said in quotes, so that it does not read as "it has none".
   assert.equal(choicesVerdict({ "reasoning-level": "high" }, "mock/echo", "pi", PI).refused, 'the model mock/echo has no reasoning level "high" in bb: it has "none". Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)');
   assert.deepEqual(choicesVerdict({ "reasoning-level": "none" }, "mock/echo", "pi", PI), { ok: true });
+  // The provider's tiers, as bb lists them: the standard one is no choice; a provider with none; an answer this provider cannot read.
+  assert.deepEqual(providerTiers(PROVIDERS, "claude-code"), ["fast"]);
+  assert.deepEqual(providerTiers(PROVIDERS, "codex"), ["fast", "ultrafast"]);
+  assert.deepEqual(providerTiers(PROVIDERS, "pi"), []);
+  for (const answer of [null, { providers: PROVIDERS }, [], [{ id: "claude-code", serviceTiers: "fast" }], [{ id: "claude-code", serviceTiers: [{ label: "Fast" }] }]]) assert.equal(providerTiers(answer, "claude-code"), null, JSON.stringify(answer));
+  assert.deepEqual(choicesVerdict({ "service-tier": "fast" }, "claude-opus-5-5", "claude", CLAUDE, { tiers: ["fast"] }), { ok: true });
+  assert.match(choicesVerdict({ "service-tier": "fast" }, "claude-opus-5-5", "claude", CLAUDE, { tiers: null }).unchecked, /bb's list of its providers does not say which service tiers claude-code has/);
+  // With no model and no row at all, nothing can be said.
+  assert.match(choicesVerdict({ "reasoning-level": "high" }, null, "claude", []).unchecked, /do not say which reasoning levels every model of claude-code has/);
 });

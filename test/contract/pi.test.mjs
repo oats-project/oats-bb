@@ -282,8 +282,10 @@ test("a bare model id one pi provider serves passes, as a soul declares it (clau
 // level travels as the launch choice `reasoning-level` alone (lib/choices.mjs): bb's pi
 // resolves the model by its exact id, lists none with such a suffix, and a thread spawned
 // with one ends in error (seen at bb-app 0.50.1, pi 1.5.2, recorded here).
-test("a pi model written with pi's own `:<level>` is refused, naming the model and the launch choice that carries the level; a level the model does not have in bb is refused too; bb itself would answer a thread that ends in error", async () => {
+test("a pi model written with pi's own `:<level>` is refused, naming the model and the launch choice that carries the level; a level the model does not have in bb, and any service tier, are refused too; bb itself would answer a thread that ends in error", async () => {
   const home = await makeHome("model-level");
+  // (The sentence is the model check's own refusal: given once pi's configuration is older than bb's list can be.)
+  await refusesAgain();
   const sentence = 'pi model "mock/echo:high" names a thinking level in the model id, which bb\'s pi does not take: name the model "mock/echo", and choose the level with --launch-choice reasoning-level=high';
   const planned = await checkModel("mock/echo:high");
   assert.equal(planned.status, "needs-configuration");
@@ -300,6 +302,18 @@ test("a pi model written with pi's own `:<level>` is refused, naming the model a
   // The one level it has is carried, and the thread runs.
   const { endpoint } = await launched("model-level-none", { choices: { "reasoning-level": "none" } });
   assert.equal(await threadStatus(endpoint.threadId), "idle");
+  // A service tier is the provider's, and bb's pi has none (`bb provider list --json`): any tier is refused, before
+  // anything starts. bb itself refuses it too, at the spawn.
+  const piProvider = (await bbJson("provider list")).find((entry) => entry.id === "pi");
+  assert.deepEqual([piProvider.serviceTiers, piProvider.capabilities.supportsServiceTier], [undefined, false]);
+  const noTiers = 'bb\'s pi has no service tier "fast": it has no service tiers. Clear the choice (--launch-choice service-tier=default)';
+  assert.deepEqual((await provider("check", { home, soul: null, launch: { ...PLANNED, model: MODEL, choices: { "service-tier": "fast" } } })).result.problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: noTiers }]);
+  assert.deepEqual((await provider("launch", launchInput(home, "model-level", { choices: { "service-tier": "fast" } }))).error, { code: "E_BACKEND_LAUNCH_ARG", message: noTiers });
+  const tierHome = await makeHome("model-tier-bb");
+  const tierProject = await bbJson(`project create --name model-tier-bb --root ${tierHome}`);
+  const bbsNo = await bbJson(`thread spawn --project ${tierProject.id} --provider pi --model ${MODEL} --environment ${tierHome} --prompt-file ${tierHome}/TASK.md --permission-mode full --service-tier fast`, { ok: false });
+  assert.equal(bbsNo.ok, false, JSON.stringify(bbsNo));
+  assert.match(bbsNo.error.message, /Provider pi does not support service tiers\./);
 });
 
 test("a bare model id two pi providers serve is refused, naming both and the full ids; each full id launches; bb itself would answer a thread that ends in error", async () => {

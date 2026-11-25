@@ -10,14 +10,16 @@
   takes as `--launch-choice <name>=<value>` on `oats spawn`, `oats session start` and
   `oats session restart`, records in the home and hands to the launch. The provider
   passes each to `bb thread spawn` (`--reasoning-level`, `--service-tier`). A choice is
-  carried or refused, never dropped: bb itself takes any level and any tier and says
-  nothing of what became of it, so the value is held against what bb lists for the
-  launch's model before anything is started. Refused with `E_BACKEND_LAUNCH_ARG`, at the
-  launch and at the check of a planned launch: a level or a tier the model does not have
-  in bb, any tier for a model bb lists none for, the value `default`, a choice the
-  provider does not declare. For pi, a model written with pi's own `:<level>` is refused
+  carried or refused, never dropped: bb takes any reasoning level and runs the thread
+  without one its model does not have, and refuses a service tier its provider does not
+  list only at the spawn, after a launch has changed bb. So the value is held against
+  what bb lists (the model's levels; the provider's tiers, or the model's own where it
+  narrows them) before anything is started. Refused with `E_BACKEND_LAUNCH_ARG`, at the
+  launch and at the check of a planned launch: a level the model does not have in bb, a
+  tier its provider or its model does not list (any tier on pi, which has none), the
+  value `default`, a choice the provider does not declare. For pi, a model written with pi's own `:<level>` is refused
   with a sentence that names the model and `--launch-choice reasoning-level=<level>`: on
-  bb the level travels as the choice alone. Where bb's list cannot settle it, the launch
+  bb the level travels as the choice alone. Where bb's lists cannot settle it, the launch
   goes on with a warning (`session-provider-launch-choice-unchecked`). A launch with no
   choice is unchanged. README, "Launch choices".
   **This needs the OATS release that has `launch-choices`**: the manifest's new property

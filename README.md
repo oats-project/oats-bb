@@ -517,23 +517,27 @@ oats session start --home <home> --launch-choice reasoning-level=default   # cle
 | Choice | What it is | Passed to bb as |
 |---|---|---|
 | `reasoning-level` | How hard the model thinks: a level bb lists for the launch's model (`low`, `medium`, `high`, `xhigh`, `max`, or one of the model's own) | `bb thread spawn --reasoning-level <level>` |
-| `service-tier` | The service tier the thread runs on, where bb lists tiers for the launch's model | `bb thread spawn --service-tier <tier>` |
+| `service-tier` | The service tier the thread runs on: one bb lists for the launch's provider (Claude Code has `fast`; pi has none), and for its model where the model narrows them | `bb thread spawn --service-tier <tier>` |
 
 The kernel knows neither choice's meaning. It records a spawn's choices in the home, hands
 them to every later start, and checks only that the provider declares the name. What a
 value means is this provider's, and its rule is one: **a choice is carried or refused,
-never dropped, and what is carried is what bb itself lists for the launch's model**
-(`bb provider models <provider> --json`: the model's `supportedReasoningEfforts` and,
-where it has tiers, `supportedServiceTiers`). Both harnesses.
+never dropped, and what is carried is what bb itself lists**: for the launch's model, its
+reasoning levels (`bb provider models <provider> --json`, `supportedReasoningEfforts`);
+for its provider, its service tiers (`bb provider list --json`, `serviceTiers`), which a
+model's row may narrow (`supportedServiceTiers`; a row with no such list takes every tier
+of its provider). Both harnesses.
 
 **Refused, before anything is started** (`E_BACKEND_LAUNCH_ARG`, at the launch and, where
 the kernel hands the check the planned launch's `choices` and `model`, at the check):
 
 - a reasoning level the model does not have in bb, naming the levels it has;
-- a service tier the model does not have in bb, or any tier for a model bb lists none
-  for;
+- a service tier bb's provider does not list (any tier on pi, which has none), or one the
+  model's own list leaves out;
 - the value `default`: it is how a recorded choice is cleared in OATS
-  (`--launch-choice <name>=default`), and is never a level or a tier to ask bb for;
+  (`--launch-choice <name>=default`), and is never a value a launch is handed. (In bb
+  `default` is the provider's standard tier, which is what a launch with no choice runs
+  on.)
 - a choice the provider does not declare, or a value that is not 1 to 40 lowercase
   letters, digits, dashes and underscores (the value becomes an argument of bb's CLI
   of its own, never an option, never a shell word);
@@ -542,33 +546,38 @@ the kernel hands the check the planned launch's `choices` and `model`, at the ch
   model without the suffix and `--launch-choice reasoning-level=<level>` ([pi](#pi), "The
   model").
 
-Why refuse: bb takes **any** level and any tier when a thread is spawned, answers a
-thread, and says nothing of what became of the choice. Three facts of bb, seen at the
-pinned bb and pinned by `test/contract/contract.test.mjs`:
+Why the provider checks, by what bb does (seen at the pinned bb, and pinned by
+`test/contract/contract.test.mjs` and `pi.test.mjs`):
 
-- **An unlisted level is a third thing, not the default.** A thread spawned with no level
-  starts Claude Code with bb's own, `--effort=medium` (not the `defaultReasoningEffort`
-  its list shows for the model, `high`). One spawned with a level the model has starts
-  it with that one. One spawned with a level the model does not have, or with the word
-  `default`, starts it with **no effort at all**: neither the one asked for, nor bb's
-  own.
-- **A tier bb lists for no model is applied all the same**: with the tier `fast` for a
-  model whose row has no tiers, Claude Code is started in its fast mode. What a launch
-  carries is what bb itself lists for the model, so that tier is refused here.
+- **bb takes any reasoning level, and an unlisted one is a third thing, not the
+  default.** A thread spawned with no level starts Claude Code with bb's own,
+  `--effort=medium` (not the `defaultReasoningEffort` its list shows for the model,
+  `high`). One spawned with a level the model has starts it with that one. One spawned
+  with a level the model does not have, or with the word `default`, starts it with **no
+  effort at all**: neither the one asked for, nor bb's own. bb answers a thread each
+  time, and nothing says what became of the level.
+- **bb refuses a service tier its provider does not list, but only at the spawn**
+  ("Provider claude-code does not support the … service tier", "Provider pi does not
+  support service tiers"). By then a launch has stopped the home's earlier thread and
+  made its project, so the same refusal is given first, with nothing started. A tier
+  the provider lists is carried: with `fast`, Claude Code is started in its fast mode.
 - **bb remembers nothing of it from one spawn to the next**: after a thread spawned with
   `low`, a thread of the same project spawned with no level is at bb's own again. That
   is why the kernel records the choice in the home and hands it to every start: a
   restart would otherwise lose it.
 
-**Where bb's list cannot settle it, nothing is refused**: the launch goes on with the
-choice, and says once `could not check the launch choice <name> against bb's model list:
+**Where bb's lists cannot settle it, nothing is refused**: the launch goes on with the
+choice, and says once `could not check the launch choice <name> against bb's lists:
 <why>` (the warning `session-provider-launch-choice-unchecked` at the check; the provider
-command's standard error at the launch). That is the case when bb's list cannot be read,
-the model is not in it (or is in it more than once), the list does not say which levels
-or tiers the model has, or the launch names no model. bb then picks one by a rule of its
-own that its list does not show (the project's remembered model, then its provider's
-default), so there is no row to hold the choice against: that case is left open, and a
-choice made with no model named may be one bb does not carry.
+command's standard error at the launch). That is the case when a list cannot be read,
+the model is not in bb's list (or is in it more than once), or a list does not say which
+levels or tiers there are.
+
+**A launch that names no model.** bb then picks one by a rule of its own that its list
+does not show (the project's remembered model, then its provider's default), so there is
+no one row to hold the choice against. Each choice is held against every model of the
+provider: a value no model has is refused (bb would drop it, whichever it picks), one
+every model has is carried, and one only some have is left open, with the warning.
 
 **The kernel this needs.** The manifest property is one a kernel without `launch-choices`
 does not know, so the package's floor (`compatibility.oats`) is the OATS release that has
@@ -863,7 +872,7 @@ launch checks first:
 | the host daemon is not connected yet, or serves another server; with `hostDaemonPort` set, the daemon at that port is not a connected host of the server (it does not say which host it is, the server does not list it, or its hosts cannot be read); bb reports the provider of the launch's harness (claude-code, or pi) as `not_installed`, `unsupported_version`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read; for a pi launch, the pi configuration bb's server runs with does not list @awebai/oats-pi | `E_BACKEND_NOT_READY` |
 | for a pi launch, that configuration lists @awebai/pi, and `AWEB_DELIVERY` is not in bb's machine env | `E_BACKEND_PI_LISTENER` |
 | for a pi launch whose model the check is handed, bb's pi has no such model, or two of its providers serve that bare id, or the id carries pi's `:<level>` ([pi](#pi), "The model") | `E_BACKEND_LAUNCH_ARG` |
-| for a launch whose choices the check is handed, a reasoning level or a service tier the model does not have in bb, the value `default`, or a choice the provider does not declare ([launch choices](#launch-choices)) | `E_BACKEND_LAUNCH_ARG` |
+| for a launch whose choices the check is handed, a reasoning level the model does not have in bb, a service tier its provider or its model does not list, the value `default`, or a choice the provider does not declare ([launch choices](#launch-choices)) | `E_BACKEND_LAUNCH_ARG` |
 
 Which harness these speak for: with the launch the kernel plans, only that harness's
 facts are problems (a pi launch is not held up because bb's Claude is signed out, nor a

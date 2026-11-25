@@ -20,9 +20,9 @@ export const BOARD = {
   noHistory: "This OATS sends no history.",
   unreadable: "This agent's board could not be read.",
   /** At the press, the server's roster no longer holds the question as it was drawn (the agent cleared it, or asked again): nothing was sent. */
-  noLongerAsked: "It no longer asks this: nothing was sent.",
+  noLongerAsked: "No longer asked. Nothing sent.",
   /** At the press, the agent waits on an approval of its harness: a message then would answer that. Nothing was sent. */
-  approvalFirst: "It waits on an approval now: nothing was sent.",
+  approvalFirst: "It waits on an approval. Nothing sent.",
   /** The palette command, and what it says where there is nothing to focus. */
   focus: "Agent: questions and facts (focus)",
   nothing: "This agent has no questions or facts to show.",

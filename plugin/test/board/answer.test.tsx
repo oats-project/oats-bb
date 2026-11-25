@@ -87,7 +87,7 @@ test("the question the agent CLEARED between the draw and the press: refused wit
   const { zone, sent, answers, server } = await drawn();
   server.board = { facts: [], questions: [] };
   fireEvent.click(answers()[0]!);
-  await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).toBe("It no longer asks this: nothing was sent."));
+  await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).toBe("No longer asked. Nothing sent."));
   expect(sent).toEqual([]);
   expect(within(zone).queryByTestId("oats-board-sent")).toBeNull();
 });
@@ -96,7 +96,7 @@ test("the same id asked AGAIN (another `since`) at the press: refused, nothing s
   const { zone, sent, answers, server } = await drawn();
   server.board = { facts: [], questions: [{ ...QUESTION, since: "2026-11-23T18:05:00.000Z" }] };
   fireEvent.click(answers()[0]!);
-  await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).toBe("It no longer asks this: nothing was sent."));
+  await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).toBe("No longer asked. Nothing sent."));
   expect(sent).toEqual([]);
 });
 
@@ -134,7 +134,7 @@ test("an approval that arose since the draw: refused at the press, nothing sent"
   const { zone, sent, answers, server } = await drawn();
   server.claim = { producer: "pi.harness", reason: "permission" };
   fireEvent.click(answers()[0]!);
-  await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).toBe("It waits on an approval now: nothing was sent."));
+  await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).toBe("It waits on an approval. Nothing sent."));
   expect(sent).toEqual([]);
 });
 

@@ -121,6 +121,24 @@ export function useReading(instance: string | null): boolean {
   return entry !== undefined && instance !== null && oats.phase === "ready" && oats.stale === null && beforeEnd(entry.endedAt, oats.at);
 }
 
+/**
+ * A ROW's place for what it says of its agent (the sidebar's rows; the home's rows) while that agent is behind a result:
+ * the word alone, in the facts' place. No state's word, no soul, no reason: the roster the row is drawn from is from
+ * before the act, and after a Stop that archived the agent's thread its row read "Idle · … · may still run", in the
+ * warning tone, beside "3 sessions stopped." (the second look's sixth item, 25 Nov 2026).
+ */
+export function ReadingFacts({ testId = "oats-row-reading", className = "" }: { testId?: string; className?: string }) {
+  return (
+    <span role="status" data-testid={testId} data-reading="" className={`min-w-0 whitespace-nowrap text-xs text-muted-foreground ${className}`}>
+      {READING}
+    </span>
+  );
+}
+/** That row's mark: plain. No state's colour and no warning tone (it says no state: `data-state` is not set); hidden from a screen reader, as a row's mark is (the word says it). */
+export function ReadingMark() {
+  return <span aria-hidden data-mark="" data-reading="" className="inline-block size-2 shrink-0 rounded-full border border-muted-foreground" />;
+}
+
 /** The status line's place while the agent's state is being read again: the word, and the place's own buttons (off, where they are acts). */
 export function ReadingLine({ action }: { action?: ReactNode }) {
   return (

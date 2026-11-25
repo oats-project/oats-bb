@@ -22,7 +22,7 @@ import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideNeeds, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
-import { READING as READING_WORD, ReadingLine, readingNow, useActed } from "../roster/reading";
+import { READING as READING_WORD, ReadingFacts, ReadingLine, readingNow, useActed } from "../roster/reading";
 import { LastObservation, RosterNotice, useLineShowsNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { TMUX } from "../ui";
@@ -625,6 +625,10 @@ function AgentFacts({ entry, oats, testId, card = false, fit }: { entry: Entry; 
 function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
   const line = useRef<HTMLSpanElement>(null);
   const fit = useFit(line, "row", "oats-home-agent-where");
+  // Behind a result, until the roster is read again: "Reading…" in the facts' place and no state's word, as the
+  // sidebar's row of that agent says (the roster this row is drawn from is from before the act: app/roster/reading.tsx).
+  useActed();
+  const reading = readingNow(oats, entry.agent.instance);
   return (
     <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
       {/* ONE line at every width (the reader's P20: at 390 a long name sent its soul to a second line, its neighbours' stayed):
@@ -633,9 +637,9 @@ function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oat
           `data-fit="under"`). Never a clipped warning, never a cut glyph, never a name cut for them. */}
       <span ref={line} data-fit={fit} className={`flex min-w-0 flex-1 items-baseline gap-x-2 ${fit === "under" ? "flex-wrap" : ""}`}>
         <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
-        <AgentFacts entry={entry} oats={oats} testId="oats-home-agent-where" fit={fit} />
+        {reading ? <ReadingFacts testId="oats-home-agent-reading" /> : <AgentFacts entry={entry} oats={oats} testId="oats-home-agent-where" fit={fit} />}
       </span>
-      {stateToo ? (
+      {stateToo && !reading ? (
         <span className="shrink-0 text-sm">
           {/* The state in words; a lost session's word on a row is "Lost" (its mark is the stopped one: the agent is stopped). */}
           <State state={entry.status.state} word={rowWords(entry.status.word, entry.status.state, reasonOf(entry, oats).reason).state} />

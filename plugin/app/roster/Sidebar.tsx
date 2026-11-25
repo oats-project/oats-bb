@@ -32,6 +32,7 @@ import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { useOpenAgent } from "./open-agent";
+import { ReadingFacts, ReadingMark, readingNow, useActed } from "./reading";
 import { LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
 import { useNow } from "./now";
 import { FoldToggle, foldKeys, GUTTERED, useOpened } from "./fold";
@@ -97,6 +98,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
   const opened = useOpened();
+  // Behind a result (an act took the agent, and the roster shown is from before the act's end: app/roster/reading.tsx)
+  // a row says "Reading…" in its facts' place, as the thread's line and the page do. Asked of the roster the rows are
+  // drawn from, never by a read of its own.
+  useActed();
+  const reads = (instance: string): boolean => oats.phase === "ready" && readingNow(oats, instance);
 
   const openThread = (event: MouseEvent, threadId: string) => {
     if (!plainClick(event)) return;
@@ -148,11 +154,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    *   first. The state's word and the glyph never shrink. The whole line is its title.
    *   (The machine is not on a row: the instance panel says it.)
    */
-  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** "warning": the reason asks a person to look: it stays, and the soul gives way first */ reasonTone?: "warning" | undefined; /** what the line's title says for the state and the reason, where the row draws another word (app/outside `rowWords`) */ said?: { state: string; reason: string | null } }, full: string) => {
+  const lines = (name: ReactNode, strong: boolean, phrases: { state: string; soul: string; reason?: string | null; where?: string; /** "warning": the reason asks a person to look: it stays, and the soul gives way first */ reasonTone?: "warning" | undefined; /** what the line's title says for the state and the reason, where the row draws another word (app/outside `rowWords`) */ said?: { state: string; reason: string | null } }, full: string, /** the agent is behind a result: "Reading…" in the facts' place */ reading = false) => {
     return (
       <span className="flex min-w-0 flex-1 flex-col">
         <span data-testid="oats-row-name" title={full} className={`line-clamp-2 break-words ${strong ? "font-semibold" : ""}`}>{name}</span>
-        <RowFacts testId="oats-row-facts" state={phrases.state} soul={phrases.soul} reason={phrases.reason} reasonTone={phrases.reasonTone} where={phrases.where} said={phrases.said} />
+        {reading ? <ReadingFacts /> : <RowFacts testId="oats-row-facts" state={phrases.state} soul={phrases.soul} reason={phrases.reason} reasonTone={phrases.reasonTone} where={phrases.where} said={phrases.said} />}
       </span>
     );
   };
@@ -198,9 +204,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           (guttered ? GUTTERED : INDENT)[node.depth],
           "oats-agent-row",
           <>
-            <StateMark state={drawn.state} hidden tone={reason.tone} />
+            {reads(node.agent.instance) ? <ReadingMark /> : <StateMark state={drawn.state} hidden tone={reason.tone} />}
             {/* The name is bold while it waits on a person, and while bb has it unread, as bb's own rows are. */}
-            {lines(agentName(node.agent.instance), status.state === "needs-you" || thread.isUnread, { state: words.state, soul: shown(oats.soulOf(node.agent)), reason: words.reason, reasonTone: reason.tone, said: words.title }, shown(node.agent.instance))}
+            {lines(agentName(node.agent.instance), (status.state === "needs-you" && !reads(node.agent.instance)) || thread.isUnread, { state: words.state, soul: shown(oats.soulOf(node.agent)), reason: words.reason, reasonTone: reason.tone, said: words.title }, shown(node.agent.instance), reads(node.agent.instance))}
           </>,
           toggle,
           keys,
@@ -254,8 +260,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
             onNavigate();
           }}
         >
-          <StateMark state={drawn.state} hidden tone={gone.has(agent.instance) ? undefined : reason.tone} />
-          {lines(name, status.state === "needs-you", { state: words.state, soul: shown(oats.soulOf(agent)), reason: words.reason, reasonTone: gone.has(agent.instance) ? undefined : reason.tone, where, said: words.title }, shown(agent.instance))}
+          {reads(agent.instance) ? <ReadingMark /> : <StateMark state={drawn.state} hidden tone={gone.has(agent.instance) ? undefined : reason.tone} />}
+          {lines(name, status.state === "needs-you" && !reads(agent.instance), { state: words.state, soul: shown(oats.soulOf(agent)), reason: words.reason, reasonTone: gone.has(agent.instance) ? undefined : reason.tone, where, said: words.title }, shown(agent.instance), reads(agent.instance))}
         </button>
       </li>
     );
@@ -329,7 +335,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const guttered = view.rows.some((row) => row.children.length > 0);
   // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a
   // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the row's own state, which is the one its line draws.
-  const warns = (row: Row): boolean => !gone.has(row.agent.instance) && rowWarns(outside.of(row.agent), row.state);
+  const warns = (row: Row): boolean => !gone.has(row.agent.instance) && !reads(row.agent.instance) && rowWarns(outside.of(row.agent), row.state);
+  // A closed parent marks nothing for a hidden row that reads "Reading…": its state in this roster is from before the
+  // act, and a mark for it would be the old state's. For the fold alone such a row is a quiet one.
+  const quiet = (rows: readonly Row[]): readonly Row[] => rows.map((row) => ({ ...row, state: reads(row.agent.instance) ? ("idle" as const) : row.state, children: quiet(row.children) as Row[] }));
+  const folded = flatten(view.rows).some((row) => reads(row.agent.instance)) ? quiet(view.rows) : view.rows;
   return (
     // `data-pages`: whether bb has given the settings that say which pages are shown. With nobody
     // waiting the foot has no line, so nothing drawn says it: a live check that asserts an absence
@@ -354,7 +364,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
               an agent with no bb thread is under its parent like any other, and a root where it has none that is drawn.
               - no thread bb lists: where its thread is, by bb's own answer, after the state's word; nothing until bb has answered;
               - on tmux: where it is; one whose session was lost says so first ("Stopped · session lost"): nobody stopped it. */}
-          {agentRows(treeRows(view.rows, opened, selected, warns), guttered)}
+          {agentRows(treeRows(folded, opened, selected, warns), guttered)}
         </ul>
       )}
       {/* No line counts who waits on a person: the rows that wait are marked, and bb's badge on the

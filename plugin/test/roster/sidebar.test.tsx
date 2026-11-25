@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-libra
 import type { ReactNode } from "react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
+import { noteActed } from "../../app/roster/reading";
 import { addPageLink } from "../../app/workspace/pages";
 import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 import { ALL_PAGES, handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
@@ -1334,3 +1335,84 @@ test("the chevron's mark: right while closed, down while open, the off one as op
   // No size of the mark or of its button depends on the width: no class of a breakpoint on either.
   expect(`${toggles(pinned.slot)[0]!.className} ${open.classes}`).not.toMatch(/\b(sm|md|lg|xl):/);
 });
+
+// ---- A row behind a result (the second look's sixth item, 25 Nov 2026) ----
+// Between an act's result and the roster read after it, the thread's line and the page of every agent the act took say
+// "Reading…"; the ROW kept the roster's word of before, and after a Stop that archived the threads the rows read
+// "Idle · … · may still run", in the warning tone, beside "3 sessions stopped.". A row says "Reading…" too.
+const AT = fixtureSnapshot().at; // the roster the window holds: read no later than the act's end
+const LATER = "2026-11-19T12:30:05.000Z"; // a roster read after it
+const TOOK = ["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"]; // a stop of the lead takes its two children
+const THREADS = ["thr_redesign", "thr_mockups", "thr_harvest"];
+/** What a row draws after its name: the word in the facts' place, or the facts; and its mark's state (null: the plain mark). */
+const drawn = (row: HTMLElement) => ({
+  reading: row.querySelector('[data-testid="oats-row-reading"]')?.textContent ?? null,
+  facts: row.querySelector('[data-testid="oats-row-facts"]')?.textContent ?? null,
+  mark: row.querySelector("[data-mark]")?.getAttribute("data-state") ?? null,
+  tone: row.querySelector("[data-mark]")?.getAttribute("data-tone") ?? null,
+  plain: row.querySelector("[data-mark]")?.hasAttribute("data-reading") ?? false,
+});
+
+test("behind a result every row the act took says Reading… in its facts' place, with a plain mark and no reason, and stays a link; the next roster read says Stopped; no other row changes", async () => {
+  let stopped = false;
+  const agents = () => fixtureAgents().map((agent) => (stopped && TOOK.includes(agent.instance) ? { ...agent, running: false, runtimeState: "stopped", sessionEnd: "stopped", waiting: null } : agent));
+  const { slot } = await sidebar({ snapshot: () => ({ ...fixtureSnapshot(agents()), at: stopped ? LATER : AT }) });
+  await openParents(slot);
+  const rows = () => THREADS.map((thread) => rowOn(slot, thread)!);
+  const other = () => rowOn(slot, "thr_release")!;
+  const before = rows().map(drawn);
+  const otherBefore = drawn(other());
+  expect(before.every((row) => row.reading === null && row.facts !== null && row.mark !== null)).toBe(true);
+  // The act's result: the three are marked; the roster on screen is still the one from before the act's end.
+  act(() => noteActed(TOOK, AT));
+  expect(rows().map(drawn)).toEqual([0, 1, 2].map(() => ({ reading: "Reading…", facts: null, mark: null, tone: null, plain: true })));
+  for (const row of rows()) {
+    expect(row.tagName).toBe("A"); // still the thread's link
+    expect(row.getAttribute("href")).not.toBeNull();
+    expect(row.textContent).not.toMatch(/Working|Idle|Needs you|may still run|oats-/); // no state's word, no soul, no reason
+  }
+  expect(drawn(other())).toEqual(otherBefore); // an agent the act did not take
+  // The roster read after the act: the rows say what it says.
+  stopped = true;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: LATER }));
+  await waitFor(() => expect(rows().map((row) => drawn(row).facts?.startsWith("Stopped"))).toEqual([true, true, true]));
+  expect(rows().map((row) => [drawn(row).reading, drawn(row).mark, drawn(row).plain])).toEqual([0, 1, 2].map(() => [null, "stopped", false]));
+});
+
+test("a closed parent marks nothing for a hidden row that says Reading…: its state in the roster on screen is from before the act", async () => {
+  // The lead's child waits on a person: closed, the lead's chevron carries that mark.
+  const claim = { reason: "attention" as const, message: "Which mockup?", since: "2026-11-19T12:00:00.000Z" };
+  const agents = fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, waiting: claim } : agent));
+  const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) });
+  await slot.findByTestId("oats-tree");
+  const toggle = () => toggles(slot).find((each) => each.getAttribute("data-instance") === "redesign-ui-lead")!;
+  const inside = () => toggle().querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside");
+  expect([toggle().getAttribute("aria-expanded"), inside()]).toEqual(["false", "needs-you"]);
+  // An act took that child (it was stopped): until the roster is read again the parent marks nothing for it.
+  act(() => noteActed(["desktop-mockups-developer"], AT));
+  expect([inside(), toggle().getAttribute("aria-label")]).toEqual([null, "Show Redesign ui lead's agents"]);
+  // Opened, the child's row says Reading….
+  fireEvent.click(toggle());
+  expect(drawn(rowOn(slot, "thr_mockups")!)).toEqual({ reading: "Reading…", facts: null, mark: null, tone: null, plain: true });
+});
+
+test("an agent with no bb thread says Reading… on its row too; and the home's list of every agent says it where it draws that agent, with no state's word at the row's end", async () => {
+  const { slot } = await sidebar();
+  await openParents(slot);
+  const tmux = () => slot.getAllByTestId("oats-agent-row-threadless").find((row) => row.getAttribute("data-instance") === "kernel-fix-developer")!;
+  expect(drawn(tmux()).facts).toBe("Running · oats-developer · tmux");
+  act(() => noteActed(["kernel-fix-developer"], AT));
+  expect(drawn(tmux())).toEqual({ reading: "Reading…", facts: null, mark: null, tone: null, plain: true });
+  expect(tmux().tagName).toBe("BUTTON"); // it still opens its page
+  resetApp();
+  // The home's list (Home › Agents): the same word, in the facts' place.
+  const app = await loadApp();
+  const home = renderSlot<{ subPath: string }, Contract>(app.navPanels.find((candidate) => candidate.id === "home")!, { subPath: "agents" }, { rpc: handlers(), sidebarThreads: sidebarThreads() });
+  const row = async () => (await home.findAllByTestId("oats-home-agent-row")).find((each) => each.dataset.instance === "desktop-mockups-developer")!;
+  expect(within(await row()).getByTestId("oats-state").textContent).toBe("Working");
+  act(() => noteActed(["desktop-mockups-developer"], AT));
+  expect(within(await row()).getByTestId("oats-home-agent-reading").textContent).toBe("Reading…");
+  expect(within(await row()).queryByTestId("oats-state")).toBeNull();
+  expect(within(await row()).queryByTestId("oats-home-agent-where")).toBeNull();
+});
+

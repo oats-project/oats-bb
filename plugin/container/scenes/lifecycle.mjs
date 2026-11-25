@@ -504,6 +504,20 @@ export default [
         // place, and every act of it off. Never the state of before the stop with its acts on.
         const between = JSON.parse((await page.until(`(() => { const now = JSON.parse(${placeOf(child)}); return now.here && now.reading ? JSON.stringify(now) : ""; })()`, 20)) || (await page.evaluate(placeOf(child))));
         check(between.here && between.reading && between.acts.length > 0 && between.acts.every((off) => off === true), `${at} between the result and the read the CHILD ${child}, which the stop took, says "Reading…" in its state's place, with every act of it off`, JSON.stringify(between));
+        // THE ROWS of the three, at that same moment (the second look's sixth item; added by the roster developer): each
+        // says "Reading…" in its facts' place, or, read again by then, "Stopped": never the roster's word of before the
+        // stop, and never a warning ("may still run": the threads are archived by now) beside "3 sessions stopped.".
+        if (viewport.mobile) await showSidebar(page, viewport);
+        const rowsBetween = JSON.parse(
+          await page.evaluate(
+            `JSON.stringify(${JSON.stringify(STOPPED.map((instance) => [instance, threadIdOf(instance)]))}.map(([instance, thread]) => { const row = document.querySelector(\`[data-testid="oats-agent-row-threadless"][data-instance="\${instance}"], [data-testid="oats-agent-row"][data-sidebar-thread-id="\${thread}"]\`); if (!row) return { instance, row: false }; return { instance, row: true, reading: row.querySelector('[data-testid="oats-row-reading"]')?.innerText.trim() ?? null, says: row.querySelector('[data-testid="oats-row-facts"]')?.getAttribute("title") ?? null, warns: row.querySelector('[data-mark][data-tone="warning"], [data-phrase="reason"][data-tone="warning"]') !== null }; }))`,
+          ),
+        );
+        check(
+          rowsBetween.every((row) => row.row && !row.warns && (row.reading === "Reading…" || /^Stopped/.test(row.says ?? ""))) && rowsBetween.some((row) => row.reading === "Reading…"),
+          `${at} between the result and the read the ROWS of the three say "Reading…" in their facts' place (or, read again by then, "Stopped"): none says the state of before the stop, and none warns`,
+          JSON.stringify(rowsBetween),
+        );
         // (No image: this scene HOLDS the status read for nine seconds to have a "between" to read; a real one is a
         // second or two. The images of a stop's result are `stop-done` and `stop-left-toast`, taken once the roster is read.)
         // The other two, each opened from its row: "Reading…" with its acts off too. ("Reading…" stands for ten seconds

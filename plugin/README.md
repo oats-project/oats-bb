@@ -292,7 +292,12 @@ stopped or was retired is true of the agent before the roster the window holds i
 it is, the places that say that agent's state (its page, its panel, its thread's line, its
 thread's menu) say **Reading…** in the state's place and EVERY act of it is off there (the line's
 Answer too; the panel does not draw what it asked before the act; a command's key does nothing for
-it): never the old state stated plainly beside "… started.". ONE question decides, about the
+it): never the old state stated plainly beside "… started.". The agent's ROW says it too, in
+the sidebar and in the home's lists: **Reading…** in its facts' place, a plain mark (no state's
+colour, no warning tone), no reason; it stays the link it is; and a closed parent marks nothing
+for a hidden row that says it. (Before the second look a row kept the roster's word of before:
+after a Stop that archived the threads, three rows read "Idle · … · may still run", warning,
+beside "3 sessions stopped.".) ONE question decides, about the
 roster and not about the agent: was this roster READ AFTER THE ACT ENDED? The roster's `at` is the
 plugin server's clock at the START of the status read that made it; the act's answer carries the
 same clock at the act's END (`endedAt`, stamped by the server when its `oats` command returned:

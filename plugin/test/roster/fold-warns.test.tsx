@@ -7,12 +7,13 @@
 // bb thread, is under its parent, and its parent is closed as the page loads: nothing else would
 // lead a person to it. Here with bb's own answer for the thread, as the sidebar asks it.
 import { afterEach, expect, test } from "vitest";
-import { fireEvent, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import type { Agent } from "../../model/types";
-import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
+import { noteActed } from "../../app/roster/reading";
+import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp } from "../helpers/render";
 import type { Contract } from "../helpers/render";
 
@@ -83,3 +84,17 @@ test("a closed parent carries no mark for a child an operator stopped whose thre
   expect(toggle().getAttribute("aria-expanded")).toBe("false");
   expect(inside()).toBeNull();
 });
+
+// A hidden row that says "Reading…" (an act took its agent; the roster on screen is from before the act's end) is no
+// row to warn of: after a Stop that archived its thread it is exactly the row this file's first tests mark ("Idle ·
+// may still run"), and that warning is of the roster from before. The closed parent carries nothing for it.
+test("a closed parent carries no warning mark for a hidden row that says Reading…", async () => {
+  const { slot, inside, toggle } = await sidebar({ running: true, runtimeState: "unknown" }, true);
+  await waitFor(() => expect(inside()).toEqual(["idle", "warning"]));
+  act(() => noteActed([CHILD], fixtureSnapshot().at));
+  expect([inside(), toggle().getAttribute("aria-label")]).toEqual([null, "Show Redesign ui lead's agents"]);
+  fireEvent.click(toggle());
+  const row = slot.getAllByTestId("oats-agent-row-threadless").find((each) => each.getAttribute("data-instance") === CHILD)!;
+  expect([row.querySelector('[data-testid="oats-row-reading"]')?.textContent, row.querySelector('[data-testid="oats-row-facts"]'), row.querySelector("[data-mark]")!.getAttribute("data-tone")]).toEqual(["Reading…", null, null]);
+});
+

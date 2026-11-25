@@ -55,16 +55,19 @@ test.each([
   expect(slot.queryAllByTestId("oats-agent-row-threadless").some((row) => row.getAttribute("data-instance") === CHILD)).toBe(false);
   // bb's answer comes after the first draw: then the parent carries the child's own mark, in the warning tone, after its own word.
   await waitFor(() => expect(inside()).toEqual([state, "warning"]));
-  // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then the hidden row's state by the NAME its mark has everywhere
-  // (app/ui/words.ts STATE: "status unknown" for an idle agent, "stopped"). The warning is said by the mark's tone alone: the name says the state,
-  // not why it warns; the row itself says that once it is shown.
-  const named = `Show Redesign ui lead's agents: ${state === "idle" ? "status unknown" : "stopped"}`;
-  expect([toggle().getAttribute("aria-label"), toggle().getAttribute("title")]).toEqual([named, named]);
+  // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then WHAT THAT ROW ITSELF SAYS: its state's word and its reason,
+  // as the row draws them (ruled 25 Nov 2026: the warning's tone is a colour, and the state's name alone, "stopped", says nothing of it).
+  const named = toggle().getAttribute("aria-label")!;
+  expect(named).toMatch(/^Show Redesign ui lead's agents: (Idle|Stopped) · (archived|deleted) in bb$/);
+  expect(toggle().getAttribute("title")).toBe(named);
   expect(within(parent()).getByTestId("oats-row-facts").textContent).toMatch(/^Working/); // the parent's own word stays its own
   // Opened: the child's row is there with that same mark, and the parent carries none.
   fireEvent.click(toggle());
   const row = slot.getAllByTestId("oats-agent-row-threadless").find((each) => each.getAttribute("data-instance") === CHILD)!;
   expect([row.querySelector("[data-mark]")!.getAttribute("data-state"), row.querySelector("[data-mark]")!.getAttribute("data-tone")]).toEqual([state, "warning"]);
+  // … and those were the row's own words: what a sighted person reads now that it is shown.
+  const drawn = ["state", "reason"].map((phrase) => row.querySelector(`[data-phrase="${phrase}"]`)?.textContent?.replace(/^[\s·]+|[\s·]+$/g, "") ?? "").filter((part) => part !== "").join(" · ");
+  expect(named).toBe(`Show Redesign ui lead's agents: ${drawn}`);
   expect(inside()).toBeNull();
 });
 

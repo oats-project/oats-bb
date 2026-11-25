@@ -167,10 +167,18 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * row opens it and Left closes it, as a tree's keys do. A closed parent's children are not in the
    * page at all: nothing of them takes the focus.
    */
+  /** What a row says of its agent after its name, as the row draws it: its state's word, then its reason ("Stopped · may still run"). The chevron of a closed parent is named with it over a row that warns. */
+  const saysOf = (row: Row): string => {
+    const isGone = gone.has(row.agent.instance);
+    const status = agentStatus(row.agent, row.thread, now);
+    const drawn = rowState(status, isGone);
+    const words = rowWords(drawn.word, drawn.state, rowParts(isGone ? null : outside.of(row.agent), status.state).note);
+    return [words.state, words.reason].filter((part): part is string => part !== null && part !== "").join(" · ");
+  };
   const agentRows = (rows: readonly TreeRow<Row>[], guttered: boolean): ReactNode[] =>
-    rows.flatMap(({ node, parent, open, pinned, inside, insideTone }) => {
+    rows.flatMap(({ node, parent, open, pinned, inside, insideTone, insideNode }) => {
       const called = agentName(node.agent.instance);
-      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} inside={inside} insideTone={insideTone} /> : null;
+      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} inside={inside} insideTone={insideTone} insideSays={insideTone === "warning" && insideNode !== null ? saysOf(insideNode) : null} /> : null;
       const keys = parent ? foldKeys(node.agent.instance, open, pinned) : undefined;
       if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), guttered, node.depth, toggle, keys)];
       const thread = oats.threadById.get(node.thread.id);

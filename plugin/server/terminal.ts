@@ -13,7 +13,11 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
    * of OATS, so there is none to refuse here.)
    */
   async terminalCommand({ instance }, context) {
-    const agent = await core.agentOf(instance);
+    // An ACT, as Stop and Start are: what is typed in that tab is typed to the agent. So the agent is
+    // the one the kernel's snapshot names NOW: while OATS cannot be read it is refused with why,
+    // also for an agent of the last roster that is still shown (the page's button is off then: this
+    // is the server's half of the same rule).
+    const agent = await core.agentForAct(instance);
     if (agent.backend !== "tmux") throw invalid(`${instance} does not run on tmux: it has no terminal`);
     if (agent.running !== true) throw invalid(`${instance} is not running: there is no session to show`);
     const { features } = await core.versionOf();

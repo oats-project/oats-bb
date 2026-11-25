@@ -8,10 +8,10 @@ import { errorMessage } from "../store";
 import { Button } from "../ui";
 import { Disclosure } from "../ui/patterns";
 import { agentName } from "../ui/words";
-import { openTerminal, type Opened, type TerminalIo } from "./open";
-import { commandSaid, DECLINED_SAID, DID_NOT_OPEN, endedSaid, TERMINAL } from "./words";
+import { openTerminal, TerminalLeft, type Opened, type TerminalIo } from "./open";
+import { commandSaid, DECLINED_SAID, DID_NOT_OPEN, endedSaid, LEFT_SAID, TERMINAL } from "./words";
 
-type Failed = { command: string | null; said: string };
+type Failed = { command: string | null; said: string; /** a terminal the press made is still there: bb refused to close it */ left: boolean };
 
 /** The tab's title: the agent's name as the plugin says it everywhere. It is also how its tab is found again. */
 export const terminalTitle = (instance: string): string => agentName(instance);
@@ -43,7 +43,7 @@ export function TerminalButton({ instance, held }: { instance: string; held: boo
     setBusy(true);
     setFailed(null);
     let command: string | null = null;
-    let outcome: Opened | { kind: "failed"; message: string };
+    let outcome: Opened | { kind: "failed"; message: string; left: boolean };
     try {
       const answered = await rpc.call("terminalCommand", { instance });
       // The page left meanwhile: nothing is created for a page that is no longer there.
@@ -61,13 +61,13 @@ export function TerminalButton({ instance, held }: { instance: string; held: boo
       };
       outcome = await openTerminal(io, answered, terminalTitle(instance));
     } catch (cause) {
-      outcome = { kind: "failed", message: errorMessage(cause) };
+      outcome = { kind: "failed", message: errorMessage(cause), left: cause instanceof TerminalLeft };
     }
     going.current = false;
     if (!alive.current) return;
     setBusy(false);
     if (outcome.kind === "opened") return;
-    setFailed({ command, said: outcome.kind === "ended" ? endedSaid(outcome.status) : outcome.kind === "declined" ? DECLINED_SAID : outcome.message });
+    setFailed({ command, said: outcome.kind === "ended" ? endedSaid(outcome.status) : outcome.kind === "declined" ? DECLINED_SAID : outcome.message, left: outcome.left });
   };
   return (
     <div data-testid="oats-terminal" className="flex min-w-0 flex-col gap-1">
@@ -84,6 +84,7 @@ export function TerminalButton({ instance, held }: { instance: string; held: boo
           <Disclosure summary="Details" testId="oats-terminal-details">
             {failed.command === null ? null : <p className="break-all font-mono text-xs text-muted-foreground">{failed.command}</p>}
             <p className="text-xs text-muted-foreground">{failed.said}</p>
+            {failed.left ? <p className="text-xs text-muted-foreground">{LEFT_SAID}</p> : null}
           </Disclosure>
         </div>
       )}

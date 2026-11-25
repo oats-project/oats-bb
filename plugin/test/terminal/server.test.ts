@@ -50,4 +50,19 @@ describe("terminalCommand", () => {
     backend = await startBackend({ verbs: withRow({ running: null }) });
     await expect(backend.rpc("terminalCommand", { instance: TMUX })).rejects.toThrow(/is not running/);
   });
+
+  // An open of the terminal is an ACT (what is typed in that tab is typed to the agent): held while
+  // OATS cannot be read, also for an agent of the roster that is still shown, as Stop and Start are.
+  it("is refused with why while OATS cannot be read, also for a tmux agent of the last roster read; the machine is not asked", async () => {
+    backend = await startBackend();
+    expect(((await backend.rpc<{ ok: boolean }>("snapshot")) as { ok: boolean }).ok).toBe(true);
+    await backend.fake.behave({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CONFIG_BROKEN", message: "oats-local.yaml cannot be read" } }) } });
+    await backend.rpc("refresh").catch(() => undefined);
+    await expect.poll(async () => (await backend!.rpc<{ ok: boolean }>("snapshot")).ok, { timeout: 12_000 }).toBe(false);
+    const failed = await backend.rpc<{ last?: { agents: { instance: string }[] } }>("snapshot");
+    expect(failed.last?.agents.some((agent) => agent.instance === TMUX)).toBe(true); // still shown
+    const before = (await backend.verbs()).length;
+    await expect(backend.rpc("terminalCommand", { instance: TMUX })).rejects.toThrow("E_CONFIG_BROKEN: oats-local.yaml cannot be read");
+    expect((await backend.verbs()).slice(before).filter((verb) => verb !== "status")).toEqual([]);
+  }, 30_000);
 });

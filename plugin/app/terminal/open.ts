@@ -24,10 +24,18 @@ export type Command = { hostId: string; argv: readonly string[]; cwd: string };
 
 export type Opened =
   | { kind: "opened"; terminalId: string; reused: boolean }
-  /** the command ended before it could be shown: bb's own word of how */
-  | { kind: "ended"; status: number | null }
-  /** the command runs and bb showed no tab: closed again, where this call created it */
-  | { kind: "declined" };
+  /** the command ended before it could be shown: bb's own word of how. `left`: bb refused to close the terminal this press made */
+  | { kind: "ended"; status: number | null; left: boolean }
+  /** the command runs and bb showed no tab: closed again, where this call created it. `left`: bb refused to close it */
+  | { kind: "declined"; left: boolean };
+
+/** A failure of bb's after a press made a terminal that bb then refused to close: the failure itself, and that fact for whoever says it. */
+export class TerminalLeft extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = "TerminalLeft";
+  }
+}
 
 /** The size a terminal is created at: it lasts only until its tab is shown (bb then sizes it to the tab). */
 const COLS = 100;
@@ -55,13 +63,19 @@ export async function openTerminal(io: TerminalIo, command: Command, title: stri
   // machine may carry it.
   const held = (await io.list({ scope })).sessions.find((session) => session.title === title && session.initialCwd === command.cwd && RUNS.has(session.status));
   const terminalId = held?.id ?? (await io.create({ scope: { ...scope, cwd: command.cwd }, cols: COLS, rows: ROWS, title, start: { mode: "argv", argv: [...command.argv] } })).id;
-  /** Closes the terminal THIS call created; one that was found again is left as it is. */
-  const close = async () => {
-    if (held !== undefined) return;
+  /**
+   * Closes the terminal THIS call created; one that was found again is left as it is. → whether a
+   * terminal this press made is LEFT attached because bb refused to close it: that is answered to
+   * the caller with the outcome (or the failure), which says it to the person. Nothing else can
+   * be done from here.
+   */
+  const close = async (): Promise<boolean> => {
+    if (held !== undefined) return false;
     try {
       await io.close({ terminalId, mode: "force" });
+      return false;
     } catch {
-      // What bb refuses to close cannot be closed from here: the outcome (or the failure) being answered stands.
+      return true;
     }
   };
   try {
@@ -69,17 +83,11 @@ export async function openTerminal(io: TerminalIo, command: Command, title: stri
     await (io.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))))(SETTLE_MS);
     // (bb's answer to the open is no witness of a dead terminal: for one that had exited it said false at one width and true at another.)
     const now = await io.get({ terminalId });
-    if (now.status === ENDED) {
-      await close();
-      return { kind: "ended", status: now.exitCode ?? null };
-    }
-    if (!shown) {
-      await close();
-      return { kind: "declined" };
-    }
+    if (now.status === ENDED) return { kind: "ended", status: now.exitCode ?? null, left: await close() };
+    if (!shown) return { kind: "declined", left: await close() };
     return { kind: "opened", terminalId, reused: held !== undefined };
   } catch (cause) {
-    await close();
+    if (await close()) throw new TerminalLeft(cause);
     throw cause;
   }
 }

@@ -168,6 +168,17 @@ test("two presses of one moment are one open", async () => {
   expect(calls.filter((call) => call.startsWith("create"))).toHaveLength(1);
 });
 
+test("bb showed no tab and then refuses to close the terminal: the fold says so last, so that a person knows one is still there", async () => {
+  const { options } = bb({ shown: false });
+  (options.sdk as unknown as { terminals: { close(): Promise<never> } }).terminals.close = async () => {
+    throw new Error("cannot close");
+  };
+  const slot = await page({}, options);
+  await press(slot);
+  expect(within(slot.getByTestId("oats-terminal-failed")).getByTestId("oats-terminal-said").textContent).toBe("Terminal did not open.");
+  expect(Array.from(slot.getByTestId("oats-terminal-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual([COMMAND_SAID, "bb did not show it.", "bb did not close it."]);
+});
+
 test("the server refuses (no oats found on the machine): the same one line, with the server's own words under Details, and bb is not asked", async () => {
   const { calls, options } = bb();
   const slot = await page({}, options, {

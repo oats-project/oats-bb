@@ -777,7 +777,9 @@ its session: what a person sees and types there is the agent's own screen (`app/
   --home <its home>` (`kernel/terminal.ts`): a temporary tmux session linked to the agent's window
   alone. Closing the tab leaves the agent running. It is NOT read-only: keys typed there are
   typed to the agent. The plugin runs nothing of it: the server answers the command
-  (`terminalCommand`), and bb's terminal runs it.
+  (`terminalCommand`), and bb's terminal runs it. For that reason the server treats an open as
+  an ACT, as Stop and Start are: while OATS cannot be read it is refused with why, also for an
+  agent of the last roster that is still shown (the page's button is off then).
 - **By absolute path.** bb's terminal runs a command with the login shell's PATH, not the one
   the plugin's host entry has: `oats` by name ended there with status 127. The machine that
   holds the deployment answers where its `oats` is: the setting, else the first `oats` on its
@@ -794,8 +796,9 @@ its session: what a person sees and types there is the agent's own screen (`app/
   terminal), bb showed no tab, or the server's or bb's own refusal. Whatever went wrong after
   a press CREATED a terminal, that terminal is closed again (`terminals.close`) before the page
   says so: no viewer stays attached on no tab, where it would hold the agent's window to its
-  size unseen. A terminal that was found again is never closed by a press: it may be on its tab
-  in another window of bb's.
+  size unseen. Where bb refuses that close, the fold says so last ("bb did not close it."): a
+  person then knows a terminal is still there. A terminal that was found again is never closed
+  by a press: it may be on its tab in another window of bb's.
 - **Only from the page.** bb shows a terminal for a plugin page; a click in the sidebar or the
   app overlay is declined (the terminal probe of 21 Nov 2026). The row of an agent on tmux has
   no menu (it has no bb thread): a click on it opens this page.

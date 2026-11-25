@@ -1,7 +1,7 @@
 // Opening bb's Terminal tab on the viewer (app/terminal/open.ts), on a fake of bb's terminals: what
 // is called, in what order, and what is answered for each way it can go.
 import { describe, expect, test } from "vitest";
-import { openTerminal, SETTLE_MS, type TerminalIo } from "../../app/terminal/open";
+import { openTerminal, SETTLE_MS, TerminalLeft, type TerminalIo } from "../../app/terminal/open";
 
 const COMMAND = { hostId: "host_falcon", argv: ["/usr/local/bin/oats", "session", "attach", "--home", "/srv/oats/agents/a/instances/kernel-fix-developer"], cwd: "/srv/oats/agents/a/instances/kernel-fix-developer" };
 const TITLE = "Kernel fix developer";
@@ -73,16 +73,16 @@ describe("opening the terminal", () => {
   test("the command ended at once: said with its status, whatever bb answered to the open (it is no witness); the dead terminal is closed", async () => {
     for (const shown of [true, false]) {
       const { io, calls } = bb({ shown, after: { status: "exited", exitCode: 127 } });
-      expect(await openTerminal(io, COMMAND, TITLE), String(shown)).toEqual({ kind: "ended", status: 127 });
+      expect(await openTerminal(io, COMMAND, TITLE), String(shown)).toEqual({ kind: "ended", status: 127, left: false });
       expect(calls.at(-1)).toBe("close term_new force");
     }
     const none = bb({ after: { status: "exited" } });
-    expect(await openTerminal(none.io, COMMAND, TITLE)).toEqual({ kind: "ended", status: null });
+    expect(await openTerminal(none.io, COMMAND, TITLE)).toEqual({ kind: "ended", status: null, left: false });
   });
 
   test("the command runs and bb showed no tab: the terminal is closed again, so that no viewer stays attached on no tab", async () => {
     const { io, calls } = bb({ shown: false });
-    expect(await openTerminal(io, COMMAND, TITLE)).toEqual({ kind: "declined" });
+    expect(await openTerminal(io, COMMAND, TITLE)).toEqual({ kind: "declined", left: false });
     expect(calls.at(-1)).toBe("close term_new force");
   });
 
@@ -119,16 +119,21 @@ describe("opening the terminal", () => {
     await expect(openTerminal(thrown.io, COMMAND, TITLE)).rejects.toThrow("network");
     expect(thrown.calls.filter((call) => call.startsWith("close"))).toEqual([]);
     const declined = found();
-    expect(await openTerminal(declined.io, COMMAND, TITLE)).toEqual({ kind: "declined" });
+    expect(await openTerminal(declined.io, COMMAND, TITLE)).toEqual({ kind: "declined", left: false }); // not this press's to close: nothing of its own is left
     expect(declined.calls.filter((call) => call.startsWith("close"))).toEqual([]);
   });
 
-  test("bb refuses to close: what is being answered stands (the outcome, or the failure), and the refusal is not thrown over it", async () => {
+  test("bb refuses to close: what is being answered stands (the outcome, or the failure), and it is ANSWERED that a terminal is left, for the page to say", async () => {
     const declined = bb({ shown: false });
     declined.io.close = async () => {
       throw new Error("cannot close");
     };
-    expect(await openTerminal(declined.io, COMMAND, TITLE)).toEqual({ kind: "declined" });
+    expect(await openTerminal(declined.io, COMMAND, TITLE)).toEqual({ kind: "declined", left: true });
+    const ended = bb({ after: { status: "exited", exitCode: 1 } });
+    ended.io.close = async () => {
+      throw new Error("cannot close");
+    };
+    expect(await openTerminal(ended.io, COMMAND, TITLE)).toEqual({ kind: "ended", status: 1, left: true });
     const thrown = bb();
     thrown.io.show = async () => {
       throw new Error("no such call");
@@ -136,13 +141,23 @@ describe("opening the terminal", () => {
     thrown.io.close = async () => {
       throw new Error("cannot close");
     };
-    await expect(openTerminal(thrown.io, COMMAND, TITLE)).rejects.toThrow("no such call");
+    // The failure itself, as a TerminalLeft: its message is bb's, and its kind says that the terminal is still there.
+    const failure = await openTerminal(thrown.io, COMMAND, TITLE).catch((cause: unknown) => cause);
+    expect(failure).toBeInstanceOf(TerminalLeft);
+    expect((failure as Error).message).toBe("no such call");
+    // Closed as asked: the failure is passed on as it came.
+    const closed = bb();
+    closed.io.show = async () => {
+      throw new Error("no such call");
+    };
+    const plain = await openTerminal(closed.io, COMMAND, TITLE).catch((cause: unknown) => cause);
+    expect(plain).not.toBeInstanceOf(TerminalLeft);
   });
 
   test("a terminal bb calls \"disconnected\" is not called ended: shown, it is the agent's tab; not shown, it is closed", async () => {
     expect(await openTerminal(bb({ after: { status: "disconnected" } }).io, COMMAND, TITLE)).toEqual({ kind: "opened", terminalId: "term_new", reused: false });
     const unseen = bb({ shown: false, after: { status: "disconnected" } });
-    expect(await openTerminal(unseen.io, COMMAND, TITLE)).toEqual({ kind: "declined" });
+    expect(await openTerminal(unseen.io, COMMAND, TITLE)).toEqual({ kind: "declined", left: false });
     expect(unseen.calls.at(-1)).toBe("close term_new force");
   });
 

@@ -16,6 +16,14 @@
 set -eu
 RUN=${RUN:-/home/node/kernel-run}
 BB_VERSION=$(bb --version)
+# Where the container's bb is (test/contract/rig.mjs: not on bb's default ports), as the
+# rig's shell names it for bb's CLI; the deployments name it to the provider below: its
+# server, its host daemon's port, and the daemon's address on that port. The address is
+# written too because the kernel hands the provider the manifest's default for `daemon`
+# (bb's default port) where a deployment sets none, and the provider refuses a
+# hostDaemonPort beside a `daemon` on another port (E_BACKEND_SETTINGS; seen under kernel
+# 0.70.5 and under awebai/oats main de3b4f61, 2026-11-25).
+: "${BB_SERVER_URL:?} ${BB_HOST_DAEMON_PORT:?}"
 FRAMEWORK=${FRAMEWORK:-v1.28.0}
 commit() { git -c user.name=kernel-run -c user.email=kernel-run@example.invalid commit -q "$@"; }
 
@@ -77,7 +85,7 @@ deployment() {
   git clone -q --bare . "$WORKSPACE"
   cd "$RUN/$1"
   oats onboard "$RUN/$1" --workspace "file://$WORKSPACE" > /dev/null
-  printf '%s\n' 'settings:' '  oats.bb:' '    trust: container' "    version: $BB_VERSION" "    dataDir: $HOME/bbdata" 'launch-configs:' '  claude:' '    harness: claude' "    yolo: $4" '    default: true' >> oats-local.yaml
+  printf '%s\n' 'settings:' '  oats.bb:' '    trust: container' "    version: $BB_VERSION" "    dataDir: $HOME/bbdata" "    server: $BB_SERVER_URL" "    hostDaemonPort: $BB_HOST_DAEMON_PORT" "    daemon: http://127.0.0.1:$BB_HOST_DAEMON_PORT" 'launch-configs:' '  claude:' '    harness: claude' "    yolo: $4" '    default: true' >> oats-local.yaml
   git clone -q "$WORKSPACE" "$RUN/$1/$1"
   oats sync --dir "$RUN/$1" > /dev/null
 }

@@ -598,10 +598,25 @@ cases where bb lists fewer models than its pi resolves (the first two seen at bb
   where that `settings.json` sets no `enabledModels` **and has not changed since bb
   started** (bb-app's own record of its start, `bb-app-runtime.json` in
   `settings.oats.bb.dataDir`); where it has, or that record cannot be read, the model
-  is not checked. After a change to bb's pi settings, restart bb;
+  is not checked. After a change to bb's pi settings, restart bb: until then the check
+  is off for every model that is not listed, and readiness says so (below);
 - a home with a pi configuration of its own (`<home>/.pi`) may give its thread models
   that bb, which lists from a directory of its own, does not show: its launch is not
   refused for a model that is not listed.
+
+**Readiness says when the check is off until bb restarts.** A change to bb's pi
+settings under a running bb turns the check off for every home at once: every id that
+is not listed passes, and one pi does not have fails as its thread starts. pi writes
+that `settings.json` itself (a default model chosen in pi, for one), so it happens
+without anyone editing the file. `oats readiness` and `oats bb doctor` (a read with no
+planned launch) then carry the warning `session-provider-pi-model-check-off`: "the pi
+model check is off until bb restarts: bb's pi settings changed after it started (restart
+bb-app to turn it back on)". It is a warning: nothing is refused for it. It is given
+where a pi launch would go on (bb has pi, and its configuration passes the two checks
+below), the `settings.json` sets no `enabledModels` (the check is then off by that
+setting, and a restart does not turn it on), and bb-app's record of its start can be
+read; where it cannot, nothing is said there, and each launch whose model is not listed
+warns as above. A bb that does not answer is told nothing of it.
 
 **bb's list may also be older than pi's configuration.** bb's server serves the list it
 fetched for a minute as it is, while a thread starts by what pi has now. So where the
@@ -739,7 +754,10 @@ facts are problems (a pi launch is not held up because bb's Claude is signed out
 Claude launch by anything of pi's). With no planned launch (`oats readiness`, `oats bb
 doctor`), Claude's state is a problem as before, and everything of pi's is one warning,
 `session-provider-pi-not-ready`, which names the codes a pi launch would be refused
-with; a bb with no pi installed is told nothing of pi.
+with; a bb with no pi installed is told nothing of pi. Where a pi launch would go on
+and bb's pi settings changed after bb started, the warning is
+`session-provider-pi-model-check-off` instead: the pi model check refuses nothing until
+bb restarts ([pi](#pi), "The model").
 
 With the launch the kernel plans (before every launch), the check lists what a sandboxed
 launch would write into the home's sandbox, each host and path with who asked for it
@@ -1045,9 +1063,20 @@ npm run test:kernel:pi   # a pi home and a Claude home under the released kernel
 The contract test builds `test/contract/Dockerfile` at the version in `bb-version`, starts
 bb and a mock Anthropic endpoint inside the container, and calls the provider's commands
 on their wire: every bb command and HTTP address the provider uses. bb runs only in the
-container: no port is published. Moving the bb pin is one change to `bb-version` and the
+container: no port is published. In every contract container bb runs on 18886 and 18887
+(`test/contract/rig.mjs`), not on its default ports: those are in Linux's ephemeral range,
+where a listener on port 0 or an outgoing connection can hold one as bb starts. The
+tests name that bb to the provider with `server` and `hostDaemonPort`, as a deployment
+does. Moving the bb pin is one change to `bb-version` and the
 manifest's `version` default (`npm run validate` keeps them equal) that the contract test
 must pass.
+
+The three contract images install bb-app, Claude Code, pi and the kernel from committed
+locks with `npm ci` (`test/contract/locks/`, and its README): no dependency tree is
+resolved when an image is built, so a package published upstream that minute cannot
+change or fail a run. A moved pin needs its lock written again
+(`test/contract/relock.sh claude`, `test/contract/relock.sh pi`); a unit test holds the
+locks against `bb-version`.
 
 A second contract file (`test/contract/sandbox.test.mjs`, its own image with a sandbox
 runtime) runs bb's sandboxed modes with the sandbox really started, through the tests' own

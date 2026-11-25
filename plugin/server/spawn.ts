@@ -75,7 +75,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   return {
     /** What the bb session provider declares: one read for every client and every place that offers the choice. */
     async spawnHarnesses() {
-      return { harnesses: await harnessesOf(core), hostId: core.target()?.hostId ?? null };
+      const provider = await providerOf(core);
+      return { harnesses: provider.harnesses, hostId: core.target()?.hostId ?? null, ...(provider.absent === undefined ? {} : { absent: provider.absent }) };
     },
     async spawnPreview(input, context) {
       const { summary } = await core.call("spawnPreview", await checked(input), HOST_TIMEOUT.preview, context.experimental_signal);

@@ -20,7 +20,7 @@
 // is already right: the safe side).
 // WHERE: every place of the pilot's screens that says one agent's state or offers its acts: its thread's line and
 // menu, its page and panel, a command's key, and the home's cards of an agent that runs outside OATS and of a stopped
-// agent that asks. NOT the Souls page's detached agents (Start…, Retire…): not a pilot screen, left as it is.
+// agent that asks; and the agent's ROW (the sidebar's, the home's lists': `ReadingFacts`, below). NOT the Souls page's detached agents (Start…, Retire…): not a pilot screen, left as it is.
 // And it is bounded: after BOUND_MS the roster's own state is drawn whatever it says (a watch that
 // died must not leave "Reading…" on a page). The window's memory only.
 import { useSyncExternalStore } from "react";
@@ -119,6 +119,26 @@ export function useReading(instance: string | null): boolean {
   );
   const entry = instance === null ? undefined : all.get(instance);
   return entry !== undefined && instance !== null && oats.phase === "ready" && oats.stale === null && beforeEnd(entry.endedAt, oats.at);
+}
+
+/**
+ * A ROW's place for what it says of its agent (the sidebar's rows; the home's rows) while that agent is behind a result:
+ * the word alone, in the facts' place. No state's word, no soul, no reason: the roster the row is drawn from is from
+ * before the act, and after a Stop that archived the agent's thread its row read "Idle · … · may still run", in the
+ * warning tone, beside "3 sessions stopped." (the second look's sixth item, 25 Nov 2026).
+ * The word, not a `role="status"`: a stop of three would make a live region of every row at once, and the thread's
+ * line and the page already announce it.
+ */
+export function ReadingFacts({ testId = "oats-row-reading", className = "" }: { testId?: string; className?: string }) {
+  return (
+    <span data-testid={testId} data-reading="" className={`min-w-0 whitespace-nowrap text-xs text-muted-foreground ${className}`}>
+      {READING}
+    </span>
+  );
+}
+/** That row's mark: plain. No state's colour and no warning tone (it says no state: `data-state` is not set); hidden from a screen reader, as a row's mark is (the word says it). */
+export function ReadingMark() {
+  return <span aria-hidden data-mark="" data-reading="" className="inline-block size-2 shrink-0 rounded-full border border-muted-foreground" />;
 }
 
 /** The status line's place while the agent's state is being read again: the word, and the place's own buttons (off, where they are acts). */

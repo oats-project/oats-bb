@@ -104,7 +104,7 @@ const MARK = { soul: "oats-spawn-soul-mark", model: "oats-spawn-model-mark", nam
  * roster's notice. An off Spawn is described by it too (aria-describedby): no word is added to the screen, and for a
  * screen reader the button is never just dimmed (the review of part 7).
  */
-const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice" } as const;
+const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice", absent: "oats-spawn-no-bb" } as const;
 /** How long Spawn waits for bb's list of models before it goes without it (the wait a thread's start is given too). */
 const MODELS_WAIT_MS = 10_000;
 type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
@@ -311,11 +311,18 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
    * Which field keeps these values from being asked of the kernel; null when they can be. No sentence says it beside
    * Spawn: the field is empty in view (its placeholder says what it wants) or carries its own mark.
    */
-  const off: "soul" | "cannot" | "name" | "model" | "relation" | null =
-    chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
+  // A deployment with no bb session provider: nothing can be spawned on bb there. The form says so once (its notice),
+  // asks the kernel for no preview (it would be refused for the bb backend), and holds its fields and Spawn.
+  const absent = harnesses.absent;
+  const off: "absent" | "soul" | "cannot" | "name" | "model" | "relation" | null =
+    absent !== null ? "absent" : chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
+  // The preview waits for the harness read's answer: until it is known whether the deployment has the provider at
+  // all, nothing is asked of the kernel (there it would refuse the bb backend, and a red notice would flash before the
+  // one line). Where the provider is there: the same preview, a moment later (the server keeps that read).
+  const harnessesRead = harnesses.status !== "loading";
   const input: Input | null = useMemo(
     () =>
-      off !== null
+      off !== null || !harnessesRead
         ? null
         : {
             soul,
@@ -325,7 +332,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             ...(model === "" ? {} : { model }),
             ...(relation === "unrelated" ? {} : { relation: { kind: relation, to: relative } }),
           },
-    [off, soul, task, name, harness, harnesses.choice, model, relation, relative],
+    [off, harnessesRead, soul, task, name, harness, harnesses.choice, model, relation, relative],
   );
   const key = input === null ? null : JSON.stringify(input);
 
@@ -533,14 +540,14 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     if (phaseNow.current === "idle") setFailure(null);
   }, [key]);
 
-  const fieldsHeld = held || phase !== "idle";
+  const fieldsHeld = held || phase !== "idle" || absent !== null;
   /**
    * What holds Spawn while the form can be changed; null when nothing does. Only a read in flight is SAID beside the
    * button ("Reading…"). Every other hold is said once, where it is: the roster's notice while OATS cannot be read
    * ("Acts are off."), the field that is empty or marked, the column's refusal, the button's own word for a spawn
    * that is in flight. The button is described by the mark of the field that holds it, for a screen reader.
    */
-  const hold: "held" | "flight" | "soul" | "cannot" | "name" | "model" | "relation" | "refused" | "reading" | "model-mark" | null =
+  const hold: "held" | "flight" | "absent" | "soul" | "cannot" | "name" | "model" | "relation" | "refused" | "reading" | "model-mark" | null =
     phase !== "idle"
       ? null
       : held
@@ -568,6 +575,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     relation: SAYS.relative,
     refused: SAYS.column,
     held: SAYS.held,
+    absent: SAYS.absent,
     // A read in flight says "Reading…" beside the button; a spawn in flight is the button's own word.
     reading: undefined,
     flight: undefined,
@@ -635,7 +643,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const updating = asking && chosen !== undefined && !held && (settled !== null || refusal !== null);
 
   // (A spawn that is in flight, pressed here before the person left and came back: the button says so itself.)
-  const spawnWord = phase === "spawning" || hold === "flight" ? W.SPAWNING : phase === "created" ? W.CREATED : phase === "unknown" ? W.CHECK_RESULT : phase === "incomplete" ? W.INCOMPLETE : W.SPAWN;
+  const spawnWord = phase === "spawning" || hold === "flight" ? W.SPAWNING : phase === "created" ? W.CREATED : phase === "unknown" ? W.CHECK_RESULT : W.SPAWN;
   const harnessFailed = harnesses.status === "failed";
   return (
     <Page testId="oats-new-agent-page">
@@ -647,6 +655,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         <div id={SAYS.held} className="empty:hidden">
           <RosterNotice oats={oats} />
         </div>
+        {/* A deployment with no bb session provider: said ONCE, in a person's words; the kernel's own code and sentence under Details. Spawn is described by it. */}
+        {absent === null || held ? null : (
+          <div id={SAYS.absent} data-testid="oats-spawn-no-bb">
+            <Notice title={W.NO_BB} details={`${absent.code}: ${absent.message}`} />
+          </div>
+        )}
         {/* While OATS cannot be read the roster's notice says so, alone: never a second one for the same cause. */}
         {souls.status === "error" && list === undefined && !held ? (
           <Notice title="The souls could not be read" tone="error" code={refusalCode(souls.error)} details={souls.error} actions={<Button onClick={souls.retry}>Retry</Button>} />
@@ -690,7 +704,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 <Field
                   label={W.HARNESS_LABEL}
                   hint={harnessFailed || notReady === null ? null : notReady.sentence}
-                  error={harnessFailed ? W.HARNESSES_FAILED : null}
+                  // (Not while the roster cannot be read: its notice holds the form and says why; the form adds no red sentence of its own under it.)
+                  error={harnessFailed && !held ? W.HARNESSES_FAILED : null}
                   errorTitle={harnessFailed ? (refusalCode(harnesses.error) ?? undefined) : undefined}
                 >
                   <Choice
@@ -711,7 +726,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                     onChange={setHarness}
                   />
                 </Field>
-                {harnessFailed ? (
+                {/* Not while the roster cannot be read: its notice has the one Retry of the screen (app/roster/unreadable.tsx). */}
+                {harnessFailed && !held ? (
                   <div>
                     <Button data-testid="oats-spawn-harness-retry" onClick={harnesses.retry}>
                       {W.RETRY_HARNESSES}
@@ -727,18 +743,20 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             )}
             <Field
               label={W.MODEL_LABEL}
-              errorId={MARK.model}
-              error={modelAnswer === null ? null : modelMark}
+              // The mark stands under the field a person changes: with "Custom…" chosen that is the Model ID below, not this list.
+              {...(modelPick === CUSTOM ? {} : { errorId: MARK.model, error: modelAnswer === null ? null : modelMark })}
             >
               <Choice
                 testId="oats-spawn-model"
                 field="model"
                 value={modelPick}
-                placeholder={MODEL_DEFAULT}
+                // Required of the person: there is no default, so the field does not say "Default" over a mark that says
+                // "Required": it says what it wants ("Choose a model…"), and its list holds no entry that sends none.
+                // (By the mark: while the soul's own harness is still asked, nothing is said to be required, and the field says "Default" as it did.)
+                placeholder={modelMark === MODEL_HELD.required ? W.CHOOSE_MODEL : MODEL_DEFAULT}
                 filterLabel={W.FILTER}
                 options={[
-                  // (Required of the person: the first entry promises nothing, "Default" alone.)
-                  { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null && modelHeld.held !== MODEL_HELD.required ? resolved.model : undefined) },
+                  ...(modelMark === MODEL_HELD.required ? [] : [{ id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null && modelHeld.held !== MODEL_HELD.required ? resolved.model : undefined) }]),
                   // The ids that serve a bare model more than once are the ones offered: one of them is what to pick.
                   ...suggestions.models.filter((option) => modelHeld.held !== MODEL_HELD.ambiguous || modelHeld.offers.includes(option.id)).map((option) => ({ id: option.id, label: shown(option.label) })),
                   // A model picked before the harness changed stays what is sent, and is said.
@@ -750,7 +768,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             </Field>
             {modelPick === CUSTOM ? (
               <div id={SAYS.modelId} className="flex min-w-0 flex-col">
-              <Field label={W.MODEL_CUSTOM_LABEL}>
+              <Field label={W.MODEL_CUSTOM_LABEL} errorId={MARK.model} error={modelAnswer === null ? null : modelMark}>
                 <input data-testid="oats-spawn-model-id" className={INPUT} value={modelTyped} placeholder={W.MODEL_CUSTOM_PLACEHOLDER} autoComplete="off" spellCheck={false} onChange={(event) => setModelTyped(event.target.value)} />
               </Field>
               </div>
@@ -854,7 +872,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               </Button>
               {/* A thread that failed at its start: the result has its title, Details, Open and Close, and nothing
                   that is off. The submit is not drawn there (a control that cannot be used and tells nothing new). */}
-              {unstarted !== null ? null : (
+              {/* Nor where the kernel made the instance and its start is not complete: the result's title says it, and a
+                  held button beside Close would be a status drawn as a control. */}
+              {unstarted !== null || phase === "incomplete" ? null : (
                 <Button
                   variant="primary"
                   data-testid="oats-spawn-submit"

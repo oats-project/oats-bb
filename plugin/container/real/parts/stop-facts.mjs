@@ -3,15 +3,16 @@
 //
 // The kernel's plan carries `midTask: true` for every session that runs (reported activity: a
 // harness is loaded), an idle agent's too, and the dialog said of each "reports it is in the
-// middle of a task". It now says two facts, and nothing where there is neither:
-//   - "uncommitted work": the plan's own observation of the work tree;
-//   - "mid-turn": bb's word on the agent's thread;
-//   as words after the agent's name, on its ONE line ("<Name> · uncommitted work · mid-turn").
+// middle of a task". It now says ONE fact, and nothing where it does not hold:
+//   - "mid-turn": bb's word on the agent's thread: what the stop cuts;
+//   as a word after the agent's name, on its ONE line ("<Name> · mid-turn"). Uncommitted work is
+//   NOT said of a stop (the lead's read: a stop deletes nothing; the box says only what the act
+//   affects), though the kernel's plan observes it.
 // In each view one agent of its own, on a worktree, is taken through the three cases, the dialog
 // opened from its row's menu each time:
 //   idle, its work tree clean     no box at all (the kernel's plan says midTask true all the same);
-//   a file left in its work tree  the work line;
-//   a turn held open too          the work line, then the turn line; then the stop is confirmed.
+//   a file left in its work tree  still no box (the plan observed the file; a stop does not say it);
+//   a turn held open too          the turn line; then the stop is confirmed.
 // The turn is held open by the run's mock model (a message that holds `MOCK-HOLD:<name>` is not
 // answered while the file mock/hold/<name> exists).
 import { rmSync, writeFileSync } from "node:fs";
@@ -29,8 +30,7 @@ export default async (run) => {
     view += 1;
     const name = `stop-facts-${view}-helper`;
     const called = run.nameOf(name); // the instance name as the plugin draws it (scenario.mjs)
-    const WORK = `${called} · uncommitted work`;
-    const BOTH = `${called} · uncommitted work · mid-turn`;
+    const TURN = `${called} · mid-turn`;
     step(`C stop-facts ${view}: ${name}, at ${at}: what the Stop dialog says before the confirmation, from facts`);
     const file = join(OUT, `task-${name}.md`);
     writeFileSync(file, "Wait for instructions.\n");
@@ -76,23 +76,23 @@ export default async (run) => {
     if (view === 1) evidence.keep("stop-plan-idle-loaded.json", recorded(["instance", "stop", name], ["--plan"]).stdout);
     await cancel();
 
-    // ---- a file left in its work tree: the work line
+    // ---- a file left in its work tree: still no box (a stop says nothing of uncommitted work)
     writeFileSync(join(home, "work", "notes-left-behind.txt"), "not committed\n");
     ({ said, attention } = await open(["Idle"]));
     target = planned();
     check(target?.work?.untracked === 1, "the kernel's plan observed one untracked file in its work tree", JSON.stringify(target?.work ?? null));
-    check(JSON.stringify(attention) === JSON.stringify([WORK]), `${at} UNCOMMITTED WORK: the box says "${WORK}", and nothing else`, JSON.stringify(attention));
-    await shot("work");
+    check(attention === null && !/uncommitted work/.test(said.body), `${at} UNCOMMITTED WORK, idle: still no box, and nothing of uncommitted work on the dialog's face (a stop deletes nothing)`, JSON.stringify(attention));
+    // (No image of its own: the dialog is the idle one's, to the pixel, and the run holds that no two images are the same.)
     await cancel();
 
-    // ---- a turn held open too: the turn line after the work line; then the stop
+    // ---- a turn held open too: the turn line; then the stop
     writeFileSync(join(HOLDS, name), "");
     try {
       show("bb thread tell", bb("thread", "tell", threadId, `Keep going on this.\nMOCK-HOLD:${name}\n`).trim());
       const active = await until(`bb to have ${name}'s thread in a turn`, () => (run.bbThread(threadId)?.status === "active" ? run.bbThread(threadId) : undefined), 60);
       check(active?.status === "active", "bb: its thread is in a turn (the mock model holds the answer)", JSON.stringify(active ? { status: active.status } : null));
       ({ said, attention } = await open(["Working"]));
-      check(JSON.stringify(attention) === JSON.stringify([BOTH]), `${at} IN A TURN, with uncommitted work: the box says "${BOTH}", on the agent's one line`, JSON.stringify(attention));
+      check(JSON.stringify(attention) === JSON.stringify([TURN]), `${at} IN A TURN, with uncommitted work: the box says "${TURN}", the turn alone, on the agent's one line`, JSON.stringify(attention));
       await shot("turn");
       await page.evaluate(click("oats-confirm-act"));
       await page.until(phaseIs("done"), 120);

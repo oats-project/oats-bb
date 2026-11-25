@@ -206,10 +206,12 @@ open, a confirmation before its act, in progress, done, refused and with another
   failed, unreachable; and the home's card of the agent that runs outside OATS, counted as the
   roster's foot counts it. OUTH: the three rows that read "not running" side by side (an operator's
   stop, a session lost, idle with no harness loaded), asserting the state word and the
-  tone of each, and that Start on the line of the one that is not loaded opens the lifecycle's
-  Start dialog, which says first that a message in the thread carries the conversation on. OUTA:
+  tone of each, that the lost one and the one that is not loaded say "message to continue" and
+  have no Start… on their line, and that Start… on the page of the one that is not loaded opens
+  the lifecycle's Start dialog, which says first that a message in the thread carries the
+  conversation on. OUTA:
   the three agents whose thread bb has archived, side by side (an operator's stop: plain, with its
-  soul; a session lost, and an agent that still runs: the warning mark and "archived in bb"), and
+  soul; a session lost, and an agent that still runs: the warning mark and "may still run"), and
   the archived thread's own row of the one that still runs. OUTQ:
   the first roster while bb holds a question on the thread of the agent that runs outside OATS.
   What bb says of a thread is true in bb: the stage archives the threads it says

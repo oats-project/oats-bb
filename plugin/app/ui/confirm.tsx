@@ -38,6 +38,11 @@ export type ConfirmProps = {
   /** The primary button, named for the act: "Retire", "Stop". `destructive`: the focus starts on Cancel. */
   confirmLabel: string;
   destructive?: boolean;
+  /**
+   * The act interrupts something that is going on now (a restart of an agent that works on a turn):
+   * the focus starts on Cancel, as for a destructive act, and the primary button keeps its plain look.
+   */
+  interrupts?: boolean;
   /** Why the primary button is off, in words, beside it; null when it can be pressed. */
   blocked?: string | null;
   /**
@@ -66,14 +71,14 @@ export type ConfirmProps = {
      */
     | { kind: "done"; tone?: "done" | "unknown"; title: string; lines?: readonly string[]; /** the first line is a warning: drawn in the warning tone, as the dialog's one line is (`saysWarns`) */ warns?: boolean; code?: string | null; actions?: ReactNode }
     /** A refusal or a failure: a person's words (`title`, `refusal`), then the kernel's code (`code`, or leading `refusal`), and the next step. */
-    | { kind: "failed"; title: string; refusal: string; code?: string | null; actions?: ReactNode };
+    | { kind: "failed"; title: string; refusal: string; /** the first line of `refusal` is a warning: drawn in the warning tone, under the headline (as a done result's `warns`) */ warns?: boolean; code?: string | null; actions?: ReactNode };
   onConfirm: () => void;
   /** Cancel before the act, Close after it. Not called while the act runs, unless the running phase has `leave`. */
   onClose: () => void;
   returnFocus?: () => HTMLElement | null;
 };
 
-export function Confirm({ title, about, shownFor, says = [], saysWarns = false, happens = [], kept = [], notice, children, confirmLabel, destructive = false, blocked = null, describedBy, held = false, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
+export function Confirm({ title, about, shownFor, says = [], saysWarns = false, happens = [], kept = [], notice, children, confirmLabel, destructive = false, interrupts = false, blocked = null, describedBy, held = false, phase, onConfirm, onClose, returnFocus }: ConfirmProps) {
   const running = phase.kind === "running";
   const settled = phase.kind === "done" || phase.kind === "failed";
   const mismatch = shownFor !== null && shownFor !== about;
@@ -135,11 +140,11 @@ export function Confirm({ title, about, shownFor, says = [], saysWarns = false, 
                 Close
               </Button>
             ) : (
-              <Button data-testid="oats-confirm-cancel" disabled={running} {...(destructive ? { "data-autofocus": "" } : {})} onClick={close}>
+              <Button data-testid="oats-confirm-cancel" disabled={running} {...(destructive || interrupts ? { "data-autofocus": "" } : {})} onClick={close}>
                 Cancel
               </Button>
             )}
-            <Button data-testid="oats-confirm-act" variant={destructive ? "destructive" : "primary"} disabled={off} {...(off && describedBy !== undefined ? { "aria-describedby": describedBy } : {})} {...(destructive ? {} : { "data-autofocus": "" })} onClick={onConfirm}>
+            <Button data-testid="oats-confirm-act" variant={destructive ? "destructive" : "primary"} disabled={off} {...(off && describedBy !== undefined ? { "aria-describedby": describedBy } : {})} {...(destructive || interrupts ? {} : { "data-autofocus": "" })} onClick={onConfirm}>
               {confirmLabel}
             </Button>
           </>
@@ -192,9 +197,18 @@ export function Confirm({ title, about, shownFor, says = [], saysWarns = false, 
         ) : null}
         {phase.kind === "failed" ? (
           <Result title={phase.title} tone="failed" code={phase.code} actions={phase.actions}>
-            <p className="text-muted-foreground">
-              <Lines text={phase.refusal} />
-            </p>
+            {phase.warns === true ? (
+              // The headline, then what a person must read first, in the warning tone; then the rest.
+              <p data-testid="oats-result-warning" data-tone="warning" className="font-semibold text-warning-text">
+                {shown(phase.refusal.split("\n")[0] ?? "")}
+              </p>
+            ) : null}
+            {/* (A warning that is the whole refusal: nothing more is drawn, not an empty line under it.) */}
+            {phase.warns === true && phase.refusal.split("\n").length === 1 ? null : (
+              <p className="text-muted-foreground">
+                <Lines text={phase.warns === true ? phase.refusal.split("\n").slice(1).join("\n") : phase.refusal} />
+              </p>
+            )}
           </Result>
         ) : null}
       </div>

@@ -650,9 +650,9 @@ export function createCore(bb: BbPluginApi) {
 
   // ---- calls to the host entry ----
 
-  /** Runs one verb on the machine; a kernel refusal, a failed `oats` and an unreachable machine are RPC refusals. */
   /**
-   * Asks the host for one verb. `sent` is told the machine's id at the moment the verb is SENT to it (once the
+   * Runs one verb on the machine; a kernel refusal, a failed `oats` and an unreachable machine are RPC refusals.
+   * `sent` is told the machine's id at the moment the verb is SENT to it (once the
    * machine and the deployment are found): an act logs its "asked" line there, with the machine it was sent to.
    */
   async function ask<Method extends Verb>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal, sent?: (hostId: string) => void): Promise<Value<Method>> {
@@ -749,8 +749,13 @@ export function createCore(bb: BbPluginApi) {
       after?.();
     }
     // The kernel answered: the act is done whatever becomes of its line (written outside the act's own try: reading
-    // the answer for the line cannot turn a done act into a refusal).
-    say(outcomeOf(method, answered.value).result === "ok" ? "info" : "warn", () => actLine(method, "ended", about(), who(host), { ...outcomeOf(method, answered.value), ms: took }));
+    // the answer for the line cannot turn a done act into a refusal). What the answer says is read once.
+    try {
+      const said = outcomeOf(method, answered.value);
+      say(said.result === "ok" ? "info" : "warn", () => actLine(method, "ended", about(), who(host), { ...said, ms: took }));
+    } catch (error) {
+      console.error(`oats: the act log could not be written (${method}, n=${n}): ${String((error as Error)?.message ?? error)}`);
+    }
     return answered;
   }
 

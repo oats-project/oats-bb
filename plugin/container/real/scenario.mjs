@@ -943,6 +943,8 @@ try {
   {
     const file = join(homedir(), "bbdata", "plugins", "oats", "logs", "plugin.log");
     const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    // (ONE of each: this is the first stop of that agent in the run, read before the next ones; in the run's fresh
+    // container the file holds no earlier run's lines.)
     const of = (phase) => text.split("\n").filter((line) => line.includes(`oats act stopApply ${phase} instance=${A.instance} `));
     const [asked, ended] = [of("asked"), of("ended")];
     check(asked.length === 1 && / caller=\S+ host=\S+ at=\d{4}-\d\d-\d\dT[\d:.]+Z n=\d+/.test(asked[0]), "the act log: bb's log of the plugin holds ONE line that the plugin asked the kernel to stop the agent (who asked, the machine, when)", `${asked.length} line(s) in ${file}${existsSync(file) ? "" : " (no such file)"}`);

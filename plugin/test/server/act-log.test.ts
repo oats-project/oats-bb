@@ -124,7 +124,8 @@ describe("an act has one way to the kernel", () => {
     const around: string[] = [];
     for (const name of files) {
       const source = await readFile(join(SERVER, name), "utf8");
-      for (const verb of ACTS) if (new RegExp(`\\.call\\(\\s*["'\`]${verb}["'\`]`).test(source)) around.push(`${name}: call("${verb}")`);
+      // (`call(` with or without `core.` before it: a `call` taken out of the core is found too.)
+      for (const verb of ACTS) if (new RegExp(`\\bcall\\(\\s*["'\`]${verb}["'\`]`).test(source)) around.push(`${name}: call("${verb}")`);
       if (name !== "core.ts" && /\bhosts\.experimental_client\b|\bhost\.call\(/.test(source)) around.push(`${name}: speaks to the host itself`);
     }
     expect(around).toEqual([]);
@@ -161,7 +162,74 @@ describe("what an act's answer says", () => {
     expect(outcomeOf("stopApply", { ok: true, results: [{ instance: "x", ok: true, alreadyIdle: true }] })).toEqual({ result: "ok", homes: "1/1" });
     expect(outcomeOf("spawn", { instance: "made-1" })).toEqual({ result: "ok", made: "made-1" });
     expect(outcomeOf("start", { instance: "a", results: [row(false)] })).toEqual({ result: "ok" }); // only a stop's and a retire's receipts are read so
-    expect(outcomeOf("schedulerEnable", null)).toEqual({ result: "ok" });
+  });
+
+  it("THE TABLE (README, \"The act log\"): one row per line: what each act's answer says", () => {
+    const row = (ok: boolean) => ({ instance: "x", ok });
+    const run = (outcome: string | null, more: object = {}) => ({ run: { outcome, errorCode: null, instance: null, ...more } });
+    const on = { installed: true, active: true, registered: true };
+    const table: [Parameters<typeof outcomeOf>[0], unknown, ReturnType<typeof outcomeOf>][] = [
+      ["start", { threadId: "t", instance: "a", warnings: ["w"], resume: { resumed: false, reason: "no session", waiting: null } }, { result: "ok" }],
+      ["restart", { threadId: null, instance: "a", warnings: [], resume: null }, { result: "ok" }],
+      ["stopApply", { ok: true, results: [row(true), row(true)] }, { result: "ok", homes: "2/2" }],
+      ["stopApply", { ok: false, results: [row(true), row(false)] }, { result: "INCOMPLETE", homes: "1/2" }],
+      ["stopApply", { ok: true, results: [] }, { result: "INCOMPLETE", homes: "0/0" }],
+      ["retireApply", { deferred: false, removedDir: true, children: [row(true)], incomplete: [] }, { result: "ok", homes: "2/2" }],
+      ["retireApply", { deferred: true, removedDir: false, children: [], incomplete: [] }, { result: "DEFERRED", homes: "0/1" }],
+      ["retireApply", { deferred: false, removedDir: false, children: [], incomplete: [] }, { result: "INCOMPLETE", homes: "0/1" }],
+      ["retireApply", { deferred: false, removedDir: true, children: [], incomplete: ["left"] }, { result: "INCOMPLETE", homes: "1/1" }],
+      ["retireApply", { deferred: false, removedDir: true, children: [row(false)], incomplete: [] }, { result: "INCOMPLETE", homes: "1/2" }],
+      ["spawn", { instance: "made-1", threadId: "t" }, { result: "ok", made: "made-1" }],
+      ["automationEnable", { row: {} }, { result: "ok" }],
+      ["automationDescribe", { row: {} }, { result: "ok" }],
+      ["scheduleRemove", { removed: "local/x" }, { result: "ok" }],
+      ["scheduleRun", { run: null }, { result: "INCOMPLETE" }],
+      ["scheduleRun", run("launched", { instance: "daily-1" }), { result: "ok", made: "daily-1" }],
+      ["scheduleRun", run("active"), { result: "ok" }],
+      ["scheduleRun", run("running"), { result: "ok" }],
+      ["scheduleRun", run("delivered"), { result: "ok" }],
+      ["scheduleRun", run("launch-failed", { errorCode: "E_SPAWN_FAILED" }), { result: "INCOMPLETE", code: "E_SPAWN_FAILED" }],
+      ["scheduleRun", run("unknown"), { result: "INCOMPLETE" }],
+      ["scheduleRun", run("skipped"), { result: "INCOMPLETE" }],
+      ["scheduleRun", run("stopped"), { result: "INCOMPLETE" }],
+      ["scheduleRun", run("ended"), { result: "INCOMPLETE" }],
+      ["scheduleRun", run("invalid"), { result: "INCOMPLETE" }],
+      ["scheduleRun", run("a-word-of-a-later-kernel"), { result: "INCOMPLETE" }],
+      ["scheduleRun", run(null), { result: "INCOMPLETE" }],
+      ["scheduleReconcile", { reconciled: "unknown", remedy: "look at it" }, { result: "INCOMPLETE" }],
+      ["scheduleReconcile", { reconciled: "ended", remedy: null }, { result: "ok" }],
+      ["schedulerEnable", { scheduler: on, warnings: [] }, { result: "ok" }],
+      ["schedulerEnable", { scheduler: { ...on, registered: null }, warnings: [] }, { result: "ok" }],
+      ["schedulerEnable", { scheduler: { ...on, active: false }, warnings: [] }, { result: "INCOMPLETE" }],
+      ["schedulerEnable", { scheduler: { ...on, installed: false }, warnings: [] }, { result: "INCOMPLETE" }],
+      ["schedulerEnable", { scheduler: { ...on, registered: false }, warnings: [] }, { result: "INCOMPLETE" }],
+      ["automationTest", { ok: true, source: { ok: true } }, { result: "ok" }],
+      ["automationTest", { ok: true, source: null }, { result: "ok" }],
+      ["automationTest", { ok: false, source: { ok: true } }, { result: "INCOMPLETE" }],
+      ["automationTest", { ok: true, source: { ok: false } }, { result: "INCOMPLETE" }],
+    ];
+    for (const [verb, answer, said] of table) expect([verb, answer, outcomeOf(verb, answer)]).toEqual([verb, answer, said]);
+    // Every act has rows in the table, and a case of its own: an answer that says nothing is never read as done for an
+    // act whose answer must say so, and no act throws.
+    const acts = [...ACTS, ...(Object.keys(ACTS_BY_ARGUMENT) as (keyof typeof ACTS_BY_ARGUMENT)[])];
+    expect(acts.filter((verb) => !table.some(([each]) => each === verb))).toEqual([]);
+    for (const verb of acts) expect(["ok", "INCOMPLETE", "DEFERRED"]).toContain(outcomeOf(verb, null).result);
+    expect(acts.filter((verb) => outcomeOf(verb, {}).result === "ok").sort()).toEqual(["automationDescribe", "automationEnable", "automationTest", "restart", "scheduleReconcile", "scheduleRemove", "spawn", "start"]);
+  });
+
+  it("THE RULE: the line never says more than the window: where the line reads ok, the window's own word for the same answer is done", async () => {
+    const { runTone, schedulerOn } = await import("../../app/automations/words");
+    const run = (outcome: string | null) => ({ at: null, startedAt: null, scheduledFor: null, outcome, error: null, errorCode: null, reason: null, event: null, number: null, subject: null, key: null, instance: null });
+    for (const outcome of ["launched", "active", "running", "ended", "stopped", "unknown", "launch-failed", "skipped", "delivered", "invalid", "another", null]) {
+      if (outcomeOf("scheduleRun", { run: run(outcome) }).result === "ok") expect([outcome, runTone(run(outcome) as never)]).toEqual([outcome, "done"]);
+      if (runTone(run(outcome) as never) !== "done") expect([outcome, outcomeOf("scheduleRun", { run: run(outcome) }).result]).toEqual([outcome, "INCOMPLETE"]);
+    }
+    expect(runTone(null)).not.toBe("done");
+    expect(outcomeOf("scheduleRun", { run: null }).result).toBe("INCOMPLETE");
+    for (const installed of [true, false]) for (const active of [true, false]) for (const registered of [true, false, null]) {
+      const scheduler = { installed, active, registered, lastTick: null, maxConcurrent: null };
+      expect([scheduler, outcomeOf("schedulerEnable", { scheduler, warnings: [] }).result === "ok"]).toEqual([scheduler, schedulerOn(scheduler as never)]);
+    }
   });
 });
 
@@ -408,4 +476,116 @@ describe("what the log holds of an act, through the whole backend", () => {
     await backend.rpc("automationEnable", { kind: "schedule", id: "weekly-cleanup", enabled: true }); // found as local/weekly-cleanup
     expect(acts().map((each) => each.line.match(/ automation=(\S+) /)![1])).toEqual(["schedule:local/weekly-cleanup", "schedule:local/weekly-cleanup"]);
   }, 40_000);
+
+  it("the automations' answers that say what was asked did not happen end INCOMPLETE at warn, from the kernel's recorded answers: a run that was not launched (with the run's code), a run state still unknown, a scheduler that is not on, a test whose source's poll failed", async () => {
+    const off = JSON.parse(await readFile(join(SERVER, "..", "test", "fixtures", "automations", "host-install.json"), "utf8"));
+    (off.result ?? off).scheduler.active = false; // (the recorded answer, with the timer installed and not running yet)
+    const { backend, acts } = await logged({
+      verbs: {
+        "schedule run": { file: "automations/schedule-run-launch-failed.json" },
+        "schedule host install": { stdout: JSON.stringify(off) },
+        "trigger test --run-source": { file: "automations/trigger-test-source-failed.json" },
+      },
+    });
+    const last = () => {
+      const { level, line } = acts().at(-1)!;
+      return [level, line.replace(/^.* n=\d+ /, "").replace(/ms=\d+/, "ms=N")];
+    };
+    const run = await backend.rpc<{ run: { outcome: string; errorCode: string | null } }>("scheduleRun", { id: "local/daily-review" });
+    expect(run.run.outcome).toBe("launch-failed"); // the kernel answered: it is no refusal
+    expect(last()).toEqual(["warn", `result=INCOMPLETE ms=N${run.run.errorCode === null ? "" : ` code=${run.run.errorCode}`}`]);
+    expect(await backend.rpc("scheduleReconcile", { id: "local/status-check" })).toMatchObject({ reconciled: "unknown" });
+    expect(last()).toEqual(["warn", "result=INCOMPLETE ms=N"]);
+    await backend.rpc("schedulerEnable");
+    expect(last()).toEqual(["warn", "result=INCOMPLETE ms=N"]);
+    await backend.rpc("automationTest", { kind: "trigger", id: "oats-real/harvest-review", runSource: true });
+    expect(last()).toEqual(["warn", "result=INCOMPLETE ms=N"]);
+    // And the same acts answered as done (the recorded launched run names the agent it made).
+    await backend.fake.behave({ "schedule run": { file: "automations/schedule-run.json" } });
+    const launched = await backend.rpc<{ run: { outcome: string; instance: string } }>("scheduleRun", { id: "local/daily-review" });
+    expect(last()).toEqual(["info", `result=ok ms=N made=${launched.run.instance}`]);
+  }, 60_000);
+});
+
+// EVERY ACT's HANDLER, one table: (a) what its guard refuses is ONE hold and the kernel is asked no act; (b) asked by
+// a caller that is already gone it is SENT all the same (an act is not ended by its caller going away), but the test
+// that runs its source, which is ended with its caller; (c) once the kernel was asked, the roster is read again.
+describe("every act's handler", () => {
+  type Row = { verb: string; at: RegExp; call: (h: Handlers, context: never) => Promise<unknown>; refused: ((h: Handlers, context: never) => Promise<unknown>) | null; endedWithCaller?: true; rereads: boolean };
+  type Handlers = { lifecycle: ReturnType<typeof import("../../server/lifecycle.js").handlers>; spawn: ReturnType<typeof import("../../server/spawn.js").handlers>; automations: ReturnType<typeof import("../../server/automations.js").handlers> };
+  const STOP = { instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" };
+  const SPAWN = { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix it.", harness: "pi", key: "spawn-1f0c9a7e", revision: "0123456789abcdef01234567" };
+  const NOBODY = "not-in-the-snapshot";
+  const rows: Row[] = [
+    { verb: "start", at: /^session start/, call: (h, c) => Promise.resolve(h.lifecycle.start({ instance: "weekly-digest-helper" }, c)), refused: (h, c) => Promise.resolve(h.lifecycle.start({ instance: NOBODY }, c)), rereads: true },
+    { verb: "restart", at: /^session restart/, call: (h, c) => Promise.resolve(h.lifecycle.restart({ instance: "redesign-ui-lead" }, c)), refused: (h, c) => Promise.resolve(h.lifecycle.restart({ instance: NOBODY }, c)), rereads: true },
+    { verb: "stopApply", at: /^instance stop --apply$/, call: (h, c) => Promise.resolve(h.lifecycle.stopApply(STOP, c)), refused: (h, c) => Promise.resolve(h.lifecycle.stopApply({ ...STOP, instance: NOBODY }, c)), rereads: true },
+    { verb: "retireApply", at: /^retire$/, call: (h, c) => Promise.resolve(h.lifecycle.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" }, c)), refused: (h, c) => Promise.resolve(h.lifecycle.retireApply({ instance: NOBODY, revision: "ef5028f1e6cb517560247307", key: "retire-000000000000" }, c)), rereads: true },
+    { verb: "spawn", at: /^spawn$/, call: (h, c) => Promise.resolve(h.spawn.spawn(SPAWN, c)), refused: (h, c) => Promise.resolve(h.spawn.spawn({ ...SPAWN, soul: "no-such-soul" }, c)), rereads: true },
+    { verb: "automationEnable", at: /^schedule (enable|disable)$/, call: (h, c) => Promise.resolve(h.automations.automationEnable({ kind: "schedule", id: "local/weekly-cleanup", enabled: true }, c)), refused: (h, c) => Promise.resolve(h.automations.automationEnable({ kind: "schedule", id: "no-such-row", enabled: true }, c)), rereads: true },
+    { verb: "scheduleRun", at: /^schedule run$/, call: (h, c) => Promise.resolve(h.automations.scheduleRun({ id: "local/daily-review" }, c)), refused: (h, c) => Promise.resolve(h.automations.scheduleRun({ id: "no-such-row" }, c)), rereads: true },
+    { verb: "automationDescribe", at: /^schedule update$/, call: (h, c) => Promise.resolve(h.automations.automationDescribe({ kind: "schedule", id: "local/status-check", description: "Checks the status." }, c)), refused: (h, c) => Promise.resolve(h.automations.automationDescribe({ kind: "schedule", id: "no-such-row", description: "x" }, c)), rereads: true },
+    { verb: "scheduleRemove", at: /^schedule remove$/, call: (h, c) => Promise.resolve(h.automations.scheduleRemove({ id: "local/weekly-cleanup" }, c)), refused: (h, c) => Promise.resolve(h.automations.scheduleRemove({ id: "no-such-row" }, c)), rereads: true },
+    { verb: "scheduleReconcile", at: /^schedule reconcile$/, call: (h, c) => Promise.resolve(h.automations.scheduleReconcile({ id: "local/status-check" }, c)), refused: (h, c) => Promise.resolve(h.automations.scheduleReconcile({ id: "no-such-row" }, c)), rereads: true },
+    { verb: "schedulerEnable", at: /^schedule host install$/, call: (h, c) => Promise.resolve(h.automations.schedulerEnable(null as never, c)), refused: null, rereads: true },
+    { verb: "automationTest", at: /^trigger test --run-source$/, call: (h, c) => Promise.resolve(h.automations.automationTest({ kind: "trigger", id: "oats-real/harvest-review", runSource: true }, c)), refused: (h, c) => Promise.resolve(h.automations.automationTest({ kind: "trigger", id: "no-such-row", runSource: true }, c)), endedWithCaller: true, rereads: false },
+  ];
+  it("the table names every act, once", () => {
+    expect(rows.map((row) => row.verb).sort()).toEqual([...ACTS, ...Object.keys(ACTS_BY_ARGUMENT)].sort());
+  });
+  const handlersOf = async (core: Core): Promise<Handlers> => ({
+    lifecycle: (await import("../../server/lifecycle.js")).handlers(core),
+    spawn: (await import("../../server/spawn.js")).handlers(core),
+    automations: (await import("../../server/automations.js")).handlers(core),
+  });
+  const started = async () => {
+    let core: Core | undefined;
+    const made = await logged({}, (bb) => {
+      core = createCore(bb);
+    });
+    return { ...made, core: core!, handlers: await handlersOf(core!) };
+  };
+  const here = { experimental_caller: { kind: "client" as const }, experimental_signal: new AbortController().signal } as never;
+  const gone = () => {
+    const controller = new AbortController();
+    controller.abort(new Error("the caller went away"));
+    return { experimental_caller: { kind: "client" as const }, experimental_signal: controller.signal } as never;
+  };
+  const actsAsked = async (backend: Backend, row: Row) => (await backend.verbs()).filter((verb) => row.at.test(verb));
+
+  for (const row of rows) {
+    it(`${row.verb}: its guard's refusal is ONE hold and asks the kernel no act${row.refused === null ? " (it has no guard: nothing to hold)" : ""}`, async () => {
+      if (row.refused === null) return;
+      const { backend, acts, handlers, core } = await started();
+      await refused(row.refused(handlers, here));
+      expect(acts().map((each) => each.line.split(" ").slice(2, 4).join(" "))).toEqual([`${row.verb} held`]);
+      expect(acts()[0]!.level).toBe("warn");
+      expect(await actsAsked(backend, row)).toEqual([]);
+      await core.reread().catch(() => undefined);
+    }, 40_000);
+
+    it(`${row.verb}: ${row.endedWithCaller ? "asked by a caller that is gone it is NOT sent (a test is ended with its caller)" : "asked by a caller that is gone it is sent all the same, and ends"}${row.rereads ? "; the roster is read again after it" : ""}`, async () => {
+      const { backend, acts, handlers, core } = await started();
+      const asked = row.call(handlers, gone());
+      if (row.endedWithCaller) {
+        await refused(asked);
+        expect(await actsAsked(backend, row)).toEqual([]);
+      } else {
+        await asked;
+        expect(await actsAsked(backend, row)).toHaveLength(1);
+        expect(acts().map((each) => each.line.split(" ").slice(2, 4).join(" "))).toEqual([`${row.verb} asked`, `${row.verb} ended`]);
+      }
+      if (row.rereads) {
+        // The read the act asks for as it ends: a status read that the fake was asked AFTER the act (waited for: no clock).
+        await expect
+          .poll(async () => {
+            const verbs = await backend.verbs();
+            const at = verbs.findIndex((verb) => row.at.test(verb));
+            return at >= 0 && verbs.slice(at + 1).includes("status");
+          }, { timeout: 20_000 })
+          .toBe(true);
+      }
+      await core.reread().catch(() => undefined);
+    }, 60_000);
+  }
 });

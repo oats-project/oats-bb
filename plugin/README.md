@@ -1013,7 +1013,7 @@ The line is a contract: one act, one line, `key=value` separated by one space, i
 ```
 oats act <verb> asked <subject> caller=<c> host=<h> at=<iso> n=<k>
 oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
-oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> homes=<ok>/<all>
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> [homes=<ok>/<all>] [code=<CODE>]
 oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=DEFERRED ms=<n> homes=<ok>/<all>
 oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=<CODE> ms=<n>
 oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<words>
@@ -1030,17 +1030,44 @@ oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<c
 - `n`: the act's number in this run of the plugin's server: the lines of one act carry the same
   number, so two acts on one agent at the same time are told apart. It starts again with each run
   of the server. An `asked` with no `ended` under its number: the server ended while the act ran.
-- `result`: `ok`; `INCOMPLETE`: the kernel answered and its receipt says not everything was done (a
-  stop that left a session running; a retire whose home is still there, or that left something
-  undone): "I pressed Stop and nothing happened" never reads as `ok`; `DEFERRED`: a retire the
-  kernel accepted and finishes in the background: not done yet (its row shows the result); the
-  kernel's CODE for a refusal (never its sentence); `FAILED` for an act that ended with no code.
-  It is read from what the window reads to word the result (`app/lifecycle/words.ts`).
+- `asked` means SENT to the machine that runs `oats`.
+- `result`, of an act that was sent: `ok`; `INCOMPLETE`; `DEFERRED`; or a CODE. THE RULE for the
+  first three: **the line never says more than the window says of the same answer**: an answer the
+  window words as not done, not yet, failed or unknown is never `ok` ("I pressed Stop and nothing
+  happened" never reads as a success). Act by act (`server/act-log.ts` `outcomeOf`):
+
+  | act | the kernel's answer | `result` |
+  |---|---|---|
+  | `start`, `restart` | it started (a start that resumed nothing started fresh) | `ok` |
+  | `stopApply` | every home its receipt names does not run after it (stopped, or idle already) | `ok homes=n/n` |
+  | `stopApply` | a home still runs or was busy; the receipt is not ok; or it names no home | `INCOMPLETE homes=k/n` |
+  | `retireApply` | the home is gone, nothing left, every child stopped | `ok homes=n+1/n+1` |
+  | `retireApply` | accepted, finishes in the background | `DEFERRED homes=k/n+1` |
+  | `retireApply` | the home is still there, something is left undone, or a child did not stop | `INCOMPLETE homes=k/n+1` |
+  | `spawn` | a new agent | `ok made=<instance>` |
+  | `automationEnable`, `automationDescribe`, `scheduleRemove` | done | `ok` |
+  | `scheduleRun` | a run that launched an agent, or delivered its wake (`launched`, `active`, `running`, `delivered`) | `ok made=<the run's instance>` |
+  | `scheduleRun` | no run, or any other outcome (launch failed, unknown, skipped, stopped, ended, …) | `INCOMPLETE code=<the run's code, where it has one>` |
+  | `scheduleReconcile` | the run's state is still unknown | `INCOMPLETE` |
+  | `scheduleReconcile` | a state | `ok` |
+  | `schedulerEnable` | the timer is installed, active and registered for this deployment | `ok` |
+  | `schedulerEnable` | it is not (yet) | `INCOMPLETE` |
+  | `automationTest` (one that runs its source) | the test and its source's poll are ok | `ok` |
+  | `automationTest` (one that runs its source) | the test, or the poll, says not ok | `INCOMPLETE` |
+
+  (Stricter than the window in two rows, on purpose: a run that was skipped, stopped or ended, and
+  a retire whose home is gone but whose child did not stop, read "done" in the window and
+  `INCOMPLETE` here: the log says whether what was ASKED happened.)
+- A CODE: one that starts `E_` is the kernel's refusal (never its sentence). Any other is the
+  plugin's own: `INVALID_INPUT`, `OATS_NOT_FOUND`: no `oats` ran (the host entry refused what was
+  asked; the binary is not there). Every other (`OATS_TIMEOUT`, `OATS_ABORTED`, `OATS_FAILED`,
+  `OATS_NOT_JSON`, `OATS_BAD_ANSWER`, `HOST_UNREACHABLE`, …): the act was sent and its outcome is
+  NOT KNOWN: the command may have run: look at the agent. `FAILED`: it ended with no code.
 - `homes`: of a stop, the homes its receipt says do not run after it (stopped by it, OR idle
   already: a stop of an agent that was idle reads `ok homes=1/1`), of those it names; of a retire,
   the children the same way and the retired agent with them, counted as done only once its home is
-  gone. `made`: the instance a spawn made. `ms`: how long the kernel took, from the moment the act
-  was sent.
+  gone. `made`: the instance a spawn made or a schedule's run launched. `code`: the kernel's code
+  on a run that did not launch. `ms`: how long the kernel took, from the moment the act was sent.
 - `HELD:<code>`: the kernel was NOT asked. The plugin's guard refused: `invalid` (what was asked
   names nothing the roster or the provider holds: an agent that is not in the roster now, a harness
   nothing declares, a row that is gone), the code of the read the act rests on (OATS could not be

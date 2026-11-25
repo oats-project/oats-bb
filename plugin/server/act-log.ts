@@ -7,7 +7,7 @@
 // `key=value` separated by one space, in this order:
 //   oats act <verb> asked <subject> caller=<c> host=<h> at=<iso> n=<k>
 //   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
-//   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> homes=<ok>/<all>
+//   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> [homes=<ok>/<all>] [code=<CODE>]
 //   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=DEFERRED ms=<n> homes=<ok>/<all>
 //   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=<CODE> ms=<n>
 //   oats act <verb> held  <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<words>
@@ -19,13 +19,20 @@
 // <k>: the act's number in this run of the plugin's server: the lines of ONE act carry the same, so
 // two acts on one agent at once can be told apart. It starts again with each run of the server; an
 // "asked" with no "ended" under its number means the server ended while the act ran.
-// `result`: `ok`; `INCOMPLETE`: the kernel answered, and its receipt says not everything was done (a
-// stop that left a session running; a retire whose home is still there, or with something left);
-// `DEFERRED`: a retire the kernel accepted and finishes in the background: not done yet; the
-// kernel's CODE for a refusal (never its sentence); `FAILED` for an act that ended with no code.
-// `homes`: of a stop, the homes its receipt says do not run after it (stopped by it, or idle
-// already), of those it names; of a retire, the children the same way and the retired agent with
-// them (counted as done only once its home is gone). `ms`: from the moment the act was sent.
+// "asked" means SENT to the machine that runs `oats`.
+// `result`, of an act that was sent: `ok`: the kernel did what was asked; `INCOMPLETE`: the kernel
+// answered, and its answer says that what was asked was not achieved, or not wholly (`outcomeOf`,
+// below: the table, act by act); `DEFERRED`: a retire the kernel accepted and finishes in the
+// background: not done yet; or a CODE: one that starts `E_` is the kernel's refusal (never its
+// sentence); any other is the plugin's own (kernel/result.ts): `INVALID_INPUT`, `OATS_NOT_FOUND`:
+// no `oats` ran (the host entry refused what was asked; the binary is not there); every other
+// (`OATS_TIMEOUT`, `OATS_ABORTED`, `OATS_FAILED`, `OATS_NOT_JSON`, `OATS_BAD_ANSWER`, …,
+// `HOST_UNREACHABLE`): sent, and the act's outcome is NOT KNOWN (the command may have run);
+// `FAILED`: it ended with no code. `homes`: of a stop, the homes its receipt says do not run after it (stopped
+// by it, or idle already), of those it names; of a retire, the children the same way and the
+// retired agent with them (counted as done only once its home is gone). `made`: the instance a
+// spawn made, or a schedule's run launched. `code`: the kernel's code on a run that did not launch.
+// `ms`: from the moment the act was sent.
 // `HELD:<code>`: the kernel was NOT asked: the plugin's own guard refused (the roster could not be
 // read: its code; `invalid`: what was asked names nothing the roster or the provider holds; `error`:
 // the guard itself failed: `why` is then the fault's name, never its message), or the machine was
@@ -46,7 +53,7 @@ export type Act = (typeof ACTS)[number];
  */
 export const NOT_ACTS: Readonly<Record<string, string>> = {
   watch: "it starts the watch on the deployment's files: it runs no `oats`",
-  retirePlan: "a plan: it changes nothing (not retryable because its revision must be the one the person saw)",
+  retirePlan: "a plan: it retires nothing; it is not retryable because each retire plan appends one `retire-planned` event to the workspace log (contract/lifecycle.ts): a record of a read, which the kernel keeps itself",
 };
 /**
  * The verbs that are an act BY THEIR ARGUMENT, and which argument: `automationTest` with `runSource: true` RUNS a
@@ -74,34 +81,75 @@ export const callerOf = (asker: Asker | undefined): string => {
   return caller === undefined ? "unknown" : caller.kind === "plugin" ? `plugin:${word(caller.pluginId)}` : "client";
 };
 
+/** The outcomes of a schedule's run that say an agent was launched, or its wake delivered: what "Run now" asks for. */
+const RAN = new Set(["launched", "active", "running", "delivered"]);
+
 /**
- * What the kernel's ANSWER to an act says, for its "ended" line: whether everything was done, the homes it took, the
- * instance a spawn made. It reads what the window reads to word the result (app/lifecycle/words.ts): an answer that
- * says something is NOT done never reads `ok`: "I pressed Stop and nothing happened" must not look like a success.
- * - A stop's receipt names each home and whether it does not run after the stop (`results`: stopped by it, or idle
- *   already; and the receipt's own `ok`).
- * - A retire's names the children it stopped (`children`), what it left undone (`incomplete`), whether the retired
- *   home is gone (`removedDir`), and whether the kernel only ACCEPTED it and finishes in the background (`deferred`):
- *   DEFERRED is not done yet, and a home that is still there is INCOMPLETE; the retired agent is counted among the
- *   homes, as done only once its home is gone.
+ * What the kernel's ANSWER to an act says, for its "ended" line. THE RULE: the line never says more than the window
+ * says of the same answer (app/lifecycle/words.ts, app/automations/acts.tsx and words.ts): an answer the window words
+ * as not done, not yet, failed or unknown is never `ok` (test/server/act-log.test.ts holds the two together). The
+ * table, one case per act (README, "The act log"):
+ * - start, restart: the kernel started it: `ok` (a start that resumed nothing started fresh: done).
+ * - stopApply: every home its receipt names does not run after it (stopped, or idle already) and the receipt says ok:
+ *   `ok`; a row that did not stop, a receipt that is not ok, or one that names NO home: INCOMPLETE. `homes`.
+ * - retireApply: DEFERRED where the kernel only accepted it (it finishes in the background); INCOMPLETE where the home
+ *   is still there, something is left undone, or a child did not stop; else `ok`. `homes`: the children, and the
+ *   retired agent once its home is gone.
+ * - spawn: a new agent: `ok`, `made`.
+ * - automationEnable, automationDescribe, scheduleRemove: the kernel did it: `ok`.
+ * - scheduleRun: a run that launched an agent or delivered its wake: `ok` (`made`: the run's instance); no run, or any
+ *   other outcome (launch failed, unknown, skipped, stopped, ended, …): INCOMPLETE, with the run's own `code`.
+ * - scheduleReconcile: a run's state that is still unknown: INCOMPLETE; else `ok`.
+ * - schedulerEnable: the timer is installed, active and registered for this deployment: `ok`; else INCOMPLETE.
+ * - automationTest (one that runs its source): the test, or its source's poll, says not ok: INCOMPLETE; else `ok`.
+ * A new act has no case here until it is given one: the switch is exhaustive (typecheck), and a test asks every act.
  */
-export function outcomeOf(verb: ActVerb, value: unknown): { result: "ok" | "INCOMPLETE" | "DEFERRED"; homes?: string; made?: string } {
-  const answer = (typeof value === "object" && value !== null ? value : {}) as { ok?: unknown; results?: unknown; children?: unknown; incomplete?: unknown; instance?: unknown; deferred?: unknown; removedDir?: unknown };
+export function outcomeOf(verb: ActVerb, value: unknown): { result: "ok" | "INCOMPLETE" | "DEFERRED"; homes?: string; made?: string; code?: string } {
+  const answer = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
   const stopped = (rows: unknown[]) => rows.filter((row) => (row as { ok?: unknown } | null)?.ok === true).length;
-  if (verb === "stopApply" && Array.isArray(answer.results)) {
-    const ok = stopped(answer.results);
-    return { result: answer.ok === false || ok < answer.results.length ? "INCOMPLETE" : "ok", homes: `${ok}/${answer.results.length}` };
+  const done = (ok: boolean): { result: "ok" | "INCOMPLETE" } => ({ result: ok ? "ok" : "INCOMPLETE" });
+  switch (verb) {
+    case "start":
+    case "restart":
+    case "automationEnable":
+    case "automationDescribe":
+    case "scheduleRemove":
+      return { result: "ok" };
+    case "spawn":
+      return { result: "ok", ...(typeof answer.instance === "string" ? { made: answer.instance } : {}) };
+    case "stopApply": {
+      const rows = Array.isArray(answer.results) ? answer.results : [];
+      const ok = stopped(rows);
+      return { ...done(answer.ok !== false && rows.length > 0 && ok === rows.length), homes: `${ok}/${rows.length}` };
+    }
+    case "retireApply": {
+      const children = Array.isArray(answer.children) ? answer.children : [];
+      const ok = stopped(children);
+      const gone = answer.removedDir === true && answer.deferred !== true;
+      const left = !gone || (Array.isArray(answer.incomplete) && answer.incomplete.length > 0) || ok < children.length;
+      return { result: answer.deferred === true ? "DEFERRED" : left ? "INCOMPLETE" : "ok", homes: `${ok + (gone ? 1 : 0)}/${children.length + 1}` };
+    }
+    case "scheduleRun": {
+      const run = (typeof answer.run === "object" && answer.run !== null ? answer.run : null) as { outcome?: unknown; errorCode?: unknown; instance?: unknown } | null;
+      const ran = run !== null && typeof run.outcome === "string" && RAN.has(run.outcome);
+      return { ...done(ran), ...(ran && typeof run?.instance === "string" ? { made: run.instance } : {}), ...(!ran && typeof run?.errorCode === "string" ? { code: run.errorCode } : {}) };
+    }
+    case "scheduleReconcile":
+      return done(answer.reconciled !== "unknown");
+    case "schedulerEnable": {
+      const scheduler = (typeof answer.scheduler === "object" && answer.scheduler !== null ? answer.scheduler : {}) as { installed?: unknown; active?: unknown; registered?: unknown };
+      return done(scheduler.installed === true && scheduler.active === true && scheduler.registered !== false);
+    }
+    case "automationTest":
+      return done(answer.ok !== false && (answer.source as { ok?: unknown } | null | undefined)?.ok !== false);
+    default: {
+      const never: never = verb;
+      return never;
+    }
   }
-  if (verb === "retireApply" && Array.isArray(answer.children)) {
-    const ok = stopped(answer.children);
-    const gone = answer.removedDir === true && answer.deferred !== true;
-    const left = !gone || (Array.isArray(answer.incomplete) && answer.incomplete.length > 0) || ok < answer.children.length;
-    return { result: answer.deferred === true ? "DEFERRED" : left ? "INCOMPLETE" : "ok", homes: `${ok + (gone ? 1 : 0)}/${answer.children.length + 1}` };
-  }
-  return { result: "ok", ...(verb === "spawn" && typeof answer.instance === "string" ? { made: answer.instance } : {}) };
 }
 
-export type Ending = { result: string; ms: number; homes?: string; made?: string };
+export type Ending = { result: string; ms: number; homes?: string; made?: string; code?: string };
 /** The line of one moment of an act. */
 export function actLine(verb: ActVerb, phase: "asked" | "ended" | "held", subject: Subject, who: { caller: string; host: string | null; at: string; n: number }, more: Ending | { held: string; why: string } | null = null): string {
   const head = `oats act ${verb} ${phase} ${subjectOf(subject)} caller=${who.caller} host=${who.host === null ? "-" : word(who.host)} at=${who.at} n=${who.n}`;
@@ -109,5 +157,6 @@ export function actLine(verb: ActVerb, phase: "asked" | "ended" | "held", subjec
   if ("held" in more) return `${head} result=HELD:${word(more.held)} why=${word(more.why)}`;
   const extra = more.homes !== undefined ? ` homes=${word(more.homes)}` : "";
   const made = more.made !== undefined ? ` made=${word(more.made)}` : "";
-  return `${head} result=${word(more.result)} ms=${Math.max(0, Math.round(more.ms))}${extra}${made}`;
+  const code = more.code !== undefined ? ` code=${word(more.code)}` : "";
+  return `${head} result=${word(more.result)} ms=${Math.max(0, Math.round(more.ms))}${extra}${made}${code}`;
 }

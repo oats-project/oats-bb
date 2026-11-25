@@ -68,3 +68,18 @@ test("lists that cannot be read leave the row without a mark, and the sidebar as
   expect(mark(row)).toBeNull();
   expect(slot.getByTestId("oats-tree")).toBeTruthy();
 });
+
+test("while an agent an automation made asks, the row carries an amber dot, before the red one: one rule, two results", async () => {
+  // The recorded run of daily-review, made by an agent the roster says needs a person.
+  const list = schedules();
+  const asks = { ...list, rows: list.rows.map((row) => (row.id === "local/daily-review" ? { ...row, recentRuns: row.recentRuns.map((run) => ({ ...run, instance: "release-070-maintainer" })) } : row)) };
+  const slot = await sidebar({ automations: lists(asks) });
+  const row = await slot.findByTestId("oats-page-link-automations");
+  const marks = () => Array.from(row.querySelectorAll<HTMLElement>('[data-testid="oats-mark"]')).map((dot) => [dot.getAttribute("aria-label"), dot.dataset.tone ?? "failure"]);
+  await waitFor(() => expect(marks()).toEqual([["Automations, needs you", "warning"], ["Automations, a failure", "failure"]]));
+  resetApp();
+  // With nothing failing, the amber one alone.
+  const calmSlot = await sidebar({ automations: lists(calm(asks), calm(triggers())) });
+  const calmRow = await calmSlot.findByTestId("oats-page-link-automations");
+  await waitFor(() => expect(Array.from(calmRow.querySelectorAll('[data-testid="oats-mark"]')).map((dot) => dot.getAttribute("aria-label"))).toEqual(["Automations, needs you"]));
+});

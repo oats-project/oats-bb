@@ -50,8 +50,8 @@ export function Dot({ state }: { state: AgentState }) {
  * A mark that something of a row needs a look (a failed run): a dot in the colour of a refusal,
  * which holds 3:1 on a row in both themes. Its accessible name is the label.
  */
-export function Mark({ label }: { label: string }) {
-  return <span role="img" aria-label={label} title={label} data-testid="oats-mark" data-mark="" className="inline-block size-2 shrink-0 rounded-full bg-destructive-text" />;
+export function Mark({ label, tone }: { label: string; /** "warning": something of the row waits on a person (an agent asks), in the colour of a state that needs one; left out: a failure, in the colour of a refusal */ tone?: "warning" }) {
+  return <span role="img" aria-label={label} title={label} data-testid="oats-mark" data-mark="" data-tone={tone} className={`inline-block size-2 shrink-0 rounded-full ${tone === "warning" ? "bg-warning-text" : "bg-destructive-text"}`} />;
 }
 
 /** A tag: one word about a thing ("default", "workspace"). `tone` mutes it, or frames one that needs a look. Never a fact: a fact has its label (`Fact`). */

@@ -30,7 +30,7 @@ import { RowFacts } from "../ui/row-facts";
 import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
-import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
+import { marksOf, hasNewAgent, newAgentHeld, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
 import { board, mayAnswer, refusal } from "./board";
@@ -708,10 +708,9 @@ function LostRow({ entry, oats, held }: { entry: Entry; oats: Ready; held: boole
   );
 }
 
-/** The mark a page's feature gives it (Automations, while a run failed). Its own component: the feature's hook reads, so it is drawn only while the home is seen. */
+/** The marks a page's feature gives it (Automations: while an agent of one asks, and while something of one failed). Its own component: the feature's hook reads, so it is drawn only while the home is seen. */
 function PageMark({ useMark }: { useMark: NonNullable<PageLink["useMark"]> }) {
-  const mark = useMark();
-  return mark === null ? null : <Mark label={mark.label} />;
+  return marksOf(useMark()).map((mark) => <Mark key={mark.label} label={mark.label} tone={mark.tone} />);
 }
 
 /** One page's tile: its title, its feature's mark, and its count where the home counts it. */

@@ -27,7 +27,7 @@ import { openAgentPage } from "../home/agent-tab";
 import { useCli } from "../home/cli";
 import { GONE_MARK } from "./gone";
 import { agentStatus, rowState } from "./status";
-import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
+import { marksOf, hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
@@ -68,13 +68,15 @@ const noMark = () => null;
 /** One row of the "oats" block: a page of the plugin, and the mark its feature gives it, if any. */
 function PageRow({ page, open, onOpen }: { page: PageLink; open: boolean; onOpen: () => void }) {
   // The same hook at every render of this row: a row is keyed by its page.
-  const mark = (page.useMark ?? noMark)();
+  const marks = marksOf((page.useMark ?? noMark)());
   return (
     <li>
       {/* The page that is shown is the selected row, as bb marks the open thread's (D-037). */}
       <button type="button" data-testid={`oats-page-link-${page.path}`} aria-current={open ? "page" : undefined} className={`${ROW} w-full pl-2 text-left ${open ? "bg-accent" : ""}`} onClick={onOpen}>
         {page.title}
-        {mark === null ? null : <Mark label={mark.label} />}
+        {marks.map((mark) => (
+          <Mark key={mark.label} label={mark.label} tone={mark.tone} />
+        ))}
       </button>
     </li>
   );

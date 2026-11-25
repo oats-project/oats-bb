@@ -21,9 +21,12 @@ export function openSoul(navigate: Pick<BbNavigate, "toPluginPanel">, key: strin
  * A row of the sidebar's "oats" block: a page of the plugin, by its route under the plugin and its
  * title. `useMark` is a hook the row calls while it is drawn: null for no mark, or the label of a
  * mark the row draws as a dot after the title, with the label as the dot's accessible name
- * ("Automations, a run failed").
+ * ("Automations, a failure"), or several such marks, each a dot of its own.
  */
-export type PageLink = { path: string; title: string; useMark?: () => { label: string } | null };
+export type PageMark = { label: string; /** "warning": it waits on a person; left out: a failure */ tone?: "warning" };
+export type PageLink = { path: string; title: string; useMark?: () => PageMark | readonly PageMark[] | null };
+/** A row's marks as a list, in the order given: none, one, or several (Automations: one of its agents asks, and something of it failed). */
+export const marksOf = (mark: PageMark | readonly PageMark[] | null): readonly PageMark[] => (mark === null ? [] : Array.isArray(mark) ? mark : [mark as PageMark]);
 
 const added: PageLink[] = [];
 

@@ -9,15 +9,13 @@ import { NO_AUTOMATIONS } from "../../contract/automations";
 import type { AutomationKind, AutomationRow, TriggerStatus } from "../../contract/automations";
 import { openAgentPage } from "../home/agent-tab";
 import { openAct } from "../lifecycle/acts";
-import { useOats } from "../oats";
-import { state as stateOf } from "../../model/view";
 import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { HELD_REASON, isUnreadable, Unreadable } from "../roster/unreadable";
 import { displayLine } from "../ui/text";
 import { useActs } from "./acts";
 import { HereContext } from "./here";
-import { PAGE_REREAD_MS, useAutomations } from "./read";
+import { askingOf, PAGE_REREAD_MS, useAgents, useAutomations } from "./read";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead, Open, Tab } from "./View";
 import { capabilitySource, HERE, hereOf, refusalParts } from "./words";
@@ -239,13 +237,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   // The agents as the window's roster has them now: a run's agent opens its chat (bb's thread; its
   // own page where it has none), says whether it asks, and is started where it is stopped. One the
   // roster no longer lists is none of that.
-  const oats = useOats();
-  const ready = oats.phase === "ready" ? oats : null;
-  // Every agent of the roster by its instance, with its state: the tree's own for an agent the tree draws, else the kernel's row alone (an agent with no bb thread).
-  const agents = useMemo(() => {
-    if (ready === null) return null;
-    return new Map(ready.agents.map((agent) => [agent.instance, { agent, state: ready.nodeByInstance.get(agent.instance)?.state ?? stateOf(agent, null) }]));
-  }, [ready?.agents, ready?.nodeByInstance]);
+  const agents = useAgents();
   const agentLink = useCallback(
     (instance: string) => {
       const known = agents?.get(instance);
@@ -259,16 +251,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     },
     [agents, navigate],
   );
-  // The agent of an automation that asks: among the agents its runs made (a schedule's kept runs; a
-  // trigger's fires), the first the roster says needs a person.
-  const asking = useCallback(
-    (row: AutomationRow): string | null => {
-      if (agents === null) return null;
-      const made = row.kind === "schedule" ? row.recentRuns.map((run) => run.instance) : (statuses?.find((entry) => entry.id === row.id)?.status.fired.map((fired) => fired.instance) ?? []);
-      return made.find((instance): instance is string => instance !== null && agents.get(instance)?.state === "needs-you") ?? null;
-    },
-    [agents, statuses],
-  );
+  const asking = useMemo(() => askingOf(agents, statuses), [agents, statuses]);
   const onAnswer = useCallback((instance: string) => agentLink(instance)?.open(), [agentLink]);
   const descriptions = read.data?.oats?.features.includes("automation-descriptions") ?? false;
   const host = (reads.schedule.list ?? reads.trigger.list)?.host.name ?? null;

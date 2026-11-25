@@ -5,10 +5,11 @@
 // drawing whether or not something read earlier is still shown: with it, the notice says how old
 // that is, once.
 import { codes } from "../../kernel/result";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Loading, Notice } from "../ui";
 import type { Read } from "../store";
 import { readAge } from "../ui/words";
+import { useRosterAsked } from "../oats";
 import { refusalWords } from "./refusal-words";
 
 /**
@@ -36,8 +37,14 @@ export const mendable = (read: CommandRead, of: "readiness" | "activity" | "soul
  * `of` names the read, for the words of its refusal (refusal-words.ts); `failed` is the notice's
  * title; `at` is the instant of what is still shown where its answer names one (else the instant
  * the panel received it); `now` is the clock.
+ *
+ * `unread`: the ROSTER cannot be read (it is the last one read, or OATS was never read). The pane
+ * then holds the one notice of that, with the one Retry of the screen (app/roster/unreadable.tsx):
+ * a part whose own read failed says its sentence WITHOUT an act of its own, and is read again on each
+ * press of that one Retry (the server answers a part from the last roster, so it can succeed while
+ * the roster still cannot be read), and when the roster is read again.
  */
-export function CommandState({ read, of, reading, failed, at = null, now }: { read: CommandRead; of: "readiness" | "activity" | "soul"; reading: string; failed: string; at?: string | null; now: number }) {
+export function CommandState({ read, of, reading, failed, at = null, now, unread = false }: { read: CommandRead; of: "readiness" | "activity" | "soul"; reading: string; failed: string; at?: string | null; now: number; unread?: boolean }) {
   // The panel's clock ticks every half minute: a failure is aged by the clock as it was when the
   // failure was seen, read after the drawing (an effect), never during it.
   const [seen, setSeen] = useState(now);
@@ -45,6 +52,16 @@ export function CommandState({ read, of, reading, failed, at = null, now }: { re
   useEffect(() => {
     if (failing) setSeen(Date.now());
   }, [failing, read.error]);
+  // A part that failed while the roster could not be read is read again on each press of the roster's Retry (the one
+  // on the screen then), and when the roster is read again.
+  const asked = useRosterAsked();
+  const last = useRef({ unread, asked });
+  useEffect(() => {
+    const before = last.current;
+    last.current = { unread, asked };
+    const again = (before.unread && !unread) || (unread && asked !== before.asked);
+    if (again && read.status === "error" && !read.fetching) read.retry();
+  }, [unread, asked, read]);
   if (read.status === "loading") return <Loading>{reading}</Loading>;
   if (read.status !== "error") return null;
   const code = codeOf(read.error);
@@ -62,7 +79,7 @@ export function CommandState({ read, of, reading, failed, at = null, now }: { re
       // What to do next is one press away, with the kernel's own message: the notice's face is what happened.
       details={[words.next, read.error]}
       {...(kept ? { age: stale === null ? null : readAge(stale, Math.max(now, seen)) } : {})}
-      actions={words.retry ? <Button onClick={read.retry}>{read.fetching ? "Reading…" : "Retry"}</Button> : undefined}
+      actions={words.retry && !unread ? <Button onClick={read.retry}>{read.fetching ? "Reading…" : "Retry"}</Button> : undefined}
     >
       {words.sentence === null ? null : <p className="m-0">{words.sentence}</p>}
     </Notice>

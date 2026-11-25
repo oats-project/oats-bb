@@ -9,7 +9,10 @@ import { STATE, waitingClock, waitingDetail, waitingSince } from "../ui/words";
 export type AgentStatus = {
   /** The drawn state (model/view.ts `state`): whether the agent waits on a person, what the kernel says of its session, and for an agent on a bb thread whether bb has a turn running on it. */
   state: AgentState;
-  /** The state's word, the standard's ("Needs you", "Working", "Failed", …). */
+  /**
+   * The state's word, the standard's ("Needs you", "Working", "Failed", …); for an agent on tmux
+   * that runs, "Running" (`stateWord`). Every place that says an agent's state in words says THIS.
+   */
   word: string;
   /** For an agent that waits on a person, how long: "12 min", "4 d"; null otherwise, or when the kernel names no instant. */
   since: string | null;
@@ -35,10 +38,23 @@ export type AgentStatus = {
 /** The reason after "Failed": the Desktop's "Its session ended", as a reason. */
 export const SESSION_ENDED = "session ended";
 
+/** What is said of an agent on tmux that runs, in the state's place. */
+export const RUNNING = "Running";
+
+/**
+ * The word of an agent's state, by its backend: the ONE place (the lead's ruling T4 on its reader's
+ * report, 24 Nov 2026). The STATE does not change with it: the mark, the order, the acts and the
+ * counts are the state's. An agent on tmux that runs reads "Running", never "Working": the kernel
+ * knows of a tmux session that it runs, and nothing of a turn (it gives such a row no turn facts),
+ * so "Working" would say more than anyone knows. An agent on a bb thread keeps "Working": bb says
+ * its thread has a turn running.
+ */
+export const stateWord = (agent: Pick<Agent, "backend">, drawn: AgentState): string => (drawn === "working" && agent.backend === "tmux" ? RUNNING : STATE[drawn].word);
+
 /** `thread` is null for an agent that has no bb thread (it runs in tmux, or its thread is gone); `now` is the clock in epoch milliseconds. */
 export function agentStatus(agent: Agent, thread: BbThread | null, now: number): AgentStatus {
   const drawn = state(agent, thread);
-  const base = { state: drawn, word: STATE[drawn].word, kernel: null };
+  const base = { state: drawn, word: stateWord(agent, drawn), kernel: null };
   switch (drawn) {
     case "needs-you": {
       // The kernel's claim, through the one gate; with none, the question is bb's own.

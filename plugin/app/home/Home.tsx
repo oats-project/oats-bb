@@ -19,17 +19,18 @@ import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
-import { lineActs, lineParts, outsideOf, OutsideWarning, rowWords } from "../outside";
+import { lineActs, lineParts, LOST_WORD, outsideNeeds, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
-import { READING as READING_WORD, ReadingLine, readingNow, useActed } from "../roster/reading";
-import { RosterNotice } from "../roster/unreadable";
+import { messageResumes } from "../../model/rest";
+import { READING as READING_WORD, ReadingFacts, ReadingLine, readingNow, useActed } from "../roster/reading";
+import { LastObservation, RosterNotice, useLineShowsNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
 import { TMUX } from "../ui";
 import { RowFacts } from "../ui/row-facts";
 import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
-import { hasNewAgent, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
+import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
 import { board, mayAnswer, refusal } from "./board";
@@ -209,6 +210,12 @@ function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: b
         {/* The same drawing as under the thread's line: Stop… and Start… are the line's own acts, and Details is under it. */}
         {/* Behind a lifecycle result that says this agent changed, until the roster is read again: "Reading…" in the state's place, its acts off (app/roster/reading.tsx: L13). */}
         {reading ? <ReadingLine action={lineActs(said, entry.agent.instance, true, entry.status.state)} /> : <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} action={lineActs(said, entry.agent.instance, held, entry.status.state)} />}
+        {/* What it needs, in the words of its line: the card is under "Needs you", and asks no question. (None for an agent whose one act is Stop; and none behind "Reading…": the state it is said of is being read again.) */}
+        {reading || outsideNeeds(said) === null ? null : (
+          <p data-testid="oats-needs-outside" className="m-0 min-w-0 break-words text-foreground">
+            {outsideNeeds(said)}
+          </p>
+        )}
         <OutsideWarning said={said} instance={entry.agent.instance} held={held || reading} />
       </Card>
     </li>
@@ -330,6 +337,13 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const refused = refusal(entry.agent, entry.thread);
   const offer: Offer =
     thread === undefined ? "elsewhere" : refused !== null ? refused : asked !== null && asked.choices.length > 0 ? "choices" : pending || claim?.reason === "permission" ? "in-thread" : "reply";
+  // Under "Needs you" the heading says the word: the card keeps the mark (named for a screen reader) and the wait.
+  const waitSays = message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null;
+  const wait = <StatusLine state={entry.status.state} markOnly={entry.status.state === "needs-you"} since={entry.status.since} detail={waitSays} />;
+  /** The mark and the age alone: they stand at the end of the name's line. */
+  const waitInline = entry.status.state === "needs-you" && (waitSays ?? "") === "";
+  const line = useRef<HTMLDivElement>(null);
+  const fit = useFit(line, "card", "oats-needs-where");
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
@@ -344,11 +358,22 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     <li data-testid="oats-needs-card" data-instance={entry.agent.instance} data-offer={offer === "stopped" || offer === "unreachable" || answered === null ? offer : "answered"}>
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 items-start justify-between gap-2">
-          {/* (The column takes the card's width, so that the line under the name can measure what fits; the name stays as wide as its words.) */}
-          <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+          {/* ONE line (the reader's P5: the card was five lines, name / soul / "! 5 d" / question / field): the name, then its
+              soul, the reason where there is one and where it is for an agent on tmux, then the mark and how long it waits.
+              A wait that says more than its age (a kind of request in words; a state that is not "needs you") keeps its
+              own line, under this one. Where that line does not fit, THE FIT (`factsFit`, below) says where the facts stand:
+              under the name, whole; and where even what they never give up does not fit there with the mark, the reason
+              wins and the mark with its age takes the next line. */}
+          <div ref={line} data-fit={fit} className={`flex min-w-0 flex-1 items-center gap-x-2 gap-y-0.5 ${fit === "beside" ? "" : "flex-wrap"}`}>
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            {/* Under its name, one line: its soul, the reason where there is one, and where it is for an agent on tmux. */}
-            <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" under />
+            <div data-testid="oats-needs-facts" className={`flex min-w-0 items-center gap-x-2 gap-y-0.5 ${fit === "beside" ? "flex-1" : "basis-full"} ${fit === "split" ? "flex-wrap" : ""}`}>
+              <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" card fit={fit} />
+              {waitInline ? (
+                <span data-wait="" className="shrink-0">
+                  {wait}
+                </span>
+              ) : null}
+            </div>
           </div>
           {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page.
               Where the request can only be answered in its thread the word is "Answer": the same press, the same place. */}
@@ -356,8 +381,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             {offer === "in-thread" && answered === null ? ANSWER : OPEN}
           </Button>
         </div>
-        {/* Under "Needs you" the heading says the word: the card keeps the mark (named for a screen reader) and the wait. */}
-        <StatusLine state={entry.status.state} markOnly={entry.status.state === "needs-you"} since={entry.status.since} detail={message === null ? (claim === null ? entry.status.detail : waitingLabel(claim)) : null} />
+        {waitInline ? null : wait}
         {message === null ? null : (
           <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
             {shown(message)}
@@ -457,37 +481,219 @@ function reasonOf(entry: Entry, oats: Ready): { reason: string | null; tone: "wa
   return { reason, tone: said?.rowTone === "warning" ? "warning" : undefined, onTmux };
 }
 
-function AgentFacts({ entry, oats, testId, under = false }: { entry: Entry; oats: Ready; testId: string; /** under the name, in a column (a card): as wide as the column, and one line high. Beside the name, in a row: the rest of the row's width */ under?: boolean }) {
+// ---- THE FIT OF A FACTS LINE (a card's and a row's): ONE design, ONE measure (ruled 25 Nov 2026, after the polish's
+// third review round; a fixed width for the card had cut a reason mid-word at every width under 1280).
+// 1. THE HELD PART is what a facts line never gives up: the soul's least (1.5 em); the reason where it is held (on a
+//    CARD: every reason; on a ROW: a reason that warns); the glyph; their separators; on a card, the mark with its age
+//    after them.
+// 2. The facts stand BESIDE the name when they fit its line with the name and the gap; otherwise UNDER the name, at the
+//    line's whole width. Measured from the element's own boxes after every draw and on every change of its width or of
+//    its words' width; before layout: beside.
+// 3. What "fit beside" counts: on a CARD the WHOLE facts line, the soul unshortened (a card's soul is never cut where a
+//    second line would hold it whole); on a ROW the held part (P20: a row's soul gives way first, down to its least,
+//    before the row takes a second line; a row that holds nothing never takes one).
+// 4. UNDER the name, where even the held part does not fit the line: THE REASON WINS. It is never cut. On a card the
+//    mark with its age then takes the next line: the ONE case where it stands alone ("split").
+// 5. Where a row's facts have no room at all they and their gap are not drawn beside the name ("none": they stay for a
+//    screen reader), so no name is pushed onto two lines for nothing.
+// 6. At 1280 a card and a row are one line.
+// (Not this: a name wider than its own line.)
+
+/** Where a facts line stands: beside its name; under it; under it with the mark and its age on the next line (a card); not drawn (a row with no room). */
+export type Fit = "beside" | "under" | "split" | "none";
+
+/**
+ * THE FIT. Pure. Widths in px: `line`: what the name and the facts share; `name`; `gap`: between two parts of that
+ * line; `whole`: the facts with the soul unshortened; `held`: what the facts never give up (rule 1, without the mark);
+ * `least`: the soul's least alone; `wait`: a card's mark with its age where it stands on this line (0: none);
+ * `holds`: a row holds a reason that warns or the glyph.
+ */
+export function factsFit({ kind, line, name, gap, whole, held, least, wait, holds }: { kind: "card" | "row"; line: number; name: number; gap: number; whole: number; held: number; least: number; wait: number; holds: boolean }): Fit {
+  // (No grace: going under a fraction early costs nothing; staying beside a fraction late takes it from the soul, which
+  // is then cut where a second line would hold it whole.)
+  const fits = (needed: number) => needed <= line;
+  if (kind === "card") {
+    const tail = wait > 0 ? gap + wait : 0;
+    if (fits(name + gap + whole + tail)) return "beside";
+    return fits(held + tail) ? "under" : "split";
+  }
+  if (holds) return fits(name + gap + held) ? "beside" : "under";
+  return fits(name + gap + least) ? "beside" : "none";
+}
+
+/** The soul's least width on a facts line, in the line's own em (app/ui/row-facts.tsx: `min-w-[1.5em]`). */
+const SOUL_LEAST_EM = 1.5;
+
+/**
+ * THE MEASURE, one for a card and a row. `line`: the element the name (its first child) and the facts share. It reads
+ * the element's own boxes, whichever way it is drawn now (the name's width; each part of the facts at its full width;
+ * the mark with its age), so the answer does not depend on the answer before and does not flap. Looked at again after
+ * every draw, when the line's or the name's width changes, and when a font arrives. With no layout (nothing drawn: a
+ * test's DOM), "beside".
+ */
+function useFit(line: { current: HTMLElement | null }, kind: "card" | "row", factsId: string): Fit {
+  const card = kind === "card";
+  const [fit, setFit] = useState<Fit>("beside");
+  const measure = () => {
+    const element = line.current;
+    const name = element?.firstElementChild as HTMLElement | null | undefined;
+    const facts = element?.querySelector<HTMLElement>(`[data-testid="${factsId}"]`);
+    const width = element?.getBoundingClientRect().width ?? 0;
+    if (!element || !name || !facts || width === 0) {
+      setFit("beside");
+      return;
+    }
+    const em = parseFloat(getComputedStyle(facts).fontSize) || 12;
+    const least = SOUL_LEAST_EM * em;
+    // A part at its FULL width, shortened or not: the width of its WORDS (a range over its contents: a fraction, the
+    // same whether the part is squeezed or not; `scrollWidth` is a whole number and a squeezed box is the squeezed one),
+    // never less than its box (a part that is no text: the glyph).
+    const words = (part: HTMLElement) => {
+      if (typeof document.createRange !== "function") return 0;
+      const range = document.createRange();
+      range.selectNodeContents(part);
+      return typeof range.getBoundingClientRect === "function" ? range.getBoundingClientRect().width : 0;
+    };
+    const full = (part: HTMLElement) => {
+      const said = words(part);
+      // The soul is the one part that is ever squeezed: its words' width where the page can say it, else its scroll width.
+      if (part.getAttribute("data-phrase") === "soul") return said > 0 ? said : part.scrollWidth;
+      return Math.max(said, part.scrollWidth, part.getBoundingClientRect().width);
+    };
+    // A reason is held on a card whatever its tone, on a row only where it warns (a plain one shortens, then leaves,
+    // before anything else gives way: a row that draws one does not count it. No row of the home holds one today: a
+    // guard, for a row that one day does).
+    const plain = !card && facts.querySelector('[data-phrase="reason"]:not([data-tone="warning"])') !== null;
+    let whole = 0;
+    let held = 0;
+    let holds = false;
+    for (const part of Array.from(facts.children) as HTMLElement[]) {
+      const phrase = part.getAttribute("data-phrase");
+      const size = full(part);
+      whole += size;
+      if (plain && (phrase === "reason" || part.getAttribute("data-sep") === "reason")) continue;
+      held += phrase === "soul" ? least : size;
+      if (phrase === "where" || (phrase === "reason" && part.getAttribute("data-tone") === "warning")) holds = true;
+    }
+    const mark = card ? element.querySelector<HTMLElement>("[data-wait]") : null;
+    const gap = parseFloat(getComputedStyle(element).columnGap) || 0;
+    setFit(factsFit({ kind, line: width, name: name.getBoundingClientRect().width, gap, whole, held, least, wait: mark === null ? 0 : mark.getBoundingClientRect().width, holds }));
+  };
+  // After every draw (the words may have changed) …
+  useLayoutEffect(measure);
+  // … and when the line's or the name's width changes with no draw (a resize; a font that arrives).
+  useLayoutEffect(() => {
+    const element = line.current;
+    if (element === null) return undefined;
+    // (One frame of a resize can be painted with the fit of before; the next has the new one. Said, not mended: flushing
+    // it at once needs react-dom in the plugin's app, which it does not otherwise import.)
+    const sized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    sized?.observe(element);
+    if (element.firstElementChild !== null) sized?.observe(element.firstElementChild);
+    const fonts = typeof document === "undefined" ? undefined : document.fonts;
+    fonts?.addEventListener?.("loadingdone", measure);
+    return () => {
+      sized?.disconnect();
+      fonts?.removeEventListener?.("loadingdone", measure);
+    };
+    // (`measure` reads the boxes at the time it runs: the observer is made once.)
+  }, []);
+  return fit;
+}
+
+function AgentFacts({ entry, oats, testId, card = false, fit }: { entry: Entry; oats: Ready; testId: string; /** on a card every reason is held (the soul gives way): for an agent whose thread is gone it is the card's only word on why there is no reply */ card?: boolean; /** where THE FIT puts the line */ fit: Fit }) {
   const { reason, tone, onTmux } = reasonOf(entry, oats);
   // A lost session is said in the state's place on a row ("Lost": app/outside `rowWords`), so its line has no reason to hold; its title keeps it.
   const words = rowWords(entry.status.word, entry.status.state, reason);
   const soul = shown(oats.soulOf(entry.agent));
-  // The line measures what fits, so it needs a width that is not its own words': beside a name it takes the rest of
-  // the ROW's width (it grows, from a base of ten rem: `flex-1 basis-40`); under a name, in a COLUMN, it is as wide as
-  // the column and nothing else: there a flex base is a HEIGHT (it made every card's line ten rem tall: an empty gap
-  // of about 150 px under the soul; the specialist's finding on the image set of 24 Nov 2026).
-  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} className={under ? "w-full" : "max-w-full flex-1 basis-40"} />;
+  // The line measures what fits inside it, so it needs a width that is not its own words': beside a name it takes what
+  // the name leaves, from nothing (`flex-1 basis-0`); under a name the line's whole width; on a card whose mark has its
+  // own line, that width too. It always stands in a ROW (a list's row, a card's first line, or the line under it): in a
+  // COLUMN a flex base is a HEIGHT (a base of ten rem once made every card's line ten rem tall: an empty gap of about
+  // 150 px under the soul; the specialist's finding on the image set of 24 Nov 2026). "none": no room at all beside the
+  // name: not drawn, kept for a screen reader.
+  const where = fit === "none" ? "sr-only" : fit === "beside" || (card && fit === "under") ? "min-w-0 flex-1 basis-0" : "min-w-0 basis-full";
+  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} reasonKept={card} className={where} />;
 }
 
 /**
  * One agent as a row of a list: its name, then on the same line what `AgentFacts` says of it, and,
  * in the list of every agent, its state in words at the row's end. A list under a heading that
- * says the state ("Working") does not repeat it on every row. No rule between rows: bb's own lists
+ * says it ("Running") does not repeat it on every row. No rule between rows: bb's own lists
  * draw none between theirs.
  */
 function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
+  const line = useRef<HTMLSpanElement>(null);
+  const fit = useFit(line, "row", "oats-home-agent-where");
+  // Behind a result, until the roster is read again: "Reading…" in the facts' place and no state's word, as the
+  // sidebar's row of that agent says (the roster this row is drawn from is from before the act: app/roster/reading.tsx).
+  useActed();
+  const reading = readingNow(oats, entry.agent.instance);
   return (
     <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
-      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+      {/* ONE line at every width (the reader's P20: at 390 a long name sent its soul to a second line, its neighbours' stayed):
+          the name is whole, the facts take what is left and give way inside it (`RowFacts`). ONE thing may cost a second
+          line: a reason that WARNS, or the tmux glyph, that cannot stand whole beside the name (THE FIT, above:
+          `data-fit="under"`). Never a clipped warning, never a cut glyph, never a name cut for them. */}
+      <span ref={line} data-fit={fit} className={`flex min-w-0 flex-1 items-baseline gap-x-2 ${fit === "under" ? "flex-wrap" : ""}`}>
         <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
-        <AgentFacts entry={entry} oats={oats} testId="oats-home-agent-where" />
+        {reading ? <ReadingFacts testId="oats-home-agent-reading" /> : <AgentFacts entry={entry} oats={oats} testId="oats-home-agent-where" fit={fit} />}
       </span>
-      {stateToo ? (
+      {stateToo && !reading ? (
         <span className="shrink-0 text-sm">
           {/* The state in words; a lost session's word on a row is "Lost" (its mark is the stopped one: the agent is stopped). */}
           <State state={entry.status.state} word={rowWords(entry.status.word, entry.status.state, reasonOf(entry, oats).reason).state} />
         </span>
       ) : null}
+    </li>
+  );
+}
+
+/**
+ * Whether the roster's row of this agent says "Lost" (its session was lost: nobody stopped it): the row's own words,
+ * asked as the sidebar asks them (`rowParts`, `rowWords`), so the home's list and the roster never disagree on who is in it.
+ */
+const isLost = (entry: Entry, oats: Ready): boolean => rowWords(entry.status.word, entry.status.state, rowParts(outsideOf(oats).of(entry.agent), entry.status.state).note).state === LOST_WORD;
+
+/**
+ * One agent whose session was lost, under the heading that says so: its name, its soul and where it is, and the act
+ * that brings it back. The one place where eight lost agents are eight presses in one list, not eight pages (the
+ * lead's T2). Start… opens the act's dialog, like every Start…; it is off while the roster shown is the last one read.
+ */
+function LostRow({ entry, oats, held }: { entry: Entry; oats: Ready; held: boolean }) {
+  const onTmux = entry.thread === null && entry.agent.backend === "tmux";
+  // Behind a result that says it started, until the roster is read again (the row is still here, from the roster before): its act is off (L13's rule, app/roster/reading.tsx).
+  // (Asked of the roster this row is drawn from, never by a read of its own: a row that mounts must not read OATS again.)
+  useActed();
+  const reading = readingNow(oats, entry.agent.instance);
+  // ONE rule with the thread's line: where a MESSAGE is the way on (an agent on bb whose thread bb lists: `messageResumes`),
+  // the row's act is Open: it opens that thread, whose line says so. Start… there would begin a NEW conversation where
+  // a message keeps the old one. Every other row (tmux; a bb agent whose thread is archived or gone) has Start….
+  const byMessage = messageResumes(entry.agent, entry.thread);
+  const open = useOpen(oats)(entry);
+  return (
+    <li data-testid="oats-lost-row" data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
+      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+        <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
+        {/* (No reason on the line: the heading says it.) Behind a done Start, until the roster is read again, the line says
+            "Reading…" in its facts' place: its Start… is then off, and an off control is never alone (the Loading pattern's word, L13's). */}
+        {reading ? (
+          <span role="status" data-testid="oats-lost-reading" className="text-xs text-muted-foreground">
+            {READING_WORD}
+          </span>
+        ) : (
+          <RowFacts testId="oats-home-agent-where" soul={shown(oats.soulOf(entry.agent))} where={onTmux ? TMUX : undefined} className="max-w-full flex-1 basis-40" />
+        )}
+      </span>
+      {byMessage ? (
+        <Button data-testid="oats-lost-open" onClick={open.onClick}>
+          {OPEN}
+        </Button>
+      ) : (
+        <Button data-testid="oats-lost-start" disabled={held || reading} onClick={() => openAct("start", entry.agent.instance)}>
+          {START}
+        </Button>
+      )}
     </li>
   );
 }
@@ -651,27 +857,31 @@ function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; 
   );
 }
 
-function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: boolean; agents: boolean; onBack: () => void }) {
+function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; visible: boolean; agents: boolean; onBack: () => void; /** whether this place says the roster's notice: not a tab that is hidden (bb keeps it mounted), nor one beside a thread whose own line says it: the notice stands once on a screen, where a person looks (the lead's T3) */ says?: boolean }) {
   const now = useNow();
   const navigate = useBbNavigate();
   const pages = usePagesShown();
   // Read once the home is seen (once more by itself when that failed and the roster reads), and again when the person asks: the installed CLI changes with an install, not with what the agents do.
   const { cli, checking, failure: checkFailure, check } = useCli(visible, oats.phase === "ready");
   const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} onCheck={check} />;
-  // Behind the card New agent is off: a spawn through a CLI the plugin does not work with is not offered.
-  const incompatible = cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api");
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is. The page has no heading of its own:
   // bb's bar over it names it.
-  if (oats.phase === "loading" || oats.phase === "failed") return oats.phase === "loading" ? <Loading>{READING}</Loading> : <RosterNotice oats={oats} />;
+  if (oats.phase === "loading") return <Loading>{READING}</Loading>;
+  // OATS was never read: the notice, whole. Where this place does not say it (a thread's tab, beside that thread's own
+  // line, which says it with the one Retry), ONE line, the notice's title alone, with nothing to press: never an empty pane.
+  if (oats.phase === "failed") return says ? <RosterNotice oats={oats} /> : <LastObservation failure={oats} machine={oats.machine} />;
   const made = board(oats.view, now);
   const held = oats.stale !== null;
+  // The agents whose session was lost (not the ones a person stopped), in the roster's order.
+  const lost = made.all.filter((entry) => isLost(entry, oats));
   // New agent is on every home, first on the page (the Desktop's Home has none: its act is the
   // sidebar's, which bb keeps in a drawer at a phone's width). Offered where it has somewhere to
   // open (the sidebar's rule); off behind the CLI card and while the roster shown is the last one
   // read. Why is said by the notice under it, on the same screen (the CLI card, the roster's
   // notice), never beside the button. On the home of a workspace with no agent it is the one act.
-  const off = incompatible || held;
+  // The ONE rule of every New agent, the sidebar's too (`newAgentHeld`): behind the CLI card a spawn is not offered.
+  const off = newAgentHeld(held, cli);
   const head = (
     <div data-testid="oats-home-head" className="flex min-w-0 flex-wrap items-center justify-end gap-2">
       {hasNewAgent(pages.has("souls")) ? (
@@ -682,14 +892,14 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
     </div>
   );
   // The one Stale drawing, the roster's: nothing while the roster is the one just read.
-  const stale = <RosterNotice oats={oats} />;
+  const stale = <RosterNotice oats={oats} seen={says} />;
   if (agents) {
     return (
       <>
         {head}
         {stale}
         {/* New agent is off behind the CLI card: the card is on this screen too, so the button is never off with nothing saying why. */}
-        {incompatible ? notice : null}
+        {newAgentHeld(false, cli) ? notice : null}
         <EveryAgent made={made} oats={oats} onBack={onBack} />
       </>
     );
@@ -710,23 +920,37 @@ function Sections({ oats, visible, agents, onBack }: { oats: Oats; visible: bool
       {head}
       {stale}
       {notice}
-      <Section title={NEEDS_YOU} n={made.needsYou.length} testId="oats-home-needs">
-        {made.needsYou.length === 0 ? (
+      {made.needsYou.length === 0 ? (
+        // Nobody needs a person: the sentence ALONE (the lead's reader, P31: a heading "Needs you 0" over "Nothing needs
+        // you." said it twice, the first time as a count of nothing).
+        <div data-testid="oats-home-needs">
           <p data-testid="oats-home-nothing" className="m-0 text-muted-foreground">
             {NOTHING_NEEDS_YOU}
           </p>
-        ) : (
+        </div>
+      ) : (
+        <Section title={NEEDS_YOU} n={made.needsYou.length} testId="oats-home-needs">
           <Cropped items={made.needsYou} shown={NEEDS_YOU_SHOWN} more={showAll} testId="oats-home-needs-all">
             {(entry) => (entry.status.state === "outside" ? <OutsideCard key={entry.agent.instance} entry={entry} oats={oats} held={held} /> : <NeedsYouCard key={entry.agent.instance} entry={entry} oats={oats} held={held} />)}
           </Cropped>
-        )}
-      </Section>
+        </Section>
+      )}
       <Tiles visible={visible} />
       {made.working.length === 0 ? null : (
         <Section title={WORKING} n={made.working.length} testId="oats-home-working">
           <Cropped items={made.working} shown={WORKING_SHOWN} more={showAll} testId="oats-home-working-all">
             {(entry) => <AgentRow key={entry.agent.instance} entry={entry} oats={oats} testId="oats-working-row" />}
           </Cropped>
+        </Section>
+      )}
+      {/* A quiet section, only when it has rows: headed with the roster's own word for them and their count ("Lost 8"). */}
+      {lost.length === 0 ? null : (
+        <Section title={LOST_WORD} n={lost.length} testId="oats-home-lost">
+          <ul className="m-0 flex list-none flex-col p-0">
+            {lost.map((entry) => (
+              <LostRow key={entry.agent.instance} entry={entry} oats={oats} held={held} />
+            ))}
+          </ul>
         </Section>
       )}
       {made.finished.length === 0 ? null : (
@@ -764,6 +988,8 @@ export function HomePage({ subPath }: PluginNavPanelProps) {
 export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   const oats = useOats();
   const visible = useTabVisible();
+  // (A thread's own line on this screen says the roster's notice: an agent's archived thread (the outside feature's row); and, where OATS was never read, every thread's line.)
+  const lineSays = useLineShowsNotice();
   const AgentTab = getAgentTab();
   const ready = oats.phase === "ready";
   const node = AgentTab !== null && oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
@@ -787,7 +1013,7 @@ export function HomeTab({ threadId }: ExperimentalThreadTabProps) {
   return (
     <div data-testid="oats-home-tab" className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-3 text-sm text-foreground">
       {/* The tab is the home alone: Home › Agents has an address of the page's, and nothing in the tab leads to it. */}
-      <Sections oats={oats} visible={visible} agents={false} onBack={() => undefined} />
+      <Sections oats={oats} visible={visible} agents={false} onBack={() => undefined} says={visible && !lineSays} />
     </div>
   );
 }

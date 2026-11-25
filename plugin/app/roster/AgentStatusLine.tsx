@@ -22,7 +22,7 @@ export type AgentStatusLineProps = {
    * roster's own since-when and question or reason (app/outside `lineParts`: what happened to the
    * agent outside OATS, and whether the line warns). Given the roster's own; absent: the roster's own.
    */
-  parts?: (own: { state: AgentState; since: string | null; detail: string | null }) => { since: string | null; detail: string | null; tone?: "warning" | undefined };
+  parts?: (own: { state: AgentState; since: string | null; detail: string | null }) => { since: string | null; detail: string | null; tone?: "warning" | undefined; markTone?: "warning" | null };
   /** The kernel has since refused this agent as one it does not know: the line says that, and nothing of its state. */
   gone?: boolean;
   /** A lifecycle result says the agent changed and the roster is not read again yet: the line says "Reading…", never the old state (./reading.tsx). */
@@ -33,7 +33,7 @@ export type AgentStatusLineProps = {
 
 export function AgentStatusLine({ agent, thread, now, staleAt = null, parts, gone = false, reading = false, action }: AgentStatusLineProps) {
   const status = agentStatus(agent, thread, now);
-  const said = parts === undefined ? { since: status.since, detail: status.detail, tone: undefined } : parts(status);
+  const said: { since: string | null; detail: string | null; tone?: "warning" | undefined; markTone?: "warning" | null } = parts === undefined ? { since: status.since, detail: status.detail, tone: undefined } : parts(status);
   const age = staleAt === null ? null : readAge(staleAt, now);
   const asOf = age === null ? null : `as of ${age}`;
   // ("Not in OATS any more" in the state's place says it all.)
@@ -41,7 +41,7 @@ export function AgentStatusLine({ agent, thread, now, staleAt = null, parts, gon
   if (reading) return <ReadingLine action={action} />;
   return (
     <>
-      <StatusLine state={status.state} since={said.since} detail={said.detail} tone={said.tone} asOf={asOf} action={action} />
+      <StatusLine state={status.state} word={status.word} since={said.since} detail={said.detail} tone={said.tone} markTone={said.markTone} asOf={asOf} action={action} />
       {/* The kernel's own text for a session it cannot reach: one press away, never the line's words. */}
       <KernelSays text={status.kernel} bb={status.bb} />
     </>

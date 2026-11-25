@@ -121,10 +121,27 @@ export function markText(value: string): string {
   const cut = Math.max(slash < 0 ? 0 : slash + 1, dashes < 0 ? 0 : dashes + 2);
   let parts = wordsOf(value.slice(cut));
   if (parts.length >= 3) parts = parts.slice(1);
+  return initials(parts) || "?";
+}
+/**
+ * Words as a mark: the initials of the first two, or a single word's first two characters,
+ * upper-cased, by code points; "" for no word. Upper case can grow ("ß" is "SS"): a mark is two
+ * glyphs at most, so then each character keeps its first.
+ */
+function initials(parts: string[]): string {
   const chars = parts.length >= 2 ? [[...parts[0]!][0]!, [...parts[1]!][0]!] : parts.length === 1 ? [...parts[0]!].slice(0, 2) : [];
   const upper = [...chars.join("").toLocaleUpperCase("en")];
-  // Upper case can grow ("ß" is "SS"): a mark is two glyphs at most, so then each character keeps its first.
-  return (upper.length <= 2 ? upper : chars.map((char) => [...char.toLocaleUpperCase("en")][0])).join("") || "?";
+  return (upper.length <= 2 ? upper : chars.map((char) => [...char.toLocaleUpperCase("en")][0])).join("");
+}
+/**
+ * An AGENT's two-letter mark, beside its name: the name's own letters, so that the tile reads as
+ * the initials of the words next to it ("Overnight sweep developer" is "OS", never its soul's
+ * "CD"). The initials of the name's first two words, or a single word's first two characters,
+ * upper-cased, by code points. Nothing is dropped from a name (a soul's mark drops a namespace
+ * word: a name has none). null when the name has no letter or digit: no tile is drawn then.
+ */
+export function nameMark(instance: string): string | null {
+  return initials(wordsOf(instance)) || null;
 }
 
 /**

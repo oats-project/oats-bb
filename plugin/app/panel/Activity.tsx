@@ -95,7 +95,7 @@ function Events({ events, now }: { events: PanelEvents; now: number }) {
  * the roster's (the agent was started again and asked something new since the roster was read),
  * the roster is behind, and is asked for again at once, once per answer.
  */
-export function Activity({ instance, claimSince, onNewerClaim, now }: { instance: string; claimSince: string | null; onNewerClaim: () => void; now: number }) {
+export function Activity({ instance, claimSince, onNewerClaim, now, unread }: { instance: string; claimSince: string | null; onNewerClaim: () => void; now: number; /** the roster cannot be read: no act of this part's own (state.tsx `CommandState`) */ unread: boolean }) {
   // Whether a person asked for a read since this section came on the page. The section leaves the
   // page when its tab turns and what was read stays with bb: coming back reads nothing, and shows
   // what was read, with Refresh.
@@ -120,7 +120,7 @@ export function Activity({ instance, claimSince, onNewerClaim, now }: { instance
       {/* Nothing is read until a person asks (the kernel reads two logs for it), but for an agent OATS stopped, whose
           stop's time the Session reads from the same events: what that read brought is drawn here with no press.
           (A session OATS lost has no such time, and no such read.) */}
-      {asked ? <CommandState read={read} of="activity" reading={READING} failed="The recorded activity could not be read" now={now} /> : null}
+      {asked ? <CommandState read={read} of="activity" reading={READING} failed="The recorded activity could not be read" now={now} unread={unread} /> : null}
       {read.data === undefined ? null : <Events events={read.data} now={now} />}
       {/* OATS keeps no activity for this kind of agent: the press is answered with what is so, and nothing is left to press. */}
       {asked && read.status === "error" && !read.fetching && !mendable(read, "activity") && read.data === undefined ? (
@@ -132,7 +132,7 @@ export function Activity({ instance, claimSince, onNewerClaim, now }: { instance
         {/* One act at a time: while the first read runs the line above says so, and after a failure its Retry is the act.
             Over what is shown the button is off while a read runs, and the words beside it say why. */}
         {(read.fetching && !held) || (asked && offersRetry(read, "activity")) || (asked && read.status === "error" && !mendable(read, "activity")) ? null : (
-          <Button data-testid="oats-panel-activity-load" disabled={read.fetching} onClick={ask}>
+          <Button data-testid="oats-panel-activity-load" disabled={read.fetching || unread} onClick={ask}>
             {held || asked ? REFRESH : LOAD}
           </Button>
         )}

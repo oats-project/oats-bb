@@ -89,7 +89,8 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
  * with a separator), and a list that opens from the line would be cut.
  */
-export function StatusLine({ state, word, markOnly = false, since, detail, tone, asOf, action }: { state: AgentState; word?: string; /** the mark alone, with the state as its accessible name: for a place whose heading already says the state's word (a card under "Needs you") */ markOnly?: boolean; since?: string | null; detail?: string | null; asOf?: string | null; /** "warning": the line warns (a stopped agent's live composer, a stopped agent whose process may still run): the state's mark and the detail are drawn in bb's warning tone (the text token holds 4.5:1 on a page's surface; the line is never a row of a list). The words carry the meaning; the tone never does alone. */ tone?: "warning"; action?: ReactNode }) {
+export function StatusLine({ state, word, markOnly = false, since, detail, tone, markTone, asOf, action }: { state: AgentState; word?: string; /** the mark alone, with the state as its accessible name: for a place whose heading already says the state's word (a card under "Needs you") */ markOnly?: boolean; since?: string | null; detail?: string | null; asOf?: string | null; /** "warning": the line warns (a stopped agent's live composer, a stopped agent whose process may still run): the detail, and the state's mark unless `markTone` says otherwise, are drawn in bb's warning tone (the text token holds 4.5:1 on a page's surface; the line is never a row of a list). The words carry the meaning; the tone never does alone. */ tone?: "warning"; /** The MARK's tone where it is not the line's: an agent's mark has ONE colour, the one its row in the sidebar draws (null: the state's own, under a detail that warns). Not given: the line's `tone`. */ markTone?: "warning" | null; action?: ReactNode }) {
+  const mark = markTone === undefined ? tone : (markTone ?? undefined);
   const parts = [
     { text: shown(since), tone: undefined },
     { text: shown(detail), tone },
@@ -105,11 +106,11 @@ export function StatusLine({ state, word, markOnly = false, since, detail, tone,
       <div className="-ml-4 flex min-w-0 flex-wrap items-center gap-y-1">
         <span className="pl-4 font-semibold">
           {markOnly ? (
-            <span data-testid="oats-state" data-state={state} data-tone={tone} className="inline-flex shrink-0 items-center">
-              <StateMark state={state} tone={tone} />
+            <span data-testid="oats-state" data-state={state} data-tone={mark} className="inline-flex shrink-0 items-center">
+              <StateMark state={state} tone={mark} />
             </span>
           ) : (
-            <State state={state} word={word} tone={tone} />
+            <State state={state} word={word} tone={mark} />
           )}
         </span>
         {parts.map((part, index) => (

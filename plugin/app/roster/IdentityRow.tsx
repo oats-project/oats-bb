@@ -12,16 +12,18 @@ import {
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import { openAgentPage } from "../home/agent-tab";
 import { askPlan, run } from "../lifecycle/acts";
+import { failedAct } from "../lifecycle/words";
 import { claimOf } from "../../model/view";
 import { lineActs, lineParts, outsideOf, OutsideThreadRow, OutsideWarning } from "../outside";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button } from "../ui";
+import { agentName, instanceDisplayName } from "../ui/words";
 import { useNow } from "./now";
 import { AgentStatusLine } from "./AgentStatusLine";
 import { useReading } from "./reading";
 import { agentStatus } from "./status";
-import { failureWords, Unreadable } from "./unreadable";
+import { Unreadable } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
 export const HOME_TAB = { id: "home", context: { kind: "thread" }, availability: "fixed" } as const;
@@ -65,9 +67,9 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   if (oats.phase === "failed") {
     // Whether this thread is an agent's is not known: say that OATS cannot be read, never nothing.
     return (
-      <div data-testid="oats-identity-row" data-unreadable="" role="status" className={`${FRAME} flex-row flex-wrap items-center gap-2`}>
-        <span className="min-w-0 break-words text-muted-foreground">{failureWords(oats, oats.machine).title}</span>
-        <Button onClick={oats.retry}>Retry</Button>
+      // (The one notice's line, as over a roster kept as last read: it counts as this screen's notice, so the sidebar beside it says its title alone.)
+      <div data-testid="oats-identity-row" data-unreadable="" className={`${FRAME} flex-row flex-wrap items-center gap-2`}>
+        <Unreadable compact failure={oats} machine={oats.machine} onRetry={oats.retry} />
       </div>
     );
   }
@@ -91,10 +93,11 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   // stays in its place, off; the notice under the line says that the acts are off, and has Retry.
   // (And behind a lifecycle result that says the agent changed, until the roster is read again: app/roster/reading.tsx.)
   const held = oats.stale !== null || reading;
-  // The act that applies to the state, through OATS: a stopped agent is started, one whose session
-  // ended is restarted, one the kernel cannot reach is read again.
-  // One that never ran (bb says its thread failed at its start: `status.bb`) is started, not restarted: nothing runs.
-  const verb = status.state === "stopped" || (status.state === "error" && status.bb !== undefined) ? (["start", "Start…"] as const) : status.state === "error" ? (["restart", "Restart…"] as const) : null; // (the dots: each opens its dialog, and nothing runs on the press)
+  // The act that applies to the state, through OATS: a stopped agent is started; a FAILED one has the ONE act the
+  // lifecycle gives it everywhere (`failedAct`): Start where nothing runs (it never ran: bb says its thread failed at
+  // its start; or the kernel's row says its session ended), Restart where its harness still runs or
+  // that is not known; one the kernel cannot reach is read again.
+  const verb = status.state === "stopped" || (status.state === "error" && failedAct(agent, node.thread) === "start") ? (["start", "Start…"] as const) : status.state === "error" ? (["restart", "Restart…"] as const) : null; // (the dots: each opens its dialog, and nothing runs on the press)
   const act =
     verb !== null ? (
       <Button data-testid="oats-status-act" disabled={held} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
@@ -146,8 +149,19 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     </Button>
   );
 
+  // WHOSE line this is. bb's title over it is the agent's name as words at every start (the provider gives it), and a
+  // person can move it off that name (bb's own Rename, Regenerate title; a title bb wrote from a first message): then
+  // the acts below would sit under a name that is not the agent's. So the line says the agent's NAME first whenever
+  // bb's title is not exactly it, as the archived thread's row does (app/outside), and never otherwise: no name twice.
+  const named = node.thread.displayTitle === instanceDisplayName(agent.instance);
+
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
+      {named ? null : (
+        <span data-testid="oats-thread-agent" className="min-w-0 break-words font-semibold">
+          {agentName(agent.instance)}
+        </span>
+      )}
       {/* The one status line of an agent (the panel's header is to draw the same). The age of a roster kept as
           last read is said by the one-line notice under it, so the line itself says no "as of". What happened to
           the agent outside OATS (app/outside) takes the line's words where it has a reason for them. */}

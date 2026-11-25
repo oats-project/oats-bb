@@ -83,8 +83,8 @@ export function PatternBook() {
         <StatusLine state="needs-you" since={SINCE} detail={waitingLabel({ reason: "permission", message: null, since: null })} action={<Button>Open</Button>} />
         <StatusLine state="working" />
         <StatusLine state="stopped" action={<Button>Start</Button>} />
-        {/* A line that warns (a stopped agent's live composer): the mark and the sentence in the warning tone. */}
-        <StatusLine state="stopped" detail="A message here starts it outside OATS." tone="warning" action={<Button>Start</Button>} />
+        {/* A line that warns (a stopped agent's live composer): the sentence in the warning tone, the mark the state's own (an agent's dot has one colour, its row's). */}
+        <StatusLine state="stopped" detail="A message here starts it outside OATS." tone="warning" markTone={null} action={<Button>Start</Button>} />
         {/* A state whose word says it all, and a state with its reason in two words. */}
         <StatusLine state="unreachable" action={<Button>Retry</Button>} />
         <StatusLine state="error" detail="session ended" action={<Button>Restart</Button>} />

@@ -174,6 +174,8 @@ export default [
       const context = await page.until(`(() => { const t = document.querySelector(${JSON.stringify(inBoard("oats-board-context-text"))}); if (!t) return ""; const r = t.getBoundingClientRect(); return JSON.stringify({ length: t.innerText.length, height: Math.round(r.height), scrolls: t.scrollHeight > t.clientHeight + 1, window: innerHeight }); })()`, 30);
       const text = context ? JSON.parse(context) : null;
       check(text !== null && text.length > 1500 && text.height <= text.window / 3 + 1 && text.scrolls === true, `${at} BUSY: the context of two thousand characters is whole behind its fold, in a box no higher than a third of the window that scrolls alone`, String(context));
+      // In view for its image: at the phone's width the open context is under the four options.
+      await page.evaluate(`document.querySelector(${JSON.stringify(inBoard("oats-board-context"))})?.scrollIntoView({ block: "start" })`);
       await targets(page, viewport, check, at, `board-${viewport.name}-busy-context`);
       await page.shot(`board-${viewport.name}-busy-context`);
       // All twelve facts, by bb's own toggle.
@@ -184,6 +186,10 @@ export default [
       // A value is never cut: each is drawn whole (no box of a value holds more than it shows), at both widths.
       const cut = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-fact-value"))})].filter((v) => v.scrollWidth > v.clientWidth + 1 || v.getBoundingClientRect().right > innerWidth).map((v) => v.innerText.slice(0, 30)))`));
       check(cut.length === 0, `${at} BUSY: no value of the twelve facts is cut (the long ones on a line of their own, the short ones first on their row)`, JSON.stringify(cut));
+      // A line of ours under bb's row (a long value, an address) starts where the row's own text starts.
+      const edges = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-fact"))})].map((f) => { const left = (id) => { const e = f.querySelector('[data-testid="' + id + '"]'); return e ? Math.round(e.getBoundingClientRect().left) : null; }; return [f.hasAttribute("data-long") ? left("oats-board-fact-label") : left("oats-board-fact-value"), f.hasAttribute("data-long") ? left("oats-board-fact-value") : null, left("oats-board-link-show")]; }))`));
+      const ragged = edges.filter(([row, value, link]) => (value !== null && Math.abs(value - row) > 1) || (link !== null && Math.abs(link - row) > 1));
+      check(ragged.length === 0, `${at} BUSY: in each fact, a long value's own line and the address start where the row's text starts`, JSON.stringify(edges));
       const says = JSON.parse(await page.evaluate(`JSON.stringify({ says: [...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-says"))})].map(${flat}), hosts: [...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-link-show"))})].map(${flat}) })`));
       check(says.says.length === 1 && says.says[0] === "Panel worktree helper says" && says.hosts.length === 6 && says.hosts.every((host) => host === "github.com"), `${at} BUSY: who says the six addresses is said once, on the Facts heading's line; each address is its host alone`, JSON.stringify(says));
       await page.evaluate(`document.querySelector(${JSON.stringify(inBoard("oats-board-facts"))})?.scrollIntoView({ block: "start" })`);

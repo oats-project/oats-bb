@@ -86,6 +86,9 @@ function FactLink({ link }: { link: NonNullable<BoardFact["link"]> }) {
   );
 }
 
+/** A line of ours under bb's row starts where the row's own text starts (bb keeps 18 px for its leading slot, measured at both widths: the live scene holds it). */
+const UNDER_ROW = "pl-[18px]";
+
 function Facts({ instance, board, detail, now }: { instance: string; board: BoardData; detail: DetailRead; now: number }) {
   const name = agentName(instance);
   const { hidden, hide, showAll } = useHiddenFacts(instance);
@@ -140,14 +143,18 @@ function Facts({ instance, board, detail, now }: { instance: string; board: Boar
                   }
                 />
                 {long ? (
-                  <span className="flex min-w-0 items-start gap-1.5">
+                  <span className={`flex min-w-0 items-start gap-1.5 ${UNDER_ROW}`}>
                     <span data-testid="oats-board-fact-value" className="min-w-0 break-words text-sm font-medium text-foreground">
                       {value}
                     </span>
                     {spark}
                   </span>
                 ) : null}
-                {fact.link === null ? null : <FactLink link={fact.link} />}
+                {fact.link === null ? null : (
+                  <span className={`flex min-w-0 ${UNDER_ROW}`}>
+                    <FactLink link={fact.link} />
+                  </span>
+                )}
               </div>
             );
           }}

@@ -182,9 +182,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     return [words.state, words.reason].filter((part): part is string => part !== null && part !== "").join(" · ");
   };
   const agentRows = (rows: readonly TreeRow<Row>[], guttered: boolean): ReactNode[] =>
-    rows.flatMap(({ node, parent, open, pinned, inside, insideTone, insideNode }) => {
+    rows.flatMap(({ node, parent, open, pinned, inside, insideTone, insideNode, insideAsks }) => {
       const called = agentName(node.agent.instance);
-      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} inside={inside} insideTone={insideTone} insideSays={insideTone === "warning" && insideNode !== null ? saysOf(insideNode) : null} /> : null;
+      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} inside={inside} insideTone={insideTone} insideAsks={insideAsks} insideSays={insideTone === "warning" && insideNode !== null ? saysOf(insideNode) : null} /> : null;
       const keys = parent ? foldKeys(node.agent.instance, open, pinned) : undefined;
       if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), guttered, node.depth, toggle, keys)];
       const thread = oats.threadById.get(node.thread.id);

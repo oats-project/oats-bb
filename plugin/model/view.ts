@@ -210,7 +210,7 @@ export type Foldable<T> = { agent: Pick<Agent, "instance">; state: AgentState; c
  * "warning" where the hidden row is one the caller says warns (`insideOf`). `pinned`: it is open
  * because it is above the row on screen, whatever the person left: it cannot be closed now.
  */
-export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null; /** the hidden row `inside` is the state of: the caller names the chevron with that row's own words */ insideNode: T | null };
+export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null; /** the hidden row `inside` is the state of: the caller names the chevron with that row's own words */ insideNode: T | null; /** how many hidden rows need a person: the toggle's name says the count */ insideAsks: number };
 
 /** The instances above one in the tree (its parent, its parent's parent, …), or none where it is a root or not in the tree. */
 export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance: string): Set<string> {
@@ -240,24 +240,30 @@ export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance
  * tone where it is a row that warns; `{ state: null }` where every hidden row is quiet and none
  * warns. The parent's own state is never part of it: its own word and mark stay its own.
  */
-export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null } {
+export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null; /** how many hidden rows need a person (they ask, or they run outside OATS: the home lists both under "Needs you") */ asks: number } {
   // The best so far, in a list of at most one (a local a closure assigns is not narrowed after it).
   const best: { state: AgentState; tone: "warning" | null; rank: number; node: T }[] = [];
+  let asks = 0;
   const walk = (nodes: readonly T[]) => {
     for (const each of nodes) {
       const warned = warns(each);
       // A row a person must find behind a closed parent: one that needs a person (rank 0), one of rank 1 (outside,
       // failed, or one that warns), and an UNREACHABLE one (the reader's P23: its rank in the ORDER stays 2, with
       // working, idle and stopped; behind a fold it is marked, after every row of rank 0 or 1).
+      // Among them a row that needs a PERSON comes first (one that asks, then one that runs outside OATS: the closed
+      // parent draws that row's own mark beside its chevron, and counts them); then one a person must look at with
+      // nobody asked (failed, or one that warns: the chevron takes the tone); then an unreachable one.
       const rank = Math.min(RANK[each.state], warned ? 1 : 2);
-      const weight = rank < 2 ? rank : each.state === "unreachable" ? 1.5 : 2;
-      if (weight < 2 && (best[0] === undefined || weight < best[0].rank)) best[0] = { state: each.state, tone: warned ? "warning" : null, rank: weight, node: each };
+      const needs = each.state === "needs-you" || each.state === "outside";
+      if (needs) asks += 1;
+      const weight = each.state === "needs-you" ? 0 : each.state === "outside" ? 0.5 : rank < 2 ? 1 : each.state === "unreachable" ? 1.5 : 2;
+      if (weight < 2 && (best[0] === undefined || weight < best[0].rank)) best[0] = { state: each.state, tone: warned && !needs ? "warning" : null, rank: weight, node: each };
       walk(each.children);
     }
   };
   walk(node.children);
   const found = best[0];
-  return found === undefined ? { state: null, tone: null, node: null } : { state: found.state, tone: found.tone, node: found.node };
+  return found === undefined ? { state: null, tone: null, node: null, asks } : { state: found.state, tone: found.tone, node: found.node, asks };
 }
 
 /**
@@ -278,8 +284,8 @@ export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: Rea
       const parent = node.children.length > 0;
       const pinned = parent && above.has(node.agent.instance);
       const open = parent && (pinned || opened.has(node.agent.instance));
-      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null, node: null };
-      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone, insideNode: inside.node });
+      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null, node: null, asks: 0 };
+      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone, insideNode: inside.node, insideAsks: inside.asks });
       if (open) walk(node.children);
     }
   };

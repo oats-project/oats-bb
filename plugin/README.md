@@ -141,13 +141,16 @@ the page loads, and stays as the person left it while the window lives: the open
 window's memory (it outlives bb's drawer, which draws the sidebar anew), and nothing of it is
 stored. A closed parent's children are not in the page, so nothing of them takes the focus. A
 closed parent's line says only the parent (its own state, mark and word). The mark of any row its
-subtree hides that itself carries one stands IN ITS CHEVRON's PLACE (the lead's T1: after the
-state's word it read as the parent's own; the lead's reader's P23: a triangle in another colour is
-found by colour alone: the hidden row's own disc, in its tone, where a plain parent has a triangle,
-is found without it; an unreachable row behind a fold is marked too), and the toggle is named with the state's
-name for a screen reader and a pointer ("Show <Name>'s agents: Needs input"; over a row that
-WARNS the name says what that row itself says, its state's word and its reason, as the row draws
-them: "Show <Name>'s agents: Stopped · archived in bb": the warning's tone is a colour): a row that needs a
+subtree hides that itself carries one is said AT ITS CHEVRON, which never leaves a row that has
+children (it is what says the row opens; the lead's ruling of 25 Nov 2026 on P23): a hidden row
+that NEEDS A PERSON (it asks, or it runs outside OATS) puts its own mark, the needs-you disc, BESIDE
+the chevron, after it and before the parent's own dot, in the same button (pressing either opens
+the row): found without colour; a hidden row that failed, cannot be reached or warns, with nobody
+asked, puts NO second dot there (two dots read as one more state of the parent, told apart by
+colour alone): the chevron itself takes the tone. The toggle is named in words for a screen reader
+and a pointer: how many hidden rows need a person ("Show <Name>'s agents: 1 needs you"); in the
+tone cases the row's own state ("…: failed"), or, over a row that WARNS, what that row itself says
+("…: Stopped · archived in bb"). In the model (`insideOf`): a row that needs a
 person, one a person must look at (it runs outside OATS, or failed), and one whose own mark is in
 the warning tone, in that tone (the outside feature's `rowWarns`: its thread archived in bb while it
 ran, its session lost with its thread archived, its thread deleted in bb; such an agent has no bb

@@ -185,7 +185,7 @@ async function stopExtraBb(dir) {
  *  `answered`: the read whose answer a time-out quotes.
  *  The ports are below Linux's ephemeral range (32768-60999): a port in it can be held by a listener on port 0 or by any
  *  outgoing connection of the container (curl, bb's CLI, the first bb's workers), and either makes a bind of it fail
- *  (CI, 2026-11-25, run 45519214063: the exposed bb's server failed with EADDRINUSE on 0.0.0.0:27886, twice, with no
+ *  (CI, 2026-11-25, run 45519214063: the exposed bb's server failed with EADDRINUSE on 0.0.0.0:48886, twice, with no
  *  other bb of the test on it). Where bb-app exits, every socket on its ports is printed, from /proc/net/tcp*. */
 async function startExtraBb({ dir, out, prefix = "", env = {}, args, ports, up, what, answered, timeoutMs = 180_000 }) {
   const command = `cd ~ && echo started > ${out} && ${prefix ? `${prefix} ` : ""}bb-app --data-dir ~/${dir} ${args} --no-in-app-updates >> ${out} 2>&1; echo "bb-app exited with status $?" >> ${out}`;

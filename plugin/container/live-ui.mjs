@@ -262,14 +262,19 @@ function statusWithRealIds(threads, changes = {}) {
  * are not recorded as a set: each tmux row is the ONE row the kernel printed for a tmux home
  * (status.json's kernel-fix-developer), with its name, home, window, soul group and parent changed;
  * a waiting one carries the claim the kernel printed for release-070-maintainer; and each says
- * whether it runs as the kernel prints it for a tmux home today: `running` true or false, and no
- * runtimeState word (README).
+ * whether it runs in the three keys of a RECORDED tmux row of its kind (`SESSION_KEYS` of
+ * test/fixtures/lifecycle/tmux-row-{running,stopped,lost}.json, OATS 0.70.5: one that runs, one
+ * stopped with OATS, one whose session was lost), a key the recorded row does not have left out.
+ * So the rows are DERIVED, not recorded (README).
  */
+const SESSION_KEYS = ["running", "runtimeState", "sessionEnd"];
+const recordedTmuxRow = (kind) => JSON.parse(readFileSync(join(PLUGIN, `test/fixtures/lifecycle/tmux-row-${kind}.json`), "utf8"));
 function tmuxRoster(threads) {
   const status = JSON.parse(statusWithRealIds(threads));
   const rows = status.agents.flatMap((group) => group.instances);
   const model = rows.find((row) => row.instance === "kernel-fix-developer");
   const claim = rows.find((row) => row.instance === "release-070-maintainer").waitingOnYou;
+  const recorded = { running: recordedTmuxRow("running"), waiting: recordedTmuxRow("running"), stopped: recordedTmuxRow("stopped"), lost: recordedTmuxRow("lost") };
   for (const group of status.agents) group.instances = group.instances.filter((row) => TMUX_ROSTER.bb.includes(row.instance));
   for (const row of status.agents.flatMap((group) => group.instances)) row.instance = TMUX_ROSTER.renamed[row.instance] ?? row.instance;
   for (const [instance, soul, parent, how] of TMUX_ROSTER.tmux) {
@@ -278,12 +283,15 @@ function tmuxRoster(threads) {
     row.tmux = { ...model.tmux, window: instance };
     if (row.identity) row.identity = { ...row.identity, alias: instance };
     if (row.capabilityMeta?.["oats.aweb"]) row.capabilityMeta = { ...row.capabilityMeta, "oats.aweb": { ...row.capabilityMeta["oats.aweb"], alias: instance } };
-    // What the kernel prints for a tmux home (awebai/oats lib/instance-listing.mjs `tmuxLiveness`):
-    // `{ running: true }` for one whose harness runs and `{ running: false }` for one whose window is
-    // gone, with NO runtimeState word in either. (status.json's own tmux row carries "unknown", from
-    // the kernel it was recorded with.)
-    delete row.runtimeState;
-    row.running = how !== "stopped";
+    // What the kernel printed of the session of a tmux home of this kind, and nothing else of that
+    // row: running `running: true` and no word; stopped with OATS `running: false`, the word "shell"
+    // and `sessionEnd: "stopped"`; lost `running: false`, no word and `sessionEnd: "lost"`.
+    // (status.json's own tmux row carries "unknown", from the kernel it was recorded with.)
+    if (!Object.hasOwn(recorded, how)) throw new Error(`tmux-roster.mjs: ${instance} is "${how}", which is none of ${Object.keys(recorded).join(", ")}`);
+    for (const key of SESSION_KEYS) {
+      if (key in recorded[how]) row[key] = recorded[how][key];
+      else delete row[key];
+    }
     status.agents.find((group) => group.name === soul).instances.push(row);
   }
   return JSON.stringify(status);
@@ -409,7 +417,14 @@ const BUILT_IN = {
   "tmux-roster": {
     label: "TM",
     enter: async ({ threads }) => {
-      fake({ status: { stdout: tmuxRoster(threads) } });
+      const status = tmuxRoster(threads);
+      // Held here, with the three keys written out (not through the builder's list): what the screen
+      // draws cannot tell a leftover word of the model row from none.
+      const built = new Map(JSON.parse(status).agents.flatMap((group) => group.instances).map((row) => [row.instance, row]));
+      const sessionOf = (row) => JSON.stringify(["running", "runtimeState", "sessionEnd"].map((key) => (key in row ? row[key] : "ABSENT")));
+      const off = TMUX_ROSTER.tmux.filter(([instance, , , how]) => sessionOf(built.get(instance) ?? {}) !== sessionOf(recordedTmuxRow(how === "waiting" ? "running" : how))).map(([instance]) => instance);
+      check(off.length === 0, `TM each of the ${TMUX_ROSTER.tmux.length} tmux rows says of its session exactly what the recorded row of its kind says: running, runtimeState and sessionEnd, a key that row lacks absent`, off.join(", "));
+      fake({ status: { stdout: status } });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === TMUX_ROSTER.bb.length + TMUX_ROSTER.tmux.length);
     },
   },

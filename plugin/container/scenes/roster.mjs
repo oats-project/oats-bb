@@ -400,9 +400,13 @@ export default [
       // Every tmux agent is a row, by its one name, and says its state, its soul and "tmux".
       const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText.replace(/\\s+/g, " ").trim() ?? ""])) : ""; })()`, 30);
       const read = rows === null ? [] : JSON.parse(rows);
-      const wanted = tmux.map(([instance, soul, , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : "Working"} · ${soul} · tmux`]);
+      // One that OATS stopped says "Stopped" and its soul; one whose session was LOST says so in the soul's place (nobody stopped it).
+      const said = { waiting: (soul) => `Needs you · ${soul}`, running: (soul) => `Working · ${soul}`, stopped: (soul) => `Stopped · ${soul}`, lost: () => "Stopped · session lost" };
+      const wanted = tmux.map(([instance, soul, , how]) => [instance, `${said[how](soul)} · tmux`]);
+      const kinds = Object.keys(said).map((how) => tmux.filter((agent) => agent[3] === how).length);
+      check(kinds.every((count) => count >= 2), `${at} the stage holds each kind of tmux row the kernel records, twice at least: ${Object.keys(said).map((how, i) => `${kinds[i]} ${how}`).join(", ")}`, JSON.stringify(kinds));
       const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
-      check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, its soul, "tmux"`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, its soul (or, of a lost session, "session lost" in its place), "tmux"`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // Who waits: the three on tmux that wait... every one that waits, with a thread or not, in ONE number.
       const waiting = tmux.filter(([, , , how]) => how === "waiting").length + 1; // and release-070-maintainer, on bb
       const needs = await page.until(`(() => { const t = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)})?.innerText.replace(/\\s+/g, " ").trim() ?? ""; return /need you/.test(t) ? t : ""; })()`, 15);

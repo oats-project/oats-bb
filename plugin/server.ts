@@ -10,9 +10,11 @@ import * as board from "./server/board.js";
 import { createCore } from "./server/core.js";
 import * as home from "./server/home.js";
 import * as lifecycle from "./server/lifecycle.js";
+import * as mail from "./server/mail.js";
 import * as panel from "./server/panel.js";
 import * as roster from "./server/roster.js";
 import * as spawn from "./server/spawn.js";
+import * as terminal from "./server/terminal.js";
 import * as workspace from "./server/workspace.js";
 
 export { rpcContract } from "./contract/index.js";
@@ -28,6 +30,8 @@ export default async function plugin(bb: BbPluginApi) {
     ...lifecycle.handlers(core),
     ...automations.handlers(core),
     ...panel.handlers(core),
+    ...terminal.handlers(core),
+    ...mail.handlers(core),
     ...board.handlers(core),
   });
   core.start();

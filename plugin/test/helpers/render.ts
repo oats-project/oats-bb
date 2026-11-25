@@ -15,9 +15,11 @@ import * as automations from "../automations/handlers";
 import * as board from "../board/handlers";
 import * as home from "../home/handlers";
 import * as lifecycle from "../lifecycle/handlers";
+import * as mail from "../mail/handlers";
 import * as panel from "../panel/handlers";
 import * as roster from "../roster/handlers";
 import * as spawn from "../spawn/handlers";
+import * as terminal from "../terminal/handlers";
 import * as workspace from "../workspace/handlers";
 import { fixtureAgents, fixtureThreads } from "./fixtures";
 
@@ -69,6 +71,8 @@ export function handlers(over: Partial<GivenHandlers> = {}, agents: Agent[] = fi
     ...lifecycle.defaults(),
     ...automations.defaults(),
     ...panel.defaults(),
+    ...terminal.defaults(),
+    ...mail.defaults(),
     ...board.defaults(),
     ...over,
   });

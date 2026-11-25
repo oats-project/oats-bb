@@ -34,6 +34,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join } from "node:path";
 import { fill, launchBrowser, showSidebar, testId, textOf, visible } from "../../browser.mjs";
 import { sameImages } from "../../images.mjs";
+import { atomicWrite, completeLines } from "../../files.mjs";
 import { choose } from "../../scenes/spawn.mjs";
 import { Fixtures } from "../fixtures.mjs";
 
@@ -113,7 +114,7 @@ const untilRow = (instance, what, matches, seconds = 60) =>
 /** The pi mock's log (mock-openai.mjs): one line per request. Its chat requests that offer tools are the agents' turns. */
 const piRequests = () => {
   const file = join(REAL, "mock", "pi-requests.jsonl");
-  return existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+  return existsSync(file) ? completeLines(file).map((line) => JSON.parse(line)) : []; // (the mock appends while this reads)
 };
 const piTurns = () => piRequests().filter((request) => request.event !== "listed" && request.tools > 0);
 
@@ -262,10 +263,11 @@ try {
   const asInstalled = readFileSync(piSettings, "utf8");
   let refusedPreview;
   try {
-    writeFileSync(piSettings, `${JSON.stringify({ ...JSON.parse(asInstalled), packages: [] }, null, 2)}\n`);
+    // (Written whole and renamed into place, both times: bb's pi provider reads this file at every check, by itself.)
+    atomicWrite(piSettings, `${JSON.stringify({ ...JSON.parse(asInstalled), packages: [] }, null, 2)}\n`);
     refusedPreview = rpc("spawnPlan", { soul: SOUL, name: "pi-refused-developer", task: "", harness: "pi", model: MODEL });
   } finally {
-    writeFileSync(piSettings, asInstalled);
+    atomicWrite(piSettings, asInstalled);
   }
   const refusedCall = recorded(["spawn", SOUL], ["--preview", "pi-refused-developer"]);
   let refusal;
@@ -304,7 +306,9 @@ try {
     await page.evaluate(fill(testId("oats-spawn-model-id"), TWIN));
     // (The mark stands under the field a person changes: the Model ID while "Custom…" is chosen, else the Model list. `over`: a mark left under the list above a typed id.)
     const HOLD = `(() => { const of = (id) => document.querySelector(id)?.closest('[data-testid="oats-field"]')?.querySelector('[role="alert"]') ?? null; const typed = document.querySelector(${q("oats-spawn-model-id")}) !== null; const mark = of(typed ? ${q("oats-spawn-model-id")} : ${q("oats-spawn-model")}); const over = typed ? of(${q("oats-spawn-model")}) : null; const submit = document.querySelector(${q("oats-spawn-submit")}); const by = submit?.getAttribute("aria-describedby"); return JSON.stringify({ mark: mark?.innerText.trim() ?? null, off: submit?.disabled ?? null, described: by ? (document.getElementById(by)?.innerText.trim() ?? null) : null, beside: document.querySelector(${q("oats-disabled-reason")})?.innerText.trim() ?? null, over: over?.innerText.trim() ?? null }); })()`;
-    const heldTwin = await page.until(`(() => { const read = ${HOLD}; return JSON.parse(read).mark === "Pick provider" ? read : ""; })()`, 60);
+    // Waited for: the SETTLED hold, all of what is asserted. The mark comes from bb's list; that Spawn is described by it,
+    // and that no "Reading…" stands beside the button, come a moment later (the preview's read ends): a wait on the mark alone read them early.
+    const heldTwin = await page.until(`(() => { const read = ${HOLD}; const now = JSON.parse(read); return now.mark === "Pick provider" && now.off === true && now.described === "Pick provider" && now.beside === null ? read : ""; })()`, 60);
     check(heldTwin === JSON.stringify({ mark: "Pick provider", off: true, described: "Pick provider", beside: null, over: null }), `${at}: the bare id ${TWIN}, which two of pi's providers serve, is HELD: "Pick provider" under the Model ID field, where it was typed, once (none under the Model list over it); Spawn is off and described by that mark`, heldTwin ?? (await page.evaluate(HOLD)));
     // The hold as a person meets it: the mark under the Model ID, Spawn off.
     await page.evaluate(`document.querySelector(${q("oats-spawn-model")}).scrollIntoView({ block: "center" })`);
@@ -375,7 +379,8 @@ try {
   check(mine?.threadId === threadId && mine.running === (row?.running ?? null), "the plugin's snapshot has the agent as the kernel does: its thread, and the kernel's word for whether a harness is loaded", JSON.stringify({ plugin: mine && { threadId: mine.threadId, running: mine.running }, kernel: brief(row) }));
   await views("real-pi-idle", async ({ page, at, shot }) => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
-    const line = JSON.parse((await page.until(`document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") === "idle" && ${THREAD_ROW}`, 30)) || (await page.evaluate(THREAD_ROW)));
+    // Waited for: the line AND its way to the panel, because both are asserted (the app draws them in one render today).
+    const line = JSON.parse((await page.until(`document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") === "idle" && ${textOf(testId("oats-identity-row"))}.includes("Instance panel") && ${THREAD_ROW}`, 30)) || (await page.evaluate(THREAD_ROW)));
     check(line.state === "idle" && line.status.startsWith("Idle") && !line.row.includes("instance of") && line.row.includes("Instance panel"), `${at}: the pi agent's thread says "Idle" in its own row, with the way to its instance panel (where its soul is)`, JSON.stringify(line));
     const reply = await page.until(`(document.body.innerText.match(/MOCK-REPLY \\d+/) ?? [""])[0]`, 30);
     check(Boolean(reply), `${at}: and the thread shows what pi answered (${reply})`, await page.evaluate("document.body.innerText.slice(0, 600)"));
@@ -456,7 +461,8 @@ try {
       /** Type a model, and wait for what the dialog makes of it once bb's list has answered (never a fixed time). */
       const typed = async (model, armed) => {
         await page.evaluate(fill(testId("oats-start-model"), model));
-        const settled = await page.until(armed ? `document.querySelector(${q("oats-confirm-act")})?.disabled === false && ${says} === ""` : `document.querySelector(${q("oats-confirm-act")})?.disabled === true && ${says} === "Not found"`, 30);
+        // (The held case waits for all of what the check after the last one asserts: off, the field's mark, the button described by it, nothing beside it.)
+        const settled = await page.until(armed ? `document.querySelector(${q("oats-confirm-act")})?.disabled === false && ${says} === ""` : `(() => { const now = JSON.parse(${state}); return now.off === true && now.field === "Not found" && now.why === "Not found" && now.beside === null; })()`, 30);
         const read = await page.evaluate(state);
         show(`typed ${JSON.stringify(model)}`, read);
         return Boolean(settled);
@@ -602,7 +608,9 @@ try {
     await page.evaluate(`document.querySelector(${q("oats-spawn-submit")}).click()`);
     // The form stays busy until bb's own status of the thread is past its start, then says what became of it.
     const RESULT = `(() => { const r = document.querySelector(${q("oats-result")}); if (!r) return ""; const foot = document.querySelector(${q("oats-spawn-foot")}); return JSON.stringify({ tone: r.getAttribute("data-tone"), title: r.querySelector("h3")?.innerText ?? "", buttons: [...r.querySelectorAll("button")].map((b) => b.innerText.trim()), foot: [...foot.querySelectorAll("button")].map((b) => b.innerText.trim()), submit: document.querySelector(${q("oats-spawn-submit")}) !== null, details: r.querySelector(${q("oats-spawn-start-details")}) !== null, text: foot.innerText.replace(/\\s+/g, " ").trim(), path: location.pathname }); })()`;
-    result = JSON.parse((await page.until(RESULT, 180)) || "null");
+    // Waited for: the result as it is asserted, failed with Details (one render in the app today). A result that is
+    // NOT a failure ends the wait at once, and the check below fails on it without waiting the time out.
+    result = JSON.parse((await page.until(`(() => { const read = ${RESULT}; if (read === "") return ""; const now = JSON.parse(read); return now.tone !== "failed" || now.details === true ? read : ""; })()`, 180)) || (await page.evaluate(RESULT)) || "null");
     check(result !== null && result.tone === "failed" && result.title === `${asWords} did not start` && JSON.stringify(result.buttons) === JSON.stringify(["Open"]) && JSON.stringify(result.foot) === JSON.stringify(["Open", "Close"]) && result.submit === false && result.details === true && result.path === "/plugins/oats/new-agent", `${at}: the form says "${asWords} did not start", with Details, Open and Close: no submit, and the form did not leave for the thread`, JSON.stringify(result));
     check(result !== null && !/Created/.test(result.text) && !/Created/.test(await page.evaluate("document.body.innerText")), `${at}: nothing on the page says "Created"`, result?.text ?? "");
     await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-spawn-start-details")} summary`)})?.click()`);
@@ -678,7 +686,8 @@ try {
     const facts = (await page.until(`(() => { const now = ${ROW_FACTS}; return /^Failed/.test(now) ? now : ""; })()`, 40)) || (await page.evaluate(ROW_FACTS));
     check(facts === `Failed · ${SOUL}`, `${at}: the sidebar's row says "Failed" and its soul, never "session lost"`, String(facts));
     await page.goto(`/projects/${unstartedProject}/threads/${unstartedThreadId}`);
-    const line = JSON.parse((await page.until(`document.querySelector(${q("oats-status-line")})?.getAttribute("data-state") === "error" && ${LINE}`, 40)) || (await page.evaluate(LINE)));
+    // Waited for: the line's state AND an act, because both are asserted (one render in the app today).
+    const line = JSON.parse((await page.until(`(() => { const read = ${LINE}; const now = JSON.parse(read); return now.state === "error" && now.acts.length > 0 ? read : ""; })()`, 40)) || (await page.evaluate(LINE)));
     check(line.state === "error" && JSON.stringify(line.words) === JSON.stringify(["Failed"]), `${at}: the thread's line says "Failed" and nothing after it`, JSON.stringify(line));
     check(JSON.stringify(line.acts) === JSON.stringify(["Start…"]) && !/session lost|send it a message|Nobody stopped it|Restart/.test(line.row), `${at}: its one act is Start… (it opens the dialog); nothing of a lost session, of a message, or of Restart`, JSON.stringify(line));
     await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-bb")} summary`)})?.click()`);
@@ -687,7 +696,8 @@ try {
     show("the thread's line", line.row);
     await shot("thread");
     await page.goto(`/plugins/oats/agent/${UNSTARTED}`);
-    const head = JSON.parse((await page.until(`(() => { const now = ${HEAD}; return /"state":"Failed"/.test(now) ? now : ""; })()`, 40)) || (await page.evaluate(HEAD)) || "null");
+    // Waited for: the state AND Details, because both are asserted (one render in the app today).
+    const head = JSON.parse((await page.until(`(() => { const now = ${HEAD}; return /"state":"Failed"/.test(now) && /"details":true/.test(now) ? now : ""; })()`, 40)) || (await page.evaluate(HEAD)) || "null");
     check(head !== null && head.state === "Failed" && head.details === true && JSON.stringify(head.acts) === JSON.stringify(["Start…", "Retire…"]) && head.block === false, `${at}: its own page says "Failed", with Details, Start… and Retire… (no Restart), and no sentence of a lost session`, JSON.stringify(head));
     await shot("page");
     // (The count line stands on Home › Agents alone, at its address: the home itself has no summary line since the text cut.)

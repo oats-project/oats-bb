@@ -4,7 +4,7 @@ Official [OATS](https://github.com/oats-project/oats) package for
 [bb](https://www.npmjs.com/package/bb-app): the bb session provider and plugin, which let OATS
 agents run as bb threads beside the kernel's tmux backend.
 
-The latest release is 0.5.0 ([CHANGELOG.md](CHANGELOG.md)), the pilot's release: the plugin's screens in their pilot form, one tree of agents for every backend, and "Reading…" after every act until OATS has read the agent again. The work arrives as reviewed pull
+The latest release is 0.5.1 ([CHANGELOG.md](CHANGELOG.md)), the pilot's fixes: a pi agent with a grant identity can send its mail, `hostDaemonPort` alone works, readiness says when the pi model check is off, and an asking agent's card is off while "Reading…". The work arrives as reviewed pull
 requests, and it follows the OATS session-provider contract as decided on the OATS side. The lane map
 records how work lands here: <https://github.com/oats-project/oats/issues/1566>.
 
@@ -89,7 +89,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
    ```yaml
    # oats-workspace.yaml
    packages:
-     oats.bb: git:github.com/oats-project/oats-bb@v0.5.0
+     oats.bb: git:github.com/oats-project/oats-bb@v0.5.1
    defaults:
      capabilities:
        oats.bb: { from: package }
@@ -140,7 +140,7 @@ a host with no bb at all, and `cli` may point off `PATH`. Readiness is what chec
 
 | Call | What the provider does |
 |---|---|
-| launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Stops and archives the home's previous thread (a start after a stop is a fresh conversation), and stops the home's archived threads: bb keeps an archived thread's Claude process, in the home, until it is stopped. Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600); for a pi launch, the three variables into the env of the home's bb project instead ([pi](#pi)). Runs `bb thread spawn --provider claude-code` (or `--provider pi`) `--environment <home> --prompt-file <home>/TASK.md --title <the instance's name as words>` ("The thread's title", below). Answers `{server, projectId, threadId}`. |
+| launch | Runs the readiness checks. Finds or creates the bb project rooted exactly at the home. Refuses if another live thread runs there. Stops and archives the home's previous thread (a start after a stop is a fresh conversation), and stops the home's archived threads: bb keeps an archived thread's Claude process, in the home, until it is stopped. Writes the launch environment, and in a sandboxed mode the sandbox entries, into `<home>/.claude/settings.local.json` (mode 0600); for a pi launch, its variables (four at most) into the env of the home's bb project instead ([pi](#pi)). Runs `bb thread spawn --provider claude-code` (or `--provider pi`) `--environment <home> --prompt-file <home>/TASK.md --title <the instance's name as words>` ("The thread's title", below). Answers `{server, projectId, threadId}`. |
 | inspect | One `bb thread list`. Maps bb's status (table below). For a thread in `error` or at rest (idle, pending), also looks at this host's processes for the thread's harness: whether it lives, and whether it works in the home. A second live thread in the home is `E_SESSION_UNAVAILABLE`, naming both. A bb that does not answer is an error, never "stopped". |
 | input | Reads the thread's pending interactions; while one is open, refuses with `E_SESSION_PROMPT_OPEN` and sends nothing. Otherwise `bb thread tell`. Only bb's `sent` is a submission. A `queued` tell is withdrawn (`bb thread queue delete`) and answered `E_SESSION_INPUT_QUEUED`, whatever the delete says: where the copy could not be withdrawn the message may arrive anyway, and the mail that carried it stays unread, so the agent may see it twice and never loses it. |
 | stop | Withdraws what bb holds in line for the thread (a turn bb's concurrency limit has not started yet: bb would start it by itself later), then `bb thread stop`, then waits until bb shows the thread settled, for the grace the kernel gives, counted from the moment `bb thread stop` answered. Stopped means settled AND nothing left in line; still in a turn after the grace, or a held turn that could not be withdrawn: `E_SESSION_STOP_FAILED`. A thread archived in bb is stopped like any other. Then archives the thread (`bb thread archive`): bb starts a stopped thread's agent again at the next message to it and refuses every message to an archived one, so an agent OATS stopped stays stopped ("Stops", below). An archive bb refuses fails no stop: `stopped`, and a warning on the command's standard error that names the thread. |
@@ -509,7 +509,7 @@ bb splits itself, or the bare `<id>` where one pi provider serves it: "The model
 below). Everything above holds for it, except what follows. Checked against bb-app at
 `bb-version`, pi 1.5.2 and @awebai/oats-pi 0.70.5 (`test/contract/pi.test.mjs`).
 
-**What a pi launch carries: three variables, and no argument.**
+**What a pi launch carries: four variables at most, and no argument.**
 
 - **No launch argument.** bb starts pi itself, with its own arguments. Every launch
   argument is refused for pi, `--permission-mode` included: `E_BACKEND_LAUNCH_ARG`.
@@ -517,18 +517,38 @@ below). Everything above holds for it, except what follows. Checked against bb-a
   permission mode, no permission prompts and no sandbox. A pi launch without `--yolo` is
   refused: `E_BACKEND_SANDBOXED_MODE`.
 - **Nothing of Claude's.** A pi launch neither reads nor writes `.claude/settings.local.json`.
-- **The environment: `OATS_INSTANCE`, `OATS_INSTANCE_HOME` and `PATH`, and nothing else.**
+- **The environment: `OATS_INSTANCE`, `OATS_INSTANCE_HOME`, `PATH` and
+  `AWEB_IDENTITY_HOME`, and nothing else.**
   pi reads no settings file of the home for its environment, so the launch's variables
   reach the thread through bb's own **project env** (`bb machine env set <NAME> --project
-  <id>`, the value on stdin), which bb keeps in its database. Only those three names ever
-  go there: the two say which home this is, and `PATH` puts the home's `.oats/bin` first,
-  followed by the PATH oats itself runs with. `PATH` holds paths only, never a value out
-  of a launch's env. No harness credential can land in bb's database this way.
-  - What a **capability** adds to a launch's env (oats.aweb's `AWEB_DELIVERY`,
-    `AWEB_IDENTITY_HOME` and `AWID_REGISTRY_URL` come with every launch) is **left out**
-    for pi, and so is what a launch leaves out on purpose (`unset`): the thread's pi
-    inherits the bb server's own environment for everything else. `aw` works from the
-    home all the same: it finds the home's identity by the directory it runs in.
+  <id>`, the value on stdin), which bb keeps in its database. Only these four names ever
+  go there, each for a reason, and none of them can hold a credential:
+  - `OATS_INSTANCE` and `OATS_INSTANCE_HOME` say which home this is (the kernel's own
+    entries);
+  - `PATH` puts the home's `.oats/bin` first, followed by the PATH oats itself runs with.
+    It holds paths only, never a value out of a launch's env;
+  - `AWEB_IDENTITY_HOME` says where the agent's messaging identity is, where a
+    capability's entry names a directory of the home with it (oats.aweb's: `<home>/.aw`
+    for a local seat, `<home>/.aweb-identity` for a seat with a global identity through
+    a session grant). It is carried by that one name, not marked secret, and only as a
+    path that is the home or inside it, written plainly (absolute, no `.` or `..` step):
+    a path of the home is no credential. Where the home is reached through a link and
+    the two are written differently, their real paths decide. Any other value of it is
+    left out, and the launch says so once on its standard error, without the value
+    ("AWEB_IDENTITY_HOME is not carried to this pi thread: …"): the agent would
+    otherwise receive mail, fail to send, and nothing would say why. Without it
+    a grant seat on pi received its mail and could not send: `aw` finds an identity in
+    `.aw` of the directory it runs in, so a local seat's `aw` works from the home either
+    way, and a grant seat's identity is not there ("current directory is not initialized
+    for aw").
+
+  No harness credential can land in bb's database this way. The rule is these four
+  names, and not "what a capability marks as no secret": nothing marks a launch env
+  name so today.
+  - What else a **capability** adds to a launch's env (oats.aweb's `AWEB_DELIVERY` and
+    `AWID_REGISTRY_URL` come with every launch) is **left out** for pi, and so is what a
+    launch leaves out on purpose (`unset`): the thread's pi inherits the bb server's own
+    environment for everything else.
   - What a **launch configuration** sets (a literal or a secret), or an entry of a source
     the provider does not know, is **refused** by name: `E_BACKEND_LAUNCH_ENV`. A person
     asked for it and it cannot reach pi. What pi needs of the host (a model provider's
@@ -541,17 +561,17 @@ below). Everything above holds for it, except what follows. Checked against bb-a
   Put pi's directory on the PATH of the process that runs oats. A cost: on a host whose
   bb starts pi by an absolute `BB_PI_BRIDGE_COMMAND`, pi must still be on that PATH.
 - **The home's bb project is the provider's, and so is its env, whole.** One home is one
-  bb project. A pi launch makes the project's env exactly those three names: it unsets
+  bb project. A pi launch makes the project's env exactly the names it carries: it unsets
   every other name the project holds, whoever set it. The retire hook unsets them all,
   and so does the launch hook of a home that leaves bb, on the kernel's word that it ran
   on bb before (`OATS_PREVIOUS_BACKEND`), as for the `settings.local.json` keys. A
   project that is also rooted at another directory is refused by a pi launch
   (`E_SESSION_START_FAILED`): its env would reach whatever runs there. Such a project is
-  not the home's alone, so the retire hook and a move away remove only those three names
+  not the home's alone, so the retire hook and a move away remove only those four names
   from it, and leave what a person keeps there. A Claude launch
   sets no project env. It reads the project's env (one more bb call, whose failure
   fails the launch: a refusal where the launch had changed nothing but those unsets,
-  otherwise an outcome in doubt, as for any failure after its first effect) and unsets those three names wherever it finds them, whoever set
+  otherwise an outcome in doubt, as for any failure after its first effect) and unsets those four names wherever it finds them, whoever set
   them, leaving any other name: bb gives a project's env to every thread of it and starts
   `claude` by a project `PATH`, and a pi launch of the same home composed that one for
   pi. So a project-level `PATH` set by hand in an OATS home's bb project does not survive
@@ -598,10 +618,25 @@ cases where bb lists fewer models than its pi resolves (the first two seen at bb
   where that `settings.json` sets no `enabledModels` **and has not changed since bb
   started** (bb-app's own record of its start, `bb-app-runtime.json` in
   `settings.oats.bb.dataDir`); where it has, or that record cannot be read, the model
-  is not checked. After a change to bb's pi settings, restart bb;
+  is not checked. After a change to bb's pi settings, restart bb: until then the check
+  is off for every model that is not listed, and readiness says so (below);
 - a home with a pi configuration of its own (`<home>/.pi`) may give its thread models
   that bb, which lists from a directory of its own, does not show: its launch is not
   refused for a model that is not listed.
+
+**Readiness says when the check is off until bb restarts.** A change to bb's pi
+settings under a running bb turns the check off for every home at once: every id that
+is not listed passes, and one pi does not have fails as its thread starts. pi writes
+that `settings.json` itself (a default model chosen in pi, for one), so it happens
+without anyone editing the file. `oats readiness` and `oats bb doctor` (a read with no
+planned launch) then carry the warning `session-provider-pi-model-check-off`: "the pi
+model check is off until bb restarts: bb's pi settings changed after it started (restart
+bb-app to turn it back on)". It is a warning: nothing is refused for it. It is given
+where a pi launch would go on (bb has pi, and its configuration passes the two checks
+below), the `settings.json` sets no `enabledModels` (the check is then off by that
+setting, and a restart does not turn it on), and bb-app's record of its start can be
+read; where it cannot, nothing is said there, and each launch whose model is not listed
+warns as above. A bb that does not answer is told nothing of it.
 
 **bb's list may also be older than pi's configuration.** bb's server serves the list it
 fetched for a minute as it is, while a thread starts by what pi has now. So where the
@@ -739,7 +774,10 @@ facts are problems (a pi launch is not held up because bb's Claude is signed out
 Claude launch by anything of pi's). With no planned launch (`oats readiness`, `oats bb
 doctor`), Claude's state is a problem as before, and everything of pi's is one warning,
 `session-provider-pi-not-ready`, which names the codes a pi launch would be refused
-with; a bb with no pi installed is told nothing of pi.
+with; a bb with no pi installed is told nothing of pi. Where a pi launch would go on
+and bb's pi settings changed after bb started, the warning is
+`session-provider-pi-model-check-off` instead: the pi model check refuses nothing until
+bb restarts ([pi](#pi), "The model").
 
 With the launch the kernel plans (before every launch), the check lists what a sandboxed
 launch would write into the home's sandbox, each host and path with who asked for it
@@ -1045,9 +1083,20 @@ npm run test:kernel:pi   # a pi home and a Claude home under the released kernel
 The contract test builds `test/contract/Dockerfile` at the version in `bb-version`, starts
 bb and a mock Anthropic endpoint inside the container, and calls the provider's commands
 on their wire: every bb command and HTTP address the provider uses. bb runs only in the
-container: no port is published. Moving the bb pin is one change to `bb-version` and the
+container: no port is published. In every contract container bb runs on 18886 and 18887
+(`test/contract/rig.mjs`), not on its default ports: those are in Linux's ephemeral range,
+where a listener on port 0 or an outgoing connection can hold one as bb starts. The
+tests name that bb to the provider with `server` and `hostDaemonPort`, as a deployment
+does. Moving the bb pin is one change to `bb-version` and the
 manifest's `version` default (`npm run validate` keeps them equal) that the contract test
 must pass.
+
+The three contract images install bb-app, Claude Code, pi and the kernel from committed
+locks with `npm ci` (`test/contract/locks/`, and its README): no dependency tree is
+resolved when an image is built, so a package published upstream that minute cannot
+change or fail a run. A moved pin needs its lock written again
+(`test/contract/relock.sh claude`, `test/contract/relock.sh pi`); a unit test holds the
+locks against `bb-version`.
 
 A second contract file (`test/contract/sandbox.test.mjs`, its own image with a sandbox
 runtime) runs bb's sandboxed modes with the sandbox really started, through the tests' own
@@ -1057,7 +1106,8 @@ Ubuntu.
 
 A third (`test/contract/pi.test.mjs`, its own image: bb-app, pi, the OATS kernel's
 package and @awebai/oats-pi, and a mock OpenAI-compatible endpoint) runs pi threads: the
-launch, the three variables through bb's project env, the home's skills, the readiness
+launch, the variables through bb's project env (a grant seat's identity home among
+them, read by the real `aw` in the thread), the home's skills, the readiness
 of bb's pi configuration, a failed turn, input (idle, steering, a dialog), a thread OATS
 stopped (archived: a tell is refused and starts nothing; unarchived by hand, a tell
 starts pi again), and that no process is left in a home after a stop or a retire. Run it again

@@ -1,0 +1,30 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_MAIL_UNREADABLE",
+  "message": "messaging:mail: no identity of this instance could be read (mailspike: identity-missing)",
+  "details": {
+   "exit": 1,
+   "envelope": {
+    "schemaVersion": 1,
+    "ok": false,
+    "error": {
+     "code": "E_MAIL_UNREADABLE",
+     "message": "no identity of this instance could be read (mailspike: identity-missing)",
+     "details": {
+      "identities": [
+       {
+        "team": "mailspike",
+        "alias": "",
+        "identity": "",
+        "primary": true,
+        "error": "identity-missing"
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+}

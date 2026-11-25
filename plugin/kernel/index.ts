@@ -5,6 +5,7 @@
 import * as automations from "./automations.js";
 import * as board from "./board.js";
 import * as lifecycle from "./lifecycle.js";
+import * as mail from "./mail.js";
 import * as panel from "./panel.js";
 import * as roster from "./roster.js";
 import { Runner, type OatsOptions } from "./runner.js";
@@ -18,6 +19,7 @@ const verbs = (runner: Runner) => ({
   ...lifecycle.verbs(runner),
   ...automations.verbs(runner),
   ...panel.verbs(runner),
+  ...mail.verbs(runner),
   ...board.verbs(runner),
 });
 

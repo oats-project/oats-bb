@@ -470,8 +470,8 @@ const BUILT_IN = {
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.threadId === "thr_digest"));
     },
   },
-  // The release's default: only the home is a page that is shown, with the setting left as
-  // installed (unset: `pagesAsInstalled`). Every other stage runs with all pages shown (live.sh,
+  // The release's default: the home and the Workspace page with its four tabs are shown (not
+  // Automations), with the setting left as installed (unset: `pagesAsInstalled`). Every other stage runs with all pages shown (live.sh,
   // which sets all six; this stage sets them again when it leaves); the scenes of this one assert what is absent. `pages(value)` is for a
   // scene that needs another set: it changes the setting; the scene then opens its page and waits on what it reads.
   // A deployment that is mostly tmux agents (tmuxRoster, above): what a person who ran OATS on tmux sees first.

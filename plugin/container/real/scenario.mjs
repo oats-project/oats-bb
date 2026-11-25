@@ -608,7 +608,7 @@ async function defaultPagesShots(scene, { instance, threadId }) {
     bb("plugin", "config", "oats", "set", "pages", "home, automations, souls, capabilities, teams, machines");
   }
 }
-/** At both widths: the agent stays in the roster, as a row that says its thread was deleted in bb, and its soul's page says "thread missing", with Start and Retire. */
+/** At both widths: the agent stays in the roster, as a row that says its thread was deleted in bb, and its soul's page says the same of it, with Start… and Retire…. */
 async function missingShots(scene, { instance, soul }) {
   for (const view of VIEWS) {
     const { viewport, suffix } = view;
@@ -616,8 +616,8 @@ async function missingShots(scene, { instance, soul }) {
     const page = await viewPage(browser, view, at);
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
-      const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent-detached")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return t; })()`, 30);
-      check(Boolean(line) && /thread missing/.test(line) && /Start…/.test(line) && /Retire…/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start… and Retire… (each opens its dialog)`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
+      const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return /Retire…/.test(t) ? t : ""; })()`, 30);
+      check(Boolean(line) && /deleted in bb/.test(line) && !/thread missing/.test(line) && /Start…/.test(line) && /Retire…/.test(line), `${at}: the soul's page says of ${instance} what its row says, "deleted in bb", with Start… and Retire… (each opens its dialog)`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
       await page.goto("/");

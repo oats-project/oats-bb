@@ -125,8 +125,8 @@ export default async (run) => {
     await views("real-form", async ({ page, at, viewport, shot }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      const button = await page.until(`${visible(testId("oats-new-agent"))} && !document.querySelector('[data-testid^="oats-page-link-"]')`, 30);
-      check(Boolean(button), `${at} under the default pages the sidebar has New agent, and no page link`, await page.evaluate(textOf(testId("oats-sidebar"))));
+      const button = await page.until(`${visible(testId("oats-new-agent"))} && JSON.stringify([...document.querySelectorAll('[data-testid^="oats-page-link-"]')].map((link) => link.getAttribute("data-testid"))) === '["oats-page-link-workspace"]'`, 30);
+      check(Boolean(button), `${at} under the default pages the sidebar has New agent, and ONE page link, Workspace`, await page.evaluate(textOf(testId("oats-sidebar"))));
       await page.evaluate(`document.querySelector(${q("oats-new-agent")}).click()`);
       // The form's own page, its first field the soul, with nothing chosen.
       const first = await page.until(`(() => { const f = document.querySelector(${q("oats-spawn-form")}); const c = f?.querySelector("button, select, textarea, input"); return c && c.disabled === false && document.querySelector(${q("oats-spawn-harness")})?.disabled !== true ? JSON.stringify({ path: location.pathname, first: c.getAttribute("data-testid"), title: document.querySelector(${q("oats-spawn-title")})?.innerText, soul: c.innerText.replace(/\\s+/g, " ").trim(), spawn: document.querySelector(${q("oats-spawn-submit")}).disabled, off: document.querySelector(${q("oats-disabled-reason")})?.innerText ?? "" }) : ""; })()`, 30);

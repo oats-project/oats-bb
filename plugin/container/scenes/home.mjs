@@ -494,13 +494,14 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default shows the home alone: no tile at all",
+    name: "the release's default: the home has a tile for each tab of the Workspace page, and none for Automations",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
       check(await open(page, within("oats-home-needs")), `${at} the home draws who needs the person`, await page.evaluate(textOf(PAGE)));
-      // (bb gives the plugin's settings a moment after the page: the tiles of the other pages, if they were drawn first, go.)
-      const tiles = await page.until(`document.querySelector(${JSON.stringify(within("oats-home-tiles"))}) === null ? "none" : ""`, 30);
-      check(tiles === "none", `${at} with the default the home has no tile: a tile leads to a page that is shown, and the agents have none`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
+      // (bb gives the plugin's settings a moment after the page: a tile of a page that is not shown, if it was drawn first, goes.)
+      const TILES = `JSON.stringify(${texts(`${within("oats-home-tiles")} button`)}.map((tile) => tile.replace(/[^A-Za-z].*$/s, "")))`;
+      const tiles = await page.until(`(() => { const now = ${TILES}; return now === '["Souls","Capabilities","Teams","Machines"]' ? now : ""; })()`, 30);
+      check(Boolean(tiles), `${at} with the default the home has one tile for each tab of the Workspace page, in its order: a tile leads to a page that is shown; Automations has none, and the agents have none`, tiles ?? (await page.evaluate(TILES)));
       await shown(page, check, at, within("oats-home-needs"), "what needs the person");
       await sound(page, viewport, check, at, "the home under the default");
       await page.shot(`home-${viewport.name}-default`);

@@ -186,9 +186,10 @@ async function open(page, viewport, threads, agent) {
   let whole = true;
   if (agent.thread === null) {
     await page.goto(`/plugins/oats/souls/${agent.soul}`);
-    const row = `document.querySelector(${JSON.stringify(`${testId("oats-soul-agent-elsewhere")}[data-instance="${agent.instance}"]`)})`;
+    // (A soul's page lists its agents as the roster says them: the row of one with no thread opens its own page.)
+    const row = `document.querySelector(${JSON.stringify(`${testId("oats-soul-agent")}[data-instance="${agent.instance}"]`)})`;
     await page.until(`Boolean(${row})`, 30);
-    await page.evaluate(`${row}.querySelector(${JSON.stringify(testId("oats-soul-agent-open"))}).click()`);
+    await page.evaluate(`${row}.querySelector("button").click()`);
   } else {
     const thread = threads.get(agent.thread);
     await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
@@ -1178,12 +1179,12 @@ const acts = [
         check(Boolean(dialog) && JSON.parse(dialog).about === GONE, `${at} Start… opens the lifecycle's dialog, about this agent`, dialog ?? (await page.evaluate(textOf("body")).catch((error) => String(error))));
         await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-confirm-cancel"))}) ?? document.querySelector(${JSON.stringify(testId("oats-confirm-close"))}))?.click()`);
         check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-confirm"))}) === null`, 10)), `${at} and its Cancel closes it`, await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-confirm"))})?.getAttribute("data-phase") ?? "gone"`));
-        // The default is in force: the Souls page, the other place of those acts, answers that it is not shown.
-        const notShown = await (async () => {
+        // The default is in force: the Workspace page's Souls tab, which leads to the other place of those acts (a soul's page), is shown.
+        const soulsShown = await (async () => {
           await page.goto("/plugins/oats/souls");
-          return page.until(`document.querySelector(${JSON.stringify(testId("oats-page-not-shown"))}) !== null ? "not shown" : ""`, 20);
+          return page.until(`document.querySelector(${JSON.stringify(testId("oats-souls-page"))}) !== null && document.querySelector(${JSON.stringify(testId("oats-page-not-shown"))}) === null ? "shown" : ""`, 20);
         })();
-        check(notShown === "not shown", `${at} and the Souls page, where those acts also are, is not shown under the default`, notShown);
+        check(soulsShown === "shown", `${at} and the Souls tab of the Workspace page is shown under the default`, soulsShown);
       } finally {
         pages(ALL_PAGES);
       }

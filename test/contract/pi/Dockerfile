@@ -7,29 +7,37 @@
 # only inside this container, on its loopback; no port is published and nothing of the
 # host is mounted but this repository, read-only. The models are mocks on loopback
 # (test/contract/mock-openai.mjs, mock-anthropic.mjs): no credential.
+#
+# Built from test/contract (docker build -f test/contract/pi/Dockerfile test/contract). bb-app,
+# pi, the kernel and Claude Code come from a committed lock, locks/pi (locks/README.md):
+# `npm ci`, every package at its version with its integrity checked, nothing resolved when
+# the image is built. The two packages pi installs by itself below are not in a lock:
+# locks/README.md, "What is not locked", says what each can bring.
 FROM node:22-bookworm
-# The pinned bb-app: the repository's bb-version file, passed by the test.
+# The pinned bb-app: the repository's bb-version file, passed by the test. The lock is the
+# one that installs it: a lock of another version fails the build here.
 ARG BB_APP_VERSION
-ARG PI_VERSION=1.5.2
-ARG CLAUDE_CODE_VERSION=2.1.328
-# The kernel and its pi bridge, one version: the provider's floor.
-ARG OATS_VERSION=0.70.5
 # The aweb extension for pi: what must NOT be in the pi configuration bb's server runs
 # with. It is installed into a second configuration, for the readiness check to refuse.
 ARG AWEB_PI_VERSION=0.5.0
 USER node
 ENV BB_TELEMETRY=false \
     NPM_CONFIG_PREFIX=/home/node/.npm-global \
+    NPM_CONFIG_UPDATE_NOTIFIER=false \
     PATH=/home/node/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
-RUN npm install -g --no-audit --no-fund "bb-app@${BB_APP_VERSION}" "@earendil-works/pi-coding-agent@${PI_VERSION}" "@awebai/oats@${OATS_VERSION}" "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+COPY --chown=node:node locks/install.sh locks/pi/package.json locks/pi/package-lock.json /home/node/tools/
+RUN sh /home/node/tools/install.sh \
+ && test "$(bb --version)" = "${BB_APP_VERSION:?the build is told the pinned bb-app (--build-arg BB_APP_VERSION)}"
 WORKDIR /home/node
+# The kernel and its pi bridge, one version (the provider's floor): the bridge at the
+# version of the kernel the lock names.
 # The pi configuration of this container's bb: @awebai/oats-pi, and not @awebai/pi.
-RUN pi install "npm:@awebai/oats-pi@${OATS_VERSION}"
+RUN pi install "npm:@awebai/oats-pi@$(node -p 'require("/home/node/tools/package.json").dependencies["@awebai/oats"]')"
 # A second one, as a host that also runs tmux pi agents has it: both packages.
 RUN mkdir -p /home/node/pi-with-aweb \
- && PI_CODING_AGENT_DIR=/home/node/pi-with-aweb pi install "npm:@awebai/oats-pi@${OATS_VERSION}" \
+ && PI_CODING_AGENT_DIR=/home/node/pi-with-aweb pi install "npm:@awebai/oats-pi@$(node -p 'require("/home/node/tools/package.json").dependencies["@awebai/oats"]')" \
  && PI_CODING_AGENT_DIR=/home/node/pi-with-aweb pi install "npm:@awebai/pi@${AWEB_PI_VERSION}"
 # The mock model, and an extension whose tool opens one of pi's blocking dialogs.
-COPY --chown=node:node models.json /home/node/.pi/agent/models.json
-COPY --chown=node:node contract-dialog.ts /home/node/.pi/agent/extensions/contract-dialog.ts
+COPY --chown=node:node pi/models.json /home/node/.pi/agent/models.json
+COPY --chown=node:node pi/contract-dialog.ts /home/node/.pi/agent/extensions/contract-dialog.ts
 CMD ["sleep", "infinity"]

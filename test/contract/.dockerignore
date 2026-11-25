@@ -1,0 +1,6 @@
+# The contract images are built from this directory (each Dockerfile with `-f`): what a build
+# reads is the locks and the pi image's two files, and nothing else is sent to it.
+*
+!locks/
+!pi/models.json
+!pi/contract-dialog.ts

@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { readPiPackages } from "../../oats-package/capabilities/oats-bb/lib/pi-config.mjs";
+import { piModelCheckOffUntilRestart, readPiPackages } from "../../oats-package/capabilities/oats-bb/lib/pi-config.mjs";
 import { UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, piModelRow, projectRow, runBin, scratch } from "../fixtures/harness.mjs";
 
 const envList = (names) => ({ builtInGit: { status: "not logged in" }, variables: names.map((name) => ({ name, value: null, secret: true, note: null })), inheritedVariables: [] });
@@ -246,4 +246,111 @@ test("oats bb doctor carries the same warning", async (t) => {
   const run = await runBin(["doctor", "--json"], { env: { ...bb.env, OATS_SETTINGS: JSON.stringify(backend.settings({ cli: bb.cli })) } });
   assert.equal(run.status, 0);
   assert.match(run.doc.warnings.find((warning) => warning.code === "session-provider-pi-not-ready").message, /E_BACKEND_PI_LISTENER/);
+});
+
+// The pi model check's one silent off-switch (lib/pi-model.mjs): bb's pi keeps the settings
+// it started with, so after a change of them under a running bb no model is refused until
+// bb restarts. A read with no planned launch says so.
+const CHECK_OFF = { code: "session-provider-pi-model-check-off", message: "the pi model check is off until bb restarts: bb's pi settings changed after it started (restart bb-app to turn it back on)" };
+const checkOff = (result) => result.warnings.filter((warning) => warning.code === CHECK_OFF.code);
+
+test("bb's pi settings changed after bb started: a read with no planned launch warns that the pi model check is off until bb restarts, and nothing is refused; after a restart of bb it is not said", async (t) => {
+  const { backend, check } = await setup(t);
+  assert.deepEqual(checkOff((await check()).result), [], "settings older than this bb's start: the check is on, and nothing is said");
+  backend.piSettings({ packages: [BRIDGE] }, { bbRestarted: false });
+  const plain = (await check()).result;
+  assert.equal(plain.status, "ready", "a warning, not a problem");
+  assert.deepEqual(plain.problems, []);
+  assert.deepEqual(checkOff(plain), [CHECK_OFF]);
+  // The check of a planned launch is not told: a pi launch whose model the list cannot settle gets its own warning, and a Claude launch nothing of pi's.
+  assert.deepEqual((await check(PI_LAUNCH)).result.warnings, []);
+  assert.deepEqual((await check({ harness: "claude", yolo: true, args: [] })).result.warnings, []);
+  // bb restarted since: its pi runs by the settings as they are.
+  backend.piSettings({ packages: [BRIDGE] });
+  assert.deepEqual(checkOff((await check()).result), []);
+});
+
+test("oats bb doctor shows that the pi model check is off, as a warning line and in its JSON, and still exits ready", async (t) => {
+  const { backend, bb } = await setup(t);
+  backend.piSettings({ packages: [BRIDGE] }, { bbRestarted: false });
+  const env = { ...bb.env, OATS_SETTINGS: JSON.stringify(backend.settings({ cli: bb.cli })) };
+  const text = await runBin(["doctor"], { env });
+  assert.equal(text.status, 0, text.stdout + text.stderr);
+  assert.ok(text.stdout.split("\n").includes(`  warning ${CHECK_OFF.code}: ${CHECK_OFF.message}`), text.stdout);
+  const json = await runBin(["doctor", "--json"], { env });
+  assert.equal(json.status, 0);
+  assert.equal(json.doc.status, "ready");
+  assert.deepEqual(checkOff(json.doc), [CHECK_OFF]);
+});
+
+test("no pi launch is possible here (the bridge is not listed): the read says what a pi launch is refused for, and nothing of its model check", async (t) => {
+  const { backend, check } = await setup(t);
+  for (const packages of [[], ["npm:@awebai/oats-pi-extra"], undefined]) {
+    backend.piSettings(packages === undefined ? {} : { packages }, { bbRestarted: false });
+    const plain = (await check()).result;
+    assert.deepEqual(checkOff(plain), [], JSON.stringify(packages));
+    // The rule itself, asked alone: it reads the bridge too, whoever asks it.
+    assert.equal(piModelCheckOffUntilRestart(backend.piAgentDir, { dataDir: backend.dataDir, server: backend.server }), false, JSON.stringify(packages));
+    assert.deepEqual(plain.warnings.filter((warning) => /pi/.test(warning.code)).map((warning) => warning.code), ["session-provider-pi-not-ready"]);
+  }
+  backend.piSettings({ packages: [BRIDGE] }, { bbRestarted: false });
+  assert.equal(piModelCheckOffUntilRestart(backend.piAgentDir, { dataDir: backend.dataDir, server: backend.server }), true, "with the bridge");
+  assert.equal(piModelCheckOffUntilRestart("pi-agent", { dataDir: backend.dataDir, server: backend.server }), false, "a directory that is no absolute path is not read");
+  // Nor where the bridge is listed and the launch is refused for something else: one warning of pi, the refusal.
+  backend.piSettings({ packages: [BRIDGE, "npm:@awebai/pi"] }, { bbRestarted: false });
+  const refused = (await check()).result;
+  assert.deepEqual(refused.warnings.filter((warning) => /pi/.test(warning.code)).map((warning) => warning.code), ["session-provider-pi-not-ready"]);
+  // And with no settings.json at all (nothing says when one was removed), or one that cannot be read.
+  rmSync(join(backend.piAgentDir, "settings.json"));
+  assert.deepEqual(checkOff((await check()).result), []);
+  backend.piSettings("{ not json", { bbRestarted: false });
+  assert.deepEqual(checkOff((await check()).result), []);
+});
+
+for (const [name, record] of [
+  ["no record of its start in its data directory", null],
+  ["a record that is not JSON", "{ not json"],
+  ["a record with no start", { serverUrl: "SERVER", version: "0.50.1" }],
+  ["a record whose start is no date", { serverUrl: "SERVER", startedAt: "soon" }],
+  ["a record of another bb's server", { serverUrl: "http://127.0.0.1:1", startedAt: "1999-01-01T00:00:00.000Z" }],
+]) {
+  test(`when bb started cannot be read (${name}), the read says nothing of the pi model check: the check itself warns at a launch`, async (t) => {
+    const { backend, check } = await setup(t);
+    backend.piSettings({ packages: [BRIDGE] }, { bbRestarted: false });
+    assert.deepEqual(checkOff((await check()).result), [CHECK_OFF], "with the record, it is said");
+    const file = join(backend.dataDir, "bb-app-runtime.json");
+    if (record === null) rmSync(file);
+    else writeFileSync(file, typeof record === "string" ? record : JSON.stringify(record).replace("SERVER", backend.server));
+    const plain = (await check()).result;
+    assert.deepEqual(checkOff(plain), []);
+    assert.equal(plain.status, "ready");
+  });
+}
+
+test("where the pi model check is off for something a restart of bb does not end, or bb runs no pi, the warning is not given", async (t) => {
+  const { backend, check } = await setup(t);
+  // pi's enabledModels narrows bb's list: the check refuses nothing by that setting, restart or not.
+  backend.piSettings({ packages: [BRIDGE], enabledModels: ["github-copilot/*"] }, { bbRestarted: false });
+  assert.deepEqual(checkOff((await check()).result), []);
+  // An enabledModels that names none narrows nothing.
+  for (const enabledModels of [[], null]) {
+    backend.piSettings({ packages: [BRIDGE], enabledModels }, { bbRestarted: false });
+    assert.deepEqual(checkOff((await check()).result), [CHECK_OFF], JSON.stringify(enabledModels));
+  }
+  // A bb with no pi installed, or that reports no pi provider, is told nothing of pi, whatever a pi configuration on this host holds.
+  backend.state.piProvider = { providerId: "pi", status: "not_installed", statusMessage: null };
+  assert.deepEqual(checkOff((await check()).result), []);
+  backend.state.piProvider = null;
+  assert.deepEqual(checkOff((await check()).result), []);
+});
+
+test("a bb that does not answer is told nothing of the pi model check: its record of its start may be an earlier run's", async (t) => {
+  const { backend, check } = await setup(t);
+  backend.piSettings({ packages: [BRIDGE] }, { bbRestarted: false });
+  assert.deepEqual(checkOff((await check()).result), [CHECK_OFF], "while it answers, it is said");
+  // The same server, the same record of its start, and a /health that is not ok.
+  backend.state.health = { ok: false };
+  const down = (await check()).result;
+  assert.ok(down.problems.some((problem) => problem.code === "E_BACKEND_UNREACHABLE"), JSON.stringify(down));
+  assert.deepEqual(checkOff(down), []);
 });

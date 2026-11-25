@@ -39,7 +39,8 @@ describe("the harnesses the bb session provider declares", () => {
   it("the server reads it once for every client and names the machine bb's models are asked of", async () => {
     backend = await startBackend();
     const [first, second] = await Promise.all([backend.rpc<{ harnesses: string[]; hostId: string | null }>("spawnHarnesses"), backend.rpc<{ harnesses: string[]; hostId: string | null }>("spawnHarnesses")]);
-    expect(first).toEqual({ harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true });
+    // (And where a spawn may run: a bb thread first, then the kernel's own backends, with the harnesses the kernel launches itself: `oats version --json`, recorded.)
+    expect(first).toEqual({ harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true, backends: ["bb", "tmux"], kernelHarnesses: ["pi", "claude", "codex"] });
     expect(second).toEqual(first);
     const calls = (await backend.fake.calls()).filter((call) => call.verb === "capabilities show");
     expect(calls.map((call) => call.argv)).toEqual([["capabilities", "show", "oats.bb", "--json"]]);
@@ -58,7 +59,7 @@ describe("the harnesses the bb session provider declares", () => {
   const ABSENT = readFileSync(join(process.cwd(), "test/fixtures/spawn/capabilities-show-bb-absent.json"), "utf8");
   it("a deployment with NO bb session provider is an answer, not a failed read: no harness, and `provider: false`", async () => {
     backend = await startBackend({ verbs: { "capabilities show": { stdout: ABSENT } } });
-    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", provider: false });
+    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", provider: false, backends: ["tmux"], kernelHarnesses: ["pi", "claude", "codex"] });
   });
 
   it("the same code for a provider the workspace DOES hold is a failed read, told by what the refusal names, not by its sentence: the form's read and the dialogs' are refused alike", async () => {
@@ -77,11 +78,11 @@ describe("the harnesses the bb session provider declares", () => {
     }
     // And the true case with its sentence reworded is still the answer: the code and the structure decide.
     backend = await startBackend({ verbs: { "capabilities show": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message: "(reworded)", details: { name: "oats.bb" } } }), exit: 1 } } });
-    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", provider: false });
+    expect(await backend.rpc("spawnHarnesses")).toMatchObject({ harnesses: [], hostId: "host_falcon", provider: false });
     expect(await backend.rpc("startCheck", { instance: "kernel-fix-developer" })).toMatchObject({ harnesses: [] });
   });
 
-  it("there a preview and a spawn name NO backend, no mode and no harness: the kernel decides, as `oats spawn <soul>` does; a harness named is refused before any process", async () => {
+  it("there a preview and a spawn name NO backend, no mode and no harness: the kernel decides, as `oats spawn <soul>` does; a harness named is one the KERNEL launches, never bb's", async () => {
     // (The kernel's own preview there, recorded by the real run: on tmux, with NO mode decided.)
     backend = await startBackend({ verbs: { "capabilities show": { stdout: ABSENT }, "spawn --preview": { stdout: readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8") } } });
     const plan = (await backend.rpc("spawnPlan", { soul: "oats-developer", task: "" })) as { facts: { facts: { label: string; parts: { text: string }[] }[] } };
@@ -94,10 +95,53 @@ describe("the harnesses the bb session provider declares", () => {
       expect(call.argv.slice(0, 2), call.verb).toEqual(["spawn", "oats-developer"]);
       for (const flag of ["--backend", "--yolo", "--harness", "--model"]) expect(call.argv, `${call.verb} ${flag}`).not.toContain(flag);
     }
-    const before = (await backend.fake.calls()).length;
-    await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", harness: "pi" })).rejects.toThrow('"pi" is not a harness the bb session provider declares (none)');
-    expect((await backend.fake.calls()).filter((call) => call.verb.startsWith("spawn")).length).toBe(calls.length);
-    expect((await backend.fake.calls()).length).toBeGreaterThanOrEqual(before);
+    // A harness named there: one of the kernel's own list goes to the kernel, still with no backend and no mode;
+    // anything else starts no process.
+    await backend.rpc("spawnPlan", { soul: "oats-developer", task: "", harness: "codex" });
+    const named = (await backend.fake.calls()).filter((call) => call.verb === "spawn --preview").at(-1)!;
+    expect(named.argv.slice(named.argv.indexOf("--harness"), named.argv.indexOf("--harness") + 2)).toEqual(["--harness", "codex"]);
+    for (const flag of ["--backend", "--yolo"]) expect(named.argv).not.toContain(flag);
+    const before = (await backend.fake.calls()).filter((call) => call.verb.startsWith("spawn")).length;
+    await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", harness: "gemini" })).rejects.toThrow('"gemini" is not a harness this OATS launches (pi, claude, codex)');
+    await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "bb" })).rejects.toThrow('"bb" is not a session backend a spawn can name here (tmux)');
+    expect((await backend.fake.calls()).filter((call) => call.verb.startsWith("spawn")).length).toBe(before);
+  });
+
+  // THE ARGV TABLE: what a spawn names, by where it runs. (`--yolo` is what the plugin asks of bb, and of bb alone.)
+  it("where the provider is there: a bb thread by default (`--backend bb --yolo`); tmux chosen names `--backend tmux` and NO mode, with a harness of the kernel's own; a place nothing lists starts no process", async () => {
+    backend = await startBackend();
+    const { rpc, fake } = backend;
+    const last = async (verb: string) => (await fake.calls()).filter((call) => call.verb === verb).at(-1)!.argv;
+    const flags = (argv: string[]) => argv.filter((part, at) => part.startsWith("--") && !["--json", "--preview", "--name", "--task-file", "--idempotency-key", "--expect-decision"].includes(part) ? true : ["--backend", "--harness"].includes(argv[at - 1] ?? ""));
+    // Nothing chosen, and bb chosen: the same spawn.
+    await rpc("spawnPlan", { soul: "oats-developer", task: "" });
+    expect(flags(await last("spawn --preview"))).toEqual(["--backend", "bb", "--yolo"]);
+    await rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "bb", harness: "pi" });
+    expect(flags(await last("spawn --preview"))).toEqual(["--backend", "bb", "--yolo", "--harness", "pi"]);
+    // tmux chosen: the backend named, no mode; the preview and the apply alike.
+    await rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "tmux" });
+    expect(flags(await last("spawn --preview"))).toEqual(["--backend", "tmux"]);
+    await rpc("spawn", { soul: "oats-developer", task: "", backend: "tmux", key: "spawn-7f3e2d1c" });
+    expect(flags(await last("spawn"))).toEqual(["--backend", "tmux"]);
+    // Its harness is one the kernel launches: codex is, though the bb provider declares none such; and on bb it is refused.
+    await rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "tmux", harness: "codex" });
+    expect(flags(await last("spawn --preview"))).toEqual(["--backend", "tmux", "--harness", "codex"]);
+    const before = (await fake.calls()).filter((call) => call.verb.startsWith("spawn")).length;
+    await expect(rpc("spawnPlan", { soul: "oats-developer", task: "", harness: "codex" })).rejects.toThrow('"codex" is not a harness the bb session provider declares (claude, pi)');
+    await expect(rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "tmux", harness: "gemini" })).rejects.toThrow('"gemini" is not a harness this OATS launches (pi, claude, codex)');
+    await expect(rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "screen" })).rejects.toThrow('"screen" is not a session backend a spawn can name here (bb, tmux)');
+    await expect(rpc("spawn", { soul: "oats-developer", task: "", backend: "--yolo", key: "spawn-00aa11bb" })).rejects.toThrow("is not a session backend a spawn can name here");
+    expect((await fake.calls()).filter((call) => call.verb.startsWith("spawn")).length).toBe(before);
+  });
+
+  it("a preview the kernel refuses spawns nothing: tmux chosen where the kernel has no such backend is its refusal, and no apply is asked", async () => {
+    // SHAPED: the kernel's refusal of a backend it does not have, in the words of OATS 0.70.5 lib/session-providers.mjs
+    // (`E_BACKEND_UNKNOWN`); the real run cannot make it (its kernel has tmux).
+    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_BACKEND_UNKNOWN", message: 'unknown session backend "tmux": no capability of this instance declares it as a session provider' } });
+    backend = await startBackend({ verbs: { "spawn --preview": { stdout: refusal, exit: 1 } } });
+    await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "tmux" })).rejects.toThrow("E_BACKEND_UNKNOWN");
+    await expect(backend.rpc("spawn", { soul: "oats-developer", task: "", backend: "tmux", key: "spawn-5e4d3c2b" })).rejects.toThrow("E_BACKEND_UNKNOWN");
+    expect((await backend.fake.calls()).filter((call) => call.verb === "spawn")).toEqual([]);
   });
 });
 

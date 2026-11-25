@@ -170,6 +170,8 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
 export type FormFacts = Omit<PreviewFacts, "prompts">;
 /** The preview's row of an agent that will not run on a bb thread: where it runs (the instance panel's Session card says the same of it). */
 export const RUNS_IN = "Runs in";
+/** A session backend as a person reads it: where the agent's session is. One the plugin has no words for is its id. */
+export const backendLabel = (backend: string): string => (backend === "bb" ? "bb thread" : backend === "tmux" ? "tmux session" : backend);
 /** The model of a spawn on bb that names none for its harness: bb's own default for it. */
 export const bbDefaultModel = (harness: string): string => `bb’s default for ${harnessLabel(harness)}`;
 
@@ -261,7 +263,7 @@ export function formFacts(preview: unknown, options: { name?: string | null; ful
   // Where it will run, from the preview's own `backend`. On bb: "Session / bb thread", as it was. On tmux (a deployment
   // with no bb session provider: the kernel decided): "Runs in / tmux session", the words of the instance panel's
   // Session card, in view in the form's column.
-  if (backend !== null) after("Harness", backend === "tmux" ? { label: RUNS_IN, parts: [{ text: "tmux session" }] } : { label: "Session", parts: [{ text: backend === "bb" ? "bb thread" : backend }] });
+  if (backend !== null) after("Harness", backend === "tmux" ? { label: RUNS_IN, parts: [{ text: backendLabel(backend) }] } : { label: "Session", parts: [{ text: backendLabel(backend) }] });
   return { ...facts, facts: rows };
 }
 

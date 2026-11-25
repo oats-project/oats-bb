@@ -85,7 +85,7 @@ export const host = defineRpcContract({
   version: {
     experimental_retryable: true,
     input: hostRead,
-    output: answer(z.object({ version: z.string(), desktopApi: z.number().nullable(), features: z.array(z.string()), apis: z.record(z.string(), z.number()) })),
+    output: answer(z.object({ version: z.string(), desktopApi: z.number().nullable(), features: z.array(z.string()), apis: z.record(z.string(), z.number()), harnesses: z.array(z.string()), sessionBackends: z.array(z.string()) })),
   },
   /**
    * `oats instance events <instance> --home <abs> --since <iso> --json`: what one instance's events

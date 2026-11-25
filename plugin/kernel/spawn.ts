@@ -28,11 +28,27 @@ export type SpawnInput = {
   relation?: SpawnRelation | undefined;
   /** false: the deployment has no bb session provider (`provider` of the harness read). The spawn then names no backend: the kernel decides, as `oats spawn <soul>` does there. */
   provider?: boolean | undefined;
+  /** A session backend of the kernel's own a person chose over bb ("tmux"): the spawn names it, and no mode. Left out: a bb thread where the provider is there. */
+  backend?: string | undefined;
 };
-type Checked = { soul: string; name: string | null; harness: string | null; model: string | null; relation: SpawnRelation | null; /** the spawn is a bb thread: the deployment has the bb session provider */ bb: boolean };
+type Checked = {
+  soul: string;
+  name: string | null;
+  harness: string | null;
+  model: string | null;
+  relation: SpawnRelation | null;
+  /** the spawn is a bb thread: the deployment has the bb session provider, and no other backend was chosen */
+  bb: boolean;
+  /** the kernel's own backend chosen over bb; null: bb, or (no provider) the kernel's choice */
+  backend: string | null;
+};
 
 /** A harness's id as a manifest declares it: never an option, never a path. */
 const HARNESS_ID = /^[a-z][a-z0-9-]{0,39}$/;
+/** A session backend's id as the kernel lists it: never an option, never a path. */
+const BACKEND_ID = /^[a-z][a-z0-9-]{0,39}$/;
+/** The bb session provider's backend: what a spawn on bb names (`--backend bb`). */
+export const BB_BACKEND = "bb";
 
 /**
  * Refuses, before any process: a soul `oats souls` does not list, a name or a relation's instance
@@ -65,9 +81,9 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
     if (root !== undefined && (!root.startsWith("/") || root.includes("\0"))) return err(codes.invalidInput, "a relation's agents root must be the absolute path the kernel named");
     relation = { kind: input.relation.kind, to: to.value, ...(root === undefined ? {} : { root }) };
   }
-  // No provider, no harness of its list: a harness named there is one nothing declared.
-  if (input.provider === false && input.harness !== undefined) return err(codes.invalidInput, "this deployment has no bb session provider: no harness can be named for a spawn");
-  return ok({ soul: soul.value, name, harness: input.harness ?? null, model, relation, bb: input.provider !== false });
+  // A backend named is one of the kernel's own: bb is asked for by naming none (where the provider is there).
+  if (input.backend !== undefined && (!BACKEND_ID.test(input.backend) || input.backend === BB_BACKEND)) return err(codes.invalidInput, `"${input.backend}" is not a session backend of the kernel's own`);
+  return ok({ soul: soul.value, name, harness: input.harness ?? null, model, relation, bb: input.provider !== false && input.backend === undefined, backend: input.backend ?? null });
 }
 
 /**
@@ -83,10 +99,13 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
 const common = (input: Checked, taskFile: string | null): string[] => [
   "spawn",
   input.soul,
-  // On a deployment with NO bb session provider (`oats capabilities show oats.bb`: E_CAPABILITY_UNKNOWN) neither is
-  // passed: there is no bb backend to ask for, and the kernel decides as `oats spawn <soul>` does there (the soul's
-  // own backend and mode). Its preview says which backend that is.
-  ...(input.bb ? ["--backend", "bb", "--yolo"] : []),
+  // The three spawns, by what they name:
+  // - a bb thread (the provider is there, no other backend chosen): `--backend bb --yolo`, bb's full mode;
+  // - a backend of the kernel's own a person chose over bb (tmux): `--backend <id>`, and NO mode: `--yolo` is what the
+  //   plugin asks of bb, never of a harness in a terminal (the kernel and the soul decide it there);
+  // - a deployment with NO bb session provider (`providerAbsent`), nothing chosen: neither: the kernel decides as
+  //   `oats spawn <soul>` does there. Its preview says which backend that is.
+  ...(input.bb ? ["--backend", BB_BACKEND, "--yolo"] : input.backend === null ? [] : ["--backend", input.backend]),
   ...(input.name === null ? [] : ["--name", input.name]),
   ...(taskFile === null ? [] : ["--task-file", taskFile]),
   ...(input.harness === null ? [] : ["--harness", input.harness]),
@@ -232,10 +251,11 @@ export function parseHarnessList(document: unknown): Result<{ harnesses: string[
 
 /**
  * A harness named for a spawn, a start or a restart (`--harness <id>`): one the bb session provider
- * declares. Anything else starts no process.
+ * declares. Anything else starts no process. (`by`: who lists them, for the refusal: the provider, or
+ * for a spawn that is not a bb thread the kernel itself.)
  */
-export function checkHarness(harness: string, declared: readonly string[]): Result<string> {
-  return HARNESS_ID.test(harness) && declared.includes(harness) ? ok(harness) : err(codes.invalidInput, `"${harness}" is not a harness the bb session provider declares (${declared.join(", ") || "none"})`);
+export function checkHarness(harness: string, declared: readonly string[], by = "the bb session provider declares"): Result<string> {
+  return HARNESS_ID.test(harness) && declared.includes(harness) ? ok(harness) : err(codes.invalidInput, `"${harness}" is not a harness ${by} (${declared.join(", ") || "none"})`);
 }
 /**
  * A model named for a spawn, a start or a restart (`--model <id>`): any id a person typed or picked,

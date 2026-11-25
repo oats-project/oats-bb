@@ -38,6 +38,10 @@ export type Harnesses = {
   error: string | null;
   /** false: the deployment has no bb session provider: a spawn there is not a bb thread (nothing of bb's is offered for it: no harness, no model list). */
   provider: boolean;
+  /** Where a spawn may run, in the order offered ("bb" first where the provider is there, then the kernel's own: "tmux"); fewer than two: nothing to choose. */
+  backends: string[];
+  /** The harnesses the kernel launches itself: what a spawn that is not a bb thread may name. */
+  kernel: HarnessOption[];
   retry(): void;
 };
 /** The first entry of the harness field: selected at the start, and nothing is passed while it is. */
@@ -57,6 +61,8 @@ export function useHarnesses(): Harnesses {
     choice: ids.length > 1,
     hostId: read.data?.hostId ?? null,
     provider: read.data?.provider !== false,
+    backends: read.data?.backends ?? [],
+    kernel: (read.data?.kernelHarnesses ?? []).map((id) => ({ id, label: harnessLabel(id) })),
     error: read.status === "error" ? read.error : null,
     retry: read.retry,
   };

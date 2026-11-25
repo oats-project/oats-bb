@@ -20,7 +20,7 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import { isUnconfirmed } from "../../contract/shared";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
-import { bbDefaultModel, modelCheck, MODEL_HELD, RUNS_IN, spawnProblem, withoutDefault } from "../../model/spawn";
+import { backendLabel, bbDefaultModel, modelCheck, MODEL_HELD, RUNS_IN, spawnProblem, withoutDefault } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
 import { newKey } from "../keys";
 import { openAgentPage } from "../home/agent-tab";
@@ -288,6 +288,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   useEffect(() => setSoul(soulOf(subPath)), [subPath]);
   const [task, setTask] = useState("");
   const [harness, setHarness] = useState("");
+  // Where it runs: "" is the first place offered (a bb thread where the deployment has the bb session provider).
+  const [backend, setBackend] = useState("");
   const [modelPick, setModelPick] = useState("");
   const [modelTyped, setModelTyped] = useState("");
   const [relation, setRelation] = useState<W.RelationKind>("unrelated");
@@ -311,6 +313,14 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
    * Which field keeps these values from being asked of the kernel; null when they can be. No sentence says it beside
    * Spawn: the field is empty in view (its placeholder says what it wants) or carries its own mark.
    */
+  // ---- where it runs, and the harnesses that can be named there ----
+  // A choice only where there are two places (the bb session provider AND a backend of the kernel's own): the first
+  // is the default and names nothing. On a bb thread the harnesses are the provider's; anywhere else the kernel's own.
+  const backendChoice = harnesses.backends.length > 1;
+  const place = backendChoice && backend !== "" && harnesses.backends.includes(backend) ? backend : (harnesses.backends[0] ?? "");
+  const onBb = harnesses.provider && (place === "" || place === "bb");
+  const offered = onBb ? harnesses.options : harnesses.kernel;
+  const harnessChoice = offered.length > 1;
   const off: "soul" | "cannot" | "name" | "model" | "relation" | null =
     chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
   const input: Input | null = useMemo(
@@ -321,11 +331,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             soul,
             task,
             ...(name === "" ? {} : { name }),
-            ...(harness === "" || !harnesses.choice ? {} : { harness }),
+            ...(harness === "" || !harnessChoice ? {} : { harness }),
+            ...(!backendChoice || place === harnesses.backends[0] ? {} : { backend: place }),
             ...(model === "" ? {} : { model }),
             ...(relation === "unrelated" ? {} : { relation: { kind: relation, to: relative } }),
           },
-    [off, soul, task, name, harness, harnesses.choice, model, relation, relative],
+    [off, soul, task, name, harness, harnessChoice, backendChoice, place, harnesses.backends, model, relation, relative],
   );
   const key = input === null ? null : JSON.stringify(input);
 
@@ -335,8 +346,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const [asking, setAsking] = useState(false);
   const [again, setAgain] = useState(0);
   const serial = useRef(0);
-  const latest = useRef<{ key: string | null; input: Input | null; harnessField: boolean }>({ key, input, harnessField: harnesses.choice });
-  latest.current = { key, input, harnessField: harnesses.choice };
+  const latest = useRef<{ key: string | null; input: Input | null; harnessField: boolean }>({ key, input, harnessField: harnessChoice });
+  latest.current = { key, input, harnessField: harnessChoice };
   useEffect(() => {
     const ticket = ++serial.current;
     if (key === null || held) {
@@ -381,7 +392,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const effectiveHarness = harness !== "" ? harness : shown(modelAnswer?.facts.resolved?.harness ?? "") || null;
   // What bb has for that harness (its models, whether it can run it here) is asked only where the agent will be a bb
   // thread. On a deployment with no bb session provider nothing of bb's is offered: the model is "Default" or a typed id.
-  const bbHarness = harnesses.provider ? effectiveHarness : null;
+  const bbHarness = onBb ? effectiveHarness : null;
   const suggestions = useModelSuggestions(bbHarness);
   // The soul's own harness: what the kernel resolves for this soul with no harness chosen. It is kept from the
   // preview with none chosen; where none was asked for this soul (a harness picked before the soul, or kept while
@@ -396,7 +407,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const [ownFailed, setOwnFailed] = useState<string | null>(null);
   const ownTryNow = useRef(ownTry);
   ownTryNow.current = ownTry;
-  const ownAsked = input !== null && !held && harness !== "" && harnesses.choice && !ownKnown && ownFailed !== ownTry;
+  const ownAsked = onBb && input !== null && !held && harness !== "" && harnessChoice && !ownKnown && ownFailed !== ownTry;
   useEffect(() => {
     if (!ownAsked) return;
     let current = true;
@@ -418,7 +429,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // harness the person chose that is not the soul's own, and a bare id that several of bb's listed models serve needs
   // its provider picked. That no listed model serves it is the provider's to judge, at the launch.
   // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
-  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models : null, byProvider: effectiveHarness !== null && BB_PROVIDER[effectiveHarness] === "pi" });
+  const modelHeld = modelCheck({ chosenHarness: onBb && harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models : null, byProvider: effectiveHarness !== null && BB_PROVIDER[effectiveHarness] === "pi" });
   // The "Required" mark waits for the soul's own harness to be known: until then Spawn is off as for any read.
   const modelMark = ownAsked && modelHeld.held === MODEL_HELD.required ? null : modelHeld.held;
   // bb's list for the harness is being read: until it answers, whether bb serves the model is not known.
@@ -435,7 +446,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   }, [listLoading, effectiveHarness]);
   const modelsReading = listLoading && !listLate;
   // The kernel resolved a harness and no model for it, and none is chosen: for the soul's own harness bb will start it on bb's own default.
-  const unsetModel = harnesses.provider && modelHeld.held !== MODEL_HELD.required && model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
+  const unsetModel = onBb && modelHeld.held !== MODEL_HELD.required && model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
   // What bb says of the harness this spawn would run on, when bb cannot run it here: said under the field, before any press.
   const notReady = harnessState(bbHarness);
 
@@ -619,7 +630,11 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // ---- drawing ----
   // A model is required of the person: the column promises no default for the harness.
   const heldHarness = modelHeld.held === MODEL_HELD.required ? (modelAnswer?.facts.resolved?.harness ?? null) : null;
-  const withoutModelDefault = (facts: SpawnFacts): SpawnFacts => (heldHarness === null ? facts : { ...facts, facts: withoutDefault(facts.facts, heldHarness) });
+  // Where it runs is said once: by the form's own field where there is one to choose in, else by the column's row.
+  const withoutModelDefault = (all: SpawnFacts): SpawnFacts => {
+    const facts = backendChoice ? { ...all, facts: all.facts.filter((fact) => fact.label !== RUNS_IN) } : all;
+    return heldHarness === null ? facts : { ...facts, facts: withoutDefault(facts.facts, heldHarness) };
+  };
   let column: ReactNode;
   // No soul yet: nothing will be created, and nothing is drawn (the Soul field is empty, in view).
   if (chosen === undefined) column = null;
@@ -692,7 +707,24 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               <textarea data-testid="oats-spawn-task" data-field="task" rows={4} className={`${INPUT} py-2`} value={task} placeholder={W.TASK_PLACEHOLDER} onChange={(event) => setTask(event.target.value)} />
             </Field>
             {/* In its place while the provider's list is read, so that nothing jumps when it arrives; gone only where there is nothing to choose. */}
-            {harnesses.choice || harnesses.status === "loading" || harnessFailed ? (
+            {backendChoice ? (
+              <Field label={RUNS_IN}>
+                <Choice
+                  testId="oats-spawn-backend"
+                  field="backend"
+                  value={place}
+                  placeholder={backendLabel(place)}
+                  filterLabel={W.FILTER}
+                  options={harnesses.backends.map((id) => ({ id, label: backendLabel(id) }))}
+                  // (A harness is one of the place's own list: chosen for another place, it is not kept.)
+                  onChange={(next) => {
+                    setBackend(next);
+                    setHarness("");
+                  }}
+                />
+              </Field>
+            ) : null}
+            {harnessChoice || harnesses.status === "loading" || harnessFailed ? (
               <>
                 <Field
                   label={W.HARNESS_LABEL}
@@ -704,15 +736,16 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                   <Choice
                     testId="oats-spawn-harness"
                     field="harness"
-                    value={harnesses.choice ? harness : "\u0000"}
-                    disabled={!harnesses.choice}
+                    value={harnessChoice ? harness : "\u0000"}
+                    disabled={!harnessChoice}
                     placeholder={harnessFailed ? SOUL_DEFAULT : W.READING_HARNESSES}
                     filterLabel={W.FILTER}
                     options={[
                       // (The soul's own harness that bb cannot run here carries the mark an entry of the list does: the line under the field says only the way on.)
                       { id: "", label: `${resolvedLabel(SOUL_DEFAULT, harness === "" ? (resolved?.harness ?? null) : null)}${harness === "" && notReady !== null ? ` · ${notReady.mark}` : ""}` },
-                      ...harnesses.options.map((option) => {
-                        const state = harnessState(option.id);
+                      ...offered.map((option) => {
+                        // (What bb can run is said of a bb thread's harness alone.)
+                        const state = onBb ? harnessState(option.id) : null;
                         return state === null ? option : { ...option, label: `${option.label} · ${state.mark}`, unavailable: true };
                       }),
                     ]}

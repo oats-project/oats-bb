@@ -1,20 +1,28 @@
-// The plain deployment's part of the real run (parts/README.md): spawning from bb on a deployment
-// that does NOT have the bb session provider.
+// The plain deployment's part of the real run (parts/README.md): spawning from bb an agent that is
+// NOT a bb thread. Twice: on a deployment that does NOT have the bb session provider (the kernel
+// decides where it runs), and on the run's own deployment, which has it, by the form's "Runs in"
+// choice (tmux session).
 //
 // workspace.sh makes a second workspace and deployment beside the run's own ($REAL/plain/deploy):
 // its capabilities are oats.core alone, so the kernel there knows no capability `oats.bb` and no
 // backend `bb`. This part points the plugin at it (the `deployment` setting, which the server
 // follows while it runs), and proves on the real kernel what the New agent form does there:
 //   - the harness read answers "the provider is absent" (the kernel's E_CAPABILITY_UNKNOWN, kept);
-//   - the form offers nothing of bb's (no Harness field, no red sentence, no Retry), and its
-//     preview names NO backend, no mode and no harness: the kernel decides, and the column says
-//     where the agent will run, once, from the preview's own `backend`;
+//   - the form offers nothing of bb's (the harnesses are the kernel's own, no choice of where it
+//     runs, no red sentence, no Retry), and its preview names NO backend, no mode and no harness:
+//     the kernel decides, and the column says where the agent will run, once, from the preview's
+//     own `backend`;
 //   - Spawn makes the agent where the kernel decided (tmux): bb's notice says it was created, and
 //     what opens is the agent's own page; its row reads "Running · <soul> · tmux";
 //   - the agent is then stopped and retired through the dialogs of its page.
 // The kernel's answers are kept as fixtures (test/fixtures/spawn/README.md, "A deployment with no
 // bb session provider"). The plugin is pointed back at the run's own deployment at the end, also
 // when the part fails: the parts after it read that one.
+//
+// Then, on the run's own deployment (the bb session provider is there): the form has "Runs in",
+// a bb thread by default; with "tmux session" chosen its preview and its spawn name `--backend
+// tmux` and NO mode, the column says nothing of an access, and the same follows: the agent on
+// tmux, its own page, its row, its Stop and its Retire.
 //
 // What an agent on tmux needs of the container is what parts/lost.mjs prepares (tmux, the OATS
 // tmux server, Claude Code's first-run answers): this part asks for the same, for its own
@@ -31,8 +39,9 @@ const REAL = process.env.REAL ?? "/home/node/real";
 const OATS = JSON.parse(readFileSync(join(REAL, "bin", "oats-record.json"), "utf8")).oats;
 const PLAIN = join(REAL, "plain", "deploy");
 const SOUL = "oats-developer";
-const NAME = "plain-tmux-developer";
-const CALLED = "Plain tmux developer"; // the instance name as the plugin's words
+/** The two agents: their instance name, and that name as the plugin's words. */
+const PLAIN_AGENT = { NAME: "plain-tmux-developer", CALLED: "Plain tmux developer" };
+const CHOSEN_AGENT = { NAME: "chosen-tmux-developer", CALLED: "Chosen tmux developer" };
 const KEY = "placeholder-not-a-key";
 const q = (id) => JSON.stringify(testId(id));
 const clean = (expression) => `(${expression} ?? "").replace(/\\s+/g, " ").trim()`;
@@ -45,27 +54,22 @@ export default async (run) => {
   };
   /** The real `oats`, in the second deployment (the run's own `oats()` is bound to its first). */
   const oats = (...args) => sh(OATS, args, { cwd: PLAIN });
-  const rows = () => {
-    const answer = oats("status", "--json");
+  const rowsIn = (root) => {
+    const answer = sh(OATS, ["status", "--json"], { cwd: root });
     try {
       return JSON.parse(answer.stdout).agents.flatMap((group) => group.instances ?? []);
     } catch {
       return [];
     }
   };
-  const row = () => rows().find((each) => each.instance === NAME);
   const brief = (r) => (r === undefined ? "no row" : JSON.stringify({ backend: r.backend, running: r.running, runtimeState: r.runtimeState ?? null, sessionEnd: r.sessionEnd ?? null, tmux: r.tmux ?? null, session: r.session ?? null }));
-  const pane = () => {
-    const at = row()?.tmux;
-    return at ? sh("tmux", ["-S", at.socket, "capture-pane", "-p", "-t", `${at.session}:${at.window}`]).stdout : "";
-  };
-  /** The calls the plugin made in the second deployment since `from` (the recorder writes each call's cwd). */
-  const mine = (from) => records().slice(from).filter((record) => record.cwd === PLAIN);
-  const lastOf = (from, words, having = []) => mine(from).filter((record) => words.every((word, index) => record.argv[index] === word) && having.every((word) => record.argv.includes(word))).at(-1);
+  const paneOf = (r) => (r?.tmux ? sh("tmux", ["-S", r.tmux.socket, "capture-pane", "-p", "-t", `${r.tmux.session}:${r.tmux.window}`]).stdout : "");
+  /** The plugin's calls since `from` (the recorder writes them in order), the last whose argv begins with `words` and holds `having`. */
+  const lastOf = (from, words, having = []) => records().slice(from).filter((record) => words.every((word, index) => record.argv[index] === word) && having.every((word) => record.argv.includes(word))).at(-1);
   /** The plugin reads the deployment `root`: its snapshot says so. */
   const pointedAt = (root) => until(`the plugin to read ${root}`, () => { const answer = rpc("snapshot"); return answer.ok && answer.value.ok === true && answer.value.deployment.root === root ? answer.value : undefined; }, 60);
 
-  step(`C plain: the container, for one agent on tmux in the second deployment (${NAME})`);
+  step(`C plain: the container, for one agent on tmux in the second deployment (${PLAIN_AGENT.NAME})`);
   check(existsSync(join(PLAIN, "oats-local.yaml")), "the second deployment is there (workspace.sh): a directory that holds oats-local.yaml", PLAIN);
   if (sh("tmux", ["-V"]).exit !== 0) {
     check(false, "tmux is in the container (container/Dockerfile): an agent on the tmux backend needs it");
@@ -102,19 +106,17 @@ export default async (run) => {
   check(Array.isArray(probe.sessionBackends) && probe.sessionBackends.includes("tmux"), "oats version --json lists the kernel's own session backends, tmux among them", JSON.stringify({ sessionBackends: probe.sessionBackends, harnesses: probe.harnesses }));
   show("the kernel's own lists", { sessionBackends: probe.sessionBackends, harnesses: probe.harnesses, launchOptions: probe.launchOptions });
 
-  step("C plain 2: the plugin is pointed at the second deployment (its `deployment` setting, followed while it runs)");
-  const from = records().length;
-  bb("plugin", "config", "oats", "set", "deployment", PLAIN);
-  try {
-    const read = await pointedAt(PLAIN);
-    check(read !== undefined, "the plugin's snapshot is of the second deployment", JSON.stringify(rpc("snapshot")).slice(0, 300));
-    if (read === undefined) return;
-    const list = rpc("spawnHarnesses");
-    check(list.ok && list.value.provider === false && list.value.harnesses.length === 0, "the plugin's harness read answers that the provider is absent: no harness, `provider: false` (an answer, not a failed read)", JSON.stringify(list.ok ? list.value : list.message));
-
-    step("C plain 3: the New agent form there: nothing of bb's is offered; the preview says where the agent will run; Spawn; the agent's own page");
+  /**
+   * One agent spawned from the form onto tmux, then seen, stopped and retired: `root` is the deployment the plugin
+   * reads, `from` the first of the plugin's recorded calls that count, `chosen` whether tmux is CHOSEN in the form
+   * ("Runs in", where the deployment has the bb session provider) or is where the kernel puts it (no provider).
+   */
+  const onTmux = async ({ NAME, CALLED }, { root, from, tag, scene, chosen, where, keep }) => {
+    const row = () => rowsIn(root).find((each) => each.instance === NAME);
+    const pane = () => paneOf(row());
+    step(chosen ? `${tag} 3: the New agent form: "Runs in", a bb thread by default; tmux session chosen; the preview; Spawn; the agent's own page` : `${tag} 3: the New agent form there: nothing of bb's is offered; the preview says where the agent will run; Spawn; the agent's own page`);
     let spawnedAt = null;
-    await views("real-plain-form", async ({ page, at, viewport, shot }) => {
+    await views(`${scene}-form`, async ({ page, at, viewport, shot }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
       const button = await page.until(visible(testId("oats-new-agent")), 30);
@@ -125,12 +127,20 @@ export default async (run) => {
       check(await page.evaluate(choose("oats-spawn-soul", SOUL)), `${at}: the soul ${SOUL} is chosen`, await page.evaluate(textOf(testId("oats-spawn-form"))));
       const name = spawnedAt === null ? NAME : `${NAME}-${viewport.name}`;
       await page.evaluate(fill(testId("oats-spawn-name"), name));
-      const FORM = `(() => { const form = document.querySelector(${q("oats-new-agent-page")}); const column = document.querySelector(${q("oats-spawn-preview")}); const facts = [...(column?.querySelectorAll('[data-testid="oats-fact"]') ?? [])].filter((fact) => fact.closest("details") === null).map((fact) => [${clean('fact.querySelector("dt")?.innerText')}, ${clean('fact.querySelector("dd")?.innerText')}]); const submit = document.querySelector(${q("oats-spawn-submit")}); return JSON.stringify({ name: facts.find(([label]) => label === "Name")?.[1] ?? null, runsIn: facts.filter(([label]) => label === "Runs in").map(([, value]) => value), harness: facts.find(([label]) => label === "Harness")?.[1] ?? null, access: facts.find(([label]) => label === "Access")?.[1] ?? null, updating: column?.querySelector(${q("oats-spawn-updating")}) !== null, harnessField: document.querySelector(${q("oats-spawn-harness")}) !== null, retry: document.querySelector(${q("oats-spawn-harness-retry")}) !== null, alert: form?.querySelector('[role="alert"]') !== null, text: ${clean("form?.innerText")}, off: submit?.disabled ?? null }); })()`;
-      const read = await page.until(`(() => { const now = JSON.parse(${FORM}); return now.name === ${JSON.stringify(name)} && !now.updating && now.off === false ? JSON.stringify(now) : ""; })()`, 60);
+      // Where it runs: a choice only where the deployment has two places (the provider's bb, the kernel's tmux).
+      const places = await page.until(`document.querySelector(${q("oats-spawn-harness")})?.disabled === false ? JSON.stringify({ field: document.querySelector(${q("oats-spawn-backend")}) !== null, says: ${clean(`document.querySelector(${q("oats-spawn-backend")})?.innerText`)} }) : ""`, 60);
+      if (chosen) {
+        check(Boolean(places) && JSON.parse(places).field === true && JSON.parse(places).says.startsWith("bb thread"), `${at}: the form has "Runs in", and a bb thread is what it says before anything is chosen`, String(places));
+        check(await page.evaluate(choose("oats-spawn-backend", "tmux")), `${at}: "tmux session" is chosen`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+      } else check(Boolean(places) && JSON.parse(places).field === false, `${at}: no choice of where it runs: there is one place here`, String(places));
+      const FORM = `(() => { const form = document.querySelector(${q("oats-new-agent-page")}); const column = document.querySelector(${q("oats-spawn-preview")}); const facts = [...(column?.querySelectorAll('[data-testid="oats-fact"]') ?? [])].filter((fact) => fact.closest("details") === null).map((fact) => [${clean('fact.querySelector("dt")?.innerText')}, ${clean('fact.querySelector("dd")?.innerText')}]); const submit = document.querySelector(${q("oats-spawn-submit")}); return JSON.stringify({ name: facts.find(([label]) => label === "Name")?.[1] ?? null, runsIn: facts.filter(([label]) => label === "Runs in").map(([, value]) => value), harness: facts.find(([label]) => label === "Harness")?.[1] ?? null, access: facts.find(([label]) => label === "Access")?.[1] ?? null, updating: column?.querySelector(${q("oats-spawn-updating")}) !== null, harnessField: document.querySelector(${q("oats-spawn-harness")}) !== null, harnessSays: ${clean(`document.querySelector(${q("oats-spawn-harness")})?.innerText`)}, backendSays: ${clean(`document.querySelector(${q("oats-spawn-backend")})?.innerText`)}, retry: document.querySelector(${q("oats-spawn-harness-retry")}) !== null, alert: form?.querySelector('[role="alert"]') !== null, text: ${clean("form?.innerText")}, off: submit?.disabled ?? null }); })()`;
+      const read = await page.until(`(() => { const now = JSON.parse(${FORM}); return now.name === ${JSON.stringify(name)} && !now.updating && now.off === false && (${JSON.stringify(!chosen)} || now.backendSays.startsWith("tmux session")) ? JSON.stringify(now) : ""; })()`, 60);
       const drawn = read ? JSON.parse(read) : JSON.parse(await page.evaluate(FORM));
       check(Boolean(read), `${at}: the kernel's preview is read for the values on screen, and Spawn is armed by a soul and a name alone`, JSON.stringify(drawn));
-      check(drawn.harnessField === false && drawn.retry === false && drawn.alert === false && !/Harnesses could not be read|bb is not set up|bb’s default|not installed in bb/.test(drawn.text), `${at}: nothing of bb's is offered and nothing is said to have failed: no Harness field, no Retry, no red sentence`, JSON.stringify({ harnessField: drawn.harnessField, retry: drawn.retry, alert: drawn.alert }));
-      check(JSON.stringify(drawn.runsIn) === JSON.stringify(["tmux session"]) && drawn.text.split("tmux session").length === 2 && !/bb thread/.test(drawn.text), `${at}: the column says where it will run, once, in view: "Runs in / tmux session" (from the preview's own backend); never "bb thread"`, JSON.stringify({ runsIn: drawn.runsIn, harness: drawn.harness, access: drawn.access }));
+      check(drawn.harnessField === true && drawn.harnessSays.startsWith("The soul’s default") && drawn.retry === false && drawn.alert === false && !/Harnesses could not be read|bb is not set up|bb’s default|not installed in bb/.test(drawn.text), `${at}: nothing of bb's is offered for it and nothing is said to have failed: the Harness field (the kernel's own list) says the soul's default, no Retry, no red sentence`, JSON.stringify({ harnessField: drawn.harnessField, harnessSays: drawn.harnessSays, retry: drawn.retry, alert: drawn.alert }));
+      // Where it will run is said ONCE, in view: by the form's own field where there is one, else by the column's row.
+      if (chosen) check(drawn.runsIn.length === 0 && drawn.text.split("tmux session").length === 2 && !/bb thread/.test(drawn.text), `${at}: where it runs is said once, by the field ("tmux session"): the column does not repeat it`, JSON.stringify({ runsIn: drawn.runsIn, backendSays: drawn.backendSays }));
+      else check(JSON.stringify(drawn.runsIn) === JSON.stringify(["tmux session"]) && drawn.text.split("tmux session").length === 2 && !/bb thread/.test(drawn.text), `${at}: the column says where it will run, once, in view: "Runs in / tmux session" (from the preview's own backend); never "bb thread"`, JSON.stringify({ runsIn: drawn.runsIn, harness: drawn.harness, access: drawn.access }));
       // The mode: the plugin asked for none and the kernel decided none (`yolo: null`, checked below on the recorded
       // preview): the column says nothing of the access, never bb's "no sandbox".
       check(drawn.access === null && !/no sandbox/.test(drawn.text), `${at}: the column does not say "no sandbox": no mode was asked and the kernel decided none`, JSON.stringify({ access: drawn.access }));
@@ -149,30 +159,31 @@ export default async (run) => {
       await shot("created");
     });
 
-    step("C plain 4: what the plugin asked the kernel, and what the kernel answered (kept as fixtures)");
+    step(`${tag} 4: what the plugin asked the kernel, and what the kernel answered (kept as fixtures)`);
     const preview = lastOf(from, ["spawn", SOUL], ["--preview", NAME]);
     const applied = lastOf(from, ["spawn", SOUL], ["--idempotency-key", NAME]);
     for (const [what, call] of [["preview", preview], ["spawn", applied]]) {
-      check(call !== undefined && ["--backend", "--yolo", "--harness", "--model"].every((flag) => !call.argv.includes(flag)), `the form's ${what} named NO backend, no mode, no harness and no model: the kernel decided`, JSON.stringify(call?.argv ?? "no such call"));
+      if (chosen) check(call !== undefined && call.argv[call.argv.indexOf("--backend") + 1] === "tmux" && call.argv.filter((part) => part === "--backend").length === 1 && ["--yolo", "--harness", "--model"].every((flag) => !call.argv.includes(flag)), `the form's ${what} named \`--backend tmux\` and NO mode (no --yolo), no harness and no model`, JSON.stringify(call?.argv ?? "no such call"));
+      else check(call !== undefined && ["--backend", "--yolo", "--harness", "--model"].every((flag) => !call.argv.includes(flag)), `the form's ${what} named NO backend, no mode, no harness and no model: the kernel decided`, JSON.stringify(call?.argv ?? "no such call"));
     }
     const previewed = preview === undefined ? null : JSON.parse(preview.stdout);
     check(previewed?.ok === true && (previewed.result.decision?.effective?.yolo ?? null) === null, "the kernel's preview decided NO mode (`decision.effective.yolo: null`): what the column's silence on the access rests on", JSON.stringify(previewed?.ok ? { yolo: previewed.result.decision?.effective?.yolo ?? null } : previewed));
     check(previewed?.ok === true && previewed.result.backend === "tmux", 'the kernel\'s preview says where it decided to run it: `backend: "tmux"`', JSON.stringify(previewed?.ok ? { backend: previewed.result.backend, backendStatus: previewed.result.backendStatus, harness: previewed.result.harness, model: previewed.result.model, yolo: previewed.result.decision?.effective?.yolo } : previewed));
-    if (preview !== undefined) fixtures.keep("spawn/spawn-preview-no-provider.json", preview.stdout);
+    if (preview !== undefined) fixtures.keep(keep.preview, preview.stdout);
     const spawned = applied === undefined ? null : JSON.parse(applied.stdout);
     check(spawned?.ok === true && spawned.result.launched === true && spawned.result.backend === "tmux" && spawned.result.tmux?.window === NAME, "the kernel spawned and launched it, in a window of the OATS tmux server; its answer names no bb thread", JSON.stringify(spawned?.ok ? { launched: spawned.result.launched, backend: spawned.result.backend, tmux: spawned.result.tmux, session: spawned.result.session ?? null, attach: spawned.result.attach } : spawned));
-    if (applied !== undefined) fixtures.keep("spawn/spawn-no-provider.json", applied.stdout);
-    const running = await until(`${NAME} to run on tmux in the second deployment's oats status`, () => (row()?.running === true ? row() : undefined), 90);
-    check(running?.backend === "tmux" && running.running === true, "oats status there: the agent, on tmux, running", brief(row()));
-    if (running !== undefined) fixtures.keep("spawn/status-row-no-provider.json", JSON.stringify(running));
+    if (applied !== undefined) fixtures.keep(keep.spawn, applied.stdout);
+    const running = await until(`${NAME} to run on tmux in oats status ${where}`, () => (row()?.running === true ? row() : undefined), 90);
+    check(running?.backend === "tmux" && running.running === true, `oats status ${where}: the agent, on tmux, running`, brief(row()));
+    if (running !== undefined && keep.row !== undefined) fixtures.keep(keep.row, JSON.stringify(running));
     const answered = await until(`${NAME}'s pane to hold the mock model's answer`, () => (/MOCK-REPLY/.test(pane()) ? pane() : undefined), 120);
     check(Boolean(answered), "the agent took a turn on the mock model in its tmux window", pane().replace(/\s+/g, " ").trim().slice(-300));
 
-    step("C plain 5: the new agent in the sidebar and on its page: Running, on tmux");
+    step(`${tag} 5: the new agent in the sidebar and on its page: Running, on tmux`);
     const ROW = `[data-testid="oats-agent-row-threadless"][data-instance="${NAME}"]`;
     const PAGE = '[data-testid="oats-agent-page"]';
     const WANT = `Running · ${SOUL} · tmux`;
-    await views("real-plain-agent", async ({ page, at, viewport, shot }) => {
+    await views(`${scene}-agent`, async ({ page, at, viewport, shot }) => {
       rpc("refresh");
       await page.goto("/");
       await showSidebar(page, viewport);
@@ -185,9 +196,9 @@ export default async (run) => {
       await shot("page");
     });
 
-    step("C plain 6: it is stopped, then retired, through the dialogs of its page");
+    step(`${tag} 6: it is stopped, then retired, through the dialogs of its page`);
     let done = false;
-    await views("real-plain-end", async ({ page, at, shot }) => {
+    await views(`${scene}-end`, async ({ page, at, shot }) => {
       if (done) return;
       done = true;
       for (const [verb, word, after] of [["stop", "Stop", (r) => r !== undefined && r.running === false], ["retire", "Retire", (r) => r === undefined]]) {
@@ -202,15 +213,37 @@ export default async (run) => {
         const ended = await page.until(phaseIs("done"), 180);
         check(Boolean(ended), `${at} ${verb}: the act ran to its result`, JSON.stringify(await dialog(page)).slice(0, 400));
         await shot(`${verb}-done`);
-        const then = await until(`${NAME} to be ${verb === "stop" ? "stopped" : "gone"} in the second deployment's oats status`, () => (after(row()) ? true : undefined), 120);
-        check(then === true, `oats status there after the ${verb}: ${verb === "stop" ? "the agent does not run" : "no such agent"}`, brief(row()));
+        const then = await until(`${NAME} to be ${verb === "stop" ? "stopped" : "gone"} in oats status ${where}`, () => (after(row()) ? true : undefined), 120);
+        check(then === true, `oats status ${where} after the ${verb}: ${verb === "stop" ? "the agent does not run" : "no such agent"}`, brief(row()));
       }
     });
+    if (row() !== undefined) note(`LEFT BEHIND ${where}: ${NAME} (${brief(row())}): the container is thrown away`);
+  };
+
+  step("C plain 2: the plugin is pointed at the second deployment (its `deployment` setting, followed while it runs)");
+  const from = records().length;
+  bb("plugin", "config", "oats", "set", "deployment", PLAIN);
+  try {
+    const read = await pointedAt(PLAIN);
+    check(read !== undefined, "the plugin's snapshot is of the second deployment", JSON.stringify(rpc("snapshot")).slice(0, 300));
+    if (read === undefined) return;
+    const list = rpc("spawnHarnesses");
+    check(list.ok && list.value.provider === false && list.value.harnesses.length === 0, "the plugin's harness read answers that the provider is absent: no harness, `provider: false` (an answer, not a failed read)", JSON.stringify(list.ok ? list.value : list.message));
+    check(list.ok && JSON.stringify(list.value.backends) === JSON.stringify(probe.sessionBackends) && JSON.stringify(list.value.kernelHarnesses) === JSON.stringify(probe.harnesses), "and what a spawn may name here is the kernel's own: its session backends (one place: nothing to choose) and its harnesses", JSON.stringify(list.ok ? { backends: list.value.backends, kernelHarnesses: list.value.kernelHarnesses } : list.message));
+
+    await onTmux(PLAIN_AGENT, { root: PLAIN, from, tag: "C plain", scene: "real-plain", chosen: false, where: "in the second deployment", keep: { preview: "spawn/spawn-preview-no-provider.json", spawn: "spawn/spawn-no-provider.json", row: "spawn/status-row-no-provider.json" } });
   } finally {
     // The run's own deployment again, for the parts after this one: also when something above failed.
     bb("plugin", "config", "oats", "set", "deployment", DEPLOY);
     const back = await pointedAt(DEPLOY);
     check(back !== undefined, "the plugin reads the run's own deployment again", JSON.stringify(rpc("snapshot")).slice(0, 300));
-    if (row() !== undefined) note(`LEFT BEHIND in the second deployment: ${NAME} (${brief(row())}): the container is thrown away`);
   }
+
+  // ---- the run's own deployment, which HAS the bb session provider: tmux by the form's choice ----
+  step(`C plain 7: the run's own deployment (the bb session provider is there): an agent on tmux by the form's "Runs in" (${CHOSEN_AGENT.NAME})`);
+  const places = rpc("spawnHarnesses");
+  check(places.ok && places.value.provider === true && JSON.stringify(places.value.backends) === JSON.stringify(["bb", "tmux"]) && JSON.stringify(places.value.kernelHarnesses) === JSON.stringify(probe.harnesses), "the plugin's harness read there: the provider, the two places a spawn may run in (bb first, then the kernel's tmux) and the kernel's own harnesses", JSON.stringify(places.ok ? places.value : places.message));
+  const trusted = sh(OATS, ["harness", "trust", "--dir", DEPLOY, "--harness", "claude", "--json"], { cwd: DEPLOY });
+  check(trusted.exit === 0 && JSON.parse(trusted.stdout).ok === true, "oats harness trust: Claude Code trusts the run's own deployment's folder", trusted.stdout.slice(0, 400) || trusted.stderr);
+  await onTmux(CHOSEN_AGENT, { root: DEPLOY, from: records().length, tag: "C plain 7,", scene: "real-chosen", chosen: true, where: "in the run's own deployment", keep: { preview: "spawn/spawn-preview-tmux-chosen.json", spawn: "spawn/spawn-tmux-chosen.json" } });
 };

@@ -45,7 +45,8 @@ export async function waitFor(what, read, { timeoutMs = 60_000, everyMs = 400 } 
   }
 }
 
-/** One container of `image` (built from `dockerfileDir` at the pinned bb), named `name`.
+/** One container of `image` (built by `dockerfileDir`'s Dockerfile at the pinned bb, from this directory, which holds
+ *  the images' locks: locks/README.md), named `name`.
  *  `runArgs`: more `docker run` arguments. `entry`: the provider's command in the
  *  container. `settings`: the provider's settings for every call, beside where bb is (BB_SETTINGS). `mock`: the model endpoint's
  *  script in this directory, or several. `bbEnv`: what bb's server gets in its environment (the mock
@@ -108,7 +109,7 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
   }
 
   async function start() {
-    execFileSync("docker", ["build", "-q", "--build-arg", `BB_APP_VERSION=${BB_VERSION}`, "-t", image, dockerfileDir], { stdio: ["ignore", "ignore", "inherit"] });
+    execFileSync("docker", ["build", "-q", "--build-arg", `BB_APP_VERSION=${BB_VERSION}`, "-t", image, "-f", resolve(dockerfileDir, "Dockerfile"), here], { stdio: ["ignore", "ignore", "inherit"] });
     execFileSync("docker", ["run", "-d", "--name", name, "--init", "--cpus", "2", "--memory", "4g", ...runArgs, "-v", `${repo}:/repo:ro`, image], { stdio: ["ignore", "ignore", "inherit"] });
     for (const script of [mock].flat()) await run("docker", ["exec", "-d", name, "sh", "-c", `cd ~ && node /repo/test/contract/${script} > ${script}.out 2>&1`]);
     await startBb();

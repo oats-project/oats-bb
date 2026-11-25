@@ -1071,6 +1071,13 @@ does. Moving the bb pin is one change to `bb-version` and the
 manifest's `version` default (`npm run validate` keeps them equal) that the contract test
 must pass.
 
+The three contract images install bb-app, Claude Code, pi and the kernel from committed
+locks with `npm ci` (`test/contract/locks/`, and its README): no dependency tree is
+resolved when an image is built, so a package published upstream that minute cannot
+change or fail a run. A moved pin needs its lock written again
+(`test/contract/relock.sh claude`, `test/contract/relock.sh pi`); a unit test holds the
+locks against `bb-version`.
+
 A second contract file (`test/contract/sandbox.test.mjs`, its own image with a sandbox
 runtime) runs bb's sandboxed modes with the sandbox really started, through the tests' own
 entry: it is where the deny rules are shown to hold, and where their limit is pinned. Its

@@ -24,6 +24,17 @@
   start then fails. It now runs on 18886 and 18887 (`test/contract/rig.mjs`), named to
   the provider as a deployment names such a bb (`server`, `hostDaemonPort`). The
   provider's defaults are unchanged: a person's bb stays on bb's own ports.
+- **The contract images install from locks.** The three images installed bb-app, Claude
+  Code, pi and the kernel with `npm install -g`, so each build resolved their dependency
+  trees anew, and a hiccup of the registry failed the contract job. They now install with
+  `npm ci` from committed locks (`test/contract/locks/`, the shape of the plugin's
+  checks): nothing is resolved when an image is built. `test/contract/relock.sh <lock>`
+  writes a lock again when a pin moves; a unit test holds the locks against `bb-version`
+  and the Dockerfiles against `npm install`. The locks hold bb's build toolchain too: bb
+  fetched it from npm by itself, with no lock, when the title test installed its plugin,
+  and that test now fails a run in which it does. What is not locked is named in the locks'
+  README (the aweb extension pi installs into the second pi configuration brings
+  `@awebai/aw` by a range).
 
 ## 0.4.0
 

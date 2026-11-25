@@ -725,7 +725,10 @@ export default [
     stage: "tmux-roster",
     name: "the page of a tmux agent whose session was lost, opened from its row: Stopped, \"session lost\", no sentence; Start… and Retire…; Start's dialog says that it tries to continue its last conversation; after the press it is back, and its row says Working",
     run: async ({ page, at, viewport, check, fake, tmuxStatus }) => {
-      const [LOST] = TMUX_ROSTER.tmux.find(([, , , how]) => how === "lost");
+      // BY NAME: the scene is of the agent with the longest soul. (It took "the first lost one of the stage", which was
+      // this one until the stage gained two more lost agents before it: #76.)
+      const LOST = "overnight-sweep-developer";
+      if (!TMUX_ROSTER.tmux.some(([instance, , , how]) => instance === LOST && how === "lost")) throw new Error(`scenes/roster.mjs: ${LOST} is not a lost agent of the tmux stage`);
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const row = `${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}[data-instance="${LOST}"]`;

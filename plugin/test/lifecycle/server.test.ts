@@ -212,6 +212,20 @@ describe("start and restart", () => {
     expect((await fake.calls()).filter((each) => each.argv[0] === "session")).toHaveLength(3);
   }, 30_000);
 
+  it("any OTHER failure of the provider's read stays a refusal of the dialogs' read: only the kernel's own word that the deployment holds no such capability empties the list", async () => {
+    // `oats` fails with no answer of the kernel's (as the stop plan's test fakes it).
+    backend = await startBackend({ verbs: { "capabilities show": { stdout: "", stderr: "oats: cannot read the workspace", exit: 1 } } });
+    expect(await refusalOf(backend.rpc("startCheck", { instance: "kernel-fix-developer" }))).toMatchObject({ code: "conflict" });
+    await backend.dispose();
+    // The kernel refuses with ANOTHER code.
+    const other = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_WORKSPACE_INVALID", message: "the workspace file cannot be read" } });
+    backend = await startBackend({ verbs: { "capabilities show": { stdout: other, exit: 1 } } });
+    expect(await refusalOf(backend.rpc("startCheck", { instance: "kernel-fix-developer" }))).toMatchObject({ code: "conflict", message: expect.stringContaining("E_WORKSPACE_INVALID") });
+    // (A start that names no harness never read the provider: it still goes.)
+    await backend.rpc("start", { instance: "kernel-fix-developer", resume: true });
+    expect((await backend.fake.calls()).filter((each) => each.argv[0] === "session")).toHaveLength(1);
+  }, 40_000);
+
   it("startCheck reads the roster again and answers the agent as the kernel has it now, with the harnesses the provider declares", async () => {
     backend = await startBackend({ verbs: declares(["claude", "pi"]) });
     const { rpc, verbs } = backend;

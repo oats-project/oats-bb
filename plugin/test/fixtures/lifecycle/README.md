@@ -15,7 +15,7 @@
   workspace whose catalog has NO `oats.bb` (a deployment whose agents all run on tmux): exit 1 and,
   on stdout, `ok: false` with `E_CAPABILITY_UNKNOWN`. RECORDED on 2026-11-25 with OATS 0.70.5, in
   such a workspace, with no edit (it names no path). The Start and Restart dialogs' first read
-  must not fail on it (`test/lifecycle/server.test.ts`).
+  must not fail on it, and on it alone (`test/lifecycle/server.test.ts`).
 
 The two above were recorded on 2026-11-22 with the versions `../README.md` names, the same one substitution (the
 paths), and no other edit. Neither is a default answer of the fake (`verbs.json`): a test names

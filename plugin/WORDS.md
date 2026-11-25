@@ -193,6 +193,23 @@ number in the home's badge, its heading and Home › Agents' count line (the sid
 | After a refusal of the soul's read that reading again cannot change | nothing to press | a button under the notice, "Retry" | Readiness and the activity keep their Refresh for whoever mended what was wrong; the Soul tab had no such button. |
 | A refusal that is no fault: OATS has none of it for this kind of agent (`E_UNSUPPORTED_MODE`) | the sentence in the error colour, as every refusal | nothing is drawn for it, in any of the three parts (the row above) | A state that is not a fault is not drawn as one; and where there is nothing to show, nothing is said. |
 
+## The board: an agent's questions and facts
+
+| Thing | The Desktop says | The plugin says | Why |
+|---|---|---|---|
+| Where the board is | a strip over the instance's terminal (`packages/desktop/renderer/agent-board.mjs`) | the panel's first tab, **Board**, drawn only for an agent with a fact or a question; the panel opens on it where a question is open | bb has no strip over a thread; a question is what needs the person, so it is what opens. |
+| Answering a question | a press puts `<id>: <option>` in the terminal's input, UNSENT; the person presses Enter | a press SENDS `<id>: <option>` to the agent's thread, and the option then reads **Sent.** | THE NAMED DIFFERENCE: bb has no way to put text in a thread's composer. The answer is built from the server's row at the press, through the one guarded send. |
+| A press that could not be an answer any more | (the text stays in the input: the person sees it) | **No longer asked. Nothing sent.** · **It waits on an approval. Nothing sent.** (once, under the options, in the warning tone) | A send cannot be taken back: the place says that nothing left. |
+| A question's place and age | "2 of 3", " · asked 5 min ago" | **2 of 3**, **5 min ago** (the instant in the title) | Little text: every age of the plugin is the age alone. |
+| A fact's age | "updated <time>" | **5 min ago** | The same. |
+| A context on its way | "Reading the context…" | **Reading…** | The plugin's one word for a read on its way; it stands in the Context fold. |
+| A fact's address | "<Name> says: <host>" on each fact, then the whole address, then "Open in browser" | **<Name> says**, once, on the Facts heading's line; each fact's address is its host alone, as text; a press shows the whole address; then **Open in browser** | Six facts with an address read alike six times (the worst case). The safety is kept: an address is the agent's text until a person asks for it, and it opens only on a second press. |
+| The facts past the third | "N more" / "Fold", the Desktop's own | bb's own list toggle: **N more** / **Show less** | bb's own part where one fits; its words are bb's. |
+| Hidden facts | "N hidden · show" | **N hidden · show** | The same. |
+| What cannot be shown | "History could not be read.", "The context could not be read.", "This OATS sends no history.", "This agent's board could not be read.", "N entries of this agent's board could not be shown." (and five more for a detail in another shape, a kernel without contexts, an agent with no board now, a question with no context) | those five, as quiet lines, each only in its place; the warning tone only where a read FAILED. A detail in a shape that cannot be read says the "could not be read" line; a Context fold is drawn only where the agent sent one | The Desktop's words, and fewer of them. |
+| An agent with no board, where its board is drawn all the same | (nothing) | **This agent has no questions or facts to show.** | A page opened on the Board tab of an agent that has none says so, once. |
+| The palette | (none) | one command, **Board** | bb takes a plugin's commands once, with fixed titles: nothing per question. |
+
 ## The lifecycle dialogs: Stop, Start, Restart, Retire
 
 The sentences they were cut from are the Desktop's (`app/lifecycle/words.ts` names each source).

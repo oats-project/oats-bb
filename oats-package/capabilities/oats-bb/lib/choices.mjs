@@ -116,6 +116,14 @@ const KIND = { "reasoning-level": "reasoning level", "service-tier": "service ti
 /** What to do about a value that is refused: choose one of those there are, or clear the choice. */
 const remedy = (name, ids) => `${ids.length > 0 ? `Choose one of them (${CHOOSE[name]}), or clear` : "Clear"} the choice (${clear(name)})`;
 
+/** Why a tier is none of the provider's, as a sentence, or null: where none is chosen, the
+ *  provider's tiers are not known (`tiers` null), or the tier is one of them. It rests on
+ *  bb's list of its providers alone, whatever bb's list of the models says or fails to. */
+function providerTierRefusal(tier, tiers, bbProvider) {
+  if (tier === undefined || tiers === null || tiers.includes(tier)) return null;
+  return `bb's ${bbProvider} has no service tier ${JSON.stringify(tier)}: ${tiers.length > 0 ? `it has ${listed(tiers.map((id) => JSON.stringify(id)))}` : "it has no service tiers"}. ${remedy("service-tier", tiers)}`;
+}
+
 /** What bb's lists say of the choices for the launch's model. `value`: bb's list of the
  *  provider's models. `tiers`: the provider's own service tiers (providerTiers), read only
  *  where a tier is chosen. `bbProvider`: bb's name for the provider, for a sentence.
@@ -124,9 +132,8 @@ export function choicesVerdict(choices, model, harness, value, { tiers = null, b
   if (!Array.isArray(value) || value.some((row) => !isObject(row) || typeof row.id !== "string" || row.id === "")) return { unchecked: "the list is not one this provider can read" };
   const level = choices["reasoning-level"], tier = choices["service-tier"];
   // A tier the provider does not have is refused whatever the model: bb refuses it too.
-  if (tier !== undefined && tiers !== null && !tiers.includes(tier)) {
-    return { refused: `bb's ${bbProvider} has no service tier ${JSON.stringify(tier)}: ${tiers.length > 0 ? `it has ${listed(tiers.map((id) => JSON.stringify(id)))}` : "it has no service tiers"}. ${remedy("service-tier", tiers)}` };
-  }
+  const notTheProviders = providerTierRefusal(tier, tiers, bbProvider);
+  if (notTheProviders !== null) return { refused: notTheProviders };
   if (typeof model !== "string" || model === "") return noModelVerdict(choices, value, tiers, bbProvider);
   const row = rowOf(value, model, harness);
   if (row === null) return { unchecked: `bb's list does not hold the model ${JSON.stringify(model)}, or holds it more than once` };
@@ -179,6 +186,10 @@ export async function choicesFinding(choices, model, harness, bb) {
   if (choices["service-tier"] !== undefined) {
     const providers = await bb.providers();
     tiers = providers.ok ? providerTiers(providers.value, bbProvider) : null;
+    // Refused on the provider's own list, before bb's models are read: that read may fail,
+    // and bb would then refuse the tier itself, at the spawn, after the launch's first effects.
+    const notTheProviders = providerTierRefusal(choices["service-tier"], tiers, bbProvider);
+    if (notTheProviders !== null) return { problem: { code: CHOICE_REFUSED, message: notTheProviders, status: "needs-configuration" } };
   }
   const answer = await bb.models(bbProvider, named);
   if (!answer.ok) return unchecked(answer.timedOut ? "no answer in time" : answer.message);

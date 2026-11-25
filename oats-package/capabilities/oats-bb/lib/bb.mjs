@@ -252,11 +252,9 @@ export function bbClient({ cli, server, hostDaemonPort = null, deadline = Infini
     /** The models bb lists for its pi provider, with `model` as the one a launch names
      *  (bb then also lists it where it holds it back otherwise: lib/pi-model.mjs). The
      *  raw answer: what it proves is the reader's to say. */
-    piModels(model) { return this.models("pi", model); },
     /** The models bb lists for one of its providers (claude-code, pi), each with the
      *  reasoning levels and, where it has any, the service tiers it has; `model` as the one
-     *  a launch names, as for piModels (null: the plain list, for a launch that names
-     *  none). The raw answer (lib/choices.mjs reads it). Read
+     *  a launch names (null: the plain list, for a launch that names none). The raw answer (lib/choices.mjs reads it). Read
      *  once for a provider and a model in the life of this client (one command): the pi
      *  model check and the check of the launch's choices read the same list. */
     models(provider, model) {

@@ -152,6 +152,28 @@ test("a service tier is the provider's: one bb's provider does not list is refus
   await pi.refusedBoth({ "service-tier": "fast" }, 'bb\'s pi has no service tier "fast": it has no service tiers. Clear the choice (--launch-choice service-tier=default)');
 });
 
+test("a tier that is none of the provider's is refused on bb's list of its providers alone: also where bb's list of the models cannot be read, which bb would then refuse at the spawn", async (t) => {
+  const noTiers = 'bb\'s pi has no service tier "fast": it has no service tiers. Clear the choice (--launch-choice service-tier=default)';
+  // (The pi model check itself only warns where the list cannot be read: the launch would go on.)
+  for (const models of [{ error: { code: "error", message: "fetch failed" } }, { stdout: [], stderr: "Could not load models for pi\n" }]) {
+    const { bb, launch, check } = await setup(t, { harness: "pi", script: { "provider models pi": models } });
+    const { doc } = await launch({ "service-tier": "fast" });
+    assert.deepEqual(doc.error, { code: "E_BACKEND_LAUNCH_ARG", message: noTiers });
+    assert.equal(spawnOf(bb), null);
+    const planned = await check({ "service-tier": "fast" });
+    assert.equal(planned.status, "needs-configuration");
+    assert.deepEqual(planned.problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: noTiers }]);
+  }
+  const claude = await setup(t, { script: { "provider models claude-code": { error: { code: "error", message: "fetch failed" } } } });
+  await claude.refusedBoth({ "service-tier": "ultrafast" }, 'bb\'s claude-code has no service tier "ultrafast": it has "fast". Choose one of them (--launch-choice service-tier=<tier>), or clear the choice (--launch-choice service-tier=default)');
+  // One the provider has is not settled by that list alone: with the models unread it is carried, with the warning.
+  await claude.warnsBoth({ "service-tier": "fast" }, "fetch failed");
+  // And bb's models are not read at all for a tier the provider refuses.
+  const unread = await setup(t);
+  assert.equal((await unread.launch({ "service-tier": "ultrafast" })).doc.ok, false);
+  assert.deepEqual(modelReads(unread.bb), ["provider list --json"]);
+});
+
 test("the value `default` is refused, for either choice: it is the kernel's word for none, and bb would take it for a level", async (t) => {
   const { refusedBoth, bb } = await setup(t);
   for (const name of ["reasoning-level", "service-tier"]) {
@@ -255,12 +277,19 @@ test("the `:<level>` sentence is given only where what stands before the colon i
   for (const [level, named] of [["low", "low"], ["max", "max"], ["off", "none"]]) assert.ok(piModelVerdict(`echo:${level}`, rows).refused.endsWith(`and choose the level with --launch-choice reasoning-level=${named}`), level);
   assert.equal(piModelVerdict("echo:minimal", rows).refused, 'pi model "echo:minimal" names a thinking level in the model id, which bb\'s pi does not take: name the model "echo", and choose a level bb lists for it with --launch-choice reasoning-level=<level> (bb has none called "minimal")');
   for (const tag of ["8b", "free", "latest", "thinking", "none", "ultracode"]) assert.match(piModelVerdict(`echo:${tag}`, rows).refused, /^pi has no model /, tag);
-  // It is the refusal's sentence, and no check of its own: where the list cannot settle an id, nothing is refused,
-  // as before the choices (a model the list holds back may have such an id of its own).
+  // A model of the list followed by one of pi's levels is refused whatever else the list may hold back or be late
+  // with: it is no id bb's pi resolves. Everything else stays as before the choices where the list cannot settle an
+  // id: not settled, not refused (a tag, a model the list does not hold, a bare id two providers serve).
   const PARTIAL = "pi's enabledModels setting narrows the list to the models it names", OLD = "pi's configuration changed a moment ago, and bb's list may be older than it";
-  assert.deepEqual(piModelVerdict("echo:high", rows, { partial: PARTIAL }), { unchecked: PARTIAL });
-  assert.deepEqual(piModelVerdict("echo:high", rows, { old: OLD }), { unchecked: OLD });
-  assert.deepEqual(piModelVerdict("echo:8b", rows, { partial: PARTIAL }), { unchecked: PARTIAL });
+  for (const state of [{ partial: PARTIAL }, { old: OLD }, { partial: PARTIAL, old: OLD }]) {
+    assert.match(piModelVerdict("echo:high", rows, state).refused, /^pi model "echo:high" names a thinking level in the model id.*--launch-choice reasoning-level=high$/, JSON.stringify(state));
+    assert.match(piModelVerdict("mock/twin:off", rows, state).refused, /name the model "mock\/twin", and choose the level with --launch-choice reasoning-level=none$/);
+    const why = state.old ?? state.partial;
+    assert.deepEqual(piModelVerdict("echo:8b", rows, state), { unchecked: why }, "an Ollama tag");
+    assert.deepEqual(piModelVerdict("echo:free", rows, state), { unchecked: why });
+    assert.deepEqual(piModelVerdict("nothing-here:high", rows, state), { unchecked: why }, "the model before the colon is not in the list");
+    assert.deepEqual(piModelVerdict("twin:high", rows, state), { unchecked: why }, "two providers serve twin");
+  }
 });
 
 test("readChoices, choiceArgs and choicesVerdict, each by itself", () => {

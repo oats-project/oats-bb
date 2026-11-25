@@ -83,6 +83,27 @@ export function piModelVerdict(model, value, { partial = null, old = null } = {}
   if (rows.some((row) => row.id === model)) return { ok: true };
   const serving = rows.filter((row) => row.bare === model);
   if (serving.length === 1) return { ok: true };
+  // pi's own way to write a thinking level, `<model>:<level>`, is no model bb's pi resolves:
+  // bb lists and resolves the model alone (a thread spawned with such an id ends in error),
+  // and takes the level as a choice of the launch (lib/choices.mjs). Where the suffix is one
+  // of pi's own levels and what stands before it is a model of the list, by its full id or
+  // as the one model with that bare id, that is what was written, and it is refused by
+  // name, whatever else the list may hold back or be late with: a model of the list
+  // followed by one of pi's level words is no id bb's pi resolves. Any other word after a
+  // colon is left to the rules below (a tag, a variant: not settled, not refused, where the
+  // list may not be whole).
+  const colon = model.lastIndexOf(":");
+  const level = colon > 0 ? model.slice(colon + 1) : "";
+  if (PI_LEVELS.includes(level)) {
+    const base = model.slice(0, colon);
+    if (rows.some((row) => row.id === base) || rows.filter((row) => row.bare === base).length === 1) {
+      // bb's names for a pi model's levels are pi's own, but for two (bb-app 0.50.1): pi's
+      // `off` is bb's `none`, and bb has no `minimal` for any pi model, so no value is
+      // named for it: the choice's own refusal would follow.
+      const choose = level === "minimal" ? "choose a level bb lists for it with --launch-choice reasoning-level=<level> (bb has none called \"minimal\")" : `choose the level with --launch-choice reasoning-level=${level === "off" ? "none" : level}`;
+      return { refused: `pi model ${JSON.stringify(model)} names a thinking level in the model id, which bb's pi does not take: name the model ${JSON.stringify(base)}, and ${choose}` };
+    }
+  }
   if (serving.length > 1) {
     if (old !== null) return { unchecked: old };
     // An id with a slash may also be the exact `<provider>/<id>` of a model the list holds
@@ -97,24 +118,6 @@ export function piModelVerdict(model, value, { partial = null, old = null } = {}
   // Any id that ends in a date, with a slash or without: a bare id may itself hold a slash,
   // so one that looks like `<provider>/<id>` may be a held-back model's bare id.
   if (DATED.test(model)) return { unchecked: "a model whose id ends in a date is not always listed" };
-  // pi's own way to write a thinking level, `<model>:<level>`, is no model bb's pi resolves:
-  // bb lists and resolves the model alone (a thread spawned with such an id ends in error),
-  // and takes the level as a choice of the launch (lib/choices.mjs). Where the suffix is one
-  // of pi's own levels and what stands before it is a model of the list, by its full id or
-  // as the one model with that bare id, the refusal says that. It is this refusal's
-  // sentence and no other check: an id the list cannot settle is still not refused.
-  const colon = model.lastIndexOf(":");
-  const level = colon > 0 ? model.slice(colon + 1) : "";
-  if (PI_LEVELS.includes(level)) {
-    const base = model.slice(0, colon);
-    if (rows.some((row) => row.id === base) || rows.filter((row) => row.bare === base).length === 1) {
-      // bb's names for a pi model's levels are pi's own, but for two (bb-app 0.50.1): pi's
-      // `off` is bb's `none`, and bb has no `minimal` for any pi model, so no value is
-      // named for it: the choice's own refusal would follow.
-      const choose = level === "minimal" ? "choose a level bb lists for it with --launch-choice reasoning-level=<level> (bb has none called \"minimal\")" : `choose the level with --launch-choice reasoning-level=${level === "off" ? "none" : level}`;
-      return { refused: `pi model ${JSON.stringify(model)} names a thinking level in the model id, which bb's pi does not take: name the model ${JSON.stringify(base)}, and ${choose}` };
-    }
-  }
   return { refused: `pi has no model ${JSON.stringify(model)} (if you just added it to pi, ${RETRY})` };
 }
 
@@ -124,7 +127,7 @@ export function piModelVerdict(model, value, { partial = null, old = null } = {}
  *  on). Never throws for anything bb did or did not answer. */
 export async function piModelFinding(model, bb, { partial = null, old = null } = {}) {
   const unchecked = (why) => ({ warning: { code: PI_MODEL_UNCHECKED, message: `could not check the model ${JSON.stringify(model)} against pi's model list: ${brief(why)}` } });
-  const answer = await bb.piModels(model);
+  const answer = await bb.models("pi", model);
   if (!answer.ok) return unchecked(answer.timedOut ? "no answer in time" : answer.message);
   // bb answers a list it kept where it could not load pi's models, and says so beside it,
   // on a line of its own among whatever else it wrote there.

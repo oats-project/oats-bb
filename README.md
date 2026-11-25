@@ -697,8 +697,9 @@ resolves the model by its exact id, and a thread spawned with such an id ends in
 on bb the level is a [launch choice](#launch-choices). It is said only where the suffix
 is one of pi's levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) and what
 stands before it is a model of the list: a model whose own id holds a colon, or a tag
-(`:8b`, `:free`), is not taken for one. And it is that refusal's sentence, no check of
-its own: where the list cannot settle an id, nothing is refused, as above. The value it
+(`:8b`, `:free`), is not taken for one. Such an id is refused whatever else the list may
+hold back (it is no id bb's pi resolves), while any other id the list cannot settle is
+still not refused, as below. The value it
 names is one bb has: pi's own word, but for `:off`, which is `reasoning-level=none` in
 bb, and `:minimal`, which bb has for no pi model, so the sentence names no value for
 it.)

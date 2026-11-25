@@ -43,6 +43,14 @@ export const ARCHIVED_NOTE = "archived in bb";
 
 /** OATS lost its session, and bb has the thread archived: bb's Archive never ends the harness. */
 export const LOST_ARCHIVED = "Archived in bb while running: it may still run.";
+/**
+ * The same on a ROW, in the reason's place and in the warning tone: what a person must not miss
+ * is that its process may run, not where its thread is. A row whose state reads "Stopped" (the
+ * kernel's row: not running, its session lost) then says both halves, "Stopped · may still run";
+ * the line and the row's own title say the whole ("Archived in bb while running: it may still
+ * run."). The state word is unchanged. (The lead's ruling on the read of 24 Nov 2026, T8.)
+ */
+export const MAY_RUN_NOTE = "may still run";
 
 /**
  * The reason, on a row and on its page, for every agent whose thread bb no longer has (deleted in bb), whether OATS
@@ -60,11 +68,43 @@ export const DELETED_NOTE = "deleted in bb";
  */
 export const NOT_LOADED_NOTE = "not loaded";
 
+// ---- where a message is the way on
+
+/**
+ * After the reason, on the line of an agent's own listed thread where a MESSAGE is the designed
+ * way on (model/rest.ts `messageResumes`), for a LOST session and for NO HARNESS LOADED:
+ * "Stopped · session lost · message to continue", "Idle · not loaded · message to continue". It
+ * stands in the place of the act that would mislead: such a line has no Start…, which begins a
+ * NEW conversation and whose dialog would say first to message instead; Start… stays in the
+ * thread's menu, the panel and the agent's page. (The lead's ruling on the read of 24 Nov 2026,
+ * T5, and its condition: said only where the kernel's or the provider's fact shows that a message
+ * carries the agent on under OATS. So not of a failed agent, whose line keeps its act; an
+ * operator's stop keeps its warning and Start…; and on a thread in "error" the words wait for
+ * bb's answer that a turn started there.)
+ */
+export const MESSAGE_CONTINUES = "message to continue";
+
 // ---- the kernel's report: "Running outside OATS" is its state (app/ui/words.ts)
 
-/** The fact after the state on its line: what OATS recorded, which is no longer what the agent does. */
-export const OUTSIDE_RECORDED = "recorded stopped";
-export const OUTSIDE_WHAT = "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.";
+/**
+ * The fact after the state on its line, in a person's words: the agent is stopped in OATS, which
+ * is no longer what it does ("Running outside OATS · stopped in OATS"). (The kernel's phrase was
+ * "recorded stopped": the lead's ruling on the read of 24 Nov 2026, T7.)
+ */
+export const OUTSIDE_RECORDED = "stopped in OATS";
+/**
+ * What it needs, on the home's card under those words: the TWO steps, in three words. Stop alone
+ * does not bring it back running: it ends the harness that runs and archives its thread, and the
+ * agent is then what OATS has it, stopped (no message can reach an archived thread); Start…, a
+ * new conversation, is then the way on under OATS. Start… first does not do: it does not adopt
+ * what runs, and while the outside thread is in a turn the provider refuses it ("stop it before
+ * starting again"). So Stop… is the primary act and Start… the second. (The lead's ruling of 24
+ * Nov 2026 on T7's form: not "Stop it to bring it back.", which reads as a contradiction.)
+ */
+export const OUTSIDE_NEEDS = "Stop, then Start.";
+/** The label of the time OATS recorded the stop, on the page of an agent that runs outside OATS: what its line says ("stopped in OATS"), never "Stopped" alone beside a header that says it runs. */
+export const OUTSIDE_STOPPED_FACT = "Stopped in OATS";
+export const OUTSIDE_WHAT = `Someone sent it a message in bb. ${OUTSIDE_NEEDS}`;
 /** The same, of an agent the lifecycle offers no Start for here (its session provider is neither bb nor tmux; the report is never a tmux agent's): the one remedy this plugin has is Stop. */
 export const OUTSIDE_WHAT_STOP = "Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.";
 

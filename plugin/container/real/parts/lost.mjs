@@ -53,7 +53,8 @@ const EXPECTED = {
   // the window at a shell), and offers Start… alone. "lost": the row's TITLE (`row`: what it says
   // whole) is "Stopped · <soul> · session lost · tmux", and what it DRAWS in the state's place
   // (`drawn`) is "Lost": the kernel's own word, with no reason after it (the text cut's L17).
-  running: { acts: ["Stop…", "Restart…", "Retire…"], words: ["Working", "Idle"], row: `Working · ${SOUL} · tmux`, drawn: ["Working", "Idle"] },
+  // An agent on tmux that runs reads "Running", never "Working": the kernel says that it runs, and nothing of a turn.
+  running: { acts: ["Stop…", "Restart…", "Retire…"], words: ["Running"], row: `Running · ${SOUL} · tmux`, drawn: ["Running"] },
   stopped: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · tmux`, drawn: ["Stopped"] },
   lost: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · session lost · tmux`, drawn: ["Lost"] },
 };
@@ -68,6 +69,7 @@ const LOST_NEVER = /Nobody stopped|without OATS stopping|Start tries/;
 /** The dialogs' ONE consequence line each, and the results' words (app/lifecycle/words.ts START, RESUME; the text cut). */
 const SAYS = {
   start: "Starts a new conversation.",
+  /** Said before a Restart only of an agent bb says works on a turn now: never of one on tmux (nobody knows), whose Restart says `start`. */
   restart: "Stops what it is doing now.",
   resume: "Tries to continue its last conversation; else starts fresh.",
   /** Not said before the press any more: it is said when it happens (`waiting`). */
@@ -301,7 +303,7 @@ export default async (run) => {
       if (first) resumeWhileRunning();
       let since = Date.now();
       const before = row().startedAt;
-      let result = await through("restart", "restart", `Restart ${CALLED}`, [SAYS.restart], [SAYS.start, SAYS.resume]);
+      let result = await through("restart", "restart", `Restart ${CALLED}`, [SAYS.start], [SAYS.restart, SAYS.resume]);
       let call = asked("restart", since);
       if (first) fixtures.keep("lifecycle/tmux-restart.json", call.stdout);
       check(result.tone === "done" && result.title === SAYS.restarted, `${at} the result says it restarted: "${SAYS.restarted}"`, JSON.stringify(result));

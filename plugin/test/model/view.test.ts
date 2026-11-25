@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Agent, BbThread, Node } from "../../model/types";
+import { messageResumes } from "../../model/rest";
 import { claimOf, flatten, state, view } from "../../model/view";
 import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
 
@@ -206,6 +207,45 @@ describe("A2 state(): first match wins", () => {
     // Not running beside "unknown" (its session is there, no harness loaded) is not stopped: it reads as bb says of its thread.
     expect(on("active", false)).toBe("working");
     expect(on("idle", false)).toBe("idle");
+  });
+  // The lead's ruling T4 (24 Nov 2026), the outside feature's rule: such an agent carries on by a MESSAGE in its thread;
+  // from the moment a person sends it bb runs a turn, and the kernel's row says the old thing until OATS is read again.
+  test("where a message is the way on and bb says the thread works, bb's word stands: Working, not the row's Stopped or Failed; at rest, and after an operator's stop, the row decides as before", () => {
+    const rows = {
+      lost: { running: false, runtimeState: "stopped", sessionEnd: "lost" },
+      "no harness loaded": { running: false, runtimeState: "unknown" },
+      "operator's stop": { running: false, runtimeState: "stopped", sessionEnd: "stopped" },
+    } as const;
+    const read = (over: Partial<Agent>, status: string, queuedWork = "none") => state(agent("a", over), thread("t", { status, queuedWork } as Partial<BbThread>));
+    expect(Object.entries(rows).map(([name, row]) => [name, read(row, "active"), read(row, "idle")])).toEqual([
+      ["lost", "working", "stopped"],
+      ["no harness loaded", "working", "idle"],
+      ["operator's stop", "stopped", "stopped"], // the kernel's report ("Running outside OATS") or the warning says the rest
+    ]);
+    // WHICH rows a message carries on is the outside feature's ONE answer (model/rest.ts `messageResumes`), and this rule
+    // reads it: it names none itself. So for every row that does not run, on a thread in a turn: Working exactly where
+    // that answer is yes, and where it is no the state is the one the same row has on a thread at rest (bb's turn changes
+    // nothing). (A harness that ended by itself is the case that answer is ruled on elsewhere: whatever it says, this holds.)
+    const every: Partial<Agent>[] = [
+      ...Object.values(rows),
+      { running: false, runtimeState: null, sessionEnd: "exited" },
+      { running: false, runtimeState: "shell" },
+      { running: false, runtimeState: "shell", sessionEnd: "exited" },
+      { running: false, runtimeState: null },
+      { running: false, runtimeState: "stopped" }, // stopped, with no word how
+    ];
+    for (const row of every) {
+      const turn = thread("t", { status: "active" });
+      const resumes = messageResumes(agent("a", row), turn);
+      expect([row, read(row, "active")]).toEqual([row, resumes ? "working" : read(row, "idle")]);
+    }
+    // A turn bb holds in line is work too (the same rule as a thread at rest with a message waiting to start).
+    expect(read(rows.lost, "idle", "waiting")).toBe(state(agent("a", { running: null }), thread("t", { status: "idle", queuedWork: "waiting" } as Partial<BbThread>)));
+    // Never on tmux (bb cannot write to it), never with no thread listed, never over what comes first: a claim, an unreachable session, a thread that failed at its start.
+    expect(state(agent("a", { ...rows.lost, backend: "tmux" }), thread("t", { status: "active" }))).toBe("stopped");
+    expect(state(agent("a", rows.lost), null)).toBe("stopped");
+    expect(state(agent("a", { ...rows.lost, runtimeState: "unreachable" }), thread("t", { status: "active" }))).toBe("unreachable");
+    expect(state(agent("a", rows.lost), thread("t", { status: "active", hasPendingInteraction: true }))).toBe("needs-you");
   });
   test("a tmux agent's activity is the kernel's own word; a provider's agent whose thread bb does not list is idle, a loaded harness or not", () => {
     expect(state(agent("a", { backend: "tmux", running: true, runtimeState: null }), null)).toBe("working");

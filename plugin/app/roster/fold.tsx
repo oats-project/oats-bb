@@ -8,6 +8,9 @@
 // For every kind of row: a thread's, and one with no bb thread.
 import { useSyncExternalStore } from "react";
 import type { KeyboardEvent } from "react";
+import type { AgentState } from "../../model/types";
+import { StateMark } from "../ui";
+import { STATE } from "../ui/words";
 
 /**
  * A roster with a parent in it keeps a gutter before every row for the parent's chevron, so that
@@ -60,25 +63,82 @@ export function forgetOpened(): void {
  * pattern book's form for an off control, out of the tab order, and its name says that the agents
  * are shown, not an act. It is live again the moment another row is on screen.
  */
-export function FoldToggle({ instance, name, open, pinned = false, depth }: { instance: string; /** the agent's name as words */ name: string; open: boolean; pinned?: boolean; depth: 0 | 1 | 2 }) {
+export function FoldToggle({
+  instance,
+  name,
+  open,
+  pinned = false,
+  depth,
+  inside = null,
+  insideTone = null,
+  insideSays = null,
+}: {
+  instance: string;
+  /** the agent's name as words */ name: string;
+  open: boolean;
+  pinned?: boolean;
+  depth: 0 | 1 | 2;
+  /** A closed parent: the state of the most urgent row it hides (`insideOf`); null where every hidden row is quiet. */
+  inside?: AgentState | null;
+  /** "warning": that row's own mark is drawn in the warning tone. */
+  insideTone?: "warning" | null;
+  /** What the hidden rows say, as a count ("1 needs you", "1 failed, 1 unreachable", "1 may still run"): the toggle's name and title end with it. The caller's words (the sidebar's `hiddenSays`); without them, the state's own name. */
+  insideSays?: string | null;
+}) {
+  // Only a CLOSED parent hides rows: open, each row carries its own mark.
+  const hides = open ? null : inside;
+  const says = pinned ? `${name}'s agents shown` : `${open ? "Hide" : "Show"} ${name}'s agents`;
+  // WHAT A CLOSED PARENT SAYS OF THE ROWS IT HIDES (the lead's ruling of 25 Nov 2026, after its reader's second look):
+  // - THE CHEVRON NEVER LEAVES a row that has children: it is what says the row opens. On the row, in this order: the
+  //   chevron, the hidden rows' mark, the parent's own dot.
+  // - a hidden row that ASKS (its state is needs-you): that row's own mark BESIDE the chevron, after it (the needs-you
+  //   disc with its "!"): found without colour;
+  // - a hidden row that failed or cannot be reached, or that runs outside OATS or warns, with nobody asking: NO second
+  //   dot (two plain dots side by side read as one more state of the parent, told apart by colour alone): the CHEVRON
+  //   itself takes the tone: the failure's for the first two, the warning's for the others;
+  // - the chevron and the mark are ONE button: pressing either opens the row;
+  // - its name and title say what is inside, in words, as a COUNT (the fold hides those rows' words): "1 needs you";
+  //   "1 failed", "1 unreachable", both where both are hidden; "1 running outside OATS"; over rows that warn the
+  //   count and the reason's own words: "1 may still run" (`insideSays`: the sidebar's `hiddenSays`);
+  // - opened, the marks leave: the rows show their own.
+  const asks = hides === "needs-you";
+  const tone = hides === null || asks ? "" : hides === "error" || hides === "unreachable" ? "text-destructive-text" : insideTone === "warning" ? "text-warning-text" : "";
+  const inWords = hides === null ? "" : insideSays !== null && insideSays !== "" ? insideSays : STATE[hides].name;
+  const label = hides === null ? says : `${says}: ${inWords}`;
   return (
     <button
       type="button"
       data-testid="oats-row-toggle"
       data-instance={instance}
       aria-expanded={open}
-      aria-label={pinned ? `${name}'s agents shown` : `${open ? "Hide" : "Show"} ${name}'s agents`}
+      aria-label={label}
+      title={hides === null ? undefined : label}
       disabled={pinned}
       aria-disabled={pinned ? true : undefined}
-      className={`absolute top-0 z-10 flex h-full w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-muted-foreground ${CHEVRON_AT[depth]}`}
+      className={`absolute top-0 z-10 flex h-full w-6 items-center ${asks ? "justify-start" : "justify-center"} rounded-md text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-muted-foreground ${CHEVRON_AT[depth]}`}
       onClick={() => setOpened(instance, !open)}
     >
       {/* Two marks, never one turned: closed points RIGHT, open points DOWN (the off one is drawn as open). No rotation
-          and no transition (a turned glyph was caught mid-turn, pointing left, and sat askew at a phone's width); one
-          box of one size at every width, the mark centred in it. */}
-      <span aria-hidden="true" data-testid="oats-row-toggle-mark" data-open={open ? "true" : "false"} className="inline-flex size-4 items-center justify-center text-xs leading-none">
+          and no transition (a turned glyph was caught mid-turn, pointing left, and sat askew at a phone's width). Its
+          box is one size at every width, the mark centred in it. BESIDE A HIDDEN ROW's MARK the gutter's 24 px hold
+          both: the chevron at the gutter's start in a box as wide as its glyph (8 px), the mark right after it (12 px),
+          and the 4 px that are left stand between that mark and the parent's own dot: the mark belongs to the chevron,
+          not to the parent's mark (flush against it, it read as the parent asking). So the chevron of such a row
+          stands a few pixels left of a plain parent's. */}
+      <span
+        aria-hidden="true"
+        data-testid="oats-row-toggle-mark"
+        data-open={open ? "true" : "false"}
+        {...(hides === null ? {} : { "data-inside": hides, ...(insideTone === "warning" ? { "data-tone": "warning" } : {}) })}
+        className={["inline-flex items-center justify-center text-xs leading-none", asks ? "h-4 w-2" : "size-4", tone === "" ? "" : `font-bold ${tone}`].filter((part) => part !== "").join(" ")}
+      >
         {open ? CHEVRON_OPEN : CHEVRON_CLOSED}
       </span>
+      {asks ? (
+        <span aria-hidden="true" data-testid="oats-row-toggle-inside" className="inline-flex w-3 items-center justify-center">
+          <StateMark state={hides as AgentState} hidden />
+        </span>
+      ) : null}
     </button>
   );
 }

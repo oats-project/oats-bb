@@ -16,7 +16,8 @@
 // Pure: no bb, no React, never throws. Text of the kernel's is returned raw: the components that
 // draw it put it through the display filter.
 import type { RetirePlan, RetireReceipt, Started, StopPlan, StopReceipt, StoppedRow } from "../../kernel/lifecycle";
-import { messageResumes } from "../../model/rest";
+import { messageResumes, rest } from "../../model/rest";
+import type { Agent } from "../../model/types";
 import { agentName, FULL_MODE } from "../ui/words";
 
 export type PlanVerb = "stop" | "retire";
@@ -37,7 +38,7 @@ export type PlanView = {
   says: string[];
   /** `says[0]` is a warning (a stop on a provider that leaves the thread open): drawn in the warning tone. */
   warns: boolean;
-  /** The facts that are a reason not to confirm, set apart: an agent with uncommitted work or in a turn, a work tree on another branch. Only what is true. */
+  /** The facts that are a reason not to confirm, set apart: for a stop, an agent in a turn (what the stop cuts); for a retire, a work tree on another branch. Only what is true. */
   attention: string[];
   /** Under Details: everything else the dialog says before the act, as sentences. */
   details: string[];
@@ -91,50 +92,53 @@ export function stopArchivesThread(providerVersion: string | null, from: string 
   return have[4] === undefined;
 }
 
-export const STOP_CHOICE = "Include child instances";
+/**
+ * The Stop dialog's one choice: its children, by name, ONCE: the choice itself says who else is
+ * stopped ("Also stop Desktop mockups developer, Harvest knowledge helper", On or Off), and no
+ * line beside it says them again. Agents, in the plugin's one word for them.
+ */
+export const stopChoice = (children: readonly string[]): string => `Also stop ${names(children)}`;
 export const RETIRE_CHOICE = "Also delete the worktree";
 /** The reason beside Retire when the tick is set for a tree that is not the agent's own (the Desktop's E_OPTION_UNAVAILABLE, naming the tick). */
-export const DISCARD_NOT_OWN = `Only an instance with its own worktree can delete it. Untick “${RETIRE_CHOICE}”.`;
+export const DISCARD_NOT_OWN = `Only an agent with its own worktree can delete it. Untick “${RETIRE_CHOICE}”.`;
 
-/** Whether the plan observed uncommitted work in a work tree: changed or untracked files. */
-const uncommitted = (work: StopPlan["targets"][number]["work"]): boolean => work.observed && work.changed + work.untracked > 0;
 /**
- * The facts that are a reason not to stop an agent, as words after its name, ONE line per agent:
- * "Redesign ui lead · uncommitted work · mid-turn". Only the facts that hold; an agent with none
- * has no line (null).
- * - `work`: uncommitted work in its home (the plan's own observation of its work tree);
- * - `turn`: its thread runs a turn now (bb's own word on the thread: the model's `threadWorks`).
+ * The ONE fact that is a reason not to stop an agent, as a word after its name, one line per agent:
+ * "Redesign ui lead · mid-turn": its thread runs a turn now (bb's own word on the thread: the
+ * model's `threadWorks`), which a stop cuts. An agent that is not in a turn has no line (null).
+ * Uncommitted work is NOT said of a stop: a stop deletes nothing and the work stays where it is
+ * (the lead's read: the box says only what the act affects). A RETIRE says it, at its tick.
  */
-export const WORK_FACT = "uncommitted work";
 export const TURN_FACT = "mid-turn";
-export const stopFacts = (instance: string, { work, turn }: { work: boolean; turn: boolean }): string | null =>
-  work || turn ? [agentName(instance), ...(work ? [WORK_FACT] : []), ...(turn ? [TURN_FACT] : [])].join(" · ") : null;
+export const stopFacts = (instance: string, { turn }: { turn: boolean }): string | null => (turn ? `${agentName(instance)} · ${TURN_FACT}` : null);
 /**
  * `archives`: whether the provider archives the thread of a home it stops (`stopArchivesThread`).
  * `working`: the plan's agents whose bb thread runs a turn now. What a person should see before
- * confirming is said from those FACTS, never from the plan's `midTask` (reported activity: true
- * for every session that runs, an idle one too): an agent whose session runs and has neither gets
- * no line, and the state under Details says "Session running" of it already.
+ * confirming is said from that FACT, never from the plan's `midTask` (reported activity: true
+ * for every session that runs, an idle one too): an agent that is not in a turn gets no line,
+ * and the state under Details says "Session running" of it already.
  */
 export const alsoStops = (instances: readonly string[]): string => `Also stops: ${names(instances)}.`;
 export const NOTHING_DELETED = "Nothing is deleted.";
 export function stopPlanView(plan: StopPlan, archives = false, working: ReadonlySet<string> = new Set()): PlanView {
   const targets = plan.targets;
-  // Who else it stops: the plan's sessions but the agent's own (the title names that one).
+  // Who else it stops: the plan's sessions but the agent's own (the title names that one); with the children left
+  // out, the ones the plan skipped: they are named ONCE, by the choice.
   const others = targets.filter((target) => target.instance !== plan.instance).map((target) => target.instance);
+  const children = others.length > 0 ? others : plan.skipped;
   // An agent on bb has a thread, and a stop does something to it; one with none (tmux) has no line: the title says what Stop does.
   const onBb = targets.some((target) => target.backend === "bb");
   // The tick is offered when the agent has children to include or to leave: a plan with neither has nothing to choose.
   const hasChildren = targets.length > 1 || plan.skipped.length > 0;
   return {
-    says: [...(onBb ? [stopThreadLine(archives)] : []), ...(plan.recursive && others.length > 0 ? [alsoStops(others)] : [])],
+    says: onBb ? [stopThreadLine(archives)] : [],
     warns: onBb && !archives,
-    attention: targets.flatMap((target) => stopFacts(target.instance, { work: uncommitted(target.work), turn: working.has(target.instance) }) ?? []),
+    attention: targets.flatMap((target) => stopFacts(target.instance, { turn: working.has(target.instance) }) ?? []),
     details: [NOTHING_DELETED, ...plan.ambiguous.map(ambiguous)],
     // The word is the SESSION's (the Desktop's "Running / Not running"), and says so: the roster's word for the
     // same agent is its state (Working, Idle), and the two side by side read as a contradiction otherwise.
     state: targets.map((target) => ({ label: agentName(target.instance), value: SESSION_OF[target.session] })),
-    choice: hasChildren ? { label: STOP_CHOICE, checked: plan.recursive, deletes: null } : null,
+    choice: hasChildren ? { label: stopChoice(children), checked: plan.recursive, deletes: null } : null,
     blocked: null,
     confirm: "Stop",
   };
@@ -219,12 +223,18 @@ export function retirePlanView(plan: RetirePlan, discardWorktree: boolean): Plan
 // ---- the dialog's own lines ----
 
 const ACT = { stop: "Stop", retire: "Retire", start: "Start", restart: "Restart" } as const;
-/** The dialog's title: the act and the agent as the KERNEL names it; no agent is named before the kernel has. */
-export function titleOf(verb: Verb, instance: string | null, named: boolean, settled = false): string {
-  // A plan is a question until it is answered: once the act has a result, the title asks nothing.
+/**
+ * The dialog's title: the act and the agent, in EVERY state of the dialog: while its plan is read,
+ * where it cannot be read, where the agent is gone, and over its result. The agent is the one that
+ * was ASKED for (the place that was pressed): a person always sees whom the dialog is about. What
+ * guards against another agent's plan is not the title: a plan the kernel answers for another
+ * instance, or for none, is REFUSED and never drawn under this name (the Confirm pattern's
+ * `about` against `shownFor`).
+ */
+export function titleOf(verb: Verb, instance: string, settled = false): string {
+  // A plan is a question until it is answered: once the dialog has settled (a result, a refusal), the title asks nothing.
   const ask = (verb === "stop" || verb === "retire") && !settled ? "?" : "";
-  if (instance !== null) return `${ACT[verb]} ${agentName(instance)}${ask}`;
-  return named ? `${ACT[verb]} this agent${ask}` : `${ACT[verb]} an agent`;
+  return `${ACT[verb]} ${agentName(instance)}${ask}`;
 }
 /** While the plan is read, for the first time, for a choice, or again: the title names the act and the agent. */
 export const CHECKING = "Checking…";
@@ -250,8 +260,7 @@ export function planChanges(before: StopPlan | RetirePlan, after: StopPlan | Ret
       if (old === undefined) lines.push(`${agentName(instance)} is now in this plan.`);
       else {
         if (old.session !== target.session) lines.push(`${agentName(instance)}: its session was ${was(old.session)}, and is now ${was(target.session)}.`);
-        // (Uncommitted work that came or went has no sentence of its own: the box below says what is so now, and
-        // where nothing else differs the one line for "what this would do has changed" stands, below.)
+        // (Uncommitted work that came or went is no change of a stop: a stop says nothing of it, and deletes nothing.)
       }
     }
     for (const instance of earlier.keys()) if (!later.has(instance)) lines.push(`${agentName(instance)} is no longer in this plan.`);
@@ -348,12 +357,18 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   const complete = receipt.removedDir && receipt.incomplete.length === 0;
   // The result's lines are the facts a person needs LATER (where the work that was kept is): a step that only says what was asked is not one.
   const lines: string[] = [];
-  if (receipt.children.length > 0) lines.push(`${plural(receipt.children.length, "child instance")} stopped and kept.`);
-  // A path stands on a line of its own, as the Desktop sets it apart: no full stop is glued to it, and it can be selected whole.
-  const at = (sentence: string, path: string | null) => (path ? [`${sentence}, at:`, path] : [`${sentence}.`]);
-  if (!receipt.removedDir) lines.push(...at("Home folder kept", receipt.retainedHome));
-  if (receipt.worktree === "retained") lines.push(...at("Worktree kept", receipt.movedTo));
-  if (receipt.recoveryPath !== null) lines.push("Recovery copy saved at:", receipt.recoveryPath);
+  if (receipt.children.length > 0) lines.push(`${plural(receipt.children.length, "child agent")} stopped and kept.`);
+  // In view: WHAT was kept, in a few words each. WHERE it is (a whole path) is under the result's Details: a path
+  // on the face is long, and breaks in the middle of a word at a phone's width; under Details it stands on a line
+  // of its own, with no full stop glued to it, and can be selected whole.
+  const where: string[] = [];
+  const kept = (what: string, path: string | null) => {
+    lines.push(`${what}.`);
+    if (path) where.push(`${what}, at:`, path);
+  };
+  if (!receipt.removedDir) kept("Home folder kept", receipt.retainedHome);
+  if (receipt.worktree === "retained") kept("Worktree kept", receipt.movedTo);
+  if (receipt.recoveryPath !== null) kept("Recovery copy saved", receipt.recoveryPath);
   // The home is gone: nothing can start the agent again, and its conversation is where it was, archived.
   if (receipt.removedDir && receipt.threadsArchived > 0) lines.push(RETIRE_ARCHIVED);
   // The home was kept (the kernel's answer says so: `removedDir` false): on bb its thread can be unarchived, and a message there starts it.
@@ -361,13 +376,13 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   const keptOnBb = !receipt.removedDir && plan.backend === "bb";
   // Under Details: a branch an interrupted spawn left, and what the kernel, or a capability's retire hook, warns of.
   const compensation = receipt.compensation === null ? null : receipt.compensation.deleted ? `Branch ${receipt.compensation.branch} deleted: an interrupted spawn left it, and it held no work.` : `Branch ${receipt.compensation.branch} kept: ${receipt.compensation.reason ?? "no reason given"}`;
-  if (complete) return { tone: "done", title: `${name} retired.`, lines, code: null, details: under(compensation, ...receipt.warnings, receipt.replayed && REPLAYED), offers: [] };
+  if (complete) return { tone: "done", title: `${name} retired.`, lines, code: null, details: under(...where, compensation, ...receipt.warnings, receipt.replayed && REPLAYED), offers: [] };
   return {
     tone: "failed",
     title: "Retirement didn't finish",
     lines: [...lines, "Check what was kept before trying again."],
     code: "RETIRE_INCOMPLETE",
-    details: under(compensation, ...receipt.incomplete, ...receipt.warnings, receipt.replayed && REPLAYED),
+    details: under(...where, compensation, ...receipt.incomplete, ...receipt.warnings, receipt.replayed && REPLAYED),
     offers: ["review"],
     ...(keptOnBb ? { warning: { title: HOME_KEPT, details: HOME_KEPT_DETAILS } } : {}),
   };
@@ -381,8 +396,8 @@ const LIFECYCLE: Readonly<Record<string, string>> = {
   // On an apply the code has two meanings (the kernel no longer has the name; a session's state cannot be established): the sentence claims neither.
   E_SESSION_UNKNOWN: "OATS no longer knows this agent, or cannot tell the state of its session. Review again to see which.",
   E_PLAN_STALE: PLAN_STALE,
-  E_INSTANCE_RETIRING: "An instance in this plan is already being retired.",
-  E_CHILDREN_RUNNING: "A child instance wouldn't stop, so nothing was retired. Other children may already have stopped.",
+  E_INSTANCE_RETIRING: "An agent in this plan is already being retired.",
+  E_CHILDREN_RUNNING: "A child agent wouldn't stop, so nothing was retired. Other children may already have stopped.",
   E_SESSION_STOP_FAILED: "The session didn't stop in time. Nothing was forced.",
   E_WORK_PRESERVATION_FAILED: "Its work couldn't be saved safely, so the home folder is kept. Earlier retirement steps may have run.",
   E_WORK_INSPECTION_FAILED: "Refused: OATS couldn't inspect its home. The home is kept; its session may have stopped.",
@@ -410,7 +425,7 @@ const sentenceOf = (code: string | null, table: Readonly<Record<string, string>>
 const unidentified = (verb: Verb) =>
   verb === "retire"
     ? "Nothing was removed: OATS can't run this home's cleanup. See Details."
-    : "OATS couldn't find or read what it needs in this instance's home folder, so nothing was done.";
+    : "OATS couldn't find or read what it needs in this agent's home folder, so nothing was done.";
 
 /** `unconfirmed`: the kernel's own marker that it could not confirm what its act left (`error.details.unconfirmed`). */
 export type Refusal = { code: string | null; message: string; unconfirmed?: boolean };
@@ -495,6 +510,12 @@ export function checkAgainRefused(verb: PlanVerb, instance: string, refusal: Ref
  *   "Show result", which opens the dialog again on that result, with everything it offers.
  */
 export const SHOW_RESULT = "Show result";
+/**
+ * The notice of an agent whose thread a person archived or deleted in bb while it ran
+ * (app/lifecycle/left.ts): bb stopped nothing OATS knows of. Its one button opens the Stop dialog.
+ */
+export const mayStillRun = (instance: string): string => `${agentName(instance)} may still run.`;
+export const MAY_STILL_RUN_ACT = "Stop…";
 export function toasted(verb: Verb, outcome: Outcome, threadless = false): { plain: boolean; tone: Outcome["tone"]; title: string; lines: string[] } {
   // `threadless`: a start or a restart of an agent with no bb thread (on tmux). Its result says where it runs, with
   // a command to copy, which a toast cannot hold: never plain, whatever it came to. And one that started FRESH after
@@ -517,7 +538,10 @@ export const START = {
    */
   carryOn: "To continue its conversation, message it instead.",
   checking: "Checking…",
-  /** A restart's ONE consequence line. */
+  /**
+   * Beside a restart's line (`begins`), ONLY where the agent is known to work on a turn now (bb's own
+   * word on its thread): what a restart cuts. Not said of an idle agent, nor on tmux, where nobody knows.
+   */
   restartWarning: "Stops what it is doing now.",
   harness: "Harness",
   model: "Model",
@@ -527,7 +551,7 @@ export const START = {
   refresh: "Refresh status",
   starting: "Starting…",
   restarting: "Restarting…",
-  alreadyRunning: "This instance is already running.",
+  alreadyRunning: "This agent is already running.",
   /**
    * A RESTART is held on a model the person changed unless bb's list for the harness serves it
    * exactly once (model/restart-model.ts: the kernel stops the running session before the provider
@@ -538,7 +562,7 @@ export const START = {
   required: "Required",
   /** Under the field's Details, only while it says "Not found": the way to a model bb does not list. */
   unlisted: "To use a model bb does not list: stop it, then start it with that model.",
-  unknownState: "Could not verify whether this instance is running. Refresh its status before starting.",
+  unknownState: "Could not verify whether this agent is running. Refresh its status before starting.",
 } as const;
 /**
  * Whether the Start and the Restart dialog say first that a message in the agent's thread carries its
@@ -578,22 +602,25 @@ export const RESUME = {
 } as const;
 
 /**
- * What the dialog says a start or a restart does, before the press: ONE line. A restart: that it
- * stops what the agent does now. A start: a new conversation; for a tmux agent whose session was
- * lost, that it tries to continue the last one (and no more: the result says which happened).
+ * What the dialog says a start or a restart does, before the press. A start: ONE line: a new
+ * conversation; for a tmux agent whose session was lost, that it tries to continue the last one
+ * (and no more: the result says which happened). A restart: that it starts a new conversation,
+ * ALWAYS (on bb and on tmux a restart never resumes: the conversation's fate is said before the
+ * act, in Start's words); and, first and only where the agent WORKS on a turn now, that it stops
+ * what it is doing: two short lines at most.
  */
-export function startSays(verb: RunVerb, { resumes }: { resumes: boolean }): string[] {
-  if (verb === "restart") return [START.restartWarning];
+export function startSays(verb: RunVerb, { resumes, working = false }: { resumes: boolean; working?: boolean }): string[] {
+  if (verb === "restart") return [...(working ? [START.restartWarning] : []), START.begins];
   return [resumes ? RESUME.tries : START.begins];
 }
 /**
- * And under the dialog's Details, as sentences: for a restart, that it starts a new conversation
- * too; on bb, the access it runs with (bb's full mode: said in view where an agent is made, the
- * New agent form, and here one press away).
+ * And under the dialog's Details, as a sentence: on bb, the access it runs with (bb's full mode:
+ * said in view where an agent is made, the New agent form, and here one press away).
  */
-export function startDetails(verb: RunVerb, { onBb }: { onBb: boolean }): string[] {
+export function startDetails({ onBb }: { onBb: boolean }): string[] {
   // (On bb the dialog has a Model field: that its choice outlives this start is said here, not under the field: the lead's L9.)
-  return [...(verb === "restart" ? [START.begins] : []), ...(onBb ? [START.modelSaved, FULL_MODE] : [])];
+  // (That a restart starts a new conversation is said in view, with the dialog's lines: `startSays`.)
+  return onBb ? [START.modelSaved, FULL_MODE] : [];
 }
 /** Why a resume started fresh, in words, for each reason the kernel names (docs/desktop-cli-api.md, "Resume a lost session"). */
 const FRESH_BECAUSE: Readonly<Record<string, string>> = {
@@ -627,7 +654,7 @@ const STARTED_NOTHING: Readonly<Record<string, string>> = {
   E_SESSION_START_BUSY: "OATS refused this start as busy. Nothing was started.",
   E_SESSION_START_LOCK_STUCK:
     "A start lock from an earlier OATS blocks this. Remove it (Details names it).",
-  E_SESSION_RUNNING: "This instance is already running. Nothing was started.",
+  E_SESSION_RUNNING: "This agent is already running. Nothing was started.",
 };
 
 /** A start or a restart that was refused, that stopped at a launch prompt, or whose answer was lost. */
@@ -655,7 +682,7 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal, 
   if (code === "E_LAUNCH_ENV_CHANGED") return of("failed", `${name} wasn't started`, [RESUME.envChanged]); // (OATS's own line is under Details)
   if (code !== null && LOST.has(code)) return of("unknown", "OATS didn't confirm the start", ["It may be running: check its row first."]);
   if (code !== null && STARTED_NOTHING[code] !== undefined) return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [STARTED_NOTHING[code]!]); // (what blocks is named by OATS's message, under Details)
-  if (code === "E_INSTANCE_RETIRING") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`This instance is being retired, or has cleanup to finish. ${nothing}`]);
+  if (code === "E_INSTANCE_RETIRING") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`This agent is being retired, or has cleanup to finish. ${nothing}`]);
   if (code === "E_LIFECYCLE_BUSY") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [`OATS refused this ${act} as busy. ${nothing}`]);
   if (code === "E_UNIDENTIFIED_INSTANCE_HOME") return of("failed", `${name} wasn't ${restart ? "restarted" : "started"}`, [unidentified(verb)]);
   if (code === "E_BACKEND_HARNESS" || code === "E_UNSUPPORTED_HARNESS") return of("failed", `OATS refused to ${act} ${name} on this harness`, ["Choose another under Harness, or keep the recorded one."]);
@@ -669,6 +696,25 @@ export function startRefused(verb: RunVerb, instance: string, refusal: Refusal, 
 }
 
 // ---- an act that cannot run from where it was asked (a key, a command) ----
+
+/**
+ * The ONE act for an agent that FAILED, in every place that offers one (the acts, the panel, the
+ * thread's menu and line, the keys): never two acts for one need. It ASKS the plugin's one reading
+ * of how an agent is at rest (`rest`, model/rest.ts: what the home's card and the dialogs read too),
+ * and reads no row of its own:
+ * - START where nothing runs: its thread failed at its start ("never-started": it never ran), or
+ *   its session ended, was lost, or is stopped. A restart there is a start with a warning about
+ *   stopping what is not there; and the Start dialog's own gate takes exactly such a row.
+ * - RESTART where it runs, or where nobody can tell ("runs", "unreachable"): the Start dialog's
+ *   gate refuses such a row ("already running", or not known).
+ * `thread`: bb's own row of the agent's thread where the place has it (it carries bb's word that
+ * the thread failed at its start); null where it has none.
+ * (Here, in the lifecycle's file with no component: the thread's line reads it without loading the dialogs.)
+ */
+export function failedAct(agent: Agent, thread: object | null): "start" | "restart" {
+  const how = rest(agent, thread);
+  return how === "runs" || how === "unreachable" ? "restart" : "start";
+}
 
 export const NO_TARGET = "This thread is not an OATS agent's.";
 /** Why `verb` cannot act on an agent in this state, in one line; null when it can. `running`: the agent's session is there (working, idle, waiting); `known`: OATS can say. */

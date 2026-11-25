@@ -1,0 +1,19 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_BAD_ARGS",
+  "message": "messaging:mail: cursor is not a nextCursor from a previous answer",
+  "details": {
+   "exit": 1,
+   "envelope": {
+    "schemaVersion": 1,
+    "ok": false,
+    "error": {
+     "code": "E_BAD_ARGS",
+     "message": "cursor is not a nextCursor from a previous answer"
+    }
+   }
+  }
+ }
+}

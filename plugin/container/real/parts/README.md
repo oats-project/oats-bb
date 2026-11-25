@@ -17,7 +17,9 @@ navigate, wait on what is read (`page.until`), check it (`run.check(ok, \`${at} 
 then `await shot("<name>")`, which saves `<scene>-<width>x<height>-<name>[-dark].png` with the
 run's other images. One state per scene, the same in both themes.
 
-The order is the files' order, and one part depends on it: `tagged.mjs` must stay the last. It pins
+The order is the files' order, and two parts depend on it: `on-tmux.mjs` (a tmux agent's
+terminal) runs after `lost.mjs`, which prepares the container for an agent on tmux; and
+`tagged.mjs` must stay the last. It pins
 the run's provider by a scratch tag, so that the kernel prints a release's version for it, and
 every read of a later part would see that pin. A part's images need a scene name of their own
 (the run's end compares all images: two scenes of different states must not be the same image),

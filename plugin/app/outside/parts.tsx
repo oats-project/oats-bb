@@ -306,13 +306,18 @@ export function pageParts(
 
 /**
  * The acts of the page's line for the kernel's report (`pageParts`' `report`): Stop… (the primary
- * act) and Start…, as on its thread's line; and `verbs`, the lifecycle's verbs they are, which
- * the header's own row of acts then leaves out (no act is on the page twice). Null where the
+ * act) and Start…, as on its thread's line, then Retire…, last and plain: the page's ONE row of
+ * acts; and `verbs`, the lifecycle's verbs they are, which the header's own row of acts then
+ * leaves out (it draws nothing there: no act is on the page twice). Null where the
  * page's line is not the report's.
  */
 export function pageActs(report: Said | null, instance: string, held: boolean): { buttons: ReactNode; verbs: readonly Act[] } | null {
   if (report === null || report.warning === null) return null;
-  return { buttons: <OutsideActs instance={instance} acts={reportActs(report)} held={held} primary={REPORT_PRIMARY} />, verbs: reportActs(report) };
+  // ONE row of acts on that page: the report's (Stop… the primary act, then Start…), then Retire…
+  // last and plain, which the header's own row would otherwise hold alone on a row of its own
+  // (the lead's second look, P34).
+  const acts: readonly Act[] = [...reportActs(report), "retire"];
+  return { buttons: <OutsideActs instance={instance} acts={acts} held={held} primary={REPORT_PRIMARY} />, verbs: acts };
 }
 
 /**

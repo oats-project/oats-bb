@@ -24,6 +24,31 @@ UPDATE_FIXTURES=1 plugin/test/fixtures/automations/record/record.sh
 (`container/real/setup.sh`), then `record/record.mjs` instead of the real run's scenario.
 `record/workspace.sh` adds to the real run's workspace what the lists need.
 
+## What the recording does NOT hold (said loudly)
+
+Two features of the kernel are in no released OATS yet (awebai/oats #2142: `trigger-failure-history`,
+`status-automation`; the recording is OATS 0.70.0 and the real run pins 0.70.5), so no file here
+holds their fields:
+
+- **A trigger's failed spawns** (`failures[]`, `failuresTotal` on a row of `oats trigger status`).
+  The recorded states have neither key, and the plugin then claims no history (`failures: null`:
+  test/automations/runs.test.ts holds that on every recorded trigger). The ONE test of the rows a
+  history would draw (test/automations/view.test.tsx, its name starts "NAMED FIELDS ADDED TO A
+  RECORDED ANSWER") adds, by hand, to a recorded state, the fields the kernel's contract names
+  (awebai/oats docs/desktop-cli-api.md: `attempt, at, key, event, subject, code, message,
+  resolved`): it is a test of the drawing on those names, not of a kernel's answer. It is to be
+  replaced by a recording as soon as a released kernel answers them.
+- **The automation that made an agent** (`automation` on a row of `oats status`): not read by the
+  plugin yet.
+
+The busy sets (test/automations/busy.ts for the unit tests, container/scenes/automations-busy.mjs
+for the live scenes: 37 automations, five failing, fifty-run histories, names of sixty
+characters) are no recording either: they MULTIPLY the recorded rows of this directory (every row
+is a recorded row; only its id, its name and the times and ids of its repeated runs are varied;
+the live one also names, as the agent of three runs, three agents of the scenes' roster). They
+are for the worst-case scenes and images, and for the one test that the row's red, the filter's
+count and the sidebar's dot agree; a parser's tests stay on the recorded answers.
+
 ## What was arranged, and what was not
 
 The script arranges the kernel's input, never its answer:

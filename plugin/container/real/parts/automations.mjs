@@ -38,7 +38,15 @@ export default async (run) => {
   if (lists !== undefined) {
     check(lists.schedule.ok === true && lists.trigger.ok === true, "both lists are the kernel's answers, not refusals", JSON.stringify([lists.schedule.ok ? "ok" : lists.schedule, lists.trigger.ok ? "ok" : lists.trigger]));
     check(JSON.stringify(recorded(["schedule", "list"]).argv) === JSON.stringify(["schedule", "list", "--json"]) && JSON.stringify(recorded(["trigger", "list"]).argv) === JSON.stringify(["trigger", "list", "--json"]),
-      "the plugin ran `oats schedule list --json` and `oats trigger list --json`, and nothing more", JSON.stringify([recorded(["schedule", "list"]).argv, recorded(["trigger", "list"]).argv]));
+      "the plugin ran `oats schedule list --json` and `oats trigger list --json`", JSON.stringify([recorded(["schedule", "list"]).argv, recorded(["trigger", "list"]).argv]));
+    // Every trigger's state, in ONE read beside the lists (a row's last fire and failure, the Runs tab, the sidebar's marks read it).
+    check(JSON.stringify(recorded(["trigger", "status"]).argv) === JSON.stringify(["trigger", "status", "--json"]), "and ONE `oats trigger status --json`, with no id: every trigger's state", JSON.stringify(recorded(["trigger", "status"]).argv));
+    check(lists.statuses?.ok === true && lists.trigger.ok === true && JSON.stringify(lists.statuses.statuses.map((entry) => entry.id).sort()) === JSON.stringify(lists.trigger.list.rows.map((row) => row.id).sort()),
+      "the plugin holds one state per listed trigger, by its qualified id", JSON.stringify(lists.statuses?.ok ? lists.statuses.statuses.map((entry) => entry.id) : lists.statuses));
+    // What this kernel keeps of a trigger's failed spawns: only where it lists the feature; else nothing is claimed.
+    const history = lists.oats?.features.includes("trigger-failure-history") === true;
+    check(lists.statuses?.ok === true && lists.statuses.statuses.every((entry) => (entry.status.failures !== null) === history),
+      `a trigger's failed spawns are ${history ? "read as a list: this kernel keeps them" : "not claimed: this kernel lists no `trigger-failure-history`"}`, JSON.stringify(lists.statuses?.ok ? lists.statuses.statuses.map((entry) => entry.status.failures) : null));
     if (lists.schedule.ok && lists.trigger.ok) {
       const schedules = lists.schedule.list.rows;
       const triggers = lists.trigger.list.rows;
@@ -87,6 +95,15 @@ export default async (run) => {
   const launched = [...status().rows.values()].find((row) => !before.has(row.instance));
   check(ran?.run?.outcome === "launched" && launched !== undefined && launched.backend === "bb" && launched.instance === ran.run.instance && argv(["schedule", "run"]) === JSON.stringify(["schedule", "run", "local/real-run-digest", "--json"]),
     "Run now launched a bb agent: the run's outcome is `launched`, and `oats status` holds the new instance on bb", JSON.stringify({ run: ran?.run && { outcome: ran.run.outcome, instance: ran.run.instance }, launched: launched && { instance: launched.instance, backend: launched.backend } }));
+
+  // The run it made is the first of the schedule's Runs, with the agent it made, which the roster holds: what the automation's page draws.
+  rpc("refresh");
+  const after = act("the plugin reads the lists again, after the run", "automations");
+  const digestNow = after?.schedule?.ok ? after.schedule.list.rows.find((row) => row.id === "local/real-run-digest") : undefined;
+  const newest = digestNow?.recentRuns[0];
+  check(newest !== undefined && newest.instance === ran?.run?.instance && typeof newest.runId === "string" && newest.outcome !== null && [...status().rows.keys()].includes(newest.instance),
+    "the run made by Run now is the newest of the schedule's kept runs, with its own id, its outcome, and the agent it made, which `oats status` holds", JSON.stringify(newest && { instance: newest.instance, runId: newest.runId, outcome: newest.outcome, startedAt: newest.startedAt }));
+  check(digestNow?.history !== null && digestNow?.history !== undefined && digestNow.history.truncated === false && digestNow.history.stored >= 1, "and the kernel says how many runs it keeps, and that none was dropped", JSON.stringify(digestNow?.history));
 
   // Check run state: the kernel's reconcile answers for a schedule whatever its last run is.
   const reconciled = act("check the schedule's run state", "scheduleReconcile", { id: "local/real-run-digest" });

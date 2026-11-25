@@ -56,6 +56,9 @@ test.each([
   expect(slot.queryAllByTestId("oats-agent-row-threadless").some((row) => row.getAttribute("data-instance") === CHILD)).toBe(false);
   // bb's answer comes after the first draw: then the parent carries the child's own mark, in the warning tone, after its own word.
   await waitFor(() => expect(inside()).toEqual([state, "warning"]));
+  // Nobody asked: NO second dot beside the chevron; the chevron itself takes the WARNING tone (the lead's ruling on P23).
+  const glyph = toggle().querySelector<HTMLElement>('[data-testid="oats-row-toggle-mark"]')!;
+  expect([glyph.textContent, toggle().querySelectorAll("[data-mark]").length, glyph.className.split(/\s+/).includes("text-warning-text")]).toEqual(["▸", 0, true]);
   // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then WHAT THAT ROW ITSELF SAYS: its state's word and its reason,
   // as the row draws them (ruled 25 Nov 2026: the warning's tone is a colour, and the state's name alone, "stopped", says nothing of it).
   const named = toggle().getAttribute("aria-label")!;

@@ -231,14 +231,17 @@ export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance
 }
 
 /**
- * What a closed parent says of the rows it hides. ONE principle: it carries a mark for any row
- * inside it that itself carries a mark: one that needs a person (rank 0), one a person must look
- * at (rank 1: it runs outside OATS, or failed), and one that WARNS (`warns`: the caller's word for
- * a row whose own mark is drawn in the warning tone, which the model cannot tell: a thread
- * archived in bb while it ran; that is of rank 1 too). Several inside: the most urgent by rank,
- * and among equals the first in the tree's order. → that row's own state, and "warning" as the
- * tone where it is a row that warns; `{ state: null }` where every hidden row is quiet and none
- * warns. The parent's own state is never part of it: its own word and mark stay its own.
+ * What a closed parent says of the rows it hides. ONE principle: it says so for any row inside it
+ * that a person must find: one that needs a PERSON (it asks; or it runs outside OATS, which the
+ * home lists under "Needs you"), one a person must look at with nobody asked (it failed; or it
+ * WARNS: `warns`, the caller's word for a row whose own mark is drawn in the warning tone, which
+ * the model cannot tell: a thread archived in bb while it ran), and one that cannot be reached.
+ * Several inside, WHEREVER EACH STANDS: one that asks first, then one that runs outside OATS,
+ * then one that failed or warns, then an unreachable one; among equals the first in the tree's
+ * order. → that row's own state (and the row), "warning" as the tone where it warns and nobody
+ * asks, and `asks`: how many hidden rows need a person. `{ state: null }` where every hidden row is
+ * quiet and none warns. The parent's own state is never part of it: its own word and mark stay
+ * its own. (The roster's ORDER, `RANK`, is another thing and is not touched by this.)
  */
 export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null; /** how many hidden rows need a person (they ask, or they run outside OATS: the home lists both under "Needs you") */ asks: number } {
   // The best so far, in a list of at most one (a local a closure assigns is not narrowed after it).

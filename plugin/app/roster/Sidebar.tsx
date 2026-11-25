@@ -25,6 +25,7 @@ import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET, TMUX } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
 import { useCli } from "../home/cli";
+import { GONE_MARK } from "./gone";
 import { agentStatus, rowState } from "./status";
 import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
@@ -338,8 +339,12 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const warns = (row: Row): boolean => !gone.has(row.agent.instance) && !reads(row.agent.instance) && rowWarns(outside.of(row.agent), row.state);
   // A closed parent marks nothing for a hidden row that reads "Reading…": its state in this roster is from before the
   // act, and a mark for it would be the old state's. For the fold alone such a row is a quiet one.
-  const quiet = (rows: readonly Row[]): readonly Row[] => rows.map((row) => ({ ...row, state: reads(row.agent.instance) ? ("idle" as const) : row.state, children: quiet(row.children) as Row[] }));
-  const folded = flatten(view.rows).some((row) => reads(row.agent.instance)) ? quiet(view.rows) : view.rows;
+  // Nor for a hidden row that is GONE (the kernel no longer knows it: its row says "Not in OATS any more", with the
+  // stopped mark): its state in this roster is the one before it went, and a closed parent would count it among those
+  // that need a person, or take a failed one's tone, for an agent that is no more.
+  const stale = (instance: string): boolean => reads(instance) || gone.has(instance);
+  const quiet = (rows: readonly Row[]): readonly Row[] => rows.map((row) => ({ ...row, state: reads(row.agent.instance) ? ("idle" as const) : gone.has(row.agent.instance) ? GONE_MARK : row.state, children: quiet(row.children) as Row[] }));
+  const folded = flatten(view.rows).some((row) => stale(row.agent.instance)) ? quiet(view.rows) : view.rows;
   return (
     // `data-pages`: whether bb has given the settings that say which pages are shown. With nobody
     // waiting the foot has no line, so nothing drawn says it: a live check that asserts an absence

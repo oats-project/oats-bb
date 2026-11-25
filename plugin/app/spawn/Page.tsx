@@ -729,8 +729,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             )}
             <Field
               label={W.MODEL_LABEL}
-              errorId={MARK.model}
-              error={modelAnswer === null ? null : modelMark}
+              // The mark stands under the field a person changes: with "Custom…" chosen that is the Model ID below, not this list.
+              {...(modelPick === CUSTOM ? {} : { errorId: MARK.model, error: modelAnswer === null ? null : modelMark })}
             >
               <Choice
                 testId="oats-spawn-model"
@@ -754,7 +754,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             </Field>
             {modelPick === CUSTOM ? (
               <div id={SAYS.modelId} className="flex min-w-0 flex-col">
-              <Field label={W.MODEL_CUSTOM_LABEL}>
+              <Field label={W.MODEL_CUSTOM_LABEL} errorId={MARK.model} error={modelAnswer === null ? null : modelMark}>
                 <input data-testid="oats-spawn-model-id" className={INPUT} value={modelTyped} placeholder={W.MODEL_CUSTOM_PLACEHOLDER} autoComplete="off" spellCheck={false} onChange={(event) => setModelTyped(event.target.value)} />
               </Field>
               </div>

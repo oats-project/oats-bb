@@ -1,5 +1,6 @@
 // The New agent form: a name and a task, the kernel's preview (`oats spawn --preview`), and the
 // spawn of exactly that decision in bb, through `oats spawn --backend bb --yolo`.
+import { openAgentPage } from "../home/agent-tab";
 import { useRef, useState } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import { instanceName } from "../../contract";
@@ -92,7 +93,9 @@ function SpawnForm({ soul }: { soul: Soul }) {
       (answer) => {
         setBusy(null);
         intent.current = null;
-        navigate.toThread(answer.threadId);
+        // An agent with no bb thread (a deployment with no bb session provider): its own page.
+        if (answer.threadId === null) openAgentPage(navigate, answer.instance);
+        else navigate.toThread(answer.threadId);
       },
       (cause: unknown) => {
         setBusy(null);

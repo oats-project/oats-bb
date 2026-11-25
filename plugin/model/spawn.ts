@@ -168,6 +168,8 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
  * launch-prompt note (`prompts`) is not the form's yet, and is left out.
  */
 export type FormFacts = Omit<PreviewFacts, "prompts">;
+/** The preview's row of an agent that will not run on a bb thread: where it runs (the instance panel's Session card says the same of it). */
+export const RUNS_IN = "Runs in";
 /** The model of a spawn on bb that names none for its harness: bb's own default for it. */
 export const bbDefaultModel = (harness: string): string => `bb’s default for ${harnessLabel(harness)}`;
 
@@ -250,7 +252,10 @@ export function formFacts(preview: unknown, options: { name?: string | null } = 
   const access = decision.yolo === false ? "the harness asks before it acts" : "full mode: no sandbox";
   // After the harness: where its session is, then what it may do.
   after("Harness", { label: "Access", parts: [{ text: access }] });
-  if (backend !== null) after("Harness", { label: "Session", parts: [{ text: backend === "bb" ? "bb thread" : backend }] });
+  // Where it will run, from the preview's own `backend`. On bb: "Session / bb thread", as it was. On tmux (a deployment
+  // with no bb session provider: the kernel decided): "Runs in / tmux session", the words of the instance panel's
+  // Session card, in view in the form's column.
+  if (backend !== null) after("Harness", backend === "tmux" ? { label: RUNS_IN, parts: [{ text: "tmux session" }] } : { label: "Session", parts: [{ text: backend === "bb" ? "bb thread" : backend }] });
   return { ...facts, facts: rows };
 }
 

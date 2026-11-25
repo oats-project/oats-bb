@@ -235,7 +235,7 @@ function Overlay() {
   });
   return <ActsOverlay />;
 }
-const nodeIn = (threadId: string | null): Node | undefined => (roster?.phase === "ready" && threadId !== null ? roster.nodeByThread.get(threadId) : undefined);
+export const nodeIn = (threadId: string | null): Node | undefined => (roster?.phase === "ready" && threadId !== null ? roster.nodeByThread.get(threadId) : undefined);
 
 /** A command's key was pressed for the agent of the thread in view: open the act's dialog, or say in one line why it cannot act. */
 function runCommand(verb: Verb, threadId: string | null): void {

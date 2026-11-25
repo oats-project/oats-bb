@@ -105,7 +105,7 @@ function toAgent(group: { name: string }, source: z.output<typeof row>, features
     ...outsideOf(source, features),
     // Whether the agent's BOARD holds an open question (the row's `board`, read by model/board.ts): only where
     // this kernel lists the feature. A place that says the agent needs a person then draws that question itself.
-    ...(features.includes(BOARD_FEATURE) && (boardData(source.board)?.questions.length ?? 0) > 0 ? { boardAsks: true as const } : {}),
+    ...boardOf(source.board, features),
     waiting: waiting
       ? { reason: waiting.reason ?? "attention", message: waiting.message ?? null, since: waiting.since ?? null }
       : null,
@@ -119,6 +119,13 @@ function outsideOf(source: z.output<typeof row>, features: readonly string[]): {
 }
 
 /** The roster's instances, in the kernel's order. */
+/** What a row says of its agent's board, only where this kernel lists the feature: that it has one (a fact or an open question), and that it asks. */
+function boardOf(board: unknown, features: readonly string[]): { hasBoard?: true; boardAsks?: true } {
+  const read = features.includes(BOARD_FEATURE) ? boardData(board) : null;
+  if (read === null || read === undefined || read.facts.length + read.questions.length === 0) return {};
+  return read.questions.length > 0 ? { hasBoard: true, boardAsks: true } : { hasBoard: true };
+}
+
 export function parseStatus(document: unknown): Result<Status> {
   const parsed = shaped(roster, document, "oats status");
   if (!parsed.ok) return parsed;

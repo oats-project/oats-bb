@@ -42,6 +42,8 @@ export type Agent = {
   outsideOats?: OutsideOats | null;
   /** The agent's board holds an open question (the kernel's row `board`): `true`, or absent. The question itself, its options and the facts are the board's own read (app/board). */
   boardAsks?: true;
+  /** The agent has a board to show: a fact or an open question. `true`, or absent. (What bb asks a command before it lists it is answered from the roster alone.) */
+  hasBoard?: true;
 };
 
 export type OutsideOats = { code: "running-outside-oats"; backend: string; message: string };

@@ -3,3 +3,10 @@ export { Board, BoardAsk } from "./Board";
 export { useBoardTab } from "./tab";
 export { BOARD } from "./words";
 export { forgetHidden } from "./hidden";
+export { command } from "./command";
+import type { PluginAppBuilder } from "@get-bb/plugin-sdk/app";
+import { command } from "./command";
+
+export function register(app: PluginAppBuilder): void {
+  app.commands.register(command);
+}

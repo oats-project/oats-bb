@@ -32,6 +32,8 @@ export const agent = z.object({
   outsideOats: outsideOats.nullish(),
   /** its board holds an open question (`true`, or absent) */
   boardAsks: z.literal(true).optional(),
+  /** it has a board: a fact or an open question (`true`, or absent) */
+  hasBoard: z.literal(true).optional(),
 });
 
 const raw = z.record(z.string(), z.unknown());

@@ -49,7 +49,14 @@ export const automationRun = z.object({
   number: count,
   subject: text,
   key: text,
+  /** the agent the run made or woke: a schedule run's `session.instance`, a trigger fire's `instance` */
   instance: text,
+  /** that agent's home, as the kernel recorded it */
+  home: text,
+  /** the kernel's own id of a schedule's run: opaque, a row's key and nothing else; null on a row from before the history */
+  runId: text,
+  /** whether the kernel holds the run's outcome as final; null where it does not say */
+  settled: z.boolean().nullable(),
 });
 
 /** What a trigger watches. `params` are a capability source's, as the trigger file gives them. */
@@ -117,6 +124,8 @@ export const automationRow = z.object({
   lastRun: automationRun.nullable(),
   nextDue: text,
   recentRuns: z.array(automationRun),
+  /** a schedule's kept history: how many runs are stored and whether older ones were dropped (the kernel keeps the newest 50); null where the kernel says nothing of it */
+  history: z.object({ stored: count, truncated: z.boolean() }).nullable(),
   /** the stored definition no longer validates, or (with `at`) a capability source's check failed at a poll */
   invalid: automationProblem.nullable(),
   /** the kernel could not read the row at all */
@@ -150,7 +159,19 @@ export const automationList = z.object({
 });
 
 const says = z.object({ code: text, message: text });
-const fired = z.object({ key: text, at: text, outcome: text, event: text, label: text, instance: text });
+const fired = z.object({ key: text, at: text, outcome: text, event: text, label: text, instance: text, home: text });
+/** One failed spawn of a trigger (feature `trigger-failure-history`): one row per attempt; `resolved` once a later attempt of its key spawned. */
+export const triggerFailure = z.object({
+  attempt: count,
+  at: text,
+  key: text,
+  event: text,
+  label: text,
+  code: text,
+  message: text,
+  instance: text,
+  resolved: z.object({ at: text, instance: text }).nullable(),
+});
 
 /** One trigger's recorded state (`oats trigger status`): every string is already one display line. */
 export const triggerStatus = z.object({
@@ -180,6 +201,9 @@ export const triggerStatus = z.object({
     })
     .nullable(),
   lastError: z.object({ at: text, code: text, message: text, key: text, says: says.nullable() }).nullable(),
+  /** the failed spawns, newest first (at most 50); null on a kernel that keeps no such history: then `lastError` is all there is */
+  failures: z.array(triggerFailure).nullable(),
+  failuresTotal: count,
   /** a capability source's row only: the source as the kernel names it, and its last good poll's lists */
   source: z.object({ capability: text, name: text }).nullable(),
   refused: z.array(z.object({ text: text, rule: text })),
@@ -199,6 +223,10 @@ export type AutomationHost = z.infer<typeof automationHost>;
 export type AutomationScheduler = z.infer<typeof automationScheduler>;
 export type AutomationList = z.infer<typeof automationList>;
 export type TriggerStatus = z.infer<typeof triggerStatus>;
+export type TriggerFailure = z.infer<typeof triggerFailure>;
+/** Every trigger's recorded state, by its qualified id. A row the plugin could not read is left out. */
+export const triggerStatuses = z.array(z.object({ id: z.string(), status: triggerStatus }));
+export type TriggerStatuses = z.infer<typeof triggerStatuses>;
 
 // ---- the answers of the acts ----
 
@@ -270,6 +298,11 @@ export const automationListAnswer = z.union([
   z.object({ ok: z.literal(true), list: automationList }),
   z.object({ ok: z.literal(false), code: z.string(), message: z.string() }),
 ]);
+/** Every trigger's state as a client gets it: the kernel's answer, or why there is none. */
+export const triggerStatusesAnswer = z.union([
+  z.object({ ok: z.literal(true), statuses: triggerStatuses }),
+  z.object({ ok: z.literal(false), code: z.string(), message: z.string() }),
+]);
 // The kernel's grammar for a qualified id (`local/<id>`, `<member>/<id>`) or a bare local one: a
 // member of at most 64 characters, a trigger's id of at most 64 and a schedule's of at most 100.
 export const TRIGGER_ID = /^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -280,8 +313,8 @@ export const automationId = z.string().regex(SCHEDULE_ID);
 /** app -> server */
 export const rpc = defineRpcContract({
   /**
-   * Both lists, read together: each tab counts its rows, and one that fails does not hide the
-   * other. `hostId` is the bb machine that holds the deployment (a row's file opens there). An
+   * Both lists and every trigger's state, read together: one that fails does not hide the
+   * others. `hostId` is the bb machine that holds the deployment (a row's file opens there). An
    * OATS that does not list the feature `automations` is not asked for them.
    */
   automations: {
@@ -295,6 +328,12 @@ export const rpc = defineRpcContract({
       oats: z.object({ version: z.string(), features: z.array(z.string()), automationsApi: z.number().nullable() }).nullable(),
       schedule: automationListAnswer,
       trigger: automationListAnswer,
+      /**
+       * Every listed trigger's recorded state, from ONE `oats trigger status --json` beside the
+       * lists: a row's last fire and last error, the Runs tab's merge and the sidebar's mark of a
+       * failed poll read it. A refusal is answered beside the lists, never instead of them.
+       */
+      statuses: triggerStatusesAnswer,
     }),
   },
   /** One trigger's recorded state. The id must be a trigger of the current list. */
@@ -331,6 +370,12 @@ export const host = defineRpcContract({
     experimental_retryable: true,
     input: z.object({ ...hostBase, id: automationId, source: z.string().nullable() }).strict(),
     output: answer(triggerStatus),
+  },
+  /** `sources`: each listed trigger's `on.source` by its qualified id (how its events are named); it reaches no argv. */
+  triggerStatusAll: {
+    experimental_retryable: true,
+    input: z.object({ ...hostBase, sources: z.record(z.string().regex(TRIGGER_ID), z.string().nullable()) }).strict(),
+    output: answer(triggerStatuses),
   },
   // The acts: never retried by bb. `id` is the qualified id the list named.
   automationEnable: { input: z.object({ ...hostBase, kind: automationKind, id: automationId, enabled: z.boolean() }).strict(), output: answer(z.object({ row: automationRow })) },

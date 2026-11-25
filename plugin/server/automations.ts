@@ -5,7 +5,7 @@
 // reaches the host.
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
-import { NO_AUTOMATIONS, type AutomationKind, type AutomationRow, type automationListAnswer, type rpc } from "../contract/automations.js";
+import { NO_AUTOMATIONS, type AutomationKind, type AutomationRow, type automationListAnswer, type rpc, type TriggerStatus, type triggerStatusesAnswer } from "../contract/automations.js";
 import { PULL_REQUEST } from "../model/automations.js";
 import { codes, isKernelCode } from "../kernel/result.js";
 import { HOST_TIMEOUT, invalid, refusal, refusedWith, type Core } from "./core.js";
@@ -15,6 +15,13 @@ export const LISTS_TTL_MS = 30_000;
 
 type ListAnswer = z.infer<typeof automationListAnswer>;
 type Lists = z.infer<(typeof rpc)["automations"]["output"]>;
+type StatusesAnswer = z.infer<typeof triggerStatusesAnswer>;
+
+/** The feature of the kernel's `features` under which a trigger's state carries its failed spawns (`failures`). */
+export const FAILURE_HISTORY = "trigger-failure-history";
+/** A trigger's state as this kernel may be read: without the feature, no history of failures is claimed, whatever the answer held. */
+const gated = (status: TriggerStatus, features: readonly string[] | null): TriggerStatus =>
+  features !== null && features.includes(FAILURE_HISTORY) ? status : { ...status, failures: null, failuresTotal: null };
 
 /** A refusal as the client is told it: the kernel's code and message, or the plugin's own. */
 function failed(error: unknown): ListAnswer {
@@ -37,6 +44,15 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       (list) => ({ ok: true as const, list }),
       (error: unknown) => failed(error),
     );
+  /** Every listed trigger's state, in one read; where the list itself could not be read, its refusal stands for both. */
+  const statusesOf = async (trigger: ListAnswer, features: readonly string[] | null): Promise<StatusesAnswer> => {
+    if (!trigger.ok) return trigger;
+    const sources = Object.fromEntries(trigger.list.rows.map((row) => [row.id, row.on?.source ?? null]));
+    return core.call("triggerStatusAll", { sources }, HOST_TIMEOUT.read, core.signal).then(
+      (statuses) => ({ ok: true as const, statuses: statuses.map((entry) => ({ id: entry.id, status: gated(entry.status, features) })) }),
+      (error: unknown) => failed(error) as StatusesAnswer,
+    );
+  };
   /** Both lists: this read, or the one made beside the same roster read, if it is recent. */
   const lists = async (): Promise<Lists> => {
     const snapshot = await core.clientSnapshot();
@@ -46,7 +62,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     // the server's own words for it, which name the machine and what to do: no list is asked for.
     if (!snapshot.ok && !isKernelCode(snapshot.code)) {
       const lack: ListAnswer = { ok: false, code: snapshot.code, message: snapshot.message };
-      return { at: snapshot.at, hostId: null, machine: snapshot.machine ?? null, oats: null, schedule: lack, trigger: lack };
+      return { at: snapshot.at, hostId: null, machine: snapshot.machine ?? null, oats: null, schedule: lack, trigger: lack, statuses: lack };
     }
     // Never two reads at once: with a kernel whose lists are slow and a roster that keeps changing,
     // each ask would start another pair of processes. One read runs and one waits behind it.
@@ -70,7 +86,9 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const supported = oats === null || (oats.features.includes("automations") && oats.automationsApi === 1);
       const none: ListAnswer = { ok: false, code: NO_AUTOMATIONS, message: `OATS ${oats?.version ?? ""} has no automations lists: they need OATS 0.29 or later.` };
       const [schedule, trigger] = supported ? await Promise.all([read("scheduleList"), read("triggerList")]) : [none, none];
-      return { at: new Date().toISOString(), hostId: core.target()?.hostId ?? null, machine: core.target()?.machine ?? null, oats, schedule, trigger };
+      // After the list, which names each trigger's source: never three processes at once.
+      const statuses = await statusesOf(trigger, oats?.features ?? null);
+      return { at: new Date().toISOString(), hostId: core.target()?.hostId ?? null, machine: core.target()?.machine ?? null, oats, schedule, trigger, statuses };
     })();
     const entry = { at: Date.now(), roster, value, settled: false, stale: false };
     const done = () => {
@@ -140,7 +158,11 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
 
     async triggerStatus({ id }, context) {
       const row = await rowOf("trigger", id);
-      return core.call("triggerStatus", { id: row.id, source: row.on?.source ?? null }, HOST_TIMEOUT.read, context.experimental_signal);
+      const [status, version] = await Promise.all([
+        core.call("triggerStatus", { id: row.id, source: row.on?.source ?? null }, HOST_TIMEOUT.read, context.experimental_signal),
+        core.versionOf().catch(() => null),
+      ]);
+      return gated(status, version?.features ?? null);
     },
   };
 };

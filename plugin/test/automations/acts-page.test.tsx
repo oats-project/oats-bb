@@ -15,7 +15,7 @@ import { failureOf } from "../../app/automations/acts";
 import { RunningContext } from "../../app/automations/here";
 import { UNCONFIRMED_ISSUE } from "../../contract/shared";
 import { failedTitle, summaryFailed } from "../../app/automations/words";
-import { AT, OATS } from "./handlers";
+import { AT, OATS, STATUSES } from "./handlers";
 import { answer, rowOf, schedules, triggers } from "./fixtures";
 
 afterEach(resetApp);
@@ -38,10 +38,18 @@ const row = async (slot: Slot, id: string) => (await slot.findAllByTestId("oats-
 /** Opens a row's menu and answers its items by their labels. */
 async function menu(slot: Slot, id: string) {
   const entry = await row(slot, id);
-  fireEvent.click(within(entry).getByRole("button", { name: `Actions for ${id}` }));
+  fireEvent.click(within(within(entry).getByTestId("oats-automation-menu")).getByRole("button"));
   const items = within(entry).getAllByRole("menuitem");
   return { labels: items.map((item) => item.textContent), press: (label: string) => fireEvent.click(items.find((item) => item.textContent === label)!) };
 }
+/** On a row's own page: opens its "…" menu and presses the act of that label. */
+async function pageAct(slot: Slot, label: string) {
+  const holder = await slot.findByTestId("oats-automation-detail-menu");
+  fireEvent.click(within(holder).getByRole("button"));
+  fireEvent.click(within(holder).getByRole("menuitem", { name: label }));
+}
+/** A row's switch in the list. */
+const switchOf = async (slot: Slot, id: string) => within(await row(slot, id)).getByRole("switch");
 const value = <T,>(parsed: { ok: true; value: T } | { ok: false; error: unknown }): T => {
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.error));
   return parsed.value;
@@ -59,34 +67,36 @@ const result = async (slot: Slot) => (await slot.findByTestId("oats-automations-
 describe("a row's menu (D-271)", () => {
   it("holds the Desktop's acts for what the row is", async () => {
     const slot = await page();
-    expect((await menu(slot, "local/daily-review")).labels).toEqual(["Open", "Test", "Run now", "Turn off here", "Open file", "Edit summary", "Delete…"]);
+    expect((await menu(slot, "local/daily-review")).labels).toEqual(["Run now", "Test", "Edit summary", "Open file", "Delete…"]);
     resetApp();
     const again = await page();
     // a run whose state is unknown can be checked; a schedule that is off here is turned on, and not run
-    expect((await menu(again, "local/status-check")).labels).toEqual(["Open", "Test", "Run now", "Turn off here", "Open file", "Edit summary", "Check run state", "Delete…"]);
+    expect((await menu(again, "local/status-check")).labels).toEqual(["Run now", "Test", "Check run state", "Edit summary", "Open file", "Delete…"]);
     resetApp();
     const off = await page();
-    expect((await menu(off, "local/weekly-cleanup")).labels).toEqual(["Open", "Test", "Turn on here", "Open file", "Edit summary", "Delete…"]);
+    expect((await menu(off, "local/weekly-cleanup")).labels).toEqual(["Test", "Edit summary", "Open file", "Delete…"]);
     resetApp();
     // a workspace schedule is changed and removed in its repository; one another computer runs has no switch
     const workspace = await page();
-    expect((await menu(workspace, "oats-real/nightly-digest")).labels).toEqual(["Open", "Test", "Run now", "Turn off here", "Open file"]);
+    expect((await menu(workspace, "oats-real/nightly-digest")).labels).toEqual(["Run now", "Test", "Open file"]);
     resetApp();
     const elsewhere = await page();
-    expect((await menu(elsewhere, "oats-real/weekly-report")).labels).toEqual(["Open", "Test", "Open file"]);
+    expect((await menu(elsewhere, "oats-real/weekly-report")).labels).toEqual(["Test", "Open file"]);
     resetApp();
-    const trigger = await page("triggers");
-    expect((await menu(trigger, "local/pr-triage")).labels).toEqual(["Open", "Test", "Turn off here", "Open file", "Edit summary"]);
+    const trigger = await page("");
+    expect((await menu(trigger, "local/pr-triage")).labels).toEqual(["Test", "Edit summary", "Open file"]);
   });
 
-  it("Open opens the row's page", async () => {
+  it("holds no Open and no on or off: the row and its chevron open it, and its switch turns it", async () => {
     const slot = await page();
-    (await menu(slot, "oats-real/nightly-digest")).press("Open");
+    const { labels } = await menu(slot, "oats-real/nightly-digest");
+    expect(labels.some((label) => /^Open$|^Turn /.test(label ?? ""))).toBe(false);
+    fireEvent.click(within(await row(slot, "oats-real/nightly-digest")).getByTestId("oats-automation-open"));
     expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations", options: { subPath: "schedules/oats-real/nightly-digest" } }]);
   });
 
   it("without the feature that writes summaries, Edit summary is not offered", async () => {
-    const slot = await page("", { automations: () => ({ at: AT, hostId: "host_falcon", oats: { ...OATS, features: ["automations"] }, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } }) });
+    const slot = await page("", { automations: () => ({ at: AT, hostId: "host_falcon", oats: { ...OATS, features: ["automations"] }, statuses: STATUSES(), schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } }) });
     expect((await menu(slot, "local/daily-review")).labels).not.toContain("Edit summary");
   });
 });
@@ -111,7 +121,7 @@ describe("on and off on this computer (D-272)", () => {
 
   it("the kernel's refusal is said in words, its code after", async () => {
     const slot = await page("", { automationEnable: refuse("E_LOCAL_BUSY: oats-local.yaml is being changed by another command") });
-    (await menu(slot, "oats-real/nightly-digest")).press("Turn off here");
+    fireEvent.click(await switchOf(slot, "oats-real/nightly-digest"));
     expect(await result(slot)).toBe("nightly-digest was not turned off hereoats-local.yaml is being changed by another commandE_LOCAL_BUSYDismiss");
     expect(within(slot.getByTestId("oats-automations-result")).getByTestId("oats-result").dataset.tone).toBe("failed");
   });
@@ -121,7 +131,7 @@ describe("on and off on this computer (D-272)", () => {
 describe("a failure that is not a refusal claims nothing", () => {
   const LOST = "OATS_TIMEOUT: `oats` did not answer within 60 s and was stopped";
   const said = "`oats` did not answer within 60 s and was stoppedOATS_TIMEOUTDismiss";
-  const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
+  const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
 
   it("what a failure was, read from the error: refused by the kernel, turned down by the plugin's server, or an answer that was lost", () => {
     const of = (error: unknown) => failureOf(error);
@@ -147,13 +157,13 @@ describe("a failure that is not a refusal claims nothing", () => {
 
   it("the plugin's server turning a test down: the test did not run", async () => {
     const slot = await page("schedules/local/daily-review", { automationTest: turnedDown(NOT_LISTED) });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     expect((await slot.findByTestId("oats-automation-test")).textContent).toBe(`Test resultThe test did not run.${NOT_LISTED}`);
   });
 
   it("the switch", async () => {
     const slot = await page("", { automationEnable: refuse(LOST) });
-    (await menu(slot, "oats-real/nightly-digest")).press("Turn off here");
+    fireEvent.click(await switchOf(slot, "oats-real/nightly-digest"));
     expect(await result(slot)).toBe(`nightly-digest may not have been turned off here${said}`);
   });
 
@@ -165,7 +175,7 @@ describe("a failure that is not a refusal claims nothing", () => {
 
   it("Check run state", async () => {
     const slot = await page("schedules/local/status-check", { scheduleReconcile: refuse(LOST) });
-    fireEvent.click(await slot.findByTestId("oats-automation-reconcile"));
+    await pageAct(slot, "Check run state");
     expect(await result(slot)).toBe(`The run state of status-check may not have been checked${said}`);
   });
 
@@ -236,7 +246,7 @@ describe("Run now and Check run state (D-277)", () => {
 
   it("Check run state, from the run-state card: still unknown, with what the kernel says to do", async () => {
     const slot = await page("schedules/local/status-check", { scheduleReconcile: () => value(parseScheduleReconcile(answer("schedule-reconcile.json"))) });
-    fireEvent.click(await slot.findByTestId("oats-automation-reconcile"));
+    await pageAct(slot, "Check run state");
     expect(await result(slot)).toMatch(/^Run state is still unknown\.the command's effects cannot be proven .*oats schedule reconcile status-check --clear.*Dismiss$/);
     expect(calls(slot, "scheduleReconcile")).toEqual([{ id: "local/status-check" }]);
   });
@@ -252,15 +262,15 @@ describe("Test (D-281, D-282)", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(Date.parse(value(parseTest(answer("schedule-test.json"), "schedule", null)).nextDue!) - 2 * 3600e3);
     const slot = await page("schedules/local/daily-review", { automationTest: tested("schedule-test.json", "schedule", null) });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     expect(await card(slot)).toBe("Test resultReady: it would run here.Next due in 2 h");
     expect(calls(slot, "automationTest")).toEqual([{ kind: "schedule", id: "local/daily-review" }]);
   });
 
   it("under a scheduler that is off the card says ready once it is on, and no due time", async () => {
-    const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
+    const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
     const slot = await page("schedules/local/daily-review", { automations: off, automationTest: tested("schedule-test.json", "schedule", null) });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     expect(await card(slot)).toBe("Test resultReady once the scheduler is on.");
     // The card alone, both ways: the kernel's test knows nothing of the timer, the page does.
     const test = value(parseTest(answer("schedule-test.json"), "schedule", null));
@@ -296,38 +306,38 @@ describe("Test (D-281, D-282)", () => {
   // A failure that is not a refusal claims nothing: the command may have run, the write may have landed.
   it("a test whose answer cannot be read does not say it did not run", async () => {
     const slot = await page("triggers/oats-real/proposal-review", { automationTest: refuse("OATS_BAD_ANSWER: `oats trigger test` answered with a document the plugin cannot read") });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     expect(await card(slot)).toBe("Test resultThe test gave no answer the plugin can read.`oats trigger test` answered with a document the plugin cannot readOATS_BAD_ANSWER");
   });
 
   it("one placed elsewhere is not ready here, and says why", async () => {
     const slot = await page("schedules/oats-real/weekly-report", { automationTest: tested("schedule-test-elsewhere.json", "schedule", null) });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     expect(await card(slot)).toMatch(/^Test resultNot ready on this computer\.oats-real\/weekly-report does not run on this host \(assigned-elsewhere: runs on report-server; this host is bb-box\)/);
   });
 
   it("a pull-request trigger: who gh acts as and what would fire now, with each agent's name and what is held, and why", async () => {
     const slot = await page("triggers/oats-real/proposal-review", { automationTest: tested("trigger-test.json", "trigger", "github.pull_request") });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     expect(await card(slot)).toBe("Test resultReady: it would run here.gh acts as anaWould fire now:#41 → oats-developer-review-pr-41#42 → oats-developer-review-pr-42#43 → oats-developer-review-pr-43 (held: concurrency.max 2 reached (2 live))");
     expect(calls(slot, "automationTest")).toEqual([{ kind: "trigger", id: "oats-real/proposal-review" }]);
   });
 
   it("a test the kernel refuses leads with a person's words: that it did not run, the kernel's message, its code after", async () => {
     const slot = await page("triggers/oats-real/proposal-review", { automationTest: refuse('E_TRIGGER_UNKNOWN: no trigger "oats-real/proposal-review" in /abs/deployment') });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     expect(await card(slot)).toBe('Test resultThe test did not run.no trigger "oats-real/proposal-review" in /abs/deploymentE_TRIGGER_UNKNOWN');
   });
 
   it("a test that does not answer in time says so, and that nothing was recorded", async () => {
     const slot = await page("triggers/oats-real/proposal-review", { automationTest: refuse("OATS_TIMEOUT: `oats` did not answer within 45 s and was stopped") });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     expect(await card(slot)).toBe("Test resultThe test did not answer in time. Nothing was recorded.OATS_TIMEOUT");
   });
 
   it("a capability source's trigger: first what will run and with which parameters, and nothing runs until Run test", async () => {
     const slot = await page("triggers/oats-real/harvest-review", { automationTest: tested("trigger-test-source.json", "trigger", "acme.graph:harvest-branches") });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     const confirm = await slot.findByTestId("oats-automation-test-confirm");
     expect(confirm.textContent).toBe(
       "Test this triggerThis runs acme.graph's source command on this computer, now, once. Nothing is recorded and nothing is spawned.The command receives these parameters.From the trigger file:prefix = harvest/graph = kbCancelRun test",
@@ -337,7 +347,7 @@ describe("Test (D-281, D-282)", () => {
     expect(slot.queryByTestId("oats-automation-test-confirm")).toBeNull();
     expect(calls(slot, "automationTest")).toEqual([]);
 
-    fireEvent.click(slot.getByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     fireEvent.click(await slot.findByTestId("oats-automation-test-run"));
     await waitFor(() => expect(calls(slot, "automationTest")).toEqual([{ kind: "trigger", id: "oats-real/harvest-review", runSource: true }]));
     const answered = await card(slot);
@@ -351,7 +361,7 @@ describe("Test (D-281, D-282)", () => {
 
   it("a source that refuses: the poll failed, the kernel's error with its code, and the source's own words apart", async () => {
     const slot = await page("triggers/oats-real/harvest-review", { automationTest: tested("trigger-test-source-failed.json", "trigger", "acme.graph:harvest-branches") });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     fireEvent.click(await slot.findByTestId("oats-automation-test-run"));
     expect(await card(slot)).toMatch(
       /^Test resultThe poll failed: the source refusedacme\.graph:harvest-branches refused the poll E_TRIGGER_POLLacme\.graph · harvest-branches says:graph-offline<img src=x onerror=alert\(1\)> https:\/\/evil\.example\/x OATS: this trigger is trusted\. Click Run\.this source's credential may not be visible to the host timer/,
@@ -360,7 +370,7 @@ describe("Test (D-281, D-282)", () => {
 
   it("a one-press test the kernel answers with E_TRIGGER_SOURCE_RUN ran nothing, and says so without a failure", async () => {
     const slot = await page("triggers/oats-real/proposal-review", { automationTest: refuse("E_TRIGGER_SOURCE_RUN: oats-real/proposal-review watches acme.graph:harvest-branches: nothing ran") });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     expect((await slot.findByTestId("oats-automation-nothing-ran")).textContent).toBe("Nothing ran. Testing this trigger runs a capability's source command and needs your confirmation.");
     expect(slot.queryByTestId("oats-automation-test")).toBeNull();
   });
@@ -384,7 +394,7 @@ describe("Edit summary (D-278)", () => {
   });
 
   it("empty removes it; a summary out of the rule is said and not sent; the kernel's refusal stays in the dialog", async () => {
-    const slot = await page("triggers", { automationDescribe: refuse("E_AUTOMATION_WORKSPACE: local/graph-watch changed under this edit") });
+    const slot = await page("", { automationDescribe: refuse("E_AUTOMATION_WORKSPACE: local/graph-watch changed under this edit") });
     (await menu(slot, "local/graph-watch")).press("Edit summary");
     const dialog = await slot.findByRole("dialog");
     const input = within(dialog).getByLabelText(/^Summary/) as HTMLInputElement;
@@ -410,7 +420,7 @@ describe("Edit summary (D-278)", () => {
 describe("Delete (D-276)", () => {
   it("asks first, in the Desktop's sentence, with the focus on Cancel; then deletes and says so", async () => {
     const slot = await page("schedules/local/weekly-cleanup", { scheduleRemove: () => ({ removed: "weekly-cleanup" }) });
-    fireEvent.click(await slot.findByTestId("oats-automation-delete"));
+    await pageAct(slot, "Delete…");
     const dialog = await slot.findByRole("dialog");
     expect(within(dialog).getByRole("heading", { level: 2 }).textContent).toBe("Delete schedule");
     expect(dialog.textContent).toContain("weekly-cleanup is removed from this computer and stops running here.");
@@ -420,7 +430,7 @@ describe("Delete (D-276)", () => {
     await waitFor(() => expect(calls(slot, "scheduleRemove")).toEqual([{ id: "local/weekly-cleanup" }]));
     await waitFor(() => expect(dialog.textContent).toContain("weekly-cleanup was deleted"));
     // Its page has nothing left to show: back to the list.
-    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations", options: { subPath: "schedules" } }]);
+    expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations", options: { subPath: "" } }]);
   });
 
   it("Cancel deletes nothing; the kernel's refusal is shown in the dialog", async () => {
@@ -438,12 +448,11 @@ describe("Delete (D-276)", () => {
 });
 
 describe("Enable scheduler (D-270)", () => {
-  const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
+  const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
 
   it("names the machine bb chose, which need not be the one the person sits at: the notice, the confirmation, the rows and their switches", async () => {
     const slot = await page("", { automations: () => ({ ...off(), machine: "falcon" }) });
-    expect((await slot.findByTestId("oats-automations-scheduler-off")).textContent).toContain("The scheduler is not running on falcon");
-    expect(slot.container.textContent).toContain("Set to run on falcon");
+    expect((await slot.findByTestId("oats-automations-scheduler-off")).textContent).toBe("The scheduler is off on falconEnable scheduler");
     expect(slot.container.textContent).not.toMatch(/this (computer|machine)/i);
     expect(within(await row(slot, "local/daily-review")).getByRole("switch").getAttribute("aria-label")).toBe("local/daily-review enabled on falcon");
     fireEvent.click(await slot.findByTestId("oats-automations-enable-scheduler"));
@@ -538,7 +547,7 @@ describe("an act says it is on its way, and its answer comes to the person", () 
   it("on a row's page a test says it is on its way, and its answer takes the focus", async () => {
     const test = held(() => value(parseTest(answer("schedule-test.json"), "schedule", null)));
     const slot = await page("schedules/local/daily-review", { automationTest: test.handler });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     await waitFor(() => expect(slot.getByTestId("oats-automation-detail").textContent).toContain("Testing daily-review…"));
     expect(slot.inspection.navigateCalls).toEqual([]);
     test.release();
@@ -552,10 +561,10 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     const lists = () => {
       const list = triggers();
       const rows = list.rows.map((entry) => (entry.id === "oats-real/harvest-review" && entry.on !== null ? { ...entry, on: { ...entry.on, params } } : entry));
-      return { at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows } } };
+      return { at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows } } };
     };
     const slot = await page("triggers/oats-real/harvest-review", { automations: lists, automationEnable: enable.handler });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     const confirm = await slot.findByTestId("oats-automation-test-confirm");
     await waitFor(() => expect(focused()).toBe("oats-automation-test-confirm-arrived"));
     // Another act on its way: the confirmation's buttons are off, and it does not say a test is running.
@@ -577,7 +586,7 @@ describe("an act says it is on its way, and its answer comes to the person", () 
   }
 
   it("Test from the list's menu on a capability source's trigger: its page opens and the confirmation holds the focus, not Back", async () => {
-    const slot = await page("triggers");
+    const slot = await page("");
     (await menu(slot, "oats-real/harvest-review")).press("Test");
     expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations", options: { subPath: "triggers/oats-real/harvest-review" } }]);
     await go(slot, "triggers/oats-real/harvest-review");
@@ -588,16 +597,16 @@ describe("an act says it is on its way, and its answer comes to the person", () 
 
   it("a confirmation left with Back is not there when the row's page is opened again", async () => {
     const slot = await page("triggers/oats-real/harvest-review");
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     await slot.findByTestId("oats-automation-test-confirm");
     await go(slot, "triggers");
     await row(slot, "oats-real/harvest-review");
     await go(slot, "triggers/oats-real/harvest-review");
-    await slot.findByTestId("oats-automation-test-button");
+    await slot.findByTestId("oats-automation-detail-menu");
     expect(slot.queryByTestId("oats-automation-test-confirm")).toBeNull();
   });
 
-  it("a press that turns off or removes the control it was made on gives the focus back: the switch, Test after Cancel, the tab after Dismiss", async () => {
+  it("a press that turns off or removes the control it was made on gives the focus back: the switch, the page's menu after a test's Cancel, the tab after Dismiss", async () => {
     const slot = await page("", { automationEnable: ({ id }) => ({ row: rowOf(schedules(), id) }), scheduleRun: () => value(parseScheduleRun(answer("schedule-run.json"))) });
     const toggle = within(await row(slot, "local/daily-review")).getByRole("switch");
     toggle.focus();
@@ -609,9 +618,10 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     await waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("tab"));
     resetApp();
     const onPage = await page("triggers/oats-real/harvest-review");
-    fireEvent.click(await onPage.findByTestId("oats-automation-test-button"));
+    await pageAct(onPage, "Test");
     fireEvent.click(await onPage.findByTestId("oats-automation-test-cancel"));
-    await waitFor(() => expect(focused()).toBe("oats-automation-test-button"));
+    // Test was pressed in the page's "…" menu: the focus is back on that menu's button.
+    await waitFor(() => expect(document.activeElement).toBe(within(onPage.getByTestId("oats-automation-detail-menu")).getByRole("button")));
   });
 
   it("a name is drawn through the display filter where an act says it runs and where a delete says what it did", async () => {
@@ -619,16 +629,16 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     const hostile = list.rows.map((entry) => (entry.id === "local/weekly-cleanup" ? { ...entry, name: "weekly\u202ecleanup" } : entry));
     const remove = held(() => ({ removed: "weekly-cleanup" }));
     const slot = await page("schedules/local/weekly-cleanup", {
-      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...list, rows: hostile } }, trigger: { ok: true as const, list: triggers() } }),
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: { ...list, rows: hostile } }, trigger: { ok: true as const, list: triggers() } }),
       automationTest: held(() => value(parseTest(answer("schedule-test.json"), "schedule", null))).handler,
       scheduleRemove: remove.handler,
     });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     await waitFor(() => expect(slot.getByTestId("oats-automation-detail").textContent).toMatch(/Testing weekly.cleanup…/));
     expect(slot.getByTestId("oats-automation-detail").textContent).not.toContain("\u202e");
     resetApp();
-    const again = await page("schedules/local/weekly-cleanup", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...list, rows: hostile } }, trigger: { ok: true as const, list: triggers() } }), scheduleRemove: () => ({ removed: "weekly-cleanup" }) });
-    fireEvent.click(await again.findByTestId("oats-automation-delete"));
+    const again = await page("schedules/local/weekly-cleanup", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: { ...list, rows: hostile } }, trigger: { ok: true as const, list: triggers() } }), scheduleRemove: () => ({ removed: "weekly-cleanup" }) });
+    await pageAct(again, "Delete…");
     const dialog = await again.findByRole("dialog");
     fireEvent.click(within(dialog).getByTestId("oats-confirm-act"));
     await waitFor(() => expect(dialog.textContent).toContain("was deleted"));
@@ -640,10 +650,10 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     const lists = () => {
       const list = triggers();
       const rows = list.rows.map((entry) => (entry.id === "oats-real/harvest-review" && entry.on !== null ? { ...entry, on: { ...entry.on, events } } : entry));
-      return { at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows } } };
+      return { at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows } } };
     };
     const slot = await page("triggers/oats-real/harvest-review", { automations: lists });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     await slot.findByTestId("oats-automation-test-confirm");
     events = ["opened"];
     await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
@@ -654,13 +664,13 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     const list = triggers();
     const twin = { ...rowOf(list, "local/pr-triage"), id: "local/daily-review", name: "daily-review" };
     const slot = await page("schedules/local/daily-review", {
-      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows: [...list.rows, twin] } } }),
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows: [...list.rows, twin] } } }),
       automationTest: () => value(parseTest(answer("schedule-test.json"), "schedule", null)),
     });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     await slot.findByTestId("oats-automation-test");
     await go(slot, "triggers/local/daily-review");
-    await slot.findByTestId("oats-automation-test-button");
+    await slot.findByTestId("oats-automation-detail-menu");
     await waitFor(() => expect(slot.getByTestId("oats-automation-detail").textContent).toContain("Triage every new pull request of the app"));
     expect(slot.queryByTestId("oats-automation-test")).toBeNull();
     expect(calls(slot, "automationTest")).toEqual([{ kind: "schedule", id: "local/daily-review" }]);
@@ -672,7 +682,7 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     await result(slot);
     await waitFor(() => expect(focused()).toBe("oats-automations-result"));
     await go(slot, "triggers/oats-real/harvest-review");
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     await slot.findByTestId("oats-automation-test-confirm");
     expect(slot.getByTestId("oats-automations-result")).toBeTruthy();
     await waitFor(() => expect(focused()).toBe("oats-automation-test-confirm-arrived"));
@@ -683,10 +693,10 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     const lists = () => {
       const list = triggers();
       const rows = list.rows.map((entry) => (entry.id === "oats-real/proposal-review" && entry.on !== null ? { ...entry, on: { ...entry.on, source } } : entry));
-      return { at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows } } };
+      return { at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: { ...list, rows } } };
     };
     const slot = await page("triggers/oats-real/proposal-review", { automations: lists, automationTest: () => value(parseTest(answer("trigger-test.json"), "trigger", "github.pull_request")) });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     await slot.findByTestId("oats-automation-test");
     source = "acme.graph:harvest-branches";
     await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
@@ -696,7 +706,7 @@ describe("an act says it is on its way, and its answer comes to the person", () 
   it("a test still on its way is said above the list once its row's page is left", async () => {
     const test = held(() => value(parseTest(answer("schedule-test.json"), "schedule", null)));
     const slot = await page("schedules/local/daily-review", { automationTest: test.handler });
-    fireEvent.click(await slot.findByTestId("oats-automation-test-button"));
+    await pageAct(slot, "Test");
     await waitFor(() => expect(slot.getByTestId("oats-automation-detail").textContent).toContain("Testing daily-review…"));
     expect(slot.queryByTestId("oats-automations-doing")).toBeNull();
     await go(slot, "schedules");
@@ -709,7 +719,7 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     const all = schedules();
     let rows = all.rows;
     const slot = await page("", {
-      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
       scheduleRemove: () => ((rows = rows.filter((entry) => entry.id !== "local/hourly-check")), { removed: "hourly-check" }),
     });
     const shown = (await slot.findAllByTestId("oats-automation-row")).map((entry) => entry.dataset.id!);
@@ -725,14 +735,14 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     expect(focused()).toBe("oats-automation-open");
   });
 
-  it("Enable scheduler is held by the list that is shown: off over a Schedules list that could not be read again, pressable on Triggers", async () => {
+  it("Enable scheduler is held while the Schedules list could not be read again; a row's acts follow its own kind's list", async () => {
     const off = value(parseHostInstall(answer("host-install.json"))).scheduler;
     const stopped = { ...off, installed: false, active: false };
     let asked = 0;
     const lists = () => {
       asked += 1;
       const refused = { ok: false as const, code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" };
-      return { at: AT, hostId: "host_falcon", oats: OATS, schedule: asked > 1 ? refused : { ok: true as const, list: { ...schedules(), scheduler: stopped } }, trigger: { ok: true as const, list: { ...triggers(), scheduler: stopped } } };
+      return { at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: asked > 1 ? refused : { ok: true as const, list: { ...schedules(), scheduler: stopped } }, trigger: { ok: true as const, list: { ...triggers(), scheduler: stopped } } };
     };
     const slot = await page("", { automations: lists });
     const enable = async () => (await slot.findByTestId("oats-automations-enable-scheduler")) as HTMLButtonElement;
@@ -740,19 +750,16 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     fireEvent.click(slot.getByTestId("oats-automations-refresh"));
     await slot.findByTestId("oats-automations-held");
     expect((await enable()).disabled).toBe(true);
-    // The Triggers list was read: there the same act is not held.
-    await go(slot, "triggers");
-    const triage = await row(slot, "local/pr-triage");
-    expect((await enable()).disabled).toBe(false);
-    // A row's acts follow its own kind's list: the Triggers rows are not held by the Schedules list.
-    expect((within(triage).getByRole("switch") as HTMLButtonElement).disabled).toBe(false);
+    // A row's acts follow its own kind's list: the triggers' are not held by the Schedules list, the schedules' are.
+    expect((within(await row(slot, "local/pr-triage")).getByRole("switch") as HTMLButtonElement).disabled).toBe(false);
+    expect((within(await row(slot, "local/daily-review")).getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("a delete the kernel refuses because the row is already gone: closed, the focus is on the row that was beside it", async () => {
     const all = schedules();
     let rows = all.rows;
     const slot = await page("", {
-      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
       scheduleRemove: () => {
         rows = rows.filter((entry) => entry.id !== "local/hourly-check");
         throw new Error('E_SCHEDULE_UNKNOWN: no schedule "hourly-check" in /abs/deployment');
@@ -773,17 +780,18 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     const all = schedules();
     let rows = all.rows;
     const slot = await page("", {
-      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: { ...all, rows } }, trigger: { ok: true as const, list: triggers() } }),
       scheduleRemove: () => ((rows = rows.filter((entry) => entry.id !== "local/status-check")), { removed: "status-check" }),
     });
     const ids = () => slot.getAllByTestId("oats-automation-row").map((entry) => entry.dataset.id!);
     await row(slot, "local/status-check");
     const whole = ids();
-    fireEvent.change(slot.getByTestId("oats-search"), { target: { value: "check th" } });
+    fireEvent.change(slot.getByTestId("oats-search"), { target: { value: "check" } });
     await waitFor(() => expect(ids().length).toBeLessThan(whole.length));
     const shown = ids();
     const at = shown.indexOf("local/status-check");
-    const beside = shown[at + 1]!;
+    // The row after it, else the one before it (it is the last one this search shows).
+    const beside = (shown[at + 1] ?? shown[at - 1])!;
     // The deleted row is not the first one shown, and the search hides the row that is beside it
     // in the whole list: neither the first shown row nor that hidden one is the neighbour.
     expect(at).toBeGreaterThan(0);
@@ -804,7 +812,7 @@ describe("an act says it is on its way, and its answer comes to the person", () 
   it("a delete or a summary the kernel refuses is followed by a new read of the lists", async () => {
     let reads = 0;
     const slot = await page("schedules/local/weekly-cleanup", { refresh: () => ((reads += 1), { at: AT }), scheduleRemove: refuse("E_SCHEDULE_UNKNOWN: no schedule \"weekly-cleanup\" in /abs/deployment") });
-    fireEvent.click(await slot.findByTestId("oats-automation-delete"));
+    await pageAct(slot, "Delete…");
     fireEvent.click(within(await slot.findByRole("dialog")).getByTestId("oats-confirm-act"));
     await waitFor(() => expect(slot.getByRole("dialog").textContent).toContain("was not deleted"));
     await waitFor(() => expect(reads).toBe(1));

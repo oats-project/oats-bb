@@ -1,86 +1,77 @@
-// One automation's page: what it sends (whole, never summarized), when it runs or what it
-// watches, what it spawns, its recent runs or fires on the machine, what is wrong with it, its
-// run state, where it runs and where it comes from. In the Desktop's words and order
-// (awebai/oats packages/desktop/renderer/views/automations.mjs at a4a43220).
-import { useEffect, useRef } from "react";
+// One automation's page, in the manner of bb's own: a breadcrumb (Automations / its name); the
+// name with its switch and its "…" menu; one small line (who it starts · when · the next run or
+// the last fire) and under it, in red, what is wrong; a card of WHAT IT DOES (the instruction, the
+// wake message, the command or the operation, whole, with the soul, the harness and the model at
+// its foot); then Runs, a table; then one closed fold, Details, for the few facts bb's manner has
+// no place for. Nothing here is a sentence that explains.
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { AutomationHost, AutomationProblem, AutomationRow, AutomationRun, TriggerStatus } from "../../contract/automations";
-import { cleanLine, displayLine, shown, shownBlock } from "../ui/text";
+import { experimental_DetailRow as DetailRow, experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
+import type { AutomationHost, AutomationProblem, AutomationRow, TriggerStatus } from "../../contract/automations";
+import { droppedCount, pageRuns, scheduleCut, triggerCut } from "../../model/automation-runs";
+import { displayLine, shown, shownBlock } from "../ui/text";
 import { readAge } from "../ui/words";
-import { Button, Card, Disclosure, Empty, Lines, Notice, Section, Toned } from "../ui";
-import { eventLabel, eventWords } from "../../model/automations";
+import { Button, Card, Disclosure, Empty, LINK, Loading, Menu, Notice } from "../ui";
+import type { MenuItem } from "../ui";
 import { RunningContext, useHere } from "./here";
-import { OriginTag, StateTags } from "./List";
-import { FactList, Quote, Tokens } from "./parts";
-import type { FactRow, QuoteLine } from "./parts";
+import { iconOf, SmallLine } from "./List";
+import { FactList, Quote } from "./parts";
+import type { QuoteLine } from "./parts";
+import { Runs } from "./Runs";
+import type { AgentLink } from "./Runs";
 import {
   capabilitySource,
   causeWords,
   cronInWords,
   EVENTS_SHOWN,
-  fileTarget,
+  failing,
   harnessName,
-  hostLogin,
   LEAD_INS,
   onSummary,
-  outcomeWords,
-  placementText,
-  reconcileCommand,
-  dueWords,
   pastTime,
-  relativeTime,
+  placementText,
+  rowLine,
   ruleWords,
-  runState,
-  runTime,
-  soulOriginText,
+  RUNS_SHOWN,
   sourceLabel,
   sourceParams,
   taskParts,
-  templateLabel,
-  templateProvenance,
-  TITLES,
-  hereWhileOff,
 } from "./words";
-import type { CapabilitySource, FileTarget, RunState } from "./words";
+import type { CapabilitySource, FileTarget } from "./words";
 
 const NOTE = "text-xs text-muted-foreground";
 const LINE = "min-w-0 break-words text-sm";
-const PROSE = "max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-card p-3 font-mono text-xs leading-relaxed text-foreground";
+
+/** A text of more lines or characters than these is drawn to its bound, with "Show more" to the rest. */
+export const PROSE_BOUND = { lines: 8, characters: 640 } as const;
+const long = (text: string): boolean => text.length > PROSE_BOUND.characters || text.split("\n").length > PROSE_BOUND.lines;
 
 // A prompt or a wake message is drawn as a block through `shownBlock` (app/ui/text.ts): the text
-// as it is, for these two fields only (decided by the spec's author: it is the definition a
-// person or their workspace wrote, the page's purpose is to read it, and the same reader can open
-// the file). Nothing is withheld and nothing is cut; only a character that is not text is drawn
-// as U+FFFD, so a definition from a shared repository cannot reorder or hide what the page shows.
-/** The block a prompt or a message is drawn in: whole, its lines and indentation kept, scrolling when it is long. */
-function Prose({ children }: { children: ReactNode }) {
+// as it is, for these two fields only (it is the definition a person or their workspace wrote, the
+// page's purpose is to read it, and the same reader can open the file). Nothing is withheld; only
+// a character that is not text is drawn as U+FFFD, so a definition from a shared repository cannot
+// reorder or hide what the page shows. A long one has a bound and a way to the rest.
+function Prose({ text, children }: { /** the text, for its length */ text: string; children: ReactNode }) {
+  const [whole, setWhole] = useState(false);
+  const bounded = long(text);
   return (
-    <div data-testid="oats-automation-prose" tabIndex={0} className={PROSE}>
-      {children}
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      <div data-testid="oats-automation-prose" data-bounded={bounded && !whole} className={`w-full min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground ${bounded && !whole ? "max-h-44 overflow-hidden" : ""}`}>
+        {children}
+      </div>
+      {bounded ? (
+        <button type="button" data-testid="oats-automation-prose-more" aria-expanded={whole} className={`${LINK} text-xs text-muted-foreground`} onClick={() => setWhole((before) => !before)}>
+          {whole ? "Show less" : "Show more"}
+        </button>
+      ) : null}
     </div>
-  );
-}
-
-/** "14:05" today, else "6 Oct, 14:05": when a run state began (its title keeps the full date). */
-function clockTime(iso: string, now: number): string {
-  const at = new Date(iso);
-  const today = new Date(now).toDateString() === at.toDateString();
-  return today ? at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : at.toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-
-/** A command to paste, whole: a line never ends inside `--dir` or inside a path (Tokens). */
-function Command({ text }: { text: string }) {
-  return (
-    <code className="rounded border border-border bg-background px-1 font-mono text-foreground">
-      <Tokens text={text} />
-    </code>
   );
 }
 
 function Time({ iso, now }: { iso: string | null; now: number }) {
   const at = pastTime(iso, now);
   return (
-    <time title={at?.title} dateTime={at === null || iso === null ? undefined : iso} className="shrink-0 text-xs text-muted-foreground">
+    <time title={at?.title} dateTime={at === null || iso === null ? undefined : iso}>
       {at?.label ?? "—"}
     </time>
   );
@@ -115,7 +106,7 @@ function ParamsQuote({ row }: { row: AutomationRow }) {
  * at most EVENTS_SHOWN then "and N more". An event's text and the reason for a skip are the
  * source's words (quoted); the rule is said in the product's, the subject is the kernel's.
  */
-function SourceLists({ refused, skipped, source, from }: { refused: TriggerStatus["refused"]; skipped: TriggerStatus["skipped"]; source: { capability: string | null; name: string | null }; from?: ReactNode }) {
+function SourceLists({ refused, skipped, source }: { refused: TriggerStatus["refused"]; skipped: TriggerStatus["skipped"]; source: { capability: string | null; name: string | null } }) {
   if (refused.length === 0 && skipped.length === 0) return null;
   const leadIn = LEAD_INS.source(source.capability, source.name);
   const part = (title: string, testId: string, total: number, lines: QuoteLine[]) =>
@@ -128,269 +119,120 @@ function SourceLists({ refused, skipped, source, from }: { refused: TriggerStatu
     );
   return (
     <div data-testid="oats-automation-source-lists" className="flex flex-col gap-2">
-      {from}
       {part("Refused by OATS", "oats-automation-refused", refused.length, refused.slice(0, EVENTS_SHOWN).map((entry) => ({ text: [entry.text], note: `Refused: ${ruleWords(entry.rule) ?? "no rule reported"}.` })))}
       {part("Skipped by the source", "oats-automation-skipped", skipped.length, skipped.slice(0, EVENTS_SHOWN).map((entry) => ({ label: entry.subject, text: [entry.why] })))}
     </div>
   );
 }
 
-/** What a run sends, whole: a spawn's or a trigger's task, a wake's message and the home it wakes, a command's argv and cwd, an operation and its home. */
-function Sends({ row }: { row: AutomationRow }) {
-  if (row.run === "wake") {
-    return (
-      <Section title="Wake message" testId="oats-automation-sends">
-        {row.message !== null ? <Prose>{shownBlock(row.message)}</Prose> : <Empty>No wake message reported.</Empty>}
-        <FactList facts={[["Wakes", row.home === null ? null : shown(row.home)]]} />
-      </Section>
-    );
-  }
-  if (row.run === "command") {
-    return (
-      <Section title="Command" testId="oats-automation-sends">
-        <p className={NOTE}>run as written, without a shell</p>
-        {row.argv !== null && row.argv.length > 0 ? (
-          // The argv, one chip per argument, so the boundaries show; each through the display filter, like every text of OATS but a prompt.
-          <ol aria-label="Command arguments" className="flex flex-wrap gap-1.5 rounded-md border border-border bg-card p-3">
-            {row.argv.map((word, at) => (
-              <li key={at} className="break-all rounded border border-border bg-background px-1.5 py-px font-mono text-xs text-foreground">
-                {shown(word)}
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <Empty>No command reported.</Empty>
-        )}
-        <FactList facts={[["Runs in", row.cwd === null ? null : shown(row.cwd)]]} />
-      </Section>
-    );
-  }
-  if (row.run === "operation") {
-    return (
-      <Section title="Operation" testId="oats-automation-sends">
-        {row.operation !== null || row.home !== null ? (
-          <FactList facts={[["Operation", row.operation === null ? null : shown(row.operation)], ["Runs in", row.home === null ? null : shown(row.home)]]} />
-        ) : (
-          <Empty>No operation reported.</Empty>
-        )}
-      </Section>
-    );
-  }
-  const trigger = row.kind === "trigger";
-  return (
-    <Section title="Prompt" testId="oats-automation-sends">
-      {trigger ? <p className={NOTE}>highlighted fields are filled from the event</p> : null}
-      {row.task !== null ? (
-        <>
-          <Prose>
-            {trigger
-              ? taskParts(shownBlock(row.task), row.on).map((part, at) =>
-                  "field" in part ? (
-                    <span key={at} data-field={part.field} className="rounded border border-border bg-background px-1 font-semibold">{`{${part.field}}`}</span>
-                  ) : (
-                    part.text
-                  ),
-                )
-              : shownBlock(row.task)}
-          </Prose>
-          {trigger ? (
-            <p className={NOTE}>
-              {capabilitySource(row.on) !== null
-                ? "The highlighted fields are filled from the source's event after OATS checks them. They are still the source's data, and the instance is told so."
-                : "Pull request titles and bodies are never inserted: the instance reads them from its event file."}
-            </p>
-          ) : null}
-        </>
+/** The card's heading, by what a run does. */
+export const doesTitle = (row: AutomationRow): string => (row.run === "wake" ? "Message" : row.run === "command" ? "Command" : row.run === "operation" ? "Operation" : "Instruction");
+
+/** What a run does, whole: a spawn's or a trigger's instruction, a wake's message, a command's argv, an operation; at its foot the soul, the harness and the model. */
+function Does({ row }: { row: AutomationRow }) {
+  const foot = [row.soul === null ? null : shown(row.soul.name), row.harness === null ? null : shown(harnessName(row.harness)), row.model === null ? null : shown(row.model)].filter((part): part is string => part !== null && part !== "");
+  const body = (): ReactNode => {
+    if (row.run === "wake") return row.message !== null ? <Prose text={row.message}>{shownBlock(row.message)}</Prose> : <Empty>No wake message reported.</Empty>;
+    if (row.run === "command")
+      return row.argv !== null && row.argv.length > 0 ? (
+        // The argv, one chip per argument, so the boundaries show; each through the display filter, like every text of OATS but a prompt.
+        <ol aria-label="Command arguments" className="flex flex-wrap gap-1.5">
+          {row.argv.map((word, at) => (
+            <li key={at} className="break-all rounded border border-border bg-background px-1.5 py-px font-mono text-xs text-foreground">
+              {shown(word)}
+            </li>
+          ))}
+        </ol>
       ) : (
-        <Empty>{row.run !== null && row.run !== "spawn" ? `Nothing to show for a ${shown(row.run)} run.` : "No prompt reported."}</Empty>
-      )}
-    </Section>
+        <Empty>No command reported.</Empty>
+      );
+    if (row.run === "operation") return row.operation !== null ? <p className={`${LINE} font-mono text-foreground`}>{shown(row.operation)}</p> : <Empty>No operation reported.</Empty>;
+    if (row.task === null) return <Empty>{row.run !== null && row.run !== "spawn" ? `Nothing to show for a ${shown(row.run)} run.` : "No prompt reported."}</Empty>;
+    const text = shownBlock(row.task);
+    return (
+      <Prose text={row.task}>
+        {row.kind === "trigger"
+          ? taskParts(text, row.on).map((part, at) =>
+              "field" in part ? (
+                // A field the event fills: marked, so that what is the event's and what is written is told apart.
+                <span key={at} data-field={part.field} className="rounded border border-border bg-background px-1 font-semibold">{`{${part.field}}`}</span>
+              ) : (
+                part.text
+              ),
+            )
+          : text}
+      </Prose>
+    );
+  };
+  return (
+    <section data-testid="oats-automation-sends" aria-label={doesTitle(row)} className="flex min-w-0 flex-col gap-2">
+      <h3 className="text-sm font-semibold text-foreground">{doesTitle(row)}</h3>
+      <div className="flex min-w-0 flex-col rounded-lg border border-border bg-card">
+        <div className="min-w-0 p-3">{body()}</div>
+        {foot.length === 0 ? null : (
+          <p data-testid="oats-automation-foot" className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+            {foot.map((part, at) => (
+              <span key={at} className="min-w-0 break-words">
+                {part}
+              </span>
+            ))}
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
 
-/**
- * A schedule's next run on the machine, as what is so: none while the host scheduler is off; a
- * time that has passed was due, it is not next.
- */
-function nextFact(row: AutomationRow, now: number, running: boolean): FactRow {
-  if (!row.runsHere) return ["Next", null];
-  if (!running) return ["Next", "None while the scheduler is off"];
-  const next = dueWords(row.nextDue, now);
-  return [next?.word ?? "Next", next?.label, next?.title];
-}
-/** A schedule's When card, or a trigger's On card: a pull request's event, repo, labels, base and poll, or a capability source with its events, its poll and its parameters. */
-function WhenCard({ row, now, running, source, canOpenCapability, onOpenCapability }: { row: AutomationRow; now: number; running: boolean; source: CapabilitySource | null } & Pick<DetailProps, "canOpenCapability" | "onOpenCapability">) {
-  if (row.kind === "schedule") {
+/** What is wrong with the definition, or with a capability source's check: a person's words, the kernel's one press away (WORDS.md). */
+function Problem({ row, check, now }: { row: AutomationRow; check: AutomationProblem | null; now: number }) {
+  const bad = row.unreadable ?? row.invalid;
+  const checked = check === null ? null : pastTime(check.at, now);
+  if (check !== null && check.at !== null)
     return (
-      <Card title="When" testId="oats-automation-when">
-        <FactList facts={[["Runs", cronInWords(row.cron)], ["Cron", row.cron === null ? null : shown(row.cron)], ["Time zone", row.tz === null ? null : shown(row.tz)], nextFact(row, now, running)]} />
+      <Card title="Source check failed" testId="oats-automation-problem" tone="warn">
+        <p className={LINE}>{`The source's check failed at the last poll${checked === null ? "" : ` (${checked.label})`}, so this trigger did not fire.`}</p>
+        <Disclosure summary="Details" testId="oats-automation-problem-details">
+          <FactList facts={[["Message", displayLine(check.message)], ["Code", displayLine(check.code)], ["Field", displayLine(check.field)], ["Checked", checked?.label, checked?.title]]} />
+        </Disclosure>
       </Card>
     );
-  }
-  const on = onSummary(row.on);
-  if (source === null) {
-    return (
-      <Card title="On" testId="oats-automation-when">
-        <FactList facts={[["Event", on === null ? null : shown(on.title)], ["Repo", on?.repo == null ? null : shown(on.repo)], ["Labels", on === null ? null : shown(on.labels.join(", "))], ["Base", on?.base == null ? null : shown(on.base)], ["Polls", on?.poll ? `every ${shown(on.poll)}` : null]]} />
-      </Card>
-    );
-  }
-  const lookup = source.lookup;
+  if (bad === null) return null;
   return (
-    <Card title="On" testId="oats-automation-when">
-      <FactList facts={[["Source", sourceLabel(source) ?? source.id], ["Events", on?.events.join(", ")], ["Polls", on?.poll ? `every ${on.poll}` : null]]} />
-      {lookup !== null && onOpenCapability !== undefined && canOpenCapability?.(lookup) === true ? (
-        <div>
-          <Button data-testid="oats-automation-open-capability" aria-label={`Open capability ${lookup}`} onClick={() => onOpenCapability(lookup)}>
-            Open capability
-          </Button>
-        </div>
-      ) : null}
-      {sourceParams(row.on).count > 0 ? (
-        <>
-          <p className="text-xs font-semibold text-muted-foreground">Parameters</p>
-          <ParamsQuote row={row} />
-        </>
-      ) : null}
+    <Card title={row.unreadable !== null ? "Unreadable" : "Invalid"} testId="oats-automation-problem" tone="warn">
+      <p className={LINE}>{row.unreadable !== null ? "OATS cannot read this definition, so it does not run." : "OATS cannot use this definition as it is written, so it does not run."}</p>
+      <Disclosure summary="Details" testId="oats-automation-problem-details">
+        <FactList facts={[["Code", bad.code === null ? null : shown(bad.code)], ["Field", bad.field === null ? null : shown(bad.field)], ["Message", bad.message === null ? null : shown(bad.message)]]} />
+      </Disclosure>
     </Card>
   );
 }
 
-/** The recurring wake-up of the agent a schedule launches: when, and what it is told. A card of its own, under the Desktop's name for the group. */
-function WakeCard({ wake }: { wake: NonNullable<AutomationRow["wake"]> }) {
-  return (
-    <Card title="Recurring wake-up" testId="oats-automation-wake">
-      <FactList facts={[["Repeats", cronInWords(wake.cron) ?? (wake.cron === null ? null : shown(wake.cron)), wake.cron === null ? null : shown(wake.cron)], ["Time zone", wake.tz === null ? null : shown(wake.tz)], ["Message", wake.message === null ? null : shown(wake.message)]]} />
-    </Card>
-  );
-}
-/** What a spawn schedule and every trigger launch: the soul and its settings (the wake a schedule attaches to its agents has its own card). */
-function SpawnsCard({ row }: { row: AutomationRow }) {
-  const concurrency = row.concurrency === null ? null : [row.concurrency.max !== null ? `${row.concurrency.max} at once` : null, row.concurrency.perKey !== null ? `${row.concurrency.perKey} per event` : null].filter(Boolean).join(" · ");
-  const origin = row.soul === null ? "" : soulOriginText(row.soul.origin).short;
-  const facts: FactRow[] = [
-    ["Soul", row.soul === null ? null : shown(`${row.soul.name}${origin !== "" ? ` · ${origin}` : ""}`)],
-    ["Purpose", row.purpose === null ? null : shown(row.purpose)],
-    ["Teams", shown(row.teams.join(", "))],
-    ["Harness", shown([row.harness !== null ? harnessName(row.harness) : null, row.model].filter(Boolean).join(" · "))],
-    ["Launch config", row.launchConfig === null ? null : shown(row.launchConfig)],
-    ["Permissions", row.yolo === true ? "YOLO — skips permission prompts" : row.yolo === false ? "Native permission policy" : null],
-    ["Backend", row.backend === null ? null : shown(row.backend)],
-    ["Concurrency", concurrency],
-  ];
-  return (
-    <Card title="Spawns" testId="oats-automation-spawns">
-      <FactList facts={facts} />
-    </Card>
-  );
-}
-
-/**
- * A line of a row's history: when, and what. In a narrow page (a phone) it is a stack, the time
- * over the text, so that the text has the page's whole line: an instance's id is some 35
- * characters, and beside a column for the time it would not be whole. From a wider page up the
- * time is a column at the line's side.
- */
-function HistoryLine({ iso, now, children, testId }: { iso: string | null; now: number; children: ReactNode; testId: string }) {
-  return (
-    <li data-testid={testId} className="flex min-w-0 flex-col gap-0.5 border-t border-border py-1.5 text-sm first:border-t-0 @xl:flex-row @xl:items-baseline @xl:gap-3">
-      <span className="shrink-0 @xl:w-24">
-        <Time iso={iso} now={now} />
-      </span>
-      <div className="min-w-0 flex-1 break-words text-foreground">{children}</div>
-    </li>
-  );
-}
-
-/**
- * Recent runs (a schedule) or recent fires (a trigger), on the machine. A trigger's come from
- * `oats trigger status`: the last poll, the last error (its message, then its code), the events
- * waiting (newest first, at most 10), the instances live now, then what fired. Until that answer
- * is here, and when it fails, the row's own last fire shows.
- */
-function History({ row, status, failure, source, check, now }: { row: AutomationRow; status: TriggerStatus | null; failure: DetailProps["statusFailure"]; source: CapabilitySource | null; check: AutomationProblem | null; now: number }) {
-  const here = useHere();
-  const trigger = row.kind === "trigger";
-  const st = trigger ? status : null;
-  const lead =
-    st === null
-      ? ""
-      : [st.liveCount !== null ? `${st.liveCount}${st.max !== null ? ` of ${st.max}` : ""} live now` : null, st.firedTotal ? `${st.firedTotal} fired in all` : null, st.pending.length > 0 ? `${st.pending.length} waiting` : null].filter(Boolean).join(" · ");
-  const poll = st?.lastPoll ?? null;
-  // A capability source's failure is said once. After a failed poll the kernel's last error is
-  // that same failure (its time and message), and after a failed check it repeats `invalid`: the
-  // Last error line is then left out, and its code goes beside the kernel's text of the failure.
-  const err = st?.lastError ?? null;
-  const pollFailure = source !== null && poll !== null && !poll.ok && poll.cause !== null;
-  const samePoll = pollFailure && err !== null && err.at === poll.at && err.message === poll.error;
+/** A trigger's poll and last error, where they failed: said above the runs (WORDS.md: a person's words, the kernel's one press away; a source's own words as a quote). */
+function TriggerTrouble({ status, source, check, now }: { status: TriggerStatus; source: CapabilitySource | null; check: AutomationProblem | null; now: number }) {
+  const poll = status.lastPoll;
+  const err = status.lastError;
+  // A capability source's failure is said once: after a failed poll the kernel's last error is that
+  // same failure, and after a failed check it repeats `invalid`.
+  const samePoll = source !== null && poll !== null && !poll.ok && poll.cause !== null && err !== null && err.at === poll.at && err.message === poll.error;
   const sameCheck = check !== null && check.at !== null && err !== null && err.at === check.at && err.message === displayLine(check.message);
   const says = (value: { code: string | null; message: string | null } | null | undefined) =>
     value == null || source === null ? null : <Quote testId="oats-automation-source-says" leadIn={LEAD_INS.source(source.capability, source.name)} lines={[{ text: [value.code, value.message] }]} />;
-  const eventText = (entry: { label: string | null; event: string | null }) => [entry.label, entry.event].filter(Boolean).join(" · ");
-
-  // A trigger's fires are named by what fired; a schedule's runs lead with their outcome.
-  const fromRow = (run: AutomationRun) =>
-    trigger
-      ? { at: runTime(run), parts: [eventLabel(run, row.on?.source ?? null), eventWords(run.event), displayLine(run.instance), outcomeWords(run.outcome)], run }
-      : { at: runTime(run), parts: [outcomeWords(run.outcome), run.event === null ? null : run.event.replace(/_/g, " "), run.number ? `#${run.number}` : null, run.instance], run };
-  const items =
-    st !== null && st.fired.length > 0
-      ? st.fired.map((fired) => ({ at: fired.at, parts: [fired.label, fired.event, fired.instance, outcomeWords(fired.outcome)], run: null as AutomationRun | null }))
-      : (row.recentRuns.length > 0 ? row.recentRuns : row.lastRun !== null ? [row.lastRun] : []).map(fromRow);
-
   return (
-    <Section title={trigger ? "Recent fires" : "Recent runs"} testId="oats-automation-history">
-      <p data-testid="oats-automation-history-note" className={NOTE}>
-        {[`on ${here.on}`, lead].filter(Boolean).join(" · ")}
-      </p>
-      {failure == null ? null : (
-        // The state could not be read (again): said in words, the kernel's message and its code after, over what was read before.
-        <div data-testid="oats-automation-status-failed">
-          <Notice
-            tone="error"
-            title="This trigger's state could not be read"
-            code={failure.code}
-            details={failure.message}
-            {...(failure.readAt === null ? {} : { age: readAge(failure.readAt, now) })}
-            actions={
-              <Button data-testid="oats-automation-status-retry" onClick={failure.onRetry}>
-                Retry
-              </Button>
-            }
-          >
-            {/* A person's words; the kernel's own are one press away, under Details. */}
-            <p>{status === null ? "What is live and what waits is not known; the trigger's last fire, as the list has it, is below." : "What is below is the state that was read before."}</p>
-          </Notice>
-        </div>
-      )}
+    <>
       {poll !== null && !poll.ok ? (
-        // A poll that failed is a notice, as a state that cannot be read is: what happened in a
-        // person's words, the cause the kernel names, its own message one press away, and for a
-        // capability's source the source's words as a quote.
         <div data-testid="oats-automation-last-poll">
           <Notice tone="error" title="The last poll failed" code={samePoll ? (err?.code ?? null) : null} details={poll.error}>
             <p>
               <Time iso={poll.at} now={now} />
               {source !== null && causeWords(poll.cause) !== null ? `: ${causeWords(poll.cause)}` : ""}
-              {". What is listed below is from before it."}
+              {"."}
             </p>
             {source !== null ? says(poll.says ?? (samePoll ? err?.says : null)) : null}
           </Notice>
         </div>
-      ) : poll !== null && source !== null && poll.events !== null ? (
-        <p data-testid="oats-automation-last-poll" className={`${LINE} text-foreground`}>
-          {"Last poll "}
-          <Time iso={poll.at} now={now} />
-          {`: ${[events(poll.events ?? 0), tally({ filtered: poll.filtered ?? 0, skipped: poll.skipped ?? 0, refused: poll.refused ?? 0 })].filter(Boolean).join(", ")}`}
-        </p>
-      ) : poll !== null && source === null ? (
-        <p data-testid="oats-automation-last-poll" className={`${LINE} text-foreground`}>
-          {"Last poll "}
-          <Time iso={poll.at} now={now} />
-          {`: ${poll.prs} ${poll.prs === 1 ? "pull request" : "pull requests"}, ${poll.matching} matching`}
-        </p>
       ) : null}
-      {err !== null && !samePoll && !sameCheck ? (
+      {/* With a history of failures each one is a row of the table, with its code and message: the last error alone is said only where the kernel keeps no such history. */}
+      {err !== null && status.failures === null && !samePoll && !sameCheck ? (
         <>
           <p data-testid="oats-automation-last-error" className={`${LINE} text-destructive-text`}>
             {`Last error: ${err.message ?? ""}`}
@@ -399,146 +241,96 @@ function History({ row, status, failure, source, check, now }: { row: Automation
           {says(err.says)}
         </>
       ) : null}
-      {st !== null && st.pending.length > 0 ? (
-        <>
-          <p className="text-xs font-semibold text-muted-foreground">Waiting</p>
-          <ul aria-label="Waiting" className="flex flex-col">
-            {st.pending.slice(0, 10).map((entry, at) => (
-              <HistoryLine key={entry.key ?? at} iso={entry.observedAt} now={now} testId="oats-automation-waiting">
-                <Tokens text={eventText(entry)} />
-              </HistoryLine>
-            ))}
-          </ul>
-          {st.pending.length > 10 ? <p className={NOTE}>{`and ${st.pending.length - 10} more`}</p> : null}
-        </>
-      ) : null}
-      {st !== null && st.live.length > 0 ? (
-        <>
-          <p className="text-xs font-semibold text-muted-foreground">Live now</p>
-          <ul aria-label="Live now" className="flex flex-col">
-            {st.live.map((entry, at) => (
-              <li key={at} data-testid="oats-automation-live" className="min-w-0 break-words border-t border-border py-1.5 text-sm text-foreground first:border-t-0">
-                <Tokens text={eventText(entry) !== "" && entry.instance !== null ? `${eventText(entry)} ·` : eventText(entry)} />
-                {entry.instance !== null ? (
-                  <>
-                    {eventText(entry) !== "" ? " " : ""}
-                    <span className="font-mono">
-                      <Tokens text={entry.instance} />
-                    </span>
-                  </>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
-      {items.length > 0 && st !== null && (st.pending.length > 0 || st.live.length > 0) ? <p className="text-xs font-semibold text-muted-foreground">Fired</p> : null}
-      {items.length > 0 ? (
-        <ul aria-label={trigger ? "Fired" : "Runs"} className="flex flex-col">
-          {items.slice(0, 10).map((item, at) => (
-            <HistoryLine key={at} iso={item.at} now={now} testId="oats-automation-run">
-              {/* An event, an outcome, an instance's name: each word whole, a separator with the word before it. */}
-              <Tokens text={shown(item.parts.filter(Boolean).join(" · ")) || "Recorded"} />
-              {/* Why a run did not happen: the line says it in a person's words; the kernel's own, and its code, are one press away. */}
-              {/* A run that did not happen because the definition is not valid repeats what the Invalid card says: it is said once, there. */}
-              {item.run !== null && item.run.error !== null && !(row.invalid?.message != null && item.run.error.includes(row.invalid.message)) ? (
-                <Disclosure summary="Details" testId="oats-automation-run-error">
-                  {/* The kernel's message names ids: each word whole. */}
-                  <p className="text-xs text-muted-foreground">
-                    <Tokens text={shown(item.run.error)} />
-                  </p>
-                  {item.run.errorCode !== null && !item.run.error.includes(item.run.errorCode) ? <code className="font-mono text-xs text-muted-foreground">{shown(item.run.errorCode)}</code> : null}
-                </Disclosure>
-              ) : null}
-            </HistoryLine>
-          ))}
-        </ul>
-      ) : (
-        <Empty>{row.runsHere ? `Not run yet on ${here.on}.` : "Runs are recorded on the computer that runs it."}</Empty>
-      )}
-      {/* What the source's last GOOD poll refused or skipped. A failed poll leaves the lists as they
-          were, so they can be older than the failure above: the line over them says which poll they are from. */}
-      {source !== null && st !== null && st.source !== null ? (
-        <SourceLists
-          refused={st.refused}
-          skipped={st.skipped}
-          source={source}
-          from={
-            <p data-testid="oats-automation-lists-from" className={NOTE}>
-              {poll !== null && poll.ok ? (
-                <>
-                  {"At the last poll, "}
-                  <Time iso={poll.at} now={now} />
-                </>
-              ) : poll !== null ? (
-                "From the last successful poll, before the failure above"
-              ) : (
-                "From the last successful poll"
-              )}
-            </p>
-          }
-        />
-      ) : null}
-    </Section>
+    </>
   );
 }
 
-/** Run state on the machine: running since, an unknown state (with the reconcile command to paste), a wake waiting to be delivered. */
-function RunStateCard({ row, run, now, action }: { row: AutomationRow; run: RunState; now: number; action?: ReactNode }) {
-  const line = (tone: "ok" | "bad", words: string, iso: string | null) => {
-    const at = pastTime(iso, now);
-    return (
-      <p title={at?.title} className="text-sm font-semibold text-foreground">
-        <Toned tone={tone}>{at !== null && iso !== null ? `${words} since ${clockTime(iso, now)} · ${at.label}` : words}</Toned>
-      </p>
-    );
+/** The one closed fold: the few facts bb's manner has no place for, each a row of bb's own (its Info tab's label and value). Only what is set. */
+function Details({ row, host, status, source, running, file, onOpenFile, canOpenCapability, onOpenCapability, now }: { row: AutomationRow; host: AutomationHost; status: TriggerStatus | null; source: CapabilitySource | null; running: boolean; file: FileTarget | null; now: number } & Pick<DetailProps, "onOpenFile" | "canOpenCapability" | "onOpenCapability">) {
+  const here = useHere();
+  const place = placementText(row, host, running, here);
+  const on = row.kind === "trigger" ? onSummary(row.on) : null;
+  const poll = status?.lastPoll ?? null;
+  const concurrency = row.concurrency === null ? null : [row.concurrency.max !== null ? `${row.concurrency.max} at once` : null, row.concurrency.perKey !== null ? `${row.concurrency.perKey} per event` : null].filter(Boolean).join(" · ");
+  const live = status !== null && status.liveCount !== null ? `${status.liveCount}${status.max !== null ? ` of ${status.max}` : ""} live now` : null;
+  const path = row.origin.path ?? row.origin.localPath;
+  const lookup = source?.lookup ?? null;
+  const rows: { label: string; testId: string; value: ReactNode }[] = [];
+  const add = (label: string, testId: string, value: ReactNode | null | undefined | "") => {
+    if (value !== null && value !== undefined && value !== "") rows.push({ label, testId, value });
   };
-  const unknown = run.unknown;
-  const scheduled = unknown === null ? null : relativeTime(unknown.scheduledFor, now);
+  add(
+    "Runs on",
+    "runs-on",
+    <span className="flex min-w-0 flex-col">
+      <span data-tone={place.tone}>{shown(place.label)}</span>
+      {row.reasonDetail === null ? null : <span className={NOTE}>{shown(row.reasonDetail)}</span>}
+    </span>,
+  );
+  if (row.kind === "schedule") add("Schedule", "schedule", [row.cron, row.tz].filter(Boolean).map((part) => shown(part as string)).join(" · "));
+  else if (source === null) {
+    add("Event", "event", on === null ? null : shown(on.title));
+    add("Labels", "labels", on === null ? null : shown(on.labels.join(", ")));
+    add("Base", "base", on?.base == null ? null : shown(on.base));
+    add("Polls", "polls", on?.poll ? `every ${shown(on.poll)}` : null);
+  } else {
+    add(
+      "Source",
+      "source",
+      lookup !== null && onOpenCapability !== undefined && canOpenCapability?.(lookup) === true ? (
+        <button type="button" data-testid="oats-automation-open-capability" aria-label={`Open capability ${lookup}`} className={`${LINK} min-w-0 break-words text-left`} onClick={() => onOpenCapability(lookup)}>
+          {sourceLabel(source) ?? source.id}
+        </button>
+      ) : (
+        (sourceLabel(source) ?? source.id)
+      ),
+    );
+    add("Events", "events", on?.events.join(", "));
+    add("Polls", "polls", on?.poll ? `every ${on.poll}` : null);
+  }
+  add(
+    "File",
+    "file",
+    path === null ? null : file !== null && onOpenFile !== undefined ? (
+      <button type="button" data-testid="oats-automation-open-file" className={`${LINK} min-w-0 break-all text-left`} onClick={() => onOpenFile(file)}>
+        {shown(path)}
+      </button>
+    ) : (
+      <span className="break-all">{shown(path)}</span>
+    ),
+  );
+  add("Teams", "teams", shown(row.teams.join(", ")));
+  add("Concurrency", "concurrency", [concurrency, live].filter(Boolean).join(" · "));
+  add("Launch configuration", "launch-config", row.launchConfig === null ? null : shown(row.launchConfig));
+  if (row.wake !== null) add("Recurring wake-up", "wake", [cronInWords(row.wake.cron) ?? shown(row.wake.cron), row.wake.tz === null ? null : shown(row.wake.tz), row.wake.message === null ? null : shown(row.wake.message)].filter(Boolean).join(" · "));
+  if (poll !== null && poll.ok)
+    add(
+      "Last poll",
+      "last-poll",
+      <span>
+        <Time iso={poll.at} now={now} />
+        {source !== null && poll.events !== null
+          ? `: ${[events(poll.events ?? 0), tally({ filtered: poll.filtered ?? 0, skipped: poll.skipped ?? 0, refused: poll.refused ?? 0 })].filter(Boolean).join(", ")}`
+          : poll.prs !== null
+            ? `: ${poll.prs} ${poll.prs === 1 ? "pull request" : "pull requests"}, ${poll.matching} matching`
+            : ""}
+      </span>,
+    );
   return (
-    <Card title="Run state" testId="oats-automation-run-state">
-      {run.running !== null ? line("ok", "Running", run.running.since) : null}
-      {unknown !== null ? (
-        <>
-          {line("bad", "Run state unknown", unknown.since)}
-          <p className={LINE}>OATS does not know whether this run happened. Check it, so the schedule can run again.</p>
-          <FactList facts={[["Scheduled", scheduled?.label, scheduled?.title], ["Host slot", unknown.holdsSlot ? "held (counts against the host limit)" : null]]} />
-          {/* What the kernel recorded of the process, one press away. */}
-          {unknown.exited || unknown.exitStatus !== null || unknown.exitSignal !== null || unknown.error !== null ? (
-            <Disclosure summary="Details" testId="oats-automation-run-state-details">
-              <FactList
-                facts={[
-                  ["Exited", unknown.exited ? "yes" : null],
-                  ["Exit status", unknown.exitStatus === null ? null : String(unknown.exitStatus)],
-                  ["Exit signal", unknown.exitSignal === null ? null : shown(unknown.exitSignal)],
-                  ["Error", unknown.error === null ? null : shown(unknown.error)],
-                ]}
-              />
-            </Disclosure>
-          ) : null}
-          {action}
-          {/* The command works when pasted, so it is drawn as it is or not at all: only when the id and the directory the kernel gave are lines of plain text. */}
-          {cleanLine(row.id) && (row.scope === null || cleanLine(row.scope)) ? (
-            <p data-testid="oats-automation-reconcile-command" className={NOTE}>
-              {"From a terminal: "}
-              <Command text={reconcileCommand(row)} />
-              {". If its effects can’t be proven, check by hand, then "}
-              <Command text={reconcileCommand(row, { clear: true })} />
-              {" records it as launch failed and frees its slot."}
-            </p>
-          ) : (
-            <p data-testid="oats-automation-reconcile-command" className={NOTE}>
-              The command that checks it from a terminal (oats schedule reconcile) cannot be shown: this schedule's id or its directory holds characters that are not text.
-            </p>
-          )}
-        </>
-      ) : null}
-      {run.pendingWake !== null ? (
-        <p title={relativeTime(run.pendingWake.scheduledFor, now)?.title} className={`${LINE} text-foreground`}>
-          {`A wake message is waiting to be delivered${relativeTime(run.pendingWake.scheduledFor, now) !== null ? ` (due ${relativeTime(run.pendingWake.scheduledFor, now)!.label})` : ""}.`}
-        </p>
-      ) : null}
-    </Card>
+    <Disclosure summary="Details" testId="oats-automation-details">
+      <div className="flex min-w-0 flex-col gap-1 pt-1 text-sm">
+        {rows.map((entry) => (
+          <div key={entry.testId} data-testid={`oats-automation-detail-${entry.testId}`} className="min-w-0">
+            <DetailRow label={entry.label} align="start">
+              <span className="min-w-0 break-words">{entry.value}</span>
+            </DetailRow>
+          </div>
+        ))}
+        {source !== null && sourceParams(row.on).count > 0 ? <ParamsQuote row={row} /> : null}
+        {/* What the source's last good poll refused or skipped. */}
+        {source !== null && status !== null && status.source !== null ? <SourceLists refused={status.refused} skipped={status.skipped} source={source} /> : null}
+      </div>
+    </Disclosure>
   );
 }
 
@@ -553,163 +345,132 @@ export type DetailProps = {
   onBack: () => void;
   /** Opens the row's defining file; absent where this client cannot. */
   onOpenFile?: (target: FileTarget) => void;
-  /** The bb machine that holds the deployment, once known: a file of that machine is previewed there. */
-  hostId?: string | null;
+  /** What the file's row opens: null where there is nothing to open. */
+  file?: FileTarget | null;
   /** Whether a capability of that name is one the Capabilities page lists exactly once. */
   canOpenCapability?: (name: string) => boolean;
   onOpenCapability?: (name: string) => void;
-  /** False while the host scheduler is off: the page then never says the row runs or has a next run. */
+  /** False while the host scheduler is off: the page then never says the row has a next run. */
   running?: boolean;
-  /** More of the page's bar (the acts on this row), after Open file. */
-  actions?: ReactNode;
-  /** The run-state card's own act (Check run state). */
-  runStateAction?: ReactNode;
-  /** What an act put on the page (a test's confirmation and its answer): it leads the second column, and comes first where the columns stack. */
-  answers?: ReactNode;
-  /** Beside the name (the on/off switch), and under "No summary" (Edit summary). */
+  /** Beside the name: the on/off switch. */
   identityAction?: ReactNode;
-  summaryAction?: ReactNode;
+  /** The "…" menu's acts. */
+  menu?: readonly MenuItem[];
+  /** What an act put on the page (a test's confirmation and its answer). */
+  answers?: ReactNode;
+  /** How a run's agent opens, while the roster lists it. */
+  agentLink?: AgentLink;
 };
 
-export function Detail({ row, host, now, running = true, status, statusFailure = null, onBack, onOpenFile, hostId = null, canOpenCapability, onOpenCapability, actions, runStateAction, answers, identityAction, summaryAction }: DetailProps) {
-  const here = useHere();
-  const title = TITLES[row.kind];
+export function Detail({ row, host, now, running = true, status, statusFailure = null, onBack, onOpenFile, file = null, canOpenCapability, onOpenCapability, identityAction, menu, answers, agentLink }: DetailProps) {
   const page = useRef<HTMLDivElement>(null);
-  // Opening the page puts focus on Back, where Escape and Enter both lead out again.
+  // Opening the page puts focus on the breadcrumb's way back, where Escape and Enter both lead out again.
   useEffect(() => {
     page.current?.querySelector<HTMLElement>('[data-testid="oats-automation-back"]')?.focus();
   }, [row.id]);
   const source = row.kind === "trigger" ? capabilitySource(row.on, status?.source ?? null) : null;
-  const file = fileTarget(row, hostId, here);
-  const place = placementText(row, host, running, here);
-  const run = runState(row);
-  const bad = row.unreadable ?? row.invalid;
-  // A capability source's check that failed at a poll: the state's own, else the row's. Worked out once, for the card and the history.
+  // A capability source's check that failed at a poll: the state's own, else the row's.
   const sourceCheck: AutomationProblem | null = source === null ? null : status?.invalid?.at ? status.invalid : row.invalid;
   const check = row.unreadable === null ? sourceCheck : null;
-  const checked = check === null ? null : pastTime(check.at, now);
-  const template: FactRow = ["Template", shown(templateProvenance(row.template)), row.template === null ? null : shown([templateLabel(row.template) ?? row.template.from, row.template.version, row.template.commit].filter(Boolean).join(" "))];
-  const stamp = (label: string, iso: string | null): FactRow => [label, pastTime(iso, now)?.label, pastTime(iso, now)?.title];
+  const parts = rowLine(row, status, now, running);
+  const bad = failing(row, status);
+  // The line says who, when and what is next; what is wrong stands under it, in red, by itself.
+  const plain = parts.filter((part) => part.tone !== "bad");
+  const wrong = parts.filter((part) => part.tone === "bad");
+  const entries = pageRuns(row, row.kind === "trigger" ? status : null);
+  const cut = row.kind === "schedule" ? (scheduleCut(row) ? { count: null } : null) : status !== null && triggerCut(status) ? { count: droppedCount(status) } : null;
   return (
     <RunningContext.Provider value={running}>
-    <div
-      ref={page}
-      data-testid="oats-automation-detail"
-      data-id={row.id}
-      className="flex flex-col gap-4"
-      onKeyDown={(event) => {
-        if (event.key !== "Escape" || event.defaultPrevented) return;
-        event.preventDefault();
-        onBack();
-      }}
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <Button data-testid="oats-automation-back" aria-label={`Back to ${title}`} onClick={onBack}>
-          {`‹ ${title}`}
-        </Button>
-        <span className="min-w-0 flex-1" />
-        {onOpenFile === undefined ? null : (
-          <Button data-testid="oats-automation-open-file" disabled={file.target === null} title={shown(file.title)} onClick={() => (file.target === null ? undefined : onOpenFile(file.target))}>
-            Open file
-          </Button>
-        )}
-        {actions}
-      </div>
-      <div data-testid="oats-automation-identity" className="flex min-w-0 items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h2 className="break-words font-mono text-lg font-semibold text-foreground">
-            <Tokens text={shown(row.name)} />
-          </h2>
-          <p className="break-words font-mono text-xs text-muted-foreground">
-            <Tokens text={shown(row.id)} />
-          </p>
-          <div className="flex flex-wrap gap-1">
-            <OriginTag row={row} />
-            <StateTags row={row} />
+      <div
+        ref={page}
+        data-testid="oats-automation-detail"
+        data-id={row.id}
+        className="@container mx-auto flex w-full max-w-3xl flex-col gap-5"
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || event.defaultPrevented) return;
+          event.preventDefault();
+          onBack();
+        }}
+      >
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
+          <button type="button" data-testid="oats-automation-back" className="shrink-0 rounded font-medium text-foreground hover:underline" onClick={onBack}>
+            Automations
+          </button>
+          <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+            /
+          </span>
+          {/* The one place a name is cut, as bb's own breadcrumb cuts it: the head under it says it whole. */}
+          <span aria-current="page" className="min-w-0 truncate text-muted-foreground">
+            {shown(row.name)}
+          </span>
+        </nav>
+        <div data-testid="oats-automation-identity" className="flex min-w-0 flex-col gap-1">
+          <div className="flex min-w-0 items-start gap-2">
+            <span aria-hidden="true" className={`mt-1 flex size-5 shrink-0 items-center justify-center ${bad ? "text-destructive-text" : "text-muted-foreground"}`}>
+              <Icon name={iconOf(row, bad)} className="size-4" />
+            </span>
+            <h2 title={shown(row.id)} className="min-w-0 flex-1 break-words text-base font-semibold text-foreground">
+              {shown(row.name)}
+            </h2>
+            <div className="flex shrink-0 items-center gap-1">
+              {identityAction}
+              {menu === undefined || menu.length === 0 ? null : (
+                <div data-testid="oats-automation-detail-menu">
+                  <Menu label={`Actions for ${shown(row.name)}`} items={menu} />
+                </div>
+              )}
+            </div>
           </div>
-          {row.description !== null ? (
-            <p className="break-words text-sm text-foreground">{shown(row.description)}</p>
-          ) : (
-            <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span>No summary</span>
-              {summaryAction}
-            </p>
-          )}
+          <div className="flex min-w-0 flex-col gap-1 pl-7">
+            <SmallLine parts={plain} />
+            {wrong.map((part, at) => (
+              <p key={at} data-testid="oats-automation-wrong" className="min-w-0 break-words text-xs text-destructive-text">
+                {shown(part.text)}
+              </p>
+            ))}
+            {row.description === null ? null : (
+              <p data-testid="oats-automation-summary" className="min-w-0 break-words text-sm text-foreground">
+                {shown(row.description)}
+              </p>
+            )}
+          </div>
         </div>
-        {identityAction}
-      </div>
-      {/* What an act just put on the page (a confirmation, a test's answer): right under the buttons that were pressed, at every width. */}
-      <div data-testid="oats-automation-answers" className="flex min-w-0 flex-col gap-3 empty:hidden">
-        {answers}
-      </div>
-      <Sends row={row} />
-      {/* The row's facts, in cards of equal width: two beside each other from the width that gives
-          each a value column a code, a path or an id fits in; one under the other below it. What
-          is wrong and what is running come first. */}
-      <div className="grid gap-3 @3xl:grid-cols-2">
-        {check !== null && check.at !== null ? (
-          // The last source check failed at a poll: a person's words, then the kernel's message, code and field one press away.
-          <Card title="Source check failed" testId="oats-automation-problem" tone="warn">
-            <p className={LINE}>{`The source's check failed at the last poll${checked === null ? "" : ` (${checked.label})`}, so this trigger did not fire.`}</p>
-            <Disclosure summary="Details" testId="oats-automation-problem-details">
-              <FactList facts={[["Message", displayLine(check.message)], ["Code", displayLine(check.code)], ["Field", displayLine(check.field)], ["Checked", checked?.label, checked?.title]]} />
-            </Disclosure>
-          </Card>
-        ) : bad !== null ? (
-          <Card title={row.unreadable !== null ? "Unreadable" : "Invalid"} testId="oats-automation-problem" tone="warn">
-            <p className={LINE}>{row.unreadable !== null ? "OATS cannot read this definition, so it does not run." : "OATS cannot use this definition as it is written, so it does not run."}</p>
-            <Disclosure summary="Details" testId="oats-automation-problem-details">
-              <FactList facts={[["Code", bad.code === null ? null : shown(bad.code)], ["Field", bad.field === null ? null : shown(bad.field)], ["Message", bad.message === null ? null : shown(bad.message)]]} />
-            </Disclosure>
-          </Card>
-        ) : null}
-        {run !== null ? <RunStateCard row={row} run={run} now={now} action={runStateAction} /> : null}
-        <WhenCard row={row} now={now} running={running} source={source} canOpenCapability={canOpenCapability} onOpenCapability={onOpenCapability} />
-        {row.run === "spawn" ? <SpawnsCard row={row} /> : null}
-        {row.wake === null ? null : <WakeCard wake={row.wake} />}
-        <Card title="Where it runs" testId="oats-automation-where">
-          {/* A local row that runs here has one thing to say, and the line under says it. */}
-          <FactList
-            facts={
-              row.origin.kind === "local"
-                ? []
-                : [["Runs on", row.runsOn === null ? null : shown(row.runsOn)], ["Host name in OATS", shown(host.name ?? "none")], ["Acts as", row.owner === null ? null : shown(row.owner)], ["Logged in", shown(hostLogin(host, row.owner))]]
-            }
-          />
-          <p data-testid="oats-automation-verdict" className="text-sm font-semibold text-foreground">
-            <Toned tone={place.tone}>{row.runsHere ? (running ? `Runs on ${here.on}` : `${hereWhileOff(here)}; the scheduler is off`) : shown(place.label)}</Toned>
-          </p>
-          {/* Why not here, in the kernel's words; what is wrong with the definition is said once, in its own card. */}
-          {row.reasonDetail !== null && row.reasonDetail !== bad?.message ? (
-            <p className={`${NOTE} break-words`}>
-              <Tokens text={shown(row.reasonDetail)} />
-            </p>
-          ) : null}
-        </Card>
-        {/* A path or a file can be fifty characters: this card has the whole width, so that one is whole on its line. */}
-        <div className="@3xl:col-span-2">
-        <Card title="Comes from" testId="oats-automation-from">
-          {row.origin.kind === "workspace" ? (
-            <FactList
-              facts={[
-                ["Member", row.origin.member === null ? null : shown(row.origin.member)],
-                ["Repo", row.origin.repoKey === null ? null : shown(row.origin.repoKey)],
-                ["Path", row.origin.path === null ? null : shown(row.origin.path)],
-                ["Commit", row.origin.commit === null ? null : shown(row.origin.commit.slice(0, 7)), shown(row.origin.commit)],
-                template,
-              ]}
-            />
-          ) : (
-            <>
-              <p className={NOTE}>{`Local to ${here.on}; not shared through Git.`}</p>
-              <FactList facts={[template, stamp("Created", row.createdAt), stamp("Updated", row.updatedAt)]} />
-            </>
-          )}
-        </Card>
+        {/* What an act just put on the page (a confirmation, a test's answer): right under the head, at every width. */}
+        <div data-testid="oats-automation-answers" className="flex min-w-0 flex-col gap-3 empty:hidden">
+          {answers}
         </div>
+        <Problem row={row} check={check} now={now} />
+        <Does row={row} />
+        <section data-testid="oats-automation-history" aria-label="Runs" className="flex min-w-0 flex-col gap-2">
+          <h3 className="text-sm font-semibold text-foreground">Runs</h3>
+          {statusFailure == null ? null : (
+            // The state could not be read (again): said in words, the kernel's message and its code after, over what was read before.
+            <div data-testid="oats-automation-status-failed">
+              <Notice
+                tone="error"
+                title="This trigger's state could not be read"
+                code={statusFailure.code}
+                details={statusFailure.message}
+                {...(statusFailure.readAt === null ? {} : { age: readAge(statusFailure.readAt, now) })}
+                actions={
+                  <Button data-testid="oats-automation-status-retry" onClick={statusFailure.onRetry}>
+                    Retry
+                  </Button>
+                }
+              />
+            </div>
+          )}
+          {row.kind === "trigger" && status !== null ? <TriggerTrouble status={status} source={source} check={sourceCheck} now={now} /> : null}
+          {/* A new automation's table starts at its first rows. */}
+          {row.kind === "trigger" && status === null ? (
+            // A trigger's runs are its state's: until that is read nothing is said of them, least of all that there are none.
+            statusFailure == null ? <Loading>Reading…</Loading> : null
+          ) : (
+            <Runs key={`${row.kind}:${row.id}`} entries={entries} now={now} agentLink={agentLink} step={RUNS_SHOWN.page} cut={cut} openFirst />
+          )}
+        </section>
+        <Details row={row} host={host} status={status} source={source} running={running} file={file} onOpenFile={onOpenFile} canOpenCapability={canOpenCapability} onOpenCapability={onOpenCapability} now={now} />
       </div>
-      <History row={row} status={status} failure={row.kind === "trigger" ? statusFailure : null} source={source} check={sourceCheck} now={now} />
-    </div>
     </RunningContext.Provider>
   );
 }

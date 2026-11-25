@@ -1,20 +1,29 @@
-// The Automations page: one page with two tabs, Schedules and Triggers, each a list whose rows
-// open their own page. What it draws is handed to it (the lists, a trigger's recorded state):
-// Page.tsx reads them through the plugin's server. At a narrow width, as at any other, the list
-// and a row's page show one at a time, with Back.
+// The Automations page, in the manner of bb's own: two tabs, "Automations" (ONE list, schedules
+// and triggers together) and "Runs" (every automation's runs, newest first), and a row's own page.
+// What it draws is handed to it (the lists, every trigger's state, the open trigger's own read):
+// Page.tsx reads them through the plugin's server. The list and a row's page show one at a time.
+// The list's card scrolls alone, under a head that stays; a row's page and the Runs tab scroll whole.
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { AutomationKind, AutomationList, AutomationRow, TriggerStatus } from "../../contract/automations";
-import { Button, Lines, Loading, Notice, Stale, Tabs, Toned } from "../ui";
+import type { AutomationKind, AutomationList, AutomationRow, TriggerStatus, TriggerStatuses } from "../../contract/automations";
+import { allRuns } from "../../model/automation-runs";
+import type { RunOwner } from "../../model/automation-runs";
+import { Button, Lines, Loading, Notice, Stale, Tabs } from "../ui";
+import { readAge } from "../ui/words";
 import { Detail } from "./Detail";
 import type { DetailProps } from "./Detail";
 import { List } from "./List";
 import type { RowActs } from "./List";
-import { readAge } from "../ui/words";
-import { schedulerLine, schedulerOn, TITLES } from "./words";
-import type { OriginFilter } from "./words";
+import { RunsTab } from "./Runs";
+import type { AgentLink } from "./Runs";
+import { schedulerOn, TITLES } from "./words";
+import type { ListFilter } from "./words";
 
 export const KINDS: readonly AutomationKind[] = ["schedule", "trigger"];
+/** The page's two tabs. */
+export type Tab = "list" | "runs";
+/** The row whose page is open: its kind and its qualified id. */
+export type Open = { kind: AutomationKind; id: string };
 
 /** One list as the page has it: being read, read, or failed (with what an earlier read answered, if any). */
 export type ListRead = {
@@ -25,64 +34,63 @@ export type ListRead = {
   /** When what is shown was read. */
   readAt: string | null;
 };
-/** Why a list cannot be shown at all, in place of it: what is missing, and what to do about it. */
+/** Why the lists cannot be shown at all, in place of them: what is missing, and what to do about it. */
 export type Gate = { title: string; detail: string | null; code: string | null };
 
 export type ViewProps = {
-  kind: AutomationKind;
-  onKind: (kind: AutomationKind) => void;
+  tab: Tab;
+  onTab: (tab: Tab) => void;
   reads: Record<AutomationKind, ListRead>;
+  /** Every trigger's state, as last read; null where it could not be: nothing is then said of a trigger's fires and failures. */
+  statuses: TriggerStatuses | null;
   gate: Gate | null;
   now: number;
   onRefresh: () => void;
-  /** The row whose page is open, by its id; null: the list. */
-  openId: string | null;
-  onOpen: (id: string | null) => void;
+  /** The row whose page is open; null: the tabs. */
+  open: Open | null;
+  onOpen: (open: Open | null) => void;
   /** The open trigger's recorded state, once read. */
   status: TriggerStatus | null;
   /** Why that state could not be read (again), where it could not. */
   statusFailure?: DetailProps["statusFailure"];
-  /** What the page adds for a row: its acts, and the cards they bring. */
-  rowParts?: (row: AutomationRow) => Pick<DetailProps, "actions" | "runStateAction" | "answers" | "identityAction" | "summaryAction">;
+  /** What the page adds for a row: its switch, its menu, and what its acts put on the page. */
+  rowParts?: (row: AutomationRow) => Pick<DetailProps, "identityAction" | "menu" | "answers" | "file">;
   /** The act of the notice of a scheduler that is off (Enable scheduler). */
   schedulerAction?: ReactNode;
   /** A row's switch and menu in the list, where the page has acts. */
   rowActs?: RowActs;
-  /** Why the shown kind's acts are held (its list could not be read again), where the page has acts. */
+  /** Why a kind's acts are held (its list could not be read again), where the page has acts. */
   held?: string | null;
-  /** In the list's place where OATS itself cannot be read and no list is kept: the plugin's one notice for that. */
+  /** In the lists' place where OATS itself cannot be read and no list is kept: the plugin's one notice for that. */
   gateNotice?: ReactNode;
   /** A re-read is in flight. */
   refreshing?: boolean;
   /** Above the list: what an act just did (a result). */
   result?: ReactNode;
-} & Pick<DetailProps, "onOpenFile" | "hostId" | "canOpenCapability" | "onOpenCapability">;
+  agentLink?: AgentLink;
+} & Pick<DetailProps, "onOpenFile" | "canOpenCapability" | "onOpenCapability">;
 
 const PANEL = "oats-automations-panel";
 /** A list read longer ago than this is marked with its age (the UX standard, freshness). */
 export const STALE_MS = 30_000;
+const FRAME = "mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 text-sm text-foreground";
 
-export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, hostId, canOpenCapability, onOpenCapability }: ViewProps) {
-  const read = reads[kind];
-  const list = read.list;
-  const title = TITLES[kind];
-  // The filter and the search are the list's own: another tab starts with neither.
-  const [origin, setOrigin] = useState<OriginFilter>("all");
+export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, canOpenCapability, onOpenCapability, agentLink }: ViewProps) {
+  // The filter and the search are the list's own, kept while a row's page or the other tab is shown.
+  const [filter, setFilter] = useState<ListFilter>("all");
   const [query, setQuery] = useState("");
-  const [filtersOf, setFiltersOf] = useState(kind);
-  if (filtersOf !== kind) {
-    setFiltersOf(kind);
-    setOrigin("all");
-    setQuery("");
-  }
-  const row = openId === null ? null : (list?.rows.find((entry) => entry.id === openId) ?? null);
-  // A row that left the list (removed, or another tab's) has no page: back to the list.
+  const schedules = reads.schedule.list;
+  const triggers = reads.trigger.list;
+  const listOfOpen = open === null ? undefined : reads[open.kind].list;
+  const row = open === null ? null : (listOfOpen?.rows.find((entry) => entry.id === open.id) ?? null);
+  // A row that left its list (removed) has no page: back to the list.
   useEffect(() => {
-    if (openId !== null && list !== undefined && row === null) onOpen(null);
-  }, [openId, list, row, onOpen]);
+    if (open !== null && listOfOpen !== undefined && row === null) onOpen(null);
+  }, [open, listOfOpen, row, onOpen]);
   // Closing a row's page puts focus back on the row it was opened from.
   const panel = useRef<HTMLDivElement>(null);
   const closed = useRef<string | null>(null);
+  const openId = open?.id ?? null;
   useEffect(() => {
     if (openId !== null) {
       closed.current = openId;
@@ -95,102 +103,144 @@ export function View({ kind, onKind, reads, gate, now, onRefresh, openId, onOpen
     rows.find((candidate) => candidate.dataset.id === id)?.querySelector<HTMLElement>('[data-testid="oats-automation-open"]')?.focus();
   }, [openId]);
 
-  const scheduler = list?.scheduler ?? null;
-  // What stands in the list's place: the page's own gate, or the plugin's one notice for an OATS that cannot be read.
+  // What stands in the lists' place: the page's own gate, or the plugin's one notice for an OATS that cannot be read.
   const unreadable = gateNotice ?? null;
   const gated = gate !== null || unreadable !== null;
-  const onRowPage = row !== null && list !== undefined && !gated;
-  return (
-    <div data-testid="oats-automations" data-kind={kind} className="@container flex flex-col gap-4">
-      {onRowPage ? null : (
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-          <Tabs label="Automations" tabs={KINDS.map((id) => ({ id, label: TITLES[id], count: reads[id].list?.rows.length }))} value={kind} onChange={onKind} panelId={PANEL} />
-          <span className="min-w-0 flex-1" />
-          {scheduler === null || gated ? null : (
-            <span data-testid="oats-automations-scheduler" className="min-w-0 text-xs text-muted-foreground">
-              <Toned tone={schedulerOn(scheduler) ? "ok" : "bad"}>{schedulerLine(scheduler, now)}</Toned>
-            </span>
-          )}
-          <span className="flex items-center gap-2 pb-1">
-            <Button data-testid="oats-automations-refresh" aria-label={`Refresh ${title.toLowerCase()}`} title="Refresh" disabled={read.loading || refreshing} onClick={onRefresh}>
-              Refresh
-            </Button>
-          </span>
-        </div>
+  const onRowPage = row !== null && listOfOpen !== undefined && !gated;
+  const any = schedules !== undefined || triggers !== undefined;
+  const loading = reads.schedule.loading || reads.trigger.loading;
+  // What is shown was read a while ago, or is being read again: it says so, with its age (the older of the two).
+  const readAts = KINDS.map((kind) => reads[kind].readAt).filter((at): at is string => at !== null);
+  const oldest = readAts.length === 0 ? null : readAts.reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b));
+  const failed = KINDS.filter((kind) => reads[kind].error !== null);
+  const total = (schedules?.rows.length ?? 0) + (triggers?.rows.length ?? 0);
+  const runs = allRuns(schedules?.rows ?? [], triggers?.rows ?? [], statuses ?? []);
+  const host = schedules ?? triggers;
+  const running = host === undefined || host.scheduler === null || schedulerOn(host.scheduler);
+  const openOwner = (owner: RunOwner) => onOpen({ kind: owner.kind, id: owner.id });
+  // The list's tab keeps the page's height and scrolls its card alone; everything else scrolls whole.
+  const fixed = !onRowPage && !gated && tab === "list";
+
+  const notices = (
+    <>
+      {failed.length === 0 ? (
+        any && oldest !== null && (refreshing || now - Date.parse(oldest) > STALE_MS) ? <Stale age={readAge(oldest, now)} refreshing={refreshing} /> : null
+      ) : (
+        failed.map((kind) => {
+          const read = reads[kind];
+          const title = TITLES[kind];
+          return (
+            <div key={kind} data-testid="oats-automations-failed" data-kind={kind}>
+              <Notice
+                tone="error"
+                title={`${title} could not be read`}
+                code={read.error?.code}
+                details={read.error?.message}
+                {...(read.list !== undefined && read.readAt !== null ? { age: readAge(read.readAt, now) } : {})}
+                actions={
+                  <Button data-testid="oats-automations-retry" disabled={refreshing} onClick={onRefresh}>
+                    Retry
+                  </Button>
+                }
+              >
+                {/* A person's words; what OATS or the plugin's server said is one press away, under Details. */}
+                <p>{read.list === undefined ? `Nothing can be shown of this deployment's ${title.toLowerCase()} until they are read.` : `What is below is the last list that was read.`}</p>
+                {/* The rows are still shown, and the page has acts: they are held, and that is said here. */}
+                {read.list !== undefined && held !== undefined && held !== null ? <p data-testid="oats-automations-held">{held}</p> : null}
+                {refreshing ? (
+                  <p role="status" data-testid="oats-automations-rereading">
+                    Refreshing…
+                  </p>
+                ) : null}
+              </Notice>
+            </div>
+          );
+        })
       )}
-      {/* A row's page draws no tabs, so no tab is there to name the panel: it is named in words. */}
-      <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={onRowPage ? undefined : `${PANEL}-tab-${kind}`} aria-label={onRowPage ? title : undefined} className="flex flex-col gap-4">
-        {unreadable !== null ? (
-          // OATS itself cannot be read (no `oats`, no deployment, no machine): the one notice every place of the plugin shows for it.
-          <div data-testid="oats-automations-gate">{unreadable}</div>
-        ) : gate !== null ? (
-          <div data-testid="oats-automations-gate">
-            <Notice title={gate.title} code={gate.code}>
-              {gate.detail === null ? null : (
-                <p>
-                  <Lines text={gate.detail} />
-                </p>
-              )}
-            </Notice>
+      {result}
+    </>
+  );
+
+  return (
+    <div data-testid="oats-automations-page" className={fixed ? "flex h-full min-h-0 flex-col" : "h-full min-h-0 overflow-y-auto"}>
+      <div data-testid="oats-automations" data-tab={tab} className={`@container ${FRAME} ${fixed ? "min-h-0 flex-1" : ""}`}>
+        {onRowPage ? null : (
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+            <Tabs
+              label="Automations"
+              tabs={[
+                { id: "list", label: "Automations", count: any ? total : undefined },
+                { id: "runs", label: "Runs" },
+              ]}
+              value={tab}
+              onChange={onTab}
+              panelId={PANEL}
+            />
+            <span className="min-w-0 flex-1" />
+            <span className="flex items-center gap-2 pb-1">
+              <Button data-testid="oats-automations-refresh" aria-label="Refresh automations" title="Refresh" disabled={loading || refreshing} onClick={onRefresh}>
+                Refresh
+              </Button>
+            </span>
           </div>
-        ) : (
-          <>
-            {read.error === null ? (
-              // What is shown was read a while ago, or is being read again: it says so, with its age.
-              list !== undefined && read.readAt !== null && (refreshing || now - Date.parse(read.readAt) > STALE_MS) ? (
-                <Stale age={readAge(read.readAt, now)} refreshing={refreshing} />
-              ) : null
-            ) : (
-              <div data-testid="oats-automations-failed">
-                <Notice
-                  tone="error"
-                  title={`${title} could not be read`}
-                  code={read.error.code}
-                  details={read.error.message}
-                  {...(list !== undefined && read.readAt !== null ? { age: readAge(read.readAt, now) } : {})}
-                  actions={
-                    <Button data-testid="oats-automations-retry" disabled={refreshing} onClick={onRefresh}>
-                      Retry
-                    </Button>
-                  }
-                >
-                  {/* A person's words; what OATS or the plugin's server said is one press away, under Details. */}
-                  <p>{list === undefined ? `Nothing can be shown of this deployment's ${title.toLowerCase()} until they are read.` : `What is below is the last list that was read.`}</p>
-                  {/* The rows are still shown, and the page has acts: they are held, and that is said here. */}
-                  {list !== undefined && held !== undefined && held !== null ? <p data-testid="oats-automations-held">{held}</p> : null}
-                  {refreshing ? (
-                    <p role="status" data-testid="oats-automations-rereading">
-                      Refreshing…
-                    </p>
-                  ) : null}
-                </Notice>
-              </div>
-            )}
-            {result}
-            {list === undefined ? (
-              read.loading ? (
-                <Loading>{`Reading ${title.toLowerCase()}…`}</Loading>
-              ) : null
-            ) : row !== null ? (
-              <Detail
-                row={row}
-                host={list.host}
-                now={now}
-                running={list.scheduler === null || schedulerOn(list.scheduler)}
-                status={row.kind === "trigger" ? status : null}
-                statusFailure={row.kind === "trigger" ? statusFailure : null}
-                onBack={() => onOpen(null)}
-                onOpenFile={onOpenFile}
-                hostId={hostId}
-                canOpenCapability={canOpenCapability}
-                onOpenCapability={onOpenCapability}
-                {...rowParts?.(row)}
-              />
-            ) : (
-              <List list={list} now={now} origin={origin} onOrigin={setOrigin} query={query} onQuery={setQuery} onOpen={onOpen} schedulerAction={schedulerAction} acts={rowActs} />
-            )}
-          </>
         )}
+        {/* A row's page draws no tabs, so no tab is there to name the panel: it is named in words. */}
+        <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={onRowPage ? undefined : `${PANEL}-tab-${tab}`} aria-label={onRowPage ? "Automation" : undefined} className={`flex flex-col gap-4 ${fixed ? "min-h-0 flex-1" : ""}`}>
+          {unreadable !== null ? (
+            // OATS itself cannot be read (no `oats`, no deployment, no machine): the one notice every place of the plugin shows for it.
+            <div data-testid="oats-automations-gate">{unreadable}</div>
+          ) : gate !== null ? (
+            <div data-testid="oats-automations-gate">
+              <Notice title={gate.title} code={gate.code}>
+                {gate.detail === null ? null : (
+                  <p>
+                    <Lines text={gate.detail} />
+                  </p>
+                )}
+              </Notice>
+            </div>
+          ) : (
+            <>
+              {notices}
+              {!any ? (
+                loading ? (
+                  <Loading>Reading automations…</Loading>
+                ) : null
+              ) : row !== null && listOfOpen !== undefined ? (
+                <Detail
+                  row={row}
+                  host={listOfOpen.host}
+                  now={now}
+                  running={running}
+                  status={row.kind === "trigger" ? status : null}
+                  statusFailure={row.kind === "trigger" ? statusFailure : null}
+                  onBack={() => onOpen(null)}
+                  onOpenFile={onOpenFile}
+                  canOpenCapability={canOpenCapability}
+                  onOpenCapability={onOpenCapability}
+                  agentLink={agentLink}
+                  {...rowParts?.(row)}
+                />
+              ) : tab === "runs" ? (
+                <RunsTab entries={runs.entries} cut={runs.cut} now={now} onOpenOwner={openOwner} agentLink={agentLink} />
+              ) : (
+                <List
+                  schedules={schedules}
+                  triggers={triggers}
+                  statuses={statuses}
+                  now={now}
+                  filter={filter}
+                  onFilter={setFilter}
+                  query={query}
+                  onQuery={setQuery}
+                  onOpen={(opened) => onOpen({ kind: opened.kind, id: opened.id })}
+                  schedulerAction={schedulerAction}
+                  acts={rowActs}
+                />
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,22 +1,23 @@
 // The Automations page as a bb page: /plugins/oats/automations, with the tab and the open row in
-// its route (…/schedules, …/triggers, …/triggers/<id>), so Back and a link both work. It reads
-// the two lists through the plugin's server and a trigger's recorded state when its page opens;
-// View.tsx draws them.
+// its route (…/runs; …/schedules/<id>, …/triggers/<id>), so Back and a link both work. It reads
+// the two lists and every trigger's state through the plugin's server (one read), and the open
+// trigger's own state when its page opens; View.tsx draws them.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { NO_AUTOMATIONS } from "../../contract/automations";
-import type { AutomationKind, AutomationRow, TriggerStatus } from "../../contract/automations";
+import type { AutomationKind, TriggerStatus } from "../../contract/automations";
+import { openAgentPage } from "../home/agent-tab";
+import { useOats } from "../oats";
 import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { HELD_REASON, isUnreadable, Unreadable } from "../roster/unreadable";
-import { Page } from "../ui";
 import { useActs } from "./acts";
 import { HereContext } from "./here";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
 import { KINDS, View } from "./View";
-import type { Gate, ListRead } from "./View";
-import { capabilitySource, GROUPS, HERE, hereOf, refusalParts, TITLES } from "./words";
+import type { Gate, ListRead, Open, Tab } from "./View";
+import { capabilitySource, HERE, hereOf, refusalParts } from "./words";
 import type { FileTarget, Here } from "./words";
 
 export const PATH = "automations";
@@ -24,8 +25,12 @@ export const PATH = "automations";
 export const HELD = "Held until the list can be read again: what each row is now is not known.";
 const SEGMENT: Record<AutomationKind, string> = { schedule: "schedules", trigger: "triggers" };
 
-/** The route under the page: which tab, and which row's page is open. */
-export function routeOf(subPath: string): { kind: AutomationKind; openId: string | null } {
+/**
+ * The route under the page: which tab, and which row's page is open. `runs` is the Runs tab;
+ * `schedules/<id>` and `triggers/<id>` a row's page; anything else (the page's start, and the
+ * earlier `schedules` and `triggers` tabs' addresses, which a link may still hold) the list.
+ */
+export function routeOf(subPath: string): { tab: Tab; open: Open | null } {
   let segments: string[];
   try {
     segments = subPath.split("/").filter((segment) => segment !== "").map(decodeURIComponent);
@@ -33,20 +38,20 @@ export function routeOf(subPath: string): { kind: AutomationKind; openId: string
     // An address that does not decode names nothing: the page's start.
     segments = [];
   }
-  const kind = KINDS.find((candidate) => SEGMENT[candidate] === segments[0]) ?? "schedule";
-  return { kind, openId: segments.length > 1 ? segments.slice(1).join("/") : null };
+  const kind = KINDS.find((candidate) => SEGMENT[candidate] === segments[0]);
+  if (kind !== undefined && segments.length > 1) return { tab: "list", open: { kind, id: segments.slice(1).join("/") } };
+  return { tab: segments[0] === "runs" ? "runs" : "list", open: null };
 }
-export const subPathOf = (kind: AutomationKind, openId: string | null = null): string => (openId === null ? SEGMENT[kind] : `${SEGMENT[kind]}/${openId}`);
+export const subPathOf = (tab: Tab, open: Open | null = null): string => (open !== null ? `${SEGMENT[open.kind]}/${open.id}` : tab === "runs" ? "runs" : "");
 
 /**
- * Why a list cannot be shown at all though OATS answers: an OATS from before the lists (the server
- * says so), in the Desktop's words. An OATS that cannot be read at all (no `oats`, no deployment,
- * no machine) is the plugin's one notice for that, the sidebar's (app/roster/unreadable.tsx).
+ * Why the lists cannot be shown at all though OATS answers: an OATS from before the lists (the
+ * server says so), in the Desktop's words. An OATS that cannot be read at all (no `oats`, no
+ * deployment, no machine) is the plugin's one notice for that, the sidebar's (app/roster/unreadable.tsx).
  */
-export function gateOf(kind: AutomationKind, answer: { code: string; message: string } | null, here: Here = HERE): Gate | null {
-  const title = TITLES[kind];
+export function gateOf(answer: { code: string; message: string } | null, here: Here = HERE): Gate | null {
   if (answer === null || answer.code !== NO_AUTOMATIONS) return null;
-  return { title: `${title} need OATS 0.29 or later`, detail: `Update OATS to see the workspace's ${title.toLowerCase()} and ${here.on}'s own, and where each one runs.`, code: answer.code };
+  return { title: "Automations need OATS 0.29 or later", detail: `Update OATS to see the workspace's schedules and triggers and ${here.on}'s own, and where each one runs.`, code: answer.code };
 }
 
 type Lists = Result<"automations">;
@@ -76,7 +81,9 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const rpc = useRpc<Contract>();
   const navigate = useBbNavigate();
   const now = useNow();
-  const { kind, openId } = routeOf(subPath);
+  const { tab, open } = routeOf(subPath);
+  const kind = open?.kind ?? null;
+  const openId = open?.id ?? null;
 
   // A list that was read stays on screen while a later read fails or is under way.
   const kept = useRef<Partial<Record<AutomationKind, Kept>>>({});
@@ -121,12 +128,18 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   /** The machine the page is about, by bb's name for it. */
   const machine = read.data?.machine ?? null;
   const here = useMemo(() => hereOf(machine), [machine]);
-  const answer = read.data?.[kind];
-  const refused = answer !== undefined && !answer.ok ? answer : null;
-  // What takes the list's place: an OATS without the lists, or an OATS that cannot be read at all
+  // What both lists were refused with: one fault of OATS itself refuses both alike.
+  const refusals = KINDS.map((id) => read.data?.[id]).map((answer) => (answer !== undefined && !answer.ok ? answer : null));
+  const refused = refusals[0] ?? refusals[1] ?? null;
+  // What takes the lists' place: an OATS without the lists, or an OATS that cannot be read at all
   // while nothing read before is shown (with a list kept, the notice goes over it and holds its acts).
-  const gate = gateOf(kind, refused, here);
-  const unreadable = refused !== null && isUnreadable(refused.code) && reads[kind].list === undefined ? refused : null;
+  const gate = gateOf(refused, here);
+  const unreadable = refused !== null && isUnreadable(refused.code) && reads.schedule.list === undefined && reads.trigger.list === undefined ? refused : null;
+  // Every trigger's state, of the same read as the lists; kept while a later read of it fails, like a list.
+  const keptStatuses = useRef<Result<"automations">["statuses"] & { ok: true } | null>(null);
+  const answered = read.data?.statuses;
+  if (answered !== undefined && answered.ok) keptStatuses.current = answered;
+  const statuses = keptStatuses.current?.statuses ?? null;
 
   // A trigger's recorded state, read when its page opens and again when the lists are. An answer
   // for a row that is no longer the open one changes nothing. A read that fails is said, over the
@@ -158,6 +171,8 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
     };
   }, [kind, openId, at, statusRetry]);
   const mine = status !== null && status.id === openId ? status : null;
+  // Until the open trigger's own read answers, its state is the one read beside the lists.
+  const beside = kind === "trigger" && openId !== null ? (statuses?.find((entry) => entry.id === openId)?.status ?? null) : null;
 
   const hostId = read.data?.hostId ?? null;
   const onOpenFile = useCallback(
@@ -176,68 +191,78 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const capabilities = useRead("capabilities", { live: false, enabled: sourced }).data?.capabilities;
   const canOpenCapability = useCallback((name: string) => (capabilities ?? []).filter((capability) => capability.id === name).length === 1, [capabilities]);
   const onOpenCapability = useCallback(() => navigate.toPluginPanel("capabilities"), [navigate]);
-  const onOpen = useCallback((id: string | null) => navigate.toPluginPanel(PATH, { subPath: subPathOf(kind, id) }), [kind, navigate]);
+  const onOpen = useCallback((next: Open | null) => navigate.toPluginPanel(PATH, { subPath: subPathOf(tab, next) }), [tab, navigate]);
+  // A run's agent opens its thread, or its own page where it has none; one the roster no longer lists opens nothing.
+  const oats = useOats();
+  const listed = oats.phase === "ready" ? oats.agents : null;
+  const byInstance = useMemo(() => new Map((listed ?? []).map((agent) => [agent.instance, agent])), [listed]);
+  const agentLink = useCallback(
+    (instance: string) => {
+      const agent = byInstance.get(instance);
+      if (agent === undefined) return null;
+      return () => void (agent.threadId !== null ? navigate.toThread(agent.threadId) : openAgentPage(navigate, agent.instance));
+    },
+    [byInstance, navigate],
+  );
 
   const descriptions = read.data?.oats?.features.includes("automation-descriptions") ?? false;
-  const list = reads[kind].list;
+  const host = (reads.schedule.list ?? reads.trigger.list)?.host.name ?? null;
   const acts = useActs({
     here,
     rpc,
     refresh,
     summaries: descriptions,
-    kind,
-    open: openId === null ? null : { kind, id: openId },
+    open,
     // The reason an act that is off carries is the one the roster's acts carry; the notice above the list says why.
     held: { schedule: reads.schedule.error === null ? null : HELD_REASON, trigger: reads.trigger.error === null ? null : HELD_REASON },
-    onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind, row.id) }),
+    onOpen: (row) => navigate.toPluginPanel(PATH, { subPath: subPathOf(tab, { kind: row.kind, id: row.id }) }),
     onOpenFile,
     hostId,
-    // The row after the deleted one, else the one before it: the control a person would reach next.
-    // Among the rows the list shows (its filter and search applied) when the list is on screen;
-    // from a row's own page, in the order the list will show them (its groups, each in the kernel's order).
+    // The row after the deleted one, else the one before it: the control a person would reach next,
+    // among the rows the list shows (its filter and search applied). From a row's own page the list
+    // is not drawn: its first row takes the focus once it is.
     neighbourOf: (row) => {
-      const drawn = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]')).map((entry) => entry.dataset.id ?? "");
-      const shown = drawn.length > 0 ? drawn : GROUPS.flatMap((group) => (reads[row.kind].list?.rows ?? []).filter((entry) => entry.group === group.id)).map((entry) => entry.id);
-      const at = shown.indexOf(row.id);
-      const besideId = at === -1 ? null : (shown[at + 1] ?? shown[at - 1] ?? null);
+      const shown = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]')).map((entry) => `${entry.dataset.kind ?? ""}:${entry.dataset.id ?? ""}`);
+      const at = shown.indexOf(`${row.kind}:${row.id}`);
+      const besideKey = at === -1 ? null : (shown[at + 1] ?? shown[at - 1] ?? null);
       return () => {
         const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="oats-automation-row"]'));
-        return (rows.find((entry) => entry.dataset.id === besideId) ?? rows[0])?.querySelector<HTMLElement>('[data-testid="oats-automation-open"]') ?? null;
+        return (rows.find((entry) => `${entry.dataset.kind ?? ""}:${entry.dataset.id ?? ""}` === besideKey) ?? rows[0])?.querySelector<HTMLElement>('[data-testid="oats-automation-open"]') ?? null;
       };
     },
     onRemoved: (row) => {
-      if (openId === row.id) navigate.toPluginPanel(PATH, { subPath: subPathOf(row.kind) });
+      if (open !== null && open.kind === row.kind && open.id === row.id) navigate.toPluginPanel(PATH, { subPath: subPathOf(tab) });
     },
   });
 
+  const heldKinds = KINDS.some((id) => reads[id].error !== null);
   return (
     <HereContext.Provider value={here}>
-    <Page testId="oats-automations-page">
       {acts.dialog}
       <View
         rowActs={acts}
-        held={reads[kind].error === null ? null : HELD}
+        held={heldKinds ? HELD : null}
         gateNotice={unreadable === null ? null : <Unreadable failure={{ code: unreadable.code, message: unreadable.message }} machine={machine} onRetry={refresh} />}
-        rowParts={(row) => acts.rowParts(row, now, list?.host.name ?? null)}
+        rowParts={(row) => acts.rowParts(row, now, host)}
         schedulerAction={acts.schedulerAction}
         result={acts.result}
-        kind={kind}
-        onKind={(next) => navigate.toPluginPanel(PATH, { subPath: subPathOf(next) })}
+        tab={tab}
+        onTab={(next) => navigate.toPluginPanel(PATH, { subPath: subPathOf(next) })}
         reads={reads}
+        statuses={statuses}
         gate={gate}
         now={now}
         onRefresh={refresh}
         refreshing={refreshing}
-        openId={openId}
+        open={open}
         onOpen={onOpen}
-        status={mine?.value ?? null}
+        status={mine?.value ?? beside}
         statusFailure={mine === null || mine.error === null ? null : { ...mine.error, readAt: mine.value === null ? null : mine.readAt, onRetry: () => setStatusRetry((n) => n + 1) }}
         onOpenFile={onOpenFile}
-        hostId={hostId}
         canOpenCapability={canOpenCapability}
         onOpenCapability={onOpenCapability}
+        agentLink={agentLink}
       />
-    </Page>
     </HereContext.Provider>
   );
 }

@@ -8,6 +8,7 @@ export const handlers = (core: HostCore): Handlers<typeof host> => ({
   scheduleList: (base, context) => core.run(base, context, (oats) => oats.scheduleList(context.signal)),
   triggerList: (base, context) => core.run(base, context, (oats) => oats.triggerList(context.signal)),
   triggerStatus: ({ id, source, ...base }, context) => core.run(base, context, (oats) => oats.triggerStatus(id, source, context.signal)),
+  triggerStatusAll: ({ sources, ...base }, context) => core.run(base, context, (oats) => oats.triggerStatusAll(sources, context.signal)),
 
   automationEnable: ({ kind, id, enabled, ...base }, context) => core.run(base, context, (oats) => oats.automationEnable(kind, id, enabled, context.signal)),
   scheduleRun: ({ id, ...base }, context) => core.run(base, context, (oats) => oats.scheduleRun(id, context.signal)),

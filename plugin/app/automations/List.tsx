@@ -1,300 +1,164 @@
-// One Automations list (Schedules or Triggers): the rows grouped by where they run, because the
-// first question is what the machine that holds the deployment does. Workspace (Git) and local items sit together, each
-// marked with where it comes from. A row opens its page. In the Desktop's words and order
-// (awebai/oats packages/desktop/renderer/views/automations.mjs at a4a43220).
+// The Automations list, in the manner of bb's own Automations page: ONE card of rows, schedules
+// and triggers together. A row is an icon of its kind (bb's red mark while it is failing), its
+// name, and under it one small line (who it starts · when · the next run or the last fire · what
+// is wrong, in red), then its switch, its "…" menu and a chevron. What is failing comes first.
+// Over the card, from twelve rows, a search; and one filter of four with counts. The card scrolls
+// alone: the search and the filter stay. Every part has a fixed place, so a name of sixty
+// characters runs into nothing: it is never cut, and wraps whole where it must (bb's own row cuts
+// a name with an ellipsis; names that differ only in their last word must be told apart: WORDS.md).
 import type { ReactNode } from "react";
-import type { AutomationList, AutomationRow } from "../../contract/automations";
-import { Chip, Empty, Menu, Notice, SearchField, Segmented, TARGET, Toned } from "../ui";
+import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
+import type { AutomationList, AutomationRow, TriggerStatuses } from "../../contract/automations";
+import { Empty, Menu, Notice, SearchField, Segmented, TARGET } from "../ui";
 import type { MenuItem } from "../ui";
 import { shown } from "../ui/text";
 import { useHere } from "./here";
-import { Token, Tokens } from "./parts";
-import {
-  actsAs,
-  capabilitySource,
-  cronInWords,
-  emptyHow,
-  filterRows,
-  groupRows,
-  hostNameHow,
-  hostUnnamed,
-  hostUnnamedDetail,
-  lastNext,
-  listBanners,
-  notRunHere,
-  onSummary,
-  ORIGIN_FILTERS,
-  placementText,
-  schedulerOff,
-  schedulerOn,
-  snapshotLine,
-  soulOriginText,
-  summaryLine,
-  templateLabel,
-  TITLES,
-} from "./words";
-import type { OriginFilter } from "./words";
+import { EMPTY, failing, failingFirst, filterList, hostNameHow, hostUnnamed, LIST_FILTERS, listBanners, NO_MATCH, oneList, rowLine, schedulerOffLine, schedulerOn, SEARCH_FROM, searchRows, statusFor } from "./words";
+import type { LinePart, ListFilter } from "./words";
 
-const HEADS = ["Automation", "Soul", "When", "Runs on", "Last · next"] as const;
-/** What a row's acts add to it, where the page has them: its switch before its name, its menu after its facts. */
+/** What a row's acts add to it, where the page has them: its switch and its menu, at the row's end. */
 export type RowActs = { switchOf: (row: AutomationRow) => ReactNode; menuOf: (row: AutomationRow) => MenuItem[] };
-// From bb's wide layout up a row is two lines: its name, with its tags and summary, across the whole
-// row (an id can be forty characters, and no column of five holds that whole), then its four facts
-// under their headings. Below it a row is a stack.
-const GRID = "@4xl:grid @4xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] @4xl:gap-x-3 @4xl:gap-y-1";
-const CELL = "flex min-w-0 flex-col gap-0.5";
-const SUB = "min-w-0 break-words text-xs text-muted-foreground";
 
-/** Where a row comes from: "local", or the member whose repository holds it. */
-export function OriginTag({ row }: { row: AutomationRow }) {
-  const here = useHere();
-  const local = row.origin.kind === "local";
-  return <Chip title={local ? `Local to ${here.on}` : shown([row.origin.repoKey, row.origin.path].filter(Boolean).join(" · "))}>{local ? "local" : shown(row.origin.member ?? "workspace")}</Chip>;
-}
+/**
+ * The icons, by bb's own names for them (`experimental_Icon` draws bb's generic glyph for a name
+ * its set does not hold, so each name here is one the live check saw resolve on bb-app 0.50.1).
+ */
+export const ICONS = { schedule: "Repeat", trigger: "GitPullRequest", wake: "AlarmClock", failing: "CircleX", open: "ChevronRight" } as const;
+/** A row's icon: bb's red mark while it is failing, else its kind's (a wake has its own). */
+export const iconOf = (row: AutomationRow, bad: boolean): string => (bad ? ICONS.failing : row.kind === "trigger" ? ICONS.trigger : row.run === "wake" ? ICONS.wake : ICONS.schedule);
+const KIND_NAME = { schedule: "Schedule", trigger: "Trigger" } as const;
 
-/** What is to be said of a row's state: off here, a failed source check, invalid, unreadable, its package template. */
-export function StateTags({ row }: { row: AutomationRow }) {
-  const bad = row.unreadable ?? row.invalid;
-  // A capability source's check that failed at a poll (`invalid` with a time) is a state of its
-  // own: the definition is as written, its source no longer answers to it.
-  const check = row.unreadable === null && row.kind === "trigger" && capabilitySource(row.on) !== null && row.invalid !== null && row.invalid.at !== null;
-  const template = templateLabel(row.template);
+const TONE = { bad: "text-destructive-text", warn: "text-warning-text" } as const;
+
+/**
+ * The small line: its parts with "·" between them where there is room for one line, and each
+ * part on a line of its own where there is not (bb's own row does the same at a phone's width).
+ * A part is never cut: one longer than its line wraps.
+ */
+export function SmallLine({ parts }: { parts: readonly LinePart[] }) {
   return (
-    <>
-      {!row.enabledHere && row.group !== "elsewhere" ? <Chip tone="muted">Off here</Chip> : null}
-      {check ? (
-        <Chip tone="warn" title={shown(row.invalid?.message ?? row.invalid?.code ?? "")}>
-          Source check failed
-        </Chip>
-      ) : bad !== null ? (
-        <Chip tone="warn" title={shown(bad.message ?? bad.code ?? "")}>
-          {row.unreadable !== null ? "Unreadable" : "Invalid"}
-        </Chip>
-      ) : null}
-      {template === null ? null : <Chip tone="muted" title={shown(`From the package template ${template}${row.template?.version ? ` ${row.template.version}` : ""}`)}>{shown(template)}</Chip>}
-    </>
-  );
-}
-
-/** The summary line: authored, derived from the prompt's first line (in italics, its title says so), or "No summary". */
-export function Summary({ row }: { row: AutomationRow }) {
-  const summary = summaryLine(row);
-  if (summary === null) return <span className={SUB}>No summary</span>;
-  return (
-    <span title={shown(summary.title)} data-derived={summary.derived} className={`${SUB} ${summary.derived ? "italic" : ""}`}>
-      {shown(summary.text)}
+    <span data-testid="oats-automation-line" className="flex min-w-0 flex-col text-xs text-muted-foreground @2xl:flex-row @2xl:flex-wrap @2xl:items-baseline">
+      {parts.map((part, at) => (
+        <span key={at} data-part="" data-tone={part.tone ?? undefined} title={part.title} className={`min-w-0 break-words ${part.tone === undefined ? "" : TONE[part.tone]}`}>
+          {at === 0 ? null : (
+            <span aria-hidden="true" className="mx-1.5 hidden text-muted-foreground @2xl:inline">
+              ·
+            </span>
+          )}
+          {shown(part.text)}
+        </span>
+      ))}
     </span>
   );
 }
 
-function Row({ row, list, now, running, onOpen, acts }: { row: AutomationRow; list: AutomationList; now: number; /** false while the host scheduler is off */ running: boolean; onOpen: (id: string) => void; acts?: RowActs }) {
-  const here = useHere();
+function Row({ row, parts, bad, onOpen, acts }: { row: AutomationRow; parts: readonly LinePart[]; bad: boolean; onOpen: (row: AutomationRow) => void; acts?: RowActs }) {
   const off = !row.enabledHere && row.group !== "elsewhere";
-  const main = `min-w-0 break-words ${off ? "text-muted-foreground" : "text-foreground"}`;
-  const place = placementText(row, list.host, running, here);
-  const cell = lastNext(row, now, running, here);
-  const on = row.kind === "trigger" ? onSummary(row.on) : null;
-  const words = cronInWords(row.cron);
-  const label = (head: string): ReactNode => <span className="sr-only @4xl:hidden">{`${head}: `}</span>;
   return (
-    <div role="row" data-testid="oats-automation-row" data-id={row.id} data-group={row.group} className={`${GRID} flex flex-col gap-2 border-t border-border px-3 py-2 text-sm first:border-t-0`}>
-      {/* Wide: the switch, the name with its tags, and the summary on one line, wrapping whole when they are long. */}
-      <div role="cell" className={`${CELL} @4xl:col-span-full @4xl:flex-row @4xl:flex-wrap @4xl:items-center @4xl:gap-x-3 @4xl:gap-y-1`}>
+    <div role="listitem" data-testid="oats-automation-row" data-id={row.id} data-kind={row.kind} data-failing={bad} className="flex items-start gap-3 border-t border-border px-3 py-2.5 first:border-t-0">
+      {/* The icon's fixed place, at the name's height. Its name is said: a kind is never told by a glyph alone. */}
+      <span role="img" aria-label={bad ? "Failing" : KIND_NAME[row.kind]} data-testid="oats-automation-icon" className={`mt-0.5 flex size-5 shrink-0 items-center justify-center ${bad ? TONE.bad : "text-muted-foreground"}`}>
+        <Icon name={iconOf(row, bad)} className="size-4" />
+      </span>
+      {/* The name and its line take the room that is left, and only that. */}
+      <button
+        type="button"
+        data-testid="oats-automation-open"
+        aria-label={`Open ${shown(row.name)}`}
+        className={`${TARGET} flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded text-left`}
+        onClick={() => onOpen(row)}
+      >
+        <span data-testid="oats-automation-name" title={shown(row.id)} className={`min-w-0 max-w-full break-words text-sm font-medium ${off ? "text-muted-foreground" : "text-foreground"}`}>
+          {shown(row.name)}
+        </span>
+        <SmallLine parts={parts} />
+      </button>
+      {/* The controls' fixed block: it never moves for a long name. */}
+      <div className="flex shrink-0 items-center gap-1">
         {acts === undefined ? null : <div data-testid="oats-automation-switch">{acts.switchOf(row)}</div>}
-        <button
-          type="button"
-          data-testid="oats-automation-open"
-          aria-label={`Open ${shown(row.id)}`}
-          className={`${TARGET} flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded text-left hover:underline`}
-          onClick={() => onOpen(row.id)}
-        >
-          <span title={shown(row.id)} className={`min-w-0 break-words font-mono text-[13px] font-semibold @4xl:text-sm ${off ? "text-muted-foreground" : "text-foreground"}`}>
-            <Tokens text={shown(row.name)} />
-          </span>
-          <OriginTag row={row} />
-          <StateTags row={row} />
-        </button>
-        <Summary row={row} />
-        {/* Not trusted here: the row says so in "Runs on"; what to add to oats-local.yaml is on the row's page, where there is room for it. */}
-      </div>
-      <div role="cell" className={CELL}>
-        {label("Soul")}
-        {row.soul === null ? (
-          <span className={SUB}>{row.run !== null && row.run !== "spawn" ? shown(row.run) : "Not reported"}</span>
-        ) : (
-          <>
-            <span title={shown(`${row.soul.name} · ${soulOriginText(row.soul.origin).long}`)} className={`${main} font-mono`}>
-              <Tokens text={shown(row.soul.name)} />
-            </span>
-            <span className={SUB}>
-              <Tokens text={shown(soulOriginText(row.soul.origin).short)} />
-            </span>
-          </>
+        {acts === undefined ? null : (
+          <div data-testid="oats-automation-menu">
+            <Menu label={`Actions for ${shown(row.name)}`} items={acts.menuOf(row)} />
+          </div>
         )}
-      </div>
-      <div role="cell" className={CELL}>
-        {label("When")}
-        {row.kind === "schedule" ? (
-          <>
-            <span title={shown([row.cron, row.tz].filter(Boolean).join(" · "))} className={main}>
-              {/* With no words for it the cron itself stands here: its fields whole, wrapped between them. */}
-              {words !== null ? shown(words) : <Tokens text={shown(row.cron ?? "Not reported")} />}
-            </span>
-            {/* The cron itself goes under its words; with no words, the line above is already the cron. */}
-            <span className={`${SUB} font-mono`}>
-              {/* The cron (one the page has words for: five short fields) is one piece and the time zone another: a line ends between them, never inside one. */}
-              {words !== null && row.cron !== null ? <Token>{`${shown(row.cron)}${row.tz !== null ? " ·" : ""}`}</Token> : null}
-              {words !== null && row.cron !== null && row.tz !== null ? " " : null}
-              {row.tz === null ? null : <Tokens text={shown(row.tz)} />}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className={main}>
-              <Tokens text={shown(on?.title ?? "Not reported")} />
-            </span>
-            {/* A capability source's trigger has no repo and no labels: then there is no second line. */}
-            {on === null || (on.repo === null && on.labels.length === 0) ? null : (
-              <span className={SUB}>
-                <Tokens text={shown([on.repo, ...on.labels.map((entry) => `#${entry}`)].filter(Boolean).join(" · "))} />
-              </span>
-            )}
-          </>
-        )}
-      </div>
-      <div role="cell" className={CELL}>
-        {label("Runs on")}
-        <span data-testid="oats-automation-place" data-tone={place.tone} title={place.detail === null ? undefined : shown(place.detail)} className={`${place.tone === "bad" ? "font-semibold" : ""} ${main}`}>
-          <Toned tone={place.tone}>
-            <Tokens text={shown(place.label)} />
-          </Toned>
-        </span>
-        <span className={SUB}>
-          <Tokens text={shown(actsAs(row))} />
+        {/* The chevron says the row opens; the row's own button is the control. */}
+        <span aria-hidden="true" className="flex size-5 items-center justify-center text-muted-foreground" onClick={() => onOpen(row)}>
+          <Icon name={ICONS.open} className="size-4" />
         </span>
       </div>
-      <div role="cell" className={CELL}>
-        {label("Last and next")}
-        {cell === null ? (
-          <span className={SUB}>{notRunHere(here)}</span>
-        ) : (
-          <>
-            {/* A next run is whole on its line. "Does not run on <machine>" holds the machine's name, which is free text of any length: it wraps, the name whole. */}
-            <span data-testid="oats-automation-next" title={cell.nextTitle} className={cell.next === notRunHere(here) ? main : `${main} whitespace-nowrap`}>
-              {cell.next === notRunHere(here) ? <Tokens text={cell.next} /> : cell.next}
-            </span>
-            <span data-testid="oats-automation-last" data-tone={cell.lastTone ?? undefined} title={cell.lastTitle ?? undefined} className={SUB}>
-              {/* When, then what the last run did: each word whole, the separator with the time; one that did not happen, or whose state nobody knows, is marked. What fired a trigger is a source's text of any length: it wraps, and is never cut. */}
-              <Token>{`${cell.last}${cell.lastOutcome !== null && cell.lastTone === null ? " ·" : ""}`}</Token>
-              {cell.lastOutcome === null ? null : " "}
-              {cell.lastOutcome === null ? null : cell.lastTone === null ? (
-                <Tokens text={shown(cell.lastOutcome)} />
-              ) : (
-                <span className="font-semibold text-foreground">
-                  <Toned tone={cell.lastTone}>
-                    <Tokens text={shown(cell.lastOutcome)} />
-                  </Toned>
-                </span>
-              )}
-            </span>
-          </>
-        )}
-      </div>
-      {acts === undefined ? null : (
-        <div data-testid="oats-automation-menu" className="flex items-start justify-end">
-          <Menu label={`Actions for ${shown(row.id)}`} items={acts.menuOf(row)} />
-        </div>
-      )}
     </div>
   );
 }
 
 export type ListProps = {
-  list: AutomationList;
+  /** The two lists, each where it was read. */
+  schedules: AutomationList | undefined;
+  triggers: AutomationList | undefined;
+  /** Every trigger's state; null where it could not be read: then nothing is said of a trigger's fires and failures. */
+  statuses: TriggerStatuses | null;
   now: number;
-  origin: OriginFilter;
-  onOrigin: (origin: OriginFilter) => void;
+  filter: ListFilter;
+  onFilter: (filter: ListFilter) => void;
   query: string;
   onQuery: (query: string) => void;
-  onOpen: (id: string) => void;
+  onOpen: (row: AutomationRow) => void;
   /** The act of the notice of a scheduler that is off (Enable scheduler), where the page offers it. */
   schedulerAction?: ReactNode;
   acts?: RowActs;
 };
 
-export function List({ list, now, origin, onOrigin, query, onQuery, onOpen, schedulerAction, acts }: ListProps) {
+export function List({ schedules, triggers, statuses, now, filter, onFilter, query, onQuery, onOpen, schedulerAction, acts }: ListProps) {
   const here = useHere();
-  const title = TITLES[list.kind];
-  const lower = title.toLowerCase();
-  const rows = list.rows;
-  const banners = listBanners(list);
-  // Nothing runs here while the host scheduler is off: no row is drawn as running, and none has a next run.
-  const running = list.scheduler === null || schedulerOn(list.scheduler);
-  const shown_ = filterRows(rows, { origin, query });
+  const all = oneList(schedules?.rows ?? [], triggers?.rows ?? []);
+  // The host's facts are the same in both lists: whichever was read says them.
+  const host = schedules ?? triggers;
+  const both = [schedules, triggers].filter((list): list is AutomationList => list !== undefined).map(listBanners);
+  const banners = { hostUnnamed: both.some((banner) => banner.hostUnnamed), schedulerOff: both.some((banner) => banner.schedulerOff) };
+  // Nothing runs while the host scheduler is off: no row has a next run.
+  const running = host === undefined || host.scheduler === null || schedulerOn(host.scheduler);
+  const drawn = failingFirst(searchRows(filterList(all, filter, statuses), query), statuses);
+  const count = (id: ListFilter): number => filterList(all, id, statuses).length;
   return (
-    <div data-testid="oats-automations-list" className="flex flex-col gap-4">
+    // The notices, the search and the filter keep their place; the card of rows takes what is left and scrolls alone.
+    <div data-testid="oats-automations-list" className="flex min-h-0 flex-1 flex-col gap-3">
       {banners.hostUnnamed ? (
         <div data-testid="oats-automations-host-unnamed">
-          <Notice tone="warning" title={hostUnnamed(here).title}>
-            <p>{hostUnnamedDetail(list.kind)}</p>
-            <p>{hostNameHow(here)}</p>
-          </Notice>
+          <Notice tone="warning" title={hostUnnamed(here).title} details={hostNameHow(here)} />
         </div>
       ) : null}
       {banners.schedulerOff ? (
         <div data-testid="oats-automations-scheduler-off">
-          <Notice tone="warning" title={schedulerOff(here).title} actions={schedulerAction}>
-            {schedulerOff(here).detail}
-          </Notice>
+          <Notice tone="warning" title={schedulerOffLine(here)} actions={schedulerAction} />
         </div>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Segmented
-          label={`Show ${lower} from`}
-          options={ORIGIN_FILTERS.map((option) => ({ ...option, count: option.id === "all" ? rows.length : rows.filter((row) => row.origin.kind === option.id).length }))}
-          value={origin}
-          onChange={onOrigin}
-        />
-        <div className="w-full @xl:w-60">
-          <SearchField label={`Search ${lower}`} value={query} onChange={onQuery} />
-        </div>
-      </div>
-      {rows.length === 0 ? (
+      {all.length === 0 ? (
         <div data-testid="oats-automations-empty">
-          <Empty title={`No ${lower} yet`}>{emptyHow(list.kind, here)}</Empty>
+          <Empty title={EMPTY} />
         </div>
-      ) : shown_.length === 0 ? (
-        <Empty>{`No ${lower} match.`}</Empty>
-      ) : null}
-      {groupRows(shown_, running, here).map((group) => {
-        const headId = `oats-automations-${list.kind}-${group.id}`;
-        return (
-          <section key={group.id} data-testid="oats-automations-group" data-group={group.id} className="flex flex-col gap-2">
-            <h3 id={headId} className={`flex items-baseline gap-2 text-sm font-semibold ${group.id === "attention" ? "text-warning-text" : "text-foreground"}`}>
-              <span>{group.title}</span>
-              <span className="text-xs font-normal text-muted-foreground">{group.rows.length}</span>
-            </h3>
-            <div role="table" aria-labelledby={headId} className="overflow-hidden rounded-md border border-border bg-card">
-              <div role="row" className={`${GRID} hidden border-b border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground`}>
-                {HEADS.map((head) => (
-                  // The name's line needs no heading over it: its heading is there for a screen reader, and takes no column.
-                  <span key={head} role="columnheader" className={head === "Automation" ? "sr-only" : undefined}>
-                    {head}
-                  </span>
-                ))}
-                {/* The rows' last column holds their ⋯ menu: the headings leave it the same room, so each sits over its column. */}
-                {acts === undefined ? null : <span aria-hidden="true" className="w-8" />}
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            {all.length < SEARCH_FROM ? null : (
+              <div className="min-w-40 flex-1">
+                <SearchField label="Search automations" value={query} onChange={onQuery} />
               </div>
-              {group.rows.map((row) => (
-                <Row key={row.id} row={row} list={list} now={now} running={running} onOpen={onOpen} acts={acts} />
-              ))}
+            )}
+            <Segmented label="Show" options={LIST_FILTERS.map((option) => ({ ...option, count: count(option.id) }))} value={filter} onChange={onFilter} />
+          </div>
+          {drawn.length === 0 ? (
+            <div data-testid="oats-automations-no-match">
+              <Empty title={NO_MATCH} />
             </div>
-          </section>
-        );
-      })}
-      <p data-testid="oats-automations-foot" className="text-xs text-muted-foreground">
-        {snapshotLine(list, now)}
-      </p>
+          ) : (
+            <div role="list" aria-label="Automations" data-testid="oats-automations-rows" className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border bg-card">
+              {drawn.map((row) => {
+                const status = statusFor(row, statuses);
+                return <Row key={`${row.kind}:${row.id}`} row={row} parts={rowLine(row, status, now, running)} bad={failing(row, status)} onOpen={onOpen} acts={acts} />;
+              })}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

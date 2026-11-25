@@ -293,17 +293,17 @@ export type Acts = {
   result: ReactNode;
   /** A row's switch: on or off on the machine. Nothing for a row another computer runs. */
   switchOf(row: AutomationRow): ReactNode;
-  /** A row's menu, after Open. */
+  /** A row's "…" menu: the acts that apply to it. */
   menuOf(row: AutomationRow): MenuItem[];
   /** What a row's page adds: its acts, the test's confirmation and result. */
-  rowParts(row: AutomationRow, now: number, host: string | null): Pick<DetailProps, "actions" | "runStateAction" | "answers" | "identityAction" | "summaryAction">;
+  rowParts(row: AutomationRow, now: number, host: string | null): Pick<DetailProps, "identityAction" | "menu" | "answers" | "file">;
   /** The act of the notice of a scheduler that is off. */
   schedulerAction: ReactNode;
   /** The dialog that is open, if one is. */
   dialog: ReactNode;
 };
 
-export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onOpenFile, hostId, onRemoved, neighbourOf, here = HERE }: {
+export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFile, hostId, onRemoved, neighbourOf, here = HERE }: {
   rpc: Rpc;
   /** The machine that holds the deployment, as the page names it. */
   here?: Here;
@@ -311,8 +311,6 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
   refresh: () => void;
   /** This OATS writes summaries (feature automation-descriptions). */
   summaries: boolean;
-  /** The list that is shown. */
-  kind: AutomationRow["kind"];
   /** The row whose page is open, if one is. */
   open: Pick<AutomationRow, "kind" | "id"> | null;
   /** Why a kind's acts are held: its list could not be read again, so what a row is now is not known. Null where they are not. */
@@ -546,14 +544,14 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
 
   const menuOf = (row: AutomationRow): MenuItem[] => {
     const disabled = off(row);
-    const items: MenuItem[] = [{ id: "open", label: "Open", onSelect: () => onOpen(row) }];
-    items.push({ id: "test", label: "Test", disabled, onSelect: () => test(row) });
+    // The row and its chevron open it, and its switch turns it on and off: the menu holds the other acts.
+    const items: MenuItem[] = [];
     if (canRun(row)) items.push({ id: "run", label: "Run now", disabled, onSelect: () => void runNow(row) });
-    if (row.group !== "elsewhere") items.push({ id: "toggle", label: row.enabledHere ? "Turn off here" : "Turn on here", disabled, onSelect: () => void toggle(row) });
+    items.push({ id: "test", label: "Test", disabled, onSelect: () => test(row) });
+    if (canReconcile(row)) items.push({ id: "reconcile", label: "Check run state", disabled, onSelect: () => void reconcile(row) });
+    if (canDescribe(row)) items.push({ id: "describe", label: "Edit summary", disabled, onSelect: () => describe(row) });
     const file = fileTarget(row, hostId, here).target;
     if (onOpenFile !== undefined && file !== null) items.push({ id: "file", label: "Open file", onSelect: () => onOpenFile(file) });
-    if (canDescribe(row)) items.push({ id: "describe", label: "Edit summary", disabled, onSelect: () => describe(row) });
-    if (canReconcile(row)) items.push({ id: "reconcile", label: "Check run state", disabled, onSelect: () => void reconcile(row) });
     if (canDelete(row)) items.push({ id: "remove", label: "Delete…", destructive: true, disabled, onSelect: () => remove(row) });
     return items;
   };
@@ -579,40 +577,10 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
       );
     // The confirmation stands only while the row is what it showed: a re-read with another definition withdraws it.
     const confirm = source !== null && confirming !== null && confirming.key === key && confirming.signature === signatureOf(row) ? confirming : null;
-    // Under "No summary" while there is none, in the page's bar once there is one.
-    const editSummary = canDescribe(row) ? (
-      <Button data-testid="oats-automation-edit-summary" disabled={disabled} onClick={() => describe(row)}>
-        Edit summary
-      </Button>
-    ) : null;
     return {
       identityAction: switchOf(row),
-      summaryAction: row.description === null ? editSummary : null,
-      actions: (
-        <>
-          {row.description !== null ? editSummary : null}
-          {canDelete(row) ? (
-            <Button data-testid="oats-automation-delete" disabled={disabled} onClick={() => remove(row)}>
-              Delete…
-            </Button>
-          ) : null}
-          {canRun(row) ? (
-            <Button data-testid="oats-automation-run-now" disabled={disabled} onClick={() => void runNow(row)}>
-              Run now
-            </Button>
-          ) : null}
-          <Button data-testid="oats-automation-test-button" variant="primary" disabled={disabled} onClick={() => test(row)}>
-            Test
-          </Button>
-        </>
-      ),
-      runStateAction: canReconcile(row) ? (
-        <div>
-          <Button data-testid="oats-automation-reconcile" disabled={disabled} onClick={() => void reconcile(row)}>
-            Check run state
-          </Button>
-        </div>
-      ) : null,
+      menu: menuOf(row),
+      file: fileTarget(row, hostId, here).target,
       // What an act put on the page: a confirmation, that nothing ran, a test on its way, its answer.
       answers: (
         <>
@@ -628,7 +596,7 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
             <Arrive token={confirm.arrival ?? 0} seen={seen} testId="oats-automation-test-confirm-arrived">
               <SourceConfirm row={row} source={source} host={host} running={testing} disabled={disabled} onRun={() => test(row, true)}
                 onCancel={() => {
-                  back.current = () => document.querySelector<HTMLElement>('[data-testid="oats-automation-test-button"]');
+                  back.current = () => document.querySelector<HTMLElement>('[data-testid="oats-automation-detail-menu"] button');
                   setConfirming(null);
                 }}
               />
@@ -758,7 +726,7 @@ export function useActs({ rpc, refresh, summaries, kind, open, held, onOpen, onO
     menuOf,
     rowParts,
     schedulerAction: (
-      <Button data-testid="oats-automations-enable-scheduler" disabled={busy || held[kind] !== null} onClick={() => setDialog({ kind: "scheduler", phase: { kind: "ready" } })}>
+      <Button data-testid="oats-automations-enable-scheduler" disabled={busy || held.schedule !== null} onClick={() => setDialog({ kind: "scheduler", phase: { kind: "ready" } })}>
         Enable scheduler
       </Button>
     ),

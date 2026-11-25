@@ -17,7 +17,9 @@ import type {
   AutomationRow,
   AutomationRun,
   AutomationSoul,
+  TriggerFailure,
   TriggerStatus,
+  TriggerStatuses,
 } from "../contract/automations.js";
 import { displayLine } from "../model/text.js";
 import { eventLabel, eventWords, PULL_REQUEST } from "../model/automations.js";
@@ -43,6 +45,7 @@ export function checkAutomationId(kind: AutomationKind, id: string): Result<stri
 // ---- argv ----
 export const scheduleListArgv = (): string[] => ["schedule", "list", "--json"];
 export const triggerListArgv = (): string[] => ["trigger", "list", "--json"];
+export const triggerStatusAllArgv = (): string[] => ["trigger", "status", "--json"];
 export function triggerStatusArgv(id: string): Result<string[]> {
   const checked = checkAutomationId("trigger", id);
   return checked.ok ? ok(["trigger", "status", checked.value, "--json"]) : checked;
@@ -103,6 +106,8 @@ const errorText = (value: unknown): string | null => text(value) ?? (record(valu
 
 export function runOf(raw: unknown): AutomationRun | null {
   if (!record(raw)) return null;
+  // A schedule's run names its agent under `session` (history API 3); a run from before it, and a trigger's fire, at the top.
+  const session = record(raw.session) ? raw.session : {};
   return {
     at: text(raw.at),
     startedAt: text(raw.startedAt),
@@ -115,7 +120,10 @@ export function runOf(raw: unknown): AutomationRun | null {
     number: integer(raw.number),
     subject: text(raw.subject),
     key: text(raw.key),
-    instance: text(raw.instance),
+    instance: text(session.instance) ?? text(raw.instance),
+    home: text(session.home) ?? text(raw.home),
+    runId: text(raw.runId),
+    settled: typeof raw.settled === "boolean" ? raw.settled : null,
   };
 }
 
@@ -137,6 +145,12 @@ function problemOf(raw: unknown): AutomationProblem | null {
   if (!record(raw)) return null;
   const at = text(raw.at);
   return { code: text(raw.code), message: text(raw.message), field: text(raw.field), at: at !== null && Number.isFinite(Date.parse(at)) ? at : null };
+}
+
+/** A schedule's `history`: what is stored and whether older runs were dropped. A history the kernel could not read (`corrupt`) says neither. */
+function historyOf(raw: unknown): AutomationRow["history"] {
+  if (!record(raw) || raw.status !== "ok") return null;
+  return { stored: counted(raw.stored) ? raw.stored : null, truncated: raw.truncated === true };
 }
 
 /** One kernel row as the page's row, or null for something that is no row (it has no id). */
@@ -211,6 +225,7 @@ export function automationRowOf(raw: unknown, kind: AutomationKind): AutomationR
     recentRuns: list(raw.recentRuns)
       .map(runOf)
       .filter((run): run is AutomationRun => run !== null),
+    history: historyOf(raw.history),
     invalid: problemOf(raw.invalid),
     unreadable: problemOf(raw.unreadable),
   };
@@ -311,19 +326,25 @@ const observed = (entry: { observedAt: string | null }): number => {
 
 const statusDocument = z.looseObject({ triggers: z.array(z.unknown()) });
 
-/**
- * One trigger's row of `oats trigger status --json` as the detail page's history: what fired,
- * what is live, what waits (newest observed first), the last poll and the last error. Every
- * kernel string is one display line and every malformed entry is skipped. `source` (the list
- * row's `on.source`) decides the `#` of a label. A capability source's row (it carries `source`)
- * adds the source as the kernel names it, the events OATS refused and the items the source
- * skipped at its last good poll, and a failed check.
- */
-export function parseTriggerStatus(document: unknown, id: string, source: string | null): Result<TriggerStatus> {
-  const parsed = shaped(statusDocument, document, "oats trigger status");
-  if (!parsed.ok) return parsed;
-  const row = parsed.value.triggers.find((entry): entry is Json => record(entry) && (entry.id === id || entry.qualifiedId === id));
-  if (row === undefined) return err(codes.badAnswer, `\`oats trigger status\` answered no row for ${id}`);
+/** One failed spawn, as display lines. A row with neither a code nor a message says nothing and is skipped. */
+function failureOf(raw: Json, source: string | null): TriggerFailure | null {
+  const resolved = record(raw.resolved) ? { at: text(raw.resolved.at), instance: displayLine(raw.resolved.instance) } : null;
+  const failure = {
+    attempt: integer(raw.attempt),
+    at: text(raw.at),
+    key: text(raw.key),
+    event: eventWords(raw.event),
+    label: eventLabel(raw, source),
+    code: displayLine(raw.code),
+    message: displayLine(raw.message),
+    instance: displayLine(raw.instance),
+    resolved,
+  };
+  return failure.code === null && failure.message === null ? null : failure;
+}
+
+/** One row of `oats trigger status --json` as a trigger's recorded state. */
+function statusOf(row: Json, source: string | null): TriggerStatus {
   const named = record(row.source) ? { capability: displayLine(row.source.capability), name: displayLine(row.source.name) } : null;
   const lastError = record(row.lastError) ? row.lastError : null;
   const error =
@@ -331,10 +352,10 @@ export function parseTriggerStatus(document: unknown, id: string, source: string
       ? null
       : { at: text(lastError.at), code: displayLine(lastError.code), message: displayLine(lastError.message), key: text(lastError.key), says: named === null ? null : sourceSays(lastError.source) };
   const concurrency = record(row.concurrency) ? row.concurrency : null;
-  return ok({
+  return {
     fired: list(row.fired)
       .filter(record)
-      .map((entry) => ({ key: text(entry.key), at: text(entry.at), outcome: text(entry.outcome), event: eventWords(entry.event), label: eventLabel(entry, source), instance: displayLine(entry.instance) })),
+      .map((entry) => ({ key: text(entry.key), at: text(entry.at), outcome: text(entry.outcome), event: eventWords(entry.event), label: eventLabel(entry, source), instance: displayLine(entry.instance), home: text(entry.home) })),
     firedTotal: integer(row.firedTotal),
     live: list(row.live)
       .filter(record)
@@ -349,11 +370,53 @@ export function parseTriggerStatus(document: unknown, id: string, source: string
       .sort((a, b) => observed(b) - observed(a) || 0),
     lastPoll: lastPollOf(row.lastPoll),
     lastError: error !== null && (error.code !== null || error.message !== null) ? error : null,
+    // The kernel answers `failures` only where it keeps the history (feature `trigger-failure-history`): without the key, nothing is said of one.
+    failures: Array.isArray(row.failures)
+      ? row.failures
+          .filter(record)
+          .map((entry) => failureOf(entry, source))
+          .filter((entry): entry is TriggerFailure => entry !== null)
+      : null,
+    failuresTotal: Array.isArray(row.failures) ? integer(row.failuresTotal) : null,
     source: named,
     refused: named === null ? [] : refusedEvents(row.invalidEvents),
     skipped: named === null ? [] : skippedItems(row.skipped),
     invalid: named === null ? null : sourceCheck(row.invalid),
-  });
+  };
+}
+
+/**
+ * One trigger's row of `oats trigger status --json` as the detail page's history: what fired,
+ * what is live, what waits (newest observed first), the last poll, the last error and, where the
+ * kernel keeps them, the failed spawns. Every kernel string is one display line and every
+ * malformed entry is skipped. `source` (the list row's `on.source`) decides the `#` of a label. A
+ * capability source's row (it carries `source`) adds the source as the kernel names it, the
+ * events OATS refused and the items the source skipped at its last good poll, and a failed check.
+ */
+export function parseTriggerStatus(document: unknown, id: string, source: string | null): Result<TriggerStatus> {
+  const parsed = shaped(statusDocument, document, "oats trigger status");
+  if (!parsed.ok) return parsed;
+  const row = parsed.value.triggers.find((entry): entry is Json => record(entry) && (entry.id === id || entry.qualifiedId === id));
+  if (row === undefined) return err(codes.badAnswer, `\`oats trigger status\` answered no row for ${id}`);
+  return ok(statusOf(row, source));
+}
+
+/**
+ * Every row of `oats trigger status --json`, by its qualified id. `sources` is each listed
+ * trigger's `on.source`; a row the list did not name is read with no source (its events are
+ * named without a `#`). A row with no id is no row.
+ */
+export function parseTriggerStatuses(document: unknown, sources: Readonly<Record<string, string | null>>): Result<TriggerStatuses> {
+  const parsed = shaped(statusDocument, document, "oats trigger status");
+  if (!parsed.ok) return parsed;
+  const statuses: TriggerStatuses = [];
+  for (const row of parsed.value.triggers) {
+    if (!record(row)) continue;
+    const id = text(row.qualifiedId) ?? text(row.id);
+    if (id === null) continue;
+    statuses.push({ id, status: statusOf(row, Object.hasOwn(sources, id) ? (sources[id] ?? null) : null) });
+  }
+  return ok(statuses);
 }
 
 /** The reads' commands. */
@@ -362,6 +425,8 @@ export const verbs = (oats: Runner) => ({
   triggerList: (signal?: AbortSignal): Promise<Result<AutomationList>> => oats.run(triggerListArgv(), parseTriggerList, oats.timeouts.read, signal),
   triggerStatus: (id: string, source: string | null, signal?: AbortSignal): Promise<Result<TriggerStatus>> =>
     oats.run(triggerStatusArgv(id), (document) => parseTriggerStatus(document, id, source), oats.timeouts.read, signal),
+  triggerStatusAll: (sources: Readonly<Record<string, string | null>>, signal?: AbortSignal): Promise<Result<TriggerStatuses>> =>
+    oats.run(triggerStatusAllArgv(), (document) => parseTriggerStatuses(document, sources), oats.timeouts.read, signal),
 });
 
 export { eventLabel, eventWords, PULL_REQUEST };

@@ -15,6 +15,52 @@ afterEach(async () => {
 type Lists = { at: string; hostId: string | null; oats: { version: string; features: string[]; automationsApi: number | null } | null; schedule: { ok: boolean; list?: unknown; code?: string; message?: string }; trigger: { ok: boolean; list?: unknown; code?: string; message?: string } };
 const argvs = async (running: Backend, verb: string) => (await running.fake.calls()).filter((call) => call.verb === verb).map((call) => call.argv);
 
+/** The reads of ONE trigger's state: `trigger status <id> --json`. The lists' own read of every trigger's (no id) is not one of them. */
+const oneStatus = async (running: Backend) => (await argvs(running, "trigger status")).filter((argv) => argv.length === 4);
+const allStatus = async (running: Backend) => (await argvs(running, "trigger status")).filter((argv) => argv.length === 3);
+type Statuses = { statuses: { ok: boolean; statuses?: { id: string; status: unknown }[]; code?: string; message?: string } };
+
+describe("every trigger's state, beside the lists", () => {
+  it("is ONE `oats trigger status --json` per read of the lists, and one state per listed trigger", async () => {
+    backend = await startBackend();
+    const lists = await backend.rpc<Lists & Statuses>("automations");
+    expect(lists.statuses.ok).toBe(true);
+    const rows = automationList.parse(lists.trigger.list).rows;
+    expect(lists.statuses.statuses!.map((entry) => entry.id).sort()).toEqual(rows.map((row) => row.id).sort());
+    for (const entry of lists.statuses.statuses!) triggerStatus.parse(entry.status);
+    // A pull-request trigger's events are named with "#", a capability source's as they are: each by its own list row's source.
+    const labels = (id: string) => triggerStatus.parse(lists.statuses.statuses!.find((entry) => entry.id === id)!.status).fired.map((fired) => fired.label);
+    expect(labels("oats-real/proposal-review")).toEqual(["#41", "#42"]);
+    expect(labels("oats-real/harvest-review")).toEqual(["harvest/a"]);
+    await backend.rpc("automations");
+    expect(await allStatus(backend)).toEqual([["trigger", "status", "--json"]]);
+  });
+
+  it("a kernel that does not list `trigger-failure-history` is never said to keep failures, whatever its answer holds", async () => {
+    backend = await startBackend();
+    const lists = await backend.rpc<Lists & Statuses>("automations");
+    expect(lists.oats!.features).not.toContain("trigger-failure-history");
+    for (const entry of lists.statuses.statuses!) expect(triggerStatus.parse(entry.status).failures).toBeNull();
+  });
+
+  it("the kernel's refusal of it is answered beside the lists, which stand", async () => {
+    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_TRIGGER_STATE", message: "the trigger state cannot be read" } });
+    backend = await startBackend({ verbs: { "trigger status": { stdout: refusal } } });
+    const lists = await backend.rpc<Lists & Statuses>("automations");
+    expect(lists.statuses).toEqual({ ok: false, code: "E_TRIGGER_STATE", message: "the trigger state cannot be read" });
+    expect(lists.trigger.ok).toBe(true);
+    expect(lists.schedule.ok).toBe(true);
+  });
+
+  it("is not asked for where the trigger list could not be read", async () => {
+    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_TRIGGER_INVALID", message: "oats-triggers.json cannot be read" } });
+    backend = await startBackend({ verbs: { "trigger list": { stdout: refusal } } });
+    const lists = await backend.rpc<Lists & Statuses>("automations");
+    expect(lists.statuses).toEqual({ ok: false, code: "E_TRIGGER_INVALID", message: "oats-triggers.json cannot be read" });
+    expect(await allStatus(backend)).toEqual([]);
+  });
+});
+
 describe("automations", () => {
   it("reads both lists with the kernel's own commands, in the deployment, and names the machine", async () => {
     backend = await startBackend();
@@ -133,13 +179,16 @@ describe("automations", () => {
 describe("the host verbs", () => {
   it("bb may retry the reads, and never an act", () => {
     const retryable = Object.entries(host).filter(([, method]) => "experimental_retryable" in method && method.experimental_retryable).map(([name]) => name);
-    expect(retryable.sort()).toEqual(["scheduleList", "triggerList", "triggerStatus"]);
+    expect(retryable.sort()).toEqual(["scheduleList", "triggerList", "triggerStatus", "triggerStatusAll"]);
     expect(Object.keys(host).filter((name) => !retryable.includes(name)).sort()).toEqual(["automationDescribe", "automationEnable", "automationTest", "scheduleReconcile", "scheduleRemove", "scheduleRun", "schedulerEnable"]);
   });
 });
 
 describe("the acts", () => {
-  const acts = async (running: Backend) => (await running.fake.calls()).filter((call) => !["status", "version", "schedule list", "trigger list"].includes(call.verb)).map((call) => call.argv);
+  const acts = async (running: Backend) => (await running.fake.calls())
+      // The reads: the roster, the version, the two lists and the lists' own read of every trigger's state (`trigger status` with no id).
+      .filter((call) => !["status", "version", "schedule list", "trigger list"].includes(call.verb) && !(call.verb === "trigger status" && call.argv.length === 3))
+      .map((call) => call.argv);
 
   it("each is the kernel's own command for the row the list names, by its qualified id", async () => {
     backend = await startBackend();
@@ -267,7 +316,7 @@ describe("triggerStatus", () => {
     const source = triggerStatus.parse(await backend.rpc("triggerStatus", { id: "oats-real/harvest-review" }));
     expect(source.fired.map((fired) => fired.label)).toEqual(["harvest/a"]);
     expect(source.source).toEqual({ capability: "acme.graph", name: "harvest-branches" });
-    expect(await argvs(backend, "trigger status")).toEqual([
+    expect(await oneStatus(backend)).toEqual([
       ["trigger", "status", "oats-real/proposal-review", "--json"],
       ["trigger", "status", "oats-real/harvest-review", "--json"],
     ]);
@@ -276,7 +325,7 @@ describe("triggerStatus", () => {
   it("a bare local id is the local trigger's", async () => {
     backend = await startBackend();
     await backend.rpc("triggerStatus", { id: "pr-triage" });
-    expect(await argvs(backend, "trigger status")).toEqual([["trigger", "status", "local/pr-triage", "--json"]]);
+    expect(await oneStatus(backend)).toEqual([["trigger", "status", "local/pr-triage", "--json"]]);
   });
 
   it("an id that is no trigger of the current list starts no process", async () => {
@@ -286,7 +335,7 @@ describe("triggerStatus", () => {
     }
     await expect(backend.rpc("triggerStatus", { id: "local/pr-triage", source: "x" })).rejects.toThrow();
     await expect(backend.rpc("triggerStatus", { id: "local/pr-triage", home: "/tmp" })).rejects.toThrow();
-    expect(await argvs(backend, "trigger status")).toEqual([]);
+    expect(await oneStatus(backend)).toEqual([]);
   });
 
   it("the kernel's refusal is shown with its code and message", async () => {

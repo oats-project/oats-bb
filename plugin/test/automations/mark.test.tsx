@@ -8,7 +8,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
-import { AT, OATS } from "./handlers";
+import { AT, OATS, STATUSES } from "./handlers";
 import { schedules, triggers } from "./fixtures";
 
 afterEach(resetApp);
@@ -17,7 +17,10 @@ async function sidebar(over: Partial<Handlers> = {}) {
   const app = await loadApp();
   return renderSlot<PluginThreadListProps, Contract>(app.threadLists[0]!, { activeThreadId: null, onNavigate: () => undefined } as PluginThreadListProps, { rpc: handlers(over), sidebarThreads: sidebarThreads() });
 }
-const lists = (schedule = schedules()) => () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedule }, trigger: { ok: true as const, list: triggers() } });
+const lists = (schedule = schedules(), trigger = triggers(), statuses = STATUSES()) => () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses, schedule: { ok: true as const, list: schedule }, trigger: { ok: true as const, list: trigger } });
+/** The recording without what is failing in it: a refused launch, an invalid definition, a wrong account, a schedule not trusted, and a trigger whose source check failed. */
+const FAILING = ["local/hourly-check", "local/legacy-herdr", "oats-real/reconcile", "oats-real/release-check", "oats-real/harvest-closed"];
+const calm = <List extends { rows: { id: string }[] }>(list: List): List => ({ ...list, rows: list.rows.filter((row) => !FAILING.includes(row.id)) });
 const mark = (row: HTMLElement) => row.querySelector('[data-testid="oats-mark"]');
 
 test("Automations is a row of the block, under the four pages, and opens its page", async () => {
@@ -28,25 +31,38 @@ test("Automations is a row of the block, under the four pages, and opens its pag
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations" }]);
 });
 
-test("while a schedule's last run is launch failed or invalid, the row carries a dot announced as a failed run", async () => {
-  // The recording holds two: a launch the provider refused and an invalid definition.
+test("while an automation is failing, the row carries a dot announced as a failure", async () => {
+  // The recording holds five that are.
   const slot = await sidebar({ automations: lists() });
   const row = await slot.findByTestId("oats-page-link-automations");
   await waitFor(() => expect(mark(row)).not.toBeNull());
-  expect([mark(row)!.getAttribute("role"), mark(row)!.getAttribute("aria-label")]).toEqual(["img", "Automations, a run failed"]);
+  expect([mark(row)!.getAttribute("role"), mark(row)!.getAttribute("aria-label")]).toEqual(["img", "Automations, a failure"]);
 });
 
-test("with no failed last run there is no mark: an unknown state and a trigger's fire do not mark", async () => {
-  const calm = schedules();
-  const slot = await sidebar({ automations: lists({ ...calm, rows: calm.rows.filter((row) => row.name !== "hourly-check" && row.name !== "legacy-herdr") }) });
+test("with nothing failing there is no mark: an unknown state and a trigger's fire do not mark", async () => {
+  const slot = await sidebar({ automations: lists(calm(schedules()), calm(triggers())) });
   const row = await slot.findByTestId("oats-page-link-automations");
   await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("automations"));
   expect(mark(row)).toBeNull();
 });
 
+test("a trigger's failed poll alone marks, as its row's red line does", async () => {
+  const slot = await sidebar({ automations: lists(calm(schedules()), calm(triggers("trigger-list-poll-failed.json")), STATUSES("trigger-status-poll-failed.json")) });
+  const row = await slot.findByTestId("oats-page-link-automations");
+  await waitFor(() => expect(mark(row)).not.toBeNull());
+  expect(mark(row)!.getAttribute("aria-label")).toBe("Automations, a failure");
+});
+
+test("each kind of failing row marks by itself: one schedule that is not trusted, with every trigger calm", async () => {
+  const one = schedules();
+  const slot = await sidebar({ automations: lists({ ...one, rows: one.rows.filter((row) => !FAILING.includes(row.id) || row.id === "oats-real/release-check") }, calm(triggers())) });
+  const row = await slot.findByTestId("oats-page-link-automations");
+  await waitFor(() => expect(mark(row)).not.toBeNull());
+});
+
 test("lists that cannot be read leave the row without a mark, and the sidebar as it is", async () => {
   const refused = { ok: false as const, code: "E_SCHEDULE_INVALID", message: "oats-schedules.json cannot be read" };
-  const slot = await sidebar({ automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: refused, trigger: refused }) });
+  const slot = await sidebar({ automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: refused, schedule: refused, trigger: refused }) });
   const row = await slot.findByTestId("oats-page-link-automations");
   await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("automations"));
   expect(mark(row)).toBeNull();

@@ -1,0 +1,9 @@
+{
+  "name": "oats-bb-lock-pi",
+  "private": true,
+  "description": "The exact tree of pi that the plugin's pi run installs (plugin/container/locks/README.md).",
+  "tool": "@earendil-works/pi-coding-agent",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.5.2"
+  }
+}

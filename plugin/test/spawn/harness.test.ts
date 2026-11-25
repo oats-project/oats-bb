@@ -54,13 +54,25 @@ describe("the harnesses the bb session provider declares", () => {
   });
 
   it("a deployment with NO bb session provider (the kernel knows no capability oats.bb) is an answer, not a failed read: no harness, and the kernel's own code and sentence of it", async () => {
-    const absent = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace' } });
-    backend = await startBackend({ verbs: { "capabilities show": { stdout: absent } } });
-    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", absent: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace' } });
+    // The kernel's own answer there, as recorded (exit 1): test/fixtures/lifecycle/README.md.
+    const recorded = readFileSync(join(process.cwd(), "test/fixtures/lifecycle/capabilities-show-no-provider.json"), "utf8");
+    const { message } = (JSON.parse(recorded) as { error: { message: string } }).error;
+    backend = await startBackend({ verbs: { "capabilities show": { stdout: recorded, exit: 1 } } });
+    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", absent: { code: "E_CAPABILITY_UNKNOWN", message } });
+    expect(message).toMatch(/^no capability "oats\.bb" in this workspace's catalog/);
     // With the provider there, nothing says it is absent.
     await backend.dispose();
     backend = await startBackend();
     expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: ["claude", "pi"], hostId: "host_falcon" });
+  });
+
+  it("the same code from a workspace that DOES hold the provider is a failed read, never \"absent\": a package not in the lock, a capability missing from a member", async () => {
+    for (const message of ["package oats.bb is not in the lock — run `oats sync`", 'no capability "oats.bb" in member oats-real']) {
+      backend = await startBackend({ verbs: { "capabilities show": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message } }), exit: 1 } } });
+      await expect(backend.rpc("spawnHarnesses"), message).rejects.toThrow(`E_CAPABILITY_UNKNOWN: ${message}`);
+      await backend.dispose();
+      backend = undefined;
+    }
   });
 });
 

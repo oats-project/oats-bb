@@ -232,6 +232,16 @@ export function checkModel(model: string): Result<string> {
   return model !== "" && model.length <= 256 && !model.startsWith("-") && !/[\0\n\r]/.test(model) ? ok(model) : err(codes.invalidInput, "a model is one line of up to 256 characters that does not start with a dash");
 }
 
+/**
+ * The kernel's refusal that the workspace's catalog holds no capability `oats.bb` at all (the kernel's
+ * lib/capability-show.mjs at v0.70.5: "no capability "oats.bb" … in this workspace's catalog"; recorded:
+ * test/fixtures/lifecycle/capabilities-show-no-provider.json). The same code has two other meanings, which are
+ * FAILURES of a workspace that does hold it, and stay failures: a package that is not in the lock ("run `oats
+ * sync`"), and a capability missing from a member. Told apart by the kernel's own sentence: one the kernel words
+ * otherwise is a failed read, with its sentence and its Retry, as before.
+ */
+const providerAbsent = (error: { code: string; message: string }): boolean => error.code === "E_CAPABILITY_UNKNOWN" && /^no capability "oats\.bb".* in this workspace's catalog/.test(error.message);
+
 /** Spawn's commands. */
 export const verbs = (oats: Runner) => ({
   /** The harnesses the bb session provider declares, for the New agent form and the Start and Restart dialogs. */
@@ -243,7 +253,7 @@ export const verbs = (oats: Runner) => ({
    */
   spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null; absent?: { code: string; message: string } }>> => {
     const read = await oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal);
-    return !read.ok && read.error.code === "E_CAPABILITY_UNKNOWN" ? ok({ harnesses: [], version: null, absent: { code: read.error.code, message: read.error.message } }) : read;
+    return !read.ok && providerAbsent(read.error) ? ok({ harnesses: [], version: null, absent: { code: read.error.code, message: read.error.message } }) : read;
   },
 
   /**

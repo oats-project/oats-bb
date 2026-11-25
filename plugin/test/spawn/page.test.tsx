@@ -596,6 +596,30 @@ test("a name the kernel refuses at the preview is said under the name, in a pers
   expect(slot.queryByTestId("oats-spawn-preview")).toBeNull(); // no refusal drawn in a column: the field says it
 });
 
+test("a deployment with NO bb session provider: no harness to choose, no red sentence and no Retry (nothing failed); the kernel's refusal of the bb backend is the form's one notice, and Spawn is off", async () => {
+  // The harness read's answer there (the server's: no harness declared), and the kernel's refusal of a preview that asks
+  // for the bb backend, as lib/session-providers.mjs words it at v0.70.5 (E_BACKEND_UNKNOWN; not recorded: no run has such a deployment).
+  const REFUSAL = 'unknown session backend "bb": no capability of this instance declares it as a session provider; the backends available here: tmux; nothing was created';
+  const slot = await form("oats-developer", {
+    spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon" }),
+    spawnPlan: () => {
+      throw new Error(`E_BACKEND_UNKNOWN: ${REFUSAL}`);
+    },
+  });
+  const notice = await slot.findByTestId("oats-notice");
+  // Nothing of the harness: no field, no sentence that a read failed, no Retry of its own.
+  expect(slot.queryByTestId("oats-spawn-harness")).toBeNull();
+  expect(slot.queryByTestId("oats-spawn-harness-retry")).toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toContain("Harnesses could not be read");
+  // What the form says of it today, once: the refused preview's notice, in the column; Spawn is off.
+  expect([notice.getAttribute("data-tone"), notice.querySelector("h3")!.textContent, notice.querySelector("div p")!.textContent]).toEqual(["error", "This can’t be spawned as it is", "OATS couldn’t work out this soul’s defaults. Try again, or see Details."]);
+  expect(notice.querySelector('[data-testid="oats-notice-details"]')!.textContent).toContain(`E_BACKEND_UNKNOWN: ${REFUSAL}`);
+  expect(slot.getAllByTestId("oats-notice")).toHaveLength(1);
+  expect([submit(slot).disabled, reason(slot)]).toEqual([true, null]);
+  fireEvent.click(submit(slot));
+  expect(calls(slot, "spawn")).toHaveLength(0);
+});
+
 test("Spawn applies the decision the preview showed, once: the form says Created, stays held, and opens the new agent's thread", async () => {
   const slot = await ready(previews({ spawn: () => ({ instance: "ranker-v4-probe", threadId: "thr_new" }) }));
   set(slot, "oats-spawn-task", "Try depth 7.");

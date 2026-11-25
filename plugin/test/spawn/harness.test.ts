@@ -47,10 +47,16 @@ describe("the harnesses the bb session provider declares", () => {
   });
 
   it("the kernel's refusal is shown with its code and message; bb may retry the read", async () => {
-    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace' } });
+    const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_WORKSPACE_INVALID", message: "oats-workspace.yaml: capabilities must be a list" } });
     backend = await startBackend({ verbs: { "capabilities show": { stdout: refusal } } });
-    await expect(backend.rpc("spawnHarnesses")).rejects.toThrow('E_CAPABILITY_UNKNOWN: no capability "oats.bb" in this workspace');
+    await expect(backend.rpc("spawnHarnesses")).rejects.toThrow("E_WORKSPACE_INVALID: oats-workspace.yaml: capabilities must be a list");
     expect("experimental_retryable" in host.spawnHarnesses && host.spawnHarnesses.experimental_retryable).toBe(true);
+  });
+
+  it("a deployment with NO bb session provider (the kernel knows no capability oats.bb) is an answer, not a failed read: no harness is declared", async () => {
+    const absent = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace' } });
+    backend = await startBackend({ verbs: { "capabilities show": { stdout: absent } } });
+    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon" });
   });
 });
 

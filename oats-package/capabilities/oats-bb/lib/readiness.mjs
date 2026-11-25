@@ -348,12 +348,13 @@ export async function readinessResult(settings, options = {}) {
     if (finding?.problem) problems.push(finding.problem);
     if (finding?.warning) warnings.push(finding.warning);
   }
-  // The choices of a planned launch (`options.choices`, as plannedLaunchFindings read
+  // The choices of a planned launch (`options.extra.choices`, as plannedLaunchFindings read
   // them): one the model does not have in bb is a problem, as at the launch, and a list
   // that cannot settle it a warning (lib/choices.mjs). Asked last, of a launch nothing
-  // else refuses: one more read of bb, and none where nothing is chosen.
-  if (options.harness != null && options.choices && problems.length === 0) {
-    const finding = await choicesFinding(options.choices, isModelId(options.model) ? options.model : null, options.harness, bb);
+  // else refuses, and only where something is chosen (for pi, the list the model check
+  // has just read: lib/bb.mjs reads it once).
+  if (options.harness != null && options.extra?.choices && problems.length === 0) {
+    const finding = await choicesFinding(options.extra.choices, isModelId(options.model) ? options.model : null, options.harness, bb);
     if (finding?.problem) problems.push(finding.problem);
     if (finding?.warning) warnings.push(finding.warning);
   }
@@ -401,18 +402,22 @@ export function homeSandboxWarnings(home) {
  *  refusal a launch in that mode would answer, as a problem; optional rows, skipped
  *  capabilities and, in full mode, the gaps, as warnings. `settings` and `home` are the
  *  check's own: with them a sandboxed launch's deny rules are built as the launch builds
- *  them, and what would refuse there is a problem here. → {problems, warnings}. */
+ *  them, and what would refuse there is a problem here. → {problems, warnings, choices?}
+ *  (`choices`: the planned launch's choices where it has any, read as a launch reads them). */
 export function plannedLaunchFindings(planned, { sandboxedModes = false, settings = null, home = null } = {}) {
   const problems = [], warnings = [];
   const unsupported = harnessRefusal(planned.harness);
   if (unsupported !== null) return { problems: [{ ...unsupported, status: "needs-configuration" }], warnings };
   // The planned launch's choices, as the launch reads them: what it refuses them for is a
-  // problem here, before bb is asked anything of them (lib/choices.mjs).
-  try { readChoices(planned.choices); }
+  // problem here, before bb is asked anything of them (lib/choices.mjs). Read, they are
+  // handed on (`choices`) for the check against bb's list, which readinessResult makes.
+  let choices;
+  try { choices = readChoices(planned.choices); }
   catch (error) {
     if (!(error instanceof ProviderError)) throw error;
     return { problems: [{ code: error.code, message: error.message, status: "needs-configuration" }], warnings };
   }
+  choices = Object.keys(choices).length > 0 ? choices : null;
   let mode, allowances;
   try {
     mode = permissionMode(planned.args, planned.yolo, planned.harness);
@@ -427,7 +432,7 @@ export function plannedLaunchFindings(planned, { sandboxedModes = false, setting
   }
   // A planned pi launch that got here runs in full mode, and bb's pi has no sandbox: nothing
   // of the allowances, the deny rules or the gaps is said of it.
-  if (planned.harness === "pi") return { problems, warnings };
+  if (planned.harness === "pi") return { problems, warnings, choices };
   const refusal = sandboxRefusal(mode, allowances);
   if (refusal !== null) problems.push({ ...refusal, status: refusal.code === "E_BACKEND_SANDBOX_UNAVAILABLE" ? "unavailable" : "needs-configuration" });
   else if (allowances.unavailable !== null) {
@@ -476,6 +481,6 @@ export function plannedLaunchFindings(planned, { sandboxedModes = false, setting
       warnings.push({ code: "session-provider-sandbox-forge", message: `${gapList(forges, 0, { describe: (entry) => `${entry.host} (${entry.capability})`, noun: ["host", "hosts"] })} ${forges.length > 1 ? "are general forges" : "is a general forge"}: allowing it opens every repository there to this agent's commands, not only the one it was allowed for` });
     }
   }
-  return { problems, warnings };
+  return { problems, warnings, choices };
 }
 

@@ -293,7 +293,7 @@ test("a pi model written with pi's own `:<level>` is refused, naming the model a
   // The level as a choice, against what bb lists for the model: this mock model does not reason, and bb lists the one level "none" for it.
   const row = (await bbJson(`provider models pi --selected-model ${MODEL}`)).find((model) => model.id === MODEL);
   assert.deepEqual(row.supportedReasoningEfforts.map((entry) => entry.reasoningEffort), ["none"]);
-  const refused = 'the model mock/echo has no reasoning level "high" in bb: it has none. Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)';
+  const refused = 'the model mock/echo has no reasoning level "high" in bb: it has "none". Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)';
   const withChoice = (await provider("check", { home, soul: null, launch: { ...PLANNED, model: MODEL, choices: { "reasoning-level": "high" } } })).result;
   assert.deepEqual(withChoice.problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: refused }]);
   assert.deepEqual((await provider("launch", launchInput(home, "model-level", { choices: { "reasoning-level": "high" } }))).error, { code: "E_BACKEND_LAUNCH_ARG", message: refused });

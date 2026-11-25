@@ -348,8 +348,8 @@ test("a launch choice is carried to bb's thread or refused, never dropped: a rea
   const count = async () => [(await bbJson("project list")).length, (await bbJson("thread list --include-hidden --include-archived")).length];
   const before = await count();
   for (const [choices, sentence] of [
-    [{ "reasoning-level": "bogus" }, `the model ${MODEL} has no reasoning level "bogus" in bb: it has ${levelsOf.slice(0, -1).join(", ")} and ${levelsOf[levelsOf.length - 1]}. Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)`],
-    [{ "service-tier": "fast" }, `the model ${MODEL} has no service tier "fast" in bb: it has none. Clear the choice (--launch-choice service-tier=default)`],
+    [{ "reasoning-level": "bogus" }, `the model ${MODEL} has no reasoning level "bogus" in bb: it has ${levelsOf.slice(0, -1).map((level) => `"${level}"`).join(", ")} and "${levelsOf[levelsOf.length - 1]}". Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)`],
+    [{ "service-tier": "fast" }, `the model ${MODEL} has no service tier "fast" in bb: bb lists no service tier for it. Clear the choice (--launch-choice service-tier=default)`],
     [{ "reasoning-level": "default" }, 'the launch choice reasoning-level is "default", which is no value to ask bb for: it is how a recorded choice is cleared (--launch-choice reasoning-level=default), and the launch then carries none'],
   ]) {
     const checked = (await provider("check", { home: refusedHome, soul: null, launch: { harness: "claude", yolo: true, args: [], model: MODEL, choices } })).result;

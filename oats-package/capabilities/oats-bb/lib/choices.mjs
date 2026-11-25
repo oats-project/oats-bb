@@ -18,9 +18,11 @@
 // so the value is held here against what bb lists for the launch's model (`bb provider
 // models <provider> --json`: `supportedReasoningEfforts[].reasoningEffort`, and
 // `supportedServiceTiers[].id` where the model has tiers) before anything is started.
-// Where that list cannot settle it (bb does not answer, the model is not in it, the launch
-// names no model and bb starts on a default of its own), nothing is refused: the launch
-// goes on with a warning, as for the pi model check (lib/pi-model.mjs).
+// Where that list cannot settle it (bb does not answer, the model is not in it), nothing is
+// refused: the launch goes on with a warning, as for the pi model check (lib/pi-model.mjs).
+// So too where the launch names no model. bb then picks one by a rule of its own that its
+// list does not show (the project's remembered model, then its provider's default: `bb
+// thread spawn --help`), so there is no row to hold the choice against: left open, and said.
 import { fail, isObject } from "./errors.mjs";
 import { BB_PROVIDER } from "./mode.mjs";
 
@@ -33,6 +35,8 @@ const VALUE = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 const WHY_MAX = 200;
 const brief = (text) => { const line = String(text).split("\n")[0].trim(); return line.length > WHY_MAX ? `${line.slice(0, WHY_MAX - 1)}…` : line; };
 const listed = (names) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+/** The values bb lists, each in quotes (a level may be called `none`), or what to say of a list that names none. */
+const has = (ids, what) => (ids.length > 0 ? `it has ${listed(ids.map((id) => JSON.stringify(id)))}` : `bb lists no ${what} for it`);
 const clear = (name) => `--launch-choice ${name}=default`;
 
 /** The launch's choices, from the launch input's or the planned launch's `choices`. → {}
@@ -89,14 +93,14 @@ export function choicesVerdict(choices, model, harness, value) {
   if (level !== undefined) {
     const levels = idsOf(row.supportedReasoningEfforts, "reasoningEffort");
     if (levels === null) return { unchecked: `bb's list does not say which reasoning levels ${row.id} has` };
-    if (!levels.includes(level)) return { refused: `the model ${row.id} has no reasoning level ${JSON.stringify(level)} in bb: it has ${levels.length > 0 ? listed(levels) : "none"}. Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (${clear("reasoning-level")})` };
+    if (!levels.includes(level)) return { refused: `the model ${row.id} has no reasoning level ${JSON.stringify(level)} in bb: ${has(levels, "reasoning level")}. ${levels.length > 0 ? "Choose one of them (--launch-choice reasoning-level=<level>), or clear" : "Clear"} the choice (${clear("reasoning-level")})` };
   }
   const tier = choices["service-tier"];
   if (tier !== undefined) {
     // A model with no tiers has no such list at all (bb's own shape: `supportedServiceTiers?`).
     const tiers = row.supportedServiceTiers === undefined || row.supportedServiceTiers === null ? [] : idsOf(row.supportedServiceTiers, "id");
     if (tiers === null) return { unchecked: `bb's list does not say which service tiers ${row.id} has` };
-    if (!tiers.includes(tier)) return { refused: `the model ${row.id} has no service tier ${JSON.stringify(tier)} in bb: it has ${tiers.length > 0 ? listed(tiers) : "none"}. ${tiers.length > 0 ? "Choose one of them (--launch-choice service-tier=<tier>), or clear" : "Clear"} the choice (${clear("service-tier")})` };
+    if (!tiers.includes(tier)) return { refused: `the model ${row.id} has no service tier ${JSON.stringify(tier)} in bb: ${has(tiers, "service tier")}. ${tiers.length > 0 ? "Choose one of them (--launch-choice service-tier=<tier>), or clear" : "Clear"} the choice (${clear("service-tier")})` };
   }
   return { ok: true };
 }
@@ -110,7 +114,7 @@ export async function choicesFinding(choices, model, harness, bb) {
   const names = Object.keys(choices);
   if (names.length === 0) return null;
   const unchecked = (why) => ({ warning: { code: CHOICE_UNCHECKED, message: `could not check the launch ${names.length > 1 ? "choices" : "choice"} ${listed(names)} against bb's model list: ${brief(why)}` } });
-  if (typeof model !== "string" || model === "") return unchecked("the launch names no model, and bb then starts on a default of its own");
+  if (typeof model !== "string" || model === "") return unchecked("the launch names no model, and bb then picks one by a rule its list does not show");
   const answer = await bb.models(BB_PROVIDER[harness], model);
   if (!answer.ok) return unchecked(answer.timedOut ? "no answer in time" : answer.message);
   const notLoaded = (answer.said ?? "").split("\n").find((line) => /could not load models/i.test(line));

@@ -133,6 +133,8 @@ const INTERACTION_STATUSES = new Set(["pending", "resolving", "resolved", "inter
  *  carried by every call (runBb). */
 export function bbClient({ cli, server, hostDaemonPort = null, deadline = Infinity, env = process.env, fallbackCode = "E_SESSION_UNAVAILABLE" }) {
   const remaining = () => Math.min(CALL_TIMEOUT_MS, deadline - Date.now());
+  // bb's list of a provider's models, by provider and model: read once (models, below).
+  const modelReads = new Map();
   const raw = async (args, options = {}) => {
     const timeoutMs = remaining();
     if (timeoutMs <= 0) return { ok: false, code: "timeout", timedOut: true, message: `no time left for bb ${args.slice(0, 2).join(" ")}` };
@@ -250,11 +252,17 @@ export function bbClient({ cli, server, hostDaemonPort = null, deadline = Infini
     /** The models bb lists for its pi provider, with `model` as the one a launch names
      *  (bb then also lists it where it holds it back otherwise: lib/pi-model.mjs). The
      *  raw answer: what it proves is the reader's to say. */
-    piModels(model) { return raw(["provider", "models", "pi", "--selected-model", model, "--json"]); },
+    piModels(model) { return this.models("pi", model); },
     /** The models bb lists for one of its providers (claude-code, pi), each with the
      *  reasoning levels and, where it has any, the service tiers it has; `model` as the one
-     *  a launch names, as for piModels. The raw answer (lib/choices.mjs reads it). */
-    models(provider, model) { return raw(["provider", "models", provider, "--selected-model", model, "--json"]); },
+     *  a launch names, as for piModels. The raw answer (lib/choices.mjs reads it). Read
+     *  once for a provider and a model in the life of this client (one command): the pi
+     *  model check and the check of the launch's choices read the same list. */
+    models(provider, model) {
+      const key = `${provider}\0${model}`;
+      if (!modelReads.has(key)) modelReads.set(key, raw(["provider", "models", provider, "--selected-model", model, "--json"]));
+      return modelReads.get(key);
+    },
     /** The environment, or null when bb has none by that id. */
     async environment(id) {
       const answer = await raw(["environment", "show", id, "--json"]);

@@ -91,8 +91,9 @@ for (const harness of ["claude", "pi"]) {
     const argv = spawnOf(bb);
     assert.deepEqual(argv.slice(argv.indexOf("--reasoning-level"), argv.indexOf("--reasoning-level") + 2), ["--reasoning-level", "high"]);
     assert.equal(argv.includes("--service-tier"), false, "a choice that was not made is not passed");
-    // Held against bb's list for the launch's model, read with the model named.
-    assert.ok(modelReads(bb).includes(`provider models ${harness === "pi" ? "pi" : "claude-code"} --selected-model ${model} --json`), modelReads(bb).join("; "));
+    // Held against bb's list for the launch's model, read with the model named, and read once: for pi it is the
+    // list the pi model check reads too.
+    assert.deepEqual(modelReads(bb), [`provider models ${harness === "pi" ? "pi" : "claude-code"} --selected-model ${model} --json`]);
     const planned = await check({ "reasoning-level": "high" });
     assert.deepEqual([planned.status, planned.problems, planned.warnings.filter((warning) => warning.code === UNCHECKED)], ["ready", [], []]);
   });
@@ -122,16 +123,16 @@ test("both choices are carried, each as an option and a value of its own, where 
 
 test("a reasoning level the model does not have in bb is refused, at the launch and at the check, naming the levels it has: bb would run the thread without it", async (t) => {
   const { refusedBoth } = await setup(t);
-  await refusedBoth({ "reasoning-level": "bogus" }, 'the model claude-opus-5-5 has no reasoning level "bogus" in bb: it has low, medium, high, xhigh, ultracode and max. Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)');
+  await refusedBoth({ "reasoning-level": "bogus" }, 'the model claude-opus-5-5 has no reasoning level "bogus" in bb: it has "low", "medium", "high", "xhigh", "ultracode" and "max". Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)');
   // A level another model has is not this model's.
   const pi = await setup(t, { harness: "pi" });
-  await pi.refusedBoth({ "reasoning-level": "xhigh" }, 'the model anthropic/claude-opus-5-5 has no reasoning level "xhigh" in bb: it has low, medium and high. Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)');
+  await pi.refusedBoth({ "reasoning-level": "xhigh" }, 'the model anthropic/claude-opus-5-5 has no reasoning level "xhigh" in bb: it has "low", "medium" and "high". Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)');
 });
 
 test("a service tier where the model lists none is refused, and one the model does not list too", async (t) => {
   const { refusedBoth } = await setup(t);
-  await refusedBoth({ "service-tier": "fast" }, 'the model claude-opus-5-5 has no service tier "fast" in bb: it has none. Clear the choice (--launch-choice service-tier=default)');
-  await refusedBoth({ "service-tier": "priority" }, 'the model claude-fast-5 has no service tier "priority" in bb: it has standard and fast. Choose one of them (--launch-choice service-tier=<tier>), or clear the choice (--launch-choice service-tier=default)', { model: "claude-fast-5" });
+  await refusedBoth({ "service-tier": "fast" }, 'the model claude-opus-5-5 has no service tier "fast" in bb: bb lists no service tier for it. Clear the choice (--launch-choice service-tier=default)');
+  await refusedBoth({ "service-tier": "priority" }, 'the model claude-fast-5 has no service tier "priority" in bb: it has "standard" and "fast". Choose one of them (--launch-choice service-tier=<tier>), or clear the choice (--launch-choice service-tier=default)', { model: "claude-fast-5" });
 });
 
 test("the value `default` is refused, for either choice: it is the kernel's word for none, and bb would take it for a level", async (t) => {
@@ -185,15 +186,15 @@ test("where bb's list cannot settle it, nothing is refused: the launch goes on w
   const odd = await setup(t, { script: { "provider models claude-code": { stdout: [claudeRow("claude-opus-5-5", { supportedServiceTiers: ["fast"] })] } } });
   await odd.warnsBoth({ "service-tier": "fast" }, "bb's list does not say which service tiers claude-opus-5-5 has");
   const bare = await setup(t);
-  await bare.warnsBoth({ "reasoning-level": "high", "service-tier": "fast" }, "the launch names no model, and bb then starts on a default of its own", { model: null });
+  await bare.warnsBoth({ "reasoning-level": "high", "service-tier": "fast" }, "the launch names no model, and bb then picks one by a rule its list does not show", { model: null });
   assert.deepEqual(modelReads(bare.bb), [], "with no model there is nothing to ask bb");
 });
 
 test("a pi model written with pi's own `:<level>` is refused, at the launch and at the check, naming the model and the launch choice that carries the level", async (t) => {
   const { refusedBoth, launch, bb } = await setup(t, { harness: "pi" });
   await refusedBoth(undefined, 'pi model "anthropic/claude-opus-5-5:high" names a thinking level in the model id, which bb\'s pi does not take: name the model "anthropic/claude-opus-5-5", and choose the level with --launch-choice reasoning-level=high', { model: "anthropic/claude-opus-5-5:high" });
-  // By its bare id too, where one provider serves it; and whatever the level is called.
-  await refusedBoth(undefined, 'pi model "echo:off" names a thinking level in the model id, which bb\'s pi does not take: name the model "echo", and choose the level with --launch-choice reasoning-level=off', { model: "echo:off" });
+  // By its bare id too, where one provider serves it; pi's `off` is the level bb calls `none`.
+  await refusedBoth(undefined, 'pi model "echo:off" names a thinking level in the model id, which bb\'s pi does not take: name the model "echo", and choose the level with --launch-choice reasoning-level=none', { model: "echo:off" });
   // The model and the level, each in its place, launch.
   const { doc } = await launch({ "reasoning-level": "high" });
   assert.equal(doc.ok, true, JSON.stringify(doc));
@@ -210,8 +211,15 @@ test("the `:<level>` sentence is given only where what stands before the colon i
   assert.match(piModelVerdict("mock/twin:high", rows).refused, /names a thinking level in the model id.*name the model "mock\/twin", and choose the level with --launch-choice reasoning-level=high$/);
   assert.match(piModelVerdict("echo:", rows).refused, /^pi has no model "echo:" /);
   assert.match(piModelVerdict("echo:Not A Level", rows).refused, /^pi has no model /);
-  // Said by name whatever else the list may hold back: the model before the colon is in it.
-  assert.match(piModelVerdict("echo:high", rows, { partial: "pi's enabledModels setting narrows the list to the models it names", old: "pi's configuration changed a moment ago, and bb's list may be older than it" }).refused, /names a thinking level in the model id/);
+  // Only pi's own levels are taken for one: any other word after a colon is part of a model's own id (a tag, a variant).
+  for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"]) assert.match(piModelVerdict(`echo:${level}`, rows).refused, /names a thinking level in the model id/, level);
+  for (const tag of ["8b", "free", "latest", "thinking", "none", "ultracode"]) assert.match(piModelVerdict(`echo:${tag}`, rows).refused, /^pi has no model /, tag);
+  // It is the refusal's sentence, and no check of its own: where the list cannot settle an id, nothing is refused,
+  // as before the choices (a model the list holds back may have such an id of its own).
+  const PARTIAL = "pi's enabledModels setting narrows the list to the models it names", OLD = "pi's configuration changed a moment ago, and bb's list may be older than it";
+  assert.deepEqual(piModelVerdict("echo:high", rows, { partial: PARTIAL }), { unchecked: PARTIAL });
+  assert.deepEqual(piModelVerdict("echo:high", rows, { old: OLD }), { unchecked: OLD });
+  assert.deepEqual(piModelVerdict("echo:8b", rows, { partial: PARTIAL }), { unchecked: PARTIAL });
 });
 
 test("readChoices, choiceArgs and choicesVerdict, each by itself", () => {
@@ -225,5 +233,8 @@ test("readChoices, choiceArgs and choicesVerdict, each by itself", () => {
   assert.match(choicesVerdict({ "reasoning-level": "high" }, "twin", "pi", PI).unchecked, /does not hold the model "twin", or holds it more than once/);
   assert.match(choicesVerdict({ "reasoning-level": "high" }, "claude-opus-5-5", "claude", [claudeRow("claude-opus-5-5"), claudeRow("claude-opus-5-5")]).unchecked, /more than once/);
   assert.match(choicesVerdict({ "reasoning-level": "high" }, "claude-opus-5-5", "claude", [{ id: 7 }]).unchecked, /not one this provider can read/);
-  assert.match(choicesVerdict({ "reasoning-level": "none" }, "claude-opus-5-5", "claude", [claudeRow("claude-opus-5-5", { supportedReasoningEfforts: [] })]).refused, /it has none\. Choose one of them/);
+  assert.equal(choicesVerdict({ "reasoning-level": "high" }, "claude-opus-5-5", "claude", [claudeRow("claude-opus-5-5", { supportedReasoningEfforts: [] })]).refused, 'the model claude-opus-5-5 has no reasoning level "high" in bb: bb lists no reasoning level for it. Clear the choice (--launch-choice reasoning-level=default)');
+  // A level bb calls `none` is a level like another: said in quotes, so that it does not read as "it has none".
+  assert.equal(choicesVerdict({ "reasoning-level": "high" }, "mock/echo", "pi", PI).refused, 'the model mock/echo has no reasoning level "high" in bb: it has "none". Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)');
+  assert.deepEqual(choicesVerdict({ "reasoning-level": "none" }, "mock/echo", "pi", PI), { ok: true });
 });

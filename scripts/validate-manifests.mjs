@@ -61,6 +61,23 @@ function floor(manifest, at) {
   if (!isObject(manifest.compatibility) || typeof manifest.compatibility.oats !== "string" || !/^>=\d+\.\d+\.\d+$/.test(manifest.compatibility.oats)) report(at, 'compatibility.oats must be a floor, ">=<version>"');
 }
 
+// The OATS release that has the feature `launch-choices`: a kernel without it does not know
+// the manifest property `launchChoices`, and takes the whole session provider for malformed
+// (OATS 0.70.5: every spawn on bb answers E_BACKEND_UNKNOWN). So a manifest that declares
+// launch choices must be floored at that release, in the package and in the capability.
+// NOT TAGGED when the choices were written (2026-11-25): null, and the manifests are
+// refused until it is set here, with both floors raised to it. Never a guess.
+const LAUNCH_CHOICES_FLOOR = null;
+const versionOf = (range) => /^>=(\d+)\.(\d+)\.(\d+)$/.exec(range ?? "")?.slice(1).map(Number) ?? null;
+const below = (a, b) => { for (let i = 0; i < 3; i += 1) if (a[i] !== b[i]) return a[i] < b[i]; return false; };
+/** The floor a manifest that declares launch choices must have. */
+function launchChoicesFloor(manifest, at) {
+  if (LAUNCH_CHOICES_FLOOR === null) { report(at, "launch choices are declared, and the OATS release with the feature launch-choices is not named yet: set LAUNCH_CHOICES_FLOOR in scripts/validate-manifests.mjs to that release, and raise compatibility.oats to it in oats-package.json and in the capability's oats.json"); return; }
+  const [has, needs] = [versionOf(manifest.compatibility?.oats), versionOf(`>=${LAUNCH_CHOICES_FLOOR}`)];
+  if (has === null || needs === null || below(has, needs)) report(at, `compatibility.oats is ${JSON.stringify(manifest.compatibility?.oats)}, and launch choices need OATS ${LAUNCH_CHOICES_FLOOR} or later (the release with the feature launch-choices): an older kernel takes the session provider for malformed`);
+}
+let declaresLaunchChoices = false;
+
 const repoPackage = readJson(join(repoRoot, "package.json"));
 const pkg = readJson(join(root, "oats-package.json"));
 if (isObject(pkg)) {
@@ -108,6 +125,8 @@ if (isObject(pkg)) {
         // launchChoices: what a person may choose for a launch of this provider, by name. The
         // kernel knows no choice's meaning: the names are the provider's, and the same in its code.
         if (provider.launchChoices !== undefined) {
+          declaresLaunchChoices = true;
+          launchChoicesFloor(manifest, `${at}#/compatibility/oats`);
           const choices = isObject(provider.launchChoices) ? provider.launchChoices : {};
           if (!isObject(provider.launchChoices)) report(`${here}/launchChoices`, "must be a map");
           if (Object.keys(choices).length > MAX_CHOICES) report(`${here}/launchChoices`, `declares more than ${MAX_CHOICES} choices`);
@@ -152,6 +171,9 @@ if (isObject(pkg)) {
     }
   }
 }
+
+// The package's own floor follows its capabilities': a kernel reads it first.
+if (declaresLaunchChoices && LAUNCH_CHOICES_FLOOR !== null && isObject(pkg)) launchChoicesFloor(pkg, "oats-package.json#/compatibility/oats");
 
 if (errors.length > 0) {
   for (const error of errors) process.stderr.write(`${error}\n`);

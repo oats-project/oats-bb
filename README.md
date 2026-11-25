@@ -543,19 +543,32 @@ the kernel hands the check the planned launch's `choices` and `model`, at the ch
   model").
 
 Why refuse: bb takes **any** level and any tier when a thread is spawned, answers a
-thread, and says nothing of what became of the choice (seen at the pinned bb, and pinned
-by `test/contract/contract.test.mjs`). With a level its model does not have, or the word
-`default`, Claude Code is started with no effort at all: neither the one asked for, nor
-the one bb gives a thread spawned with no level (`medium`). With the tier `fast` for a
-model bb lists no tier for, Claude Code is started in its fast mode all the same.
+thread, and says nothing of what became of the choice. Three facts of bb, seen at the
+pinned bb and pinned by `test/contract/contract.test.mjs`:
+
+- **An unlisted level is a third thing, not the default.** A thread spawned with no level
+  starts Claude Code with bb's own, `--effort=medium` (not the `defaultReasoningEffort`
+  its list shows for the model, `high`). One spawned with a level the model has starts
+  it with that one. One spawned with a level the model does not have, or with the word
+  `default`, starts it with **no effort at all**: neither the one asked for, nor bb's
+  own.
+- **A tier bb lists for no model is applied all the same**: with the tier `fast` for a
+  model whose row has no tiers, Claude Code is started in its fast mode. What a launch
+  carries is what bb itself lists for the model, so that tier is refused here.
+- **bb remembers nothing of it from one spawn to the next**: after a thread spawned with
+  `low`, a thread of the same project spawned with no level is at bb's own again. That
+  is why the kernel records the choice in the home and hands it to every start: a
+  restart would otherwise lose it.
 
 **Where bb's list cannot settle it, nothing is refused**: the launch goes on with the
 choice, and says once `could not check the launch choice <name> against bb's model list:
 <why>` (the warning `session-provider-launch-choice-unchecked` at the check; the provider
 command's standard error at the launch). That is the case when bb's list cannot be read,
 the model is not in it (or is in it more than once), the list does not say which levels
-or tiers the model has, or the launch names no model: bb then starts on a default of its
-own, whose levels are not known here.
+or tiers the model has, or the launch names no model. bb then picks one by a rule of its
+own that its list does not show (the project's remembered model, then its provider's
+default), so there is no row to hold the choice against: that case is left open, and a
+choice made with no model named may be one bb does not carry.
 
 **The kernel this needs.** The manifest property is one a kernel without `launch-choices`
 does not know, so the package's floor (`compatibility.oats`) is the OATS release that has
@@ -564,7 +577,8 @@ an older kernel loses the whole backend, which is why the floor moves with this:
 0.70.5 answers every spawn on bb `E_BACKEND_UNKNOWN`, "unknown session backend "bb":
 capability oats.bb declares it malformed: session provider "bb": unknown key
 "launchChoices" (allowed: commands, harnesses, description, wire)" (seen with
-`npm run test:kernel:pi`, 2026-11-25).
+`npm run test:kernel:pi`). `npm run validate` holds the two together: it refuses a
+manifest that declares launch choices below that release.
 
 Nothing is chosen unless a person chooses it: a launch with no choice passes none, reads
 nothing more of bb, and starts as it did before. A launch configuration, a soul, a host
@@ -660,13 +674,16 @@ call) and is **refused before anything is started**, with `E_BACKEND_LAUNCH_ARG`
 |---|---|
 | a bare id no pi provider serves, or a `<provider>/<id>` pi does not have | `pi has no model "<id>" (if you just added it to pi, try again in a minute)` |
 | a bare id two or more pi providers serve | `pi model "<id>" is served by A and B: use A/<id> or B/<id> (if you just changed that in pi, try again in a minute)` |
-| a model of the list followed by pi's own `:<level>` (`<model>:high`) | `pi model "<model>:high" names a thinking level in the model id, which bb's pi does not take: name the model "<model>", and choose the level with --launch-choice reasoning-level=high` |
+| a model of the list followed by one of pi's own thinking levels, `:<level>` (`<model>:high`) | `pi model "<model>:high" names a thinking level in the model id, which bb's pi does not take: name the model "<model>", and choose the level with --launch-choice reasoning-level=high` |
 
 (The third row: on tmux, pi takes a thinking level written into the model id. bb's pi
 resolves the model by its exact id, and a thread spawned with such an id ends in error;
-on bb the level is a [launch choice](#launch-choices). It is said only where what stands
-before the last colon is a model of the list, so a model whose own id holds a colon is
-not taken for one.)
+on bb the level is a [launch choice](#launch-choices). It is said only where the suffix
+is one of pi's levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) and what
+stands before it is a model of the list: a model whose own id holds a colon, or a tag
+(`:8b`, `:free`), is not taken for one. And it is that refusal's sentence, no check of
+its own: where the list cannot settle an id, nothing is refused, as above. For `:off`
+the sentence names `reasoning-level=none`, bb's word for it.)
 
 The rule is bb's own, and no stricter: the id is one model's `<provider>/<id>` exactly,
 or it is a bare id and exactly one model's. Nothing is matched loosely (no prefix, no

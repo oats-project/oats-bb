@@ -39,8 +39,10 @@ import { isObject } from "./errors.mjs";
 
 export const PI_MODEL_REFUSED = "E_BACKEND_LAUNCH_ARG";
 export const PI_MODEL_UNCHECKED = "session-provider-pi-model-unchecked";
-// What follows the last colon of `<model>:<level>`: a launch choice's value, as the kernel passes one.
-const LEVEL = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+// pi's own thinking levels, as it takes one after a model id, `<model>:<level>` (pi 1.5.2:
+// `--model`, "optional :<thinking>"; `--thinking`). A closed set: any other word after a
+// colon is part of a model's own id (a tag, a variant), and is not taken for a level.
+const PI_LEVELS = Object.freeze(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 // A model id bb holds back from its list (its isModelAlias, negated): dated, and not "-latest".
 const DATED = /-\d{8}$/;
 const WHY_MAX = 200;
@@ -81,18 +83,6 @@ export function piModelVerdict(model, value, { partial = null, old = null } = {}
   if (rows.some((row) => row.id === model)) return { ok: true };
   const serving = rows.filter((row) => row.bare === model);
   if (serving.length === 1) return { ok: true };
-  // pi's own way to write a thinking level, `<model>:<level>`, is not a model bb's pi
-  // resolves: bb lists and resolves the model alone, and takes the level as a choice of the
-  // launch (lib/choices.mjs). Where what stands before the last colon is a model of the
-  // list, by its full id or as the one model with that bare id, that is what was written:
-  // said by name, whatever else the list may hold back.
-  const colon = model.lastIndexOf(":");
-  if (colon > 0 && LEVEL.test(model.slice(colon + 1))) {
-    const base = model.slice(0, colon);
-    if (rows.some((row) => row.id === base) || rows.filter((row) => row.bare === base).length === 1) {
-      return { refused: `pi model ${JSON.stringify(model)} names a thinking level in the model id, which bb's pi does not take: name the model ${JSON.stringify(base)}, and choose the level with --launch-choice reasoning-level=${model.slice(colon + 1)}` };
-    }
-  }
   if (serving.length > 1) {
     if (old !== null) return { unchecked: old };
     // An id with a slash may also be the exact `<provider>/<id>` of a model the list holds
@@ -107,6 +97,21 @@ export function piModelVerdict(model, value, { partial = null, old = null } = {}
   // Any id that ends in a date, with a slash or without: a bare id may itself hold a slash,
   // so one that looks like `<provider>/<id>` may be a held-back model's bare id.
   if (DATED.test(model)) return { unchecked: "a model whose id ends in a date is not always listed" };
+  // pi's own way to write a thinking level, `<model>:<level>`, is no model bb's pi resolves:
+  // bb lists and resolves the model alone (a thread spawned with such an id ends in error),
+  // and takes the level as a choice of the launch (lib/choices.mjs). Where the suffix is one
+  // of pi's own levels and what stands before it is a model of the list, by its full id or
+  // as the one model with that bare id, the refusal says that. It is this refusal's
+  // sentence and no other check: an id the list cannot settle is still not refused.
+  const colon = model.lastIndexOf(":");
+  const level = colon > 0 ? model.slice(colon + 1) : "";
+  if (PI_LEVELS.includes(level)) {
+    const base = model.slice(0, colon);
+    if (rows.some((row) => row.id === base) || rows.filter((row) => row.bare === base).length === 1) {
+      // (bb's name for pi's `off` is `none`: what bb lists for a model that does not reason.)
+      return { refused: `pi model ${JSON.stringify(model)} names a thinking level in the model id, which bb's pi does not take: name the model ${JSON.stringify(base)}, and choose the level with --launch-choice reasoning-level=${level === "off" ? "none" : level}` };
+    }
+  }
   return { refused: `pi has no model ${JSON.stringify(model)} (if you just added it to pi, ${RETRY})` };
 }
 

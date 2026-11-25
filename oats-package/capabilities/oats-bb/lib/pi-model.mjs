@@ -108,8 +108,11 @@ export function piModelVerdict(model, value, { partial = null, old = null } = {}
   if (PI_LEVELS.includes(level)) {
     const base = model.slice(0, colon);
     if (rows.some((row) => row.id === base) || rows.filter((row) => row.bare === base).length === 1) {
-      // (bb's name for pi's `off` is `none`: what bb lists for a model that does not reason.)
-      return { refused: `pi model ${JSON.stringify(model)} names a thinking level in the model id, which bb's pi does not take: name the model ${JSON.stringify(base)}, and choose the level with --launch-choice reasoning-level=${level === "off" ? "none" : level}` };
+      // bb's names for a pi model's levels are pi's own, but for two (bb-app 0.50.1): pi's
+      // `off` is bb's `none`, and bb has no `minimal` for any pi model, so no value is
+      // named for it: the choice's own refusal would follow.
+      const choose = level === "minimal" ? "choose a level bb lists for it with --launch-choice reasoning-level=<level> (bb has none called \"minimal\")" : `choose the level with --launch-choice reasoning-level=${level === "off" ? "none" : level}`;
+      return { refused: `pi model ${JSON.stringify(model)} names a thinking level in the model id, which bb's pi does not take: name the model ${JSON.stringify(base)}, and ${choose}` };
     }
   }
   return { refused: `pi has no model ${JSON.stringify(model)} (if you just added it to pi, ${RETRY})` };

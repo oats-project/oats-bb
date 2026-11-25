@@ -556,6 +556,12 @@ Why the provider checks, by what bb does (seen at the pinned bb, and pinned by
   with a level the model does not have, or with the word `default`, starts it with **no
   effort at all**: neither the one asked for, nor bb's own. bb answers a thread each
   time, and nothing says what became of the level.
+- **A service tier is the provider's, and a model with no list of its own takes them
+  all.** bb's own guide (`bb guide providers`): "`bb provider list --json` reports each
+  provider's `serviceTiers` […] A model may narrow that list: […] `--json` reports
+  `supportedServiceTiers` per model (absent when the provider does not report tiers per
+  model, in which case the model accepts every tier the provider lists)". Claude Code's
+  are `default` and `fast`, no Claude model's row narrows them, and pi has none.
 - **bb refuses a service tier its provider does not list, but only at the spawn**
   ("Provider claude-code does not support the … service tier", "Provider pi does not
   support service tiers"). By then a launch has stopped the home's earlier thread and
@@ -571,7 +577,8 @@ choice, and says once `could not check the launch choice <name> against bb's lis
 <why>` (the warning `session-provider-launch-choice-unchecked` at the check; the provider
 command's standard error at the launch). That is the case when a list cannot be read,
 the model is not in bb's list (or is in it more than once), or a list does not say which
-levels or tiers there are.
+levels or tiers there are (a model whose levels bb has not discovered yet,
+`reasoningDiscovery: "unknown"`, among them).
 
 **A launch that names no model.** bb then picks one by a rule of its own that its list
 does not show (the project's remembered model, then its provider's default), so there is
@@ -691,8 +698,10 @@ on bb the level is a [launch choice](#launch-choices). It is said only where the
 is one of pi's levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) and what
 stands before it is a model of the list: a model whose own id holds a colon, or a tag
 (`:8b`, `:free`), is not taken for one. And it is that refusal's sentence, no check of
-its own: where the list cannot settle an id, nothing is refused, as above. For `:off`
-the sentence names `reasoning-level=none`, bb's word for it.)
+its own: where the list cannot settle an id, nothing is refused, as above. The value it
+names is one bb has: pi's own word, but for `:off`, which is `reasoning-level=none` in
+bb, and `:minimal`, which bb has for no pi model, so the sentence names no value for
+it.)
 
 The rule is bb's own, and no stricter: the id is one model's `<provider>/<id>` exactly,
 or it is a bare id and exactly one model's. Nothing is matched loosely (no prefix, no

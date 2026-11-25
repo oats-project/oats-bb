@@ -90,8 +90,11 @@ function idsOf(list, key) {
   return ids;
 }
 
-/** The reasoning levels a model has in bb, or null where its row does not say. */
-const levelsOf = (row) => idsOf(row.supportedReasoningEfforts, "reasoningEffort");
+/** The reasoning levels a model has in bb, or null where its row does not say: a list
+ *  this provider cannot read, or one bb has not discovered yet (`reasoningDiscovery:
+ *  "unknown"`, whose levels are then an empty list that says nothing: `bb guide
+ *  providers`). */
+const levelsOf = (row) => (row.reasoningDiscovery === "unknown" ? null : idsOf(row.supportedReasoningEfforts, "reasoningEffort"));
 /** The service tiers a model takes: its own list where its row has one, else every tier of
  *  its provider (`providerTiers`: ids, or null where bb's providers could not be read). */
 const tiersOf = (row, providerTiers) => (row.supportedServiceTiers === undefined || row.supportedServiceTiers === null ? providerTiers : idsOf(row.supportedServiceTiers, "id"));

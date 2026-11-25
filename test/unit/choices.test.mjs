@@ -250,6 +250,10 @@ test("the `:<level>` sentence is given only where what stands before the colon i
   assert.match(piModelVerdict("echo:Not A Level", rows).refused, /^pi has no model /);
   // Only pi's own levels are taken for one: any other word after a colon is part of a model's own id (a tag, a variant).
   for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"]) assert.match(piModelVerdict(`echo:${level}`, rows).refused, /names a thinking level in the model id/, level);
+  // The value the sentence names is one bb has: pi's own word, but for `off` (bb's `none`) and `minimal`, which bb
+  // has for no pi model, so none is named for it.
+  for (const [level, named] of [["low", "low"], ["max", "max"], ["off", "none"]]) assert.ok(piModelVerdict(`echo:${level}`, rows).refused.endsWith(`and choose the level with --launch-choice reasoning-level=${named}`), level);
+  assert.equal(piModelVerdict("echo:minimal", rows).refused, 'pi model "echo:minimal" names a thinking level in the model id, which bb\'s pi does not take: name the model "echo", and choose a level bb lists for it with --launch-choice reasoning-level=<level> (bb has none called "minimal")');
   for (const tag of ["8b", "free", "latest", "thinking", "none", "ultracode"]) assert.match(piModelVerdict(`echo:${tag}`, rows).refused, /^pi has no model /, tag);
   // It is the refusal's sentence, and no check of its own: where the list cannot settle an id, nothing is refused,
   // as before the choices (a model the list holds back may have such an id of its own).
@@ -281,6 +285,10 @@ test("readChoices, choiceArgs and choicesVerdict, each by itself", () => {
   for (const answer of [null, { providers: PROVIDERS }, [], [{ id: "claude-code", serviceTiers: "fast" }], [{ id: "claude-code", serviceTiers: [{ label: "Fast" }] }]]) assert.equal(providerTiers(answer, "claude-code"), null, JSON.stringify(answer));
   assert.deepEqual(choicesVerdict({ "service-tier": "fast" }, "claude-opus-5-5", "claude", CLAUDE, { tiers: ["fast"] }), { ok: true });
   assert.match(choicesVerdict({ "service-tier": "fast" }, "claude-opus-5-5", "claude", CLAUDE, { tiers: null }).unchecked, /bb's list of its providers does not say which service tiers claude-code has/);
+  // A model whose levels bb has not discovered yet lists none, and that says nothing: not refused, with a model named or with none.
+  const undiscovered = [claudeRow("claude-opus-5-5", { reasoningDiscovery: "unknown", supportedReasoningEfforts: [] })];
+  assert.deepEqual(choicesVerdict({ "reasoning-level": "high" }, "claude-opus-5-5", "claude", undiscovered), { unchecked: "bb's list does not say which reasoning levels claude-opus-5-5 has" });
+  assert.match(choicesVerdict({ "reasoning-level": "high" }, null, "claude", undiscovered).unchecked, /do not say which reasoning levels every model of claude-code has/);
   // With no model and no row at all, nothing can be said.
   assert.match(choicesVerdict({ "reasoning-level": "high" }, null, "claude", []).unchecked, /do not say which reasoning levels every model of claude-code has/);
 });

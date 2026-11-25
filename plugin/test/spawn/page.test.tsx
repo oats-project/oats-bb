@@ -448,6 +448,22 @@ test("a bare model that several of bb's listed models serve: pick the provider, 
   await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
 });
 
+test("with Custom… chosen the mark stands under the Model ID, the field a person changes: not under the list over it; Spawn is described by it there", async () => {
+  const bbModel = (model: string) => ({ id: model, model, displayName: model, description: "", isDefault: false, defaultReasoningEffort: "medium", routeProviderId: model.slice(0, model.indexOf("/")) });
+  const slot = await ready({ spawnPlan: (input) => ({ facts: formFacts({ ...recorded, model: input.model ?? "claude-fable-5.2" }, { name: input.name ?? null }), revision: REVISION }) }, { models: () => ({ modelLoadError: null, models: ["mock/twin", "mock2/twin", "openai/sol-5"].map(bbModel) }) });
+  const markUnder = (testId: string) => slot.getByTestId(testId).closest('[data-testid="oats-field"]')!.querySelector('[role="alert"]')?.textContent ?? null;
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
+  choose(slot, "oats-spawn-model", "__custom__");
+  set(slot, "oats-spawn-model-id", "twin");
+  await waitFor(() => expect([submit(slot).disabled, describedBy(slot), markUnder("oats-spawn-model-id"), markUnder("oats-spawn-model")]).toEqual([true, "Pick provider", "Pick provider", null]));
+  expect([slot.getByTestId("oats-spawn-model-id").getAttribute("aria-invalid"), slot.getByTestId("oats-spawn-model").getAttribute("aria-invalid")]).toEqual(["true", null]);
+  expect(slot.getByTestId("oats-spawn-form").textContent!.split("Pick provider")).toHaveLength(2); // once
+  // One of them picked from the list: the Model ID field goes, and so does the mark.
+  choose(slot, "oats-spawn-model", "mock2/twin");
+  await waitFor(() => expect([submit(slot).disabled, describedBy(slot), markUnder("oats-spawn-model")]).toEqual([false, null, null]));
+  expect(slot.queryByTestId("oats-spawn-model-id")).toBeNull();
+});
+
 test("a model bb's pi does not have is refused by the provider at the press: the kernel's whole message once under the result's title, the Model field not marked, nothing held, the form editable again", async () => {
   // The real kernel's answer to that spawn (test/fixtures/spawn/README.md): refused, rolled back, nothing left.
   const refused = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-pi-model-refused.json"), "utf8")) as { error: { code: string; message: string } }).error;

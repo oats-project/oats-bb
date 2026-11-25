@@ -80,9 +80,9 @@ call the plugin's RPC, as its UI does. After each act it reads `oats status --js
   the kernel's answer has the launch on pi. At each view.
   First, at each view, **the hold "Pick provider"** on bb's real list: pi's configuration of the run
   holds one model, `twin`, under two providers (`mock` and `mock2`: `setup.sh`), so bb lists
-  `mock/twin` and `mock2/twin`. The bare id `twin`, typed, is held: "Pick provider" on the Model
-  field, once, Spawn off and described by it, and the field's list holds exactly those two ids
-  (images `real-pi-form-<view>-pick-provider`, the mark under the field, and `-pick-provider-list`,
+  `mock/twin` and `mock2/twin`. The bare id `twin`, typed, is held: "Pick provider" under the Model ID
+  field, where it was typed (none under the Model list over it), once, Spawn off and described by it, and the field's list holds exactly those two ids
+  (images `real-pi-form-<view>-pick-provider`, the mark under the Model ID, and `-pick-provider-list`,
   its list open); one of them picked, Spawn is armed.
 - **P2 the spawn.** Spawn, once: the form opens the new agent's thread, the one the kernel names,
   with bb's notice "Created Pi form developer." over it (image `real-pi-form-1280x800-created`: one

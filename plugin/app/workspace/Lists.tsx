@@ -6,24 +6,28 @@ import { useOats } from "../oats";
 import { RosterNotice } from "../roster/unreadable";
 import { useRead } from "../store";
 import type { Read, Result } from "../store";
-import { Chip, ErrorLine, Heading, Loading, Note, Page } from "../ui";
+import { Chip, ErrorLine, Heading, Loading, Note } from "../ui";
 import { shown } from "../ui/text";
+import type { WorkspaceTab } from "./pages";
+import { Frame } from "./Workspace";
 
 /** A page that is one read: its loading line, its error with Retry, then its rows. */
 function ReadPage<T>({
+  tab,
   testId,
   read,
   children,
 }: {
+  tab: WorkspaceTab;
   testId: string;
   read: Read<T> & { retry(): void };
   children: (data: T) => ReactNode;
 }) {
   return (
-    <Page testId={testId}>
+    <Frame tab={tab} testId={testId}>
       {read.status === "error" ? <ErrorLine onRetry={read.retry}>{read.error}</ErrorLine> : null}
       {read.data === undefined ? (read.status === "loading" ? <Note>Reading OATS…</Note> : null) : children(read.data)}
-    </Page>
+    </Frame>
   );
 }
 
@@ -32,7 +36,7 @@ const ROW = "flex flex-col gap-1 border-b border-border py-2 last:border-b-0";
 export function CapabilitiesPage() {
   const read = useRead("capabilities");
   return (
-    <ReadPage testId="oats-capabilities-page" read={read}>
+    <ReadPage tab="capabilities" testId="oats-capabilities-page" read={read}>
       {({ capabilities }) => (
         <>
           <Heading n={capabilities.length}>Capabilities</Heading>
@@ -59,7 +63,7 @@ export function TeamsPage() {
   const read = useRead("teams");
   const oats = useOats();
   return (
-    <ReadPage testId="oats-teams-page" read={read}>
+    <ReadPage tab="teams" testId="oats-teams-page" read={read}>
       {({ teams }) => (
         <>
           <Heading n={teams.length}>Teams</Heading>
@@ -112,7 +116,7 @@ export function MachinesPage() {
   const read = useRead("machines");
   const oats = useOats();
   return (
-    <ReadPage testId="oats-machines-page" read={read}>
+    <ReadPage tab="machines" testId="oats-machines-page" read={read}>
       {({ machines }) => (
         <>
           <section data-testid="oats-this-machine" className="flex flex-col gap-1">

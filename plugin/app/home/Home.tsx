@@ -30,7 +30,7 @@ import { RowFacts } from "../ui/row-facts";
 import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
-import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
+import { hasNewAgent, newAgentHeld, openNewAgent, pageTiles, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
 import { board, mayAnswer, refusal } from "./board";
@@ -742,7 +742,7 @@ function Tiles({ visible }: { visible: boolean }) {
     machines: counted(machines, machines.data?.machines.length),
   };
   const tile = "flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md border border-border bg-card px-3 py-2 text-left hover:bg-accent";
-  const shown = pageLinks().filter((page) => pages.has(page.path));
+  const shown = pageTiles().filter((page) => pages.has(page.path));
   if (shown.length === 0) return null;
   return (
     <ul data-testid="oats-home-tiles" className="m-0 grid list-none grid-cols-2 gap-2 p-0 md:grid-cols-3">

@@ -148,8 +148,8 @@ export function createCore(bb: BbPluginApi) {
       type: "string",
       label: "Pages shown",
       description:
-        "The plugin's pages that are shown, by id, separated by commas. The default is home. The others are not finished yet and are left out until they are: automations, souls, capabilities, teams, machines.",
-      default: "home",
+        "The plugin's pages that are shown, by id, separated by commas: home, souls, capabilities, teams, machines (the default: all five; the last four are the Workspace page's tabs) and automations (not shown by default).",
+      default: "home souls capabilities teams machines",
     },
   });
   const host = bb.hosts.experimental_client({ contract: hostContract, experimental_signals: hostSignals });

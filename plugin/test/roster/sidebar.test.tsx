@@ -424,17 +424,14 @@ test("the workspace's name, with no heading under it; at the roster's foot New a
   expect(navigated()).toBe(1);
 });
 
-test("the four page rows call toPluginPanel, then onNavigate", async () => {
+test("the Workspace row (ONE row for the page's four tabs, as the Desktop has it) calls toPluginPanel, then onNavigate", async () => {
   const { slot, navigated } = await sidebar();
   await slot.findByTestId("oats-workspace-line");
-  for (const path of ["souls", "capabilities", "teams", "machines"]) fireEvent.click(slot.getByTestId(`oats-page-link-${path}`));
-  expect(slot.inspection.navigateCalls).toEqual([
-    { method: "toPluginPanel", path: "souls" },
-    { method: "toPluginPanel", path: "capabilities" },
-    { method: "toPluginPanel", path: "teams" },
-    { method: "toPluginPanel", path: "machines" },
-  ]);
-  expect(navigated()).toBe(4);
+  // The tabs are not rows of the sidebar.
+  for (const path of ["souls", "capabilities", "teams", "machines"]) expect(slot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
+  fireEvent.click(slot.getByTestId("oats-page-link-workspace"));
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "workspace" }]);
+  expect(navigated()).toBe(1);
 });
 
 test("the active thread's row is marked", async () => {
@@ -595,20 +592,20 @@ test("when bb cannot list its threads the line says so, with Retry", async () =>
   expect(slot.queryByTestId("oats-tree")).toBeNull();
 });
 
-test("a feature's own page is a row under the four pages, with its mark while its hook gives one", async () => {
+test("a feature's own page is a row under Workspace, with its mark while its hook gives one", async () => {
   let failed = true;
   const remove = addPageLink({ path: "example", title: "Example", useMark: () => (failed ? { label: "Example, a run failed" } : null) });
   try {
     const { slot } = await sidebar();
     const row = await slot.findByTestId("oats-page-link-example");
-    // The four pages first, then what the features added, this one last.
+    // Workspace first, then what the features added, this one last.
     const rows = Array.from(slot.container.querySelectorAll('[data-testid^="oats-page-link-"]')).map((link) => link.textContent);
-    expect(rows.slice(0, 4)).toEqual(["Souls", "Capabilities", "Teams", "Machines"]);
+    expect(rows[0]).toBe("Workspace");
     expect(rows.at(-1)).toBe("Example");
     const mark = row.querySelector('[data-testid="oats-mark"]')!;
     expect([mark.getAttribute("role"), mark.getAttribute("aria-label")]).toEqual(["img", "Example, a run failed"]);
-    // The four pages have no mark.
-    expect(slot.getByTestId("oats-page-link-souls").querySelector('[data-testid="oats-mark"]')).toBeNull();
+    // Workspace has no mark.
+    expect(slot.getByTestId("oats-page-link-workspace").querySelector('[data-testid="oats-mark"]')).toBeNull();
     fireEvent.click(row);
     expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "example" }]);
     slot.unmount();
@@ -619,9 +616,9 @@ test("a feature's own page is a row under the four pages, with its mark while it
   } finally {
     remove();
   }
-  // Taken away: the block is the four pages again.
+  // Taken away: the block is Workspace again.
   const { slot } = await sidebar();
-  await slot.findByTestId("oats-page-link-souls");
+  await slot.findByTestId("oats-page-link-workspace");
   expect(slot.queryByTestId("oats-page-link-example")).toBeNull();
 });
 
@@ -672,13 +669,14 @@ test("an agent the kernel refused as one it does not know says so in its row, un
 test("the row of the plugin's page that is shown is the selected one (D-037), and none is while a thread is shown", async () => {
   const { slot } = await sidebar();
   await slot.findByTestId("oats-workspace-line");
-  const current = () => ["souls", "capabilities", "teams", "machines"].filter((path) => slot.getByTestId(`oats-page-link-${path}`).getAttribute("aria-current") === "page");
+  const current = () => ["workspace"].filter((path) => slot.getByTestId(`oats-page-link-${path}`).getAttribute("aria-current") === "page");
   expect(current()).toEqual([]);
+  // A tab of the Workspace page is drawn (as app/workspace registers it: its row is Workspace).
   const { shownPage } = await import("../../app/workspace/pages");
-  const Teams = shownPage("teams", () => null);
+  const Teams = shownPage("teams", () => null, "workspace");
   const page = renderSlot<object, Contract>({ component: Teams } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads() });
-  await waitFor(() => expect(current()).toEqual(["teams"]));
-  expect(slot.getByTestId("oats-page-link-teams").className).toContain("bg-accent");
+  await waitFor(() => expect(current()).toEqual(["workspace"]));
+  expect(slot.getByTestId("oats-page-link-workspace").className).toContain("bg-accent");
   page.unmount();
   await waitFor(() => expect(current()).toEqual([]));
 });
@@ -1068,7 +1066,7 @@ test("a stopped tmux agent says Stopped in its sidebar row and in its own panel"
 // home alone). A page that is not shown has no link in the sidebar and no mark; the count of who
 // waits still opens the home; "New agent" stays, whatever pages are shown: the form is a page of its
 // own (app/spawn), not one a release leaves out.
-test("with the release's default (pages: home) the sidebar has the roster, New agent and no page link; with every page, all of them", async () => {
+test("with the home alone (pages: home) the sidebar has the roster, New agent and no page link; with every page, Workspace and Automations", async () => {
   const withPages = async (pages: string) => {
     const app = await loadApp();
     return renderSlot<PluginThreadListProps, Contract>(
@@ -1080,7 +1078,7 @@ test("with the release's default (pages: home) the sidebar has the roster, New a
   const pilot = await withPages("home");
   await pilot.findByTestId("oats-tree");
   expect(pilot.queryByTestId("oats-pages")).toBeNull();
-  for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(pilot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
+  for (const path of ["workspace", "souls", "capabilities", "teams", "machines", "automations"]) expect(pilot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
   expect(pilot.getByTestId("oats-new-agent").textContent).toBe("New agent"); // the way to start an agent survives the hidden pages
   // (The home is reached from bb's own entry for the plugin, which carries the badge: the sidebar has no line that opens it.)
   expect(pilot.queryByTestId("oats-needs-line")).toBeNull();
@@ -1090,7 +1088,7 @@ test("with the release's default (pages: home) the sidebar has the roster, New a
   resetApp();
   const all = await withPages(ALL_PAGES);
   await all.findByTestId("oats-tree");
-  for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(all.getByTestId(`oats-page-link-${path}`)).toBeTruthy();
+  for (const path of ["workspace", "automations"]) expect(all.getByTestId(`oats-page-link-${path}`)).toBeTruthy();
   expect(all.getByTestId("oats-new-agent")).toBeTruthy();
   all.unmount();
   resetApp();
@@ -1098,7 +1096,7 @@ test("with the release's default (pages: home) the sidebar has the roster, New a
   const none = await withPages("souls");
   await none.findByTestId("oats-tree");
   expect(none.queryByTestId("oats-needs-line")).toBeNull();
-  expect(none.getByTestId("oats-page-link-souls")).toBeTruthy();
+  expect(none.getByTestId("oats-page-link-workspace")).toBeTruthy(); // one tab shown: the page is there
 });
 
 test("the path of a page that is not shown answers one line and the way back; the page itself is not drawn", async () => {
@@ -1174,12 +1172,15 @@ test("while bb is still reading the settings no page is known to be shown or hid
     const loading = pagesOf({ values: undefined, isLoading: true });
     expect([loading.known, loading.has("home"), loading.has("souls")]).toEqual([false, false, false]);
     const unavailable = pagesOf({ values: undefined, isLoading: false });
-    expect([unavailable.known, unavailable.has("home"), unavailable.has("souls")]).toEqual([true, true, false]);
+    // The default: the home and the Workspace page's four tabs; not Automations.
+    expect([unavailable.known, unavailable.has("home"), unavailable.has("souls"), unavailable.has("machines"), unavailable.has("workspace"), unavailable.has("automations")]).toEqual([true, true, true, true, true, false]);
     const read = pagesOf({ values: { pages: "home, Souls" }, isLoading: false });
     expect([read.known, read.has("home"), read.has("souls"), read.has("teams")]).toEqual([true, true, true, false]);
+    // The Workspace page is there while one of its tabs is, and not with the home alone.
+    expect([read.has("workspace"), pagesOf({ values: { pages: "home" }, isLoading: false }).has("workspace")]).toEqual([true, false]);
     // A cleared field is the default, as for the plugin's other settings.
     const cleared = pagesOf({ values: { pages: " " }, isLoading: false });
-    expect([cleared.has("home"), cleared.has("souls")]).toEqual([true, false]);
+    expect([cleared.has("home"), cleared.has("souls")]).toEqual([true, true]);
     // The values of a read before stay while bb reads them again.
     expect(pagesOf({ values: { pages: "souls" }, isLoading: true }).known).toBe(true);
   } finally {

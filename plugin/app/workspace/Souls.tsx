@@ -12,7 +12,8 @@ import { NewAgent } from "../spawn/NewAgent";
 import { openSoul } from "./pages";
 import { useRead } from "../store";
 import type { Contract, Result } from "../store";
-import { Button, Chip, Dot, ErrorLine, Heading, Lines, Loading, Note, Page, plainClick } from "../ui";
+import { Button, Chip, Dot, ErrorLine, Heading, Lines, Loading, Note, plainClick } from "../ui";
+import { Frame } from "./Workspace";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
 
@@ -152,9 +153,9 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
 
   if (souls.data === undefined) {
     return (
-      <Page testId="oats-souls-page">
+      <Frame tab="souls" testId="oats-souls-page">
         {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{souls.error}</ErrorLine> : <Note>Reading OATS…</Note>}
-      </Page>
+      </Frame>
     );
   }
   const list = souls.data.souls;
@@ -163,7 +164,7 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
   const agentsOf = (soul: Soul) => (oats.phase === "ready" ? oats.agents.filter((agent) => agent.soul === soul.agent).length : null);
 
   return (
-    <Page testId="oats-souls-page">
+    <Frame tab="souls" testId="oats-souls-page">
       {souls.status === "error" ? <ErrorLine onRetry={souls.retry}>{souls.error}</ErrorLine> : null}
       {/* Each soul's count of agents, and a soul's agents, are the roster's: while OATS cannot be read the page says so once, above both. */}
       <RosterNotice oats={oats} />
@@ -205,6 +206,6 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
           )}
         </div>
       </div>
-    </Page>
+    </Frame>
   );
 }

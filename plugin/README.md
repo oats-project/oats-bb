@@ -46,7 +46,7 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 | `deployment` | `""` | The deployment directory. Empty: the plugin walks up from each bb project's root on the machine to the first directory that holds `oats-local.yaml`. |
 | `oatsBin` | `""` | An absolute path to `oats`. Empty: `oats` on the PATH of the machine's login shell. |
 | `host` | `""` | The bb machine (its name or id) that holds the homes. Empty: the server's only machine. |
-| `pages` | `"home"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home alone: the other pages are built and tested, and left out until they are finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. The home's own route answers under every value. |
+| `pages` | `"home souls capabilities teams machines"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. The last four are the TABS of ONE page, **Workspace** (one row of the sidebar, as the Desktop has it): the page is there while one of its tabs is shown, and its strip holds the tabs that are. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home and the Workspace page's four tabs; Automations is built and tested, and left out until it is finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. The home's own route answers under every value. |
 
 When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
 is missing in a person's words (its title), Retry, and Open settings where a setting mends it;
@@ -587,7 +587,7 @@ the OATS Desktop's Home: what needs you first, then what you have.
 
 The page has no heading of its own (bb's bar over it names it) and no summary line: its headings
 count who needs you and who works. It has no tile for the agents (the sidebar lists every one):
-its tiles are the plugin's other pages, where the release shows any; with the default, none.
+its tiles are the Workspace page's tabs (Souls, Capabilities, Teams, Machines: each with its count) and a feature's own page, where the release shows them.
 
 **The installed `oats`.** The home says where the installed `oats` stands against what the plugin
 is built for (`kernel/compat.ts`: the oldest OATS it works with, the newest minor it was tested
@@ -623,8 +623,8 @@ It is one RPC, `homeCli`, which answers picked fields (`version`, `desktopApi`, 
 that cannot be run at all is the roster's notice, not this one.
 
 **The pages shown.** A tile leads to a page, so the home has a tile only for a page this release
-shows (the plugin's setting `pages`; the default is `home` alone, and then the tiles are **Agents**
-only), and reads a page's count only then. New agent is offered where it has somewhere to open
+shows (the plugin's setting `pages`; with `home` alone there is no tile), and reads a page's
+count only then. New agent is offered where it has somewhere to open
 (the New agent form's page, once that feature names it; else the Souls page when it is shown).
 
 **What a card offers.** An agent is answered by the answer its request takes, and the card offers
@@ -1004,7 +1004,7 @@ runs, and `record/` there makes the recording again (its README says what was ar
 ### One module per feature
 
 The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
-`spawn` (the New agent form), `workspace` (the four pages), `lifecycle` (stop, start, restart,
+`spawn` (the New agent form), `workspace` (the Workspace page and its four tabs), `lifecycle` (stop, start, restart,
 retire), `automations`, `panel` (the instance panel) and `outside` (what is said when something
 happened to an agent outside OATS; no slot, no read and no `oats` verb of its own). Each has one module, or one directory, in
 every layer, and the entry of a layer only composes them:

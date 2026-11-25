@@ -1,16 +1,22 @@
-// The workspace's four pages, as the sidebar and the home link to them: each one's route under
-// the plugin (`/plugins/oats/<path>`) and its title.
+// The Workspace page and its four tabs (Souls, Capabilities, Teams, Machines), as the sidebar and
+// the home link to them: each one's route under the plugin (`/plugins/oats/<path>`) and its title.
+// ONE entry of the sidebar, "Workspace", as the Desktop has it (its D-177; the ruling on the pages'
+// audit, 25 Nov 2026, R1): a tab is a route of its own, so that a link to a tab, or to a soul, holds.
 import { createElement, useEffect, useSyncExternalStore } from "react";
 import type { ComponentType } from "react";
 import { useBbNavigate, useSettings } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate } from "@get-bb/plugin-sdk/app";
 
+/** The Workspace page's tabs, in the Desktop's order. */
 export const PAGES = [
   { path: "souls", title: "Souls" },
   { path: "capabilities", title: "Capabilities" },
   { path: "teams", title: "Teams" },
   { path: "machines", title: "Machines" },
 ] as const;
+export type WorkspaceTab = (typeof PAGES)[number]["path"];
+/** The Workspace page itself: its route opens the first tab that is shown. */
+export const WORKSPACE = { path: "workspace", title: "Workspace" } as const;
 
 /** Opens one soul's own page: `key` is the soul's key, as `oats souls` names it (`<package>/<soul>` for a package soul). */
 export function openSoul(navigate: Pick<BbNavigate, "toPluginPanel">, key: string): void {
@@ -42,8 +48,10 @@ export function addPageLink(link: PageLink): () => void {
   };
 }
 
-/** The rows of the sidebar's block: the four pages, then what the features added. */
-export const pageLinks = (): readonly PageLink[] => [...PAGES, ...added];
+/** The rows of the sidebar's block: Workspace, then what the features added. */
+export const pageLinks = (): readonly PageLink[] => [WORKSPACE, ...added];
+/** The home's tiles: one per tab of the Workspace page (each has a count of its own), then what the features added. */
+export const pageTiles = (): readonly PageLink[] => [...PAGES, ...added];
 
 // ---- which page is open (D-037: the row of the page shown carries the selection) ----
 // bb gives a plugin no hook for the route it shows, so a page says so itself while it is drawn.
@@ -60,14 +68,14 @@ const setOpen = (path: string | null) => {
  * A page's component, for its `navPanel` registration: while it is drawn, `path` is the open page
  * and its row in the sidebar's block is the selected one. `component: shownPage("souls", SoulsPage)`.
  */
-export function shownPage<Props extends object>(path: string, Page: ComponentType<Props>): ComponentType<Props> {
+export function shownPage<Props extends object>(path: string, Page: ComponentType<Props>, /** the sidebar's row that is the open one while this page is drawn (a tab's is Workspace) */ row: string = path): ComponentType<Props> {
   return function ShownPage(props: Props) {
     // A page that is not shown in this release has no route: its path answers one line, with a way back.
     const pages = usePagesShown();
     // Which pages are shown is not known until bb has read the settings: nothing is drawn till
     // then, so a page that IS shown never says for a moment that it is not.
     if (!pages.known) return null;
-    return pages.has(path) ? createElement(Open<Props>, { path, Page, props }) : createElement(NotShown, { path });
+    return pages.has(path) ? createElement(Open<Props>, { path: row, Page, props }) : createElement(NotShown, { path });
   };
 }
 
@@ -119,9 +127,11 @@ export function useOpenPage(): string | null {
 // A release shows only the pages that are finished: the others are built and tested, and left out of
 // the navigation. One switch, read here by every place that links to a page or is one.
 
-/** The ids a page can have in the setting `pages`. `home` is the default's only one. */
+/** The ids a page can have in the setting `pages`. The default shows the home and the Workspace page's four tabs (the ruling's R5); Automations is not in it. */
 export const PAGE_IDS = ["home", "automations", "souls", "capabilities", "teams", "machines"] as const;
-export const DEFAULT_PAGES = "home";
+export const DEFAULT_PAGES = "home souls capabilities teams machines";
+/** The Workspace page is shown where any of its tabs is. */
+const shows = (ids: { has(id: string): boolean }, id: string): boolean => (id === WORKSPACE.path ? PAGES.some((page) => ids.has(page.path)) : ids.has(id));
 /** For the unit tests alone: an unset `pages` stands for every page, a feature's own included. */
 let everyPageWhenUnset = false;
 /**
@@ -140,9 +150,10 @@ export function showEveryPageWhenUnset(on: boolean): void {
  */
 export function pagesShown(value: unknown): { has(id: string): boolean } {
   if (typeof value !== "string" && everyPageWhenUnset) return { has: () => true };
+  // (`workspace` is no id of the setting: the page is there while one of its tabs is.)
   // A cleared field is the default, as for every other setting of the plugin.
   const ids = new Set((typeof value === "string" && value.trim() !== "" ? value : DEFAULT_PAGES).split(/[\s,]+/).map((id) => id.trim().toLowerCase()).filter((id) => id !== ""));
-  return { has: (id) => ids.has(id.toLowerCase()) };
+  return { has: (id) => shows(ids, id.toLowerCase()) };
 }
 
 const NONE = { has: () => false, known: false } as const;

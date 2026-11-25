@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 // The Capabilities, Teams and Machines pages: what the kernel answers, listed; nothing acts.
 import { afterEach, expect, test } from "vitest";
-import { fireEvent } from "@testing-library/react";
+import { fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { fixtureAgents } from "../helpers/fixtures";
-import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
+import { handlers, loadApp, resetApp, sidebarThreads, SOULS } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 
 afterEach(resetApp);
@@ -23,6 +23,56 @@ test("the plugin registers the home and the four pages first, in that order", as
   expect(app.navPanels.map((panel) => panel.path).slice(0, 5)).toEqual(["home", "souls", "capabilities", "teams", "machines"]);
 });
 
+// ---- ONE Workspace page, its tabs routes of their own (the ruling on the pages' audit, R1, R5) ----
+
+test("the Workspace page's four tabs and the page itself are routes, each titled Workspace and out of bb's own navigation", async () => {
+  const app = await loadApp();
+  const mine = app.navPanels.filter((panel) => ["souls", "capabilities", "teams", "machines", "workspace"].includes(panel.path));
+  expect(mine.map((panel) => [panel.path, panel.title, panel.experimental_hideFromNavigation])).toEqual([
+    ["souls", "Workspace", true],
+    ["capabilities", "Workspace", true],
+    ["teams", "Workspace", true],
+    ["machines", "Workspace", true],
+    ["workspace", "Workspace", true],
+  ]);
+});
+
+const tabsOf = (slot: Awaited<ReturnType<typeof page>>) => Array.from(slot.container.querySelectorAll('[role="tab"]')).map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]);
+
+test("a tab's page draws the strip over it: the four tabs in the Desktop's order, Souls and Capabilities with their count, the open one selected; a press goes to that tab's route", async () => {
+  const slot = await page("teams");
+  await slot.findAllByTestId("oats-team-row");
+  // (Each count is the number of rows its own read answers: the handlers' souls and capabilities; Teams and Machines have none, as on the Desktop.)
+  const souls = SOULS.length;
+  await waitFor(() => expect(tabsOf(slot)).toEqual([[`Souls${souls}`, "false"], [expect.stringMatching(/^Capabilities\d+$/), "false"], ["Teams", "true"], ["Machines", "false"]]));
+  expect(souls).toBeGreaterThan(0);
+  expect(slot.getByRole("tablist").getAttribute("aria-label")).toBe("Workspace");
+  expect(slot.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(slot.getByTestId("oats-tab-teams").id);
+  fireEvent.click(slot.getByTestId("oats-tab-machines"));
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "machines" }]);
+});
+
+test("the Workspace route opens the first tab that is shown; only the tabs that are shown are in the strip; one tab alone has no strip", async () => {
+  const app = await loadApp();
+  const workspace = app.navPanels.find((candidate) => candidate.path === "workspace")!;
+  const open = (pages: string) => renderSlot<{ subPath: string }, Contract>(workspace, { subPath: "" }, { rpc: handlers(), sidebarThreads: sidebarThreads(), settings: { pages } });
+  const all = open("home souls capabilities teams machines");
+  await all.findByTestId("oats-souls-page");
+  all.unmount();
+  const two = open("home, teams, machines");
+  await two.findByTestId("oats-teams-page");
+  expect(tabsOf(two).map(([label]) => label)).toEqual(["Teams", "Machines"]);
+  two.unmount();
+  const one = open("machines");
+  await one.findByTestId("oats-machines-page");
+  expect(one.container.querySelector('[role="tablist"]')).toBeNull();
+  expect(one.container.querySelector('[role="tabpanel"]')).toBeNull();
+  one.unmount();
+  // With no tab shown the page is not shown either: its route answers the one line.
+  const none = open("home");
+  expect(none.getByTestId("oats-page-not-shown")).toBeTruthy();
+});
+
 test("Capabilities: id, description, origin and the number of souls", async () => {
   const slot = await page("capabilities", {
     capabilities: () => ({
@@ -37,7 +87,8 @@ test("Capabilities: id, description, origin and the number of souls", async () =
     "oats.coreused by 9 soulsDay-to-day operation.from oats.framework 1.12.0",
     "oats.awebused by 1 soulfrom oats-aweb 1.28.0",
   ]);
-  expect(slot.inspection.rpcCalls.map((call) => call.method)).toEqual(["capabilities"]);
+  // (And the souls, for the Souls tab's count.)
+  expect(slot.inspection.rpcCalls.map((call) => call.method).sort()).toEqual(["capabilities", "souls"]);
 });
 
 test("Teams: label, team id, default or not, and this deployment's agents in each", async () => {
@@ -70,7 +121,8 @@ test("Machines: this machine with its agents in bb and elsewhere, then what the 
   expect(slot.getByText("Servers OATS knows").parentElement!.textContent).toBe("Servers OATS knows1");
   await slot.findByText("7 agents in bb · 1 agent elsewhere");
   expect(slot.getByTestId("oats-this-machine").textContent).toContain("falcon");
-  expect(slot.inspection.rpcCalls.map((call) => call.method).sort()).toEqual(["machines", "snapshot", "souls"]);
+  // (The souls and the capabilities for their tabs' counts; no check of a machine.)
+  expect(slot.inspection.rpcCalls.map((call) => call.method).sort()).toEqual(["capabilities", "machines", "snapshot", "souls"]);
 });
 
 test("an empty answer says so in one line", async () => {

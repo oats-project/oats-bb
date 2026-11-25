@@ -183,11 +183,74 @@ const CONTROL = 'button, a[href], input, select, textarea, summary, [role="tab"]
 export const lowTargets = (min) =>
   `JSON.stringify([...document.querySelectorAll('[data-testid^="oats-"]')].flatMap((root) => [root, ...root.querySelectorAll('${CONTROL}')]).filter((e, i, all) => all.indexOf(e) === i && e.matches('${CONTROL}')).filter((e) => getComputedStyle(e).display !== "inline").map((e) => [e, e.getBoundingClientRect()]).filter(([, r]) => r.width > 0 && r.height > 0 && r.height < ${min} - 0.5).map(([e, r]) => (e.getAttribute("data-testid") || e.getAttribute("aria-label") || (e.innerText ?? "").trim().slice(0, 30) || e.tagName.toLowerCase()) + " " + Math.round(r.height) + "px"))`;
 
+/**
+ * Every block `selector` finds that is drawn, measured for EMPTY ROOM: a block is as high as what it
+ * holds. Its content boxes are the elements that hold text of their own, the controls and the marks,
+ * and every FRAME in it: an element with a visible border or a background of its own (a card, a fact
+ * box) is a thing a person sees, so toward its neighbours it is one box, measured to its border; and
+ * its inside is measured as a block of its own (from its border to its first and last line: its
+ * padding). `worst` is the largest empty gap between two vertical neighbours, in the block or in any
+ * frame inside it; `edge` the largest at a top or a bottom; `boxes` each box of the block's own
+ * level as [top, bottom, its first words], and `frames` the same for each frame, for a failing check
+ * to print. A line stretched to ten times its height, or a row kept for something that was cut,
+ * shows as a gap: no check of words can see it. What a closed fold holds is not drawn, and not measured.
+ * → JSON `[{ worst, edge, height, boxes, frames }]`.
+ */
+const GAPS = String.raw`(root) => {
+  const drawn = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== "hidden" && (e.checkVisibility?.() ?? true);
+  const control = (e) => e.matches("button, input, textarea, select, [data-mark]");
+  const seen = (color) => color !== "" && color !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(color);
+  const frame = (e) => { if (control(e)) return false; const c = getComputedStyle(e); return (["Top", "Bottom"].some((side) => parseFloat(c["border" + side + "Width"]) > 0 && c["border" + side + "Style"] !== "none" && seen(c["border" + side + "Color"])) && e.getBoundingClientRect().height > 0) || seen(c.backgroundColor); };
+  const words = (e) => ((e.innerText ?? "").replace(/\s+/g, " ").trim() || e.getAttribute("placeholder") || e.tagName.toLowerCase()).slice(0, 28);
+  const box = (e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom), words(e)]; };
+  const frames = [];
+  const measure = (block) => {
+    const boxes = [];
+    const walk = (e) => {
+      for (const child of e.children) {
+        if (!drawn(child)) continue;
+        if (frame(child)) { boxes.push(box(child)); frames.push(measure(child)); continue; }
+        if (control(child)) { boxes.push(box(child)); continue; }
+        if ([...child.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() !== "")) boxes.push(box(child));
+        walk(child);
+      }
+    };
+    walk(block);
+    const kept = boxes.filter(([top, bottom]) => bottom > top).sort((x, y) => x[0] - y[0]);
+    const r = block.getBoundingClientRect();
+    let reach = kept.length ? kept[0][1] : r.top;
+    let worst = 0;
+    for (const [top, bottom] of kept) { worst = Math.max(worst, top - reach); reach = Math.max(reach, bottom); }
+    const edge = kept.length ? Math.max(kept[0][0] - r.top, r.bottom - reach) : 0;
+    return { worst: Math.round(worst), edge: Math.round(edge), height: Math.round(r.height), boxes: kept };
+  };
+  const own = measure(root);
+  return { worst: Math.max(own.worst, ...frames.map((each) => each.worst)), edge: Math.max(own.edge, ...frames.map((each) => each.edge)), height: own.height, boxes: own.boxes, frames: frames.filter((each) => each.boxes.length > 0).map((each) => ({ worst: each.worst, edge: each.edge, height: each.height, boxes: each.boxes })) };
+}`;
+export const gapsIn = (selector) => `JSON.stringify([...document.querySelectorAll(${JSON.stringify(selector)})].filter((root) => root.getClientRects().length > 0).map(${GAPS}))`;
+/** The most empty room a block may hold between two of its lines, or at an edge: a gap of the pattern book's, never a line's height or more. */
+export const MAX_GAP = 24;
+/** Whether every measured block (`gapsIn`) holds no gap over MAX_GAP, and there is at least one. */
+export const tight = (measured) => measured.length > 0 && measured.every((block) => block.worst <= MAX_GAP && block.edge <= MAX_GAP);
+/** The blocks that are not tight, for a failing check to print. */
+export const loose = (measured) => JSON.stringify(measured.filter((block) => block.worst > MAX_GAP || block.edge > MAX_GAP));
+
 /** On screen and not covered: the point at the element's middle (clamped to the viewport) is its own. */
 export const visible = (selector) =>
   `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; const r = e.getBoundingClientRect(); if (r.width === 0 || r.height === 0) return false; const x = Math.min(Math.max(r.left + r.width / 2, 0), innerWidth - 1), y = Math.min(Math.max(r.top + Math.min(r.height / 2, 40), 0), innerHeight - 1); const top = document.elementFromPoint(x, y); return top !== null && (e.contains(top) || top.contains(e)); })()`;
 export const testId = (id) => `[data-testid="${id}"]`;
 export const texts = (selector) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((e) => e.innerText.replace(/\\s+/g, " ").trim())`;
+/**
+ * The same two reads with a glyph that has a name read BY its name, as a person reads it: the
+ * plugin's "tmux" mark is bb's terminal glyph, named "tmux" (app/ui/tmux.tsx), and a glyph is no
+ * text of the page. The name is put in the mark for the length of the read, in one evaluation:
+ * nothing is painted meanwhile. (Where the mark is the word, there is nothing to add.)
+ */
+const NAMED = `(read) => { const marks = [...document.querySelectorAll('[data-testid="oats-tmux"][data-tmux="glyph"]')]; const added = marks.map((mark) => mark.appendChild(document.createTextNode(mark.getAttribute("aria-label") ?? ""))); try { return read(); } finally { for (const node of added) node.remove(); } }`;
+export const textsNamed = (selector) => `(${NAMED})(() => ${texts(selector)})`;
+export const textOfNamed = (selector) => `(${NAMED})(() => ${textOf(selector)})`;
+/** The plugin's "tmux" marks on the page, as drawn: how many are the glyph (with its name and a drawing of some size), how many the word. */
+export const tmuxMarks = `JSON.stringify((() => { const marks = [...document.querySelectorAll('[data-testid="oats-tmux"]')].filter((mark) => mark.getClientRects().length > 0); const glyphs = marks.filter((mark) => mark.getAttribute("data-tmux") === "glyph"); return { marks: marks.length, glyphs: glyphs.length, named: glyphs.filter((mark) => mark.getAttribute("role") === "img" && mark.getAttribute("aria-label") === "tmux" && mark.innerText.trim() === "").length, drawn: glyphs.filter((mark) => { const drawing = mark.querySelector('[aria-hidden="true"] > *'); return drawing !== null && drawing.getBoundingClientRect().width >= 8; }).length }; })())`;
 export const textOf = (selector) => `(document.querySelector(${JSON.stringify(selector)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
 
 /**
@@ -198,13 +261,44 @@ export const fill = (selector, value) =>
   `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; const kind = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement : HTMLInputElement; Object.getOwnPropertyDescriptor(kind.prototype, "value").set.call(e, ${JSON.stringify(value)}); e.dispatchEvent(new Event("input", { bubbles: true })); e.scrollIntoView({ block: "center" }); return true; })()`;
 
 /** At phone width the thread list is in bb's drawer: open it with bb's own toggle. */
-export async function showSidebar(page, viewport) {
+export async function showSidebar(page, viewport, { fold = "open" } = {}) {
+  const shown = await showsSidebar(page, viewport);
+  // The roster's parents are closed when the page loads (the fold). A scene that reads a child's
+  // row opens them, as a person does: every chevron pressed. `fold: "asLoaded"` leaves the tree as
+  // the page drew it (the fold's own scene, and the image of the sidebar as a fresh install shows it).
+  if (shown && fold === "open") await openParents(page);
+  return shown;
+}
+
+async function showsSidebar(page, viewport) {
   if (await page.until(visible(testId("oats-sidebar")), viewport.mobile ? 4 : 30)) return true;
   if (!viewport.mobile) return false;
   await page.evaluate(
-    `(() => { const b = [...document.querySelectorAll("button")].find((b) => /sidebar|menu|navigation/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0); b?.click(); return b?.getAttribute("aria-label") ?? null; })()`,
+    // bb's own button, never one of the plugin's: a parent's chevron is named for its agent ("Show Desktop sidebar developer's agents"), and pressing it would open that parent, not the drawer.
+    `(() => { const b = [...document.querySelectorAll("button")].find((b) => /sidebar|menu|navigation/i.test(b.getAttribute("aria-label") ?? "") && b.getBoundingClientRect().width > 0 && b.closest(${JSON.stringify(testId("oats-sidebar"))}) === null); b?.click(); return b?.getAttribute("aria-label") ?? null; })()`,
   );
   await sleep(600); // the drawer slides in
   return Boolean(await page.until(visible(testId("oats-sidebar")), 15));
+}
+
+/**
+ * Presses the chevron of every closed parent of the roster's tree, one at a time, until none is
+ * closed (a child that is a parent too is closed when its parent opens). Each press is WAITED
+ * for: the parent says it is open before the next closed one is looked for. (Pressed in one go
+ * with no wait, the page had not always drawn the first press when the second looked: the same
+ * chevron was then pressed again and again.) It waits a little for the tree first: a sidebar
+ * with no roster (not read, no agents) has nothing to open. → how many it pressed.
+ */
+export async function openParents(page) {
+  await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-tree")}, ${testId("oats-no-agents")}`)}) !== null`, 5);
+  const toggle = `${testId("oats-sidebar")} ${testId("oats-row-toggle")}`;
+  let pressed = 0;
+  for (; pressed < 200; pressed += 1) {
+    const instance = await page.evaluate(`(() => { const closed = document.querySelector(${JSON.stringify(`${toggle}[aria-expanded="false"]`)}); if (!closed) return null; closed.click(); return closed.getAttribute("data-instance"); })()`);
+    if (typeof instance !== "string") return pressed;
+    const opened = await page.until(`[...document.querySelectorAll(${JSON.stringify(toggle)})].some((each) => each.getAttribute("data-instance") === ${JSON.stringify(instance)} && each.getAttribute("aria-expanded") === "true") ? "1" : ""`, 10);
+    if (!opened) throw new Error(`openParents: the chevron of ${instance} was pressed and its parent did not open`);
+  }
+  return pressed;
 }
 

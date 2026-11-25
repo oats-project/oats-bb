@@ -75,14 +75,14 @@ const kernelSays = (act: keyof typeof GONE) => `${GONE[act].error.code}: ${GONE[
 test("a stop plan the kernel refuses for an agent it does not know: the notice, and both rows say so, with no act left on the thread's row", async () => {
   const { slot, ask, facts, mark, line } = await places({ stopPlan: refuse(kernelSays("stopPlan")) });
   expect(facts()).toBe("Stopped · oats-expert");
-  expect(line()).toBe("Stopped· A message sent here in bb starts it again without OATS. Use Start.StartInstance panel");
+  expect(line()).toBe("Stopped· A message here starts it outside OATS.Start…Instance panel");
   act(() => ask().plan("stop"));
   const notice = await within(await slot.findByRole("dialog")).findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("Weekly digest helper is not in OATS any more");
   expect(notice.textContent).toContain("E_SESSION_UNKNOWN");
   await waitFor(() => expect(facts()).toBe("Not in OATS any more · oats-expert"));
   expect(mark()).toBe("stopped");
-  expect(line()).toBe("Not in OATS any more· OATS has no agent of this name nowInstance panel"); // the words, with the separator the line draws
+  expect(line()).toBe("Not in OATS any moreInstance panel"); // the words in the state's place say it all: no sentence repeats them, and no act is left
   expect(slot.queryByTestId("oats-status-act")).toBeNull();
 });
 

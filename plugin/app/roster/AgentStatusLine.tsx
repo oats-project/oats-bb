@@ -1,12 +1,13 @@
 // Where ONE agent is, whole, for every place that says it of one agent (the thread's row; the
-// instance panel's header will take it, and draws the shared StatusLine itself until then): the state's word, since when, the question or the reason, the act that
+// instance panel's header will take it, and draws the shared StatusLine itself until then): the state's word, how long it has waited, the question or the reason, the act that
 // applies, and under the line what the kernel itself says where it said more. One component, so
 // that a header says what the thread's row says (the panel read's F1: the question is in the header).
 import type { ReactNode } from "react";
 import type { Agent, AgentState, BbThread } from "../../model/types";
 import { KernelSays, StatusLine } from "../ui";
 import { readAge } from "../ui/words";
-import { agentStatus, rowState, stoppedSince } from "./status";
+import { ReadingLine } from "./reading";
+import { agentStatus, rowState } from "./status";
 
 export type AgentStatusLineProps = {
   agent: Agent;
@@ -14,8 +15,6 @@ export type AgentStatusLineProps = {
   thread: BbThread | null;
   /** The clock, in epoch milliseconds. */
   now: number;
-  /** The instance's recorded events, where the place has read them: a stopped agent's time is its last "stopped". */
-  events?: readonly { kind: string; at: string; incarnation?: string }[] | undefined;
   /** When the roster this is drawn from was read, while OATS cannot be read again: the line says "as of <age>". */
   staleAt?: string | null;
   /**
@@ -26,18 +25,20 @@ export type AgentStatusLineProps = {
   parts?: (own: { state: AgentState; since: string | null; detail: string | null }) => { since: string | null; detail: string | null; tone?: "warning" | undefined };
   /** The kernel has since refused this agent as one it does not know: the line says that, and nothing of its state. */
   gone?: boolean;
+  /** A lifecycle result says the agent changed and the roster is not read again yet: the line says "Reading…", never the old state (./reading.tsx). */
+  reading?: boolean;
   /** The act that applies, and the place's own buttons: buttons only (the line's frame clips a list). */
   action?: ReactNode;
 };
 
-export function AgentStatusLine({ agent, thread, now, events, staleAt = null, parts, gone = false, action }: AgentStatusLineProps) {
-  const read = agentStatus(agent, thread, now);
-  // The time of a stop is the agent's last recorded "stopped": also for one that runs outside OATS, whose line says since when OATS has it recorded stopped.
-  const status = read.state === "stopped" || read.state === "outside" ? { ...read, since: stoppedSince(events, agent.startedAt ?? null, now) } : read;
+export function AgentStatusLine({ agent, thread, now, staleAt = null, parts, gone = false, reading = false, action }: AgentStatusLineProps) {
+  const status = agentStatus(agent, thread, now);
   const said = parts === undefined ? { since: status.since, detail: status.detail, tone: undefined } : parts(status);
   const age = staleAt === null ? null : readAge(staleAt, now);
   const asOf = age === null ? null : `as of ${age}`;
-  if (gone) return <StatusLine {...rowState(status, true)} detail="OATS has no agent of this name now" action={action} />;
+  // ("Not in OATS any more" in the state's place says it all.)
+  if (gone) return <StatusLine {...rowState(status, true)} action={action} />;
+  if (reading) return <ReadingLine action={action} />;
   return (
     <>
       <StatusLine state={status.state} since={said.since} detail={said.detail} tone={said.tone} asOf={asOf} action={action} />

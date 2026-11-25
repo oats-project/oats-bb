@@ -2,7 +2,9 @@
 // function for a state.
 import { describe, expect, it } from "vitest";
 import { board, mayAnswer, refusal } from "../../app/home/board";
-import { startedBy, summaryLine, tileCount } from "../../app/home/home-words";
+import { summaryLine, tileCount } from "../../app/home/home-words";
+import * as words from "../../app/home/home-words";
+import { TMUX } from "../../app/ui/tmux";
 import { attachCommand } from "../../app/panel/words";
 import type { Agent, BbThread, Node } from "../../model/types";
 import { view } from "../../model/view";
@@ -115,18 +117,18 @@ describe("what the home may send to an agent's thread", () => {
 });
 
 describe("the home's words", () => {
-  it("the summary: every agent once, the plugin's state words, a state with no agent left out but for working and needs you", () => {
-    expect(summaryLine({ "needs-you": 1, working: 2, idle: 3, stopped: 1, error: 1, unreachable: 0, outside: 0 })).toBe("8 agents · 2 working · 1 need you · 3 idle · 1 stopped · 1 failed");
-    expect(summaryLine({ "needs-you": 3, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 2, outside: 0 })).toBe("5 agents · 0 working · 3 need you · 2 unreachable");
-    expect(summaryLine({ "needs-you": 0, working: 1, idle: 0, stopped: 0, error: 0, unreachable: 0, outside: 0 })).toBe("1 agent · 1 working · 0 need you");
+  it("the count line: every agent once, by the plugin's state words, with no total (the heading over it counts the agents); a state with no agent left out but for working and needs you", () => {
+    expect(summaryLine({ "needs-you": 1, working: 2, idle: 3, stopped: 1, error: 1, unreachable: 0, outside: 0 })).toBe("2 working · 1 need you · 3 idle · 1 stopped · 1 failed");
+    expect(summaryLine({ "needs-you": 3, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 2, outside: 0 })).toBe("0 working · 3 need you · 2 unreachable");
+    expect(summaryLine({ "needs-you": 0, working: 1, idle: 0, stopped: 0, error: 0, unreachable: 0, outside: 0 })).toBe("1 working · 0 need you");
     // An agent that runs outside OATS is one of those that need you (the sidebar's foot counts it so): counted once, there.
-    expect(summaryLine({ "needs-you": 1, working: 1, idle: 0, stopped: 2, error: 0, unreachable: 0, outside: 1 })).toBe("5 agents · 1 working · 2 need you · 2 stopped");
+    expect(summaryLine({ "needs-you": 1, working: 1, idle: 0, stopped: 2, error: 0, unreachable: 0, outside: 1 })).toBe("1 working · 2 need you · 2 stopped");
   });
-  it("a tile's count, and who started an agent", () => {
+  it("a tile's count; where an agent on tmux is, the one word of the home's own (what became of a thread is the outside feature's answer); who started it is the panel's Lineage: no row says it", () => {
     expect([tileCount(4), tileCount("loading"), tileCount("failed")]).toEqual(["4", "Counting…", "Couldn't count"]);
-    expect(startedBy({ human: "Ana", parent: "redesign-ui-lead" })).toBe("started by Ana");
-    expect(startedBy({ human: null, parent: "redesign-ui-lead" })).toBe("started by Redesign ui lead");
-    expect(startedBy({ human: null, parent: null })).toBeNull();
+    expect(TMUX).toBe("tmux");
+    expect(Object.keys(words)).not.toContain("THREAD_GONE_NOTE"); // "gone" is said of no agent: bb's answer says what became of its thread
+    expect(Object.keys(words)).not.toContain("startedBy");
   });
   it("the command into a tmux agent's session names its home as one word of a shell", () => {
     expect(attachCommand("/abs/deployment/agents/oats-developer/instances/kernel-fix-developer")).toBe("oats session attach --home /abs/deployment/agents/oats-developer/instances/kernel-fix-developer");

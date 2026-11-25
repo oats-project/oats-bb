@@ -24,7 +24,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { showSidebar, testId, textOf, texts, visible } from "../browser.mjs";
+import { showSidebar, testId, textOf, texts, visible, textsNamed } from "../browser.mjs";
 
 const bb = (...args) => execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 const bbJson = (...args) => JSON.parse(bb(...args, "--json"));
@@ -242,25 +242,26 @@ const flat = `(e) => (e?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
 const ACT = '[data-testid="oats-status-act"], [data-testid^="oats-agent-act-"]';
 /** One row of the sidebar by its instance (a row with no thread to open) or by its thread: → `{ facts, state, tone, lines }`: its second line's words, its mark's state and tone, and how many lines that second line takes. */
 const rowOf = (selector) =>
-  `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(selector)}); if (!row) return null; const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const mark = row.querySelector("[data-mark][data-state]"); return { facts: flat(facts), state: mark?.getAttribute("data-state") ?? null, tone: mark?.getAttribute("data-tone") ?? null, lines: facts ? Math.round(facts.getBoundingClientRect().height / parseFloat(getComputedStyle(facts).lineHeight)) : 0 }; })()`;
+  `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(selector)}); if (!row) return null; const facts = row.querySelector(${JSON.stringify(testId("oats-row-facts"))}); const mark = row.querySelector("[data-mark][data-state]"); return { facts: facts?.getAttribute("title") ?? "" /* (the line's title: it says all of it, the reason too where the row is too narrow to hold it, and "tmux" for bb's terminal glyph) */, state: mark?.getAttribute("data-state") ?? null, tone: mark?.getAttribute("data-tone") ?? null, lines: facts ? Math.round(facts.getBoundingClientRect().height / parseFloat(getComputedStyle(facts).lineHeight)) : 0 }; })()`;
 const threadless = (instance) => `${testId("oats-agent-row-threadless")}[data-instance="${instance}"]`;
 const onThread = (id) => `${testId("oats-agent-row")}[data-sidebar-thread-id="${id}"]`;
 
 /**
  * The thread's own row, read once its line says `wanted` (a RegExp of the line's words: the state
  * word, then each part after its separator): → `{ kind, words, acts, warning }`, where `acts` are
- * the line's own buttons and `warning` the notice under it (`{ tone, title, text, acts }`) or null.
+ * the line's own buttons and `warning` what is under it for the kernel's report (`{ boxed, inView,
+ * folded, kernel, acts }`: no box; one fold, Details) or null.
  * When the wait runs out the row is read as it is, for the failing check to print.
  */
 async function lineOf(page, wanted) {
   const read = (test) =>
-    `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const line = row?.querySelector(${JSON.stringify(testId("oats-status-line"))}); if (!line) return ""; const words = [flat(line.querySelector(${JSON.stringify(testId("oats-state"))})), ...[...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map(flat)].join(" "); if (${test ? `!new RegExp(${JSON.stringify(wanted.source)}).test(words)` : "false"}) return ""; const acts = (e) => [...e.querySelectorAll(${JSON.stringify(ACT)})].map(flat); const warning = row.querySelector(${JSON.stringify(testId("oats-outside-warning"))}); const notice = warning?.querySelector(${JSON.stringify(testId("oats-notice"))}); const fold = notice?.querySelector(${JSON.stringify(testId("oats-notice-details"))}); return JSON.stringify({ kind: row.getAttribute("data-outside"), state: line.getAttribute("data-state"), stateTone: line.querySelector(${JSON.stringify(testId("oats-state"))})?.getAttribute("data-tone") ?? null, agent: flat(row.querySelector(${JSON.stringify(testId("oats-outside-agent"))})) || null, words, tones: [...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map((part) => part.getAttribute("data-tone")).filter(Boolean), acts: acts(line), warning: notice ? { tone: notice.getAttribute("data-tone"), title: flat(notice.querySelector("h3")), text: flat(notice), folded: fold ? !fold.open : null, kernel: (fold?.textContent ?? "").replace(/\\s+/g, " ").trim(), does: [...notice.querySelectorAll(${JSON.stringify(testId("oats-outside-act"))})].map(flat), acts: acts(notice) } : null }); })()`;
+    `(() => { const flat = ${flat}; const row = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); const line = row?.querySelector(${JSON.stringify(testId("oats-status-line"))}); if (!line) return ""; const words = [flat(line.querySelector(${JSON.stringify(testId("oats-state"))})), ...[...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map(flat)].join(" "); if (${test ? `!new RegExp(${JSON.stringify(wanted.source)}).test(words)` : "false"}) return ""; const acts = (e) => [...e.querySelectorAll(${JSON.stringify(ACT)})].map(flat); const warning = row.querySelector(${JSON.stringify(testId("oats-outside-warning"))}); const fold = warning?.querySelector(${JSON.stringify(testId("oats-outside-details"))}); return JSON.stringify({ kind: row.getAttribute("data-outside"), state: line.getAttribute("data-state"), stateTone: line.querySelector(${JSON.stringify(testId("oats-state"))})?.getAttribute("data-tone") ?? null, agent: flat(row.querySelector(${JSON.stringify(testId("oats-outside-agent"))})) || null, words, tones: [...line.querySelectorAll(${JSON.stringify(testId("oats-status-part"))})].map((part) => part.getAttribute("data-tone")).filter(Boolean), acts: acts(line), warning: warning ? { boxed: warning.querySelector(${JSON.stringify(testId("oats-notice"))}) !== null || warning.querySelector("h3") !== null, inView: flat(warning), folds: warning.querySelectorAll("details").length, folded: fold ? !fold.open : null, kernel: (fold?.textContent ?? "").replace(/\\s+/g, " ").trim(), acts: acts(warning) } : null }); })()`;
   const found = (await page.until(read(true), 30)) || (await page.evaluate(read(false)));
   return found ? JSON.parse(found) : null;
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-/** "since 14:03", or with its date: the time of the agent's last recorded stop, where the fake's events hold one. */
-const SINCE = "( · since (\\w+ \\d+, )?\\d\\d:\\d\\d)?";
+/** A line says no time of a stop (when OATS stopped an agent is a fact of the instance panel's Session): nothing stands between the state's word and its reason. */
+const SINCE = "";
 
 export default [
   {
@@ -280,7 +281,7 @@ export default [
       // The thread's line: "Failed" alone, Start, and bb's own reason one press away.
       await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
       const line = await lineOf(page, /^Failed$/);
-      check(line !== null && line.state === "error" && line.words === "Failed" && same(line.acts, ["Start"]) && line.warning === null, `${at} the line: "Failed" and nothing after it, with Start`, JSON.stringify(line));
+      check(line !== null && line.state === "error" && line.words === "Failed" && same(line.acts, ["Start…"]) && line.warning === null, `${at} the line: "Failed" and nothing after it, with Start… (it opens its dialog)`, JSON.stringify(line));
       const details = testId("oats-status-bb");
       await page.evaluate(`document.querySelector(${JSON.stringify(`${details} summary`)})?.click()`);
       const reason = await page.until(`(() => { const fold = document.querySelector(${JSON.stringify(details)}); return fold?.open ? (fold.querySelector("p")?.innerText ?? "").trim() : ""; })()`, 10);
@@ -305,23 +306,23 @@ export default [
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       // bb's own answer arrives after the roster: the rows are waited for, by what they say.
-      const all = `JSON.stringify({ digest: ${rowOf(threadless("weekly-digest-helper"))}, ranker: ${rowOf(threadless("ranker-v3-probe"))}, flaky: ${rowOf(threadless("flaky-ci-developer"))}, outside: ${rowOf(onThread(threads.get("thr_harvest").id))}, failed: ${rowOf(onThread(threads.get("thr_mockups").id))}, unreachable: ${rowOf(onThread(threads.get("thr_redesign").id))}, open: ${rowOf(onThread(threads.get("thr_release").id))}, tree: ${textOf(testId("oats-tree"))}, outsides: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark][data-state="outside"]`)}).length, words: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
+      const all = `JSON.stringify({ digest: ${rowOf(threadless("weekly-digest-helper"))}, ranker: ${rowOf(threadless("ranker-v3-probe"))}, flaky: ${rowOf(threadless("flaky-ci-developer"))}, outside: ${rowOf(onThread(threads.get("thr_harvest").id))}, failed: ${rowOf(onThread(threads.get("thr_mockups").id))}, unreachable: ${rowOf(onThread(threads.get("thr_redesign").id))}, open: ${rowOf(onThread(threads.get("thr_release").id))}, tree: ${textOf(testId("oats-tree"))}, outsides: document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} [data-mark][data-state="outside"]`)}).length, words: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
       const settled = await page.until(`(() => { const now = ${all}; return /archived in bb/.test(now) && /deleted in bb/.test(now) && /Running outside OATS/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
-      // A reason takes the soul's place on a row (an operator's stop with an archived thread has none: its soul stays): each of these rows' second line is ONE line, never two.
+      // The reason follows the state's word on a row and the soul follows it: each of these rows' second line is ONE line, never two.
       const digestOpens = await page.until(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.getAttribute("data-opens") === "thread"`, 15);
-      check(same(rows.digest, { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 }) && Boolean(digestOpens), `${at} stopped, its thread archived in bb: "Stopped" and its soul, in the plain tone, and the row opens the archived thread`, JSON.stringify(rows.digest));
-      check(same(rows.outside, { facts: "Running outside OATS", state: "outside", tone: null, lines: 1 }) && rows.outsides === 1, `${at} the kernel's outsideOats: the state IS "Running outside OATS", with its mark, alone on its line, on that row alone; no "Stopped" beside it`, JSON.stringify([rows.outside, rows.outsides]));
-      check(same(rows.ranker, { facts: "Stopped · archived in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
-      check(same(rows.flaky, { facts: "Stopped · deleted in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));
+      check(same(rows.digest, { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 }) && Boolean(digestOpens), `${at} stopped, its thread archived in bb: "Stopped" and its soul, no reason, in the plain tone, and the row opens the archived thread`, JSON.stringify(rows.digest));
+      check(same(rows.outside, { facts: "Running outside OATS · knowledge-harvester", state: "outside", tone: null, lines: 1 }) && rows.outsides === 1, `${at} the kernel's outsideOats: the state IS "Running outside OATS", with its mark, then its soul, on that row alone; no "Stopped" beside it`, JSON.stringify([rows.outside, rows.outsides]));
+      check(same(rows.ranker, { facts: "Stopped · research-expert · archived in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread archived in bb: "Stopped" with its mark in the warning tone, then "archived in bb"`, JSON.stringify(rows.ranker));
+      check(same(rows.flaky, { facts: "Stopped · oats-developer · deleted in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));
       // Every row's state word is one of the set: "Archived in bb" and "Deleted in bb" are reasons after a state, never states.
       const SET = ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"];
       check(rows.words.length === 8 && rows.words.every((word) => SET.includes(word)), `${at} every row's state word is one of the set (${SET.join(", ")})`, JSON.stringify(rows.words));
-      check(rows.failed?.facts === "Failed · oats-desktop-developer" && rows.unreachable?.facts === "Unreachable · oats-product-expert" && rows.open?.facts === "Stopped · oats-maintainer", `${at} failed, unreachable and stopped on an open thread: the roster's own words, with nothing after the soul`, JSON.stringify([rows.failed, rows.unreachable, rows.open]));
+      check(rows.failed?.facts === "Failed · oats-desktop-developer" && rows.unreachable?.facts === "Unreachable · oats-product-expert" && rows.open?.facts === "Stopped · oats-maintainer", `${at} failed, unreachable and stopped on an open thread: the roster's own words, the state and the soul, no reason`, JSON.stringify([rows.failed, rows.unreachable, rows.open]));
       check(!/its bb thread is gone/.test(rows.tree), `${at} no row says "its bb thread is gone"`, rows.tree);
       // The one the kernel reports running outside OATS is counted among those that need a person (no other agent of this roster waits).
-      const foot = await page.evaluate(textOf(testId("oats-needs-line")));
-      check(foot === "! 1 need you", `${at} the roster's foot counts the agent that runs outside OATS: "1 need you"`, foot);
+      const foot = await page.evaluate(`JSON.stringify({ foot: !(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-needs-line")}`)}) === null), said: /need you/i.test(document.querySelector(${JSON.stringify(testId("oats-sidebar"))}).innerText) })`);
+      check(foot === JSON.stringify({ foot: false, said: false }), `${at} the roster has no line that counts who needs a person: the row's own state says it (bb's badge and the home count it)`, foot);
       // No row's second line is cut.
       const cut = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${testId("oats-tree")} ${testId("oats-row-facts")}`)})].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.innerText)`);
       check(cut.length === 0, `${at} no row's words are cut`, JSON.stringify(cut));
@@ -373,8 +374,8 @@ export default [
       await page.until(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.getAttribute("data-opens") === "thread"`, 30);
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("weekly-digest-helper"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/threads/${digest.id}")`, 15)), `${at} the row of a stopped agent whose conversation is archived opens that thread in bb`, await page.evaluate("location.pathname"));
-      let line = await lineOf(page, new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb\\. Start begins a new one\\.$`));
-      check(line !== null && line.kind === "stopped-archived" && line.agent === "Weekly digest helper" && new RegExp(`^Stopped${SINCE} · Its conversation is archived in bb\\. Start begins a new one\\.$`).test(line.words) && same(line.acts, ["Start…", "Retire…"]) && line.warning === null, `${at} stopped, archived: the archived thread's own row names the agent, says "Stopped", since when, and "Its conversation is archived in bb. Start begins a new one.", with the lifecycle's Start… and Retire…`, line === null ? await shown() : JSON.stringify(line));
+      let line = await lineOf(page, new RegExp(`^Stopped${SINCE} · archived in bb$`));
+      check(line !== null && line.kind === "stopped-archived" && line.agent === "Weekly digest helper" && line.words === "Stopped · archived in bb" && same(line.acts, ["Start…", "Retire…"]) && line.warning === null, `${at} stopped, archived: the archived thread's own row names the agent, says "Stopped" and the reason, "archived in bb", with the lifecycle's Start… and Retire…`, line === null ? await shown() : JSON.stringify(line));
       // What bb 0.50.1 itself does with an archived thread opened by its id: the conversation, no composer, and its own bar.
       const bar = await page.until(`(() => { const text = document.body.innerText.replace(/\\s+/g, " "); return /Thread is archived/.test(text) ? JSON.stringify({ composer: document.querySelectorAll("textarea, [contenteditable=true], [role=textbox]").length, unarchive: [...document.querySelectorAll("button")].some((b) => b.innerText.trim() === "Unarchive") }) : ""; })()`, 15);
       check(bar === JSON.stringify({ composer: 0, unarchive: true }), `${at} bb shows the archived thread to read: no composer, "Thread is archived" and its own Unarchive`, bar ?? (await page.evaluate(`document.body.innerText.replace(/\\s+/g, " ").slice(-300)`)));
@@ -382,57 +383,58 @@ export default [
 
       // a session lost, archived in bb
       await open("thr_research");
-      const LOST = new RegExp(`^Stopped${SINCE} · Its conversation was archived in bb while it ran, and its process may still run\\. Stop it, then start it from OATS\\.$`);
+      const LOST = new RegExp(`^Stopped${SINCE} · Archived in bb while running: it may still run\\.$`);
       line = await lineOf(page, LOST);
-      check(line !== null && line.kind === "lost-archived" && line.state === "stopped" && line.stateTone === "warning" && same(line.tones, ["warning"]) && LOST.test(line.words) && same(line.acts, ["Stop", "Retire"]) && line.warning === null, `${at} lost, archived: "Stopped" in the warning tone, that its process may still run, with Stop (Start comes once it is stopped) and Retire`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.kind === "lost-archived" && line.state === "stopped" && line.stateTone === "warning" && same(line.tones, ["warning"]) && LOST.test(line.words) && same(line.acts, ["Stop…", "Retire…"]) && line.warning === null, `${at} lost, archived: "Stopped" in the warning tone, that its process may still run, with Stop (Start comes once it is stopped) and Retire`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-lost-archived`, { targets: true });
 
       // the kernel's report, on the open thread
       await open("thr_harvest");
-      const OUTSIDE_LINE = /^Running outside OATS · recorded stopped( since (\w+ \d+, )?\d\d:\d\d)?$/;
+      const OUTSIDE_LINE = /^Running outside OATS · recorded stopped$/;
       line = await lineOf(page, OUTSIDE_LINE);
       const warned = line?.warning ?? null;
       check(
-        line !== null && line.state === "outside" && line.stateTone === "warning" && OUTSIDE_LINE.test(line.words) && same(line.acts, []) && warned !== null && warned.tone === "warning" && warned.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && warned.text.includes("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.") && !/`|oats instance stop|running-outside-oats/.test(warned.text) && warned.folded === true && warned.kernel.includes(MESSAGE) && warned.kernel.includes("running-outside-oats") && same(warned.does, ["Stop stops the harness that runs outside OATS", "Start starts it from OATS, in a new conversation"]) && same(warned.acts, ["Stop", "Start"]),
-        `${at} outsideOats: ONE state, "Running outside OATS", in the warning tone, then what OATS recorded; the notice in a person's words (no command and no backtick on screen), the kernel's sentence and its code folded under Details, and Stop and Start each with what it does`,
+        line !== null && line.state === "outside" && line.stateTone === "warning" && OUTSIDE_LINE.test(line.words) && same(line.tones, ["warning"]) && same(line.acts, ["Stop…", "Start…"]) && warned !== null && warned.boxed === false && /^.?\s*Details$/.test(warned.inView) && warned.folds === 1 && warned.folded === true && warned.kernel.includes("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.") && warned.kernel.includes(MESSAGE) && warned.kernel.includes("running-outside-oats") && same(warned.acts, []),
+        `${at} outsideOats: ONE state, "Running outside OATS", in the warning tone, then what OATS recorded, with Stop… and Start… as the line's own acts; under it no box and no title: ONE fold, Details, closed, holding what happened in a person's words, then the kernel's code and sentence (no command and no backtick in view)`,
         line === null ? await shown() : JSON.stringify(line),
       );
-      await page.shot(`outside-${viewport.name}-thread-outside`, { targets: true });
+      // The line with the kernel's report under it (the notice: one fold): as high as what it holds.
+      await page.shot(`outside-${viewport.name}-thread-outside`, { targets: true, gaps: testId("oats-identity-row") });
 
       // The home counts it as the roster's foot does, and its card holds the same notice: no choice, no reply.
       await page.goto("/plugins/oats/home");
       const cardSel = `${testId("oats-needs-card")}[data-instance="harvest-knowledge-helper"]`;
       const homeSays = await page.until(
-        `(() => { const card = document.querySelector(${JSON.stringify(cardSel)}); const notice = card?.querySelector(${JSON.stringify(testId("oats-outside-warning"))}); if (!card || !notice) return ""; const flat = (node) => (node?.innerText ?? "").replace(/\\s+/g, " ").trim(); return JSON.stringify({ offer: card.dataset.offer, state: flat(card.querySelector(${JSON.stringify(testId("oats-state"))})), title: flat(notice.querySelector("h3")), acts: [...notice.querySelectorAll("button")].map((button) => button.innerText.trim()), answers: card.querySelectorAll(${JSON.stringify(`${testId("oats-needs-choice")}, ${testId("oats-reply-send")}, ${testId("oats-needs-stopped")}`)}).length, heading: flat(document.querySelector(${JSON.stringify(`${testId("oats-home-needs")} h2`)})), summary: flat(document.querySelector(${JSON.stringify(testId("oats-home-summary"))})) }); })()`,
+        `(() => { const card = document.querySelector(${JSON.stringify(cardSel)}); const notice = card?.querySelector(${JSON.stringify(testId("oats-outside-warning"))}); if (!card || !notice) return ""; const flat = (node) => (node?.innerText ?? "").replace(/\\s+/g, " ").trim(); return JSON.stringify({ offer: card.dataset.offer, state: flat(card.querySelector(${JSON.stringify(testId("oats-state"))})), boxed: notice.querySelector(${JSON.stringify(testId("oats-notice"))}) !== null || notice.querySelector("h3") !== null, folds: notice.querySelectorAll("details").length, acts: [...(card.querySelector(${JSON.stringify(testId("oats-status-line"))})?.querySelectorAll("button") ?? [])].map((button) => button.innerText.trim()), answers: card.querySelectorAll(${JSON.stringify(`${testId("oats-needs-choice")}, ${testId("oats-reply-send")}, ${testId("oats-needs-stopped")}`)}).length, heading: flat(document.querySelector(${JSON.stringify(`${testId("oats-home-needs")} h2`)})), summary: flat(document.querySelector(${JSON.stringify(testId("oats-home-summary"))})) }); })()`,
         30,
       );
       const home = homeSays ? JSON.parse(homeSays) : null;
       check(
-        home !== null && home.offer === "outside" && home.state === "Running outside OATS" && home.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && same(home.acts, ["Stop", "Start"]) && home.answers === 0,
-        `${at} the home's card of the agent that runs outside OATS: the same state and notice, with Stop and Start, and no choice and no reply`,
+        home !== null && home.offer === "outside" && home.state === "Running outside OATS" && home.boxed === false && home.folds === 1 && same(home.acts, ["Stop…", "Start…"]) && home.answers === 0,
+        `${at} the home's card of the agent that runs outside OATS: the same drawing as under its thread's line: the state, Stop… and Start… on the line, Details under it, no box; and no choice and no reply`,
         JSON.stringify(home),
       );
-      check(home !== null && /^needs you ?1$/i.test(home.heading) && home.summary.includes(" · 1 need you") && !/outside/i.test(home.summary), `${at} the home counts it as the roster's foot does: "Needs you 1", "1 need you" in the summary, and no count of its own`, JSON.stringify(home));
+      check(home !== null && /^needs you ?1$/i.test(home.heading) && home.summary === "", `${at} the home counts it as the roster's foot does: "Needs you 1" over its card, with no count of its own and no summary line (the summary is Home › Agents')`, JSON.stringify(home));
       await page.shot(`outside-${viewport.name}-home-card`, { targets: true });
 
       // failed, on its open thread
       await open("thr_mockups");
       line = await lineOf(page, /^Failed · /);
-      check(line !== null && line.words === "Failed · Its session ended. Restart it, or send a message here." && same(line.acts, ["Restart"]) && line.warning === null, `${at} failed, open: "Failed", that a message here starts it again, with Restart and no warning`, line === null ? await shown() : JSON.stringify(line));
+      check(line !== null && line.words === "Failed · session ended" && same(line.acts, ["Restart…"]) && line.warning === null, `${at} failed, open: "Failed", the reason in two words, with Restart and no warning`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-failed`, { targets: true });
 
       // unreachable: what status says, and nothing about a message
       await open("thr_redesign");
-      line = await lineOf(page, /^Unreachable · /);
-      check(line !== null && line.words === "Unreachable · OATS cannot reach its session" && same(line.acts, ["Retry"]) && line.warning === null && !/message/i.test(await shown()), `${at} unreachable: what status says, with Retry, and nothing about a message`, line === null ? await shown() : JSON.stringify(line));
+      line = await lineOf(page, /^Unreachable$/);
+      check(line !== null && line.words === "Unreachable" && same(line.acts, ["Retry"]) && line.warning === null && !/message/i.test(await shown()), `${at} unreachable: the state's word alone, with Retry, and nothing about a message`, line === null ? await shown() : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-unreachable`, { targets: true });
 
       // stopped, on an open thread: bb's composer is live under it, and the line says what a message there does
       await open("thr_release");
-      const OPEN = new RegExp(`^Stopped${SINCE} · A message sent here in bb starts it again without OATS\\. Use Start\\.$`);
+      const OPEN = new RegExp(`^Stopped${SINCE} · A message here starts it outside OATS\\.$`);
       line = await lineOf(page, OPEN);
       const composer = await page.evaluate(`document.querySelectorAll("textarea, [contenteditable=true], [role=textbox]").length`);
-      check(line !== null && line.state === "stopped" && OPEN.test(line.words) && same(line.acts, ["Start"]) && line.warning === null && composer > 0, `${at} stopped, open: "Stopped", since when, that a message sent here starts it again without OATS, with Start; bb's composer is there`, line === null ? await shown() : JSON.stringify({ line, composer }));
+      check(line !== null && line.state === "stopped" && OPEN.test(line.words) && same(line.acts, ["Start…"]) && line.warning === null && composer > 0, `${at} stopped, open: "Stopped", that a message here starts it outside OATS, with Start; bb's composer is there`, line === null ? await shown() : JSON.stringify({ line, composer }));
       await page.shot(`outside-${viewport.name}-thread-stopped-open`, { targets: true });
     },
   },
@@ -442,16 +444,16 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      await page.until(`(${rowOf(threadless("flaky-ci-developer"))})?.facts === "Stopped · deleted in bb"`, 30);
+      await page.until(`(${rowOf(threadless("flaky-ci-developer"))})?.facts === "Stopped · oats-developer · deleted in bb"`, 30);
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless("flaky-ci-developer"))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/plugins/oats/agent/flaky-ci-developer")`, 15)), `${at} the row of an agent whose thread was deleted opens the agent's own page`, await page.evaluate("location.pathname"));
       const read = await page.until(
-        `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const block = document.querySelector(${JSON.stringify(`[role="tabpanel"] > ${testId("oats-outside-agent-block")}:first-child`)}); if (!head || !block) return ""; return JSON.stringify({ name: flat(head.querySelector(${JSON.stringify(testId("oats-panel-name"))})), state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), kind: block.getAttribute("data-outside"), sentence: flat(block.querySelector(":scope > p")), tone: block.querySelector(":scope > p")?.getAttribute("data-tone") ?? null, acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat), headed: [...head.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)})].map(flat) }); })()`,
+        `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const said = head?.querySelector(${JSON.stringify(`${testId("oats-panel-state")}[data-outside]`)}); if (!head || !said) return ""; const parts = [...head.querySelectorAll(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-status-part")}`)})]; const block = document.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}); return JSON.stringify({ name: flat(head.querySelector(${JSON.stringify(testId("oats-panel-name"))})), state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), kind: said.getAttribute("data-outside"), sentence: parts.map((part) => flat(part).replace(/^· /, "")).join(" | "), tone: parts.at(-1)?.getAttribute("data-tone") ?? null, alone: block !== null, acts: [...(block?.querySelectorAll(${JSON.stringify(ACT)}) ?? [])].map(flat), headed: [...head.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)})].map(flat) }); })()`,
         30,
       );
       check(
-        read === JSON.stringify({ name: "Flaky ci developer", state: "Stopped", kind: "deleted", sentence: "Its conversation was deleted in bb. Start it from OATS for a new one.", tone: "warning", acts: [], headed: ["Start…", "Retire…"] }),
-        `${at} its page says "Stopped", that its conversation was deleted in bb (in the warning tone), and has the lifecycle's Start… and Retire… in its header, once`,
+        read === JSON.stringify({ name: "Flaky ci developer", state: "Stopped", kind: "deleted", sentence: "deleted in bb", tone: "warning", alone: false, acts: [], headed: ["Start…", "Retire…"] }),
+        `${at} its page says "Stopped · deleted in bb" on its header's state line (the reason in the warning tone, nothing of it alone under the tabs), and has the lifecycle's Start… and Retire… in its header, once`,
         read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
       );
       await page.shot(`outside-${viewport.name}-agent-deleted`, { targets: true });
@@ -475,13 +477,13 @@ export default [
         await untilRoster(reported);
         await page.goto(`/plugins/oats/agent/${INSTANCE}`);
         const read = await page.until(
-          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const panel = document.querySelector('[role="tabpanel"]'); const tabs = document.querySelector('[role="tablist"]'); const block = panel?.querySelector(${JSON.stringify(`:scope > ${testId("oats-outside-agent-block")}[data-outside="outside"]:first-child`)}); const title = block?.querySelector("h3"); if (!head || !tabs || !block || !title) return ""; const box = (e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; return JSON.stringify({ state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), inHeader: head.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}) !== null, acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat), headed: [...head.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)})].map(flat), notice: flat(title), header: box(head), tabs: box(tabs), title: box(title), window: innerHeight }); })()`,
+          `(() => { const flat = ${flat}; const head = document.querySelector(${JSON.stringify(testId("oats-panel-header"))}); const panel = document.querySelector('[role="tabpanel"]'); const tabs = document.querySelector('[role="tablist"]'); const block = panel?.querySelector(${JSON.stringify(`:scope > ${testId("oats-outside-agent-block")}[data-outside="outside"]:first-child`)}); const title = block?.querySelector(${JSON.stringify(`${testId("oats-outside-details")} summary`)}); if (!head || !tabs || !block || !title) return ""; const box = (e) => { const r = e.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; return JSON.stringify({ state: flat(head.querySelector(${JSON.stringify(`${testId("oats-panel-state")} ${testId("oats-state")}`)})), inHeader: head.querySelector(${JSON.stringify(testId("oats-outside-agent-block"))}) !== null, acts: [...block.querySelectorAll(${JSON.stringify(ACT)})].map(flat), headed: [...head.querySelectorAll(${JSON.stringify(`${testId("oats-agent-acts")} button`)})].map(flat), notice: flat(title), boxed: block.querySelector(${JSON.stringify(testId("oats-notice"))}) !== null || block.querySelector("h3") !== null, header: box(head), tabs: box(tabs), title: box(title), window: innerHeight }); })()`,
           30,
         );
         const drawn = read ? JSON.parse(read) : null;
         check(
-          drawn !== null && drawn.state === "Running outside OATS" && drawn.inHeader === false && same(drawn.acts, []) && same(drawn.headed, ["Stop…", "Start…", "Retire…"]) && drawn.notice === "Weekly digest helper is running in bb, but OATS recorded it as stopped." && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.title.bottom <= drawn.window,
-          `${at} the header says "Running outside OATS" and ends ${drawn === null ? "?" : drawn.header.bottom} px down (the upper half of the window); the tabs are whole; the block is first under them, with the notice's title in view, and no second button (Stop, Start and Retire are the header's)`,
+          drawn !== null && drawn.state === "Running outside OATS" && drawn.inHeader === false && same(drawn.acts, []) && same(drawn.headed, ["Stop…", "Start…", "Retire…"]) && /Details$/.test(drawn.notice) && drawn.boxed === false && drawn.header.bottom <= drawn.window / 2 && drawn.tabs.top >= drawn.header.bottom - 1 && drawn.tabs.bottom <= drawn.window && drawn.title.bottom <= drawn.window,
+          `${at} the header says "Running outside OATS" and ends ${drawn === null ? "?" : drawn.header.bottom} px down (the upper half of the window); the tabs are whole; the block is first under them: ONE fold, Details, in view, with no box, no title and no second button (Stop, Start and Retire are the header's)`,
           read ?? (await page.evaluate(textOf(testId("oats-agent-page")))),
         );
         await page.shot(`outside-${viewport.name}-agent-archived-outside`, { targets: true });
@@ -502,39 +504,39 @@ export default [
       // The sidebar's three rows, side by side: two words of state, and what tells the two stopped ones apart.
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      const all = `JSON.stringify({ operator: ${rowOf(onThread(operator.id))}, host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, tmux: ${rowOf(threadless("kernel-fix-developer"))}, words: ${texts(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
-      const settled = await page.until(`(() => { const now = ${all}; return /session lost · tmux/.test(now) && /not loaded/.test(now) ? now : ""; })()`, 30);
+      const all = `JSON.stringify({ operator: ${rowOf(onThread(operator.id))}, host: ${rowOf(onThread(host.id))}, idle: ${rowOf(onThread(idle.id))}, tmux: ${rowOf(threadless("kernel-fix-developer"))}, words: ${textsNamed(`${testId("oats-tree")} ${testId("oats-row-facts")}`)}.map((facts) => facts.split(" · ")[0]) })`;
+      const settled = await page.until(`(() => { const now = ${all}; return (now.match(/session lost/g) ?? []).length >= 2 && /not loaded/.test(now) ? now : ""; })()`, 30);
       const rows = JSON.parse(settled || (await page.evaluate(all)));
       check(
         same([rows.operator, rows.host, rows.idle, rows.tmux], [
           { facts: "Stopped · knowledge-harvester", state: "stopped", tone: null, lines: 1 },
-          { facts: "Stopped · session lost", state: "stopped", tone: null, lines: 1 },
-          { facts: "Idle · not loaded", state: "idle", tone: null, lines: 1 },
-          { facts: "Stopped · session lost · tmux", state: "stopped", tone: null, lines: 1 },
-        ]) && rows.words.every((word) => ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"].includes(word)),
-        `${at} the rows: "Stopped · <soul>" (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every state word is one of the set`,
+          { facts: "Stopped · oats-maintainer · session lost", state: "stopped", tone: null, lines: 1 },
+          { facts: "Idle · oats-desktop-developer · not loaded", state: "idle", tone: null, lines: 1 },
+          { facts: "Stopped · oats-developer · session lost · tmux", state: "stopped", tone: null, lines: 1 },
+        ]) && rows.words.every((word) => ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS", "Lost"].includes(word)) && rows.words.filter((word) => word === "Lost").length === 2,
+        `${at} the rows (each with its soul after these words): "Stopped" with no reason (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux, "tmux" its glyph's name: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every word drawn in the state's place is one of the set, with "Lost" (a row's own word for a lost session, whose title keeps "Stopped · … · session lost") on exactly the two lost rows`,
         JSON.stringify(rows),
       );
       await page.shot(`outside-${viewport.name}-three-sidebar`);
 
       // (1) an operator's stop: "Stopped", the warning (in the warning tone), Start
       await page.goto(`/projects/${operator.projectId}/threads/${operator.id}`);
-      const OPERATOR = new RegExp(`^Stopped${SINCE} · A message sent here in bb starts it again without OATS\\. Use Start\\.$`);
+      const OPERATOR = new RegExp(`^Stopped${SINCE} · A message here starts it outside OATS\\.$`);
       const one = await lineOf(page, OPERATOR);
-      check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && one.stateTone === "warning" && same(one.tones, ["warning"]) && same(one.acts, ["Start"]), `${at} (1) an operator's stop: "Stopped", the warning in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
+      check(one !== null && one.state === "stopped" && OPERATOR.test(one.words) && one.stateTone === "warning" && same(one.tones, ["warning"]) && same(one.acts, ["Start…"]), `${at} (1) an operator's stop: "Stopped", the warning in the warning tone, Start`, one === null ? await shown() : JSON.stringify(one));
       await page.shot(`outside-${viewport.name}-three-1-operator-stop`, { targets: true });
 
-      // (2) its session lost: "Stopped", that nobody stopped it and a message carries it on; no time, no cause, no warning
+      // (2) its session lost: "Stopped · session lost", the reason alone; no sentence, no time, no cause, no warning
       await page.goto(`/projects/${host.projectId}/threads/${host.id}`);
-      const HOST = /^Stopped · Its session ended without OATS stopping it\. Nobody stopped it\. To carry on, send it a message here\. Start begins a new conversation\.$/;
+      const HOST = /^Stopped · session lost$/;
       const two = await lineOf(page, HOST);
-      check(two !== null && two.state === "stopped" && HOST.test(two.words) && two.stateTone === null && same(two.tones, []) && same(two.acts, ["Start"]) && two.warning === null && !/starts it again without OATS|machine|since/.test(two.words), `${at} (2) a session lost: "Stopped", that nobody stopped it and a message here carries it on; no time and no cause; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
+      check(two !== null && two.state === "stopped" && two.words === "Stopped · session lost" && two.stateTone === null && same(two.tones, []) && same(two.acts, ["Start…"]) && two.warning === null && !/outside OATS|machine|since|Nobody stopped/.test(two.words), `${at} (2) a session lost: "Stopped · session lost", the reason alone: no sentence, no time and no cause; no warning tone, and not the operator's sentence`, two === null ? await shown() : JSON.stringify(two));
       await page.shot(`outside-${viewport.name}-three-2-session-lost`, { targets: true });
 
       // (3) its session is there, not loaded: "Idle · not loaded …", no warning
       await page.goto(`/projects/${idle.projectId}/threads/${idle.id}`);
       const three = await lineOf(page, /^Idle · /);
-      check(three !== null && three.state === "idle" && three.words === "Idle · not loaded. To carry on, send it a message here. Start begins a new conversation." && three.stateTone === null && same(three.tones, []) && same(three.acts, ["Start"]) && three.warning === null, `${at} (3) not loaded: "Idle", never "Stopped"; that a message here carries on and Start begins a new conversation; no warning tone`, three === null ? await shown() : JSON.stringify(three));
+      check(three !== null && three.state === "idle" && three.words === "Idle · not loaded" && three.stateTone === null && same(three.tones, []) && same(three.acts, ["Start…"]) && three.warning === null, `${at} (3) not loaded: "Idle", never "Stopped"; the reason alone, "not loaded", with Start (its dialog says first what Start does); no warning tone`, three === null ? await shown() : JSON.stringify(three));
       await page.shot(`outside-${viewport.name}-three-3-idle-not-loaded`, { targets: true });
       // Its Start is the lifecycle's Start dialog, which says FIRST that a message in the thread carries the conversation on
       // (the line's own sentence, in the dialog's words), and then that a start begins a new one. Start stays possible; nothing is started here.
@@ -549,15 +551,15 @@ export default [
           )
         : null;
       check(
-        dialogSays !== null && dialogSays.first && dialogSays.title === "To carry on its conversation, send it a message in its thread instead." && dialogSays.body.includes("Starts a new conversation. The current one stays readable in bb, archived."),
-        `${at} (3) Start on the line of an agent that is not loaded opens the lifecycle's Start dialog, which says first to send a message in its thread to carry on, then that a start begins a new conversation`,
+        dialogSays !== null && dialogSays.first && dialogSays.title === "To continue its conversation, message it instead." && dialogSays.body.includes("Starts a new conversation.") && !dialogSays.body.includes("stays readable"),
+        `${at} (3) Start on the line of an agent that is not loaded opens the lifecycle's Start dialog, which says first to message it instead to continue its conversation, then that a start begins a new conversation`,
         JSON.stringify(dialogSays),
       );
       await page.shot(`outside-${viewport.name}-three-3-start-dialog`, { targets: true });
       await page.press("Escape");
       const shut = Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-modal"))}) === null`, 10));
       const after = await lineOf(page, /^Idle · /);
-      check(shut && after !== null && after.words === three?.words && same(after.acts, ["Start"]), `${at} (3) Escape closes the Start dialog, and the line says what it said, with its Start: the agent was not started`, after === null ? await shown() : JSON.stringify(after));
+      check(shut && after !== null && after.words === three?.words && same(after.acts, ["Start…"]), `${at} (3) Escape closes the Start dialog, and the line says what it said, with its Start: the agent was not started`, after === null ? await shown() : JSON.stringify(after));
 
       // Never confused: the state word tells (3) from (1) and (2), the tone tells (1) from (2) and (3), and no two lines say the same.
       const lines = [one, two, three];
@@ -578,13 +580,13 @@ export default [
       // (The home's card of such an agent carries the same notice once the rebuilt home calls it: README, "Outside OATS".)
       await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
       const line = await lineOf(page, /^Running outside OATS · /);
-      check(line !== null && line.state === "outside" && /^Running outside OATS · recorded stopped/.test(line.words) && line.warning?.title === "Harvest knowledge helper is running in bb, but OATS recorded it as stopped." && same(line.warning.acts, ["Stop", "Start"]), `${at} on its thread, while bb holds a question: still ONE statement, "Running outside OATS", and the notice under the line`, line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line));
+      check(line !== null && line.state === "outside" && /^Running outside OATS · recorded stopped/.test(line.words) && line.warning !== null && line.warning.boxed === false && line.warning.folded === true && same(line.acts, ["Stop…", "Start…"]), `${at} on its thread, while bb holds a question: still ONE statement, "Running outside OATS", with Stop… and Start… on the line and Details under it`, line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line));
       await page.shot(`outside-${viewport.name}-thread-outside-question`, { targets: true });
     },
   },
   {
     stage: "outside-archived",
-    name: "three agents whose thread bb has archived, side by side: an operator's stop is plain and keeps its soul; a session lost and an agent that still runs warn; each row opens its archived thread, whose own row says what to do",
+    name: "three agents whose thread bb has archived, side by side: an operator's stop is plain and says its state alone; a session lost and an agent that still runs warn; each row opens its archived thread, whose own row says what to do",
     run: async ({ page, at, viewport, threads, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
@@ -596,24 +598,24 @@ export default [
         Boolean(answered) &&
           same(rows, [
             { facts: "Stopped · oats-expert", state: "stopped", tone: null, lines: 1 },
-            { facts: "Stopped · archived in bb", state: "stopped", tone: "warning", lines: 1 },
-            { facts: "Idle · archived in bb", state: "idle", tone: "warning", lines: 1 },
+            { facts: "Stopped · research-expert · archived in bb", state: "stopped", tone: "warning", lines: 1 },
+            { facts: "Idle · oats-maintainer · archived in bb", state: "idle", tone: "warning", lines: 1 },
           ]),
-        `${at} the three rows: "Stopped" and the soul, plain (an operator's stop); "Stopped · archived in bb" with the warning mark (a session lost); "Idle · archived in bb" with the warning mark (it still runs); each opens its archived thread`,
+        `${at} the three rows (each with its soul after these words): "Stopped" with no reason, plain (an operator's stop); "Stopped · archived in bb" with the warning mark (a session lost); "Idle · archived in bb" with the warning mark (it still runs); each opens its archived thread`,
         JSON.stringify(rows),
       );
       const stoppedTmux = JSON.parse(await page.evaluate(`JSON.stringify(${rowOf(threadless("kernel-fix-developer"))})`));
-      check(same(stoppedTmux, { facts: "Stopped · oats-developer · tmux", state: "stopped", tone: null, lines: 1 }), `${at} an agent on tmux that OATS stopped (its row says "shell" beside an operator's stop) reads "Stopped" and its soul, never "Failed"`, JSON.stringify(stoppedTmux));
+      check(same(stoppedTmux, { facts: "Stopped · oats-developer · tmux", state: "stopped", tone: null, lines: 1 }), `${at} an agent on tmux that OATS stopped (its row says "shell" beside an operator's stop) reads "Stopped" and where it is, never "Failed"`, JSON.stringify(stoppedTmux));
       await page.shot(`outside-${viewport.name}-archived-three-sidebar`, { targets: true });
 
       // The one that still runs: its row opens the archived thread, whose own row says the remedy, with Stop.
       const release = threads.get("thr_release");
       await page.evaluate(`document.querySelector(${JSON.stringify(threadless(RUNS))})?.click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/threads/${release.id}")`, 15)), `${at} the row of an agent that still runs, its conversation archived, opens that thread in bb`, await page.evaluate("location.pathname"));
-      const RAN = /^Idle · Its conversation was archived in bb while it ran, and its process may still run\. Stop it, then start it from OATS\.$/;
+      const RAN = /^Idle · Archived in bb while running: it may still run\.$/;
       const line = await lineOf(page, RAN);
       check(
-        line !== null && line.kind === "running-archived" && line.state === "idle" && line.stateTone === "warning" && same(line.tones, ["warning"]) && RAN.test(line.words) && same(line.acts, ["Stop", "Retire"]) && line.warning === null,
+        line !== null && line.kind === "running-archived" && line.state === "idle" && line.stateTone === "warning" && same(line.tones, ["warning"]) && RAN.test(line.words) && same(line.acts, ["Stop…", "Retire…"]) && line.warning === null,
         `${at} it still runs, archived: its archived thread's own row says its state in the warning tone, that its process may still run, with Stop and Retire`,
         line === null ? await page.evaluate(textOf(testId("oats-identity-row"))) : JSON.stringify(line),
       );

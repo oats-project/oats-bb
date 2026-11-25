@@ -1,5 +1,5 @@
 // Pure functions from (agents, bbThreads) to what each slot draws. No bb or React import.
-import type { Agent, AgentState, BbThread, Node, View } from "./types";
+import type { Agent, AgentState, BbThread, Node, Row, View } from "./types";
 
 /**
  * Whether the kernel's row says the agent is STOPPED. The one predicate of the claim's gate and of
@@ -128,22 +128,28 @@ export function state(agent: Agent, thread: BbThread | null): AgentState {
   return threadWorks(thread) ? "working" : "idle";
 }
 
-const RANK: Record<AgentState, number> = {
+/**
+ * The roster's ONE order, for every row whatever its backend (the lead's ruling on the text audit,
+ * 23 Nov 2026). Three ranks only:
+ *   0  it needs you;
+ *   1  a person must look: it runs outside OATS, or it failed;
+ *   2  everything else, TOGETHER: working, idle, stopped, unreachable.
+ * A row is ordered by the lowest rank anywhere in its own SUBTREE (a parent with a waiting child
+ * rises with it), roots among roots and children among their siblings; and within a rank by the
+ * kernel's own order of the agents (their place in the snapshot). Never by a thread's `updatedAt`
+ * and never by a state of the same rank: the order does not jump while a person reads it. An agent
+ * that goes from Working to Idle, or a message in a thread, moves no row; an agent that starts to
+ * need a person rises, and falls back to its kernel place once answered.
+ */
+export const RANK: Record<AgentState, 0 | 1 | 2> = {
   "needs-you": 0,
-  working: 1,
-  unreachable: 2,
-  stopped: 2,
-  error: 2,
-  idle: 2,
-  // An agent that runs outside OATS is listed with the ones a person must look at: after those
-  // that wait, before the rest.
   outside: 1,
+  error: 1,
+  working: 2,
+  idle: 2,
+  stopped: 2,
+  unreachable: 2,
 };
-
-/** needs-you, then working, then the rest; each by the thread's `updatedAt`, newest first. */
-function byAttention(a: Node, b: Node): number {
-  return RANK[a.state] - RANK[b.state] || b.thread.updatedAt - a.thread.updatedAt;
-}
 
 /**
  * The instances whose parent link is dropped so the tree has no cycle. Walking up from each
@@ -170,12 +176,99 @@ function cutLinks(parentOf: ReadonlyMap<string, string>): Set<string> {
 }
 
 /** Every node of a tree, parents before their children. */
-export function flatten(roots: readonly Node[]): Node[] {
-  const out: Node[] = [];
-  const walk = (nodes: readonly Node[]) => {
+export function flatten<T extends { children: T[] }>(roots: readonly T[]): T[] {
+  const out: T[] = [];
+  const walk = (nodes: readonly T[]) => {
     for (const node of nodes) {
       out.push(node);
       walk(node.children);
+    }
+  };
+  walk(roots);
+  return out;
+}
+
+/**
+ * What the fold reads of a row of the tree: who it is (the fold is keyed by the agent's INSTANCE,
+ * never a thread's id: an agent on tmux has none), its own state, and its children. `Node` is one;
+ * so is any row of a tree that holds agents with no bb thread.
+ */
+export type Foldable<T> = { agent: Pick<Agent, "instance">; state: AgentState; children: readonly T[] };
+
+/**
+ * One row the roster's tree draws: the row, whether it is a parent (it has children, so it
+ * carries the chevron), whether it is open, and for a CLOSED parent the mark it carries after its
+ * own state: the state of the most urgent row its subtree hides, or null; and that mark's tone,
+ * "warning" where the hidden row is one the caller says warns (`insideOf`). `pinned`: it is open
+ * because it is above the row on screen, whatever the person left: it cannot be closed now.
+ */
+export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null };
+
+/** The instances above one in the tree (its parent, its parent's parent, …), or none where it is a root or not in the tree. */
+export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance: string): Set<string> {
+  const found = new Set<string>();
+  const walk = (nodes: readonly T[], above: readonly string[]): boolean => {
+    for (const node of nodes) {
+      // (A match that is a root has nobody above it: the walk goes on, for a name the kernel listed twice, whose other row may be under a parent.)
+      if (node.agent.instance === instance && above.length > 0) {
+        for (const each of above) found.add(each);
+        return true;
+      }
+      if (walk(node.children, [...above, node.agent.instance])) return true;
+    }
+    return false;
+  };
+  walk(roots, []);
+  return found;
+}
+
+/**
+ * What a closed parent says of the rows it hides. ONE principle: it carries a mark for any row
+ * inside it that itself carries a mark: one that needs a person (rank 0), one a person must look
+ * at (rank 1: it runs outside OATS, or failed), and one that WARNS (`warns`: the caller's word for
+ * a row whose own mark is drawn in the warning tone, which the model cannot tell: a thread
+ * archived in bb while it ran; that is of rank 1 too). Several inside: the most urgent by rank,
+ * and among equals the first in the tree's order. → that row's own state, and "warning" as the
+ * tone where it is a row that warns; `{ state: null }` where every hidden row is quiet and none
+ * warns. The parent's own state is never part of it: its own word and mark stay its own.
+ */
+export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null } {
+  // The best so far, in a list of at most one (a local a closure assigns is not narrowed after it).
+  const best: { state: AgentState; tone: "warning" | null; rank: number }[] = [];
+  const walk = (nodes: readonly T[]) => {
+    for (const each of nodes) {
+      const warned = warns(each);
+      const rank = Math.min(RANK[each.state], warned ? 1 : 2);
+      if (rank < 2 && (best[0] === undefined || rank < best[0].rank)) best[0] = { state: each.state, tone: warned ? "warning" : null, rank };
+      walk(each.children);
+    }
+  };
+  walk(node.children);
+  const found = best[0];
+  return found === undefined ? { state: null, tone: null } : { state: found.state, tone: found.tone };
+}
+
+/**
+ * The rows the roster's tree draws (Joan's word of 24 Nov 2026: children collapsed by default).
+ * A parent's children are drawn only while it is OPEN, and a parent is open when:
+ * - the person opened it (`opened`, by instance: the window's memory, empty when the page loads); or
+ * - it is above the row that is open on screen (`selected`, an instance): a parent is never
+ *   closed over the row a person is on.
+ * Every other parent is closed: its children are not drawn, and it carries `inside` (`insideOf`;
+ * `warns`: which rows carry their mark in the warning tone, the caller's to say).
+ * The order is the tree's own (`view().rows`, already in the roster's one order). Pure.
+ */
+export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: ReadonlySet<string>, selected: string | null = null, warns?: (node: T) => boolean): TreeRow<T>[] {
+  const above = selected === null ? new Set<string>() : ancestorsOf(roots, selected);
+  const out: TreeRow<T>[] = [];
+  const walk = (nodes: readonly T[]) => {
+    for (const node of nodes) {
+      const parent = node.children.length > 0;
+      const pinned = parent && above.has(node.agent.instance);
+      const open = parent && (pinned || opened.has(node.agent.instance));
+      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null };
+      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone });
+      if (open) walk(node.children);
     }
   };
   walk(roots);
@@ -230,8 +323,24 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     if (parentNode === undefined) roots.push(node);
     else parentNode.children.push(node);
   }
+  // The kernel's order: each agent's place in the snapshot (the first, for a name it lists twice).
+  const place = new Map<string, number>();
+  agents.forEach((agent, index) => {
+    if (!place.has(agent.instance)) place.set(agent.instance, index);
+  });
+  const placeOf = (agent: Agent): number => place.get(agent.instance) ?? agents.length;
+  // A subtree's rank: the lowest rank in it.
+  const urgency = new Map<Node, number>();
+  const rankOf = (node: Node): number => {
+    const known = urgency.get(node);
+    if (known !== undefined) return known;
+    const rank = Math.min(RANK[node.state], ...node.children.map(rankOf));
+    urgency.set(node, rank);
+    return rank;
+  };
+  const inOrder = (a: Node, b: Node): number => rankOf(a) - rankOf(b) || placeOf(a.agent) - placeOf(b.agent);
   const settle = (nodes: Node[], depth: number) => {
-    nodes.sort(byAttention);
+    nodes.sort(inOrder);
     for (const node of nodes) {
       node.depth = depth >= 2 ? 2 : depth === 1 ? 1 : 0; // deeper than 2 is drawn at 2
       settle(node.children, depth + 1);
@@ -239,11 +348,59 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
   };
   settle(roots, 0);
 
+  // ---- The roster as it is drawn: ONE tree for every agent, whatever its backend. ----
+  // Every agent is a row. One with no bb thread (on tmux; or its thread is not listed) hangs under
+  // its parent like any other, where the parent is a row, whatever either's backend: the kernel's
+  // row names the parent. The rules of the tree are the same for all: a parent that is no row
+  // makes its child a root; a cycle is cut at one link (`cutLinks`); deeper than 2 is drawn at 2;
+  // and every level is in the one order, by the most urgent state of each row's own subtree.
+  const rowOf = new Map<string, Row>(); // by instance: the kernel's first row of a name
+  const twice: Row[] = []; // a second row of a name the kernel should never list twice: a root, under nobody and over nobody
+  for (const agent of agents) {
+    const node = drawn.get(agent.instance);
+    const onThread = node !== undefined && node.agent === agent;
+    const own = onThread ? node.state : state(agent, null);
+    const row: Row = { agent, thread: onThread ? node.thread : null, where: onThread ? "thread" : agent.backend === "tmux" ? "tmux" : "detached", state: own, urgent: own, depth: 0, children: [] };
+    if (rowOf.has(agent.instance)) twice.push(row);
+    else rowOf.set(agent.instance, row);
+  }
+  const rowParent = new Map<string, string>();
+  for (const row of rowOf.values()) {
+    const parent = row.agent.parent;
+    if (parent !== null && parent !== row.agent.instance && rowOf.has(parent)) rowParent.set(row.agent.instance, parent);
+  }
+  const rowCut = cutLinks(rowParent);
+  const rows: Row[] = [];
+  for (const row of rowOf.values()) {
+    const parent = rowCut.has(row.agent.instance) ? undefined : rowParent.get(row.agent.instance);
+    const over = parent === undefined ? undefined : rowOf.get(parent);
+    if (over === undefined) rows.push(row);
+    else over.children.push(row);
+  }
+  // After the named rows: among the roots of one rank, a name's second row is drawn after its first (the sort is stable), as
+  // the kernel lists them. (Where the first is under a parent the second, a root, may stand before that parent.)
+  rows.push(...twice);
+  // Children first: a row's `urgent` is its own state, or that of the most urgent row under it
+  // (the first in the order, where two are of one rank), and each level is sorted by it.
+  const byUrgency = (a: Row, b: Row): number => RANK[a.urgent] - RANK[b.urgent] || placeOf(a.agent) - placeOf(b.agent);
+  const order = (level: Row[], depth: number) => {
+    for (const row of level) {
+      row.depth = depth >= 2 ? 2 : depth === 1 ? 1 : 0;
+      order(row.children, depth + 1);
+      const first = row.children[0];
+      if (first !== undefined && RANK[first.urgent] < RANK[row.state]) row.urgent = first.urgent;
+    }
+    // (A stable sort: two rows of one agent name keep the order they were made in.)
+    level.sort(byUrgency);
+  };
+  order(rows, 0);
+
   const all = flatten(roots);
   const newest = (a: Node, b: Node) => b.thread.updatedAt - a.thread.updatedAt;
   const pick = (keep: (node: Node) => boolean) => all.filter(keep).sort(newest);
 
   return {
+    rows,
     roots,
     others: threads
       .filter((thread) => !taken.has(thread.id) && isListed(thread))
@@ -253,8 +410,8 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     needsYou: pick((node) => node.state === "needs-you"),
     // Every agent that needs a person, whether bb has a thread for it or not: the ONE number a
     // place says of who needs one. An agent that waits on a person; and one that runs outside OATS
-    // (the state "outside"), which only a person can stop or start again. The sidebar's foot, the
-    // home's badge and the home's list (app/home/board.ts) count the same agents. In the kernel's order.
+    // (the state "outside"), which only a person can stop or start again. The home's badge, its
+    // heading and its list (app/home/board.ts) count the same agents. In the kernel's order.
     needing: agents.filter((agent) => {
       const node = drawn.get(agent.instance);
       const now = node !== undefined && node.agent === agent ? node.state : state(agent, null);

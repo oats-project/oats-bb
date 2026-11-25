@@ -11,7 +11,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
 
 ## Rules
 
-- **Stop an OATS agent with "Stop agent (OATS)"** in the thread's menu, or with **Stop…** on the
+- **Stop an OATS agent with "Stop (OATS)"** in the thread's menu, or with **Stop…** on the
   OATS status line under the thread's header (both open the same dialog), never with bb's own Stop
   (the composer's, which ends a turn), Archive or Delete. Only the OATS stop records the agent as stopped, so it stays stopped; bb's own
   buttons leave OATS thinking the agent should run.
@@ -20,7 +20,9 @@ agents, their homes, identities and mail are OATS's and aweb's.
   Answer on an agent that waits for you (it opens the instance panel at what it asks).
   The palette has "OATS: Stop agent…" (Alt+Shift+X), Restart (R), Start (S) and Retire (D), each
   rebound in bb's Keyboard settings. Each opens a dialog first and acts only on its own button.
-  Stop and Retire show the kernel's plan as what will happen and what is kept. A stopped agent's
+  Each dialog says one line on what the act does ("Archives its thread.", "This cannot be
+  undone.", "Starts a new conversation.", "Stops what it is doing now."), with the rest under its
+  Details. A stopped agent's
   thread stays open in bb: a message sent in it starts the agent again without OATS. Retire
   removes the agent's home and archives its thread, and cannot be undone; its worktree is kept,
   moved aside, unless "Also delete the worktree" is turned on; its branch stays. Start and Restart
@@ -29,7 +31,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
   kernel's code and its message under Details, is said in the same dialog.
 - **A thread archived or deleted in bb** takes the agent out of the tree. Nothing is retired: the
   agent shows on its soul's page as "thread missing", with Start and Retire.
-- **Spawn** with **New agent** (the sidebar's foot, the home's heading): the form's own page.
+- **Spawn** with **New agent** (under the sidebar's roster, and first on the home): the form's own page.
   Choose the soul; the rest is optional: an opening instruction (empty: the agent starts and
   waits), the harness and the model (the defaults are the kernel's), a relationship to another
   agent, a name (lower-case letters, digits and dashes; empty: the kernel numbers it). "What will
@@ -47,32 +49,35 @@ agents, their homes, identities and mail are OATS's and aweb's.
 
 ## Where things are
 
-- Sidebar: the workspace line, Souls, Capabilities, Teams, Machines, Automations, "N need you", then the agents
+- Sidebar: the workspace line, Souls, Capabilities, Teams, Machines, Automations, then the agents (one that waits carries its mark; bb's badge counts them)
   as a tree (children under parents), then bb's other threads.
 - Under an agent's thread header, one line of chips: soul, instance, aweb alias, parent (a link
   when the parent runs in bb), number of children, home, and `OATS`, which opens the home.
 - OATS home (the Bot entry in bb's navigation, with a count when agents need you; the same view is
   the OATS tab of a thread that is no agent's): **Needs you** first, one card per agent that waits
-  (who, since when, what it asks), then a summary line ("8 agents · 3 working · 3 need you · …"),
-  tiles for Agents and the pages this release shows, **Working** and **Finished, not looked at**.
+  (who, how long it has waited, what it asks), then tiles for Agents and the pages this release
+  shows, **Working** and **Unread**.
   A card offers the answer the request takes: bb's choices as buttons (an approval, a question
   with options); a reply box that writes to that agent through bb's own send, for an agent that
-  asks in its own words; "open its thread" where the answer is in the thread; for an agent on
-  tmux, the command that reaches its terminal (`oats session attach --home <its home>`).
-  A message never grants an approval: beside choices it is behind "Write a message instead".
+  asks in its own words; where the answer is in the thread, the card's button reads "Answer" and
+  leads there; for an agent on tmux, "Answer it in its terminal." (Open leads to its own page, which
+  has the command that reaches it: `oats session attach --home <its home>`).
+  A message never grants an approval: beside choices it is behind "Message instead".
   The card of an agent OATS STOPPED offers neither an answer nor a message (either would start it
   outside OATS): it offers Start…. One the kernel cannot reach offers neither, and no Start. An
   agent that does not run and that nobody stopped (its session lost, ended, or not loaded) is
   answered as any other: a message in its thread is how it comes back.
-  **New agent** is in the heading's row of every home. The **Agents** tile opens Home › Agents: every agent OATS has, the stopped ones and the ones
-  with no bb thread among them, with its state and who started it. While OATS cannot be read the
-  cards' choices and replies are held until it is read again. The home also says when the
+  **New agent** is first on every home. Home › Agents (`/plugins/oats/home/agents`, by its address: nothing on the home leads
+  to it) lists every agent OATS has, the stopped ones and the ones with no bb thread among them,
+  with its state, under one count line ("3 working · 3 need you · …"); the sidebar lists them too.
+  While OATS cannot be read the cards' choices and replies are off, and the notice over them says
+  "Acts are off.", with Retry. The home also says when the
   installed `oats` is older than the plugin works with, or newer than it reads.
 - On an agent's own thread, the OATS tab of the side panel is the agent's panel. Instance: its
   state in words, what it waits on you for and since when, where it works (the folder and the home
-  to copy), its harness, model and thread, its messaging id, its parent, whether it is ready
-  (Instance readiness, with the checks behind a fold) and, once you press Load activity, its
-  recorded lifecycle events. Soul: its soul as the instance was spawned from it (core
+  to copy, under Paths), its harness, model and where it runs, when it was started or stopped, its
+  parent and its messaging id (Lineage), whether it is ready (Readiness, with the checks behind a
+  fold) and, once you press Load, its recorded events (Activity). Soul: its soul as the instance was spawned from it (core
   capabilities, capabilities and why each is there), the soul's readiness, the agents root, and
   Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`.
 - A row's end: `?` when the agent waits on you, `new` when its thread is unread.
@@ -86,7 +91,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
   cannot write to it, use the acts its page offers); "Idle · not loaded" (send it a message in its thread to
   carry on; Start begins a new conversation); "Running outside OATS" (OATS recorded it stopped and
   it runs, because a message was sent in its thread: Stop or Start it through OATS). Never answer
-  in bb's composer an agent whose line warns that a message starts it without OATS: Start it.
+  in bb's composer an agent whose line warns that a message starts it outside OATS: Start it.
 - Dots: amber needs you; green working; hollow grey idle; grey stopped; red error or unreachable.
   "Idle" means the kernel does not say the agent is working: it may be waiting or done.
 

@@ -271,8 +271,8 @@ above. With one that archives: the images of the stopped agent are of its row of
 thread ("Stopped", its soul, the plain tone; bb lists no archived thread), which opens the
 archived conversation, and of that thread's own row ("Stopped", since when, "Its conversation is
 archived in bb. Start begins a new one.", with Start… and Retire…); and the lifecycle's part
-presses Start from that row instead of the row's menu, where the Start dialog says "This starts a
-new conversation using the saved briefing and state.". What the read cannot tell: a provider that
+presses Start from that row instead of the row's menu, where the Start dialog says "Starts a new
+conversation.". What the read cannot tell: a provider that
 changed what its stop does, at every stop alike, passes as the other kind; the NOTE is where to
 look.
 
@@ -314,8 +314,8 @@ Each is the kernel's or the provider's to decide; the plugin shows what they say
   runs (a harness is loaded: from the provider that scans its harness, oats-bb #40, an idle bb
   agent too; a tmux agent always) or for uncommitted work, and `"unknown"` from a provider that
   cannot tell (the bb provider before #40, for an idle thread). The plugin's confirmation says
-  nothing from it: it says "<Name> has uncommitted work in its home." from the plan's `work`, and
-  "<Name> is working on a turn now." from bb's own word on the thread.
+  nothing from it: it says "uncommitted work" from the plan's `work`, and "mid-turn" from bb's
+  own word on the thread, as words after the agent's name on its one line.
 - **A thread whose turn bb holds in line reads `running: true`** in `oats status --json`, like one
   in its turn.
 - **`oats status --json` names the agents root** (`<deployment>/agents`) as `root`, not the

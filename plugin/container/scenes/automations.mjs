@@ -704,7 +704,7 @@ const scenes = [
       // Waited for: the line of THIS re-read ("Refreshing…"), not any line about the list's age (one stands there by itself once the list is 30 s old).
       const stale = `${testId("oats-automations-page")} ${testId("oats-stale")}`;
       const again = (await page.until(`(() => { const t = ${textOf(stale)}; return t.startsWith("Refreshing…") ? t : ""; })()`, 15)) ?? (await page.evaluate(textOf(stale)));
-      check(/^Refreshing… showing what was read .+\.$/.test(again ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} while it reads again the page says so and keeps its 11 rows`, String(again));
+      check(/^Refreshing… read .+\.$/.test(again ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} while it reads again the page says so and keeps its 11 rows`, String(again));
       await page.shot(`automations-${viewport.name}-refreshing`, { targets: true });
       // The re-read has ended when its line is gone, or no longer says "Refreshing…" (a list older than 30 s keeps a line of its age).
       await page.until(`(() => { const t = ${textOf(stale)}; return !t.startsWith("Refreshing…") ? "done" : ""; })()`, 60);
@@ -719,7 +719,7 @@ const scenes = [
       const failed =
         (await page.until(`(() => { const t = ${textOf(refusedNotice)}; return t !== "" && !t.includes("Refreshing…") && document.querySelector(${JSON.stringify(testId("oats-automations-rereading"))}) === null ? t : ""; })()`, 40)) ??
         (await page.evaluate(textOf(refusedNotice)));
-      check(/^Schedules could not be read What is below is the last list that was read\. Held until the list can be read again: what each row is now is not known\. Showing what was read .+\. E_SCHEDULE_INVALID ▸ Details Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
+      check(/^Schedules could not be read What is below is the last list that was read\. Held until the list can be read again: what each row is now is not known\. Read .+\. E_SCHEDULE_INVALID ▸ Details Retry$/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 11, `${at} a re-read the kernel refuses is said over the list still shown, with how old that is`, String(failed));
       const heldSwitch = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(`${ROW}[data-id="local/daily-review"] [role="switch"]`)}); return s && s.disabled ? s.title : ""; })()`, 15);
       check(heldSwitch === "Comes back when OATS is read again", `${at} over a list that could not be read again a row's switch is held, with the reason every held OATS act carries`, String(heldSwitch));
       await page.shot(`automations-${viewport.name}-failed-over-list`, { targets: true });
@@ -731,7 +731,9 @@ const scenes = [
     name: "Automations without oats",
     run: async ({ page, at, viewport, check }) => {
       const gate = await open(page, "", testId("oats-automations-gate"));
-      check(gate === `OATS is not installed on ${MACHINE} Install OATS there, or set the path to oats in the plugin's settings. OATS_NOT_FOUND ▸ Details Retry Open settings`, `${at} with oats gone the page shows the plugin's one notice for it: the machine by name, what to do, Retry and the way to the settings`, gate);
+      // (The plugin's one notice since the text cut: its title, Details, the acts; what to do and the code are one press away.)
+      const under = await page.evaluate(`(document.querySelector(${JSON.stringify(`${testId("oats-automations-gate")} ${testId("oats-notice-details")}`)})?.textContent ?? "")`);
+      check(gate === `OATS is not installed on ${MACHINE} ▸ Details Retry Open settings` && /Install OATS there, or set the path to oats in the plugin's settings\..*OATS_NOT_FOUND/.test(under), `${at} with oats gone the page shows the plugin's one notice for it: the machine by name, Retry and the way to the settings; what to do and the code under Details`, `${gate} | ${under}`);
       await page.shot(`automations-${viewport.name}-no-oats`, { targets: true });
     },
   },

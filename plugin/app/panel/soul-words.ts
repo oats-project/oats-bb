@@ -4,10 +4,8 @@
 // No bb and no React import.
 import type { PanelCapability, PanelCore, PanelSource } from "../../kernel/panel-soul";
 
-/** The line over an instance's snapshot. */
-export const AS_SPAWNED = "As spawned: an instance never changes under itself. A newer soul or module needs a new instance.";
-export const NO_OTHER_CAPABILITIES = "No other capabilities: only the core ones.";
-export const NO_CAPABILITIES = "No capabilities resolved.";
+/** Under "Capabilities", an instance that has none beside the core ones. */
+export const NO_CAPABILITIES = "None";
 
 const LAYERS: Record<PanelCore["slot"], string> = { knowledge: "Knowledge", messaging: "Messaging", tasks: "Tasks" };
 /** A core capability's name: Knowledge, Messaging, Tasks. */
@@ -37,13 +35,13 @@ const overridden = (layer: string | null): string => {
   const team = layer === null ? null : /^team:(.+)$/.exec(layer);
   return team ? `the ${team[1]} team's default` : layer === "workspace" ? "the workspace default" : "a default";
 };
-/** Why a capability is there: the tag's word and its sentence. */
+/** Why a capability is there: the tag's word (the Desktop's, on the row) and its sentence (in the row, once it is opened). */
 export function whyTag(capability: PanelCapability): { label: string; title: string } {
   if (capability.why === "team" && capability.team !== null) return { label: `team · ${capability.team}`, title: `A default of the ${capability.team} team` };
   if (capability.why === "off") {
     return capability.reason === "slot-none"
-      ? { label: "turned off by soul", title: `This soul empties a core slot, which ${overridden(capability.overrides)} filled with ${capability.name}` }
-      : { label: "turned off by soul", title: `This soul turns off ${overridden(capability.overrides)}` };
+      ? { label: "off", title: `This soul empties a core slot, which ${overridden(capability.overrides)} filled with ${capability.name}` }
+      : { label: "off", title: `This soul turns off ${overridden(capability.overrides)}` };
   }
   if (capability.why === "workspace") return { label: "workspace", title: "A workspace default" };
   if (capability.why === "soul") return { label: "soul", title: "Declared by this soul" };
@@ -52,5 +50,3 @@ export function whyTag(capability: PanelCapability): { label: string; title: str
 
 /** "Spawned from <soul> @ <commit>", the commit by its first seven characters. */
 export const spawnedFrom = (soul: { name: string; commit: string | null }): string => `Spawned from ${soul.name}${soul.commit === null ? "" : ` @ ${soul.commit.slice(0, 7)}`}`;
-/** The label of the count of modules the instance was spawned with (the Desktop's "Modules as spawned · N", as a labelled fact). */
-export const MODULES_AS_SPAWNED = "Modules as spawned";

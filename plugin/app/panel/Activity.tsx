@@ -1,5 +1,5 @@
 // An instance's recorded lifecycle activity (`oats instance events`): read only when a person asks
-// (Load activity), read again on Refresh activity, never in the background. Address history as
+// (Load), read again on Refresh, never in the background. Address history as
 // the kernel recorded it, never the current runtime state. As the OATS Desktop's "Reported
 // lifecycle activity" (packages/desktop/renderer/instance-events-view.mjs).
 import { useEffect, useRef, useState } from "react";
@@ -7,7 +7,7 @@ import type { PanelEvents } from "../../kernel/panel-events";
 import { Button, Disclosure, Fact, Facts, Section } from "../ui";
 import { shown } from "../ui/text";
 import {
-  ACTIVITY, HISTORY_PLAIN, LAST_OBSERVATION, LOAD, LOADED, PROVENANCE_PLAIN, READING, RECENT, REFRESH, differedLines, eventFacts, eventTitle, incomplete, incompleteLine, producerLine, setupLine,
+  ACTIVITY, HISTORY_PLAIN, LOAD, NO_EVENTS, PROVENANCE_PLAIN, READING, RECENT, REFRESH, differedLines, eventFacts, eventTitle, incomplete, incompleteLine, producerLine, setupLine,
   sourcesLine, summaryLine, windowLine,
 } from "./events-words";
 import { usePanelEvents } from "./read";
@@ -98,7 +98,7 @@ function Events({ events, now }: { events: PanelEvents; now: number }) {
 export function Activity({ instance, claimSince, onNewerClaim, now }: { instance: string; claimSince: string | null; onNewerClaim: () => void; now: number }) {
   // Whether a person asked for a read since this section came on the page. The section leaves the
   // page when its tab turns and what was read stays with bb: coming back reads nothing, and shows
-  // it as what it is, the last observation, with Refresh activity.
+  // what was read, with Refresh.
   const [asked, setAsked] = useState(false);
   // The read is on only while it holds no answer (read.ts), so asking with one held starts nothing by itself.
   const read = usePanelEvents(instance, asked);
@@ -117,9 +117,17 @@ export function Activity({ instance, claimSince, onNewerClaim, now }: { instance
   };
   return (
     <Section title={ACTIVITY} testId="oats-panel-activity">
-      {/* Nothing is read until a person asks: the kernel reads two logs for it. */}
+      {/* Nothing is read until a person asks (the kernel reads two logs for it), but for an agent OATS stopped, whose
+          stop's time the Session reads from the same events: what that read brought is drawn here with no press.
+          (A session OATS lost has no such time, and no such read.) */}
       {asked ? <CommandState read={read} of="activity" reading={READING} failed="The recorded activity could not be read" now={now} /> : null}
       {read.data === undefined ? null : <Events events={read.data} now={now} />}
+      {/* OATS keeps no activity for this kind of agent: the press is answered with what is so, and nothing is left to press. */}
+      {asked && read.status === "error" && !read.fetching && !mendable(read, "activity") && read.data === undefined ? (
+        <p data-testid="oats-panel-activity-summary" className="m-0 break-words text-foreground">
+          {NO_EVENTS}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         {/* One act at a time: while the first read runs the line above says so, and after a failure its Retry is the act.
             Over what is shown the button is off while a read runs, and the words beside it say why. */}
@@ -129,10 +137,10 @@ export function Activity({ instance, claimSince, onNewerClaim, now }: { instance
           </Button>
         )}
         {/* A read again over what is shown says so, in the words of the first read, beside the button it turned off; after a
-            failure whose notice has Retry, that button says it. */}
-        {held && (read.fetching ? read.status === "ready" || !offersRetry(read, "activity") : !asked || read.status === "ready") ? (
+            failure whose notice has Retry, that button says it. What it read then stands over it: nothing says "loaded". */}
+        {held && read.fetching && (read.status === "ready" || !offersRetry(read, "activity")) ? (
           <span role="status" data-testid="oats-panel-activity-status" className="text-xs text-muted-foreground">
-            {read.fetching ? READING : asked ? LOADED : LAST_OBSERVATION}
+            {READING}
           </span>
         ) : null}
       </div>

@@ -25,9 +25,12 @@
 // with `sessionEnd: "stopped"`.
 //
 // WHAT IT ASSERTS, in every view (bb's light and dark themes, at each width):
-//   the words  the row's sessionEnd decides how a tmux agent that does not run is said: "Stopped ·
-//              <soul> · tmux" for a stop with OATS, "Stopped · session lost · tmux" for a loss,
-//              and the lost agent's page says what happened under its state;
+//   the words  the row's sessionEnd decides how a tmux agent that does not run is said. Stopped with
+//              OATS: "Stopped · <soul> · tmux". LOST: the ROW draws "Lost · <soul> · tmux" (the
+//              kernel's own word in the state's place, and no reason after it: the text cut's L17),
+//              its title says "Stopped · <soul> · session lost · tmux", and its page says
+//              "Stopped · session lost" on its header's state line: no sentence under it, no
+//              "Last started";
 //   the acts   each goes through its dialog, from the agent's page, with the result read: what
 //              happened, where the agent runs, and for a resume what the kernel's `resume` said.
 import { spawnSync } from "node:child_process";
@@ -45,26 +48,36 @@ const KEY = "placeholder-not-a-key";
 
 /** What the plugin says and offers per state. */
 const EXPECTED = {
-  running: { acts: ["Stop…", "Restart…", "Retire…"], words: ["Working", "Idle"], row: `Working · ${SOUL} · tmux` },
   // Where the row has a sessionEnd, IT decides (plugin/README.md, "A provider home's row, case by
   // case"): "stopped" is "Stopped · <soul> · tmux" whatever runtimeState says (an OATS stop leaves
-  // the window at a shell), and offers Start… alone; "lost" is "Stopped · session lost · tmux".
-  stopped: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · tmux` },
-  lost: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: "Stopped · session lost · tmux" },
+  // the window at a shell), and offers Start… alone. "lost": the row's TITLE (`row`: what it says
+  // whole) is "Stopped · <soul> · session lost · tmux", and what it DRAWS in the state's place
+  // (`drawn`) is "Lost": the kernel's own word, with no reason after it (the text cut's L17).
+  running: { acts: ["Stop…", "Restart…", "Retire…"], words: ["Working", "Idle"], row: `Working · ${SOUL} · tmux`, drawn: ["Working", "Idle"] },
+  stopped: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · tmux`, drawn: ["Stopped"] },
+  lost: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · session lost · tmux`, drawn: ["Lost"] },
 };
-/** The lost tmux agent's page, under its state (app/outside/words.ts LOST_TMUX, and LOST_TMUX_START where Start is offered): the whole of it. */
-const LOST_SAYS = "Its session ended without OATS stopping it. Nobody stopped it. Start tries to continue its last conversation.";
+/**
+ * The lost tmux agent's page: its header's state line, whole (the reason on the line, as on its row's title); and what
+ * the page no longer says (the text cut). ("Last started <age>" is not among them: it is the Session card's own
+ * labelled fact for an agent that does not run, where the row names a start; what went is the line of that name
+ * under the header: `lastStarted`, below.)
+ */
+const LOST_LINE = /^Stopped\s*·\s*session lost$/;
+const LOST_NEVER = /Nobody stopped|without OATS stopping|Start tries/;
+/** The dialogs' ONE consequence line each, and the results' words (app/lifecycle/words.ts START, RESUME; the text cut). */
 const SAYS = {
-  start: "This starts a new conversation using the saved briefing and state.",
-  restart: "Restart stops the current harness after checking the new configuration. Save any in-progress work before continuing.",
-  resume: "Start tries to continue its last conversation. If it can't, it starts fresh on its task and says so.",
-  resumeClaude: "Claude may first ask, in its terminal, how to load a long conversation.",
+  start: "Starts a new conversation.",
+  restart: "Stops what it is doing now.",
+  resume: "Tries to continue its last conversation; else starts fresh.",
+  /** Not said before the press any more: it is said when it happens (`waiting`). */
+  resumeClaude: "Claude may first ask",
   started: `${CALLED} started.`,
   restarted: `${CALLED} restarted.`,
   resumed: `${CALLED} is back in its last conversation.`,
-  fresh: `${CALLED} started fresh: its last conversation was not brought back.`,
-  where: /^Runs in tmux on \S+\. Attach from a terminal:/,
-  waiting: "It is waiting for you in its terminal: the harness asks how to load a long conversation before it goes on.",
+  fresh: `${CALLED} started fresh.`,
+  where: /^Attach:/,
+  waiting: "Waiting for you in its terminal.",
 };
 
 export default async (run) => {
@@ -174,7 +187,7 @@ export default async (run) => {
   const clean = (expression) => `(${expression} ?? "").replace(/\\s+/g, " ").trim()`;
   /** The agent's page once it shows a state among `words` (a wait on the state it asserts) → what it says and offers. */
   const pageSays = (words) =>
-    `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); const s = p?.querySelector('[data-testid="oats-panel-state"]'); if (!p || !s) return ""; const state = ${clean("s.innerText")}; if (!${JSON.stringify(words)}.some((word) => state.includes(word))) return ""; return JSON.stringify({ name: ${clean(`p.querySelector('[data-testid="oats-panel-name"]')?.innerText`)}, state, acts: [...p.querySelectorAll('[data-testid="oats-agent-acts"] button')].map((b) => b.innerText.trim()), block: p.querySelector('[data-testid="oats-outside-agent-block"]')?.getAttribute("data-outside") ?? null, reason: ${clean(`p.querySelector('[data-testid="oats-outside-reason"]')?.innerText`)}, lastStarted: ${clean(`p.querySelector('[data-testid="oats-outside-last-started"]')?.innerText`)} }); })()`;
+    `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); const s = p?.querySelector('[data-testid="oats-panel-state"]'); if (!p || !s) return ""; const state = ${clean("s.innerText")}; if (!${JSON.stringify(words)}.some((word) => state.includes(word))) return ""; return JSON.stringify({ name: ${clean(`p.querySelector('[data-testid="oats-panel-name"]')?.innerText`)}, state, acts: [...p.querySelectorAll('[data-testid="oats-agent-acts"] button')].map((b) => b.innerText.trim()), kind: s.getAttribute("data-outside"), block: p.querySelector('[data-testid="oats-outside-agent-block"]') !== null, lastStarted: p.querySelector('[data-testid="oats-outside-last-started"]') !== null, whole: ${clean("p.innerText")} }); })()`;
   const pageNow = `(() => { const p = document.querySelector(${JSON.stringify(PAGE)}); return p ? ${clean("p.innerText")}.slice(0, 600) : ${clean("document.body.innerText")}.slice(0, 300); })()`;
   /** The agent's row in the sidebar, once its state is one of `words` → its facts, whole (the row's own title: state · soul or reason · where). */
   const rowSays = (words) => `(() => { const facts = document.querySelector(${JSON.stringify(ROW)})?.querySelector('[data-testid="oats-row-facts"]')?.getAttribute("title") ?? ""; return ${JSON.stringify(words)}.some((word) => facts.startsWith(word)) ? facts : ""; })()`;
@@ -184,20 +197,23 @@ export default async (run) => {
    * → { at, row, name, state, acts }
    */
   const look = async ({ page, at, viewport, shot }, state) => {
-    const { words, acts, row: rowWords } = EXPECTED[state];
+    const { words, acts, row: rowWords, drawn } = EXPECTED[state];
     rpc("refresh");
     await page.goto("/");
     await showSidebar(page, viewport);
     const inRow = await page.until(rowSays(words), 60);
     check(inRow === rowWords, `${at} the ${state} tmux agent's row in the sidebar, among the agents with no bb thread: "${rowWords}"`, inRow ?? (await page.evaluate(`${clean(`document.querySelector(${JSON.stringify(ROW)})?.innerText ?? document.querySelector('[data-testid="oats-sidebar"]')?.innerText`)}.slice(0, 400)`)));
+    // What the row DRAWS in the state's place (its title, above, says all of it).
+    const word = (await page.until(`(() => { const word = ${clean(`document.querySelector(${JSON.stringify(ROW)})?.querySelector('[data-phrase="state"]')?.innerText`)}; return ${JSON.stringify(drawn)}.includes(word) ? word : ""; })()`, 10)) ?? (await page.evaluate(`${clean(`document.querySelector(${JSON.stringify(ROW)})?.querySelector('[data-phrase="state"]')?.innerText`)}`));
+    check(drawn.includes(word), `${at} and it draws ${drawn.map((each) => `"${each}"`).join(" or ")} in the state's place`, String(word));
     await shot(`${state}-row`);
     await page.goto(`/plugins/oats/agent/${NAME}`);
     const said = await page.until(pageSays(words), 60);
     const read = said ? JSON.parse(said) : null;
     check(read !== null && read.name === CALLED, `${at} the agent's own page opens for it and says its state`, said ?? (await page.evaluate(pageNow)));
     check(JSON.stringify(read?.acts) === JSON.stringify(acts), `${at} the page offers ${acts.join(" and ")}`, JSON.stringify(read?.acts));
-    if (state === "lost") check(read?.block === "lost-tmux" && read.reason === LOST_SAYS && /^Last started /.test(read.lastStarted), `${at} the lost agent's page says what happened under its state: "${LOST_SAYS}", and when it was last started`, JSON.stringify(read));
-    if (state === "stopped") check(read?.block === null, `${at} the page of an agent stopped with OATS says nothing more than "Stopped": no block of what happened outside OATS`, JSON.stringify(read));
+    if (state === "lost") check(read?.kind === "lost-tmux" && LOST_LINE.test(read.state) && read.block === false && read.lastStarted === false && !LOST_NEVER.test(read.whole), `${at} the lost agent's page says "Stopped · session lost" on its header's state line, and nothing of it under the tabs: no sentence, and no "Last started" line of its own (when it started is the Session card's fact)`, JSON.stringify(read));
+    if (state === "stopped") check(read?.state === "Stopped" && read.block === false, `${at} the page of an agent stopped with OATS says nothing more than "Stopped": no block of what happened outside OATS`, JSON.stringify(read));
     await shot(`${state}-page`);
     return { at, row: inRow ?? null, ...read };
   };
@@ -257,7 +273,13 @@ export default async (run) => {
           ),
         );
         // Where it runs, under every result of an agent on tmux: the machine, and the command that attaches to its home.
-        check(SAYS.where.test(result.where) && result.where.includes(`oats session attach --home ${home}`), `${at} ${name}: the result says where it runs: in tmux, on the machine, with the command that attaches to it`, JSON.stringify(result));
+        check(SAYS.where.test(result.where) && result.where.includes(`oats session attach --home ${home}`), `${at} ${name}: the result says how to reach it: "Attach:" and the command that attaches to its home`, JSON.stringify(result));
+        // BEHIND THE RESULT (the text cut's L13): the page's header never says the state from before the act plainly: it
+        // says "Reading…" until the roster is read again, and then what the roster says.
+        const behind = await page.evaluate(`(() => { const s = document.querySelector(${JSON.stringify(`${PAGE} [data-testid="oats-panel-state"]`)}); return JSON.stringify({ reading: s?.querySelector('[data-testid="oats-reading"]') !== null, state: ${clean("s?.innerText")} }); })()`);
+        // (Asserted for a START: before it the state is "Stopped", which must not stand behind "… started.". A restart's
+        // state is the same word before and after, so the header's words prove nothing there, and nothing is claimed of it.)
+        if (verb === "start") check(result.tone === "failed" || JSON.parse(behind).reading === true || !/^Stopped/.test(JSON.parse(behind).state), `${at} ${name}: behind a start's result the page's header says "Reading…", or already what the roster says now: never "Stopped" from before the act`, behind);
         await shot(`${name}-done`);
         await page.evaluate(click("oats-confirm-close"));
         check(Boolean(await page.until(closed, 10)), `${at} ${name}: Close closes the dialog`);
@@ -279,7 +301,7 @@ export default async (run) => {
       if (first) resumeWhileRunning();
       let since = Date.now();
       const before = row().startedAt;
-      let result = await through("restart", "restart", `Restart ${CALLED}`, [SAYS.restart, SAYS.start]);
+      let result = await through("restart", "restart", `Restart ${CALLED}`, [SAYS.restart], [SAYS.start, SAYS.resume]);
       let call = asked("restart", since);
       if (first) fixtures.keep("lifecycle/tmux-restart.json", call.stdout);
       check(result.tone === "done" && result.title === SAYS.restarted, `${at} the result says it restarted: "${SAYS.restarted}"`, JSON.stringify(result));
@@ -306,7 +328,7 @@ export default async (run) => {
       if (first) keepRow("lifecycle/tmux-row-lost.json");
       await look(view, "lost");
       since = Date.now();
-      result = await through("start", "resume", `Start ${CALLED}`, [SAYS.resume, SAYS.resumeClaude], [SAYS.start]);
+      result = await through("start", "resume", `Start ${CALLED}`, [SAYS.resume], [SAYS.start, SAYS.resumeClaude]);
       call = asked("start", since);
       if (first) fixtures.keep("lifecycle/tmux-start-resume.json", call.stdout);
       const resume = call.result?.resume ?? null;

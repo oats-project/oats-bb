@@ -170,7 +170,7 @@ test("the thread's line: \"Failed\" alone, bb's reason under Details, and Start;
   const { asked, sdk } = bb(events("never-started"));
   const slot = await line({ rpc: handlers({}, agents()), sidebarThreads: threads(), sdk });
   await waitFor(() => expect(words(slot)).toEqual(["Failed"]));
-  expect(actsIn(slot.getByTestId("oats-identity-row"))).toEqual(["Start"]);
+  expect(actsIn(slot.getByTestId("oats-identity-row"))).toEqual(["Start…"]); // (the dots: it opens its dialog, and nothing runs on the press; the text cut)
   const details = slot.getByTestId("oats-status-bb");
   expect(details.querySelector("summary")!.textContent).toMatch(/Details$/);
   expect(details.querySelector("p")!.textContent).toBe(`bb says: ${REASON}`);
@@ -195,7 +195,8 @@ test("a thread in \"error\" that started a turn (the recorded events of a thread
     const slot = await line({ rpc: handlers({}, agents()), sidebarThreads: threads(), sdk });
     await waitFor(() => expect(asked.length).toBeGreaterThanOrEqual(2));
     await waitFor(() => expect(words(slot)[0]).toBe("Stopped"));
-    expect(words(slot).join(" ")).toMatch(/send it a message here/);
+    // The lost session's words, not "Failed": the reason alone since the text cut (its sentence went; the Start dialog says to message it instead).
+    expect(words(slot)).toEqual(["Stopped", "session lost"]);
     expect(slot.queryByTestId("oats-status-bb")).toBeNull();
     resetApp();
   }
@@ -220,9 +221,13 @@ test("the sidebar's row says \"Failed\" and the soul, never \"session lost\"", a
   const app = await loadApp();
   const slot = renderSlot<PluginThreadListProps, Contract>(app.threadLists[0]!, { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" }, { rpc: handlers({}, agents()), sidebarThreads: threads(), sdk });
   await slot.findByTestId("oats-tree");
-  const facts = () => within(slot.getAllByTestId("oats-agent-row").find((each) => each.getAttribute("data-sidebar-thread-id") === "thr_harvest")!).getByTestId("oats-row-facts").textContent;
-  await waitFor(() => expect(facts()).toMatch(/^Failed · /));
-  expect(facts()).not.toMatch(/session lost/);
+  // (The agent is a child: its parent is opened first, as a person does: children are collapsed when the page loads.)
+  for (let closed = slot.container.querySelector<HTMLElement>('[data-testid="oats-row-toggle"][aria-expanded="false"]'); closed !== null; closed = slot.container.querySelector<HTMLElement>('[data-testid="oats-row-toggle"][aria-expanded="false"]')) fireEvent.click(closed);
+  const line = () => within(slot.getAllByTestId("oats-agent-row").find((each) => each.getAttribute("data-sidebar-thread-id") === "thr_harvest")!).getByTestId("oats-row-facts");
+  await waitFor(() => expect(line().textContent).toMatch(/^Failed · /));
+  // Neither drawn nor in its title; and the row's own word for a lost session ("Lost") is not this agent's: it never ran.
+  expect(`${line().textContent} ${line().getAttribute("title")}`).not.toMatch(/session lost|Lost/);
+  expect(line().textContent).toBe("Failed · knowledge-harvester");
 });
 
 test("the agent's own page: \"Failed\", bb's reason under Details, Start… and Retire… and no Restart, and nothing of a lost session", async () => {

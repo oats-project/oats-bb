@@ -57,9 +57,7 @@ export function useHarnesses(): Harnesses {
 export type ModelOption = { id: string; label: string; provider: string | null };
 /** The first entry of the model field: selected at the start, and no `--model` is passed while it is. */
 export const MODEL_DEFAULT = "Default";
-/** Under the field when bb reports no model for the harness (the Desktop's sentence). */
-export const NO_SUGGESTIONS = "No model suggestions reported. Any model ID can be typed.";
-export type ModelSuggestions = { status: "loading" | "ready"; models: ModelOption[]; note: string | null };
+export type ModelSuggestions = { status: "loading" | "ready"; models: ModelOption[] };
 
 /** bb's answer as suggestions: each model once by its id, in bb's order; ids that could be read as an option are left out. */
 export function modelOptions(answer: unknown): ModelOption[] {
@@ -105,10 +103,10 @@ export function useModelSuggestions(harness: string | null): ModelSuggestions {
     };
   }, [sdk, of, providerId, hostId]);
   // The machine is not known until the harness list is read: until then nothing is said to be missing.
-  if (providerId !== undefined && hostId === null && list.status === "loading") return { status: "loading", models: [], note: null };
-  if (of === null) return { status: "ready", models: [], note: NO_SUGGESTIONS };
-  if (answer === null || answer.of !== of) return { status: "loading", models: [], note: null };
-  return { status: "ready", models: answer.models, note: answer.models.length === 0 ? NO_SUGGESTIONS : null };
+  if (providerId !== undefined && hostId === null && list.status === "loading") return { status: "loading", models: [] };
+  if (of === null) return { status: "ready", models: [] };
+  if (answer === null || answer.of !== of) return { status: "loading", models: [] };
+  return { status: "ready", models: answer.models };
 }
 
 // ---- whether bb can run a harness here ----
@@ -120,12 +118,14 @@ export function useModelSuggestions(harness: string | null): ModelSuggestions {
 
 /** What bb says of a harness's bb provider when it is not ready to run; null when it is ready, or not known. */
 /**
- * `sentence` is for under a Harness field, where another harness can be picked; `alone` is the
- * same with no word of picking another, for a form that has no such field (one harness declared):
- * a sentence names only a control that exists.
+ * `sentence` is for under a Harness field, where the harness's entry carries the `mark` (the fault)
+ * and another can be picked: the way on, alone. `alone` is for a form that has no such field (one
+ * harness declared): the fault and the way on, with no word of picking another: a sentence names
+ * only a control that exists.
  */
 export type HarnessState = { mark: string; sentence: string; alone: string } | null;
-const notReady = (mark: string, what: string, how: string): { mark: string; sentence: string; alone: string } => ({ mark, sentence: `${what}, so a spawn on it is refused. ${how}, or pick another harness.`, alone: `${what}, so a spawn on it is refused. ${how}.` });
+// (Under the field the harness's entry carries the mark, which says the fault: the sentence says only the way on.)
+const notReady = (mark: string, what: string, how: string): { mark: string; sentence: string; alone: string } => ({ mark, sentence: `${how}, or pick another.`, alone: `${what}, so a spawn on it is refused. ${how}.` });
 const NOT_READY: Record<string, (name: string) => { mark: string; sentence: string; alone: string }> = {
   not_installed: (name) => notReady("not installed in bb", `bb has not installed ${name} on this machine`, "Install it in bb’s settings"),
   unauthenticated: (name) => notReady("not signed in in bb", `bb is not signed in to ${name} on this machine`, "Sign in to it in bb’s settings"),

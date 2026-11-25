@@ -20,13 +20,13 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import { isUnconfirmed } from "../../contract/shared";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
-import { bbDefaultModel, harnessLabel, modelCheck, MODEL_HELD, PREVIEW_FOOT, spawnProblem, withoutDefault } from "../../model/spawn";
+import { bbDefaultModel, modelCheck, MODEL_HELD, spawnProblem, withoutDefault } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
 import { newKey } from "../keys";
 import { openAgentPage } from "../home/agent-tab";
 import { useOats } from "../oats";
 import { startOutcome } from "../outside/threads";
-import { HELD_REASON, RosterNotice } from "../roster/unreadable";
+import { RosterNotice } from "../roster/unreadable";
 import { errorMessage, onWindowReset, useRead } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { notify } from "../ui";
@@ -97,6 +97,14 @@ function useFlight(): { soul: string } | null {
   return flight;
 }
 
+/** The ids of the fields' marks: what an off Spawn is described by (aria-describedby), the word said once. */
+const MARK = { soul: "oats-spawn-soul-mark", model: "oats-spawn-model-mark", name: "oats-spawn-name-mark" } as const;
+/**
+ * The ids of what is IN VIEW for a hold that has no mark: the field that is empty, the column (its refusal), the
+ * roster's notice. An off Spawn is described by it too (aria-describedby): no word is added to the screen, and for a
+ * screen reader the button is never just dimmed (the review of part 7).
+ */
+const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice" } as const;
 /** How long Spawn waits for bb's list of models before it goes without it (the wait a thread's start is given too). */
 const MODELS_WAIT_MS = 10_000;
 type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
@@ -174,13 +182,36 @@ function Module({ module }: { module: { name: string; source: string; why: strin
   );
 }
 
+/** The rows of the column that stay in view: the ones a person decides on. Every other row is under its one fold. */
+const IN_VIEW: ReadonlySet<string> = new Set(["Works in", "Harness", "Access", "Relationship"]);
+
+/** A fact of who the agent is (its name, its home): a value that may be muted, and a title for what was cut short. */
+function Identity({ fact }: { fact: SpawnFacts["identity"][number] }) {
+  return (
+    <Fact label={fact.label} title={fact.title === undefined ? undefined : shown(fact.title)}>
+      <span className={fact.muted ? "text-muted-foreground" : undefined}>
+        <Breakable text={shown(fact.text)} />
+      </span>
+    </Fact>
+  );
+}
+
 /**
  * The facts of a preview, as the Desktop's column lists them. `machine` is the machine that holds
  * the deployment, where the agent runs: the roster's fact, said after where it works.
  */
 function Created({ facts, machine }: { facts: SpawnFacts; machine: string | null }) {
-  const rows = facts.facts.flatMap((fact) => (fact.label === "Works in" && machine !== null ? [fact, { label: W.RUNS_ON, parts: [{ text: machine }] }] : [fact]));
-  if (machine !== null && !rows.some((fact) => fact.label === W.RUNS_ON)) rows.push({ label: W.RUNS_ON, parts: [{ text: machine }] });
+  // In view: what a person decides on (the name, where it works, the harness and its model, the access it runs
+  // with, who it is started under). Everything else is one press away, under the column's ONE fold.
+  const [name, ...identity] = facts.identity;
+  const inView = facts.facts.filter((fact) => IN_VIEW.has(fact.label)).map((fact) => ({ ...fact, parts: fact.parts.filter((part) => part.sub !== true) }));
+  // Where the harness came from is a second line of its row: under the fold, as the row's own.
+  const cameFrom = facts.facts.filter((fact) => IN_VIEW.has(fact.label) && fact.parts.some((part) => part.sub === true)).map((fact) => ({ label: fact.label, parts: fact.parts.filter((part) => part.sub === true).map((part) => ({ ...part, sub: false })) }));
+  const others = facts.facts.filter((fact) => !IN_VIEW.has(fact.label));
+  const soul = others.filter((fact) => fact.label === "Soul");
+  const rest = others.filter((fact) => fact.label !== "Soul");
+  const folded = [...soul, ...(machine === null ? [] : [{ label: W.RUNS_ON, parts: [{ text: machine }] }]), ...cameFrom, ...rest];
+  const more = identity.length > 0 || folded.length > 0 || facts.modules !== null;
   return (
     <>
       {facts.warnings.map((lines, index) => (
@@ -191,19 +222,26 @@ function Created({ facts, machine }: { facts: SpawnFacts; machine: string | null
         </Notice>
       ))}
       <Facts>
-        {facts.identity.map((fact) => (
-          <Fact key={fact.label} label={fact.label} title={fact.title === undefined ? undefined : shown(fact.title)}>
-            <span className={fact.muted ? "text-muted-foreground" : undefined}>
-              <Breakable text={shown(fact.text)} />
-            </span>
-          </Fact>
-        ))}
-        {rows.map((fact) => (
+        {name === undefined ? null : <Identity fact={name} />}
+        {inView.map((fact) => (
           <Fact key={fact.label} label={fact.label}>
             <Parts parts={fact.label === "Relationship" ? related(fact.parts) : fact.parts} />
           </Fact>
         ))}
       </Facts>
+      {!more ? null : (
+        <Disclosure summary={W.COLUMN_DETAILS} testId="oats-spawn-more">
+          <div className="flex min-w-0 flex-col gap-3">
+          <Facts>
+            {identity.map((fact) => (
+              <Identity key={fact.label} fact={fact} />
+            ))}
+            {folded.map((fact) => (
+              <Fact key={`${fact.label}-${fact.parts[0]?.text ?? ""}`} label={fact.label}>
+                <Parts parts={fact.parts} />
+              </Fact>
+            ))}
+          </Facts>
       {facts.modules === null ? null : (
         <>
           <Section title="Core capabilities" testId="oats-spawn-core">
@@ -227,6 +265,9 @@ function Created({ facts, machine }: { facts: SpawnFacts; machine: string | null
             </Section>
           )}
         </>
+      )}
+          </div>
+        </Disclosure>
       )}
     </>
   );
@@ -266,9 +307,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const held = oats.phase === "failed" || (oats.phase === "ready" && oats.stale !== null);
   const machine = oats.phase === "ready" ? shown(oats.deployment.machine) : null;
 
-  /** Why these values cannot be asked of the kernel yet; null when they can. */
-  const off: string | null =
-    chosen === undefined ? W.OFF.soul : !chosen.spawnable ? W.OFF.cannot : nameFault !== null ? W.OFF.name : modelPick === CUSTOM && model === "" ? W.OFF.model : relation !== "unrelated" && relative === "" ? W.OFF.relation : null;
+  /**
+   * Which field keeps these values from being asked of the kernel; null when they can be. No sentence says it beside
+   * Spawn: the field is empty in view (its placeholder says what it wants) or carries its own mark.
+   */
+  const off: "soul" | "cannot" | "name" | "model" | "relation" | null =
+    chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
   const input: Input | null = useMemo(
     () =>
       off !== null
@@ -288,7 +332,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // ---- what will be created: the preview of exactly these values ----
   const [settled, setSettled] = useState<Preview | null>(null);
   const [refused, setRefused] = useState<Refused | null>(null);
-  const [reading, setReading] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [again, setAgain] = useState(0);
   const serial = useRef(0);
   const latest = useRef<{ key: string | null; input: Input | null; harnessField: boolean }>({ key, input, harnessField: harnesses.choice });
@@ -296,10 +340,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   useEffect(() => {
     const ticket = ++serial.current;
     if (key === null || held) {
-      setReading(false);
+      setAsking(false);
       return;
     }
-    setReading(true);
+    setAsking(true);
     const timer = setTimeout(() => {
       const asked = latest.current;
       if (asked.input === null || asked.key !== key) return;
@@ -311,12 +355,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             if (serial.current !== ticket) return;
             setSettled({ key, input: asked.input!, facts: answer.facts, revision: answer.revision });
             setRefused(null);
-            setReading(false);
+            setAsking(false);
           },
           (cause: unknown) => {
             if (serial.current !== ticket) return;
             setRefused({ key, problem: spawnProblem(reasonOf(cause), "preview", { harnessField: latest.current.harnessField }) });
-            setReading(false);
+            setAsking(false);
           },
         );
     }, PREVIEW_DEBOUNCE_MS);
@@ -490,25 +534,47 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   }, [key]);
 
   const fieldsHeld = held || phase !== "idle";
-  const reason =
-    phase === "unknown" && held
-      ? HELD_REASON // Check result is an act: held like the acts while OATS cannot be read
-      : phase !== "idle"
-        ? null
-        : held
-        ? HELD_REASON
+  /**
+   * What holds Spawn while the form can be changed; null when nothing does. Only a read in flight is SAID beside the
+   * button ("Reading…"). Every other hold is said once, where it is: the roster's notice while OATS cannot be read
+   * ("Acts are off."), the field that is empty or marked, the column's refusal, the button's own word for a spawn
+   * that is in flight. The button is described by the mark of the field that holds it, for a screen reader.
+   */
+  const hold: "held" | "flight" | "soul" | "cannot" | "name" | "model" | "relation" | "refused" | "reading" | "model-mark" | null =
+    phase !== "idle"
+      ? null
+      : held
+        ? "held"
         : inFlight !== null
-          ? W.inProgress(shown(inFlight.soul))
+          ? "flight"
           : off !== null
             ? off
             : refusal !== null
               ? nameRefusal !== null
-                ? W.OFF.name
-                : W.OFF.refused
+                ? "name"
+                : "refused"
               : preview === null || modelsReading || ownAsked
-                ? W.READING
-                : modelMark; // the Model field's own words: it is marked with them too
-  const canSpawn = phase === "idle" && reason === null && preview !== null && input !== null;
+                ? "reading"
+                : modelMark !== null
+                  ? "model-mark" // the Model field's own words: it is marked with them, once
+                  : null;
+  const reading = hold === "reading";
+  const described: Record<NonNullable<typeof hold>, string | undefined> = {
+    "model-mark": MARK.model,
+    name: MARK.name,
+    cannot: MARK.soul,
+    soul: unknownSoul ? MARK.soul : SAYS.soul,
+    model: SAYS.modelId,
+    relation: SAYS.relative,
+    refused: SAYS.column,
+    held: SAYS.held,
+    // A read in flight says "Reading…" beside the button; a spawn in flight is the button's own word.
+    reading: undefined,
+    flight: undefined,
+  };
+  // (Check result is held like the acts while OATS cannot be read: the roster's notice says so.)
+  const describedBy = hold !== null ? described[hold] : phase === "unknown" && held ? SAYS.held : undefined;
+  const canSpawn = phase === "idle" && hold === null && preview !== null && input !== null;
   const press = () => {
     if (phase === "unknown") {
       if (!held) send(true); // Check result: the same key, the same decision
@@ -544,39 +610,43 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   };
 
   // ---- drawing ----
-  const title = chosen === undefined ? W.TITLE : W.titleFor(shown(chosen.name), oats.phase === "ready" ? shown(oats.deployment.workspace) : null);
   // A model is required of the person: the column promises no default for the harness.
   const heldHarness = modelHeld.held === MODEL_HELD.required ? (modelAnswer?.facts.resolved?.harness ?? null) : null;
   const withoutModelDefault = (facts: SpawnFacts): SpawnFacts => (heldHarness === null ? facts : { ...facts, facts: withoutDefault(facts.facts, heldHarness) });
   let column: ReactNode;
-  if (chosen === undefined) column = <p className="text-sm text-muted-foreground">{W.COLUMN_NO_SOUL}</p>;
+  // No soul yet: nothing will be created, and nothing is drawn (the Soul field is empty, in view).
+  if (chosen === undefined) column = null;
   // Held: only the facts of the values on screen stay; those of other values are not drawn as theirs.
   else if (held) column = preview === null ? null : <Created facts={preview.facts} machine={machine} />;
   else if (refusal !== null && nameRefusal === null)
     column = (
-      <Notice title={W.REFUSED_TITLE} tone="error" code={refusal.code} details={refusal.detail} actions={<Button onClick={() => setAgain((n) => n + 1)}>Retry</Button>}>
+      // The kernel's code is one press away, with its own line: "<code>: <line>" under Details.
+      <Notice title={W.REFUSED_TITLE} tone="error" details={refusal.detail === null ? refusal.code : [`${refusal.code}: ${refusal.detail}`]} actions={<Button onClick={() => setAgain((n) => n + 1)}>Retry</Button>}>
         <p>{refusal.sentence}</p>
       </Notice>
     );
-  else if (off !== null || nameRefusal !== null) column = <p className="text-sm text-muted-foreground">{W.COLUMN_FIX_FIRST}</p>;
+  // A field that is empty or marked says what is missing: the column says nothing of it.
+  else if (off !== null || nameRefusal !== null) column = null;
   else if (preview !== null) column = <Created facts={withoutModelDefault(preview.facts)} machine={machine} />;
   // Until the values on screen are answered for, the last facts stay, marked as being read again.
   else if (settled !== null) column = <Created facts={modelAnswer === settled ? withoutModelDefault(settled.facts) : settled.facts} machine={machine} />;
   else column = <Loading>{W.READING}</Loading>;
   // Marked whenever something stays in the column while it is read again: the last facts, or a refusal after Retry.
-  const updating = reading && chosen !== undefined && !held && (settled !== null || refusal !== null);
-  /** The column holds the kernel's answer for the values on screen: only then is its foot true. */
-  const resolvedNow = chosen !== undefined && preview !== null;
+  const updating = asking && chosen !== undefined && !held && (settled !== null || refusal !== null);
 
-  const spawnWord = phase === "spawning" ? W.SPAWNING : phase === "created" ? W.CREATED : phase === "unknown" ? W.CHECK_RESULT : phase === "incomplete" ? W.INCOMPLETE : W.SPAWN;
+  // (A spawn that is in flight, pressed here before the person left and came back: the button says so itself.)
+  const spawnWord = phase === "spawning" || hold === "flight" ? W.SPAWNING : phase === "created" ? W.CREATED : phase === "unknown" ? W.CHECK_RESULT : phase === "incomplete" ? W.INCOMPLETE : W.SPAWN;
   const harnessFailed = harnesses.status === "failed";
   return (
     <Page testId="oats-new-agent-page">
       <div role="presentation" className="flex min-w-0 flex-col gap-4" onKeyDown={onKeyDown}>
-        <h1 data-testid="oats-spawn-title" className="break-words text-base font-semibold">
-          {title}
+        {/* No heading in view: bb's bar over the page says "New agent", and the Soul field says the soul. */}
+        <h1 data-testid="oats-spawn-title" className="sr-only">
+          {W.TITLE}
         </h1>
-        <RosterNotice oats={oats} />
+        <div id={SAYS.held} className="empty:hidden">
+          <RosterNotice oats={oats} />
+        </div>
         {/* While OATS cannot be read the roster's notice says so, alone: never a second one for the same cause. */}
         {souls.status === "error" && list === undefined && !held ? (
           <Notice title="The souls could not be read" tone="error" code={refusalCode(souls.error)} details={souls.error} actions={<Button onClick={souls.retry}>Retry</Button>} />
@@ -591,9 +661,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           onSubmit={(event) => event.preventDefault()}
         >
           <fieldset ref={fields} disabled={fieldsHeld} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0 lg:col-start-1 lg:row-start-1">
+            <div id={SAYS.soul} className="flex min-w-0 flex-col">
             <Field
               label={W.SOUL_LABEL}
-              hint={chosen === undefined ? (list !== undefined && list.length === 0 ? W.NO_SOULS : null) : chosen.description === "" ? null : shown(chosen.description)}
+              // (A soul's description is in the list, with its option: not again under the field.)
+              hint={chosen === undefined && list !== undefined && list.length === 0 ? W.NO_SOULS : null}
+              errorId={MARK.soul}
               error={unknownSoul ? W.soulUnknown(shown(soul)) : chosen !== undefined && !chosen.spawnable ? shown(chosen.problem ?? W.SOUL_CANNOT) : null}
             >
               <Choice
@@ -602,11 +675,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 value={chosen === undefined ? "" : soul}
                 disabled={list === undefined}
                 placeholder={list === undefined && souls.status === "loading" ? W.READING_SOULS : W.CHOOSE_SOUL}
-                filterLabel={W.FILTER_SOULS}
+                filterLabel={W.FILTER}
                 options={(list ?? []).map((candidate) => ({ id: candidate.name, label: shown(candidate.name), detail: candidate.spawnable ? shown(candidate.description) : W.SOUL_CANNOT, unavailable: !candidate.spawnable }))}
                 onChange={setSoul}
               />
             </Field>
+            </div>
             <Field label={W.TASK_LABEL} optional>
               <textarea data-testid="oats-spawn-task" data-field="task" rows={4} className={`${INPUT} py-2`} value={task} placeholder={W.TASK_PLACEHOLDER} onChange={(event) => setTask(event.target.value)} />
             </Field>
@@ -616,7 +690,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 <Field
                   label={W.HARNESS_LABEL}
                   hint={harnessFailed || notReady === null ? null : notReady.sentence}
-                  error={harnessFailed ? W.harnessesFailed(refusalCode(harnesses.error)) : null}
+                  error={harnessFailed ? W.HARNESSES_FAILED : null}
+                  errorTitle={harnessFailed ? (refusalCode(harnesses.error) ?? undefined) : undefined}
                 >
                   <Choice
                     testId="oats-spawn-harness"
@@ -624,9 +699,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                     value={harnesses.choice ? harness : "\u0000"}
                     disabled={!harnesses.choice}
                     placeholder={harnessFailed ? SOUL_DEFAULT : W.READING_HARNESSES}
-                    filterLabel={W.FILTER_HARNESSES}
+                    filterLabel={W.FILTER}
                     options={[
-                      { id: "", label: resolvedLabel(SOUL_DEFAULT, harness === "" ? (resolved?.harness ?? null) : null), detail: W.HARNESS_DEFAULT_DETAIL },
+                      // (The soul's own harness that bb cannot run here carries the mark an entry of the list does: the line under the field says only the way on.)
+                      { id: "", label: `${resolvedLabel(SOUL_DEFAULT, harness === "" ? (resolved?.harness ?? null) : null)}${harness === "" && notReady !== null ? ` · ${notReady.mark}` : ""}` },
                       ...harnesses.options.map((option) => {
                         const state = harnessState(option.id);
                         return state === null ? option : { ...option, label: `${option.label} · ${state.mark}`, unavailable: true };
@@ -651,22 +727,15 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             )}
             <Field
               label={W.MODEL_LABEL}
+              errorId={MARK.model}
               error={modelAnswer === null ? null : modelMark}
-              hint={
-                unsetModel === null && suggestions.note === null ? null : (
-                  <>
-                    {unsetModel === null ? null : <span className="block">{W.modelUnset(harnessLabel(unsetModel))}</span>}
-                    {suggestions.note === null ? null : <span className="block">{suggestions.note}</span>}
-                  </>
-                )
-              }
             >
               <Choice
                 testId="oats-spawn-model"
                 field="model"
                 value={modelPick}
                 placeholder={MODEL_DEFAULT}
-                filterLabel={W.FILTER_MODELS}
+                filterLabel={W.FILTER}
                 options={[
                   // (Required of the person: the first entry promises nothing, "Default" alone.)
                   { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null && modelHeld.held !== MODEL_HELD.required ? resolved.model : undefined) },
@@ -674,15 +743,17 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                   ...suggestions.models.filter((option) => modelHeld.held !== MODEL_HELD.ambiguous || modelHeld.offers.includes(option.id)).map((option) => ({ id: option.id, label: shown(option.label) })),
                   // A model picked before the harness changed stays what is sent, and is said.
                   ...(modelPick !== "" && modelPick !== CUSTOM && !suggestions.models.some((option) => option.id === modelPick) ? [{ id: modelPick, label: shown(modelPick) }] : []),
-                  { id: CUSTOM, label: W.MODEL_CUSTOM, detail: W.MODEL_CUSTOM_PLACEHOLDER },
+                  { id: CUSTOM, label: W.MODEL_CUSTOM },
                 ]}
                 onChange={setModelPick}
               />
             </Field>
             {modelPick === CUSTOM ? (
+              <div id={SAYS.modelId} className="flex min-w-0 flex-col">
               <Field label={W.MODEL_CUSTOM_LABEL}>
                 <input data-testid="oats-spawn-model-id" className={INPUT} value={modelTyped} placeholder={W.MODEL_CUSTOM_PLACEHOLDER} autoComplete="off" spellCheck={false} onChange={(event) => setModelTyped(event.target.value)} />
               </Field>
+              </div>
             ) : null}
             <div data-testid="oats-spawn-relation" className="flex min-w-0 flex-col gap-2 text-xs text-muted-foreground">
               <div className="flex min-w-0 flex-col gap-1">
@@ -693,41 +764,40 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 </div>
               </div>
               {relation === "unrelated" ? null : (
-                <Field label={W.WHICH_INSTANCE}>
-                  <Choice
-                    testId="oats-spawn-relative"
-                    aria-label={W.whichInstance(relation)}
-                    value={relative}
-                    disabled={agents.length === 0}
-                    placeholder={W.CHOOSE_INSTANCE}
-                    filterLabel={W.FILTER_INSTANCES}
-                    options={agents.map((agent) => ({ id: agent.instance, label: agentName(agent.instance), detail: shown(agent.soul) }))}
-                    onChange={setRelativeTo}
-                  />
-                </Field>
+                // No label over it: the option chosen above says what it is ("Child of"), and it is named for a screen reader.
+                <span id={SAYS.relative} className="flex min-w-0 flex-col">
+                <Choice
+                  testId="oats-spawn-relative"
+                  aria-label={W.whichInstance(relation)}
+                  value={relative}
+                  disabled={agents.length === 0}
+                  placeholder={W.CHOOSE_INSTANCE}
+                  filterLabel={W.FILTER}
+                  options={agents.map((agent) => ({ id: agent.instance, label: agentName(agent.instance), detail: shown(agent.soul) }))}
+                  onChange={setRelativeTo}
+                />
+                </span>
               )}
-              <span aria-live="polite" data-testid="oats-spawn-relation-line">
-                {relation !== "unrelated" && agents.length === 0 ? W.NO_INSTANCES : W.relationLine(relation, relative === "" ? "" : agentName(relative))}
+              {/* Only where the choice above cannot be made at all. */}
+              <span aria-live="polite" data-testid="oats-spawn-relation-line" className="empty:hidden">
+                {relation !== "unrelated" && agents.length === 0 ? W.NO_INSTANCES : null}
               </span>
             </div>
             <Field
               label={W.NAME_LABEL}
               optional
-              hint={
-                nameFault !== null || nameRefusal !== null ? null : name === "" ? (
-                  W.NAME_EMPTY
-                ) : (
-                  <>
-                    Instance name: <strong className="font-semibold text-foreground [font-variant-ligatures:none]">{name}</strong>
-                  </>
-                )
-              }
-              error={nameFault ?? (nameRefusal === null ? null : `${nameRefusal.sentence} (${nameRefusal.code})`)}
+              errorId={MARK.name}
+              // (The kernel's code of a refused name is what a pointer shows on its sentence.)
+              error={nameFault ?? (nameRefusal === null ? null : nameRefusal.sentence)}
+              errorTitle={nameFault === null && nameRefusal !== null ? nameRefusal.code : undefined}
             >
               <input data-testid="oats-spawn-name" data-field="name" className={`${INPUT} [font-variant-ligatures:none]`} value={typedName} placeholder={W.NAME_PLACEHOLDER} autoComplete="off" spellCheck={false} onChange={(event) => setTypedName(event.target.value)} />
             </Field>
           </fieldset>
+          {/* Nothing to show (no soul yet, a field that is empty or marked): no heading over an empty column. */}
+          {column === null ? null : (
           <aside
+            id={SAYS.column}
             data-testid="oats-spawn-preview"
             aria-label="Spawn preview"
             aria-busy={updating}
@@ -743,16 +813,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               ) : null}
             </h2>
             {column}
-            {resolvedNow ? <p className="text-xs text-muted-foreground">{PREVIEW_FOOT}</p> : null}
           </aside>
+          )}
           <div data-testid="oats-spawn-foot" className="flex min-w-0 flex-col gap-3 lg:col-start-1 lg:row-start-2 lg:self-start">
-            <p data-testid="oats-spawn-mode" className="text-xs text-muted-foreground">
-              {W.MODE_LINE}
-            </p>
+            {/* (The access the agent runs with is the column's Access row, in view of the button: not said again here.) */}
             {phase === "created" && made !== null ? (
-              <Result title={W.createdTitle(agentName(made.instance))} actions={<Button data-testid="oats-spawn-open" onClick={() => navigate.toThread(made.threadId)}>{W.openAgent(agentName(made.instance))}</Button>}>
-                <p>{W.OPENING}</p>
-              </Result>
+              <Result title={W.createdTitle(agentName(made.instance))} actions={<Button data-testid="oats-spawn-open" onClick={() => navigate.toThread(made.threadId)}>{W.openAgent(agentName(made.instance))}</Button>} />
             ) : null}
             {unstarted === null ? null : (
               <Result
@@ -770,18 +836,16 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               </Result>
             )}
             {failure === null ? null : (
-              <Result title={W.FAILURE_TITLE[failure.outcome]} tone={failure.outcome === "refused" || failure.outcome === "unconfirmed" ? "failed" : "unknown"} code={failure.code}>
+              <Result title={W.FAILURE_TITLE[failure.outcome]} tone={failure.outcome === "refused" || failure.outcome === "unconfirmed" ? "failed" : "unknown"}>
                 <p>{failure.sentence}</p>
-                {failure.next === "review-again" && preview !== null ? <p data-testid="oats-spawn-reread">{W.READ_AGAIN}</p> : null}
-                {failure.detail === null ? null : (
-                  <Disclosure summary="Details" testId="oats-spawn-details">
-                    {refusalLines(failure.detail).map((line, index) => (
-                      <p key={index} className="text-xs text-muted-foreground">
-                        {line}
-                      </p>
-                    ))}
-                  </Disclosure>
-                )}
+                {/* The kernel's code and its own lines: one press away. */}
+                <Disclosure summary="Details" testId="oats-spawn-details">
+                  {[shown(failure.code), ...refusalLines(failure.detail)].filter((line) => line !== "").map((line, index) => (
+                    <p key={index} className="text-xs text-muted-foreground">
+                      {line}
+                    </p>
+                  ))}
+                </Disclosure>
               </Result>
             )}
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -795,23 +859,19 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                   variant="primary"
                   data-testid="oats-spawn-submit"
                   aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Enter`}
-                  aria-busy={phase === "spawning"}
+                  aria-busy={phase === "spawning" || hold === "flight"}
                   disabled={!(canSpawn || (phase === "unknown" && !held))}
+                  {...(describedBy === undefined ? {} : { "aria-describedby": describedBy })}
                   onClick={press}
                 >
                   {spawnWord}
                 </Button>
               )}
-              {phase === "idle" || phase === "unknown" ? (
-                <kbd data-testid="oats-spawn-key" aria-hidden="true" className="rounded border border-border px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
-                  {mac ? "⌘ Enter" : "Ctrl+Enter"}
-                </kbd>
-              ) : null}
-              {reason === null || unstarted !== null ? null : <DisabledReason>{reason}</DisabledReason>}
+              {reading ? <DisabledReason>{W.READING}</DisabledReason> : null}
             </div>
             {/* What a person waits on, announced once: the read, the spawn. */}
             <span role="status" data-testid="oats-spawn-status" className="sr-only">
-              {phase === "spawning" ? W.SPAWNING : phase === "created" && made !== null ? W.createdTitle(agentName(made.instance)) : reason === W.READING ? W.READING : ""}
+              {phase === "spawning" ? W.SPAWNING : phase === "created" && made !== null ? W.createdTitle(agentName(made.instance)) : reading ? W.READING : ""}
             </span>
           </div>
         </form>

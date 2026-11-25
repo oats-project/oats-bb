@@ -3,7 +3,7 @@
 // awebai/oats 95c7b43b), over the plugin's own states: an agent's state is the one function every
 // place reads (app/roster/status.ts), so the home's counts are the sidebar's by construction.
 // Pure: no bb, no React.
-import type { Agent, AgentState, BbThread, Node, View } from "../../model/types";
+import type { Agent, AgentState, BbThread, View } from "../../model/types";
 import { messageResumes, rest } from "../../model/rest";
 import { claimOf, flatten } from "../../model/view";
 import { agentStatus, type AgentStatus } from "../roster/status";
@@ -32,10 +32,9 @@ const instant = (entry: Entry): number => {
 };
 
 /** `view` is the roster as the sidebar draws it; `now` is the clock, for how long an agent has waited. */
-export function board(view: Pick<View, "roots" | "detached" | "elsewhere" | "finished">, now: number): Board {
-  const threaded: Entry[] = flatten(view.roots).map((node: Node) => ({ agent: node.agent, thread: node.thread, status: agentStatus(node.agent, node.thread, now) }));
-  const threadless: Entry[] = [...view.detached, ...view.elsewhere].map((agent) => ({ agent, thread: null, status: agentStatus(agent, null, now) }));
-  const all = [...threaded, ...threadless];
+export function board(view: Pick<View, "rows" | "finished">, now: number): Board {
+  // The sidebar's own order with every fold open, row by row (`view.rows`: the ONE tree, a row before its children; an agent with no bb thread is under its parent like any other).
+  const all: Entry[] = flatten(view.rows).map((row) => ({ agent: row.agent, thread: row.thread, status: agentStatus(row.agent, row.thread, now) }));
   const counts: Record<AgentState, number> = { "needs-you": 0, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 0, outside: 0 };
   for (const entry of all) counts[entry.status.state] += 1;
   const order = new Map(all.map((entry, index) => [entry.agent.instance, index]));
@@ -43,7 +42,7 @@ export function board(view: Pick<View, "roots" | "detached" | "elsewhere" | "fin
   // within each, the newest claim first, then the sidebar's order.
   const here = (entry: Entry): number => (entry.thread === null ? 1 : 0);
   const needsYou = all
-    // (An agent that runs outside OATS is among them, as in the sidebar's foot and `view.needing`: its card says why; app/outside.)
+    // (An agent that runs outside OATS is among them, as in `view.needing` (the home's badge): its card says why; app/outside.)
     .filter((entry) => entry.status.state === "needs-you" || entry.status.state === "outside")
     .sort((a, b) => here(a) - here(b) || instant(b) - instant(a) || (order.get(a.agent.instance) ?? 0) - (order.get(b.agent.instance) ?? 0));
   const unread = new Set(view.finished.map((node) => node.agent.instance));

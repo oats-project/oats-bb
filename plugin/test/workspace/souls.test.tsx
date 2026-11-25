@@ -178,11 +178,11 @@ test("spawnable: false shows the problem and no form", async () => {
   expect(slot.queryByTestId("oats-spawn-mode")).toBeNull();
 });
 
-test("an agent whose thread is archived shows as thread missing, with Start and Retire", async () => {
+test("an agent whose thread is archived shows as thread missing, with Start… and Retire… (each opens its dialog)", async () => {
   const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
   const slot = await souls("oats-developer", {}, fixtureAgents(), threads);
   const missing = await slot.findByTestId("oats-soul-agent-detached");
-  expect(missing.textContent).toBe("Flaky ci developerthread missingStartRetire");
+  expect(missing.textContent).toBe("Flaky ci developerthread missingStart…Retire…");
   expect(slot.queryByTestId("oats-soul-agent")).toBeNull();
   fireEvent.click(slot.getByTestId("oats-detached-start"));
   // Start opens the act's own dialog (test/lifecycle/actions.test.tsx holds what it does): nothing is started on one press.
@@ -306,7 +306,7 @@ test("a soul's page while OATS cannot be read: the notice with the age above its
   const stale = await souls("oats-developer", { snapshot: failed(last) });
   const notice = await stale.findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
-  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(notice.textContent).toContain("Read 40 min ago.");
   expect(stale.getByTestId("oats-soul-detail").textContent).toContain("Flaky ci developer");
   stale.unmount();
   resetApp();
@@ -322,7 +322,7 @@ test("the Souls list while OATS cannot be read: the page's one notice, with the 
   const failed = (kept: typeof last | null) => () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last: kept });
   const stale = await souls("", { snapshot: failed(last) });
   const notice = await stale.findByRole("alert");
-  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(notice.textContent).toContain("Read 40 min ago.");
   expect(stale.getAllByTestId("oats-unreadable")).toHaveLength(1);
   await waitFor(() => expect(stale.getByTestId("oats-souls-page").textContent).toMatch(/oats-developer\s*2 agents/));
   stale.unmount();
@@ -347,7 +347,7 @@ test("a soul's page on the last roster read: Start and Retire of an agent whose 
   await slot.findByTestId("oats-soul-agent-detached");
   for (const id of ["oats-detached-start", "oats-detached-retire"]) {
     const button = slot.getByTestId(id) as HTMLButtonElement;
-    expect([id, button.disabled, button.title]).toEqual([id, true, "Comes back when OATS is read again"]);
+    expect([id, button.disabled, button.title]).toEqual([id, true, ""]); // off, with no reason of its own: the page's notice says "Acts are off."
     fireEvent.click(button);
   }
   expect(rpcOf(slot, "start")).toEqual([]);

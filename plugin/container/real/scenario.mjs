@@ -514,16 +514,15 @@ async function shots(scene, { instance, soul, threadId, state }) {
 
       await page.goto(`/projects/${thread.projectId}/threads/${threadId}`);
       check(Boolean(await page.until(visible(testId("oats-identity-row")), 30)), `${at}: the agent's thread shows the header row`);
-      // The thread itself says where its agent is, in words (D-113): the state the kernel's row is in, the soul, and OATS.
-      // The line's time comes from a read of its own for a stopped agent (its last "stopped" event), which
-      // answers after the state is drawn: the line is WAITED for whole, so the image holds what a person
-      // ends up seeing, and a time that never came fails the check (part A's UX read, S3).
+      // The thread itself says where its agent is, in words (D-113): the state the kernel's row is in, and the way
+      // to the instance panel. No time, no soul and no other fact is on the row (Joan's direction of 23 Nov 2026):
+      // they are the instance panel's. The line is WAITED for, so the image holds what a person ends up seeing.
       const WORD = { working: "Working", idle: "Idle", "needs-you": "Needs you", stopped: "Stopped" };
-      const WHOLE = { working: "^Working · started \\S", idle: "^Idle\\b", "needs-you": "^(! )?Needs you\\b", stopped: "^Stopped · since \\S" };
+      const WHOLE = { working: "^Working\\b(?! · started)", idle: "^Idle\\b", "needs-you": "^(! )?Needs you\\b", stopped: "^Stopped\\b(?! · since)" };
       const lineNow = `JSON.stringify({ state: document.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, status: ${textOf(testId("oats-status-line"))}, row: ${textOf(testId("oats-identity-row"))} })`;
       await page.until(`(() => { const line = JSON.parse(${lineNow}); return line.state === ${JSON.stringify(state)} && new RegExp(${JSON.stringify(WHOLE[state])}).test(line.status); })()`, 30);
       const line = JSON.parse(await page.evaluate(lineNow));
-      check(line.state === state && new RegExp(WHOLE[state]).test(line.status) && line.row.includes(`instance of ${soul}`) && line.row.includes("Instance panel"), `${at}: the thread's row says "${WORD[state]}"${state === "stopped" ? ", since when (its last recorded stop)" : state === "working" ? ", when OATS last started it" : ""}, the soul with the Desktop's label, and the way to the instance panel`, JSON.stringify(line));
+      check(line.state === state && new RegExp(WHOLE[state]).test(line.status) && !/instance of|Messaging ID|Parent|Owning human/.test(line.row) && !line.row.includes(soul) && line.row.includes("Instance panel"), `${at}: the thread's row says "${WORD[state]}" with no time after it, the way to the instance panel, and no soul and no other fact`, JSON.stringify(line));
       show("header row", line.row);
       await page.shot(`${scene}-${viewport.name}-thread${suffix}`);
     } finally {
@@ -533,9 +532,9 @@ async function shots(scene, { instance, soul, threadId, state }) {
 }
 /**
  * For a provider that archives at stop (`stopArchives()`), at both widths: the stopped agent keeps a
- * row in the roster, on no thread (bb lists no archived thread), that says "Stopped" and its soul in
+ * row in the roster, on no thread (bb lists no archived thread), that says "Stopped" alone in
  * the plain tone and opens its archived conversation; and that thread's own row says who it is,
- * "Stopped", since when, "Its conversation is archived in bb. Start begins a new one.", with
+ * "Stopped" and the reason, "archived in bb", with
  * Start… and Retire… and the way to the instance panel (the plugin's WORDS.md, "Outside OATS"). Each read waits for what it asserts and
  * prints what is there when it is not.
  */
@@ -549,10 +548,10 @@ async function archivedShots(scene, { instance, soul, threadId }) {
       check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
       const row = `${testId("oats-agent-row-threadless")}[data-instance=${JSON.stringify(instance)}]`;
       // The row's words and where it opens come with bb's own answer for the thread, after the roster: both are waited for.
-      const ROW = `(() => { const e = document.querySelector(${JSON.stringify(row)}); return JSON.stringify({ facts: (e?.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.innerText ?? "").replace(/\\s+/g, " ").trim(), opens: e?.getAttribute("data-opens") ?? null, mark: e?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null, tone: e?.querySelector("[data-mark]")?.getAttribute("data-tone") ?? null, onItsThread: document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"]`)}) !== null }); })()`;
+      const ROW = `(() => { const e = document.querySelector(${JSON.stringify(row)}); return JSON.stringify({ facts: e?.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.getAttribute("title") ?? "", opens: e?.getAttribute("data-opens") ?? null, mark: e?.querySelector("[data-mark]")?.getAttribute("data-state") ?? null, tone: e?.querySelector("[data-mark]")?.getAttribute("data-tone") ?? null, onItsThread: document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"]`)}) !== null }); })()`;
       const wanted = JSON.stringify({ facts: `Stopped · ${soul}`, opens: "thread", mark: "stopped", tone: null, onItsThread: false });
       const drawn = (await page.until(`(() => { const read = ${ROW}; return read === ${JSON.stringify(wanted)} ? read : ""; })()`, 30)) || (await page.evaluate(ROW));
-      check(drawn === wanted, `${at}: ${instance} keeps its row in the roster, on no thread: "Stopped", its soul, the plain tone, and it opens its archived thread`, `${drawn}; the sidebar: ${await page.evaluate(textOf(testId("oats-sidebar")))}`);
+      check(drawn === wanted, `${at}: ${instance} keeps its row in the roster, on no thread: "Stopped" and its soul, no reason, the plain tone, and it opens its archived thread`, `${drawn}; the sidebar: ${await page.evaluate(textOf(testId("oats-sidebar")))}`);
       show("row", await page.evaluate(textOf(row)));
       await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
 
@@ -562,12 +561,12 @@ async function archivedShots(scene, { instance, soul, threadId }) {
       check(Boolean(opened), `${at}: the row opens the archived thread ${threadId}`, opened ?? (await page.evaluate("location.pathname")));
       // That thread's own row, once it says where the agent is: the state, the fact, and the two acts that can be pressed.
       const LINE = `(() => { const e = document.querySelector(${JSON.stringify(`${testId("oats-identity-row")}[data-outside="stopped-archived"]`)}); const acts = [...(e?.querySelectorAll(${JSON.stringify('[data-testid^="oats-agent-act-"]')}) ?? [])]; return JSON.stringify({ state: e?.querySelector(${JSON.stringify(testId("oats-status-line"))})?.getAttribute("data-state") ?? null, agent: (e?.querySelector(${JSON.stringify(testId("oats-outside-agent"))})?.innerText ?? "").trim(), line: (e?.querySelector(${JSON.stringify(testId("oats-status-line"))})?.innerText ?? "").replace(/\\s+/g, " ").trim(), acts: acts.map((act) => [act.getAttribute("data-testid"), act.innerText.trim(), act.disabled]), panel: e?.querySelector(${JSON.stringify(testId("oats-open-panel"))})?.innerText.trim() ?? null }); })()`;
-      // The whole line: the state, since when (read from the agent's recorded stop, after the row is drawn), the sentence, the acts.
-      const WHOLE = String.raw`^Stopped · since .+ · ` + ARCHIVED_IN_BB.replace(/\./g, String.raw`\.`) + String.raw` Start… Retire… Instance panel$`;
+      // The whole line: the state, the reason, the acts. No time: when it stopped is a fact of the instance panel's Session.
+      const WHOLE = String.raw`^Stopped · ` + ARCHIVED_IN_BB.replace(/\./g, String.raw`\.`) + String.raw` Start… Retire… Instance panel$`;
       const line = JSON.parse((await page.until(`(() => { const read = JSON.parse(${LINE}); return read.state === "stopped" && new RegExp(${JSON.stringify(WHOLE)}).test(read.line) && read.acts.every((act) => act[2] === false) ? JSON.stringify(read) : ""; })()`, 30)) || (await page.evaluate(LINE)));
       check(
         line.state === "stopped" && new RegExp(WHOLE).test(line.line) && line.agent === nameOf(instance) && JSON.stringify(line.acts) === JSON.stringify([["oats-agent-act-start", "Start…", false], ["oats-agent-act-retire", "Retire…", false]]) && line.panel === "Instance panel",
-        `${at}: the archived thread's own row names the agent and says "Stopped", since when, and "${ARCHIVED_IN_BB}", with Start… and Retire… that can be pressed and the way to the instance panel`,
+        `${at}: the archived thread's own row names the agent and says "Stopped" and "${ARCHIVED_IN_BB}", with Start… and Retire… that can be pressed and the way to the instance panel`,
         JSON.stringify(line),
       );
       show("header row", `${line.agent} | ${line.line}`);
@@ -577,11 +576,11 @@ async function archivedShots(scene, { instance, soul, threadId }) {
     }
   }
 }
-/** What the archived thread's row says of a stopped agent: the plugin's sentence (WORDS.md, "Outside OATS"; app/outside/words.ts). */
-const ARCHIVED_IN_BB = "Its conversation is archived in bb. Start begins a new one.";
+/** What the archived thread's row says of a stopped agent: the plugin's reason (WORDS.md, "Outside OATS"; app/outside/words.ts). */
+const ARCHIVED_IN_BB = "archived in bb";
 /**
  * With the release's DEFAULT pages (the home alone: what a person sees first), at both widths: the
- * sidebar holds the real agent's row and who waits, and no link to a page that is not shown. The
+ * sidebar holds the real agent's row, no link to a page that is not shown, and no line at its foot. The
  * setting is left as a fresh install has it, UNSET (bb's own `plugin config oats unset pages`),
  * not set to "home": so this holds what an unset setting hides. All six are set again after.
  */
@@ -596,9 +595,10 @@ async function defaultPagesShots(scene, { instance, threadId }) {
         await page.goto("/");
         check(await showSidebar(page, viewport), `${at}: the thread list is the OATS sidebar`);
         const row = `${testId("oats-agent-row")}[data-sidebar-thread-id="${threadId}"]`;
-        // Waited for: the row, and the count of who waits as a button (it is one only once bb has given the settings).
-        const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(row)})) return ""; const needs = s.querySelector(${JSON.stringify(testId("oats-needs-line"))}); if (needs?.tagName !== "BUTTON") return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: s.querySelectorAll('[data-testid^="oats-page-link-"]').length }); })()`, 30);
-        check(side === JSON.stringify({ pages: false, links: 0 }), `${at}: with the setting left as installed (unset) the sidebar has ${instance}'s row and who waits, and no link to a page that is not shown`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        // Waited for: the row, and bb's settings read (the sidebar says so: until then no page is known shown under any value).
+        // Nobody waits in this roster (its one agent works): the foot has no line at all, which is asserted too.
+        const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(row)})) return ""; if (s.getAttribute("data-pages") !== "known") return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: s.querySelectorAll('[data-testid^="oats-page-link-"]').length, needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))}) !== null, said: /needs you|need you/i.test(s.innerText) }); })()`, 30);
+        check(side === JSON.stringify({ pages: false, links: 0, needs: false, said: false }), `${at}: with the setting left as installed (unset) the sidebar has ${instance}'s row, no link to a page that is not shown, and (nobody waits) no line at its foot`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
         await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
       } finally {
         await page.close();
@@ -617,7 +617,7 @@ async function missingShots(scene, { instance, soul }) {
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
       const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent-detached")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return t; })()`, 30);
-      check(Boolean(line) && /thread missing/.test(line) && /Start/.test(line) && /Retire/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start and Retire`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
+      check(Boolean(line) && /thread missing/.test(line) && /Start…/.test(line) && /Retire…/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start… and Retire… (each opens its dialog)`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
       await page.goto("/");
@@ -626,10 +626,10 @@ async function missingShots(scene, { instance, soul }) {
       // and the reason: bb has no thread of that id (app/outside). The read waits on that row's words
       // (bb's own answer for the id arrives after the roster).
       const row = `${testId("oats-agent-row-threadless")}[data-instance=${JSON.stringify(instance)}]`;
-      const factsNow = `(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
-      const DELETED = "Stopped · deleted in bb"; // the reason takes the soul's place on the row
+      const factsNow = `(document.querySelector(${JSON.stringify(`${row} ${testId("oats-row-facts")}`)})?.getAttribute("title") ?? "")`;
+      const DELETED = `Stopped · ${soul} · deleted in bb`; // the state, the reason, then the soul
       const facts = (await page.until(`(() => { const facts = ${factsNow}; return facts === ${JSON.stringify(DELETED)} ? facts : ""; })()`, 30)) || (await page.evaluate(factsNow));
-      check(facts === DELETED, `${at}: ${instance} stays in the roster: "Stopped", then the reason, "deleted in bb"`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(facts === DELETED, `${at}: ${instance} stays in the roster: "Stopped", then the reason, "deleted in bb", then its soul`, facts ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       show("row", facts);
       await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
     } finally {
@@ -884,7 +884,7 @@ try {
       await page.evaluate(`[...(${card}).querySelectorAll(${JSON.stringify(testId("oats-needs-choice"))})].find((e) => e.innerText.trim() === "Retry").click()`);
       // The card says what was answered, until the agent goes on and its card leaves (asked by the home: the lead's ruling on its UX read).
       const said = await page.until(`(() => { const c = ${card}; return c?.querySelector('[data-testid="oats-needs-answered"]')?.innerText.trim() ?? ""; })()`, 15);
-      check(said === "Answered: Retry. Waiting for the agent to go on.", `${at}: the card says what was answered`, said ?? (await page.evaluate(textOf(testId("oats-home-needs")))));
+      check(said === "Answered: Retry.", `${at}: the card says what was answered`, said ?? (await page.evaluate(textOf(testId("oats-home-needs")))));
       await page.shot(`real-question-${viewport.name}-home-answered${suffix}`);
       const answered = await until("bb to have no pending interaction for the thread", () => pendingQuestions().length === 0, 60);
       check(Boolean(answered), `${at}: "Retry" on the card answers the question (the plugin's threads.interactions.resolve)`, JSON.stringify(bbJson("thread", "interactions", "list", threadId)));

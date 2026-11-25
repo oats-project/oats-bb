@@ -89,7 +89,7 @@ export function Section({ title, n, children, testId = "oats-section" }: { title
  * `action` holds buttons only: the line's frame clips what hangs out of it (so that no line starts
  * with a separator), and a list that opens from the line would be cut.
  */
-export function StatusLine({ state, word, since, detail, tone, asOf, action }: { state: AgentState; word?: string; since?: string | null; detail?: string | null; asOf?: string | null; /** "warning": the line warns (a stopped agent's live composer, a stopped agent whose process may still run): the state's mark and the detail are drawn in bb's warning tone (the text token holds 4.5:1 on a page's surface; the line is never a row of a list). The words carry the meaning; the tone never does alone. */ tone?: "warning"; action?: ReactNode }) {
+export function StatusLine({ state, word, markOnly = false, since, detail, tone, asOf, action }: { state: AgentState; word?: string; /** the mark alone, with the state as its accessible name: for a place whose heading already says the state's word (a card under "Needs you") */ markOnly?: boolean; since?: string | null; detail?: string | null; asOf?: string | null; /** "warning": the line warns (a stopped agent's live composer, a stopped agent whose process may still run): the state's mark and the detail are drawn in bb's warning tone (the text token holds 4.5:1 on a page's surface; the line is never a row of a list). The words carry the meaning; the tone never does alone. */ tone?: "warning"; action?: ReactNode }) {
   const parts = [
     { text: shown(since), tone: undefined },
     { text: shown(detail), tone },
@@ -104,11 +104,18 @@ export function StatusLine({ state, word, since, detail, tone, asOf, action }: {
     <div data-testid="oats-status-line" data-state={state} className="-m-1 min-w-0 overflow-hidden p-1 text-sm text-foreground">
       <div className="-ml-4 flex min-w-0 flex-wrap items-center gap-y-1">
         <span className="pl-4 font-semibold">
-          <State state={state} word={word} tone={tone} />
+          {markOnly ? (
+            <span data-testid="oats-state" data-state={state} data-tone={tone} className="inline-flex shrink-0 items-center">
+              <StateMark state={state} tone={tone} />
+            </span>
+          ) : (
+            <State state={state} word={word} tone={tone} />
+          )}
         </span>
         {parts.map((part, index) => (
-          <span key={index} data-testid="oats-status-part" data-tone={part.tone} className={`relative min-w-0 break-words pl-4 ${part.tone === "warning" ? "text-warning-text" : "text-muted-foreground"}`}>
-            <span data-sep="" className="absolute left-0 top-0 w-4 text-center text-muted-foreground">{"· "}</span>
+          <span key={index} data-testid="oats-status-part" data-tone={part.tone} className={`relative min-w-0 break-words ${markOnly && index === 0 ? "pl-1.5" : "pl-4"} ${part.tone === "warning" ? "text-warning-text" : "text-muted-foreground"}`}>
+            {/* (After the mark alone the first part needs no separator: the mark is not a word.) */}
+            {markOnly && index === 0 ? null : <span data-sep="" className="absolute left-0 top-0 w-4 text-center text-muted-foreground">{"· "}</span>}
             {part.text}
           </span>
         ))}
@@ -143,13 +150,14 @@ export function Facts({ children }: { children: ReactNode }) {
 export const LINK = "underline underline-offset-2 hover:opacity-80";
 
 /**
- * Something a person opens to read more ("Details", "Paths"): closed until pressed, its summary as
- * high as a control, with a mark that turns when it is open. Uncontrolled, or controlled with `open` and `onToggle`.
+ * Something a person opens to read more ("Details", "Paths", a row of a list that opens): closed
+ * until pressed, its summary as high as a control, with a mark that turns when it is open. Closed,
+ * it is one word, or a row behind its mark. Uncontrolled, or controlled with `open` and `onToggle`.
  */
-export function Disclosure({ summary, children, open, onToggle, testId = "oats-disclosure" }: { summary: string; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; testId?: string }) {
+export function Disclosure({ summary, children, open, onToggle, row = false, testId = "oats-disclosure" }: { summary: ReactNode; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; /** the summary is a row of a list that opens (its own words, in its own look, behind the mark), not a word that names a fold */ row?: boolean; testId?: string }) {
   return (
     <details data-testid={testId} className="min-w-0 text-sm" {...(open === undefined ? {} : { open })} onToggle={(event) => onToggle?.(event.currentTarget.open)}>
-      <summary className={`${TARGET} inline-flex cursor-pointer list-none items-center gap-1 text-xs text-muted-foreground hover:text-foreground`}>
+      <summary className={`${TARGET} cursor-pointer list-none items-center ${row ? "flex min-w-0 gap-2 text-foreground" : "inline-flex gap-1 text-xs text-muted-foreground hover:text-foreground"}`}>
         {/* The mark that says it opens, turned when THIS fold is open (the summary's own triangle is
             lost with its flex layout). By its own details alone: a fold inside an open fold is closed
             until it is opened, and a rule on any open ancestor would turn its mark too. */}
@@ -199,8 +207,10 @@ const TONE = {
  * A notice in a person's words: a title, one or two sentences, the acts that help (Retry, Open
  * settings, Details), and for a read that failed the age of what is still shown. For the failed,
  * stale, not-configured and cannot-show states of every page. `code` is the kernel's or the
- * plugin's code, drawn after the words in the muted style, never before them; `details` is the
- * kernel's own message (a refusal as the server words it), one press away under "Details".
+ * plugin's code, drawn after the words in the muted style, never before them; `details` is what is
+ * one press away under "Details": the kernel's own message (a refusal as the server words it), or
+ * several texts in order (a sentence of what to do, then the code and the kernel's message), each
+ * through the filter by itself.
  */
 export function Notice({
   title,
@@ -215,21 +225,22 @@ export function Notice({
   children?: ReactNode;
   tone?: keyof typeof TONE;
   code?: string | null;
-  details?: string | null;
-  /** `readAge()` of what is still shown: a string, or null when the instant cannot be read ("Showing what was last read."); left out, the notice says nothing of it. */
+  details?: string | null | readonly (string | null)[];
+  /** `readAge()` of what is still shown: a string, or null when the instant cannot be read ("Last read."); left out, the notice says nothing of it. */
   age?: string | null;
   actions?: ReactNode;
 }) {
   const look = TONE[tone];
+  const detailLines = (Array.isArray(details) ? details : [details]).flatMap((text) => refusalLines(text));
   return (
     <section role={look.role} data-testid="oats-notice" data-tone={tone} className={`flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm text-foreground ${look.frame}`}>
       <h3 className={`font-semibold ${look.title}`}>{title}</h3>
       {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words">{children}</div>}
       {age === undefined ? null : <p className="text-xs text-muted-foreground">{showingRead(age)}</p>}
       {code === undefined || code === null || shown(code) === "" ? null : <p className="break-words text-xs text-muted-foreground">{shown(code)}</p>}
-      {details === undefined || details === null || refusalLines(details).length === 0 ? null : (
+      {detailLines.length === 0 ? null : (
         <Disclosure summary="Details" testId="oats-notice-details">
-          {refusalLines(details).map((line, index) => (
+          {detailLines.map((line, index) => (
             <p key={index} className="text-xs text-muted-foreground">
               {line}
             </p>
@@ -245,17 +256,17 @@ export function Notice({
  * An empty list or page: the Desktop's words for it (a title where the Desktop has two lines, and
  * its sentence), and the act that fills it. In the place the content will be.
  */
-export function Empty({ title, children, action }: { title?: string; children: ReactNode; action?: ReactNode }) {
+export function Empty({ title, children, action }: { title?: string; /** the sentence; left out where the title says it all */ children?: ReactNode; action?: ReactNode }) {
   return (
     <div data-testid="oats-empty" className="flex flex-col items-start gap-2 py-2 text-sm text-muted-foreground">
       {title === undefined ? null : <p className="font-semibold text-foreground">{title}</p>}
-      <p>{children}</p>
+      {children === undefined || children === null ? null : <p>{children}</p>}
       {action === undefined || action === null ? null : <div className="flex flex-wrap items-center gap-2">{action}</div>}
     </div>
   );
 }
 
-/** A read in flight, in the place the content will be: "Reading your agents…". Polite: it is said once, not at every re-read. */
+/** A read in flight, in the place the content will be: "Reading…". Polite: it is said once, not at every re-read. */
 export function Loading({ children = "Reading OATS…" }: { children?: ReactNode }) {
   return (
     <p role="status" aria-live="polite" data-testid="oats-loading" className="py-2 text-sm text-muted-foreground">
@@ -272,7 +283,7 @@ export function Loading({ children = "Reading OATS…" }: { children?: ReactNode
 export function Stale({ age, held, refreshing = false, action }: { age: string | null; held?: string | null; refreshing?: boolean; action?: ReactNode }) {
   return (
     <div role="status" data-testid="oats-stale" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border bg-muted px-3 py-2 text-xs text-foreground">
-      <span>{refreshing ? `Refreshing… ${showingRead(age).replace(/^S/, "s")}` : showingRead(age)}</span>
+      <span>{refreshing ? `Refreshing… ${showingRead(age).replace(/^[A-Z]/, (first) => first.toLowerCase())}` : showingRead(age)}</span>
       {held === undefined || held === null ? null : <span className="text-muted-foreground">{held}</span>}
       {action === undefined || action === null ? null : <span className="ml-auto flex shrink-0 items-center gap-2">{action}</span>}
     </div>
@@ -292,9 +303,11 @@ export function Result({ title, tone = "done", children, code, actions }: { titl
       className={`flex flex-col gap-2 rounded-lg border bg-card p-3 text-sm text-foreground ${tone === "failed" ? "border-destructive-text" : tone === "unknown" ? "border-warning-text" : "border-border"}`}
     >
       <h3 className={`font-semibold ${tone === "failed" ? "text-destructive-text" : ""}`}>{title}</h3>
-      {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words">{children}</div>}
+      {/* (A part with nothing drawn in it takes no room: a caller's list of no lines, or acts that are all absent, is
+          not null, and its empty block kept the gap over it: a result of one title was a line too high.) */}
+      {children === undefined || children === null ? null : <div className="flex min-w-0 flex-col gap-1 break-words empty:hidden">{children}</div>}
       {code === undefined || code === null || shown(code) === "" ? null : <p className="break-words text-xs text-muted-foreground">{shown(code)}</p>}
-      {actions === undefined || actions === null ? null : <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions === undefined || actions === null ? null : <div className="flex flex-wrap items-center gap-2 empty:hidden">{actions}</div>}
     </section>
   );
 }
@@ -332,11 +345,12 @@ export const INPUT = `${TARGET} w-full rounded-md border border-border bg-backgr
  * it (`aria-describedby`), and a refusal marks it invalid and is announced. `children` is the one
  * control (an input, a textarea, a select): the field gives it its id.
  */
-export function Field({ label, optional = false, hint, error, children }: { label: string; optional?: boolean; hint?: ReactNode; error?: string | null; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean | "true" | "false" }> }) {
+export function Field({ label, optional = false, hint, error, errorTitle, errorId, children }: { label: string; optional?: boolean; hint?: ReactNode; error?: string | null; /** what a pointer shows on the mark: the kernel's code of the fault it says in words */ errorTitle?: string; /** the id of the field's mark (its error), for a control elsewhere that the mark explains (a button it holds off): `aria-describedby` there */ errorId?: string; children: ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean | "true" | "false" }> }) {
   const id = useId();
   const hasHint = hint !== undefined && hint !== null;
   const hasError = error !== undefined && error !== null;
-  const describedBy = [hasHint ? `${id}-hint` : null, hasError ? `${id}-error` : null].filter((part) => part !== null).join(" ");
+  const mark = errorId ?? `${id}-error`;
+  const describedBy = [hasHint ? `${id}-hint` : null, hasError ? mark : null].filter((part) => part !== null).join(" ");
   return (
     <div data-testid="oats-field" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
       <label htmlFor={id}>
@@ -346,7 +360,7 @@ export function Field({ label, optional = false, hint, error, children }: { labe
       {cloneElement(children, { id, ...(describedBy === "" ? {} : { "aria-describedby": describedBy }), ...(hasError ? { "aria-invalid": true } : {}) })}
       {hasHint ? <span id={`${id}-hint`}>{hint}</span> : null}
       {hasError ? (
-        <span id={`${id}-error`} role="alert" className="text-destructive-text">
+        <span id={mark} role="alert" title={errorTitle} className="text-destructive-text">
           {error}
         </span>
       ) : null}

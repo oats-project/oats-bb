@@ -208,7 +208,8 @@ export function TeamsPage() {
   // the default team). The kernel's own words are under its Details. One notice on a screen: while the roster's own
   // stands (OATS cannot be read), this one waits.
   const unread = oats.phase === "failed" || (oats.phase === "ready" && oats.stale !== null);
-  const stops = unread ? [] : (answer?.problems ?? []).filter((problem) => problem.code === TEAM_UNMAPPED && problem.isDefault);
+  // (Nor beside the tab's own notice: a read of the teams that failed over an answer that is kept.)
+  const stops = unread || read.status === "error" ? [] : (answer?.problems ?? []).filter((problem) => problem.code === TEAM_UNMAPPED && problem.isDefault);
   return (
     <Frame tab="teams" testId="oats-teams-page">
       {/* Each team's count of agents is the roster's: while OATS cannot be read, the notice says so (the counts are then the last read, or absent). */}

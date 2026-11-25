@@ -187,7 +187,7 @@ open, a confirmation before its act, in progress, done, refused and with another
   ("OATS is not installed on …", "Read <age>. Acts are off.", Retry, Open settings; what to do,
   the code and the message under its Details); a thread opens from it and its own row says the
   same on one line, with its act off; the home keeps its cards under the same notice.
-- **A16** an agent whose thread bb does not have: its soul's page says "thread missing", and
+- **A16** an agent whose thread bb does not have: its soul's page says of it what the roster says ("archived in bb" or "deleted in bb"), and
   Retire opens the plan dialog with the kernel's plan. Then the two states no fixture row is in,
   each in the thread's own row and in the sidebar's: an agent the kernel cannot reach
   ("Unreachable", Retry) and one whose session fell back to a shell ("Failed", "session ended",

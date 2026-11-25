@@ -106,6 +106,24 @@ describe("the pages' verbs", () => {
     }
   });
 
+  // A group is a repository (the field), never a name that happens to match: another member named `workspace`, and
+  // two members whose keys end alike, are named by their whole key.
+  it("souls: \"workspace\" is the workspace's own repository alone; a member whose short name is unclear is named by its whole key", async () => {
+    const { parseSouls } = await import("../../kernel/workspace.js");
+    const row = (name: string, repoKey: string) => ({ name, key: name, kind: "member", repoKey });
+    const answer = parseSouls({
+      workspace: { key: "github.com/acme/agents" },
+      souls: [row("own", "github.com/acme/agents"), row("other", "github.com/acme/workspace"), row("a", "github.com/a/tools"), row("b", "github.com/b/tools"), row("plain", "github.com/acme/docs")],
+    });
+    expect(answer.ok && answer.value.souls.map((soul) => [soul.name, soul.source?.label])).toEqual([
+      ["own", "workspace"],
+      ["other", "github.com/acme/workspace"],
+      ["a", "github.com/a/tools"],
+      ["b", "github.com/b/tools"],
+      ["plain", "docs"],
+    ]);
+  });
+
   it("capabilities: an answer that names a kind and says nothing of core places (no `layer`) or of who may use one (no `private`) claims neither", async () => {
     const { parseCapabilities } = await import("../../kernel/workspace.js");
     const answer = parseCapabilities({ capabilities: [{ name: "oats.core", kind: "member", repoKey: "github.com/awebai/oats" }] });

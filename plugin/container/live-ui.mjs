@@ -91,7 +91,7 @@ const ONLY_STAGES = (process.env.LIVE_ONLY_STAGES ?? "").split(",").map((name) =
 const ONLY_SCENE = (process.env.LIVE_ONLY_SCENE ?? "").trim();
 const REPEAT = Math.max(1, Number.parseInt(process.env.LIVE_REPEAT ?? "1", 10) || 1);
 const PILOT_FEATURES = ["roster", "outside", "panel", "home", "lifecycle", "spawn"];
-/** Every page's id, as live.sh sets them for the checks (the default alone in the pilot's image pass); and how a stage or a scene sets the plugin's `pages`. */
+/** Every page's id, as live.sh sets them for the checks; and how a stage or a scene sets the plugin's `pages`. (In the pilot's image pass the word "home" stands for the setting left UNSET: the release's default, which now shows the Workspace page too.) */
 const ALL_PAGES = PILOT ? "home" : "home, automations, souls, capabilities, teams, machines";
 // (In the pilot's image pass "every page" is the setting as a fresh install has it: UNSET, by bb's own unset, never set to "home".)
 const pages = (value) => void (PILOT && value === ALL_PAGES ? bb("plugin", "config", "oats", "unset", "pages") : bb("plugin", "config", "oats", "set", "pages", value));

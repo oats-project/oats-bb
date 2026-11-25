@@ -2,7 +2,7 @@
 // The Workspace page's tabs and its Capabilities, Teams and Machines tabs, by the audit of the hidden
 // pages and its ruling (25 Nov 2026): what the kernel answers, listed; nothing acts.
 import { afterEach, expect, test } from "vitest";
-import { fireEvent, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { fixtureAgents } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads, SOULS } from "../helpers/render";
@@ -270,6 +270,19 @@ test("the default team with no address is said first, as a notice: nothing can b
   expect(other.queryByTestId("oats-notice")).toBeNull();
   expect(other.getByTestId("oats-tab-teams").querySelector('[data-testid="oats-mark"]')).toBeNull();
   other.unmount();
+  resetApp();
+  // Nor beside the tab's own notice: the teams read again and that read failed, over the answer that is kept.
+  let fail = false;
+  const again = await page("teams", { teams: () => { if (fail) throw new Error("oats: internal error"); return unmapped; } });
+  await again.findAllByTestId("oats-team-row");
+  expect(again.getAllByTestId("oats-notice")).toHaveLength(1);
+  fail = true;
+  await act(async () => again.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.000Z" }));
+  await waitFor(() => expect(again.queryByTestId("oats-read-retry")).not.toBeNull());
+  expect(again.getAllByTestId("oats-notice")).toHaveLength(1);
+  expect(again.queryByText(/has no address yet: nothing can be spawned/)).toBeNull();
+  expect(again.getAllByTestId("oats-team-row").length).toBeGreaterThan(0); // the rows that were read stay
+  again.unmount();
   resetApp();
   // One notice on a screen: while OATS cannot be read the roster's notice stands, and this one waits.
   const stale = await page("teams", { teams: () => unmapped, snapshot: unread(LAST()) });

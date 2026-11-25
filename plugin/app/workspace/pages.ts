@@ -37,7 +37,7 @@ export type PageLink = { path: string; title: string; useMark?: () => { label: s
 const added: PageLink[] = [];
 
 /**
- * Lists a feature's own page in the sidebar's block, after the four pages, in the order the
+ * Lists a feature's own page in the sidebar's block, after the Workspace row, in the order the
  * features register. Called in the feature's `register`; a path listed twice is listed once, as
  * last given. Answers how to take the row away.
  */
@@ -82,13 +82,21 @@ export function shownPage<Props extends object>(path: string, Page: ComponentTyp
   };
 }
 
+/** How many pages that are drawn now mark each row as the open one. */
+const drawn = new Map<string, number>();
 /** The page itself, marked as the open one while it is drawn. */
 function Open<Props extends object>({ path, Page, props }: { path: string; Page: ComponentType<Props>; props: Props }) {
   useEffect(() => {
+    drawn.set(path, (drawn.get(path) ?? 0) + 1);
     setOpen(path);
-    // Only the page that is still the open one takes the selection away: the next page may have set its own first.
+    // Only the LAST page that marks this row takes the selection away, and only while the row is still the open one:
+    // the next page may have set its own first, and several pages mark ONE row (the Workspace page's four tabs are
+    // four routes: where bb draws the next tab before it takes the last one away, the row stays the selected one).
     return () => {
-      if (open === path) setOpen(null);
+      const left = (drawn.get(path) ?? 1) - 1;
+      if (left > 0) drawn.set(path, left);
+      else drawn.delete(path);
+      if (left === 0 && open === path) setOpen(null);
     };
   }, [path]);
   return createElement(Page, props);
@@ -127,8 +135,8 @@ export function useOpenPage(): string | null {
 }
 
 // ---- which pages are shown (the plugin's setting `pages`) ----
-// A release shows only the pages that are finished: the others are built and tested, and left out of
-// the navigation. One switch, read here by every place that links to a page or is one.
+// A deployment shows the pages its setting names; the default leaves out the one that is not finished
+// (Automations: built and tested, and left out of the navigation). One switch, read here by every place that links to a page or is one.
 
 /** The ids a page can have in the setting `pages`. The default shows the home and the Workspace page's four tabs (the ruling's R5); Automations is not in it. */
 export const PAGE_IDS = ["home", "automations", "souls", "capabilities", "teams", "machines"] as const;

@@ -10,16 +10,35 @@ const text = z.string().nullish();
 
 /** The workspace an answer is of: its own repository's key tells its souls and capabilities from a member's. */
 const workspace = z.looseObject({ key: text }).nullish();
+type Sourced = { kind?: string | null | undefined; package?: string | null | undefined; version?: string | null | undefined; repoKey?: string | null | undefined };
+/** A member repository's short name: the last part of its key. */
+const shortOf = (repoKey: string): string => repoKey.split("/").filter(Boolean).pop() ?? repoKey;
+/**
+ * The short names that would say two things at once: "workspace" (the word of the workspace's own
+ * repository) for ANOTHER member, and one name shared by two member repositories. Such a member is
+ * named by its whole key: a group is its repository (the field), never a name that happens to match.
+ */
+function unclear(rows: readonly Sourced[], own: string | null): Set<string> {
+  const keys = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row.kind || row.kind === "package" || !row.repoKey || row.repoKey === own) continue;
+    const short = shortOf(row.repoKey);
+    keys.set(short, (keys.get(short) ?? new Set()).add(row.repoKey));
+  }
+  return new Set([...keys].filter(([short, of]) => short === "workspace" || of.size > 1).map(([short]) => short));
+}
 /**
  * Where a row comes from, as its group's heading: a package with its version ("oats.okf 6.2.0"),
  * "workspace" for the workspace's own repository, else the member repository's name (the last part
- * of its key). Undefined where the kernel names no kind.
+ * of its key; its whole key where that name is `unclear`). Undefined where the kernel names no kind.
  */
-function sourceOf(row: { kind?: string | null | undefined; package?: string | null | undefined; version?: string | null | undefined; repoKey?: string | null | undefined }, own: string | null, versioned = true): Source | undefined {
+function sourceOf(row: Sourced, own: string | null, whole: ReadonlySet<string>, versioned = true): Source | undefined {
   if (!row.kind) return undefined;
   if (row.kind === "package") return { kind: "package", label: [row.package ?? "package", versioned ? row.version : null].filter(Boolean).join(" ") };
   if (row.repoKey && own !== null && row.repoKey === own) return { kind: row.kind, label: "workspace" };
-  return { kind: row.kind, label: row.repoKey?.split("/").filter(Boolean).pop() ?? row.kind };
+  if (!row.repoKey) return { kind: row.kind, label: row.kind };
+  const short = shortOf(row.repoKey);
+  return { kind: row.kind, label: whole.has(short) ? row.repoKey : short };
 }
 
 // ---- oats souls --json ----
@@ -51,10 +70,11 @@ export function parseSouls(document: unknown): Result<{ souls: Soul[] }> {
   const parsed = shaped(soulsDocument, document, "oats souls");
   if (!parsed.ok) return parsed;
   const own = parsed.value.workspace?.key ?? null;
+  const whole = unclear(parsed.value.souls, own);
   return ok({
     souls: parsed.value.souls.map((row) => {
       const problem = row.problem ? [row.problem.code, row.problem.message].filter(Boolean).join(": ") : null;
-      const source = sourceOf(row, own);
+      const source = sourceOf(row, own, whole);
       const why = Object.fromEntries((row.capabilities ?? []).flatMap((capability) => (capability.from ? [[capability.name, capability.from] as const] : [])));
       return {
         // Soul.name is the soul's `key`: what `oats spawn` takes, `<package>/<soul>` for a package soul.
@@ -100,10 +120,11 @@ export function parseCapabilities(document: unknown): Result<{ capabilities: Omi
   const parsed = shaped(capabilitiesDocument, document, "oats capabilities");
   if (!parsed.ok) return parsed;
   const own = parsed.value.workspace?.key ?? null;
+  const whole = unclear(parsed.value.capabilities, own);
   return ok({
     capabilities: parsed.value.capabilities.map((row) => {
       // (A capability's row says who made it, not at which version: the version is a fact of its own.)
-      const source = sourceOf(row, own, false);
+      const source = sourceOf(row, own, whole, false);
       return {
         id: row.name,
         description: row.description ?? "",

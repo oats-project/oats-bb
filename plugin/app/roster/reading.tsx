@@ -20,7 +20,7 @@
 // is already right: the safe side).
 // WHERE: every place of the pilot's screens that says one agent's state or offers its acts: its thread's line and
 // menu, its page and panel, a command's key, and the home's cards of an agent that runs outside OATS and of a stopped
-// agent that asks; and the agent's ROW (the sidebar's, the home's lists': `ReadingFacts`, below). NOT the Souls page's detached agents (Start…, Retire…): not a pilot screen, left as it is.
+// agent that asks; and the agent's ROW (the sidebar's, the home's lists': `ReadingFacts`, below). And a soul's page's agents (app/workspace/Souls.tsx), since that page is shown by default.
 // And it is bounded: after BOUND_MS the roster's own state is drawn whatever it says (a watch that
 // died must not leave "Reading…" on a page). The window's memory only.
 import { useSyncExternalStore } from "react";

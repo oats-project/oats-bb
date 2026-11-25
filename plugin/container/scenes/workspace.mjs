@@ -45,6 +45,12 @@ export default [
       await page.evaluate(`document.querySelector(${q("oats-tab-teams")}).click()`);
       const onTeams = await page.until(`location.pathname.endsWith("/plugins/oats/teams") && document.querySelector(${q("oats-tab-teams")})?.getAttribute("aria-selected") === "true" && ${visible(testId("oats-team-row"))}`, 30);
       check(Boolean(onTeams), `${at} a press on Teams goes to its route, and its tab is the selected one`, await page.evaluate("location.pathname"));
+      // The four tabs mark ONE row of the sidebar: after a press from tab to tab it is still the selected one (where the sidebar is drawn beside the page).
+      if (!viewport.mobile) {
+        const current = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-pages")} button`)})].filter((row) => row.getAttribute("aria-current") === "page").map((row) => row.innerText.trim()))`;
+        const row = await page.until(`(() => { const now = ${current}; return now === '["Workspace"]' ? now : ""; })()`, 15);
+        check(Boolean(row), `${at} and the sidebar's Workspace row is still the selected one after the press from tab to tab`, await page.evaluate(current));
+      }
     },
   },
   {

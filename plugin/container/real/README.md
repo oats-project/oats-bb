@@ -257,7 +257,7 @@ agent, `oats` taking seconds (4 s more on every call, then a status that never a
 `OATS_TIMEOUT` at 20 s, and the snapshot comes back), a stale stop plan (applied after another
 stop), a stop on a stopped agent, the thread archived in bb and then Start, the thread deleted in
 bb. Screenshots at 1280x800 and 390x800 of the tree's row and the thread's header row for the agent
-working, idle, waiting for a person and stopped by OATS, and of its soul's page ("thread missing")
+working, idle, waiting for a person and stopped by OATS, and of its soul's page (the agent "deleted in bb", with its acts)
 once its thread is deleted in bb.
 
 **What a stop leaves of the thread, and the two providers.** The bb provider up to 0.3 stops a

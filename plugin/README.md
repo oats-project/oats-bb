@@ -826,7 +826,9 @@ address, no message id, nothing of the
 mail the agent sent, and not the messaging layer's word for why a team's mail could not be read.
 Nor does what the process printed travel in a refusal: where `oats` ends with an answer that is
 no JSON (ended part-way), the plugin's other reads quote its first lines; for this read that
-output is mail, so the refusal says only how the process ended (`withoutOutput`). Nothing of a message is ever logged, and no fixture is taken from a real
+output is mail, so the refusal says only how the process ended (`withoutOutput`). And two of the
+kernel's own refusals quote what the messaging layer's process printed (`E_OPERATION_RESULT`,
+`E_OPERATION_FAILED`): each is answered as its code with a sentence of the plugin's. Nothing of a message is ever logged, and no fixture is taken from a real
 workspace (`test/fixtures/mail/README.md`).
 
 **What is said of a message.** "Unverified sender" (the messaging layer says unverified, or does
@@ -851,7 +853,7 @@ awebai/oats 7355f353; the decoder in `kernel/mail.ts` is otherwise its rules, on
    can't be read would be unreadable whole.
 
 **Why mail cannot be read.** ONE line, then Retry, and under Details the kernel's code with its
-own sentence:
+own sentence (the plugin's sentence for the two codes that quote the process, above):
 
 | The refusal | The line |
 |---|---|

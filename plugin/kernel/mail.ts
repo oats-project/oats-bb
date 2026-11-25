@@ -31,7 +31,7 @@
 // looks like a credential reads "[withheld]"; the others show). Mail is other people's text: no
 // function here logs, throws with, or names a body.
 import { z } from "zod";
-import { DETAIL_WITHHELD, MAX_DISPLAY_LINE, displayLine, shown } from "../model/text.js";
+import { DETAIL_WITHHELD, MAX_DISPLAY_LINE, NOT_NOTE_TEXT, displayLine, shown } from "../model/text.js";
 import { checkHome } from "./input.js";
 import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
@@ -201,12 +201,18 @@ function cutBytes(body: string, bytes: number): { text: string; cut: boolean } {
   return { text: body, cut: false };
 }
 
-/** A line as the display filter folds it before it cuts it (model/text.ts `oneLine`: its first three steps; the replacement of a character changes no length). */
+const EVERY_NOT_NOTE_TEXT = new RegExp(NOT_NOTE_TEXT.source, "gu");
+/**
+ * A line as the display filter makes it before it cuts it: the four steps of model/text.ts
+ * `oneLine`, in its order. The fourth changes a length too: a tag character (U+E0000 to E007F) is
+ * two UTF-16 units and becomes one U+FFFD.
+ */
 const folded = (line: string): string =>
   line
     .replace(/[\t\n\u2028\u2029]/g, " ")
     .replace(/ {2,}/g, " ")
-    .replace(/^ | $/g, "");
+    .replace(/^ | $/g, "")
+    .replace(EVERY_NOT_NOTE_TEXT, "\uFFFD");
 
 /**
  * A body as display lines: line breaks kept (CRLF and a lone CR as one), each line through the
@@ -221,9 +227,9 @@ export function bodyLines(body: string): { lines: string[]; cut: boolean } {
   const lines = all.slice(0, MAIL_BODY_LINES).map((line) => {
     const drawn = shown(line);
     // The display filter cuts a line at MAX_DISPLAY_LINE: a line it cut is a message shortened, and said so.
-    // Whether it cut is judged on the line as the filter folds it before it cuts (a tab and a line
-    // separator are a space, runs of spaces are one, the ends are trimmed: model/text.ts `oneLine`),
-    // not on the line as written: a line that fits once folded is drawn whole.
+    // Whether it cut is judged on the line as the filter makes it before it cuts (a tab and a line
+    // separator are a space, runs of spaces are one, the ends are trimmed, a character a note may not
+    // hold is U+FFFD: model/text.ts `oneLine`), not on the line as written: a line that fits then is drawn whole.
     if (drawn !== DETAIL_WITHHELD && line.length > MAX_DISPLAY_LINE && folded(line).length > MAX_DISPLAY_LINE) cut = true;
     return drawn;
   });

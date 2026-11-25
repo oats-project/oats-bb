@@ -217,6 +217,13 @@ describe("the named difference from the Desktop's decoder: a body over the bound
       expect(read.cut).toBe(false);
       expect(read.lines[0]).toBe(whole.replace(/\t/g, " ").replace(/ {2,}/g, " ").trim());
     }
+    // Tag characters are two units as written and one once the filter replaced them: whole too.
+    for (const whole of [`${"x".repeat(2047)}\u{E0041}`, `${"x".repeat(2040)}${"\u{E0041}".repeat(5)}`]) {
+      const read = bodyLines(whole);
+      expect(whole.length).toBeGreaterThan(2048);
+      expect(read.cut).toBe(false);
+      expect(read.lines[0]).toBe(whole.replace(/\u{E0041}/gu, "\uFFFD"));
+    }
     // One character past it once folded: cut, and said.
     expect(bodyLines(`${"x".repeat(2047)}  yz`)).toEqual({ lines: [`${"x".repeat(2047)} `.trimEnd()], cut: true });
   });

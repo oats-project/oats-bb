@@ -67,6 +67,7 @@ of its own with the same limits, started after the first is gone, and its artefa
 | `scenes/<feature>.mjs` | by `live-ui.mjs` | each feature's live scenes: what a page is asked and where its screenshots are taken (below) |
 | `real/` | its own container | the real run: bb-app, OATS from npm, the bb session provider, Claude Code on a mock model and the plugin (`real/README.md`) |
 | `real/pi/` | that container, started with `REAL_PI=1` | the pi run: the same setup and kernel, with pi, the OATS bridge for pi and a mock model, and a pi agent launched from the New agent form (`real/pi/README.md`) |
+| `real/mail/` | by hand only, five containers of its own | the mail part: aweb's local stack (four containers) and one client with a real OATS kernel, the real messaging layer and bb with the plugin; it reads an agent's Mail tab and checks that nothing was marked read. In neither `ci.sh all` nor CI (`real/mail/README.md`) |
 | `images.mjs` | by `live-ui.mjs` and the real run | finds the images of a run that are the same image: none may be in the live checks; in the real run, only two of one state |
 | `fake-oats.mjs` | as `oats` | prints the recorded answer of the verb it is asked and logs each call; the verbs it knows and their files are each feature's `test/fixtures/<feature>/verbs.json`; a JSON file beside it sets a verb's output, exit code, delay, or makes it start a child of its own |
 

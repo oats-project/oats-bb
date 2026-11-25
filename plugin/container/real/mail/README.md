@@ -14,6 +14,8 @@ plugin/container/real/mail/run.sh        # about ten minutes the first time (the
 KEEP=1 plugin/container/real/mail/run.sh # leave the five containers up, to look or to run inside.sh again
 ```
 
+Its images are in bb's light theme only (the specialist's ruling: a by-hand part outside the gate;
+the live scenes, `../../scenes/mail.mjs`, hold the mail in both themes).
 The artefacts are in `plugin/container/real/out/mail/` (ignored by git, and left out of the tree
 `ci.sh` copies into its container: the checkout of aweb is kept there, `out/mail/aweb`): the checks' images
 (`mail-real-<width>-list.png`, `-message.png`) and what each setup step printed. No account, no

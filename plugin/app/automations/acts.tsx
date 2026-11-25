@@ -371,7 +371,7 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
   });
   const switchOfRow = (row: AutomationRow) => () =>
     Array.from(document.querySelectorAll<HTMLElement>('[role="switch"]')).find((control) => control.getAttribute("aria-label") === `${row.id} enabled on ${here.on}`) ?? null;
-  const first = () => document.querySelector<HTMLElement>('[data-testid="oats-automation-back"], [data-testid="oats-automations"] [role="tab"][aria-selected="true"]');
+  const first = () => document.querySelector<HTMLElement>('[data-testid="oats-automation-detail-menu"] button, [data-testid="oats-automation-name-heading"], [data-testid="oats-automations"] [role="tab"][aria-selected="true"]');
 
   const refused = (what: Failed, error: unknown): Said => {
     const { code, message, refused: no } = failureOf(error);

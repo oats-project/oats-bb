@@ -1,5 +1,5 @@
-// One automation's page, in the manner of bb's own: a breadcrumb (Automations / its name); the
-// name with its switch and its "…" menu; one small line (who it starts · when · the next run or
+// One automation's page, in the manner of bb's own (whose breadcrumb, "Automations / its name", is
+// in bb's own header: Page.tsx `usePageTitle`): the name with its switch and its "…" menu; one small line (who it starts · when · the next run or
 // the last fire) and under it, in red, what is wrong; a card of WHAT IT DOES (the instruction, the
 // wake message, the command or the operation, whole, with the soul, the harness and the model at
 // its foot); then Runs, a table; then one closed fold, Details, for the few facts bb's manner has
@@ -365,9 +365,9 @@ export type DetailProps = {
 
 export function Detail({ row, host, now, running = true, status, statusFailure = null, onBack, onOpenFile, file = null, canOpenCapability, onOpenCapability, identityAction, menu, answers, agentLink }: DetailProps) {
   const page = useRef<HTMLDivElement>(null);
-  // Opening the page puts focus on the breadcrumb's way back, where Escape and Enter both lead out again.
+  // Opening the page puts the focus on its name (the breadcrumb is bb's own, in bb's header): what a screen reader says first, and from where Escape leads back.
   useEffect(() => {
-    page.current?.querySelector<HTMLElement>('[data-testid="oats-automation-back"]')?.focus();
+    page.current?.querySelector<HTMLElement>('[data-testid="oats-automation-name-heading"]')?.focus();
   }, [row.id]);
   const source = row.kind === "trigger" ? capabilitySource(row.on, status?.source ?? null) : null;
   // A capability source's check that failed at a poll: the state's own, else the row's.
@@ -393,24 +393,12 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
           onBack();
         }}
       >
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
-          <button type="button" data-testid="oats-automation-back" className="shrink-0 rounded font-medium text-foreground hover:underline" onClick={onBack}>
-            Automations
-          </button>
-          <span aria-hidden="true" className="shrink-0 text-muted-foreground">
-            /
-          </span>
-          {/* The one place a name is cut, as bb's own breadcrumb cuts it: the head under it says it whole. */}
-          <span aria-current="page" className="min-w-0 truncate text-muted-foreground">
-            {shown(row.name)}
-          </span>
-        </nav>
         <div data-testid="oats-automation-identity" className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-start gap-2">
             <span aria-hidden="true" className={`flex h-6 w-4 shrink-0 items-center justify-center ${bad ? "text-destructive-text" : "text-muted-foreground"}`}>
               <Icon name={iconOf(row, bad)} className="size-4" />
             </span>
-            <h2 title={shown(row.id)} className="min-w-0 flex-1 break-words text-base font-semibold text-foreground">
+            <h2 data-testid="oats-automation-name-heading" tabIndex={-1} title={shown(row.id)} className="min-w-0 flex-1 break-words text-base font-semibold text-foreground focus:outline-none">
               {shown(row.name)}
             </h2>
             <div className="flex shrink-0 items-center gap-1">

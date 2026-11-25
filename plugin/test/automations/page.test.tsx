@@ -44,6 +44,34 @@ describe("the page's registration and its route", () => {
   });
 });
 
+describe("the page's title, in bb's own header", () => {
+  const title = async (subPath: string, over: Partial<Handlers> = {}) => {
+    const app = await loadApp();
+    const panel = app.navPanels.find((candidate) => candidate.id === "automations")!;
+    const seen: unknown[] = [];
+    const Probe = (props: { subPath: string }) => {
+      seen.push(panel.experimental_usePageTitle!(props as never));
+      return null;
+    };
+    const slot = renderSlot<{ subPath: string }, Contract>({ ...panel, component: Probe as never }, { subPath }, { rpc: handlers(over), sidebarThreads: sidebarThreads() });
+    return { slot, seen };
+  };
+
+  it("the tabs keep the page's own title; a row's page is a breadcrumb of its name, by the list's name for it once the lists are read", async () => {
+    expect((await title("")).seen.at(-1)).toBeNull();
+    resetApp();
+    expect((await title("runs")).seen.at(-1)).toBeNull();
+    resetApp();
+    const { seen } = await title("schedules/oats-real/nightly-digest");
+    await waitFor(() => expect(seen.at(-1)).toEqual({ breadcrumbs: [{ label: "nightly-digest" }], windowTitle: "nightly-digest" }));
+  });
+
+  it("the icon is bb's own for automations", async () => {
+    const app = await loadApp();
+    expect(app.navPanels.find((candidate) => candidate.id === "automations")!.icon).toBe("Repeat");
+  });
+});
+
 describe("the lists", () => {
   it("are read once, with every trigger's state, and shown as one list", async () => {
     const slot = await page();
@@ -199,10 +227,10 @@ describe("a row's page", () => {
   const said = (slot: Awaited<ReturnType<typeof page>>) => slot.queryAllByTestId("oats-run").map((run) => `${run.dataset.of}: ${within(run).getByTestId("oats-run-said").textContent}`);
   const PROPOSAL = ["pending: #43 opened · Waiting", "fired: #41 opened · Agent launched", "fired: #42 opened · Agent launched"];
 
-  it("a schedule's route opens its page; the breadcrumb's way back is the list's route", async () => {
+  it("a schedule's route opens its page; Escape is the list's route", async () => {
     const slot = await page("schedules/local/daily-review");
     expect((await slot.findByTestId("oats-automation-identity")).textContent).toContain("daily-review");
-    fireEvent.click(slot.getByTestId("oats-automation-back"));
+    fireEvent.keyDown(slot.getByTestId("oats-automation-detail"), { key: "Escape" });
     expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations", options: { subPath: "" } }]);
     // A schedule has no recorded state of a trigger to read.
     expect(calls(slot)).toEqual(["automations"]);

@@ -3,7 +3,7 @@
 // stays out of bb's own navigation. The components are in this directory.
 import type { PluginAppBuilder } from "@get-bb/plugin-sdk/app";
 import { addPageLink, shownPage } from "../workspace/pages";
-import { AutomationsPage, PATH, usePageTitle } from "./Page";
+import { AutomationsPage, HeaderTitle, PATH, usePageTitle } from "./Page";
 import { useFailedRunMark } from "./read";
 
 import { ICONS } from "./bb";
@@ -12,6 +12,6 @@ import { ICONS } from "./bb";
 const ICON = ICONS.page;
 
 export function register(app: PluginAppBuilder): void {
-  app.slots.navPanel({ id: "automations", title: "Automations", icon: ICON, path: PATH, experimental_hideFromNavigation: true, experimental_usePageTitle: usePageTitle, component: shownPage(PATH, AutomationsPage) });
+  app.slots.navPanel({ id: "automations", title: "Automations", icon: ICON, path: PATH, experimental_hideFromNavigation: true, experimental_usePageTitle: usePageTitle, experimental_headerTitle: HeaderTitle, component: shownPage(PATH, AutomationsPage) });
   addPageLink({ path: PATH, title: "Automations", useMark: useFailedRunMark });
 }

@@ -84,6 +84,8 @@ function page(over: Over = {}) {
 /** A row's small line, part by part. */
 const parts = (row: HTMLElement): (string | null)[] => Array.from(within(row).getByTestId("oats-automation-line").querySelectorAll<HTMLElement>("[data-part]")).map((part) => (part.textContent ?? "").replace(/^·/, ""));
 const tones = (row: HTMLElement): (string | undefined)[] => Array.from(within(row).getByTestId("oats-automation-line").querySelectorAll<HTMLElement>("[data-part]")).map((part) => part.dataset.tone);
+/** Back from a row's page, as a person at a keyboard goes: Escape. (bb's own back arrow and its header are not drawn here.) */
+const back = (view: ReturnType<typeof page>) => fireEvent.keyDown(view.getByTestId("oats-automation-detail"), { key: "Escape" });
 const radios = (view: ReturnType<typeof page>) => within(view.getAllByRole("radiogroup")[0]!).getAllByRole("radio");
 const withRow = (list: AutomationList, id: string, change: (row: AutomationRow) => AutomationRow): AutomationList => ({ ...list, rows: list.rows.map((row) => (row.id === id ? change(row) : row)) });
 const withStatus = (id: string, change: (status: TriggerStatus) => TriggerStatus): TriggerStatuses => STATUSES().statuses.map((entry) => (entry.id === id ? { id, status: change(entry.status) } : entry));
@@ -211,7 +213,7 @@ describe("the one list", () => {
     const view = page();
     fireEvent.click(radios(view)[3]!);
     view.open("local/hourly-check");
-    fireEvent.click(view.getByTestId("oats-automation-back"));
+    back(view);
     expect(view.ids()).toEqual(ORDER.slice(0, 5));
   });
 
@@ -373,19 +375,17 @@ describe("the list's notices", () => {
 });
 
 describe("an automation's page", () => {
-  it("opens from the row, in place of the tabs, with focus on the breadcrumb's way back; it and Escape return to the row", () => {
+  it("opens from the row, in place of the tabs, with the focus on its name; Escape returns to the row. It draws no breadcrumb: that is bb's own, in bb's header", () => {
     const view = page();
     view.open("local/daily-review");
     expect(view.queryAllByRole("tab")).toHaveLength(0);
     expect(view.getByRole("tabpanel").getAttribute("aria-label")).toBe("Automation");
-    const back = view.getByTestId("oats-automation-back");
-    expect(back.textContent).toBe("Automations");
-    expect(document.activeElement).toBe(back);
-    expect(view.getByRole("navigation", { name: "Breadcrumb" }).textContent).toBe("Automations/daily-review");
-    fireEvent.click(back);
+    expect(document.activeElement).toBe(view.getByRole("heading", { name: "daily-review" }));
+    expect(view.queryByRole("navigation")).toBeNull();
+    back(view);
     expect(document.activeElement).toBe(within(view.row("local/daily-review")).getByTestId("oats-automation-open"));
     view.open("local/pr-triage");
-    fireEvent.keyDown(view.getByTestId("oats-automation-detail"), { key: "Escape" });
+    back(view);
     expect(document.activeElement).toBe(within(view.row("local/pr-triage")).getByTestId("oats-automation-open"));
   });
 
@@ -418,7 +418,7 @@ describe("an automation's page", () => {
       view.open(id);
       const card = view.getByTestId("oats-automation-sends");
       const said = [within(card).getByRole("heading").textContent, card.getAttribute("aria-label")];
-      fireEvent.click(view.getByTestId("oats-automation-back"));
+      back(view);
       return said;
     };
     expect(does("local/daily-review")).toEqual(["Instruction", "Instruction"]);
@@ -436,11 +436,11 @@ describe("an automation's page", () => {
     const view = page();
     view.open("local/wake-oats-developer-review-202611212017");
     expect(view.getByTestId("oats-automation-prose").textContent).toBe("Anything new on your review?");
-    fireEvent.click(view.getByTestId("oats-automation-back"));
+    back(view);
     view.open("local/status-check");
     const argv = rowOf(schedules(), "local/status-check").argv!;
     expect(within(view.getByRole("list", { name: "Command arguments" })).getAllByRole("listitem").map((item) => item.textContent)).toEqual(argv);
-    fireEvent.click(view.getByTestId("oats-automation-back"));
+    back(view);
     view.open("local/notes-checkpoint");
     expect(view.text("oats-automation-sends")).toBe("Operationknowledge:checkpoint");
   });
@@ -458,7 +458,7 @@ describe("an automation's page", () => {
     const view = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, description: "Reviews the day's pull requests." }))) });
     view.open("local/daily-review");
     expect(view.text("oats-automation-summary")).toBe("Reviews the day's pull requests.");
-    fireEvent.click(view.getByTestId("oats-automation-back"));
+    back(view);
     view.open("local/hourly-check");
     expect(view.queryByTestId("oats-automation-summary")).toBeNull();
   });

@@ -69,6 +69,32 @@ export function usePageTitle({ subPath }: PluginNavPanelProps) {
   return { breadcrumbs: [{ label: name }], windowTitle: name };
 }
 
+/**
+ * The title as bb's header draws it, as TEXT ONLY: bb's own draws the page's icon before its title;
+ * the OATS pages' titles are words alone. On a row's page: the page's title, a slash, the
+ * automation's name (cut at the header's end, as bb cuts its own: the page's head says it whole).
+ * In bb's own classes for its header's title and breadcrumb.
+ */
+export function HeaderTitle(props: PluginNavPanelProps) {
+  const title = usePageTitle(props);
+  const name = title?.breadcrumbs[0]?.label ?? null;
+  return (
+    <div data-testid="oats-automations-title" className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold">
+      <p className="shrink-0 truncate">Automations</p>
+      {name === null ? null : (
+        <>
+          <span aria-hidden="true" className="text-muted-foreground">
+            /
+          </span>
+          <span aria-current="page" className="min-w-0 truncate">
+            {name}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 type Lists = Result<"automations">;
 type Kept = { list: NonNullable<ListRead["list"]>; at: string };
 function listRead(answer: Lists[AutomationKind] | undefined, at: string | undefined, loading: boolean, failure: string | null, kept: Kept | undefined): ListRead {

@@ -236,13 +236,14 @@ export function checkModel(model: string): Result<string> {
 export const verbs = (oats: Runner) => ({
   /** The harnesses the bb session provider declares, for the New agent form and the Start and Restart dialogs. */
   /**
-   * A deployment that does not have the bb session provider at all (the kernel knows no capability `oats.bb`:
-   * `E_CAPABILITY_UNKNOWN`) is an ANSWER, not a failed read: the provider declares no harness there, because there is
-   * none. A form then offers no harness choice and says nothing failed. Any other failure of the read is a failure.
+   * `absent`: the deployment does not have the bb session provider at all (the kernel knows no capability `oats.bb`:
+   * `E_CAPABILITY_UNKNOWN`), with the kernel's own code and sentence. That is an ANSWER, not a failed read: there is
+   * no harness to choose there, and nothing can be spawned on bb (the form says so, once). Any other failure of the
+   * read is a failure.
    */
-  spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null }>> => {
+  spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null; absent?: { code: string; message: string } }>> => {
     const read = await oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal);
-    return !read.ok && read.error.code === "E_CAPABILITY_UNKNOWN" ? ok({ harnesses: [], version: null }) : read;
+    return !read.ok && read.error.code === "E_CAPABILITY_UNKNOWN" ? ok({ harnesses: [], version: null, absent: { code: read.error.code, message: read.error.message } }) : read;
   },
 
   /**

@@ -235,7 +235,16 @@ export function checkModel(model: string): Result<string> {
 /** Spawn's commands. */
 export const verbs = (oats: Runner) => ({
   /** The harnesses the bb session provider declares, for the New agent form and the Start and Restart dialogs. */
-  spawnHarnesses: (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null }>> => oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal),
+  /**
+   * `absent`: the deployment does not have the bb session provider at all (the kernel knows no capability `oats.bb`:
+   * `E_CAPABILITY_UNKNOWN`), with the kernel's own code and sentence. That is an ANSWER, not a failed read: there is
+   * no harness to choose there, and nothing can be spawned on bb (the form says so, once). Any other failure of the
+   * read is a failure.
+   */
+  spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null; absent?: { code: string; message: string } }>> => {
+    const read = await oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal);
+    return !read.ok && read.error.code === "E_CAPABILITY_UNKNOWN" ? ok({ harnesses: [], version: null, absent: { code: read.error.code, message: read.error.message } }) : read;
+  },
 
   /**
    * `knownSouls` is what `oats souls` lists; `tempDir` holds the task file for the length of the

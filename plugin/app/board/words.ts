@@ -35,5 +35,3 @@ export const hiddenSaid = (count: number): string => `${count} hidden · show`;
 export const droppedSaid = (count: number): string => `${count} ${count === 1 ? "entry" : "entries"} of this agent's board could not be shown.`;
 /** Who says the addresses of the facts: once, on the Facts heading's line. Each fact then shows its address's host alone. */
 export const saysSaid = (name: string): string => `${name} says`;
-/** A fact's value (with its unit) longer than this has a line of its own, whole: a value is never cut. */
-export const LONG_VALUE = 24;

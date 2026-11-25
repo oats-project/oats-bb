@@ -103,10 +103,11 @@ test("a fact is its label, its value and unit, its age; bb's own list is given e
   expect(rows.map((row) => row.getAttribute("data-key"))).toEqual(["a", "b", "c", "d", "e"]);
   expect(facts.querySelector("ul")!.getAttribute("data-limit")).toBe("3");
   expect(within(rows[0]!).getByTestId("oats-board-fact-value").textContent).toBe("0 failing");
-  // The value first, then the label: on a narrow row the label is the part that gives way, never the value.
-  expect(rows[0]!.textContent).toContain("0 failingFact a");
-  expect(within(rows[0]!).getByTestId("oats-board-fact-value").className).toMatch(/shrink-0/);
-  expect(within(rows[0]!).getByTestId("oats-board-fact-label").className).toMatch(/truncate/);
+  // ONE ORDER for every fact: the value over the label; the label is the part that gives way (its whole text in its title), never the value.
+  expect(rows[0]!.textContent).toMatch(/^0 failing16 min ago×Fact a$/);
+  expect(within(rows[0]!).getByTestId("oats-board-fact-value").className).not.toMatch(/truncate|whitespace-nowrap/);
+  const label = within(rows[0]!).getByTestId("oats-board-fact-label");
+  expect([label.className.includes("truncate"), label.getAttribute("title")]).toEqual([true, "Fact a"]);
   const age = within(rows[0]!).getByTestId("oats-board-age");
   expect([age.textContent, age.getAttribute("title")]).toEqual(["16 min ago", AT]);
   expect(facts.textContent).not.toMatch(/updated/);
@@ -134,16 +135,23 @@ test("a fact hidden on this computer leaves the list and is counted; \"N hidden 
   await waitFor(() => expect(keys()).toEqual(["tests", "pr"]));
 });
 
-test("a value is never cut: one longer than 24 characters has a line of its own under the label, whole and wrapping; a short one stays on the row", async () => {
+test("a value is never cut, and every fact has the same two lines: a long value wraps on its own line, whole; the label, with the address's host after it, is the line under", async () => {
   const long = "1000 of 2000 checks passed on the release candidate, the rest wait for a runner"; // 78: within the kernel's 80
-  const { slot } = await drawn({ board: { facts: [fact("long", { label: "Checks", value: long, unit: null }), fact("short", { label: "Tests", value: "3", unit: "failing" })], questions: [] } });
+  const { slot } = await drawn({ board: { facts: [fact("long", { label: "Checks", value: long, unit: null, link: "https://github.com/oats-project/oats-bb/pull/42" }), fact("short", { label: "Tests", value: "3", unit: "failing" })], questions: [] } });
   const [first, second] = within(slot.getByTestId("oats-board-facts")).getAllByTestId("oats-board-fact");
-  const value = within(first!).getByTestId("oats-board-fact-value");
-  expect([first!.hasAttribute("data-long"), value.textContent]).toEqual([true, long]);
-  expect(value.className).toMatch(/break-words/);
-  expect(value.className).not.toMatch(/truncate|whitespace-nowrap/);
-  expect(value.closest("li, [data-testid=oats-board-fact]")).toBeTruthy();
-  expect(second!.hasAttribute("data-long")).toBe(false);
+  for (const row of [first!, second!]) {
+    const value = within(row).getByTestId("oats-board-fact-value");
+    const label = within(row).getByTestId("oats-board-fact-label");
+    expect(value.className).not.toMatch(/truncate|whitespace-nowrap/);
+    expect(value.parentElement!.className).toMatch(/break-words/);
+    // the value's line is before the label's, in the same order for a long fact and a short one
+    expect(value.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(value.parentElement!.parentElement).not.toBe(label.parentElement);
+  }
+  expect(within(first!).getByTestId("oats-board-fact-value").textContent).toBe(long);
+  // the address belongs to its fact: on the label's own line, after it
+  expect(within(first!).getByTestId("oats-board-fact-label").parentElement!.textContent).toBe("Checks · github.com");
+  expect(within(second!).queryByTestId("oats-board-link")).toBeNull();
 });
 
 test("who says the addresses is said ONCE, on the Facts heading's line, and only where a fact in view has an address", async () => {
@@ -161,12 +169,13 @@ test("a fact's address: the host alone at the row, as text; a press shows the wh
   const link = slot.getByTestId("oats-board-link");
   expect(within(link).getByTestId("oats-board-link-show").textContent).toBe("github.com");
   expect(within(link).getByTestId("oats-board-link-show").className).not.toMatch(/underline/); // the agent's text, not a link of ours
-  expect(within(link).queryByTestId("oats-board-link-address")).toBeNull();
-  expect(link.querySelector("a")).toBeNull(); // never a link a click follows
+  const row = slot.getByTestId("oats-board-fact");
+  expect(within(row).queryByTestId("oats-board-link-address")).toBeNull();
+  expect(slot.getByTestId("oats-board-fact").querySelector("a")).toBeNull(); // never a link a click follows
   fireEvent.click(within(link).getByTestId("oats-board-link-show"));
-  expect(within(link).getByTestId("oats-board-link-address").textContent).toBe("https://github.com/oats-project/oats-bb/pull/42");
+  expect(within(row).getByTestId("oats-board-link-address").textContent).toBe("https://github.com/oats-project/oats-bb/pull/42");
   expect(slot.inspection.navigateCalls).toEqual([]);
-  fireEvent.click(within(link).getByRole("button", { name: "Open in browser" }));
+  fireEvent.click(within(row).getByRole("button", { name: "Open in browser" }));
   expect(slot.inspection.navigateCalls).toEqual([{ method: "openUrl", url: "https://github.com/oats-project/oats-bb/pull/42" }]);
 });
 

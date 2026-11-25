@@ -3,14 +3,14 @@
 // own: it takes the agent's name and nothing of the place that mounts it, and reads the board
 // itself (read.ts). Nothing is drawn for an agent with neither.
 //
-// Drawn with bb's own info parts where one fits (a section, its list with bb's own "N more", a
-// row); where bb has none (a question with its options, the small line of a fact's history), with
-// ours, in bb's look.
+// Drawn with bb's own info parts where one fits (a section, its list with bb's own "N more");
+// where bb has none, or its part cannot carry what a person must read (a question with its
+// options, a fact's two lines, the small line of its history), with ours, in bb's look.
 //
 // EVERY WORD OF A BOARD IS THE AGENT'S: plain text through the display filter (`shown`), never
 // markup; an address is text until a person presses it, and opens outside bb only on a second
 // press.
-import { useBbNavigate, useRpc, useSdk, experimental_InfoList as InfoList, experimental_InfoListRow as InfoListRow, experimental_InfoSection as InfoSection } from "@get-bb/plugin-sdk/app";
+import { useBbNavigate, useRpc, useSdk, experimental_InfoList as InfoList, experimental_InfoSection as InfoSection } from "@get-bb/plugin-sdk/app";
 import { useEffect, useRef, useState } from "react";
 import type { rpcContract } from "../../contract";
 import { answerText, boardData, dialogOpen, factsView, FACTS_SHOWN, questionOccurrence, sparkValues, turnQuestion, type Board as BoardData, type BoardClaim, type BoardFact, type BoardQuestion } from "../../model/board";
@@ -27,7 +27,7 @@ import { Disclosure, TARGET } from "../ui/patterns";
 import { agentName, readAge } from "../ui/words";
 import { useHiddenFacts } from "./hidden";
 import { useBoard, useBoardDetail, type DetailRead } from "./read";
-import { BOARD, droppedSaid, hiddenSaid, LONG_VALUE, placeSaid, saysSaid } from "./words";
+import { BOARD, droppedSaid, hiddenSaid, placeSaid, saysSaid } from "./words";
 
 /** A quiet line: what cannot be shown, in its place. `failed`: a read FAILED (the warning tone); else muted. */
 function Quiet({ children, failed = false, testId }: { children: string; failed?: boolean; testId: string }) {
@@ -60,19 +60,53 @@ function Spark({ values }: { values: readonly number[] }) {
 }
 
 /**
- * A fact's address: its HOST alone at the row, as plain text that reads as the agent's (who says
- * it is said once, on the heading's line); a press shows the whole address as text; only then
- * "Open in browser".
+ * ONE FACT, the same two lines for every one (ours, in bb's type and spacing: bb's own row keeps
+ * one line, and a list a person can read comes first). LINE 1: the VALUE, whole (a long one wraps
+ * here; a value is never cut), the small line of its history right after it, and at the row's end
+ * its age and the ×. LINE 2, small and muted: the LABEL and, where the fact has an address, its
+ * HOST: one line, and the label is what gives way (its whole text is its title).
+ * The address is the agent's: its host alone, as text (who says it is said once, on the heading's
+ * line); a press shows the whole address as text; only then "Open in browser".
  */
-function FactLink({ link }: { link: NonNullable<BoardFact["link"]> }) {
+function FactRow({ fact, values, now, hide }: { fact: BoardFact; values: readonly number[] | null; now: number; hide: () => void }) {
   const navigate = useBbNavigate();
   const [whole, setWhole] = useState(false);
+  const link = fact.link;
   return (
-    <span data-testid="oats-board-link" className="flex min-w-0 flex-col gap-1">
-      <button type="button" data-testid="oats-board-link-show" aria-expanded={whole} className={`${TARGET} inline-flex min-w-0 items-center self-start break-all text-left text-xs text-muted-foreground hover:text-foreground`} onClick={() => setWhole((was) => !was)}>
-        {shown(link.host)}
-      </button>
-      {whole ? (
+    <div data-testid="oats-board-fact" data-key={fact.key} className="flex min-w-0 flex-col gap-0.5 py-1">
+      <div className="flex min-w-0 items-start gap-2">
+        <span className="min-w-0 flex-1 break-words text-sm">
+          <span data-testid="oats-board-fact-value" className="font-medium text-foreground">
+            {shown(fact.value)}
+            {fact.unit === null ? "" : ` ${shown(fact.unit)}`}
+          </span>
+          {values === null ? null : (
+            <span className="ml-1.5 inline-block align-middle">
+              <Spark values={values} />
+            </span>
+          )}
+        </span>
+        <span className="flex shrink-0 items-center gap-1">
+          <Age at={fact.at} now={now} />
+          <button type="button" data-testid="oats-board-fact-hide" aria-label={`${BOARD.hide}: ${shown(fact.label)}`} className={`${TARGET} inline-flex min-w-8 items-center justify-center text-muted-foreground hover:text-foreground`} onClick={hide} onKeyDown={(event) => event.stopPropagation()}>
+            ×
+          </button>
+        </span>
+      </div>
+      <div className="flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground">
+        <span data-testid="oats-board-fact-label" title={shown(fact.label)} className="min-w-0 truncate">
+          {shown(fact.label)}
+        </span>
+        {link === null ? null : (
+          <span data-testid="oats-board-link" className="shrink-0 whitespace-nowrap">
+            {" · "}
+            <button type="button" data-testid="oats-board-link-show" aria-expanded={whole} className="inline text-xs text-muted-foreground hover:text-foreground" onClick={() => setWhole((was) => !was)}>
+              {shown(link.host)}
+            </button>
+          </span>
+        )}
+      </div>
+      {link !== null && whole ? (
         <span className="flex min-w-0 flex-wrap items-center gap-2">
           <span data-testid="oats-board-link-address" className="min-w-0 break-all font-mono text-xs text-foreground">
             {shown(link.href)}
@@ -82,12 +116,9 @@ function FactLink({ link }: { link: NonNullable<BoardFact["link"]> }) {
           </Button>
         </span>
       ) : null}
-    </span>
+    </div>
   );
 }
-
-/** A line of ours under bb's row starts where the row's own text starts (bb keeps 18 px for its leading slot, measured at both widths: the live scene holds it). */
-const UNDER_ROW = "pl-[18px]";
 
 function Facts({ instance, board, detail, now }: { instance: string; board: BoardData; detail: DetailRead; now: number }) {
   const name = agentName(instance);
@@ -104,60 +135,7 @@ function Facts({ instance, board, detail, now }: { instance: string; board: Boar
           items={view.shown}
           getKey={(fact) => fact.key}
           limit={FACTS_SHOWN}
-          renderItem={(fact) => {
-            const values = sparkValues(history?.get(fact.key)?.history);
-            const value = `${shown(fact.value)}${fact.unit === null ? "" : ` ${shown(fact.unit)}`}`;
-            // A VALUE IS NEVER CUT. A short one is on bb's row, first, and the label after it is the
-            // part that gives way where the row is narrow; a long one has a line of its own under
-            // the label, whole, wrapping. The small line of its history stands after the value.
-            const long = value.length > LONG_VALUE;
-            const spark = values === null ? null : <Spark values={values} />;
-            return (
-              <div data-testid="oats-board-fact" data-key={fact.key} data-long={long ? "" : undefined} className="flex min-w-0 flex-col">
-                <InfoListRow
-                  leading={null}
-                  name={
-                    long ? (
-                      <span data-testid="oats-board-fact-label" className="block min-w-0 truncate text-muted-foreground">
-                        {shown(fact.label)}
-                      </span>
-                    ) : (
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <span data-testid="oats-board-fact-value" className="shrink-0 whitespace-nowrap font-medium text-foreground">
-                          {value}
-                        </span>
-                        {spark}
-                        <span data-testid="oats-board-fact-label" className="min-w-0 truncate text-muted-foreground">
-                          {shown(fact.label)}
-                        </span>
-                      </span>
-                    )
-                  }
-                  trailing={
-                    <span className="flex shrink-0 items-center gap-1">
-                      <Age at={fact.at} now={now} />
-                      <button type="button" data-testid="oats-board-fact-hide" aria-label={`${BOARD.hide}: ${shown(fact.label)}`} className={`${TARGET} inline-flex min-w-8 items-center justify-center text-muted-foreground hover:text-foreground`} onClick={() => hide(fact.key, fact.value)} onKeyDown={(event) => event.stopPropagation()}>
-                        ×
-                      </button>
-                    </span>
-                  }
-                />
-                {long ? (
-                  <span className={`flex min-w-0 items-start gap-1.5 ${UNDER_ROW}`}>
-                    <span data-testid="oats-board-fact-value" className="min-w-0 break-words text-sm font-medium text-foreground">
-                      {value}
-                    </span>
-                    {spark}
-                  </span>
-                ) : null}
-                {fact.link === null ? null : (
-                  <span className={`flex min-w-0 ${UNDER_ROW}`}>
-                    <FactLink link={fact.link} />
-                  </span>
-                )}
-              </div>
-            );
-          }}
+          renderItem={(fact) => <FactRow fact={fact} values={sparkValues(history?.get(fact.key)?.history)} now={now} hide={() => hide(fact.key, fact.value)} />}
         />
       </InfoSection>
       {view.hidden.length === 0 ? null : (

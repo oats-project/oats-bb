@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.5.0
+
+The pilot's release. The OATS plugin for bb gets its screens in their pilot form:
+- the text is cut;
+- there is one tree of agents for every backend, with children folded;
+- after every act, the agent says "Reading…" until OATS has read it again.
+
+The dialogs, the home, outside OATS and the New agent form follow the product lead's reads of 24 and 25 Nov 2026. The session provider does not change: package `oats.bb` 0.5.0 is 0.4.0's provider, unchanged but for its version.
+
+**Upgrade:**
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.5.0`, then `oats sync`. The floor stays OATS 0.70.5, and bb-app stays 0.50.1.
+- Install the plugin in bb again at `v0.5.0` (`plugin/README.md`, "Install").
+- A home's provider copy needs no move: it is the same provider.
+
+**Known in this release:**
+- For about a second after a Stop, the home's card of an agent that was asking keeps its reply box. bb refuses such a reply, and nothing starts. The next release turns the card off behind "Reading…".
+- New agent needs the `oats.bb` package in the workspace. Without it, the form says "bb is not set up for this workspace." and spawns nothing. Spawning a tmux agent from bb comes in the next release.
+- A workspace whose lock doesn't yet hold `oats.bb` (run `oats sync`), or a member missing the capability, also reads "bb is not set up for this workspace.". The kernel's own sentence is under Details. The form keeps that answer for 30 seconds and has no Retry.
+- bb can't type to an agent on tmux.
+- `oats session restart` with a model the provider then refuses still stops the agent first, leaving it stopped. The kernel side is fixed in OATS 0.70.8, where a planned restart carries the model and checks it before anything stops. The plugin's Restart dialog holds such a model before any call.
+- A tmux agent's stopped and started states reach the plugin through OATS's status read, a few seconds after the act on a loaded host.
+
+### The OATS plugin for bb
+
+- **"Reading…" after every act** (#85, #89). After Start, Stop, Restart or Retire, every place that shows the agent says "Reading…", with its acts off, until the window holds a roster read after the act ended (bounded at ten seconds). Then it shows the new state. A Stop marks every agent its receipt names.
+- **One tree of agents for every backend** (#85).
+  - Order: an agent on tmux is nested under its parent like an agent on a thread. The order is one for every row: needs you, then running outside OATS or failed, then the rest, then the kernel's order. It no longer goes by latest activity.
+  - Folding: children are folded by default. A closed parent keeps its chevron. A hidden row that needs a person shows its own mark beside it ("1 needs you"), and a failed or unreachable one tones the chevron (#89).
+  - Each row says its agent's soul after its state.
+- **The thread's line names its agent** where bb's title isn't the agent's name (#89).
+- **State words** (#89): an agent on tmux that runs reads "Running". An agent on a bb thread reads "Working", also while a message is what carries it on. The row of the agent whose page is open is marked. One rule holds "New agent" in the sidebar and on the home.
+- **"Message to continue" only where a message carries the agent on under OATS** (#89): a lost session, or a thread with no harness loaded. It is never offered for a harness that ended by itself, an operator's stop, or a thread whose start bb hasn't answered for yet.
+- **The dialogs** (#89):
+  - Restart says what it does: "Stops what it is doing now." only where the agent works, and "Starts a new conversation.".
+  - A failed agent has one act everywhere.
+  - A dialog opens once bb's menu has left.
+  - A notice follows each act.
+  - On a workspace without the bb provider, Start… and Restart… of a tmux agent open with no harness to choose.
+- **Outside OATS** (#89): an agent that runs outside OATS says so on its row, its thread's line and its page, with Stop… first and its acts in one row.
+- **The home** (#85, #89):
+  - "Nothing needs you." alone when nobody waits.
+  - The pilot's first home lists the lost agents with Start… ("Lost 8").
+  - One Retry.
+  - A card and a row say their agent on one line.
+  - Home › Agents has no tile; it is reached by its address.
+- **The New agent form** (#85, #89):
+  - "Choose a model…" / "Required" where a model is required.
+  - "Pick provider" under a model id two providers serve.
+  - The pi run's two images.
+  - No preview is asked while the harness read is in flight.
+- **A window that loads while a change is being read** reads the roster after it, no longer the one from before (#82). 0.4.0's Known line is closed.
+- **The checks:**
+  - bb-app and pi install from committed locks, renewed before each release, so nothing is resolved from npm during a run (#84).
+  - A failed run keeps bb's own logs and crash reports (#75).
+  - The tmux stage's rows are shaped from the three recorded tmux rows (#76).
+  - The pi run proves "Failed at its start" against a real kernel's row (#78).
+  - An extra bb's start is retried once (#80), and the extra bbs take ports below the ephemeral range (#86).
+  - The real job's limit is 75 minutes (#81).
+
 ## 0.4.0
 
 A stop archives the agent's thread, so an agent OATS stopped stays stopped. A host stop is

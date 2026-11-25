@@ -104,7 +104,7 @@ test("a fact is its label, its value and unit, its age; bb's own list is given e
   expect(facts.querySelector("ul")!.getAttribute("data-limit")).toBe("3");
   expect(within(rows[0]!).getByTestId("oats-board-fact-value").textContent).toBe("0 failing");
   // ONE ORDER for every fact: the value over the label; the label is the part that gives way (its whole text in its title), never the value.
-  expect(rows[0]!.textContent).toMatch(/^0 failing16 min ago×Fact a$/);
+  expect(rows[0]!.textContent).toMatch(/^0 failingFact a16 min ago×$/); // the two lines, then the column of the age and the ×
   expect(within(rows[0]!).getByTestId("oats-board-fact-value").className).not.toMatch(/truncate|whitespace-nowrap/);
   const label = within(rows[0]!).getByTestId("oats-board-fact-label");
   expect([label.className.includes("truncate"), label.getAttribute("title")]).toEqual([true, "Fact a"]);

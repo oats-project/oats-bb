@@ -73,38 +73,42 @@ function FactRow({ fact, values, now, hide }: { fact: BoardFact; values: readonl
   const [whole, setWhole] = useState(false);
   const link = fact.link;
   return (
-    <div data-testid="oats-board-fact" data-key={fact.key} className="flex min-w-0 flex-col gap-0.5 py-1">
-      <div className="flex min-w-0 items-start gap-2">
-        <span className="min-w-0 flex-1 break-words text-sm">
-          <span data-testid="oats-board-fact-value" className="font-medium text-foreground">
-            {shown(fact.value)}
-            {fact.unit === null ? "" : ` ${shown(fact.unit)}`}
-          </span>
-          {values === null ? null : (
-            <span className="ml-1.5 inline-block align-middle">
-              <Spark values={values} />
+    <div data-testid="oats-board-fact" data-key={fact.key} className="flex min-w-0 flex-col gap-1 py-1">
+      {/* The two lines stand together, tight; the age and the × are a column of their own beside them (the ×'s height is a press's, not a line's). */}
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="min-w-0 break-words text-sm">
+            <span data-testid="oats-board-fact-value" className="font-medium text-foreground">
+              {shown(fact.value)}
+              {fact.unit === null ? "" : ` ${shown(fact.unit)}`}
             </span>
-          )}
-        </span>
+            {values === null ? null : (
+              <span className="ml-1.5 inline-block align-middle">
+                <Spark values={values} />
+              </span>
+            )}
+          </span>
+          <div className="flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground">
+            <span data-testid="oats-board-fact-label" title={shown(fact.label)} className="min-w-0 truncate">
+              {shown(fact.label)}
+            </span>
+            {link === null ? null : (
+              <span data-testid="oats-board-link" className="shrink-0 whitespace-nowrap">
+                {" · "}
+                {/* As high as a press needs (32 px; 44 at the phone's width) by its padding alone, taken back by its margin: the line keeps a line's height. */}
+                <button type="button" data-testid="oats-board-link-show" aria-expanded={whole} className="-my-[13px] inline-block py-[13px] text-xs text-muted-foreground hover:text-foreground md:-my-2 md:py-2" onClick={() => setWhole((was) => !was)}>
+                  {shown(link.host)}
+                </button>
+              </span>
+            )}
+          </div>
+        </div>
         <span className="flex shrink-0 items-center gap-1">
           <Age at={fact.at} now={now} />
           <button type="button" data-testid="oats-board-fact-hide" aria-label={`${BOARD.hide}: ${shown(fact.label)}`} className={`${TARGET} inline-flex min-w-8 items-center justify-center text-muted-foreground hover:text-foreground`} onClick={hide} onKeyDown={(event) => event.stopPropagation()}>
             ×
           </button>
         </span>
-      </div>
-      <div className="flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground">
-        <span data-testid="oats-board-fact-label" title={shown(fact.label)} className="min-w-0 truncate">
-          {shown(fact.label)}
-        </span>
-        {link === null ? null : (
-          <span data-testid="oats-board-link" className="shrink-0 whitespace-nowrap">
-            {" · "}
-            <button type="button" data-testid="oats-board-link-show" aria-expanded={whole} className="inline text-xs text-muted-foreground hover:text-foreground" onClick={() => setWhole((was) => !was)}>
-              {shown(link.host)}
-            </button>
-          </span>
-        )}
       </div>
       {link !== null && whole ? (
         <span className="flex min-w-0 flex-wrap items-center gap-2">

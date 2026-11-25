@@ -6,7 +6,7 @@
 // A row's rank is the lowest in its SUBTREE; within a rank, the kernel's own order of the agents.
 // Never a thread's `updatedAt`, never Working above Idle: the order does not jump while it is read.
 import { describe, expect, test } from "vitest";
-import type { Agent, AgentState, BbThread, Node, Top } from "../../model/types";
+import type { Agent, AgentState, BbThread, Row } from "../../model/types";
 import { RANK, state, view } from "../../model/view";
 
 const agent = (instance: string, over: Partial<Agent> = {}): Agent => ({
@@ -36,14 +36,11 @@ const tmux = (instance: string, over: Partial<Agent> = {}): Agent => agent(insta
 type Drawn = { instance: string; state: AgentState; depth: number; root: string };
 function drawn(agents: readonly Agent[], threads: readonly BbThread[]): Drawn[] {
   const out: Drawn[] = [];
-  const walk = (node: Node, root: string) => {
-    out.push({ instance: node.agent.instance, state: node.state, depth: node.depth, root });
-    for (const child of node.children) walk(child, root);
+  const walk = (row: Row, root: string) => {
+    out.push({ instance: row.agent.instance, state: row.state, depth: row.depth, root });
+    for (const child of row.children) walk(child, root);
   };
-  for (const top of view(agents, threads).rows as Top[]) {
-    if ("node" in top) walk(top.node, top.node.agent.instance);
-    else out.push({ instance: top.agent.instance, state: state(top.agent, null), depth: 0, root: top.agent.instance });
-  }
+  for (const top of view(agents, threads).rows) walk(top, top.agent.instance);
   return out;
 }
 const names = (rows: readonly Drawn[]) => rows.map((row) => row.instance);

@@ -39,7 +39,12 @@ it (it must be all of them; which millisecond the load falls in is chance, so ma
 
 The container gets `--cpus 2 --memory 6g`, no mount, no port, no Docker socket and nothing of the
 host's home; the plugin's directory goes in through `tar` and the artefacts come out to
-`plugin/container/out/` (ignored by git). The artefacts have an owner (`out/.owner`: the OATS
+`plugin/container/out/` (ignored by git). A run that fails also keeps bb's own logs and crash
+reports there, cut short, under `bb-logs/` (`real/bb-logs.sh`, `real/README.md`): never the
+plugin's own log file, and nothing of bb's data. bb's logs name threads and environments by their
+ids, and carry the text of an error and what a plugin's worker printed on its standard error:
+after a failed run by hand on a person's own roster (`LOCAL_STATUS`, below), `out/bb-logs/` is as
+private as that run's images. The artefacts have an owner (`out/.owner`: the OATS
 instance that ran, else the user; `ARTEFACTS_OWNER` to name one): the first to run in a checkout
 owns `out/`, and a run by another (a reviewer attached to an author's tree) leaves `out/` as it is
 and writes to `out.<owner>/` beside it, so that nobody's images are deleted under them. A run
@@ -52,7 +57,10 @@ of its own with the same limits, started after the first is gone, and its artefa
 |---|---|---|
 | `Dockerfile` | `docker build` | node 22, chromium (the live tests' browser), procps and tmux (the real run's one agent on the tmux backend); no bb and no npm package |
 | `ci.sh` | on the host | builds the image, starts the container, copies the plugin's directory in, reads the repository's bb pin, runs the scripts below, copies `out/` back, removes the container |
-| `setup.sh` | in the container | `npm install -g bb-app@<the pinned version>`, `npm ci` |
+| `setup.sh` | in the container | bb-app at the pinned version, from its lock (`locked-install.sh bb-app`); `npm ci` |
+| `locked-install.sh` | in the container | installs a tool from its committed lock (`locks/<tool>/`, `locks/README.md`) with `npm ci` and links its commands onto the PATH: nothing is resolved at run time |
+| `relock.sh` | on the host | writes a tool's lock again (`relock.sh bb-app`, `relock.sh pi`): when its pin moves, and before a release; `relock.sh plugin` writes the plugin's own lock after `package.json` changed, keeping the versions it holds |
+| `no-toolchain-fetch.sh` | in the container, after each build and install of the plugin | fails when bb fetched its build toolchain from npm (a `toolchain-*` directory in its data): the proof that bb built with the locked one |
 | `unit.sh` | in the container | `tsc --noEmit`, `vitest run`, the shell test of the real run's wait for a bb plugin's command, `bb plugin build` |
 | `live.sh` | in the container | starts bb-app, makes a deployment and a bb project in it, installs the fake `oats` and the plugin, and checks L1, L2, L3, A14 (backend), A15, G1 and A15b (below); runs `live-ui.mjs` when the app is in the tree |
 | `live-ui.mjs`, `browser.mjs`, `contrast.mjs` | in the container | the app's live checks (A13, A14, A16) with screenshots at two widths in bb's light and dark themes, the small DevTools-protocol driver of the image's Chromium they use, and the contrast check run at each screenshot (below) |
@@ -141,17 +149,33 @@ open, a confirmation before its act, in progress, done, refused and with another
   and their preview (Preview and Spawn enabled).
 - **TM** a deployment that is mostly tmux agents (stage `tmux-roster`, the agents in
   `tmux-roster.mjs`): three agents on bb threads and nineteen on tmux over seven souls, five of them
-  waiting, four stopped, some with a parent. The real run holds one tmux-backed agent (`real/parts/lost.mjs`), not a
+  waiting, two stopped with OATS, two whose session was lost, some with a parent. The real run holds one tmux-backed agent (`real/parts/lost.mjs`), not a
   deployment of them, so the nineteen rows are not recorded as a set: each is the one row the kernel printed for a tmux home
   (`test/fixtures/roster/status.json`, kernel-fix-developer) with its name, home, window, soul group
   and parent changed, the claim the kernel printed for another agent on the waiting ones, and
-  `running` true or false with no `runtimeState`, as the kernel prints a tmux home today. The scene
+  what the kernel says of the session (`running`, `runtimeState`, `sessionEnd`) taken from the
+  RECORDED tmux row of its kind (`test/fixtures/lifecycle/tmux-row-{running,stopped,lost}.json`,
+  OATS 0.70.5): one that runs has `running: true` and no word; one stopped with OATS `running:
+  false`, the word "shell" and `sessionEnd: "stopped"`; one whose session was lost `running:
+  false`, no word and `sessionEnd: "lost"`. These rows are DERIVED, not recorded. The scene
   holds: every one is a row that says its state, its soul and "tmux" (the longest row, "Stopped · oats-contrib-developer · session lost · tmux", is ONE line: the reason shortens, then leaves the row, and only then the soul shortens; the state and the glyph never; and with every session lost every row keeps that order); the foot counts every
   agent that waits; no row is over three lines (the name on one or two, cut only after the
   second; the second block on one line); the
   selected row of a bb-thread agent with a name longer than two lines holds it cut after the
   second, whole in its title; the last row and the foot can be scrolled into view; a row opens
   its agent's own page.
+  The stage also holds the ONE TREE and its fold: as the page loads the roots alone are drawn,
+  every root that has agents under it with its chevron closed (four of them on tmux), and the two
+  closed tmux parents that hide a waiting agent carry its mark; then every parent is opened by its
+  chevron and each tmux agent that has a parent is under it, one step in, a child's child two.
+  A scene of its own draws the PILOT'S OWN ROSTER SHAPE (`tmux-roster.mjs` `PILOT_ROSTER`: eight
+  agents on tmux and none on a thread, every session lost, one a child of another; made-up names,
+  derived rows like the stage's): seven rows and one closed parent as the page loads; opened, the
+  child under it; closed again with the child waiting, the parent first, saying what it is itself
+  and carrying the child's mark; opened, the child second. A scene may draw a roster of its own
+  (`tmuxStatus(as, roster)`) and puts the stage's back. In the pilot's image pass
+  (`LIVE_PILOT_IMAGES`, by hand) that scene archives the test container's own threads for its
+  images and puts them back (`ownThreads`): bb's own pane may then differ in the views after it.
 - **LR**, by hand only, never in CI: `LOCAL_STATUS=<path> container/ci.sh live` draws ONE stage,
   `local-roster`, from an `oats status --json` answer of a real deployment, with the release's
   default pages (the setting `pages` left as a fresh install has it, unset with bb's own `plugin
@@ -181,10 +205,12 @@ open, a confirmation before its act, in progress, done, refused and with another
   failed, unreachable; and the home's card of the agent that runs outside OATS, counted as the
   roster's foot counts it. OUTH: the three rows that read "not running" side by side (an operator's
   stop, a session lost, idle with no harness loaded), asserting the state word and the
-  tone of each, and that Start on the line of the one that is not loaded opens the lifecycle's
-  Start dialog, which says first that a message in the thread carries the conversation on. OUTA:
+  tone of each, that the lost one and the one that is not loaded say "message to continue" and
+  have no Start… on their line, and that Start… on the page of the one that is not loaded opens
+  the lifecycle's Start dialog, which says first that a message in the thread carries the
+  conversation on. OUTA:
   the three agents whose thread bb has archived, side by side (an operator's stop: plain, with its
-  soul; a session lost, and an agent that still runs: the warning mark and "archived in bb"), and
+  soul; a session lost, and an agent that still runs: the warning mark and "may still run"), and
   the archived thread's own row of the one that still runs. OUTQ:
   the first roster while bb holds a question on the thread of the agent that runs outside OATS.
   What bb says of a thread is true in bb: the stage archives the threads it says

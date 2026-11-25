@@ -3,7 +3,7 @@
 // awebai/oats 95c7b43b), over the plugin's own states: an agent's state is the one function every
 // place reads (app/roster/status.ts), so the home's counts are the sidebar's by construction.
 // Pure: no bb, no React.
-import type { Agent, AgentState, BbThread, Node, View } from "../../model/types";
+import type { Agent, AgentState, BbThread, View } from "../../model/types";
 import { messageResumes, rest } from "../../model/rest";
 import { claimOf, flatten } from "../../model/view";
 import { agentStatus, type AgentStatus } from "../roster/status";
@@ -33,10 +33,8 @@ const instant = (entry: Entry): number => {
 
 /** `view` is the roster as the sidebar draws it; `now` is the clock, for how long an agent has waited. */
 export function board(view: Pick<View, "rows" | "finished">, now: number): Board {
-  // The sidebar's own order, row by row (`view.rows`: a root of the tree with its children, or an agent with no bb thread, in the one order).
-  const all: Entry[] = view.rows.flatMap((top): Entry[] =>
-    "node" in top ? flatten([top.node]).map((node: Node) => ({ agent: node.agent, thread: node.thread, status: agentStatus(node.agent, node.thread, now) })) : [{ agent: top.agent, thread: null, status: agentStatus(top.agent, null, now) }],
-  );
+  // The sidebar's own order with every fold open, row by row (`view.rows`: the ONE tree, a row before its children; an agent with no bb thread is under its parent like any other).
+  const all: Entry[] = flatten(view.rows).map((row) => ({ agent: row.agent, thread: row.thread, status: agentStatus(row.agent, row.thread, now) }));
   const counts: Record<AgentState, number> = { "needs-you": 0, working: 0, idle: 0, stopped: 0, error: 0, unreachable: 0, outside: 0 };
   for (const entry of all) counts[entry.status.state] += 1;
   const order = new Map(all.map((entry, index) => [entry.agent.instance, index]));
@@ -62,12 +60,14 @@ type Row = Pick<Agent, "running" | "runtimeState" | "backend"> & { sessionEnd?: 
  * Why the home REFUSES an answer or a message to the agent, or null where it sends one. The
  * plugin's one reading of the row (`rest`, `messageResumes`: model/rest.ts; the Start dialog and
  * the thread's own line read the same):
- * - "stopped": the kernel calls it stopped (an operator's stop, or a stop that does not say that
- *   its session was lost): a message would start its harness behind OATS's back. The card says
- *   so, and offers Start. Also an agent that does not run and has no thread bb lists;
+ * - "stopped": it does not run and no fact shows that a message carries it on: the kernel calls
+ *   it stopped (an operator's stop, or a stop that does not say that its session was lost), where
+ *   a message would start its harness behind OATS's back; or its harness ended by itself; or its
+ *   row is one this plugin does not know; or its thread is in "error" and bb has not said that a
+ *   turn started on it; or bb lists no thread of it. The card says so, and offers Start;
  * - "unreachable": the kernel cannot reach its session: nobody can tell where a message would go.
- * null: it runs, or nobody stopped it (its session was lost, it ended by itself, no harness is
- * loaded) and bb lists its thread: a message there is how it comes back.
+ * null: it runs, or its session was lost or no harness is loaded (the two rows a recorded fact
+ * holds) and bb lists its thread: a message there is how it comes back.
  */
 export function refusal(agent: Row, thread: object | null): "stopped" | "unreachable" | null {
   const how = rest(agent);

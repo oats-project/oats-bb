@@ -55,9 +55,27 @@ Details. Where OATS was read before, the
 roster stays as last read under that notice, which says its age once ("Read <age>."), and the
 OATS acts are HELD until OATS is read again, as on the Desktop: Stop, Start, Restart, Retire and
 New agent stay in their place, drawn off, the notice says "Acts are off." with its Retry, and the
-plugin's server takes no act meanwhile. Beside a page
-that shows that notice the sidebar says one line, "Read <age>.", with Retry. What a place still
-shows of an agent (its soul, its events, its readiness) can still be read. Where it never was,
+plugin's server takes no act meanwhile. THE NOTICE STANDS ONCE ON A SCREEN, with ONE Retry (the
+lead's T3): in the pane a person is looking at: a page of the plugin's (the home, an agent's page,
+the New agent form), or an agent's thread, whose own line says it on one line. Beside such a pane
+the sidebar says one line, "Read <age>. Acts are off.", with nothing to press (a pane cannot know
+whether bb shows its sidebar, a drawer at a phone's width: so the Retry is the pane's, and there
+are never two on a screen and never none); where no pane shows the notice, the sidebar's own is
+the whole one, with the Retry. A notice counts as a pane's only while it is SEEN: the home in a
+thread's tab says none while bb keeps that tab mounted out of sight, nor beside a thread whose own
+line says it. The panel in a thread's tab draws none: it holds its buttons; and on an
+agent's page too the panel's parts with a read of their own (readiness, the soul, the activity)
+draw no Retry and hold their Refresh and Load while the roster cannot be read: a part that failed
+is read again on each press of the one Retry, and when the roster is read again. The rule holds on the pilot's screens; on Souls, Teams, Machines, Capabilities and
+Automations a page's own failed read still draws a Retry of its own, which is not counted. Where OATS was NEVER
+read the same rule holds: beside a pane that shows the notice the sidebar says one line, the
+notice's TITLE alone, and so does the home in a thread's tab there (every thread's line says the
+notice then: never an empty pane). A modal dialog is its own place: its own "cannot read" notice
+keeps its Retry over a pane that has one ("one Retry on a screen" counts the panes a person can
+press). A thread's line, the one notice on its screen, has Retry and, where the
+cause offers them, "Open settings". What a place still
+shows of an agent (its soul, its events, its readiness) is still read when the place opens (the
+server answers it from the last roster); reading it AGAIN is held with the other acts. Where it never was,
 bb's threads are listed as usual under the notice. The notice's code:
 
 | Code | When |
@@ -91,12 +109,28 @@ and `view().rows`; its table is `test/model/order.test.ts`). Three ranks: an age
 then one a person must look at (it runs outside OATS, or it failed); then everything else together
 (working, idle, stopped, unreachable). A row is placed by the most urgent rank anywhere in its own
 subtree, so a parent rises with a child that waits; children the same way under their parent; and
-within a rank by the kernel's own order of the agents. An agent with no bb thread (on tmux, or
-whose thread bb does not list) is a root in that same order, not a block after the tree. The order
+within a rank by the kernel's own order of the agents. The order
 never follows a thread's latest activity and never puts Working above Idle: no row moves while a
 person reads it, unless an agent starts to need them (it rises) or is answered (it falls back to
 its kernel place). The sidebar has no line that counts who waits: those rows are first and
 marked, and bb's badge on the plugin's entry says how many.
+
+**ONE tree for every agent, whatever its backend** (`model/view.ts` `view().rows`, the type `Row`;
+its table is `test/model/tree.test.ts`). An agent with no bb thread (on tmux; or one whose thread
+bb does not list: archived, deleted, hidden) is a row of the same tree as the others: under its
+parent where the parent is a row, whatever either's backend (a tmux child under an agent on a bb
+thread, an agent on a thread under a tmux parent), and a root where it has no parent that is
+drawn. The kernel's row names the parent; nothing of bb's is asked. The tree's rules are the same
+for all: a cycle is cut at one link, deeper than two steps is drawn at two, and every level is in
+the one order above. Such a row stays what it is: it opens the agent's own page, not a thread; and
+while that page is on screen its parents are open (the page says whose it is:
+`app/roster/open-agent.ts`). The row of what is on screen is MARKED, as bb marks the open
+thread's row: the row of the agent whose own page is open, with or without a thread, and the
+thread-less row whose archived thread is open; with a thread open it is the one row found for
+that thread, never a second row of the same name. A second row of a name the kernel should never list twice is a root of
+its own. `view().roots` is still the tree of the agents on a bb thread alone, for those who read
+threads. The home's list of every agent walks the same tree (`app/home/board.ts`): a thread-less
+agent comes after its parent's rows there.
 
 **Children are collapsed by default** (`model/view.ts` `treeRows`, `insideOf`, `ancestorsOf`, whose
 table is `test/model/fold.test.ts`; `app/roster/fold.tsx`). A parent has ONE chevron before its
@@ -106,10 +140,26 @@ shows or hides ("Show Redesign ui lead's agents", "Hide …") and whether they a
 the page loads, and stays as the person left it while the window lives: the open set is the
 window's memory (it outlives bb's drawer, which draws the sidebar anew), and nothing of it is
 stored. A closed parent's children are not in the page, so nothing of them takes the focus. A
-closed parent keeps its own state, mark and word, and carries after its own word, named for a
-screen reader, the mark of any row its subtree hides that itself carries one: a row that needs a
-person, one a person must look at (it runs outside OATS, or failed), and one whose own mark is in
-the warning tone (archived in bb while it ran), in that tone. Of several, the most urgent. The parents of the thread that is on screen are open and are never closed over it: while a parent
+closed parent's line says only the parent (its own state, mark and word). The mark of any row its
+subtree hides that itself carries one is said AT ITS CHEVRON, which never leaves a row that has
+children (it is what says the row opens; the lead's ruling of 25 Nov 2026 on P23): a hidden row
+that ASKS (its state is "needs you") puts its own mark, the needs-you disc, BESIDE the chevron,
+after it and before the parent's own dot (4 px apart from it), in the same button (pressing either
+opens the row): found without colour; a hidden row that failed or cannot be reached, or that runs
+outside OATS or warns, with nobody asking, puts NO second dot there (two plain dots read as one
+more state of the parent, told apart by colour alone): the chevron itself takes the tone: the
+failure's for the first two, the warning's for the others. Which hidden row it speaks for, wherever
+each stands: one that asks; then one that failed or cannot be reached (a failed row is never hidden
+behind a milder one); then one that runs outside OATS or warns; among equals the tree's order. A
+row that is gone, or behind a result ("Reading…"), is a quiet one for the fold. The toggle is named
+in words for a screen reader and a pointer, and since the fold hides those rows' words the name
+carries them as a COUNT of the kind the chevron speaks for: "Show <Name>'s agents: 1 needs you";
+"…: 1 failed", "…: 1 unreachable", and both where both are hidden ("…: 1 failed, 1 unreachable");
+"…: 1 running outside OATS"; over rows that warn, the count and the reason's own words ("…: 1 may
+still run"). A row warns where its own mark is in the warning tone (the outside feature's
+`rowWarns`: its thread archived in bb while it ran, its session lost with its thread archived, its
+thread deleted in bb; such an agent has no bb thread, so it is inside its closed parent, and
+nothing else would lead a person to it). The parents of the row that is on screen (a thread; or an agent's own page) are open and are never closed over it: while a parent
 holds that row its chevron is drawn open and off (disabled, out of the tab order, named
 "<Name>'s agents shown"), and is live again once another row is on screen.
 A roster with a parent in it keeps a gutter before every row, so every mark stands in one column.
@@ -144,18 +194,32 @@ while its Terminal tab has the focus.
   **Details** (Joan's direction of 23 Nov 2026, by the text audit ruled on it): Stop "Archives its
   thread."; Retire "This cannot be undone."; Start "Starts a new conversation." (an agent on tmux
   whose session was lost: "Tries to continue its last conversation; else starts fresh."); Restart
-  "Stops what it is doing now.". Where others are stopped too, "Also stops: <names>." is the
-  second and last line.
-- **Stop** and **Retire** read the kernel's plan, for the agent the PLAN names (never the row that
-  was pressed). In view: the consequence line, and the facts that are a reason not to confirm, set
-  apart, only when true. For a stop those are said from facts, never from the plan's `midTask`
-  (reported activity: true for every session that runs, an idle one too): "<Name> has uncommitted
-  work." (the plan's own observation of its work tree) and, for an agent on bb, "<Name> is
-  mid-turn." (bb's word on its thread); an agent whose session runs with neither gets no line.
+  "Starts a new conversation." too (a restart never resumes, on bb or on tmux), and before it,
+  only where bb says the agent works on a turn now, "Stops what it is doing now.". Where a Retire stops others too, "Also stops: <names>." is the
+  second and last line; a Stop names its children once, in its choice (below).
+- **Every dialog's title names the agent that was asked for**, in every state: while its plan is
+  read, where it cannot be read, where the agent is gone, and over the result ("Stop Redesign ui
+  lead?", a question until the dialog has settled). What the dialog SHOWS is the kernel's: a plan
+  or a check the kernel answers for another agent, or for none, is refused ("This is not the plan
+  for this agent.") and never drawn under that name.
+- **Where the focus starts.** On Cancel in a Stop, a Retire, and a RESTART of an agent that works on
+  a turn now (it cuts the turn; its button keeps the plain look: nothing is deleted); else on the
+  dialog's primary button (Start, Restart), never on a field. The Harness field of Start and Restart is the plugin's own choice (the New
+  agent form's `Choice`: a button that opens a list), never the browser's select; Escape in its
+  open list closes the list alone.
+  Its list is the bb session provider's. On a deployment that does not hold that provider (its
+  agents all run on tmux; the kernel says E_CAPABILITY_UNKNOWN) the dialogs open all the same, with
+  no harness and no model to choose, and a tmux agent is started, resumed and restarted
+  (`server/lifecycle.ts`). Any other failure of that read stays a refusal.
+- **Stop** and **Retire** read the kernel's plan. In view: the consequence line, and the facts that are a reason not to confirm, set
+  apart, only when true. For a stop that is ONE fact, said from bb's word on its thread and never from the plan's
+  `midTask` (reported activity: true for every session that runs, an idle one too): "<Name> ·
+  mid-turn", what the stop cuts; an agent that is not in a turn gets no line. Uncommitted work is
+  not said of a stop (nothing is deleted); a retire says it, at its tick.
   Under Details: what is kept and deleted ("Nothing is deleted."; "Deletes its home.", "Keeps its
   worktree, moved aside, on branch <b>."), who is left out, and the state of each session and of
-  its uncommitted work. Stop has the switch **Include child instances** (on: the kernel's default;
-  off reads the plan again for the agent alone). Retire has **Also delete the worktree** for an
+  its uncommitted work. Stop has the switch **Also stop <names>**, which names the agent's children, once (on: the
+  kernel's default; off reads the plan again for the agent alone, and still names them). Retire has **Also delete the worktree** for an
   agent with a worktree of its own: while it is on, what would be lost is said at the tick, under its
   label ("Deletes 2 uncommitted changes too (a copy is saved)."), once; without it the worktree is
   kept, moved aside. Both dialogs open with the focus on Cancel. Stop's line is what the stop
@@ -174,8 +238,9 @@ while its Terminal tab has the focus.
   the dialog says why and offers its thread and **Refresh status**.
 - **While the act runs** the dialog says so in a word ("Stopping…"), with Close in Cancel's
   place. **Its result** is said in the same dialog: its title ("3 sessions stopped."), the facts a
-  person needs later ("Worktree kept, at:" and
-  the path on its own line); a start opens the agent's new thread behind it. When the dialog is
+  person needs later ("Worktree kept."; where it is, the path on a line of its own, is under the
+  result's Details, never on its face); a warning (a home that was kept) is the result's first
+  line, under its headline, in the warning tone; a start opens the agent's new thread behind it. When the dialog is
   gone by then (the person closed it, or opened another act's), the result reaches them through
   bb's toaster. A stop, a start or a restart that is done is told whole, with **Open <agent>**,
   and leaves by itself. Anything else (a refusal, a result that is not confirmed, a retire,
@@ -193,6 +258,17 @@ while its Terminal tab has the focus.
   on a stop or a retire plan and nowhere else) says that the agent is not in OATS any more.
 - **On a roster that is the last one read** (OATS cannot be read) the acts stay where they are,
   off; the notice on the same screen says "Acts are off.", with Retry.
+- **A thread that a person archives or deletes in bb while its agent runs** is told at once,
+  through bb's toaster, and stays: "<Name> may still run.", with **Stop…**, which opens the Stop
+  dialog (bb took the thread away and stopped nothing OATS knows of). Never a false alarm
+  (`app/lifecycle/left.ts`): only of an agent the window saw running on a thread bb listed; only
+  once bb has answered that the same thread is archived or gone; never for an act through OATS,
+  which archives the thread itself (OATS is asked again once, and a roster read after that
+  decides, on what the row says: told where it says the agent runs or that its session was lost;
+  dropped where it says an operator stopped it, where the agent is gone or on a new thread; and
+  where it says neither, a retire or a restart on its way, the look waits for a later roster);
+  never while an act of ours is in flight or its dialog is open; once per agent and thread in
+  an app window.
 
 bb's own composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts
 on its own when one of them is used: an agent whose thread was archived or deleted in bb stays in
@@ -212,12 +288,27 @@ header, under the agent's state: on the thread's OATS tab and on the agent's own
 (`app/panel/Panel.tsx`). The outside feature draws it on the archived thread's own row of an agent
 the roster draws on no thread ([Outside OATS](#outside-oats)).
 
+**Whose line it is.** The thread's line carries acts and, as a rule, no name: bb's title over it is
+the agent's name as words, which the provider gives the thread at every start. A person can move
+that title off the name (bb's own Rename and Regenerate title, which the plugin does not take
+away; a title bb wrote from a first message), and the acts would then sit under a name that is
+not the agent's. So the line starts with the agent's NAME whenever bb's title is not exactly it
+(`app/roster/IdentityRow.tsx`; the same name line the archived thread's row carries), and never
+when it is: no name twice. "The name as the provider writes it" is the plugin's
+`instanceDisplayName` and the provider's `threadTitle`: two copies of one rule, held equal by
+`test/roster/title.contract.test.ts`.
+
 **Behind a result** (`app/roster/reading.tsx`). A result that says an agent started, restarted,
 stopped or was retired is true of the agent before the roster the window holds is read again. Until
 it is, the places that say that agent's state (its page, its panel, its thread's line, its
 thread's menu) say **Reading…** in the state's place and EVERY act of it is off there (the line's
 Answer too; the panel does not draw what it asked before the act; a command's key does nothing for
-it): never the old state stated plainly beside "… started.". ONE question decides, about the
+it): never the old state stated plainly beside "… started.". The agent's ROW says it too, in
+the sidebar and in the home's lists: **Reading…** in its facts' place, a plain mark (no state's
+colour, no warning tone), no reason; it stays the link it is; and a closed parent marks nothing
+for a hidden row that says it. (Before the second look a row kept the roster's word of before:
+after a Stop that archived the threads, three rows read "Idle · … · may still run", warning,
+beside "3 sessions stopped.".) ONE question decides, about the
 roster and not about the agent: was this roster READ AFTER THE ACT ENDED? The roster's `at` is the
 plugin server's clock at the START of the status read that made it; the act's answer carries the
 same clock at the act's END (`endedAt`, stamped by the server when its `oats` command returned:
@@ -251,7 +342,11 @@ bb's Delete ends it. The plugin cannot hide those acts. It says what happened, o
 row, on the thread's own line and on the agent's own page, with the one act that mends it.
 
 **The state's word comes first, and it is one of the set**: Needs you, Working, Idle, Stopped,
-Failed, Unreachable, and one more, **Running outside OATS**. After it comes the REASON: two or
+Failed, Unreachable, and one more, **Running outside OATS**. An agent on tmux that runs reads
+**Running** in "Working"'s place, in every place that says its state (`app/roster/status.ts`
+`stateWord`, the one place): the kernel knows that a tmux session runs and nothing of a turn, so
+"Working" would say more than anyone knows. Its state is the same (its mark, its order, its acts,
+its count). After it comes the REASON: two or
 three words, on the thread's line and on the sidebar's row (a row is never three lines). A row's line is STATE · SOUL ·
 REASON · glyph (`app/ui/row-facts.tsx`): when it is short of room the reason shortens with "…", then
 leaves the row (it stays whole in the line's title, on the thread's line and on the agent's page),
@@ -269,17 +364,17 @@ never states.
 
 | What OATS says | What bb says of its thread | The thread's line | The sidebar's row | Acts |
 |---|---|---|---|---|
-| stopped by an operator, or stopped with no word how its session ended (`sessionEnd` "stopped" or none) | open: bb's composer is live under it | "Stopped · A message here starts it outside OATS.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped" | Start |
-| its session lost (`sessionEnd: "lost"`: it ended without OATS stopping it) | open | "Stopped · session lost": the reason alone. No warning, no time (the kernel records none of the loss), no cause guessed, nothing promised, and no sentence: what to do is said where it is done (the Start dialog says first to message it instead). | "Stopped · session lost" | Start… (its dialog says first to message it instead: the lifecycle's) |
+| stopped by an operator, or stopped with no word how its session ended (`sessionEnd` "stopped" or none) | open: bb's composer is live under it | "Stopped · A message here starts it outside OATS.": the sentence in the warning tone, the mark the state's own grey (one colour for the agent's dot, the one its row in the sidebar draws). The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped" | Start |
+| its session lost (`sessionEnd: "lost"`: it ended without OATS stopping it) | open | "Stopped · session lost · message to continue": the reason, then the way on. No warning, no time (the kernel records none of the loss), no cause guessed, nothing promised. | "Stopped · session lost" | none on the line: a message is the way on, and Start… would begin a new conversation. Start… is in the thread's menu, the panel and the agent's page (its dialog says first to message it instead: the lifecycle's) |
 | any row that does not run, where bb says the thread FAILED AT ITS START (below) | open, in "error" | "Failed", and nothing after it; bb's own reason under Details ("bb says: …") | "Failed · <soul>" | Start… on the line; Start… and Retire… on its page and in the thread's menu. No Restart, and the Start dialog has no carry-on line |
 | its session lost, on TMUX (no thread in bb) | none | on its page, under the header's "Stopped": "session lost", and no sentence (the Start dialog's one line says that Start tries to continue its last conversation, else starts fresh) | "Stopped · session lost", then bb's terminal glyph, named "tmux" | the header's (the lifecycle's) |
-| idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded". Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread, and its dialog says so first. | "Idle · not loaded" | Start (its dialog says first to send a message instead: the lifecycle's) |
+| idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded · message to continue". Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread, and its dialog says so first. | "Idle · not loaded" | none on the line, as for a lost session; Start… in the menu, the panel and the page |
 | stopped, its session not lost | archived | "Stopped · archived in bb" (the Start dialog's one line says that Start begins a new conversation). The row opens the archived thread, which bb shows to read (no composer). | "Stopped", in the plain tone (once the provider archives at stop, this is every stopped agent) | Start…, Retire… |
-| its session lost (`sessionEnd: "lost"`) | archived | "Stopped · Archived in bb while running: it may still run.", in the warning tone | "Stopped · archived in bb", its mark in the warning tone | Stop, Retire (Start once it is stopped) |
-| still says it runs (not stopped, failed or unreachable, and not `running: false`) | archived | "<its state> · Archived in bb while running: it may still run.", in the warning tone, on the archived thread's own row: a person archived the conversation of an agent whose process goes on | "<its state> · archived in bb" (for example "Idle · archived in bb"), its mark in the warning tone | Stop, Retire |
+| its session lost (`sessionEnd: "lost"`) | archived | "Stopped · Archived in bb while running: it may still run.", in the warning tone | "Stopped · <soul> · may still run": the mark in the warning tone, and the reason never leaves the row (the soul gives way first; the row's title says the whole sentence). The state word stays "Stopped": it is the kernel's row | Stop, Retire (Start once it is stopped) |
+| still says it runs (not stopped, failed or unreachable, and not `running: false`) | archived | "<its state> · Archived in bb while running: it may still run.", in the warning tone, on the archived thread's own row: a person archived the conversation of an agent whose process goes on | "<its state> · <soul> · may still run" (for example "Idle · … · may still run"), the mark in the warning tone, and the reason never leaves the row | Stop, Retire |
 | stopped, or its session lost | deleted | "Stopped · deleted in bb" on the state's line of the agent's own page's header (it has no thread): the reason in the warning tone, on the line as on the row, never alone under the tabs | "Stopped · deleted in bb", its mark in the warning tone | Start…, Retire… |
-| recorded stopped, with the kernel's `outsideOats` | any | "Running outside OATS · recorded stopped", in the warning tone, with **Stop…** and **Start…** as the line's own acts (Stop… alone for an agent that is not on bb); under the line no box and no title: one fold, **Details**, with what happened in a person's words ("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again."), then the kernel's own code and sentence. The same drawing on the home's card; on the instance panel the acts are the header's. | "Running outside OATS" | Stop…, Start… |
-| failed (its session ended) | open | "Failed · session ended". No warning: status sees a message that starts it. | "Failed" | Restart |
+| recorded stopped, with the kernel's `outsideOats` | any | "Running outside OATS · stopped in OATS", in the warning tone, with **Stop…** and **Start…** as the line's own acts (Stop… alone for an agent that is not on bb); under the line no box and no title: one fold, **Details**, with what happened in a person's words ("Someone sent it a message in bb. Stop, then Start."), then the kernel's own code and sentence. The same drawing on the home's card, with "Stop, then Start." under its line; and on the agent's page and the instance panel, whose header's line IS the thread's line ("Running outside OATS · stopped in OATS", Stop… the primary act and first, then Start…: `pageParts`, `pageActs`), with the roster read or not: with Retire… last and plain on that line: the page's ONE row of acts (the header's own row draws none there: no act twice), and the Session card says when OATS recorded the stop as "Stopped in OATS", never "Stopped" alone beside a header that says it runs. | "Running outside OATS" | **Stop…, the primary act**: it ends the harness that runs and archives its thread, and the agent is stopped as OATS has it. Start… second: it begins a NEW conversation and does not adopt the one that runs; while the outside thread is in a turn the provider refuses it (`oats-package/capabilities/oats-bb/lib/launch.mjs`: "stop it … before starting again") |
+| failed (its session ended) | open | "Failed · session ended". No warning, and nothing of a message: no fact shows a message carrying it on (no provider prints this row on a bb thread). | "Failed" | Start (the kernel's row says it does not run; Restart where its harness still runs or that is not known: the lifecycle's ONE act for a failed agent, `failedAct`) |
 | unreachable | any | "Unreachable" (the kernel's own message under Details); nothing about a message | "Unreachable" | Retry |
 
 What it reads, and nothing else (nothing is derived from words): the agent's status row, as the
@@ -312,13 +407,17 @@ of who needs a person):
   not-loaded row is recorded live (`test/fixtures/outside/status-not-loaded.json`: the real run
   ends the thread's harness process and reads the row), on the provider that scans its harness
   (oats-bb #40); with a provider before it an idle bb thread reads `running: null` and says "Idle"
-  with nothing after it.
+  with nothing after it. A message is invited ("message to continue", the home's card, the Start
+  dialog's line) only for that recorded row exactly (`runtimeState: "unknown"` and no word how its
+  session ended) and for a lost session, on an agent of the bb provider: a row with a word this
+  plugin does not know reads "Idle · not loaded" too, and is invited nothing (`messageResumes`
+  fails closed).
 
 **Three rows read "not running", and they are never drawn alike**: an operator's stop (Start, and
 never a message), a session that was lost (nobody stopped it: a message carries it on), and no
 harness loaded (a message; Start begins a new conversation). The state word tells the third from the first two;
-the tone tells the first from the others (the line's `tone="warning"`: the state's mark and the
-sentence, `data-tone="warning"`); and the rows' words differ. One live scene draws the three side
+the tone tells the first from the others (the line's `tone="warning"`: the sentence,
+`data-tone="warning"`; the mark is the row's, the state's own grey); and the rows' words differ. One live scene draws the three side
 by side and asserts the word and the tone, not only the text. The tone never carries the meaning
 alone: the sentence does.
 
@@ -356,8 +455,10 @@ says what happened after the state's word, as the row does ("Stopped · session 
 for every reason a row can say: one that is only where the thread is stands after the roster's own
 words ("Failed · session ended · archived in bb", "Stopped · no bb thread"), so a reason that left
 a narrow row is whole on the page.
-The kernel's report, and the one act the header lacks, stand first on the Instance tab
-(`OutsideAgent`; the header over the tabs does not scroll, so that block is on the page). They are the lifecycle's buttons for the agent's state
+The kernel's report's Details is in the header too, under the state it explains
+(`OutsideAgentDetails`: one closed fold, the same place as under a thread's line and the home
+card's line; the lead's read of 24 Nov 2026, P19); only an act the header lacks stands first on the
+Instance tab (`OutsideAgent`). The acts are the lifecycle's buttons for the agent's state
 (`AgentActs`: Start… and Retire… for a stopped agent), but where a process runs, or may, with no
 thread a person can see: a session lost to bb's Archive and an agent archived while it ran have
 Stop and Retire on the archived thread's row (Start comes once it is stopped), and the kernel's
@@ -375,7 +476,7 @@ state, the feature is one pure function (`said`, `app/outside/say.ts`: an agent,
 whether the tree draws it on its thread in; the reason, its tone, the row's words, its acts and
 the kernel's report out), `outsideOf(oats)` that gives it its inputs from the caller's own roster,
 and its drawings (`OutsideWarning`: the notice; `OutsideThreadRow`: the thread's own row on a
-thread bb has archived; `OutsideAgent`: the block on the agent's page; `lineParts` and `lineActs`:
+thread bb has archived; `OutsideDetails`: its one fold, and `OutsideAgentDetails`: that fold for the agent's page's header; `OutsideAgent`: the block on the agent's page, for an act the header lacks; `lineParts` and `lineActs`:
 what a status line says and offers; `rowParts`: what a sidebar's row says after its state, only
 where the reason follows that state). It registers no slot and has no read and no `oats` verb of
 its own: the roster's row and line (`app/roster/Sidebar.tsx`, `IdentityRow.tsx`) and the instance
@@ -427,6 +528,8 @@ provider's own tests hold its side). A dash is a field the row does not carry, o
 | its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | `outside/status-failed-at-start.json` |
 | the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
 
+**One read behind** (`model/view.ts` `state`, the outside feature's `messageResumes`). An agent that does not run and that nobody stopped can carry on by a message in its own listed bb thread; which rows those are is the outside feature's one answer (`model/rest.ts` `messageResumes`: a lost session and a home with no harness loaded are among them). From the moment a person sends it bb runs a turn, and the kernel's row says the old thing until OATS is read again. Where bb says such a thread works, bb's word stands: **Working**, never "Stopped · session lost" over bb's own turn. Not after an operator's stop (there the kernel's report, "Running outside OATS", or the warning says it), not on tmux, not where bb lists no thread, and not for a row that answer says no to: it reads as it does on a thread at rest.
+
 What comes after the state's word (the reason, the tone, the acts) is the table at the head of
 this section; this one holds only what the two functions must agree on. One row is the plugin's
 own reading: "its thread failed at its start in bb" has the kernel's four fields of "its session
@@ -455,6 +558,12 @@ answer it, the Start dialog has no carry-on line), bb's reason (the event's `dat
   variables' values), which must not come into the page.
 - It is asked again at each roster read and each minute, as the archived threads are; a thread
   that has started a turn is not asked about again in the app window.
+- bb's answer rides on the thread in THREE values (`BbThread.startFailure`): the failure; `null`
+  (bb answered: a turn started there, so it is a thread whose LATER turn failed); or nothing at
+  all while bb has not answered. What invites a message fails CLOSED on the last (`messageResumes`,
+  model/rest.ts): until bb says that a turn started, a thread in "error" may be one that never
+  started, so its line says "session lost" alone and keeps Start…, the home's card does not
+  answer it, and the Start dialog has no carry-on line.
 - Until bb has answered, the row says what it says without the answer. Where bb cannot answer,
   what it last said of the thread stands (nothing, if it never answered): a row that said
   "Failed" does not go back to "Stopped · session lost" for a read that failed.
@@ -474,9 +583,10 @@ the OATS Desktop's Home: what needs you first, then what you have.
 |---|---|
 | **Needs you** | one card per agent that waits on you: those you can answer here (they have a thread in bb) first, then those answered elsewhere; within each, the newest claim first. Eight, then **Show all N**. A card says who (the instance's name as words; under it, on one line, its soul, the reason for an agent with no thread in bb ("deleted in bb", "session lost"), and for one on tmux bb's terminal glyph named "tmux"), its state on the shared status line with how long it has waited ("4 d"), what it asks in the agent's own words, and offers the answer its request takes (below). **Open** and the name lead to the agent's thread (to its own page, for an agent with none). With none: "Nothing needs you." |
 | the tiles | **Agents** (Home › Agents) and the plugin's pages, each with its count; "Counting…" while a page is read, "Couldn't count" when that failed (the tile still leads to its page, which says why). A page's tile carries the mark its row in the sidebar carries (Automations, while a run failed), read only while the home is seen |
-| **Working** | the agents at work, five, then **Show all N** / **Show fewer**; each row is the agent's name (the heading says the state) and opens its agent |
+| **Running** | the agents that run (a bb agent that works; a tmux agent that runs: the heading is true of every row), five, then **Show all N** / **Show fewer**; each row is the agent's name (the heading says the state) and opens its agent; a row is ONE line at every width (the soul gives way, then is not drawn), and takes a second only where a reason that warns or the tmux glyph cannot stand whole beside the name: neither is ever clipped (P20; THE FIT in `app/home/Home.tsx`, the one measure a card's first line uses too) |
+| **Lost** | the agents whose session was lost (their roster row says "Lost"; not the ones a person stopped), in the roster's order, one line each: the name, the soul, where it runs, and its act: **Start…**, which opens that agent's Start dialog (off while the roster shown is the last one read, and behind a done Start until the roster is read again); or, for an agent on bb whose thread bb lists, **Open**, which opens that thread: a message there is the way on (one rule with the thread's line: Start… would begin a new conversation). Headed with the roster's own word and their count ("Lost 8"); not drawn with none. The one place where eight lost agents are eight presses in one list |
 | **Unread** | idle agents whose thread holds something you have not read; not drawn with none |
-| **Home › Agents** | `/plugins/oats/home/agents`, reached by that address alone (nothing on the home, the page or the tab, leads to it: the home has no tile for the agents, and the sidebar lists every one), headed **Agents N**: **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its state in words and, beside its name on one line, its soul, the reason where it has no thread (what became of it: "deleted in bb", "archived in bb", …; "session lost"), and for one on tmux bb's terminal glyph named "tmux" (the row's one order; the reason gives way first); over them the home's one count line, "3 working · 3 need you · 1 idle · 1 stopped": every agent counted once, by the state every place says for it (`app/roster/status.ts`), so the numbers are the sidebar's (working and need you are always said; another state only when it has agents); and **‹ Home** (Esc does the same). Its machine and who started it are on an agent's own page |
+| **Home › Agents** | `/plugins/oats/home/agents`, reached by that address alone (nothing on the home, the page or the tab, leads to it: the home has no tile for the agents, and the sidebar lists every one), headed **Agents N**: **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its state in words and, beside its name on one line, its soul, the reason where it has no thread (what became of it: "deleted in bb", "archived in bb", …; "session lost"), and for one on tmux bb's terminal glyph named "tmux" (the row's one order; the reason gives way first); over them the home's one count line, "3 running · 3 need you · 1 idle · 1 stopped" (the word of the list's heading for those that work): every agent counted once, by the state every place says for it (`app/roster/status.ts`), so the numbers are the sidebar's (working and need you are always said; another state only when it has agents); and **‹ Home** (Esc does the same). Its machine and who started it are on an agent's own page |
 | **New agent** | first on every home (the page, Home › Agents, and the tab), where New agent has somewhere to open; off behind the CLI card and while the roster shown is the last one read, with no reason beside it: the card, or the roster's notice, is on the same screen (the card is drawn on Home › Agents too) |
 | an empty workspace | "No agents yet."; **New agent**, over it, is drawn as the one thing to press |
 
@@ -503,6 +613,16 @@ again; one that fails says so on the card ("Check failed: …")
 and keeps what was read before. The version is read by a call of the home's own (`app/home/cli.ts`),
 not by a kept query, so that the home knows when a check ends.
 
+**One rule for every New agent** (`newAgentHeld`, `app/workspace/pages.ts`). The sidebar's New
+agent and the home's are held by the same rule, so one is never live where the other is off: off
+while the roster shown is the last one read, and off behind an `oats` the plugin does not work
+with (older, a newer API, a version it cannot tell). The sidebar is on screen before any home is,
+so it reads where the installed `oats` stands itself, the same way, when it is first seen; the
+answer is one for the window, and the home's Check again moves the sidebar's button with the
+home's. While that is not read yet, or its read failed, New agent is on: nothing is known against
+it. The sidebar says nothing beside its button: the home's card, and the notice over the roster,
+say why.
+
 It is one RPC, `homeCli`, which answers picked fields (`version`, `desktopApi`, `state`) from the
 `oats version --json` the server reads once for every feature: no process of its own. An `oats`
 that cannot be run at all is the roster's notice, not this one.
@@ -522,10 +642,10 @@ that one, not a free-text box beside it as an equal:
 | the kernel says it waits for a tool approval (its claim's reason is `permission`) and bb lists **no** request for its thread: the claim is older than bb's request, bb's request was answered in the thread and the claim not yet cleared, or the approval is asked where bb has no interaction for it | **Answer** in the place of **Open**. The card cannot grant what bb does not list, and does not pretend to |
 | it asks in its own words (a question, its attention) | the **reply**, on its card, named for it ("Write to Release 070 maintainer…"), sent as the person at the screen through bb's own send. The box grows with what is written, so all of what will be sent is in view. There is no reply apart from a card: a message cannot go to another agent than the one read |
 | the kernel cannot reach its session, and it needs you all the same | no choices and no message: nobody can tell where either would go. The card says "Unreachable. Nothing is sent from here." (the word only where the card does not already draw it), with **Open** and no Start (the lifecycle offers none for it) |
-| the kernel calls it STOPPED (an operator's stop, or a stop with no word that its session was lost), and it needs you all the same (bb still holds a request on its thread) | no choices and no message: either would go to its thread and start its harness again outside OATS (a stopped agent stays stopped). The card says "Not running. Start it to answer.", and offers **Start…** (the lifecycle's own act and dialog: it asks the kernel first, and starts the agent through OATS; where the kernel cannot say whether the agent runs, the dialog says so and starts nothing) beside **Open** |
-| the kernel says it does not run and NOBODY STOPPED IT (its session was lost, it ended in a shell, or no harness is loaded), on a thread bb lists (one whose last turn bb calls failed included) | answered as any other agent: its choices, or the reply. A message in its thread is the provider's designed way back for such a session, and OATS reads it running at its next read; the Start dialog says the same first (`messageResumes`, `model/rest.ts`: one reading for the card, the dialog and the thread's line) |
-| it has no thread in bb: it runs in tmux | "tmux" under its name, "Answer it in its terminal.", and **Open**, which leads to its own page: the kernel's own command (`oats session attach --home <its home>`) is there, to copy |
-| it has no thread bb lists | what became of it under its name, as far as bb's answer goes, the reason alone: "deleted in bb", "archived in bb", "no bb thread" or "thread not shown in bb" (the sidebar's own words); no reply and no sentence; **Open**, whose accessible name says where it leads: the archived thread where bb has one (the press opens it, as the sidebar's row does), else the agent's own page |
+| the kernel calls it STOPPED (an operator's stop, or a stop with no word that its session was lost), and it needs you all the same (bb still holds a request on its thread) | no choices and no message: either would go to its thread and start its harness again outside OATS (a stopped agent stays stopped). The card says "Not running.", and offers **Start…** (the lifecycle's own act and dialog: it asks the kernel first, and starts the agent through OATS; where the kernel cannot say whether the agent runs, the dialog says so and starts nothing) beside **Open** |
+| the kernel says it does not run, NOBODY STOPPED IT, and a fact shows that a message carries it on (its session was lost, or no harness is loaded), on a thread bb lists (one whose LATER turn bb calls failed included, once bb has said that a turn started there) | answered as any other agent: its choices, or the reply. A message in its thread is the provider's designed way back for such a session, and OATS reads it running at its next read; the Start dialog says the same first (`messageResumes`, `model/rest.ts`: one reading for the card, the dialog and the thread's line). NOT a harness that ended by itself (a shell, "exited"), and not a thread in "error" bb has not answered for: those cards read "Not running. Start it to answer." |
+| it has no thread in bb: it runs in tmux | "tmux" on its name's line, "Answer it in its terminal.", and **Open**, which leads to its own page: the kernel's own command (`oats session attach --home <its home>`) is there, to copy |
+| it has no thread bb lists | what became of it on its name's line, as far as bb's answer goes, the reason alone: "deleted in bb", "archived in bb", "no bb thread" or "thread not shown in bb" (the sidebar's own words); no reply and no sentence; **Open**, whose accessible name says where it leads: the archived thread where bb has one (the press opens it, as the sidebar's row does), else the agent's own page |
 
 Beside choices, or a request answered in the thread, a message is still possible, behind **Message
 instead**, which first says what a message does not do: "A message does not answer its
@@ -562,8 +682,8 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the soul's mark and the instance's name as words, its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message (with none, "approval" for a tool approval), and since when ("since 14:03"; how long it waits is the status line's to say, once). **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the panel's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: the owning human, and the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; then the messaging ID, with its Copy. |
-| **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's); **Details** (the agents root, with its Copy). The soul's description is two lines at most here, whole on the soul's page. |
+| **Instance** | the instance's name as words, with the two letters of that name in a tile beside it (the name's own initials, never its soul's), its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message alone (with none, "approval" for a tool approval). How long it waits is the status line's to say, once ("Needs you · 5 d"); since when, by the clock, is no second line of the page and no tooltip: the Activity's "Waiting claim" row holds the claim's instant. **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the card's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: on the page's face the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; under its fold (**Details**, closed) the owning human and the messaging ID, with its Copy: asked for, not read on every page. |
+| **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's: its fold says what was observed, the soul and the agents root). No fold stands alone at the tab's foot. The soul's description is two lines at most here, whole on the soul's page. |
 
 The Instance tab ends with two more sections. **Readiness** (`oats readiness`): one line
 that says whether it is ready ("Ready", or how many checks fail), then, behind "Checks and
@@ -598,11 +718,14 @@ that reading again cannot change as things are, the notice offers none, and the 
 way to read again for whoever mended it (Refresh; on the Soul tab, Retry). A read again
 that fails keeps what was read under the same titled notice ("Readiness could not be read again"),
 which says once how old what is shown is, always relative ("Read 12 min ago.").
-When OATS itself cannot be read, the panel says it in the words the sidebar and the thread's row
-say it (`app/roster/unreadable.tsx`: `Unreadable` whole where nothing was ever read, `failureWords`
-in the same notice over what was read).
+When OATS itself cannot be read, the panel as an agent's PAGE says it, whole, in the notice every
+place shows (`app/roster/unreadable.tsx` `Unreadable`, with the age of what it keeps and that the
+acts are off). As the TAB beside a thread it draws no notice of the roster's over what it read:
+the thread's own line says it, once on the screen, and the tab only holds its buttons. Where
+nothing was ever read it shows the notice whole in either place. Its own notice ("This instance
+could not be read again") is for its own read's failure.
 
-Who the agent is and where it is (the soul's mark, its name, the status line, its soul's name, the
+Who the agent is and where it is (its name with the name's two letters, the status line, its soul's name, the
 older-build fold) stands over the tabs and does not scroll: a page scrolled to its activity, at any
 width, still names the agent and its state.
 
@@ -661,7 +784,8 @@ leave out: whatever a release shows, an agent can be started.
 | **Soul** | the souls OATS lists, each with its description, with a filter over them from eight on. A soul that cannot be spawned is drawn apart in the list and says why under the field. |
 | **Opening instruction · optional** | what the agent should do. Empty, it starts and waits for its person. |
 | **Harness** | "The soul's default" (nothing is passed, and the entry says what the kernel resolved: "The soul's default: pi"), or one the bb session provider declares. A harness bb cannot run on this machine is marked at the choice ("pi · not installed in bb") and the line under the field says only the way on ("Install it in bb’s settings, or pick another."; the mark says the fault, and the soul's default carries it too when it resolves to such a harness): bb's own state of its providers (`sdk.system.providerStates`), never a guess; it can still be chosen, and the kernel and the provider decide. With one harness declared there is no field; when the list cannot be read the field says so, with Retry, and a spawn uses the soul's default. |
-| **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…**, which opens a field for a typed model id. Spawn is held for the model in two cases, each said in two words at most, once, as the field's mark: the off button is described by it (`aria-describedby`), with no copy beside it (`model/spawn.ts` `modelCheck`, one rule with its table in `test/spawn/model.test.ts`). **Required**: the person chose a harness that is not the soul's own (the one the kernel resolves when none is chosen: kept from that preview, or asked once where a harness was picked before the soul) and the kernel resolves no model for it (the soul's model is another harness's); the column then names the harness alone and the field's first entry reads "Default" alone: no default is promised. While bb's list of models for the harness is being read, Spawn is off with "Reading…". A list bb has not given after 10 seconds reads as not read (Spawn goes on the kernel's answer, as where bb gives no list), and the rule is read on it if it answers later: a call of bb's that never settles does not hold the form. **Pick provider**: the model the spawn would send (picked or typed, else the one the kernel resolved from the soul) is a bare id that several of the models bb lists for the harness serve; exactly those are the ones offered, and they are the ids the bb session provider's own refusal names at the launch (the provider says the same there). Which listed models serve an id is ONE function, `model/served.ts` `served` (read by this form; written for the Restart dialog too), and it is the provider's own resolution: a model's bare id is its id minus the provider bb routes it by (so "openrouter/openai/gpt-6" has the bare id "openai/gpt-6", and "gpt-6" is served by nothing there), and a model bb lists for pi with no provider serves nothing. (That bb's list, as the plugin reads it through the SDK, names each pi model's provider was shown on the real kernel by the pi run of the Restart dialog's change, which lands after this one and keeps the step: a bare id is armed there by its provider, `echo` of `mock/echo`, and a nested one, `nested/echo2` of `mock/nested/echo2`, where its tail `echo2` is not. Where a row names none, nothing is held for it.) For a harness whose models are not resolved by provider (Claude Code) nothing is held for the list: the provider checks a model for pi alone. `test/model/served.contract.test.ts` runs one table through the provider's `piModelVerdict` (`oats-package/capabilities/oats-bb/lib/pi-model.mjs`) and through `served`, and fails on any difference. It is not held for an id that holds a slash (where bb's list is not whole such an id may be a held-back model's exact id, and the provider lets it go), nor while bb's list is not read or holds nothing: the kernel's answer then stands. One limit: for a minute after pi's configuration changed the provider does not refuse two listed models, and the form, which has the list alone, still asks for the provider. **That no listed model serves the id is not the form's to judge** ("Not found" is not said): bb's list leaves out models a thread still starts on (an id that ends in a date, a list pi's own configuration narrows, a list older than pi's configuration), and the form must never hold an agent the provider would start. Such a model is armed, the preview passes (a planned launch carries no model at this kernel), and the provider judges it at the launch: it refuses the spawn (`E_BACKEND_LAUNCH_ARG`: "pi has no model …", rolled back, nothing left behind), and the form says the kernel's whole message once under "The agent was not spawned", marks no field, holds nothing, and is editable again; or, where it cannot check the model, it lets the launch go with a warning that this kernel does not carry to the form: nothing is said, and the agent then starts, or its thread fails at its start and the form says it did not start. The soul's own harness with no model declared is not held: bb starts it on its own default, and the column says so. |
+| *(no bb session provider)* | Where the deployment's workspace does not have the bb session provider (`oats capabilities show oats.bb` answers `E_CAPABILITY_UNKNOWN`), that read is an ANSWER, not a failure (`kernel/spawn.ts` `spawnHarnesses`: `absent`, with the kernel's code and sentence). The form opens and says, once, **bb is not set up for this workspace.** (the kernel's code and sentence under its Details); its fields are held, Spawn is off and described by that line, and the kernel is asked for no preview (it would refuse the bb backend: `E_BACKEND_UNKNOWN`). No Harness field, no red sentence, no Retry. Any OTHER failure of that read keeps its sentence and its Retry. Known, and accepted for now: the kernel uses the same code for a package that is not in the lock yet (a workspace one `oats sync` behind) and for a capability missing from a member; those read as absent too, with the kernel's own sentence under the line's Details. While the harness read is still out (the form's first opening) the kernel is asked for NO preview: the form reads ("Reading…") until it is known whether the deployment has the provider, so no refusal of the bb backend flashes before the one line; where the provider is there the same preview is asked a moment later. The answer is kept by the server for 30 s: after an `oats sync` that brings the provider, the form opened again half a minute on has it. Unit tests on the server's answer and the page; no live stage has such a deployment. |
+| **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…**, which opens a field for a typed model id. Spawn is held for the model in two cases, each said in two words at most, once, as the field's mark: the off button is described by it (`aria-describedby`), with no copy beside it (`model/spawn.ts` `modelCheck`, one rule with its table in `test/spawn/model.test.ts`). **Required**: the person chose a harness that is not the soul's own (the one the kernel resolves when none is chosen: kept from that preview, or asked once where a harness was picked before the soul) and the kernel resolves no model for it (the soul's model is another harness's); the column then names the harness alone, and the field reads "Choose a model…" with no "Default" in its list: there is no default, and none is promised. While bb's list of models for the harness is being read, Spawn is off with "Reading…". A list bb has not given after 10 seconds reads as not read (Spawn goes on the kernel's answer, as where bb gives no list), and the rule is read on it if it answers later: a call of bb's that never settles does not hold the form. **Pick provider**: the model the spawn would send (picked or typed, else the one the kernel resolved from the soul) is a bare id that several of the models bb lists for the harness serve; exactly those are the ones offered, and they are the ids the bb session provider's own refusal names at the launch (the provider says the same there). Which listed models serve an id is ONE function, `model/served.ts` `served` (read by this form; written for the Restart dialog too), and it is the provider's own resolution: a model's bare id is its id minus the provider bb routes it by (so "openrouter/openai/gpt-6" has the bare id "openai/gpt-6", and "gpt-6" is served by nothing there), and a model bb lists for pi with no provider serves nothing. (That bb's list, as the plugin reads it through the SDK, names each pi model's provider was shown on the real kernel by the pi run of the Restart dialog's change, which lands after this one and keeps the step: a bare id is armed there by its provider, `echo` of `mock/echo`, and a nested one, `nested/echo2` of `mock/nested/echo2`, where its tail `echo2` is not. Where a row names none, nothing is held for it.) For a harness whose models are not resolved by provider (Claude Code) nothing is held for the list: the provider checks a model for pi alone. `test/model/served.contract.test.ts` runs one table through the provider's `piModelVerdict` (`oats-package/capabilities/oats-bb/lib/pi-model.mjs`) and through `served`, and fails on any difference. It is not held for an id that holds a slash (where bb's list is not whole such an id may be a held-back model's exact id, and the provider lets it go), nor while bb's list is not read or holds nothing: the kernel's answer then stands. One limit: for a minute after pi's configuration changed the provider does not refuse two listed models, and the form, which has the list alone, still asks for the provider. **That no listed model serves the id is not the form's to judge** ("Not found" is not said): bb's list leaves out models a thread still starts on (an id that ends in a date, a list pi's own configuration narrows, a list older than pi's configuration), and the form must never hold an agent the provider would start. Such a model is armed, the preview passes (a planned launch carries no model at this kernel), and the provider judges it at the launch: it refuses the spawn (`E_BACKEND_LAUNCH_ARG`: "pi has no model …", rolled back, nothing left behind), and the form says the kernel's whole message once under "The agent was not spawned", marks no field, holds nothing, and is editable again; or, where it cannot check the model, it lets the launch go with a warning that this kernel does not carry to the form: nothing is said, and the agent then starts, or its thread fails at its start and the form says it did not start. The soul's own harness with no model declared is not held: bb starts it on its own default, and the column says so. |
 | **Relationship** | Independent, Child of, Sibling of or Parent of, then the choice of the instance ("Choose an instance…", with no label over it): one of the roster's, by its name as words with its soul. Nothing under it repeats the choice. |
 | **Name · optional** | exactly what is typed, in lower case. Empty, the kernel numbers the agent (the column's Name row says so). A name that cannot be used says its fault under the field, and nothing else stands under it. |
 

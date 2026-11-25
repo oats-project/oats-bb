@@ -30,6 +30,7 @@ import { refusalCode, shown } from "../ui/text";
 import { agentName, readAge, showingRead } from "../ui/words";
 import { notify } from "../ui";
 import { restartModel } from "../../model/restart-model";
+import { Choice } from "../spawn/Choice";
 import { harnessLabel, KEEP_HARNESS, resolvedLabel, useModelSuggestions } from "../spawn/models";
 import {
   applyRefused,
@@ -80,6 +81,26 @@ function set(next: Request | null): void {
   current = next;
   for (const listener of [...listeners]) listener();
 }
+/** The acts that were sent and have not answered yet, whether their dialog is still there or not. */
+let inFlight = 0;
+/** The app window the count is of: an act sent in a window that is gone lands in nobody's count. */
+let flightsOf = 0;
+/** Count an act from its sending to its answer (a result or a refusal). */
+function flying<T>(sent: Promise<T>): Promise<T> {
+  const window = flightsOf;
+  inFlight += 1;
+  for (const listener of [...listeners]) listener();
+  const landed = () => {
+    if (window !== flightsOf) return;
+    inFlight -= 1;
+    for (const listener of [...listeners]) listener();
+  };
+  sent.then(landed, landed);
+  return sent;
+}
+const busyNow = () => current !== null || inFlight > 0;
+/** Whether an act of ours is in flight or its dialog is on screen: what happens to an agent's thread meanwhile may be the act's own doing (app/lifecycle/left.ts). */
+export const useActsBusy = (): boolean => useSyncExternalStore(subscribe, busyNow, busyNow);
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -89,6 +110,8 @@ const get = () => current;
 // A new app window starts with nothing asked.
 onWindowReset(() => {
   current = null;
+  inFlight = 0;
+  flightsOf += 1;
   listeners.clear();
 });
 
@@ -165,7 +188,7 @@ const dialogOf = (): HTMLElement | null => document.querySelector<HTMLElement>('
 
 /**
  * The focus when a dialog that was reading becomes ready: on the control the pattern marks (Cancel
- * for a destructive act, a form's first field, else the act), if it was left on the dialog itself
+ * for a destructive act and for one that cuts a turn, else the act), if it was left on the dialog itself
  * because that control was not there, or was off, while the kernel was asked.
  */
 function useFocusWhenReady(ready: boolean): void {
@@ -221,7 +244,7 @@ function useKeepFocus(): void {
  * line that says the act runs, the result or the refusal when it arrives; and a plan, or a notice
  * above it, is read from its top. `what` names the moment; it moves nothing while it stays the same.
  */
-function useReveal(what: "top" | "first" | "running" | "result" | "warning" | "kept" | null): void {
+function useReveal(what: "top" | "first" | "running" | "result" | "warning" | null): void {
   useEffect(() => {
     if (what === null) return;
     const reveal = () => {
@@ -229,7 +252,7 @@ function useReveal(what: "top" | "first" | "running" | "result" | "warning" | "k
       if (dialog === null) return;
       // "first": a notice that must be read first came with the plan; the focus that went to a field below it scrolled it away.
       if (what === "top" || what === "first") dialog.closest<HTMLElement>('[data-testid="oats-modal-body"]')?.scrollTo?.({ top: 0 });
-      else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-confirm-running" : what === "result" ? "oats-result" : what === "kept" ? "oats-act-warning" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
+      else dialog.querySelector<HTMLElement>(`[data-testid="${what === "running" ? "oats-confirm-running" : what === "result" ? "oats-result" : "oats-plan-warning"}"]`)?.scrollIntoView?.({ block: "nearest" });
     };
     reveal();
     // Once more when the dialog has said what is out of sight ("More above", "More below"): those lines take room of their own.
@@ -264,6 +287,9 @@ function settledPhase(outcome: Outcome, actions: ReactNode): ConfirmProps["phase
   // A result that is not confirmed is neither done nor failed: the pattern draws it as that.
   // (A done result whose title is a warning is drawn in the warning tone, which the pattern has for a result that is not confirmed.)
   if (outcome.tone !== "failed") return { kind: "done", tone: outcome.attention === true ? "unknown" : outcome.tone, title: outcome.title, lines: outcome.lines, warns: outcome.warns === true, actions: next };
+  // A warning (a retire that kept the home): the headline first, then the warning as the result's first line, in
+  // the warning tone, then the facts. (Not a box above the headline.)
+  if (outcome.warning !== undefined) return { kind: "failed", title: outcome.title, refusal: [outcome.warning.title, ...outcome.lines].join("\n"), warns: true, actions: next };
   return { kind: "failed", title: outcome.title, refusal: outcome.lines.join("\n"), actions: next };
 }
 
@@ -399,13 +425,13 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     };
     const answered =
       plan.action === "stop"
-        ? rpc.call("stopApply", { instance, revision: plan.revision, key, recursive: plan.recursive }).then(async (receipt) => {
+        ? flying(rpc.call("stopApply", { instance, revision: plan.revision, key, recursive: plan.recursive })).then(async (receipt) => {
             const onBb = plan.targets.some((target) => target.backend === "bb");
             // What the stop left of the agent's thread is what bb SHOWS of it now, where bb answers; else what the confirmation said.
             const archived = receipt.ok && onBb && threadId !== null ? await threadArchived(sdk, threadId) : null;
             return { outcome: stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? stopArchivesThread(versionOf(plan))), changed: { agents: receipt.results.filter((row) => row.ok).map((row) => row.instance), endedAt: receipt.endedAt } };
           })
-        : rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard }).then((receipt) => {
+        : flying(rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard })).then((receipt) => {
             const outcome = retireOutcome(receipt, plan);
             // (A retire that was only accepted, or did not finish, does not say its agent was retired: the children it stopped are named all the same.)
             return { outcome, changed: { agents: [...(outcome.tone === "done" ? [receipt.instance] : []), ...receipt.children.filter((row) => row.ok).map((row) => row.instance)], endedAt: receipt.endedAt } };
@@ -444,7 +470,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
   // A plan that changed under the confirmation is not armed: it comes back for review with the
   // focus on Cancel, and is confirmed only after "Review again" has read it once more.
   // A result with a warning of its own (a home that was kept) is read from that warning.
-  useReveal(state.phase === "applying" ? "running" : state.phase === "settled" ? (state.outcome.warning === undefined ? "result" : "kept") : "top");
+  useReveal(state.phase === "applying" ? "running" : state.phase === "settled" ? "result" : "top");
   // What a choice would lose is said under it the moment it is turned on: it is brought on screen with it.
   useReveal(state.phase === "ready" && view?.choice?.deletes ? "warning" : null);
   const changed = state.phase === "ready" ? state.changed : null;
@@ -483,9 +509,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
 
   return (
     <Confirm
-      // The agent is named from the kernel's plan, never from the row that was pressed: the roster
-      // on screen may be older than what the kernel knows. Until a plan is read no agent is named.
-      title={titleOf(verb, shownFor, plan !== null, state.phase === "settled" && state.sent !== null)}
+      // The title names the agent that was ASKED for, in every state (reading, unreadable, gone, the result). The
+      // PLAN is the kernel's: one it answers for another agent, or for none, is refused below (`about` against
+      // `shownFor`) and never drawn under this name; the roster on screen may be older than what the kernel knows.
+      title={titleOf(verb, instance, state.phase === "settled")}
       about={instance}
       shownFor={shownFor}
       // Once the act has an answer the plan gives way to it, a refusal as a result: what it would do, over
@@ -516,12 +543,6 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
       onClose={close}
       returnFocus={returnFocus}
     >
-      {state.phase === "settled" && state.outcome.warning !== undefined ? (
-        // What a person must read first, in the warning tone; the rest is under the result's one Details (a retire that kept the home).
-        <div data-testid="oats-act-warning">
-          <Notice title={state.outcome.warning.title} tone="warning" />
-        </div>
-      ) : null}
       {view === null || state.phase === "settled" ? null : (
         <div data-testid="oats-plan" className="flex min-w-0 flex-col gap-3">
           {view.attention.length === 0 ? null : (
@@ -744,6 +765,12 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
   // model to choose. On tmux: no thread and no choice; and where its session was LOST, a resume, unless the
   // person turned on the plain start.
   const onBb = known === null || known.backend === "bb";
+  // Whether the agent works on a turn NOW: bb's own word on its thread, as the roster holds it (the Stop dialog's
+  // reading), of an agent the kernel does not say has stopped running. Known for an agent on bb alone: of one on
+  // tmux nobody knows, and nothing is said.
+  const itsNode = oats.phase === "ready" ? oats.nodeByInstance.get(instance) : undefined;
+  const working = known !== null && known.backend === "bb" && known.running !== false && itsNode !== undefined && itsNode.thread !== null && threadWorks(itsNode.thread);
+  const interrupts = verb === "restart" && working;
   const lost = verb === "start" && known !== null && resumable(known);
   const resumes = lost && !fresh;
 
@@ -753,7 +780,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
     setChanged(false);
     setState({ phase: "running", check: checked });
     const asked = verb === "start" && resumes ? { instance, resume: true as const } : { instance, ...(onBb && harness !== "" ? { harness } : {}), ...(onBb && typed !== "" ? { model: typed } : {}) };
-    rpc.call(verb, asked).then(
+    flying(rpc.call(verb, asked)).then(
       (started) => {
         const outcome = startOutcome(verb, started.instance ?? checked.instance, started);
         // (As for a stop: "Reading…" for this agent until the window holds a roster read after the act ended: app/roster/reading.tsx.)
@@ -840,13 +867,16 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
 
   return (
     <Confirm
-      // Named from the kernel's row as read for this dialog, never from the row that was pressed.
-      title={titleOf(verb, known?.instance ?? null, known !== null)}
+      // The title names the agent that was ASKED for, in every state; the row the kernel answered for another agent
+      // is refused (`about` against `shownFor`), never drawn under this name.
+      title={titleOf(verb, instance)}
       about={instance}
       shownFor={known?.instance ?? null}
       // What a start does is said of an agent the kernel has named: a check that failed says none of it.
       // And once the start has an answer, none of it either: a refusal is not read under what it would have done.
-      says={known === null || state.phase === "settled" ? [] : startSays(verb, { resumes })}
+      says={known === null || state.phase === "settled" ? [] : startSays(verb, { resumes, working })}
+      // A restart of an agent that works on a turn now cuts it: the focus starts on Cancel, and on no field.
+      interrupts={interrupts}
       confirmLabel={verb === "restart" ? "Restart" : "Start"}
       // Why Start is off is said ONCE, on the status line under the fields (with Refresh status, or the way to its
       // thread): the button is off (`held`) with no second copy of the sentence beside it. Nothing stands
@@ -884,7 +914,7 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           {/* The dialog's ONE fold: the access it runs with, and the facts of the agent a person does not decide on. */}
           <Disclosure summary="Details" testId="oats-start-details">
             <div className="flex min-w-0 flex-col gap-2">
-              {startDetails(verb, { onBb }).map((line, index) => (
+              {startDetails({ onBb }).map((line, index) => (
                 <p key={index} className="break-words">
                   {line}
                 </p>
@@ -922,14 +952,16 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
           ) : null}
           {onBb && known.harnesses.length > 1 ? (
             <Field label={START.harness}>
-              <select data-testid="oats-start-harness" className={INPUT} value={harness} disabled={!editable} {...(editable ? { "data-autofocus": "" } : {})} onChange={(event) => setHarness(event.currentTarget.value)}>
-                <option value="">{shown(resolvedLabel(KEEP_HARNESS, recorded))}</option>
-                {known.harnesses.map((id) => (
-                  <option key={id} value={id}>
-                    {shown(harnessLabel(id))}
-                  </option>
-                ))}
-              </select>
+              {/* The plugin's own choice (the New agent form's), in the look of a field on bb's tokens: never the browser's select. */}
+              <Choice
+                testId="oats-start-harness"
+                value={harness}
+                disabled={!editable}
+                placeholder={shown(resolvedLabel(KEEP_HARNESS, recorded))}
+                filterLabel={START.harness}
+                options={[{ id: "", label: shown(resolvedLabel(KEEP_HARNESS, recorded)) }, ...known.harnesses.map((id) => ({ id, label: shown(harnessLabel(id)) }))]}
+                onChange={setHarness}
+              />
             </Field>
           ) : null}
           {/* A home on tmux starts with the launch it recorded: bb's harnesses and their models are no choice of its start. */}
@@ -948,7 +980,6 @@ function StartDialog({ request }: { request: Request & { verb: RunVerb } }) {
               spellCheck={false}
               value={model}
               disabled={!editable}
-              {...(editable && known.harnesses.length <= 1 ? { "data-autofocus": "" } : {})}
               placeholder={running !== null && running === recorded && known.model !== null ? shown(known.model) : "Harness default"}
               onChange={(event) => setModel(event.currentTarget.value)}
             />

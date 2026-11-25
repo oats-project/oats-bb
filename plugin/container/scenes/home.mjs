@@ -28,6 +28,15 @@ import { fileURLToPath } from "node:url";
 import { fill, gapsIn, loose, MAX_GAP, testId, textOf, texts, textsNamed, showSidebar, tight } from "../browser.mjs";
 import { FAILS, fits, printing, refresh, setVerb, settled } from "./panel.mjs";
 
+/**
+ * The sidebar's New agent (the roster's foot), where the sidebar is drawn beside the page: "on", "off", or "absent".
+ * With `want`, an expression for `page.until`: that word once the button says it, "" until then.
+ */
+const sideNewAgent = (want) => {
+  const read = `(() => { const button = document.querySelector('[data-testid="oats-new-agent"]'); return button === null ? "absent" : button.disabled ? "off" : "on"; })()`;
+  return want === undefined ? read : `(${read} === ${JSON.stringify(want)} ? ${JSON.stringify(want)} : "")`;
+};
+
 /** The oldest OATS the plugin works with, as kernel/compat.ts holds it: the card's "Required" says it. */
 const FLOOR = /OATS_FLOOR = "([^"]+)"/.exec(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "kernel", "compat.ts"), "utf8"))[1];
 /** The recorded `oats version --json`, for a scene that changes what is installed. */
@@ -243,7 +252,11 @@ export default [
       const needs = await page.until(`${heading("oats-home-needs", "needs you 3")} ? ${headingOf("oats-home-needs")} : ""`, 15);
       check(Boolean(needs), `${at} three agents need the person`, await page.evaluate(headingOf("oats-home-needs")));
       // every card: the agent's name as words (its soul under it, no machine), what it asks, and the answer its request takes
-      const cards = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(within("oats-needs-card"))})].map((card) => ({ instance: card.dataset.instance, offer: card.dataset.offer, name: card.querySelector('[data-testid="oats-needs-name"]')?.innerText.trim(), state: card.querySelector('[data-testid="oats-state"]')?.innerText.replace(/\\s+/g, " ").trim(), mark: card.querySelector('[data-testid="oats-state"] [data-mark][role="img"]')?.getAttribute("aria-label") ?? null, open: card.querySelector('[data-testid="oats-needs-open"]')?.innerText.trim(), replyShown: [...card.querySelectorAll('[data-testid="oats-reply-text"]')].some((box) => box.checkVisibility()), reply: card.querySelector('[data-testid="oats-reply-text"]')?.getAttribute("aria-label") ?? null, text: card.innerText.replace(/\\s+/g, " ").trim() })))`));
+      const cards = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(within("oats-needs-card"))})].map((card) => ({ instance: card.dataset.instance, offer: card.dataset.offer, name: card.querySelector('[data-testid="oats-needs-name"]')?.innerText.trim(), state: card.querySelector('[data-testid="oats-state"]')?.innerText.replace(/\\s+/g, " ").trim(), mark: card.querySelector('[data-testid="oats-state"] [data-mark][role="img"]')?.getAttribute("aria-label") ?? null, open: card.querySelector('[data-testid="oats-needs-open"]')?.innerText.trim(), replyShown: [...card.querySelectorAll('[data-testid="oats-reply-text"]')].some((box) => box.checkVisibility()), reply: card.querySelector('[data-testid="oats-reply-text"]')?.getAttribute("aria-label") ?? null, text: card.innerText.replace(/\\s+/g, " ").trim(), oneLine: (() => { const box = (id) => card.querySelector('[data-testid="' + id + '"]')?.getBoundingClientRect(); const name = box("oats-needs-name"); const on = (id) => { const part = box(id); return Boolean(name && part) && part.top < name.bottom && part.bottom > name.top && part.left >= name.right - 1; }; /* a wait that says more than its age keeps a line of its own */ const words = card.querySelectorAll('[data-testid="oats-status-line"] [data-testid="oats-status-part"]').length > 1; const part = (phrase) => card.querySelector('[data-testid="oats-needs-where"] [data-phrase="' + phrase + '"]'); const where = box("oats-needs-where"); const fit = card.querySelector("[data-fit]")?.getAttribute("data-fit") ?? null; const reason = part("reason"); const soul = part("soul"); const state = box("oats-state"); /* THE FIT (app/home/Home.tsx): beside the name; under it, whole; or, where even the held part does not fit there, the mark with its age on the next line */ return { fit, facts: !where || where.width < 12 ? "none" : on("oats-needs-where") ? "beside" : where.top >= name.bottom - 1 ? "under" : "none", cut: Boolean(reason) && (reason.scrollWidth > reason.clientWidth + 1 || reason.getBoundingClientRect().right > where.right + 1), soulCut: fit === "beside" && Boolean(soul) && (() => { const words = document.createRange(); words.selectNodeContents(soul); /* the soul's WORDS against its box, in fractions: a soul squeezed by less than a pixel is cut too */ return words.getBoundingClientRect().width > soul.getBoundingClientRect().width + 0.05; })(), wait: words ? "own" : on("oats-state") ? "name" : where && state && state.top < where.bottom && state.bottom > where.top ? "facts" : "alone" }; })() })))`));
+      // The reader's P5: the name, its soul and the mark with the age are ONE line of the card (they were three).
+      // THE FIT: at 1280 one line; at a phone's width beside the name, or under it, whole; the mark with its age after the facts (on its own line only where the fit says "split").
+      check(cards.length === 3 && cards.every((each) => (viewport.mobile ? each.oneLine.facts !== "none" && each.oneLine.fit === (each.oneLine.facts === "beside" ? "beside" : each.oneLine.fit) : each.oneLine.facts === "beside" && each.oneLine.fit === "beside") && (each.oneLine.wait !== "alone" || each.oneLine.fit === "split")), `${at} on each card the soul and the mark with its age stand on the name's line, after the name${viewport.mobile ? "; where a phone's width cannot hold them they stand under the name, whole" : ""}; the mark is never alone on a line but where the reason leaves it no room`, JSON.stringify(cards.map((each) => [each.instance, each.oneLine])));
+      check(cards.every((each) => !each.oneLine.cut && !each.oneLine.soulCut), `${at} and no card cuts its reason, nor its soul while the facts stand beside the name`, JSON.stringify(cards.filter((each) => each.oneLine.cut || each.oneLine.soulCut).map((each) => [each.instance, each.oneLine])));
       check(cards.length === 3 && cards.every((each) => each.reply === `Reply to ${each.name}` && each.state === "!" && each.mark === "Needs input" && !/\bNeeds you\b/.test(each.text) && !each.name.includes("-") && each.open === (each.offer === "in-thread" ? "Answer" : "Open") && /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(each.text) && !new RegExp(MACHINE).test(each.text)), `${at} each card names its agent in words, keeps the mark (named for a screen reader) with no "Needs you" of its own (the heading says it), has Open, or Answer where its request is answered in its thread, and says its soul and no machine`, JSON.stringify(cards));
       // A card is as high as its lines: no empty room between two of them, nor at its edges (a line of a card stretched to
       // ten rem once: an empty 150 px under the soul, which no check of words could see).
@@ -294,7 +307,16 @@ export default [
       check(mark === "Automations, a run failed", `${at} the Automations tile is marked while a run failed, as its row in the sidebar`, mark);
       const working = await page.evaluate(`JSON.stringify(${texts(within("oats-working-row"))})`);
       const repeats = await page.evaluate(`document.querySelectorAll(${JSON.stringify(`${within("oats-working-row")} ${testId("oats-state")}, ${within("oats-finished-row")} ${testId("oats-state")}`)}).length`);
-      check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => !/Working$/.test(row) && /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(row)) && repeats === 0, `${at} every agent at work is a row under the heading "Working", with its soul beside its name: no row repeats the state's word`, working);
+      check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => !/(Working|Running)$/.test(row) && /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(row)) && repeats === 0, `${at} every agent at work is a row under the heading "Running", with its soul beside its name: no row repeats the state's word`, working);
+      // The reader's P20: a row is ONE line at every width: the facts beside the name, never under it (at 390 a long name sent its soul to a second line).
+      // ONE thing may cost a second line (ruled): a reason that WARNS, or the tmux glyph, that cannot stand whole beside the name: that row says so
+      // (`data-fit="under"`). Never a clipped warning, never a cut glyph.
+      const ROWS = `${within("oats-working-row")}, ${within("oats-finished-row")}`;
+      const rowsRead = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(ROWS)})].map((row) => { const name = row.querySelector('[data-testid="oats-home-agent"]')?.getBoundingClientRect(); const facts = row.querySelector('[data-testid="oats-home-agent-where"]'); const box = facts?.getBoundingClientRect(); const held = facts ? [...facts.querySelectorAll('[data-phrase="where"], [data-phrase="reason"][data-tone="warning"]')] : []; return { row: row.innerText.replace(/\\s+/g, " ").trim(), fit: row.querySelector("[data-fit]")?.getAttribute("data-fit") ?? null, under: row.querySelector("[data-fit]")?.getAttribute("data-fit") === "under", holds: held.length > 0, beside: Boolean(name && box) && box.top < name.bottom && box.bottom > name.top && box.left >= name.right - 1, clipped: held.some((part) => part.getBoundingClientRect().right > box.right + 1 || part.scrollWidth > part.clientWidth + 1) }; }))`));
+      // (A row with no room at all for its facts draws none beside its name: `data-fit="none"`.)
+      const uneven = rowsRead.filter((row) => (row.under ? !row.holds : row.fit === "none" ? row.holds : !row.beside));
+      check(rowsRead.length > 0 && uneven.length === 0, `${at} every row of the Running and the Unread lists has its soul on its name's line, after the name; only a row that holds a warning reason or the glyph may stand on two`, JSON.stringify(uneven));
+      check(rowsRead.every((row) => !row.clipped), `${at} and no row clips a reason that warns or the tmux glyph`, JSON.stringify(rowsRead.filter((row) => row.clipped)));
       const workingGaps = JSON.parse(await page.evaluate(gapsIn(`${within("oats-working-row")}, ${within("oats-finished-row")}`)));
       check(tight(workingGaps), `${at} each row of the Working and the Unread lists is as high as its line: no empty room in it (heights ${[...new Set(workingGaps.map((row) => row.height))].join(", ")} px)`, loose(workingGaps));
       await shown(page, check, at, within("oats-home-tiles"), "the tiles and who works");
@@ -320,7 +342,7 @@ export default [
       // The one count line of the home is here: by state, each agent once; how many there are is the heading's count.
       const summary = await page.evaluate(textOf(within("oats-home-summary")));
       const counted = summary.split(" · ").map((part) => Number(part.split(" ")[0]));
-      check(/^\d+ working · 3 need you/.test(summary) && !/agents/.test(summary) && counted.reduce((sum, n) => sum + n, 0) === 8, `${at} the count line counts each of the 8 agents once, by its state, with no total`, summary);
+      check(/^\d+ running · 3 need you/.test(summary) && !/agents/.test(summary) && counted.reduce((sum, n) => sum + n, 0) === 8, `${at} the count line counts each of the 8 agents once, by its state, with no total`, summary);
       const backWord = await page.evaluate(textOf(within("oats-home-back")));
       check(backWord === "‹ Home", `${at} the way back reads "‹ Home"`, backWord);
       check((await page.evaluate(`document.activeElement?.getAttribute("data-testid") ?? ""`)) === "oats-home-back", `${at} the keyboard is on ‹ Home`, await page.evaluate(`document.activeElement?.getAttribute("data-testid") ?? ""`));
@@ -385,6 +407,8 @@ export default [
         const behind = await page.evaluate(`(() => { const head = document.querySelector(${JSON.stringify(within("oats-home-head"))}); const button = head?.querySelector('[data-testid="oats-home-new-agent"]'); return JSON.stringify({ text: (head?.innerText ?? "").replace(/\\s+/g, " ").trim(), off: button?.disabled ?? null, why: button?.title ?? null }); })()`);
         check(behind === JSON.stringify({ text: "New agent", off: true, why: "" }), `${at} behind the card New agent is off, with no reason beside it or in a title: the card says why`, behind);
         check((await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null`)) === true, `${at} and the roster is still drawn under it`, await page.evaluate(textOf(PAGE)));
+        // The sidebar's New agent is held by the same rule (one rule for every New agent): where the sidebar is drawn beside the home, it is off too.
+        if (!viewport.mobile) check((await page.until(sideNewAgent("off"), 20)) === "off", `${at} behind the card the SIDEBAR's New agent is off too: no New agent is live where another is off`, await page.evaluate(sideNewAgent()));
         await sound(page, viewport, check, at, "the CLI card");
         await page.shot(`home-${viewport.name}-cli-older`);
 
@@ -393,6 +417,7 @@ export default [
         check(await open(page, within("oats-home-cli")), `${at} an oats that speaks a newer desktop API draws the card`, await page.evaluate(textOf(PAGE)));
         const newerApi = await page.until(`(() => { const text = ${cardText}; return text.startsWith("newer-api") ? text : ""; })()`, 15);
         check(Boolean(newerApi) && newerApi === "newer-api | This plugin is older than the installed oats CLI Update the OATS plugin. Detected 0.74.0 Check again", `${at} the card names the plugin as the older one, says what to do in four words, and offers no npm command`, newerApi ?? (await page.evaluate(cardText)));
+        if (!viewport.mobile) check((await page.until(sideNewAgent("off"), 20)) === "off", `${at} behind the newer-API card the SIDEBAR's New agent is off too`, await page.evaluate(sideNewAgent()));
         await sound(page, viewport, check, at, "the newer-API card");
         await page.shot(`home-${viewport.name}-cli-newer-api`);
 
@@ -406,6 +431,7 @@ export default [
         check(await open(page, within("oats-home-needs")), `${at} with an oats of a later minor the home draws`, await page.evaluate(textOf(PAGE)));
         const later = await page.until(`(() => { const button = document.querySelector(${JSON.stringify(within("oats-home-new-agent"))}); return document.querySelector(${JSON.stringify(within("oats-home-cli"))}) === null && button && !button.disabled ? JSON.stringify({ line: document.querySelector(${JSON.stringify(within("oats-home-cli-line"))}) !== null, said: /tested with|0\\.71\\.2|Check again/.test(document.querySelector(${JSON.stringify(PAGE)}).innerText) }) : ""; })()`, 20);
         check(later === JSON.stringify({ line: false, said: false }), `${at} an oats of a later minor: no line and no card, nothing said of it, and New agent is on`, later ?? (await page.evaluate(textOf(PAGE))));
+        if (!viewport.mobile) check((await page.until(sideNewAgent("on"), 20)) === "on", `${at} and the SIDEBAR's New agent is on with it`, await page.evaluate(sideNewAgent()));
 
         // After the install the person asks again, on the page: the notice goes without a reload.
         installed({ version: "0.69.4" });
@@ -453,7 +479,7 @@ export default [
       };
       const first = await drawer("first");
       const rows = Object.fromEntries(JSON.parse(first || (await page.evaluate(roster)) || "[]"));
-      check(Object.keys(rows).length === 8 && rows[idle.id] === "Idle · knowledge-harvester" && rows[stopped.id] === "Stopped · oats-expert" && rows[TMUX] === "Working · oats-developer · tmux", `${at} the drawer holds every agent of the roster, each with its state: an idle one, a stopped one and the one on tmux among the eight`, JSON.stringify(rows));
+      check(Object.keys(rows).length === 8 && rows[idle.id] === "Idle · knowledge-harvester" && rows[stopped.id] === "Stopped · oats-expert" && rows[TMUX] === "Running · oats-developer · tmux", `${at} the drawer holds every agent of the roster, each with its state: an idle one, a stopped one and the one on tmux among the eight`, JSON.stringify(rows));
       await page.shot(`home-${viewport.name}-drawer`);
       // An idle agent's row opens its thread.
       await page.evaluate(`document.querySelector(${JSON.stringify(`${SIDE} ${testId("oats-agent-row")}[data-sidebar-thread-id="${idle.id}"]`)}).click()`);
@@ -507,6 +533,13 @@ export default [
         await page.goto(HOME);
         const failed = await page.until(`(() => { const notice = document.querySelector(${JSON.stringify(`${PAGE} ${testId("oats-notice")}`)}); return notice ? notice.querySelector("h3").innerText.trim() + " | " + notice.innerText.replace(/\\s+/g, " ").trim() : ""; })()`, 30);
         check(Boolean(failed) && /Retry/.test(failed) && !/\bRead .+ ago|Last read|Acts are off/.test(failed) && (await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) === null && document.querySelector(${JSON.stringify(within("oats-home-tiles"))}) === null`)) === true, `${at} a first read that failed: one titled notice with Retry, no age of anything kept, and no roster drawn`, failed ?? (await page.evaluate(textOf(PAGE))));
+        // THE NOTICE ONCE where OATS was never read too (the lead's T3, ruled for this state): ONE Retry on the screen, the
+        // page's; the sidebar beside it (where bb shows it: not a drawer) says one line, the notice's title alone, nothing to press.
+        const RETRIES = `[...document.querySelectorAll("button")].filter((b) => b.innerText.trim() === "Retry" && b.getClientRects().length > 0).length`;
+        const beside = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s) return ${JSON.stringify(JSON.stringify({ sidebar: false }))}; const l = s.querySelector(${JSON.stringify(testId("oats-last-observation"))}); return l ? JSON.stringify({ sidebar: true, line: l.innerText.replace(/\\s+/g, " ").trim(), whole: s.querySelector(${JSON.stringify(testId("oats-unreadable"))}) !== null, press: l.querySelectorAll("button, a").length }) : ""; })()`, 15);
+        const title = (failed ?? "").split(" | ")[0];
+        check(beside === JSON.stringify({ sidebar: false }) || beside === JSON.stringify({ sidebar: true, line: title, whole: false, press: 0 }), `${at} beside the home's notice the sidebar says one line, the notice's title alone ("${title}"), with nothing to press (or is not drawn: bb's drawer)`, beside ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        check((await page.evaluate(RETRIES)) === 1, `${at} OATS never read: ONE Retry on the screen, the page's`, String(await page.evaluate(RETRIES)));
         await sound(page, viewport, check, at, "the home that could not be read");
         if (Boolean(failed) && !/\bRead .+ ago|Last read/.test(failed)) await page.shot(`home-${viewport.name}-unreadable`);
       } finally {
@@ -548,14 +581,14 @@ export default [
     run: async ({ page, at, check: plain, record }) => {
       const check = printing(plain);
       check(await open(page, within("oats-home-working")), `${at} the home lists who works`, await page.evaluate(textOf(PAGE)));
-      const before = await page.until(`(() => { const text = ${headingOf("oats-home-working")}; return /^working \\d+$/i.test(text) ? text : ""; })()`, 30);
+      const before = await page.until(`(() => { const text = ${headingOf("oats-home-working")}; return /^running \\d+$/i.test(text) ? text : ""; })()`, 30); // (the list's heading: "Running N": the lead's T4)
       const n = Number(String(before ?? "").split(" ")[1]);
       check(Number.isInteger(n) && n > 1, `${at} before the change the home counts who works`, before);
       const stopped = record({ "redesign-ui-lead": { running: false, runtimeState: "stopped" } });
-      const fewer = (await page.until(heading("oats-home-working", `working ${n - 1}`), 15)) ? Date.now() - stopped : null;
-      check(fewer !== null && fewer <= 3000, `${at} the home lists ${n - 1} working ${fewer === null ? "never" : `${fewer} ms`} after the kernel recorded the stop (3 s at most)`, await page.evaluate(headingOf("oats-home-working")));
+      const fewer = (await page.until(heading("oats-home-working", `running ${n - 1}`), 15)) ? Date.now() - stopped : null;
+      check(fewer !== null && fewer <= 3000, `${at} the home lists ${n - 1} running ${fewer === null ? "never" : `${fewer} ms`} after the kernel recorded the stop (3 s at most)`, await page.evaluate(headingOf("oats-home-working")));
       const back = record();
-      const again = (await page.until(heading("oats-home-working", `working ${n}`), 15)) ? Date.now() - back : null;
+      const again = (await page.until(heading("oats-home-working", `running ${n}`), 15)) ? Date.now() - back : null;
       check(again !== null && again <= 3000, `${at} and ${n} again ${again === null ? "never" : `${again} ms`} after the kernel recorded that (3 s at most)`, await page.evaluate(headingOf("oats-home-working")));
     },
   },
@@ -575,7 +608,7 @@ export default [
       const tmuxCard = card(`sweep-${MANY}-helper`);
       const tmux = await page.evaluate(`(() => { const card = document.querySelector(${JSON.stringify(tmuxCard)}); return JSON.stringify({ text: card.innerText.replace(/\\s+/g, " ").trim(), glyph: card.querySelector('[data-testid="oats-needs-where"] [data-tmux="glyph"][role="img"][aria-label="tmux"] [aria-hidden="true"] > *') !== null, reply: card.querySelector('[data-testid="oats-reply"]') !== null, command: card.querySelector("code")?.innerText ?? null, copy: card.querySelector('[data-testid="oats-copy"]') !== null, open: card.querySelector('[data-testid="oats-needs-open"]').innerText.trim() }); })()`);
       const read = JSON.parse(tmux);
-      check(read.reply === false && /^Sweep \d+ helper [a-z][a-z0-9.\/-]* ·( tmux)? Open\b/.test(read.text) && read.glyph === true && read.text.endsWith("Answer it in its terminal.") && !/runs in tmux|It runs in tmux on|oats session attach|shows who it is/.test(read.text) && read.command === null && read.copy === false && read.open === "Open" && read.text.includes(`Sweep ${MANY} is done: keep its checkpoint?`), `${at} an agent on tmux says what it asks, its soul and bb's terminal glyph named "tmux" under its name, and "Answer it in its terminal."; it has Open, no command and no reply box`, tmux);
+      check(read.reply === false && /^Sweep \d+ helper [a-z][a-z0-9.\/-]* ·( tmux)?.{0,16} Open\b/.test(read.text) && read.glyph === true && read.text.endsWith("Answer it in its terminal.") && !/runs in tmux|It runs in tmux on|oats session attach|shows who it is/.test(read.text) && read.command === null && read.copy === false && read.open === "Open" && read.text.includes(`Sweep ${MANY} is done: keep its checkpoint?`), `${at} an agent on tmux says what it asks, its soul and bb's terminal glyph named "tmux" on its name's line, and "Answer it in its terminal."; it has Open, no command and no reply box`, tmux);
       await shown(page, check, at, tmuxCard, "the card of an agent on tmux");
       await sound(page, viewport, check, at, "the home with a card of an agent on tmux");
       await page.shot(`home-${viewport.name}-card-tmux`);
@@ -603,7 +636,7 @@ export default [
       // bb's pending request is what makes the card (the agent OATS stopped carries no claim): wait for the card in its stopped form, with bb's question read.
       const read = await page.until(`(() => { const card = document.querySelector(${JSON.stringify(mine)}); if (!card || card.dataset.offer !== "stopped") return ""; const question = card.querySelector('[data-testid="oats-needs-question"]')?.innerText.trim() ?? ""; return question === "" ? "" : JSON.stringify({ offer: card.dataset.offer, question, says: (card.querySelector('[data-testid="oats-needs-stopped"] p')?.innerText ?? "").replace(/\\s+/g, " ").trim(), choices: card.querySelectorAll('[data-testid="oats-needs-choice"]').length, reply: card.querySelector('[data-testid="oats-reply"]') !== null, fold: card.querySelector('[data-testid="oats-needs-message"]') !== null, buttons: [...card.querySelectorAll("button")].map((button) => button.innerText.trim() + (button.disabled ? " (off)" : "")) }); })()`, 60);
       check(
-        read === JSON.stringify({ offer: "stopped", question: STOPPED_QUESTION, says: "Not running. Start it to answer.", choices: 0, reply: false, fold: false, buttons: ["Open", "Start…"] }),
+        read === JSON.stringify({ offer: "stopped", question: STOPPED_QUESTION, says: "Not running.", choices: 0, reply: false, fold: false, buttons: ["Open", "Start…"] }),
         `${at} the card says what bb's request asks and that the agent is not running; it has no choice, no reply and no "Message instead"; its two buttons are Open and Start…`,
         read ?? (await page.evaluate(`(document.querySelector(${JSON.stringify(mine)})?.outerHTML ?? ${textOf(PAGE)}).slice(0, 900)`)),
       );

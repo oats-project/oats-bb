@@ -285,7 +285,7 @@ const COMMON_FACTS: Record<string, Said> = {
   E_MODEL_UNKNOWN: said("That model isn’t available for this harness. Pick another model, or keep the default."),
   // The Desktop says "at most 64 characters"; the plugin's own limit, checked before any process, is 63 (contract/shared.ts): one number for one field.
   E_INSTANCE_NAME_INVALID: said("Use lowercase letters, numbers and dashes, at most 63 characters, and don’t reuse a soul’s name."),
-  E_INSTANCE_NAME_TAKEN: said("An instance with this name already exists. Choose another name."),
+  E_INSTANCE_NAME_TAKEN: said("An agent with this name already exists. Choose another name."),
   E_PACKAGE_MISSING: said("A package this soul uses isn’t installed yet.", "sync-workspace"),
   E_PACKAGE_INTEGRITY: said("A package this soul uses no longer matches the lock.", "sync-workspace"),
   // The bb session provider's own refusal (the harness interface, point 2): the plugin's words, WORDS.md.
@@ -300,8 +300,8 @@ const PREVIEW_FACTS: Record<string, Said> = {
 };
 const PREVIEW_FAILED = said("OATS couldn’t work out this soul’s defaults.", "details");
 const SPAWN_FACTS: Record<string, Said> = {
-  E_DECISION_STALE: said("Something changed before the spawn went through. Nothing was created.", "review-again"),
-  E_IDEMPOTENCY_CONFLICT: said("Something changed before the spawn went through. Nothing was created.", "review-again"),
+  E_DECISION_STALE: said("Nothing was created.", "review-again"),
+  E_IDEMPOTENCY_CONFLICT: said("Nothing was created.", "review-again"),
   E_PLACEMENT_TAKEN: said("Another spawn just took this name. Nothing was created.", "review-again"),
   E_INTENT_EXPIRED: said("This spawn request expired.", "check-result"),
   E_PREFLIGHT_INCOMPLETE: said("OATS couldn’t finish checking this spawn. Try again."),
@@ -330,7 +330,7 @@ const SPAWN_FAILED = said("OATS couldn’t complete the spawn.", "details");
 // The plugin's words for the act that follows, after the fact. They name the form's own controls
 // (Spawn, Details, the fields above), as the Desktop's name the Desktop's (spawn-words.mjs).
 const NEXT: Record<Exclude<SpawnNext, null | "change-options">, string> = {
-  "review-again": "Check the values and press Spawn again.",
+  "review-again": "Check the values, then Spawn.",
   "check-result": "Press Check result: nothing starts twice.",
   "update-oats": "Update OATS, then open this form again.",
   "sync-workspace": "Run oats sync in the deployment, then try again.",
@@ -366,8 +366,6 @@ const SEE_DETAILS = "See Details.";
 
 // Sentences that go on after a dash, in lower case: the fact's full stop gives way to " — ".
 const DASHED: Record<string, readonly [SpawnNext, string]> = {
-  E_DECISION_STALE: ["review-again", "check the updated values and press Spawn again."],
-  E_IDEMPOTENCY_CONFLICT: ["review-again", "check the updated values and press Spawn again."],
   E_PLACEMENT_TAKEN: ["review-again", "check the new name and press Spawn again."],
   E_CLONE_MISSING: ["details", "Details shows how."],
   E_SANDBOX_PLACEMENT: ["details", "Details says what to do instead."],

@@ -65,7 +65,14 @@ const plan = z.object({ facts: spawnFacts, revision: z.string() });
  * declares, in its order. `hostId` is the bb machine that holds the deployment, where bb's own
  * list of a harness's models is asked (app/spawn/models.ts); null before it is found.
  */
-export const harnessList = z.object({ harnesses: z.array(z.string()), hostId: z.string().nullable() });
+/** The kernel's own code and sentence where the deployment has no bb session provider (`oats capabilities show oats.bb`: `E_CAPABILITY_UNKNOWN`). */
+const absentProvider = z.object({ code: z.string(), message: z.string() });
+export const harnessList = z.object({
+  harnesses: z.array(z.string()),
+  hostId: z.string().nullable(),
+  /** There only where the deployment has NO bb session provider: nothing can be spawned on bb there, and the New agent form says so. */
+  absent: absentProvider.optional(),
+});
 export type HarnessList = z.infer<typeof harnessList>;
 
 export const rpc = defineRpcContract({
@@ -97,7 +104,7 @@ const hostSpawn = z.object({ ...hostBase, ...spawnInput.shape, relation: hostRel
 
 export const host = defineRpcContract({
   /** `oats capabilities show oats.bb --json`: the harnesses the provider declares, and the provider's own version as the kernel prints it (null when it prints none that can be read). */
-  spawnHarnesses: { experimental_retryable: true, input: z.object(hostBase).strict(), output: answer(z.object({ harnesses: z.array(z.string()), version: z.string().nullable() })) },
+  spawnHarnesses: { experimental_retryable: true, input: z.object(hostBase).strict(), output: answer(z.object({ harnesses: z.array(z.string()), version: z.string().nullable(), absent: absentProvider.optional() })) },
   /**
    * `revision` is the kernel's decision revision for these choices; `summary` is for a soul's
    * page, `facts` for the form; `problem` is why this preview is no decision a spawn could apply

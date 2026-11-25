@@ -34,10 +34,10 @@ const SAYS = {
   notLoaded: "not loaded",
   notLoadedRow: `Idle · ${SOUL} · not loaded`, // (the row's title, whole: state · soul · reason)
   outsideState: "Running outside OATS",
-  outsideRecorded: "recorded stopped",
-  outsideWhat: "Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.",
+  outsideRecorded: "stopped in OATS",
+  outsideWhat: "Someone sent it a message in bb. Stop, then Start.",
   archivedWhileRunning: "Archived in bb while running: it may still run.",
-  archivedRow: "archived in bb",
+  archivedRow: "may still run", // (the row's reason, in the warning tone; its title and the line say the whole: archivedWhileRunning)
 };
 
 export default async (run) => {

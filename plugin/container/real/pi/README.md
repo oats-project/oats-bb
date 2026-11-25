@@ -17,8 +17,10 @@ fixture (`UPDATE_FIXTURES=1` is refused), and its artefacts are in `real/pi/out/
 are the images, `answers/` (what the kernel printed for the form's preview and spawn, for the
 two refusals the run makes, and for P6's spawn and `oats status`; the last is the source of a
 fixture copied by hand: "The fixture P6 is the source of", below),
-`kernel.json`, `bridge.json` and `pi.json` (what npm says of the three tarballs), `doctor.txt`, `bb.out`,
-`pi-mock.out` and `pi-mock-requests.jsonl` (the model requests). A run takes about five and a half
+`kernel.json` and `bridge.json` (what npm says of those two tarballs), `pi.json` (what pi's lock
+says of pi's own tarball, and how many packages it names), `doctor.txt`, `bb.out`,
+`pi-mock.out` and `pi-mock-requests.jsonl` (the model requests), and, when the run failed, `bb-logs/`
+(bb's own logs, cut short, and its crash reports: `../bb-logs.sh`). A run takes about five and a half
 minutes (338 s from the start of `ci.sh pi` to its end, on 2026-11-24; P6 is about two of them).
 
 The run is of 2026-11-22: OATS 0.70.5 from npm (`@awebai/oats@0.70.5`, gitHead
@@ -37,15 +39,15 @@ OATS_PI_INTEGRITY=… plugin/container/ci.sh pi`.
 |---|---|---|
 | `KERNEL_NPM`, `KERNEL_INTEGRITY` | the main run's (`0.70.5`, that tarball's integrity) | the kernel of this run: the same pin |
 | `OATS_PI_INTEGRITY` | the integrity of `@awebai/oats-pi@0.70.5`, for that version; none for another | the bridge's tarball, checked before pi installs it; what pi installed is then compared with that tarball, file by file. The bridge's VERSION is never chosen: it is the installed kernel's (the two are released together and tested only as a pair). A kernel that is on no release has no bridge, and this run stops there |
-| `PI_VERSION` | `1.5.2` | pi: the version the bb session provider is checked against |
-| `PI_INTEGRITY` | the integrity of `@earendil-works/pi-coding-agent@1.5.2`, for that version; none for another | pi's own tarball, checked before it is installed (that file is what is installed; its dependencies come from the registry). A mismatch stops the setup |
+| `PI_VERSION` | `1.5.2` | pi: the version the bb session provider is checked against. pi is installed from its committed lock (`../../locks/pi`, `../../locks/README.md`): its own tarball and every package under it, nothing resolved at run time. Another version here fails the setup until the lock is written again for it (`plugin/container/relock.sh pi`) |
+| `PI_INTEGRITY` | the integrity of `@earendil-works/pi-coding-agent@1.5.2`, for that version; none for another | pi's own tarball: the lock's line for it must say this integrity, checked before anything is installed (npm then checks every package of the lock against its own). A mismatch stops the setup |
 | the others | as the main run | `REQUIRE_REAL_FLOOR`, `KEEP`, `NAME`, `IMAGE`, `DOCKER_RUN_ARGS` |
 
 ## What is in the container, beside the main run's
 
 | File | Runs | Does |
 |---|---|---|
-| `setup.sh` | by `../setup.sh` when `REAL_PI=1`, after the kernel is installed and before bb starts | installs pi; checks the bridge's tarball, installs the bridge into bb's pi configuration (`~/.pi/agent`) and compares what was installed with that tarball; stops if `@awebai/pi` is listed there; writes the mock model's provider (`models.json`); copies `ask-dialog.ts`; starts `mock-openai.mjs` |
+| `setup.sh` | by `../setup.sh` when `REAL_PI=1`, after the kernel is installed and before bb starts | installs pi from its lock (`../../locked-install.sh pi`); checks the bridge's tarball, installs the bridge into bb's pi configuration (`~/.pi/agent`) and compares what was installed with that tarball; stops if `@awebai/pi` is listed there; writes the mock model's provider (`models.json`); copies `ask-dialog.ts`; starts `mock-openai.mjs` |
 | `mock-openai.mjs` | in the container, on 9998 | the mock model for pi: one line of text for every turn, and one tool call where a person's message says so (`MOCK-CALL:<json>`) |
 | `ask-dialog.ts` | by pi, as an extension of bb's pi configuration | one tool, `ask_person`, that opens one of pi's dialogs (`ctx.ui.confirm`) |
 | `scenario.mjs` | in the container | the run itself: the acts, the checks, the images |
@@ -77,7 +79,15 @@ call the plugin's RPC, as its UI does. After each act it reads `oats status --js
   name. The form's column reads "Harness pi · mock/echo" from the kernel's preview; the `oats`
   call the form made carries `--harness pi --model mock/echo --backend bb --yolo --preview`, and
   the kernel's answer has the launch on pi. At each view.
-- **P2 the spawn.** Spawn, once: the form opens the new agent's thread, the one the kernel names;
+  First, at each view, **the hold "Pick provider"** on bb's real list: pi's configuration of the run
+  holds one model, `twin`, under two providers (`mock` and `mock2`: `setup.sh`), so bb lists
+  `mock/twin` and `mock2/twin`. The bare id `twin`, typed, is held: "Pick provider" under the Model ID
+  field, where it was typed (none under the Model list over it), once, Spawn off and described by it, and the field's list holds exactly those two ids
+  (images `real-pi-form-<view>-pick-provider`, the mark under the Model ID, and `-pick-provider-list`,
+  its list open); one of them picked, Spawn is armed.
+- **P2 the spawn.** Spawn, once: the form opens the new agent's thread, the one the kernel names,
+  with bb's notice "Created Pi form developer." over it (image `real-pi-form-1280x800-created`: one
+  spawn a run, so one view);
   `oats status` has the agent on bb, on pi; bb has a thread of its pi provider; pi asked the model
   with the opening instruction, and the thread is idle. The thread's own row says "Idle", and the
   thread shows pi's answer.

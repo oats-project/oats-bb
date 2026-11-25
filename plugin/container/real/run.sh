@@ -74,6 +74,8 @@ MACHINE_NAME=${MACHINE_NAME:-falcon}
 docker run -d --name "$NAME" --hostname "$MACHINE_NAME" -e "MACHINE_NAME=$MACHINE_NAME" --init --cpus 2 --memory 6g -e BB_TELEMETRY=false ${DOCKER_RUN_ARGS:-} "$IMAGE" sleep infinity > /dev/null
 cleanup() {
   status=$?
+  # A failed run keeps bb's own logs too (bb-logs.sh): a bb that did not start says why only there.
+  [ "$status" = 0 ] || docker exec -u node "$NAME" sh /home/node/plugin/container/real/bb-logs.sh || echo "real: bb's logs could not be copied"
   rm -rf "$OUT"
   mkdir -p "$OUT"
   docker cp "$NAME:/home/node/out/real/." "$OUT/" > /dev/null 2>&1 || echo "real: no artefacts to copy out"
@@ -97,11 +99,14 @@ printf '{"kernel":"%s","provider":"%s"}\n' "$KERNEL_OID" "$PROVIDER_OID" | docke
 
 run bash container/real/setup.sh
 # The pi run records no fixture: its own scenario, and nothing more.
+# After the run too: nothing in it made bb fetch its build toolchain (../no-toolchain-fetch.sh).
 if [ "$REAL_PI" = 1 ]; then
   run node container/real/pi/scenario.mjs
+  run sh container/no-toolchain-fetch.sh
   exit
 fi
 run node container/real/scenario.mjs
+run sh container/no-toolchain-fetch.sh
 if [ "${UPDATE_FIXTURES:-0}" = 1 ]; then
   docker cp "$NAME:/home/node/out/real/fixtures/." "$PLUGIN/test/fixtures/" > /dev/null
   echo "real: the recorded answers are in $PLUGIN/test/fixtures/ (git diff shows what changed)"

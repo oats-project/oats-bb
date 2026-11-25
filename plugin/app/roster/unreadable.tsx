@@ -74,32 +74,41 @@ export const HELD_REASON = "Comes back when OATS is read again";
 export function Unreadable({ failure, machine, at, now, onRetry, compact = false, inSidebar = false }: { failure: Failure; machine: string | null; at?: string; now?: number; onRetry: () => void; compact?: boolean; inSidebar?: boolean }) {
   const words = failureWords(failure, machine);
   const settings = useSettingsHref();
-  // A PAGE that draws the full notice over a roster kept as last read says so (whoever draws it:
-  // the home, a soul's page, Teams), so that the sidebar beside it says one line and not the same
-  // notice a second time. The sidebar's own notice (`inSidebar`) and the thread row's line do not count.
-  const fullOnPage = !compact && !inSidebar && at !== undefined;
+  // A PANE that draws the notice over a roster kept as last read says so (whoever draws it: the home,
+  // a soul's page, Teams, an agent's page: the whole notice; and a thread's own line: the `compact` one), so that the sidebar beside it says one line and not the same notice a second time (the
+  // lead's T3: the notice ONCE, in the pane a person is looking at). The sidebar's own (`inSidebar`) does not count.
+  // (Also where OATS was NEVER read, and there is no age to say: the same rule. The sidebar beside such a pane says the notice's title alone.)
+  const fullOnPage = !inSidebar;
+  // A thread's own line that says it (`compact`) is counted apart too: the home in that thread's tab then draws no
+  // notice of its own (it would be a second one, with a second Retry, on the same screen).
+  const onLine = compact;
   useEffect(() => {
     if (!fullOnPage) return;
     pagesWithNotice += 1;
+    if (onLine) linesWithNotice += 1;
     tell();
     return () => {
       pagesWithNotice -= 1;
+      if (onLine) linesWithNotice -= 1;
       tell();
     };
-  }, [fullOnPage]);
+  }, [fullOnPage, onLine]);
   if (compact) {
     return (
       <div role="alert" data-testid="oats-unreadable" data-code={failure.code} data-compact="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground">
         <span className="font-semibold text-destructive-text">{words.title}</span>
         {at === undefined ? null : <span className="min-w-0 text-muted-foreground">{`${showingRead(readAge(at, now))} ${HELD}`}</span>}
-        {words.retry ? (
-          <span className="ml-auto shrink-0">
-            <Button onClick={onRetry}>Retry</Button>
+        {/* The way out: Retry, and the settings where the cause offers them (the link alone: the line is the one notice
+            on an agent's thread, and the sidebar beside it has nothing to press). */}
+        {words.retry || words.settings ? (
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {words.retry ? <Button onClick={onRetry}>Retry</Button> : null}
+            {words.settings ? (
+              <a className={`${TARGET} ${LINK} inline-flex items-center`} href={settings}>
+                Open settings
+              </a>
+            ) : null}
           </span>
-        ) : words.settings ? (
-          <a className={`${TARGET} ${LINK} ml-auto inline-flex shrink-0 items-center`} href={settings}>
-            Open settings
-          </a>
         ) : null}
       </div>
     );
@@ -138,24 +147,38 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
  * the Notice when OATS cannot be read, with the age of what the place still shows when it is the
  * last roster read. The place draws it above what it keeps.
  */
-export function RosterNotice({ oats }: { oats: Oats }) {
+export function RosterNotice({ oats, seen = true }: { oats: Oats; /** false: the place is not in view (a tab bb keeps mounted while hidden), or a thread's line on the same screen says the notice: nothing is drawn, and nothing is counted as a pane's notice (the sidebar then keeps its own, whole, with the Retry) */ seen?: boolean }) {
   const now = useNow();
+  if (!seen) return null;
   if (oats.phase === "failed") return <Unreadable failure={oats} machine={oats.machine} onRetry={oats.retry} />;
   if (oats.phase === "ready" && oats.stale !== null) return <Unreadable failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />;
   return null;
 }
 
 // ---- one full notice on a screen ----
+// ANY pane's notice drawn by `Unreadable` with a Retry counts, also one whose Retry is not the roster's own (a page's
+// gate on its own read; a dialog's "cannot read" of its plan): there is then ONE Retry on the screen, that one, and the
+// sidebar's comes back when that notice leaves (ruled 24 Nov 2026, with the lead's T3).
+// THE RULE HOLDS ON THE PILOT'S SCREENS: the sidebar, a thread's line and tab, the home, Home › Agents, an agent's
+// page, the New agent form. In the instance panel the parts with a read of their own (readiness, the soul, the
+// activity) draw NO Retry and hold their Refresh and Load while the roster cannot be read: a part that failed is read
+// again on each press of the one Retry, and when the roster is read again (app/panel/state.tsx `CommandState`). NOT COUNTED, and left as they are: the pages that are no pilot screen
+// (Souls, Teams, Machines, Capabilities, Automations), where a page's own failed read draws a Retry of its own (an
+// `ErrorLine`, the Automations page's notice over a kept list) beside the roster's.
+// "ONE Retry on a screen" counts the panes a person can PRESS: a modal dialog is its own place. Its own notice's Retry
+// re-reads what the person asked for (the plan), and what is behind it cannot be pressed while it is open: a pane
+// behind a dialog keeps its notice and its Retry (ruled the same day).
 // The sidebar and a page are drawn side by side. While a page shows the full notice over what it
-// keeps, the sidebar says ONE line (how old the roster is, that the acts are off, and Retry): `LastObservation`.
+// keeps, the sidebar says ONE line (how old the roster is, that the acts are off): `LastObservation`.
 let pagesWithNotice = 0;
+let linesWithNotice = 0;
 const noticeWatchers = new Set<() => void>();
 const tell = () => {
   for (const watcher of noticeWatchers) watcher();
 };
 // (Nothing is reset with the window: each notice counts itself in when it mounts and out when it
 // unmounts, and a count set to zero under a mounted page would go below it.)
-/** Whether a page drawn now shows the full notice over a roster kept as last read. */
+/** Whether a pane drawn now shows the notice (over a roster kept as last read, or where OATS was never read). */
 export function usePageShowsNotice(): boolean {
   return useSyncExternalStore(
     (watcher) => {
@@ -166,27 +189,30 @@ export function usePageShowsNotice(): boolean {
   );
 }
 
+/** Whether a thread's own line drawn now says the notice (the compact one): over a roster kept as last read, or where OATS was never read. */
+export function useLineShowsNotice(): boolean {
+  return useSyncExternalStore(
+    (watcher) => {
+      noticeWatchers.add(watcher);
+      return () => noticeWatchers.delete(watcher);
+    },
+    () => linesWithNotice > 0,
+  );
+}
+
 /**
- * The sidebar's one line beside a page's full notice: "Read 2 min ago. Acts are off.", and Retry (or
- * the settings, where only they mend it). It says that the acts are off itself, as the thread's
- * compact line does: at a phone's width the sidebar is bb's drawer, OVER the page, and New agent,
- * off under this line, would have only an age above it (an off control is never alone on a screen).
+ * The sidebar's one line beside a pane's notice: "Read 2 min ago. Acts are off.", and nothing to press. The ONE Retry
+ * on the screen is the pane's, in its notice, where the person looks (the lead's T3, in the form the specialist
+ * ruled: a pane cannot know whether bb shows its sidebar, which is a drawer at a phone's width, so the Retry is never
+ * the sidebar's while a pane has one: never two on a screen, and never none). The line says that the acts are off
+ * itself: at a phone's width the sidebar is bb's drawer, OVER the page, and New agent, off under this line, would
+ * have only an age above it (an off control is never alone on a screen).
  */
-export function LastObservation({ failure, machine, at, now, onRetry }: { failure: Failure; machine: string | null; at: string; now: number; onRetry: () => void }) {
+export function LastObservation({ failure, machine, at, now }: { failure: Failure; machine: string | null; /** when the roster kept was read; absent where OATS was never read: the line then says the notice's TITLE alone (there is no age, and no act to call off) */ at?: string; now?: number }) {
   const words = failureWords(failure, machine);
-  const settings = useSettingsHref();
   return (
-    <div role="status" data-testid="oats-last-observation" data-code={failure.code} title={words.title} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs text-muted-foreground">
-      <span className="min-w-0">{`${showingRead(readAge(at, now))} ${HELD}`}</span>
-      {words.retry ? (
-        <span className="ml-auto shrink-0">
-          <Button onClick={onRetry}>Retry</Button>
-        </span>
-      ) : words.settings ? (
-        <a className={`${TARGET} ${LINK} ml-auto inline-flex shrink-0 items-center`} href={settings}>
-          Open settings
-        </a>
-      ) : null}
+    <div role="status" data-testid="oats-last-observation" data-code={failure.code} title={at === undefined ? undefined : words.title} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs text-muted-foreground">
+      <span className="min-w-0">{at === undefined ? words.title : `${showingRead(readAge(at, now))} ${HELD}`}</span>
     </div>
   );
 }

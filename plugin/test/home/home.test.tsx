@@ -2,6 +2,7 @@
 // A10: the OATS home (navPanel `home`, and the fixed thread tab) and its badge.
 import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
+import { noteActed } from "../../app/roster/reading";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { ComponentType } from "react";
@@ -53,7 +54,7 @@ test("what needs you first, then the tiles, who works and what is unread; no hea
   expect(slot.queryByTestId("oats-home-summary")).toBeNull();
   expect(slot.queryByTestId("oats-tile-agents")).toBeNull();
   const working = slot.getByTestId("oats-home-working");
-  expect(heading(working)).toBe(`Working${within(working).getAllByTestId("oats-working-row").length}`);
+  expect(heading(working)).toBe(`Running${within(working).getAllByTestId("oats-working-row").length}`); // (the heading is true of all its rows: a tmux agent that runs is among them; the lead's T4)
   // The heading says the state: no row under it repeats the word.
   for (const row of within(working).getAllByTestId("oats-working-row")) expect(within(row).queryByTestId("oats-state")).toBeNull();
   const finished = slot.getByTestId("oats-home-finished");
@@ -65,7 +66,7 @@ test("what needs you first, then the tiles, who works and what is unread; no hea
   for (let i = 1; i < order.length; i++) expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-test("a card says who (the name as words, its soul under it, and no machine), what it asks and how long it has waited; its name and Open lead to its thread", async () => {
+test("a card says who (the name as words, its soul on its line, and no machine), what it asks and how long it has waited; its name and Open lead to its thread", async () => {
   const slot = await homePage();
   const release = await cardOf(slot, "release-070-maintainer");
   expect(within(release).getByTestId("oats-needs-name").textContent).toBe("Release 070 maintainer");
@@ -81,14 +82,28 @@ test("a card says who (the name as words, its soul under it, and no machine), wh
   const workerFacts = within(worker).getByTestId("oats-home-agent-where");
   expect([workerFacts.textContent, workerFacts.getAttribute("title"), workerFacts.className.split(/\s+/).includes("whitespace-nowrap")]).toEqual(["oats-product-expert", "oats-product-expert", true]);
   expect(workerFacts.querySelector('[data-phrase="soul"]')!.className.split(/\s+/)).toEqual(expect.arrayContaining(["shrink", "truncate"])); // the soul is the part that gives way
-  // Its soul is under its name on the card (Joan, 24 Nov: "Keep the agent type"); its machine is on its page.
+  // Its soul is on the card, on its name's line (Joan, 24 Nov: "Keep the agent type"; the reader's P5: one line); its machine is on its page.
   expect(within(release).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer");
-  // That line is ONE line high on a card: under the name it stands in a column, where a flex base is a height (a base
-  // of ten rem once left an empty 150 px under the soul on every card). It takes the column's width and nothing else;
-  // beside a name, in a row of a list, it takes the rest of the row's width (the live scene measures the cards' boxes).
-  expect(within(release).getByTestId("oats-needs-where").className.split(/\s+/).filter((name) => /^(flex-1|grow|basis-|h-|min-h-)/.test(name))).toEqual([]);
-  expect(within(release).getByTestId("oats-needs-where").className.split(/\s+/)).toContain("w-full");
-  expect(workerFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["flex-1", "basis-40"]));
+  // That line is ONE line high on a card: it stands in a ROW, beside the name, where its flex base is a WIDTH. (In a
+  // column a flex base is a height: a base of ten rem once left an empty 150 px under the soul on every card; the live
+  // scene measures the cards' boxes.) On a card and in a list's row alike it takes what the name leaves, from nothing.
+  const cardFacts = within(release).getByTestId("oats-needs-where");
+  expect(cardFacts.parentElement!.className.split(/\s+/)).not.toContain("flex-col");
+  expect(cardFacts.parentElement!.parentElement!.contains(within(release).getByTestId("oats-needs-name"))).toBe(true); // the name's own line
+  expect(cardFacts.className.split(/\s+/).filter((name) => /^(h-|min-h-)/.test(name))).toEqual([]);
+  expect(workerFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-0"]));
+  // WHERE the facts stand is THE FIT's (app/home/Home.tsx `factsFit`, one measure for a card and a row; its own tests
+  // below). With no layout (this DOM) it is "beside": the card's name, then ONE unit (the facts, then the mark with its
+  // age), on one line that does not wrap; a row's name and facts on one line that does not wrap.
+  const unit = cardFacts.parentElement!;
+  expect(unit.getAttribute("data-testid")).toBe("oats-needs-facts");
+  expect(cardFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-0"]));
+  expect(unit.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
+  expect([unit.parentElement!.getAttribute("data-fit"), unit.parentElement!.className.split(/\s+/).includes("flex-wrap")]).toEqual(["beside", false]);
+  expect(unit.parentElement!.contains(within(release).getByTestId("oats-needs-name"))).toBe(true);
+  expect([workerFacts.parentElement!.getAttribute("data-fit"), workerFacts.parentElement!.className.split(/\s+/).includes("flex-wrap")]).toEqual(["beside", false]);
+  // The mark and the age stand at the end of that line (P5), not on a line of their own.
+  expect(cardFacts.parentElement!.parentElement!.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
   expect(release.textContent).not.toMatch(/falcon/);
   expect(within(release).getByTestId("oats-needs-where").querySelector('[data-phrase="reason"], [data-phrase="where"]')).toBeNull(); // on its thread: no reason, no glyph
   // Under "Needs you" the heading says the word: the card keeps the mark, named for a screen reader, and the wait.
@@ -107,7 +122,9 @@ test("a card says who (the name as words, its soul under it, and no machine), wh
 test('with none: "Nothing needs you.", once and here; no summary line, and an empty group is not drawn', async () => {
   const slot = await homePage({ rpc: handlers({}, quiet()), sidebarThreads: calm() });
   const needs = await slot.findByTestId("oats-home-needs");
-  expect(needs.textContent).toBe("Needs you0Nothing needs you.");
+  // The sentence ALONE (the lead's reader, P31): no heading "Needs you 0" over it.
+  expect(needs.textContent).toBe("Nothing needs you.");
+  expect(needs.querySelector("h2")).toBeNull();
   expect(slot.queryByTestId("oats-home-summary")).toBeNull();
   expect(slot.queryByTestId("oats-home-working")).toBeNull();
   expect(slot.queryByTestId("oats-home-finished")).toBeNull();
@@ -599,13 +616,16 @@ test("Home › Agents: every agent OATS has, in the sidebar's order, each with i
   expect(heading(section)).toBe(`Agents${agents.length}`); // the word of the tile that opened it
   // The one count line of the home, here: by state, every agent once; how many there are in all is the heading's count.
   const summary = within(section).getByTestId("oats-home-summary").textContent!;
-  expect(summary).toMatch(/^\d+ working · 4 need you/);
+  expect(summary).toMatch(/^\d+ running · 4 need you/);
   expect(summary).not.toMatch(/agents/);
   expect(summary.split(" · ").map((part) => Number(part.split(" ")[0])).reduce((sum, n) => sum + n, 0)).toBe(agents.length);
   const rows = within(section).getAllByTestId("oats-home-agent-row");
   // every agent, the stopped ones, the ones whose thread is gone and the ones on tmux among them
   expect(rows.map((row) => row.dataset.instance).sort()).toEqual(agents.map((agent) => agent.instance).sort());
   for (const row of rows) expect(within(row).getByTestId("oats-state").textContent).not.toBe("");
+  // The word is the one function's, by backend (the lead's ruling T4): an agent on tmux that runs reads "Running", one on a bb thread with a turn running "Working".
+  const stateOf = (instance: string) => within(rows.find((row) => row.dataset.instance === instance)!).getByTestId("oats-state").textContent;
+  expect([stateOf("kernel-fix-developer"), stateOf("desktop-mockups-developer")]).toEqual(["Running", "Working"]);
   const tmux = rows.find((row) => row.dataset.instance === "night-watch-helper")!;
   expect(rows.indexOf(tmux)).toBeLessThan(rows.length - 1); // in the sidebar's one order: it waits, so it is among the first, not in a block after the tree
   expect(within(tmux).getByTestId("oats-home-agent").textContent).toBe("Night watch helper");
@@ -665,7 +685,7 @@ test("an agent with no bb thread that needs the person has its card: what it ask
     // kernel's command is not on the card: it is on the agent's page, where Open leads.
     expect(within(card).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer · tmux");
     expect(within(card).getByTestId("oats-needs-elsewhere").textContent).toBe("Answer it in its terminal.");
-    expect(card.textContent).toBe("Night watch helperoats-maintainer · tmuxOpen!4 dWhich branch do I watch?Answer it in its terminal.");
+    expect(card.textContent).toBe("Night watch helperoats-maintainer · tmux!4 dOpenWhich branch do I watch?Answer it in its terminal.");
     expect(card.textContent).not.toMatch(/oats session attach|falcon/);
     expect(within(card).queryByRole("button", { name: "Copy the command" })).toBeNull();
     expect(within(card).getByTestId("oats-needs-open").textContent).toBe("Open");
@@ -707,7 +727,7 @@ test("more than five at work show five, then all on a press", async () => {
   const many: Agent[] = Array.from({ length: 7 }, (_unused, index) => ({ ...base, instance: `works-${index}-helper`, backend: "tmux", threadId: null, running: true, runtimeState: "running", waiting: null }));
   const slot = await homePage({ rpc: handlers({}, many), sidebarThreads: calm() });
   const working = await slot.findByTestId("oats-home-working");
-  expect(heading(working)).toBe("Working7");
+  expect(heading(working)).toBe("Running7");
   expect(within(working).getAllByTestId("oats-working-row")).toHaveLength(5);
   fireEvent.click(within(working).getByTestId("oats-home-working-all"));
   expect(within(working).getAllByTestId("oats-working-row")).toHaveLength(7);
@@ -938,9 +958,9 @@ test("Home › Agents says where an agent the roster draws on no thread is, from
   await waitFor(() => expect(stopped.list.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "thr_digest" }));
   stopped.list.unmount();
   resetApp();
-  // A session lost with its thread archived: the reason, as on the sidebar's row.
+  // A session lost with its thread archived: the reason, as on the sidebar's row: that it may still run.
   const lost = await rowOf(withEnd("lost"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb("thr_digest") });
-  await waitFor(() => expect(lost.words()).toBe("oats-expert · archived in bb"));
+  await waitFor(() => expect(lost.words()).toBe("oats-expert · may still run"));
   lost.list.unmount();
   resetApp();
   // bb answers that it has no thread of that id: deleted.
@@ -987,7 +1007,7 @@ test("the card of an agent that asks and that bb lists no thread of says what be
   resetApp();
   // bb has it archived (and the agent still runs): the button leads to the archived thread, and its name says so.
   const archived = await cardOn(fixtureAgents(), bb("thr_ci"));
-  await waitFor(() => expect(archived.where()).toBe("oats-developer · archived in bb"));
+  await waitFor(() => expect(archived.where()).toBe("oats-developer · may still run")); // (the reason of its row: it runs, and bb has its thread archived)
   quiet(archived.card);
   expect(archived.leads()).toBe("Open thread: Flaky ci developer");
   fireEvent.click(within(archived.card).getByTestId("oats-needs-open"));
@@ -1039,10 +1059,106 @@ test("an agent that runs outside OATS is one of those that need you, in every pl
   expect(within(notice).getByTestId("oats-outside-details").querySelector("summary")!.textContent).toBe("▸Details");
   expect(notice.querySelectorAll("button")).toHaveLength(0);
   expect(Array.from(within(card).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop…", "Start…"]); // (the dots: each opens its dialog)
+  // The card is under "Needs you" and asks no question: it says, in the words of its line, what it needs; and Stop… is the primary act of the two.
+  expect(within(within(card).getByTestId("oats-status-line")).getByTestId("oats-status-part").textContent).toMatch(/stopped in OATS$/);
+  expect(within(card).getByTestId("oats-needs-outside").textContent).toBe("Stop, then Start.");
+  expect(Array.from(card.querySelectorAll("button[data-primary]")).map((button) => button.textContent)).toEqual(["Stop…"]);
   for (const id of ["oats-needs-choice", "oats-reply-send", "oats-needs-stopped", "oats-needs-message"]) expect(within(card).queryByTestId(id)).toBeNull();
   const { asked } = await import("../../app/lifecycle");
   fireEvent.click(within(card).getByRole("button", { name: "Stop…" }));
   expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
+  resetApp();
+  // An agent of another session provider has Stop alone: its card says no "Stop, then Start." (nobody reads Start with nothing to press).
+  const others = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, backend: "other", sessionEnd: "stopped", outsideOats: { ...report, backend: "other" } } : agent));
+  const elsewhere = await homePage({ rpc: handlers({}, others) });
+  const otherCard = await cardOf(elsewhere, "weekly-digest-helper");
+  expect(offerOf(otherCard)).toBe("outside");
+  expect(Array.from(within(otherCard).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop…"]);
+  expect(within(otherCard).queryByTestId("oats-needs-outside")).toBeNull();
+  expect(otherCard.textContent).not.toMatch(/then Start/);
+});
+
+// The lead's T2 (24 Nov 2026): the pilot's first home is eight tmux agents whose sessions were lost, and nobody asking.
+// The home had no place for them. ONE quiet section, only when it has rows: the roster's own word and their count
+// ("Lost 8"), one line each (name · soul · glyph) with Start…: eight presses in one list, not eight pages.
+test("THE PILOT'S FIRST HOME: eight tmux agents whose sessions were lost, nobody asking: \"Nothing needs you.\", then \"Lost 8\": one line each (name · soul · glyph) with Start…, which opens that agent's Start dialog", async () => {
+  const names = ["birch", "cedar", "elm", "fir", "hazel", "larch", "oak", "pine"].map((tree) => `${tree}-developer`);
+  const lostOnTmux = (instance: string): Agent => ({ ...TMUX_ASKS, instance, home: TMUX_ASKS.home.replace(TMUX_ASKS.instance, instance), alias: instance, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" });
+  const slot = await homePage({ rpc: handlers({}, names.map(lostOnTmux)), sidebarThreads: { ...sidebarThreads(), threads: [] } });
+  const section = await slot.findByTestId("oats-home-lost");
+  expect(heading(section)).toBe("Lost8");
+  expect(slot.getByTestId("oats-home-nothing").textContent).toBe("Nothing needs you.");
+  const rows = within(section).getAllByTestId("oats-lost-row");
+  expect(rows.map((row) => row.getAttribute("data-instance"))).toEqual(names); // the roster's order
+  // One line each: the name (the way to its page), its soul, where it runs; no reason (the heading says it) and no state word; then the one act.
+  expect(rows.map((row) => [within(row).getByTestId("oats-home-agent").textContent, within(row).getByTestId("oats-home-agent-where").textContent, Array.from(row.querySelectorAll("button")).map((button) => button.textContent).at(-1)])).toEqual(names.map((name) => [`${name[0]!.toUpperCase()}${name.slice(1).replace("-", " ")}`, "oats-maintainer · tmux", "Start…"]));
+  expect(section.textContent).not.toMatch(/session lost|Stopped/);
+  expect(within(section).queryAllByTestId("oats-state")).toHaveLength(0);
+  // Start… opens the act's dialog for THAT agent: nothing is started on the press.
+  const { asked } = await import("../../app/lifecycle");
+  fireEvent.click(within(rows[2]!).getByTestId("oats-lost-start"));
+  expect(asked()).toEqual({ verb: "start", instance: "elm-developer" });
+});
+
+// ONE rule with the thread's line (ruled with the lead's T5): where a MESSAGE is the way on (a lost agent on bb whose
+// thread bb lists), the row's act is Open: it opens that thread. Start… there would begin a NEW conversation where a
+// message keeps the old one. Every other lost row has Start…: an agent on tmux (the pilot's eight).
+test("the Lost list's act, by kind: a lost agent on bb whose thread bb lists has Open, which opens its thread and starts nothing; a lost agent on tmux has Start…", async () => {
+  const lostOnBb = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, waiting: null, running: false as const, runtimeState: "stopped", sessionEnd: "lost" } : agent));
+  const lostOnTmux: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
+  const threads = sidebarThreads();
+  // (bb's row of its thread is at rest: the agent's word is the roster's, "Lost".)
+  const slot = await homePage({ rpc: handlers({}, [...lostOnBb, lostOnTmux]), sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, status: "idle" as const, hasPendingInteraction: false } : thread)) } });
+  const section = await slot.findByTestId("oats-home-lost");
+  const row = (instance: string) => within(section).getAllByTestId("oats-lost-row").find((each) => each.getAttribute("data-instance") === instance)!;
+  const acts = (instance: string) => Array.from(row(instance).querySelectorAll("button")).map((button) => button.textContent).slice(-1);
+  expect(within(section).getAllByTestId("oats-lost-row").map((each) => each.getAttribute("data-instance"))).toEqual(["flaky-ci-developer", lostOnTmux.instance]);
+  expect([acts("flaky-ci-developer"), acts(lostOnTmux.instance)]).toEqual([["Open"], ["Start…"]]);
+  expect([within(row("flaky-ci-developer")).queryByTestId("oats-lost-start"), within(row(lostOnTmux.instance)).queryByTestId("oats-lost-open")]).toEqual([null, null]);
+  const { asked } = await import("../../app/lifecycle");
+  fireEvent.click(within(row("flaky-ci-developer")).getByTestId("oats-lost-open"));
+  expect(asked()).toBeNull(); // no dialog: nothing is started
+  await waitFor(() => expect(slot.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "thr_ci" }));
+});
+
+test("the Lost section holds the agents whose roster row says \"Lost\", and no other: not one a person stopped; with none lost there is no section; over a roster that is the last one read its Start… is off", async () => {
+  // The sample's roster: nobody's session was lost.
+  const none = await homePage();
+  await none.findByTestId("oats-home-needs");
+  expect(none.queryByTestId("oats-home-lost")).toBeNull();
+  none.unmount();
+  resetApp();
+  // One lost on tmux, one a person stopped on tmux: only the first is listed.
+  const lostOne: Agent = { ...TMUX_ASKS, waiting: null, running: false, runtimeState: null, sessionEnd: "lost" };
+  const stoppedOne: Agent = { ...TMUX_ASKS, instance: "day-watch-helper", home: TMUX_ASKS.home.replace(TMUX_ASKS.instance, "day-watch-helper"), alias: "day-watch-helper", waiting: null, running: false, runtimeState: "stopped", sessionEnd: "operator" };
+  const agents = [...fixtureAgents(), lostOne, stoppedOne];
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  const section = await slot.findByTestId("oats-home-lost");
+  expect([heading(section), within(section).getAllByTestId("oats-lost-row").map((row) => row.getAttribute("data-instance"))]).toEqual(["Lost1", [lostOne.instance]]);
+  expect((within(section).getByTestId("oats-lost-start") as HTMLButtonElement).disabled).toBe(false);
+  slot.unmount();
+  resetApp();
+  // Behind a result that says it started, until the roster is read again: the row is still in the list (the roster is
+  // from before), and its Start… is off: a second press would start what the result says is started (L13's rule).
+  const { noteActed, forgetActed } = await import("../../app/roster/reading");
+  const again = await homePage({ rpc: handlers({}, agents) });
+  const live = (await again.findByTestId("oats-lost-start")) as HTMLButtonElement;
+  expect(live.disabled).toBe(false);
+  const { act: settle } = await import("@testing-library/react");
+  settle(() => noteActed([lostOne.instance], fixtureSnapshot(agents).at));
+  expect((again.getByTestId("oats-lost-start") as HTMLButtonElement).disabled).toBe(true);
+  // Off, and not alone: the row says "Reading…" in its facts' place.
+  const row = again.getByTestId("oats-lost-start").closest('[data-testid="oats-lost-row"]') as HTMLElement;
+  expect([within(row).getByTestId("oats-lost-reading").textContent, within(row).queryByTestId("oats-home-agent-where")]).toEqual(["Reading…", null]);
+  forgetActed();
+  again.unmount();
+  resetApp();
+  // The roster shown is the last one read: the acts are off, this one too (the notice on the same screen says so).
+  const last = { at: new Date(Date.now() - 120_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents };
+  const stale = await homePage({ rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }) });
+  const held = await stale.findByTestId("oats-lost-start");
+  expect((held as HTMLButtonElement).disabled).toBe(true);
+  expect(stale.getByTestId("oats-unreadable").textContent).toContain("Acts are off.");
 });
 
 // Behind a lifecycle result that says the agent changed, the home's cards read the same rule as its thread's line (ruled
@@ -1056,8 +1172,10 @@ test("behind a result the home's card of an agent that runs outside OATS says \"
   const card = await cardOf(slot, "weekly-digest-helper");
   const acts = () => Array.from(within(card).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => [button.textContent, (button as HTMLButtonElement).disabled]);
   expect([within(card).queryByTestId("oats-reading"), acts()]).toEqual([null, [["Stop…", false], ["Start…", false]]]);
+  expect(within(card).getByTestId("oats-needs-outside").textContent).toBe("Stop, then Start.");
   act(() => noteActed(["weekly-digest-helper"], fixtureSnapshot(agents).at));
   expect([within(card).getByTestId("oats-reading").textContent, acts()]).toEqual(["Reading…", [["Stop…", true], ["Start…", true]]]);
+  expect(within(card).queryByTestId("oats-needs-outside")).toBeNull(); // what it needs is said of a state that is being read again: not behind "Reading…"
   expect(within(card).getByTestId("oats-status-line").textContent).not.toMatch(/Running outside OATS/); // never the state of before, stated plainly
 });
 
@@ -1095,6 +1213,154 @@ test("behind a result the home's card of a RUNNING agent that asks says \"Readin
 });
 
 /** The one count line of the home, on Home › Agents ("2 working · 4 need you · …"), for a roster. */
+// THE FIT OF A FACTS LINE (app/home/Home.tsx, the block of that name; ruled 25 Nov 2026): one design and one measure
+// for a card and a row. The measure reads the element's own boxes; jsdom has no layout, so the pure function is tested
+// with the widths the third review round MEASURED in a browser (its report, reviews/polish-r3-report.md of the
+// text-cut developer), and the drawing with boxes that are given.
+test("THE FIT, pure: a card's facts stand beside the name only when the WHOLE line fits (the soul unshortened, the mark with its age after it); else under the name; and where even what they never give up does not fit there with the mark, the reason wins and the mark takes the next line", async () => {
+  const { factsFit } = await import("../../app/home/Home");
+  const card = (of: { line: number; name: number; whole: number; held: number; wait: number }) => factsFit({ kind: "card", gap: 8, least: 21, holds: false, ...of });
+  // 1280: everything on one line.
+  expect(card({ line: 829, name: 150, whole: 199, held: 119, wait: 44 })).toBe("beside");
+  // Round 3's first case at 390: "Flaky test" (70.1), oats-developer · deleted in bb (whole 101 + 11.9 + 86.2 = 199.1; held 21 + 11.9 + 86.2 = 119.1), "59 min" (70): line 259.7.
+  // Beside it needs 70.1 + 8 + 199.1 + 8 + 70 = 355.2: UNDER (it was drawn beside, the reason cut by 11.6 px).
+  expect(card({ line: 259.7, name: 70.1, whole: 199.1, held: 119.1, wait: 70 })).toBe("under");
+  // A soul of 24 letters on its thread, name of 6 (51.6), "59 min": whole 171: beside needs 308.6 of 259.7: under, where it is whole (171 + 8 + 70 = 249).
+  expect(card({ line: 259.7, name: 51.6, whole: 171, held: 21, wait: 70 })).toBe("under");
+  // A short card that fits whole: beside (name 51.6, soul 101, "5 d" 44: 212.6).
+  expect(card({ line: 259.7, name: 51.6, whole: 101, held: 21, wait: 44 })).toBe("beside");
+  // A tab of 300: "thread not shown in bb" with "59 min": held 148.1 + 8 + 70 = 226.1 of 182.8: the reason wins: SPLIT.
+  expect(card({ line: 182.8, name: 70, whole: 228, held: 148.1, wait: 70 })).toBe("split");
+  // … and with "5 d" there too (203.8 of 182.8); at 340 with "59 min" (226.1 of 222.8).
+  expect(card({ line: 182.8, name: 70, whole: 228, held: 151.8, wait: 44 })).toBe("split");
+  expect(card({ line: 222.8, name: 70, whole: 228, held: 148.1, wait: 70 })).toBe("split");
+  // No mark on this line (a wait that says words has its own): only the facts count.
+  expect(card({ line: 259.7, name: 70.1, whole: 181.6, held: 119.1, wait: 0 })).toBe("beside");
+  // No grace: what fits by its own measure is beside (62.24 + 8 + 120 = 190.24 of 190.27); a fraction over goes under
+  // (the fourth round's card in a tab of 340: 223.47 of 222.83: beside, it lost the difference from its soul).
+  expect(card({ line: 190.27, name: 62.24, whole: 120, held: 120, wait: 0 })).toBe("beside");
+  expect(card({ line: 190.27, name: 62.28, whole: 120, held: 120, wait: 0 })).toBe("under");
+  expect(card({ line: 222.83, name: 45.53, whole: 124.6, held: 60, wait: 37.34 })).toBe("under");
+});
+
+test("THE FIT, pure: a row's soul gives way first; a row goes under the name only where it holds a reason that warns or the glyph and the held part does not fit; a row that holds nothing never takes a second line, and with no room at all its facts are not drawn", async () => {
+  const { factsFit } = await import("../../app/home/Home");
+  const row = (of: { line: number; name: number; whole: number; held: number; holds: boolean }) => factsFit({ kind: "row", gap: 8, least: 18, wait: 0, ...of });
+  // A plain row: one line while the soul's least fits; the soul is cut inside it, the row never wraps.
+  expect(row({ line: 356, name: 150, whole: 120, held: 18, holds: false })).toBe("beside");
+  expect(row({ line: 356, name: 320, whole: 120, held: 18, holds: false })).toBe("beside"); // 320 + 8 + 18 = 346
+  expect(row({ line: 356, name: 335, whole: 120, held: 18, holds: false })).toBe("none"); // no room at all: not drawn, no gap: the name keeps its line
+  // A row that holds a warning reason (or the glyph): beside while the held part fits, else under, whole.
+  expect(row({ line: 356, name: 150, whole: 200, held: 120, holds: true })).toBe("beside");
+  expect(row({ line: 356, name: 228, whole: 200, held: 120, holds: true })).toBe("beside"); // exactly
+  expect(row({ line: 356, name: 229, whole: 200, held: 120, holds: true })).toBe("under");
+  expect(row({ line: 900, name: 229, whole: 200, held: 120, holds: true })).toBe("beside"); // the same row in a wide window
+});
+
+/** A new roster's token for each draw a test asks for (the row and the card measure after every draw). */
+let drawn = 0;
+/** Boxes for THE FIT's drawing, in a DOM with none: the line's width, the name's, and each part of the facts'. */
+function boxes(line: HTMLElement, of: { line: number; name: number; part: (part: HTMLElement) => number }) {
+  const name = line.firstElementChild as HTMLElement;
+  const width = (element: HTMLElement) => (element === line ? of.line : element === name ? of.name : of.part(element));
+  const box = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const w = width(this);
+    return { x: 0, y: 0, left: 0, top: 0, right: w, bottom: 16, width: w, height: 16, toJSON: () => ({}) };
+  });
+  const scroll = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
+    return width(this);
+  });
+  return () => {
+    box.mockRestore();
+    scroll.mockRestore();
+  };
+}
+const partWidth = (widths: Record<string, number>) => (part: HTMLElement) => (part.hasAttribute("data-wait") ? (widths.wait ?? 0) : (widths[part.getAttribute("data-phrase") ?? `sep`] ?? 0));
+
+test("THE FIT, drawn, a ROW: a row on tmux whose name leaves no room for the glyph has its facts under the name, whole; a plain row beside it stays one line, and one with no room at all draws no facts beside its name", async () => {
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "kernel-fix-developer" ? { ...agent, running: true, runtimeState: "running" } : agent));
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  const rows = await slot.findAllByTestId("oats-working-row");
+  for (const row of rows) expect(row.querySelector("[data-fit]")!.getAttribute("data-fit")).toBe("beside"); // no layout: one line
+  const tmux = rows.find((row) => row.querySelector('[data-phrase="where"]') !== null)!;
+  const plain = rows.find((row) => row !== tmux && row.querySelector('[data-phrase="where"]') === null && row.querySelector('[data-tone="warning"]') === null)!;
+  const again = () => act(async () => slot.behavior.emitRealtime("oats/changed", { at: `2026-11-23T18:17:${String((drawn += 1) + 20).padStart(2, "0")}.000Z` }));
+  // The name takes 340 of 356: the glyph (16) with its separator (12) and the soul's least do not fit beside it.
+  let undo = boxes(tmux.querySelector<HTMLElement>("[data-fit]")!, { line: 356, name: 340, part: partWidth({ soul: 100, where: 16, sep: 12 }) });
+  try {
+    await again();
+    const line = tmux.querySelector<HTMLElement>("[data-fit]")!;
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("under"));
+    expect(line.className.split(/\s+/)).toContain("flex-wrap");
+    expect(within(tmux).getByTestId("oats-home-agent-where").className.split(/\s+/)).toContain("basis-full");
+    // Behind a result that row says "Reading…" beside its name: one line again (no facts to stand under it), in the same boxes.
+    act(() => noteActed(["kernel-fix-developer"], "2099-01-01T00:00:00.000Z"));
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("beside"));
+    expect(line.className.split(/\s+/)).not.toContain("flex-wrap");
+    expect(within(tmux).getByTestId("oats-home-agent-reading").textContent).toBe("Reading…");
+  } finally {
+    undo();
+  }
+  // A plain row in the same boxes: no room for its soul's least: not drawn beside the name (kept for a screen reader), and the row does not wrap.
+  undo = boxes(plain.querySelector<HTMLElement>("[data-fit]")!, { line: 356, name: 345, part: partWidth({ soul: 100 }) });
+  try {
+    await again();
+    const line = plain.querySelector<HTMLElement>("[data-fit]")!;
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("none"));
+    expect(line.className.split(/\s+/)).not.toContain("flex-wrap");
+    expect(within(plain).getByTestId("oats-home-agent-where").className.split(/\s+/)).toContain("sr-only");
+  } finally {
+    undo();
+  }
+});
+
+test("THE FIT, drawn, a CARD: where the whole line does not fit beside the name the unit stands under it; where even the held part does not fit there with the mark, the facts keep the line and the mark with its age takes the next", async () => {
+  // (A card with a reason: the agent's thread was deleted in bb.)
+  const sdk = { threads: { list: async () => [], interactions: { list: async () => [] } } } as never as RenderSlotOptions<Contract>["sdk"];
+  const slot = await homePage({ sidebarThreads: { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_release") }, sdk });
+  const card = await cardOf(slot, "release-070-maintainer");
+  await waitFor(() => expect(within(card).getByTestId("oats-needs-where").querySelector('[data-phrase="reason"]')).not.toBeNull());
+  const line = card.querySelector<HTMLElement>("[data-fit]")!;
+  const unit = within(card).getByTestId("oats-needs-facts");
+  const facts = within(card).getByTestId("oats-needs-where");
+  expect(line.getAttribute("data-fit")).toBe("beside");
+  const again = () => act(async () => slot.behavior.emitRealtime("oats/changed", { at: `2026-11-23T18:18:${String((drawn += 1) + 10).padStart(2, "0")}.000Z` }));
+  const parts = partWidth({ soul: 101, reason: 86, sep: 12, wait: 44 });
+  // 390: name 150 + 8 + (101 + 12 + 86 = 199) + 8 + 44 = 409 of 260: under; there 21 + 12 + 86 + 8 + 44 = 171 fits: the mark stays after the facts.
+  let undo = boxes(line, { line: 260, name: 150, part: parts });
+  try {
+    await again();
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("under"));
+    expect(line.className.split(/\s+/)).toContain("flex-wrap");
+    expect(unit.className.split(/\s+/)).toEqual(expect.arrayContaining(["basis-full"]));
+    expect(unit.className.split(/\s+/)).not.toContain("flex-wrap");
+    expect(facts.className.split(/\s+/)).toEqual(expect.arrayContaining(["flex-1", "basis-0"]));
+  } finally {
+    undo();
+  }
+  // A line of 150: even 171 does not fit: the reason wins: the facts take the line, the mark with its age the next.
+  undo = boxes(line, { line: 150, name: 150, part: parts });
+  try {
+    await again();
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("split"));
+    expect(unit.className.split(/\s+/)).toEqual(expect.arrayContaining(["basis-full", "flex-wrap"]));
+    expect(facts.className.split(/\s+/)).toContain("basis-full");
+    expect(facts.querySelector('[data-phrase="reason"]')!.className.split(/\s+/)).toContain("shrink-0"); // never cut
+  } finally {
+    undo();
+  }
+  // Wide again: one line.
+  undo = boxes(line, { line: 829, name: 150, part: parts });
+  try {
+    await again();
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("beside"));
+    expect(line.className.split(/\s+/)).not.toContain("flex-wrap");
+  } finally {
+    undo();
+  }
+});
+
+/** The one count line of the home, on Home › Agents ("2 running · 4 need you · …"), for a roster. */
 async function agentsLine(agents: Agent[]): Promise<string> {
   const app = await loadApp();
   const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
@@ -1238,7 +1504,7 @@ test.each([
   expect(within(card).queryByTestId("oats-needs-message")).toBeNull();
   // SAFETY, carried by design: the card draws no answer and no reply at all (above); it says that the
   // agent does not run and what to do, and the one act under the sentence is Start, through OATS.
-  expect(within(card).getByTestId("oats-needs-stopped").textContent).toBe("Not running. Start it to answer.Start…");
+  expect(within(card).getByTestId("oats-needs-stopped").textContent).toBe("Not running.Start…");
   // the two things to press: its thread, and Start, which opens the lifecycle's dialog (nothing is started on the press)
   expect(Array.from(card.querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Open", "Start…"]);
   fireEvent.click(within(card).getByTestId("oats-needs-start"));
@@ -1264,7 +1530,9 @@ test("an agent the kernel cannot reach while bb holds a request on its thread: n
 test("an agent whose session was lost, on a thread whose last turn bb calls failed, is answered as on any listed thread", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false as const, runtimeState: "stopped", sessionEnd: "lost" } : agent));
   const threads = sidebarThreads();
-  const slot = await homePage({ rpc: handlers({}, agents), sdk: BB_ASKS, sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, status: "error" as const } : thread)) } });
+  // bb says of that thread's events that a turn started (its LATER turn failed): until it has, the thread may be one that never started, and the card would not answer.
+  const events = { list: async ({ types }: { types: readonly string[] }) => (types.includes("turn/started") ? [{ type: "turn/started", seq: 5, data: {} }] : []) };
+  const slot = await homePage({ rpc: handlers({}, agents), sdk: { threads: { ...BB_ASKS.threads, events } } as never, sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, status: "error" as const } : thread)) } });
   const card = await cardOf(slot, "flaky-ci-developer");
   await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice").map((choice) => choice.textContent)).toEqual(["One", "Two"]));
   expect(within(card).queryByTestId("oats-needs-stopped")).toBeNull();
@@ -1459,26 +1727,41 @@ test("the home's one more try of the version waits for the roster: none while th
 // An agent whose thread bb no longer has and that still needs the person: nothing can be sent to
 // it from bb. The card's second line says what became of its thread, as the reason alone (bb's own
 // answer: "deleted in bb"); no sentence repeats it, and the card draws no reply. Open leads to its page.
-test("an agent whose bb thread was deleted that needs the person: the reason and its soul on its second line, no sentence under it, no reply, and Open to its page", async () => {
+test("an agent whose bb thread was deleted that needs the person: the reason and its soul on its name's line, the reason held whatever its tone, no sentence under it, no reply, and Open to its page", async () => {
   vi.useFakeTimers({ now: FOUR_DAYS_ON, toFake: ["Date"] }); // (the card's wait is pinned below: never the real clock)
   const sdk = { threads: { list: async () => [], interactions: { list: async () => [] } } } as never as RenderSlotOptions<Contract>["sdk"];
   const slot = await homePage({ sidebarThreads: { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_release") }, sdk });
   const card = await cardOf(slot, "release-070-maintainer");
   await waitFor(() => expect(within(card).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer · deleted in bb"));
-  expect(card.textContent).toBe("Release 070 maintaineroats-maintainer · deleted in bbOpen!4 dGreen light at 9f2e1c? Second reader done.");
+  expect(card.textContent).toBe("Release 070 maintaineroats-maintainer · deleted in bb!4 dOpenGreen light at 9f2e1c? Second reader done.");
+  // The reason is the card's only word on why there is no reply: it never shrinks and never leaves (the soul gives way), though it does not warn here.
+  const why = card.querySelector('[data-testid="oats-needs-where"] [data-phrase="reason"]')!;
+  expect([why.textContent, why.getAttribute("data-tone"), why.className.split(/\s+/).includes("shrink-0"), card.querySelector('[data-testid="oats-needs-where"]')!.getAttribute("data-reason")]).toEqual(["deleted in bb", null, true, "shown"]);
   expect(card.textContent).not.toContain("so nothing can be sent to it from here");
   expect(within(card).queryByTestId("oats-needs-elsewhere")).toBeNull();
   expect(within(card).queryByTestId("oats-reply")).toBeNull();
   expect(within(card).getByTestId("oats-needs-open").getAttribute("aria-label")).toBe("Open its page: Release 070 maintainer");
 });
 
-test("an agent nobody stopped (its session ended in a shell, was lost, or no harness is loaded) is answered from its card, on a thread bb lists: a message there is how it comes back", async () => {
-  // The one reading of "a message carries it on" (model/rest.ts), which the Start dialog's first line reads too. It
-  // narrows what the card refused before (every agent the kernel says does not run): only a STOP is refused, and an
-  // agent the kernel cannot reach.
+test("an agent nobody stopped whose way on is a message (no harness is loaded) is answered from its card, on a thread bb lists; one whose harness ended by itself is not", async () => {
+  // The one reading of "a message carries it on" (model/rest.ts), which the Start dialog's first line and the thread's
+  // line read too: said only where a fact shows it. A harness that ended by itself (a shell, "exited") has none: its
+  // card does not answer into the thread, and offers Start.
   for (const [what, change] of [
     ["its session ended in a shell", { running: false as const, runtimeState: "shell" }],
     ["its harness ended by itself", { running: false as const, runtimeState: "stopped", sessionEnd: "exited" }],
+  ] as const) {
+    const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change, waiting: { reason: "attention", message: "Which branch do I use?", since: "2026-11-19T12:00:00.000Z" } } : agent));
+    const slot = await homePage({ rpc: handlers({}, agents), sidebarThreads: calm() });
+    const card = await cardOf(slot, "flaky-ci-developer");
+    expect(card.dataset.offer, what).toBe("stopped");
+    expect(within(card).queryByTestId("oats-reply-send"), what).toBeNull();
+    expect(within(card).getByTestId("oats-needs-stopped"), what).toBeTruthy();
+    slot.unmount();
+    resetApp();
+  }
+  for (const [what, change] of [
+    // (A lost session's claim is not shown, the claim's gate: its card is the one of bb's own question, above.)
     ["no harness is loaded", { running: false as const, runtimeState: "unknown" }],
   ] as const) {
     const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change, waiting: { reason: "attention", message: "Which branch do I use?", since: "2026-11-19T12:00:00.000Z" } } : agent));

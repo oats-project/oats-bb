@@ -1,5 +1,7 @@
 // Pure functions from (agents, bbThreads) to what each slot draws. No bb or React import.
-import type { Agent, AgentState, BbThread, Node, Top, View } from "./types";
+import type { Agent, AgentState, BbThread, Node, Row, View } from "./types";
+// (model/rest.ts reads two functions of this file: a cycle of two modules, of functions that are only called later.)
+import { messageResumes } from "./rest";
 
 /**
  * Whether the kernel's row says the agent is STOPPED. The one predicate of the claim's gate and of
@@ -112,6 +114,12 @@ export function state(agent: Agent, thread: BbThread | null): AgentState {
   // ran, whatever the row says of how its session ended (the kernel reads such a home "stopped",
   // its session "lost"). Failed, in every place. Not of a row the kernel does not call at rest.
   if (failedAtStart(agent, thread)) return "error";
+  // A message is the designed way on (WHICH rows that is, is the outside feature's one answer,
+  // model/rest.ts `messageResumes`: this rule names none itself; never after an operator's stop,
+  // never on tmux) and bb says the thread works: someone sent it, the agent works, and the
+  // kernel's row is one read behind. bb's word stands: "Working", never "Stopped · session lost"
+  // over bb's own turn (the lead's ruling T4, 24 Nov 2026).
+  if (thread !== null && threadWorks(thread) && messageResumes(agent, thread)) return "working";
   // A row that does not run and says how its session ended: that decides (`recordedStopped`): an
   // operator's stop and a lost session are stopped beside any word; a harness that ended by itself failed.
   if (recordedStopped(agent)) return "stopped";
@@ -176,9 +184,9 @@ function cutLinks(parentOf: ReadonlyMap<string, string>): Set<string> {
 }
 
 /** Every node of a tree, parents before their children. */
-export function flatten(roots: readonly Node[]): Node[] {
-  const out: Node[] = [];
-  const walk = (nodes: readonly Node[]) => {
+export function flatten<T extends { children: T[] }>(roots: readonly T[]): T[] {
+  const out: T[] = [];
+  const walk = (nodes: readonly T[]) => {
     for (const node of nodes) {
       out.push(node);
       walk(node.children);
@@ -202,14 +210,15 @@ export type Foldable<T> = { agent: Pick<Agent, "instance">; state: AgentState; c
  * "warning" where the hidden row is one the caller says warns (`insideOf`). `pinned`: it is open
  * because it is above the row on screen, whatever the person left: it cannot be closed now.
  */
-export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null };
+export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null; /** the hidden row `inside` is the state of: the caller names the chevron with that row's own words */ insideNode: T | null; /** how many hidden rows ask */ insideAsks: number; /** the hidden rows of that row's kind: the toggle's name counts them */ insideKin: readonly T[] };
 
 /** The instances above one in the tree (its parent, its parent's parent, …), or none where it is a root or not in the tree. */
 export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance: string): Set<string> {
   const found = new Set<string>();
   const walk = (nodes: readonly T[], above: readonly string[]): boolean => {
     for (const node of nodes) {
-      if (node.agent.instance === instance) {
+      // (A match that is a root has nobody above it: the walk goes on, for a name the kernel listed twice, whose other row may be under a parent.)
+      if (node.agent.instance === instance && above.length > 0) {
         for (const each of above) found.add(each);
         return true;
       }
@@ -222,29 +231,42 @@ export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance
 }
 
 /**
- * What a closed parent says of the rows it hides. ONE principle: it carries a mark for any row
- * inside it that itself carries a mark: one that needs a person (rank 0), one a person must look
- * at (rank 1: it runs outside OATS, or failed), and one that WARNS (`warns`: the caller's word for
- * a row whose own mark is drawn in the warning tone, which the model cannot tell: a thread
- * archived in bb while it ran; that is of rank 1 too). Several inside: the most urgent by rank,
- * and among equals the first in the tree's order. → that row's own state, and "warning" as the
- * tone where it is a row that warns; `{ state: null }` where every hidden row is quiet and none
- * warns. The parent's own state is never part of it: its own word and mark stay its own.
+ * What a closed parent says of the rows it hides. ONE principle: it says so for any row inside it
+ * that a person must find: one that needs a PERSON (it asks; or it runs outside OATS, which the
+ * home lists under "Needs you"), one a person must look at with nobody asked (it failed; or it
+ * WARNS: `warns`, the caller's word for a row whose own mark is drawn in the warning tone, which
+ * the model cannot tell: a thread archived in bb while it ran), and one that cannot be reached.
+ * Several inside, WHEREVER EACH STANDS: one that asks first, then one that failed or cannot be
+ * reached, then one that runs outside OATS or warns; among equals the first in the tree's
+ * order. → that row's own state (and the row), "warning" as the tone for a row of the third kind,
+ * and `asks`: how many hidden rows ASK (their state is needs-you). `{ state: null }` where every hidden row is
+ * quiet and none warns. The parent's own state is never part of it: its own word and mark stay
+ * its own. (The roster's ORDER, `RANK`, is another thing and is not touched by this.)
  */
-export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null } {
+export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null; /** how many hidden rows ask (their state is needs-you): the model's own fact (the toggle's name counts `kin`, which is these rows when one that asks wins) */ asks: number; /** every hidden row of that row's KIND (those that ask; or those that failed or cannot be reached; or those that run outside OATS or warn), in the tree's order: the caller counts them in the toggle's name */ kin: T[] } {
   // The best so far, in a list of at most one (a local a closure assigns is not narrowed after it).
-  const best: { state: AgentState; tone: "warning" | null; rank: number }[] = [];
+  const best: { state: AgentState; tone: "warning" | null; rank: number; node: T }[] = [];
+  let asks = 0;
+  const kinds: Record<number, T[]> = {};
   const walk = (nodes: readonly T[]) => {
     for (const each of nodes) {
       const warned = warns(each);
-      const rank = Math.min(RANK[each.state], warned ? 1 : 2);
-      if (rank < 2 && (best[0] === undefined || rank < best[0].rank)) best[0] = { state: each.state, tone: warned ? "warning" : null, rank };
+      // (An UNREACHABLE row's rank in the roster's ORDER stays 2, with working, idle and stopped; behind a fold a
+      // person must find it: there it is the failed row's equal.)
+      // WHICH hidden row the closed parent speaks for, wherever each stands: one that ASKS first (its disc beside the
+      // chevron, and the count); then one that FAILED or cannot be REACHED (the chevron in the failure's tone: a failed
+      // row is never hidden behind a milder one); then one that runs outside OATS, or WARNS (the warning tone).
+      const needs = each.state === "needs-you";
+      if (needs) asks += 1;
+      const weight = needs ? 0 : each.state === "error" || each.state === "unreachable" ? 1 : each.state === "outside" || warned ? 1.5 : 2;
+      if (weight < 2) (kinds[weight] ??= []).push(each);
+      if (weight < 2 && (best[0] === undefined || weight < best[0].rank)) best[0] = { state: each.state, tone: weight === 1.5 ? "warning" : null, rank: weight, node: each };
       walk(each.children);
     }
   };
   walk(node.children);
   const found = best[0];
-  return found === undefined ? { state: null, tone: null } : { state: found.state, tone: found.tone };
+  return found === undefined ? { state: null, tone: null, node: null, asks, kin: [] } : { state: found.state, tone: found.tone, node: found.node, asks, kin: kinds[found.rank] ?? [] };
 }
 
 /**
@@ -255,7 +277,7 @@ export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boo
  *   closed over the row a person is on.
  * Every other parent is closed: its children are not drawn, and it carries `inside` (`insideOf`;
  * `warns`: which rows carry their mark in the warning tone, the caller's to say).
- * The order is the tree's own (`view().roots`, already in the roster's one order). Pure.
+ * The order is the tree's own (`view().rows`, already in the roster's one order). Pure.
  */
 export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: ReadonlySet<string>, selected: string | null = null, warns?: (node: T) => boolean): TreeRow<T>[] {
   const above = selected === null ? new Set<string>() : ancestorsOf(roots, selected);
@@ -265,8 +287,8 @@ export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: Rea
       const parent = node.children.length > 0;
       const pinned = parent && above.has(node.agent.instance);
       const open = parent && (pinned || opened.has(node.agent.instance));
-      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null };
-      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone });
+      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null, node: null, asks: 0, kin: [] };
+      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone, insideNode: inside.node, insideAsks: inside.asks, insideKin: inside.kin });
       if (open) walk(node.children);
     }
   };
@@ -346,22 +368,60 @@ export function view(agents: readonly Agent[], threads: readonly BbThread[]): Vi
     }
   };
   settle(roots, 0);
-  // An agent with no bb thread is a root in that same order, not a block after the tree. (It is
-  // drawn flat, under no parent, whatever its `parent`: as before.)
-  const tops: { top: Top; rank: number; place: number }[] = [
-    ...roots.map((node) => ({ top: { node }, rank: rankOf(node), place: placeOf(node.agent) })),
-    ...detached.map((agent) => ({ top: { agent, where: "detached" as const }, rank: RANK[state(agent, null)], place: placeOf(agent) })),
-    ...elsewhere.map((agent) => ({ top: { agent, where: "tmux" as const }, rank: RANK[state(agent, null)], place: placeOf(agent) })),
-  ];
-  // (A stable sort: two rows of one agent name, which the kernel should never list, keep the order they were made in.)
-  tops.sort((a, b) => a.rank - b.rank || a.place - b.place);
+
+  // ---- The roster as it is drawn: ONE tree for every agent, whatever its backend. ----
+  // Every agent is a row. One with no bb thread (on tmux; or its thread is not listed) hangs under
+  // its parent like any other, where the parent is a row, whatever either's backend: the kernel's
+  // row names the parent. The rules of the tree are the same for all: a parent that is no row
+  // makes its child a root; a cycle is cut at one link (`cutLinks`); deeper than 2 is drawn at 2;
+  // and every level is in the one order, by the most urgent state of each row's own subtree.
+  const rowOf = new Map<string, Row>(); // by instance: the kernel's first row of a name
+  const twice: Row[] = []; // a second row of a name the kernel should never list twice: a root, under nobody and over nobody
+  for (const agent of agents) {
+    const node = drawn.get(agent.instance);
+    const onThread = node !== undefined && node.agent === agent;
+    const own = onThread ? node.state : state(agent, null);
+    const row: Row = { agent, thread: onThread ? node.thread : null, where: onThread ? "thread" : agent.backend === "tmux" ? "tmux" : "detached", state: own, urgent: own, depth: 0, children: [] };
+    if (rowOf.has(agent.instance)) twice.push(row);
+    else rowOf.set(agent.instance, row);
+  }
+  const rowParent = new Map<string, string>();
+  for (const row of rowOf.values()) {
+    const parent = row.agent.parent;
+    if (parent !== null && parent !== row.agent.instance && rowOf.has(parent)) rowParent.set(row.agent.instance, parent);
+  }
+  const rowCut = cutLinks(rowParent);
+  const rows: Row[] = [];
+  for (const row of rowOf.values()) {
+    const parent = rowCut.has(row.agent.instance) ? undefined : rowParent.get(row.agent.instance);
+    const over = parent === undefined ? undefined : rowOf.get(parent);
+    if (over === undefined) rows.push(row);
+    else over.children.push(row);
+  }
+  // After the named rows: among the roots of one rank, a name's second row is drawn after its first (the sort is stable), as
+  // the kernel lists them. (Where the first is under a parent the second, a root, may stand before that parent.)
+  rows.push(...twice);
+  // Children first: a row's `urgent` is its own state, or that of the most urgent row under it
+  // (the first in the order, where two are of one rank), and each level is sorted by it.
+  const byUrgency = (a: Row, b: Row): number => RANK[a.urgent] - RANK[b.urgent] || placeOf(a.agent) - placeOf(b.agent);
+  const order = (level: Row[], depth: number) => {
+    for (const row of level) {
+      row.depth = depth >= 2 ? 2 : depth === 1 ? 1 : 0;
+      order(row.children, depth + 1);
+      const first = row.children[0];
+      if (first !== undefined && RANK[first.urgent] < RANK[row.state]) row.urgent = first.urgent;
+    }
+    // (A stable sort: two rows of one agent name keep the order they were made in.)
+    level.sort(byUrgency);
+  };
+  order(rows, 0);
 
   const all = flatten(roots);
   const newest = (a: Node, b: Node) => b.thread.updatedAt - a.thread.updatedAt;
   const pick = (keep: (node: Node) => boolean) => all.filter(keep).sort(newest);
 
   return {
-    rows: tops.map((each) => each.top),
+    rows,
     roots,
     others: threads
       .filter((thread) => !taken.has(thread.id) && isListed(thread))

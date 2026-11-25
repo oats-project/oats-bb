@@ -102,6 +102,8 @@ fi
 # plugin installed from git (G1): bb refuses a path install over it, so it goes first.
 bb plugin remove oats --yes > /dev/null 2>&1 || true
 (cd "$LIVE" && bb plugin install . --yes) > "$OUT/install.txt" 2>&1 || { cat "$OUT/install.txt"; exit 1; }
+# bb built it with the locked toolchain, and fetched none from npm (no-toolchain-fetch.sh).
+sh "$PLUGIN/container/no-toolchain-fetch.sh" || { fail "bb fetched its build toolchain at the plugin's install"; exit 1; }
 # Every page is shown for the checks (the plugin's setting `pages`; its default, `home` alone, is
 # what a release shows): each page's scenes run. The stage "pages-default" of live-ui.mjs puts the
 # default back for its scenes, and asserts what is then absent.
@@ -228,6 +230,16 @@ else
   fail "G1 the install from git"; tail -15 "$OUT/install-git.txt"
 fi
 git config --global --unset "url.file://$GIT_REPO.insteadOf"
+# The git install built with the locked toolchain too, and what it installed for the plugin is the
+# manifest's `dependencies` alone: the four toolchain packages are devDependencies of the plugin
+# (for its own bb, in the unit stage), and none of them is anywhere in bb's data directory.
+if sh "$PLUGIN/container/no-toolchain-fetch.sh" > /dev/null \
+  && [ -n "$(find "$HOME_DIR/bbdata" -path '*/node_modules/zod/package.json' 2> /dev/null | head -1)" ] \
+  && [ -z "$(find "$HOME_DIR/bbdata" \( -path '*/node_modules/esbuild/package.json' -o -path '*/node_modules/tailwindcss/package.json' -o -path '*/node_modules/@tailwindcss/node/package.json' -o -path '*/node_modules/@tailwindcss/oxide/package.json' \) 2> /dev/null | head -1)" ]; then
+  pass "G1 the git install fetched no toolchain and holds none of bb's four toolchain packages: the plugin's dependencies only"
+else
+  fail "G1 the git install's tree"; find "$HOME_DIR/bbdata" \( -name 'toolchain-*' -o -path '*/node_modules/zod/package.json' -o -path '*/node_modules/esbuild/package.json' -o -path '*/node_modules/tailwindcss/package.json' -o -path '*/node_modules/@tailwindcss/*/package.json' \) 2> /dev/null | head -12
+fi
 fake
 rpc refresh > /dev/null 2>&1 || true
 [ "$(field ok <<<"$(rpc snapshot)")" = true ] && pass "G1 the git-installed plugin reads the deployment" || fail "G1 snapshot of the git-installed plugin"

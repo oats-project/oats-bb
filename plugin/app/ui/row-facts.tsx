@@ -16,8 +16,6 @@
 // width, and the widths of its own parts), so it holds at every depth of the tree and at every
 // width with no number per depth.
 import { useLayoutEffect, useRef, useState } from "react";
-import type { AgentState } from "../../model/types";
-import { StateMark } from "./patterns";
 import { TMUX, TmuxMark } from "./tmux";
 
 /** The least room a shortened reason is worth, in the line's own em: a few letters and the "…". Under it the reason leaves. */
@@ -46,9 +44,8 @@ export function RowFacts({
   reason = null,
   reasonTone,
   where,
-  inside = null,
-  insideTone = null,
   said: whole,
+  reasonKept = false,
   className = "",
 }: {
   testId: string;
@@ -59,11 +56,10 @@ export function RowFacts({
   reason?: string | null;
   /** "warning": the reason asks a person to look: it never leaves, and the soul gives way first. */
   reasonTone?: "warning" | undefined;
+  /** The reason never leaves and is never shortened, whatever its tone: the soul gives way first. For a place where the reason is the only word on what the place lacks (the home's card of an agent whose thread is gone: why it has no reply). No tone and no word changes by it. */
+  reasonKept?: boolean;
   /** Where it is, for an agent on tmux: `TMUX` draws bb's terminal glyph. */
   where?: string;
-  /** A closed parent: the state of the most urgent row it hides, whose mark stands after the parent's own word. */
-  inside?: AgentState | null;
-  insideTone?: "warning" | null;
   /** What the line's TITLE says in the state's and the reason's place, where the row draws other words for them (a lost session: "Lost" on the row, "Stopped · session lost" in its title). */
   said?: { state?: string; reason: string | null };
   className?: string;
@@ -71,12 +67,14 @@ export function RowFacts({
   const line = useRef<HTMLSpanElement>(null);
   const said = reason !== null && reason !== "";
   const warns = reasonTone === "warning";
+  /** The reason is held on the line: it warns, or the place asks for it. */
+  const held = warns || reasonKept;
   // Whether the reason left the row; and the reason's full width as last measured while it was drawn, for the text it was.
   const [left, setLeft] = useState(false);
   const known = useRef<{ text: string; width: number; sep: number } | null>(null);
   useLayoutEffect(() => {
     const element = line.current;
-    if (element === null || !said || warns) {
+    if (element === null || !said || held) {
       if (left) setLeft(false);
       return;
     }
@@ -103,7 +101,7 @@ export function RowFacts({
     const sized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     sized?.observe(element);
     return () => sized?.disconnect();
-  }, [said, warns, left, reason, state, soul, where, inside]);
+  }, [said, held, left, reason, state, soul, where]);
 
   const shownReason = said && !left;
   const title = [whole === undefined ? state : whole.state, soul, whole === undefined ? (said ? reason : null) : whole.reason, where].filter((part) => part !== undefined && part !== null && part !== "").join(" · ");
@@ -119,23 +117,18 @@ export function RowFacts({
           <span data-phrase="state" className="shrink-0">
             {state}
           </span>
-          {/* A closed parent that hides a row that carries a mark: that row's mark, named, after the parent's own word, which stays its own. */}
-          {inside === null ? null : (
-            <span data-testid="oats-row-inside" className="ml-1.5 inline-flex shrink-0 items-center">
-              <StateMark state={inside} tone={insideTone ?? undefined} />
-            </span>
-          )}
+          {/* (The line says only the row's own agent: what a closed parent hides is marked on its chevron, app/roster/fold.tsx.) */}
           {sep("soul")}
         </>
       )}
       {/* The soul shortens only where no reason is on the line to give way before it: none, one that left, or one that warns. */}
-      <span data-phrase="soul" className={shownReason && !warns ? "shrink-0" : "min-w-[1.5em] shrink truncate"}>
+      <span data-phrase="soul" className={shownReason && !held ? "shrink-0" : "min-w-[1.5em] shrink truncate"}>
         {soul}
       </span>
       {shownReason ? (
         <>
           {sep("reason")}
-          <span data-phrase="reason" data-tone={warns ? "warning" : undefined} className={warns ? "shrink-0" : "min-w-0 shrink truncate"}>
+          <span data-phrase="reason" data-tone={warns ? "warning" : undefined} className={held ? "shrink-0" : "min-w-0 shrink truncate"}>
             {reason}
           </span>
         </>

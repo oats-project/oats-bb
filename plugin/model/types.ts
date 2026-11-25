@@ -78,8 +78,11 @@ export type BbThread = {
   queuedWork: string;
   /**
    * Not bb's sidebar's: joined by the app from bb's own events of the thread (app/outside/threads.ts),
-   * for a thread whose status is "error". Set: the thread FAILED AT ITS START (bb recorded an error
-   * and never a turn), with bb's own reason. null or absent: it did not, or bb has not answered.
+   * for a thread whose status is "error". THREE values: an object: the thread FAILED AT ITS START
+   * (bb recorded an error and never a turn), with bb's own reason; `null`: bb ANSWERED, and it did
+   * not (a turn started: a later turn failed); absent: bb has not answered (or cannot), and nobody
+   * knows yet which of the two it is. What reads it fails CLOSED on the absent value: no message
+   * is invited into a thread that may never have started (model/rest.ts `messageResumes`).
    */
   startFailure?: StartFailure | null;
 };
@@ -103,16 +106,30 @@ export type Node = {
 };
 
 /**
- * One top row of the roster, in the ONE order every row has whatever its backend: a root of the
- * tree (an agent on its bb thread, with its children under it), or an agent with no bb thread
- * (on tmux; or one whose thread bb does not list), which is a root in that same order.
+ * One row of the roster as it is drawn: ONE tree for every agent, whatever its backend. An agent
+ * on its bb thread (`where: "thread"`), on tmux, or one whose thread bb does not list
+ * ("detached") is a row under its parent where the parent is a row, and a root otherwise.
+ * - `thread`: bb's thread the row is on; null for a row with none (it opens the agent's page).
+ * - `state`: the agent's own. `urgent`: the most urgent state in the row's own SUBTREE, itself
+ *   included: its own state unless a row under it has a lower rank. It is what ORDERS the row.
+ *   (What a folded parent is MARKED with is another reading, `insideOf`: the rows it hides alone,
+ *   and the ones that warn among them.)
+ * - `depth`: deeper than 2 is drawn at 2.
  */
-export type Top = { node: Node } | { agent: Agent; where: "tmux" | "detached" };
+export type Row = {
+  agent: Agent;
+  thread: BbThread | null;
+  where: "thread" | "tmux" | "detached";
+  state: AgentState;
+  urgent: AgentState;
+  depth: 0 | 1 | 2;
+  children: Row[];
+};
 
 export type View = {
-  /** The roster as it is drawn, top row by top row, in its one order (model/view.ts says the rule). */
-  rows: Top[];
-  /** the agents tree (the roots among `rows`, in the same order) */
+  /** The roster as it is drawn: the roots of its ONE tree, every level in the one order (model/view.ts says the rules). */
+  rows: Row[];
+  /** The tree of the agents on a bb thread alone (a child whose parent has no thread is a root here), in the same order: for those who read threads. */
   roots: Node[];
   /** threads with no agent */
   others: BbThread[];

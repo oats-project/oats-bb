@@ -62,9 +62,15 @@ tests' `container/out/` is emptied at each of their runs): the run's log is what
 prints, and beside it are the screenshots, `fixtures/` (the recorded answers), `answers/` (two more
 kernel answers kept as evidence), `doctor.txt` (the provider's readiness), `install.txt` (the
 plugin's install), `bb.out`, `mock.out` and `mock-requests.jsonl` (the model requests), and the
-run's own inputs (`rpc-input.json`, the children's `task-*.md`). It needs the network for
+run's own inputs (`rpc-input.json`, the children's `task-*.md`). A run that FAILS, at its setup or
+after, also keeps `bb-logs/` (`bb-logs.sh`), which is where a bb that did not start says why: bb's
+own logs (the files named `*.log` of bb's log directory, the last 2000 lines of each, 1 MB at
+most) and bb's own crash reports (`process-*.json` there, one per uncaught error of a bb process,
+1 MB at most: the error's name, message, stack and code, the process's name and pid, the time,
+and the runtime's version, platform, architecture and executable). Nothing else of bb's data is
+read, nor any login. It needs the network for
 npm and for the `oats.framework` package (github.com); nothing else leaves the container. A run
-takes six to eight minutes.
+takes about 43 minutes (24 Nov 2026), and grows with each part.
 
 ## CI runs it
 
@@ -87,6 +93,7 @@ together.
 |---|---|---|
 | `run.sh` | on the host | starts the container, copies in the plugin, the provider's tree and, for an unreleased kernel, the kernel's tree (this checkout's `oats-package/` as committed at `HEAD`; uncommitted changes there stop the run), runs the two scripts below, copies the artefacts back to `real/out/` |
 | `setup.sh` | in the container | the installs and the services, in this order (below) |
+| `bb-logs.sh` | in the container, by `run.sh` (and `../ci.sh`) when the run failed | copies bb's own logs, cut short, and its crash reports beside the artefacts (`bb-logs/`), and says what bb's log directory holds |
 | `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment |
 | `bb-plugin-command.sh` | by `setup.sh` and `scenario.mjs` | runs a command one of bb's plugins adds to its CLI (`bb concurrency-limit status`), waiting up to 60 s for bb to have it; `bb-plugin-command.test.sh` is its test, run by `container/unit.sh` |
 | `mock-anthropic.mjs` | in the container | the mock model |

@@ -112,7 +112,7 @@ function Checks({ readiness, of, context, now }: { readiness: PanelReadiness; of
 }
 
 /** `context` names what was observed, once it is known. */
-export function Readiness({ instance, of, context, now }: { instance: string; of: "instance" | "soul"; context: Context | null; now: number }) {
+export function Readiness({ instance, of, context, now, unread }: { instance: string; of: "instance" | "soul"; context: Context | null; now: number; /** the roster cannot be read: no act of this part's own (state.tsx `CommandState`) */ unread: boolean }) {
   const read = usePanelReadiness(instance, of);
   // A person's Refresh says what it does while it reads: "Refreshing…". What it read then stands in its place.
   const [refreshing, setRefreshing] = useState(false);
@@ -125,7 +125,7 @@ export function Readiness({ instance, of, context, now }: { instance: string; of
   if (read.status === "error" && !mendable(read, "readiness")) return null;
   return (
     <Section title={TITLE} testId={`oats-panel-readiness-${of}`}>
-      <CommandState read={read} of="readiness" reading={LOADING} failed="Readiness could not be read" at={read.data?.at ?? null} now={now} />
+      <CommandState read={read} of="readiness" reading={LOADING} failed="Readiness could not be read" at={read.data?.at ?? null} now={now} unread={unread} />
       {read.data === undefined ? null : (
         <>
           <p data-testid="oats-panel-readiness-summary" className="m-0 font-semibold text-foreground">
@@ -143,7 +143,7 @@ export function Readiness({ instance, of, context, now }: { instance: string; of
         {(read.fetching && read.data === undefined) || offersRetry(read, "readiness") ? null : (
           <Button
             data-testid="oats-panel-readiness-refresh"
-            disabled={read.fetching}
+            disabled={read.fetching || unread}
             onClick={() => {
               setRefreshing(true);
               read.retry();

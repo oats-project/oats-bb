@@ -190,6 +190,34 @@ const bbSays = (id, status = statusNow(id)) => `status ${status}; its log's end:
 // "local-roster" from that file; without it that stage is skipped. The file is never part of the
 // repository, and its scene prints counts only, never a name (container/README.md).
 const LOCAL_STATUS = process.env.LIVE_UI_STATUS_FILE ?? "";
+/**
+ * The run's own bb threads (the fixtures'), for a scene of the pilot's image pass that draws a
+ * roster with no agent on a bb thread: archived, nothing of the test container stands under that
+ * roster ("Other threads"), as on a deployment whose bb has no such threads; `back()` puts back
+ * exactly what `away()` archived. (By hand only, with LIVE_PILOT_IMAGES: an archived thread holds
+ * no turn, so the scenes after it in that pass may read another state of those agents.)
+ */
+const awayThreads = [];
+const ownThreads = {
+  away: (threads) => {
+    for (const thread of threads.values()) {
+      bb("thread", "archive", thread.id);
+      awayThreads.push(thread.id);
+    }
+  },
+  back: () => {
+    // Each one is tried: one that cannot be put back does not keep the others archived. What failed is said, then thrown.
+    const failed = [];
+    for (const id of awayThreads.splice(0)) {
+      try {
+        bb("thread", "unarchive", id);
+      } catch (error) {
+        failed.push(`${id}: ${String(error?.message ?? error).split("\n")[0]}`);
+      }
+    }
+    if (failed.length > 0) throw new Error(`the image pass could not put back ${failed.length} thread(s) it archived: ${failed.join("; ")}`);
+  },
+};
 /** The bb threads the local stage archived for its image, to put back when it leaves. */
 const archivedForLocal = [];
 const START_SECONDS = Number(process.env.LIVE_UI_START_SECONDS) || 120; // unset, empty or no number: 120
@@ -280,32 +308,39 @@ function statusWithRealIds(threads, changes = {}) {
  * are not recorded as a set: each tmux row is the ONE row the kernel printed for a tmux home
  * (status.json's kernel-fix-developer), with its name, home, window, soul group and parent changed;
  * a waiting one carries the claim the kernel printed for release-070-maintainer; and each says
- * whether it runs as the kernel prints it for a tmux home today: `running` true or false, and no
- * runtimeState word (README).
+ * whether it runs in the three keys of a RECORDED tmux row of its kind (`SESSION_KEYS` of
+ * test/fixtures/lifecycle/tmux-row-{running,stopped,lost}.json, OATS 0.70.5: one that runs, one
+ * stopped with OATS, one whose session was lost), a key the recorded row does not have left out.
+ * So the rows are DERIVED, not recorded (README).
  */
+const SESSION_KEYS = ["running", "runtimeState", "sessionEnd"];
+const recordedTmuxRow = (kind) => JSON.parse(readFileSync(join(PLUGIN, `test/fixtures/lifecycle/tmux-row-${kind}.json`), "utf8"));
 /** `as`: by instance, another `how` than the roster's own (a scene that starts a lost agent draws it running after). */
-function tmuxRoster(threads, as = {}) {
+/** `roster`: another set of agents than the stage's own, in the shape of `TMUX_ROSTER` (a scene that draws one of its own, and puts the stage's back). */
+function tmuxRoster(threads, as = {}, roster = TMUX_ROSTER) {
   const status = JSON.parse(statusWithRealIds(threads));
   const rows = status.agents.flatMap((group) => group.instances);
   const model = rows.find((row) => row.instance === "kernel-fix-developer");
   const claim = rows.find((row) => row.instance === "release-070-maintainer").waitingOnYou;
-  for (const group of status.agents) group.instances = group.instances.filter((row) => TMUX_ROSTER.bb.includes(row.instance));
-  for (const row of status.agents.flatMap((group) => group.instances)) row.instance = TMUX_ROSTER.renamed[row.instance] ?? row.instance;
-  for (const [instance, soul, parent, listed] of TMUX_ROSTER.tmux) {
+  const recorded = { running: recordedTmuxRow("running"), waiting: recordedTmuxRow("running"), stopped: recordedTmuxRow("stopped"), lost: recordedTmuxRow("lost") };
+  for (const group of status.agents) group.instances = group.instances.filter((row) => roster.bb.includes(row.instance));
+  for (const row of status.agents.flatMap((group) => group.instances)) row.instance = roster.renamed[row.instance] ?? row.instance;
+  for (const [instance, soul, parent, listed] of roster.tmux) {
     const how = as[instance] ?? listed;
     const row = structuredClone(model);
     Object.assign(row, { agent: soul, instance, home: model.home.replace("/oats-developer/instances/kernel-fix-developer", `/${soul}/instances/${instance}`), parentInstance: parent, waitingOnYou: how === "waiting" ? structuredClone(claim) : null });
     row.tmux = { ...model.tmux, window: instance };
     if (row.identity) row.identity = { ...row.identity, alias: instance };
     if (row.capabilityMeta?.["oats.aweb"]) row.capabilityMeta = { ...row.capabilityMeta, "oats.aweb": { ...row.capabilityMeta["oats.aweb"], alias: instance } };
-    // What the kernel prints for a tmux home (awebai/oats lib/instance-listing.mjs `tmuxLiveness`):
-    // `{ running: true }` for one whose harness runs and `{ running: false }` for one whose window is
-    // gone, with NO runtimeState word in either. (status.json's own tmux row carries "unknown", from
-    // the kernel it was recorded with.)
-    delete row.runtimeState;
-    row.running = how !== "stopped" && how !== "lost";
-    // A lost session (the kernel's recorded row for a tmux home whose window was killed): not running, no word, and `sessionEnd: "lost"`.
-    if (how === "lost") row.sessionEnd = "lost";
+    // What the kernel printed of the session of a tmux home of this kind, and nothing else of that
+    // row: running `running: true` and no word; stopped with OATS `running: false`, the word "shell"
+    // and `sessionEnd: "stopped"`; lost `running: false`, no word and `sessionEnd: "lost"`.
+    // (status.json's own tmux row carries "unknown", from the kernel it was recorded with.)
+    if (!Object.hasOwn(recorded, how)) throw new Error(`tmux-roster.mjs: ${instance} is "${how}", which is none of ${Object.keys(recorded).join(", ")}`);
+    for (const key of SESSION_KEYS) {
+      if (key in recorded[how]) row[key] = recorded[how][key];
+      else delete row[key];
+    }
     // (A soul the fixtures' status does not list gets a group of its own, shaped as the model's.)
     let group = status.agents.find((each) => each.name === soul);
     if (group === undefined) {
@@ -443,7 +478,14 @@ const BUILT_IN = {
   "tmux-roster": {
     label: "TM",
     enter: async ({ threads }) => {
-      fake({ status: { stdout: tmuxRoster(threads) } });
+      const status = tmuxRoster(threads);
+      // Held here, with the three keys written out (not through the builder's list): what the screen
+      // draws cannot tell a leftover word of the model row from none.
+      const built = new Map(JSON.parse(status).agents.flatMap((group) => group.instances).map((row) => [row.instance, row]));
+      const sessionOf = (row) => JSON.stringify(["running", "runtimeState", "sessionEnd"].map((key) => (key in row ? row[key] : "ABSENT")));
+      const off = TMUX_ROSTER.tmux.filter(([instance, , , how]) => sessionOf(built.get(instance) ?? {}) !== sessionOf(recordedTmuxRow(how === "waiting" ? "running" : how))).map(([instance]) => instance);
+      check(off.length === 0, `TM each of the ${TMUX_ROSTER.tmux.length} tmux rows says of its session exactly what the recorded row of its kind says: running, runtimeState and sessionEnd, a key that row lacks absent`, off.join(", "));
+      fake({ status: { stdout: status } });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === TMUX_ROSTER.bb.length + TMUX_ROSTER.tmux.length);
     },
   },
@@ -645,7 +687,7 @@ try {
           const page = await themedPage(browser, viewport, theme, at);
           try {
             for (const scene of mine) {
-              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as) => tmuxRoster(threads, as), recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads, recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, retitle: (fixtureId, title) => void bb("thread", "update", threads.get(fixtureId).id, "--title", title) /* bb's own rename of a thread */, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
               if (!PILOT) await scene.run(given);
               else {
                 // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.

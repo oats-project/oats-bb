@@ -68,6 +68,9 @@ MACHINE_NAME=${MACHINE_NAME:-falcon}
 docker run -d --name "$NAME" --hostname "$MACHINE_NAME" -e "MACHINE_NAME=$MACHINE_NAME" --init --cpus 2 --memory 6g -e BB_TELEMETRY=false ${DOCKER_RUN_ARGS:-} "$IMAGE" sleep infinity > /dev/null
 cleanup() {
   status=$?
+  # A failed run keeps bb's own logs too (real/bb-logs.sh): a bb that did not start says why only
+  # there. A unit stage has no bb: the script then says that there is no log.
+  [ "$status" = 0 ] || docker exec -u node "$NAME" sh /home/node/plugin/container/real/bb-logs.sh /home/node/bbdata/logs /home/node/out || echo "ci: bb's logs could not be copied"
   rm -rf "$OUT"
   mkdir -p "$OUT"
   docker cp "$NAME:/home/node/out/." "$OUT/" > /dev/null 2>&1 || echo "ci: no artefacts to copy out"
@@ -98,7 +101,7 @@ run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e
 # the plugin's OATS floor against theirs (test/kernel-compat.test.ts). And its check of a pi model id
 # with the one file that imports: a unit test holds the plugin's reading of bb's list against it
 # (test/model/served.contract.test.ts).
-(cd "$PLUGIN/.." && tar -c oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json oats-package/capabilities/oats-bb/lib/pi-model.mjs oats-package/capabilities/oats-bb/lib/errors.mjs) | docker exec -i -u node "$NAME" tar -x -C /home/node
+(cd "$PLUGIN/.." && tar -c oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json oats-package/capabilities/oats-bb/lib/pi-model.mjs oats-package/capabilities/oats-bb/lib/errors.mjs oats-package/capabilities/oats-bb/lib/title.mjs) | docker exec -i -u node "$NAME" tar -x -C /home/node
 run mkdir -p /home/node/out
 run sh container/setup.sh
 case "$STAGE" in

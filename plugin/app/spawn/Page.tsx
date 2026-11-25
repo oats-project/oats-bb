@@ -316,9 +316,13 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const absent = harnesses.absent;
   const off: "absent" | "soul" | "cannot" | "name" | "model" | "relation" | null =
     absent !== null ? "absent" : chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
+  // The preview waits for the harness read's answer: until it is known whether the deployment has the provider at
+  // all, nothing is asked of the kernel (there it would refuse the bb backend, and a red notice would flash before the
+  // one line). Where the provider is there: the same preview, a moment later (the server keeps that read).
+  const harnessesRead = harnesses.status !== "loading";
   const input: Input | null = useMemo(
     () =>
-      off !== null
+      off !== null || !harnessesRead
         ? null
         : {
             soul,
@@ -328,7 +332,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             ...(model === "" ? {} : { model }),
             ...(relation === "unrelated" ? {} : { relation: { kind: relation, to: relative } }),
           },
-    [off, soul, task, name, harness, harnesses.choice, model, relation, relative],
+    [off, harnessesRead, soul, task, name, harness, harnesses.choice, model, relation, relative],
   );
   const key = input === null ? null : JSON.stringify(input);
 
@@ -370,10 +374,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     return () => clearTimeout(timer);
   }, [rpc, key, held, again]);
   const preview = settled !== null && settled.key === key ? settled : null;
-  // A refusal is not drawn while the harness read is still out: on a deployment with no bb session provider the
-  // kernel refuses the preview (it asks for the bb backend), and the read's answer, a moment later, is what says so,
-  // once. Until it answers the column is read ("Reading…"), never a red notice that then goes.
-  const refusal = refused !== null && refused.key === key && harnesses.status !== "loading" ? refused.problem : null;
+  const refusal = refused !== null && refused.key === key ? refused.problem : null;
   const nameRefusal = refusal !== null && NAME_REFUSALS.has(refusal.code) ? refusal : null;
 
   // ---- the harness and the model ----

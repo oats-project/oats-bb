@@ -642,26 +642,45 @@ test("a deployment with NO bb session provider: the form opens and says it ONCE,
   expect([calls(slot, "spawnPlan"), calls(slot, "spawn")]).toEqual([[], []]);
 });
 
-test("no bb session provider, while the harness read is still out: the kernel's refusal of the preview is not drawn and gone again; the column is read, then the one line stands", async () => {
+test("the preview waits for the harness read: in flight, with a soul chosen, the kernel is asked nothing and no notice is drawn; absent: the one line; present: the preview is asked", async () => {
   type List = { harnesses: string[]; hostId: string | null; absent?: { code: string; message: string } };
   let answer: (list: List) => void = () => undefined;
-  const slot = await form("oats-developer", {
+  const refusing = {
     spawnHarnesses: () => new Promise<List>((resolve) => (answer = resolve)),
     spawnPlan: () => {
       throw new Error('E_BACKEND_UNKNOWN: unknown session backend "bb": no capability of this instance declares it as a session provider');
     },
+  };
+  const slot = await form("oats-developer", refusing);
+  // In flight, a soul on the form: longer than the preview's own delay, nothing is asked and nothing red is drawn.
+  await waitFor(() => expect((slot.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 700));
   });
-  // The preview is asked (the provider is not known to be absent yet) and refused: nothing red is drawn of it.
-  await waitFor(() => expect(calls(slot, "spawnPlan").length).toBeGreaterThan(0));
-  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading…"]));
+  expect(calls(slot, "spawnPlan")).toEqual([]);
   expect(slot.queryByTestId("oats-notice")).toBeNull();
   expect(within(slot.getByTestId("oats-new-agent-page")).queryByRole("button", { name: "Retry" })).toBeNull();
-  // The read answers: the one line, alone.
+  expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading…"]);
+  // The read answers that the provider is absent: the one line, alone; still nothing asked.
   await act(async () => {
     answer({ harnesses: [], hostId: "host_falcon", absent: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace\'s catalog' } });
   });
   await waitFor(() => expect(slot.getAllByTestId("oats-notice").map((notice) => notice.querySelector("h3")!.textContent)).toEqual(["bb is not set up for this workspace."]));
-  expect(within(slot.getByTestId("oats-new-agent-page")).queryByRole("button", { name: "Retry" })).toBeNull();
+  expect(calls(slot, "spawnPlan")).toEqual([]);
+  slot.unmount();
+  resetApp();
+  // The read answers that the provider is there: the preview is asked, as before.
+  const present = await form("oats-developer", previews({ spawnHarnesses: () => new Promise<List>((resolve) => (answer = resolve)) }));
+  await waitFor(() => expect((present.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 700));
+  });
+  expect(calls(present, "spawnPlan")).toEqual([]);
+  await act(async () => {
+    answer({ harnesses: ["claude", "pi"], hostId: "host_falcon" });
+  });
+  await waitFor(() => expect(calls(present, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
+  await waitFor(() => expect(column(present).textContent).toContain("numbered by the kernel"));
 });
 
 test("no bb session provider, while the roster cannot be read: the roster's notice stands alone, and the line comes when it reads again", async () => {

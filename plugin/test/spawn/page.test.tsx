@@ -642,6 +642,46 @@ test("a deployment with NO bb session provider: the form opens and says it ONCE,
   expect([calls(slot, "spawnPlan"), calls(slot, "spawn")]).toEqual([[], []]);
 });
 
+test("no bb session provider, while the harness read is still out: the kernel's refusal of the preview is not drawn and gone again; the column is read, then the one line stands", async () => {
+  type List = { harnesses: string[]; hostId: string | null; absent?: { code: string; message: string } };
+  let answer: (list: List) => void = () => undefined;
+  const slot = await form("oats-developer", {
+    spawnHarnesses: () => new Promise<List>((resolve) => (answer = resolve)),
+    spawnPlan: () => {
+      throw new Error('E_BACKEND_UNKNOWN: unknown session backend "bb": no capability of this instance declares it as a session provider');
+    },
+  });
+  // The preview is asked (the provider is not known to be absent yet) and refused: nothing red is drawn of it.
+  await waitFor(() => expect(calls(slot, "spawnPlan").length).toBeGreaterThan(0));
+  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading…"]));
+  expect(slot.queryByTestId("oats-notice")).toBeNull();
+  expect(within(slot.getByTestId("oats-new-agent-page")).queryByRole("button", { name: "Retry" })).toBeNull();
+  // The read answers: the one line, alone.
+  await act(async () => {
+    answer({ harnesses: [], hostId: "host_falcon", absent: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace\'s catalog' } });
+  });
+  await waitFor(() => expect(slot.getAllByTestId("oats-notice").map((notice) => notice.querySelector("h3")!.textContent)).toEqual(["bb is not set up for this workspace."]));
+  expect(within(slot.getByTestId("oats-new-agent-page")).queryByRole("button", { name: "Retry" })).toBeNull();
+});
+
+test("no bb session provider, while the roster cannot be read: the roster's notice stands alone, and the line comes when it reads again", async () => {
+  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  let stale = true;
+  const live = handlers().snapshot;
+  const slot = await form("oats-developer", {
+    snapshot: (input) => (stale ? { ok: false as const, at: "2026-11-23T18:16:56.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last } : live(input)),
+    spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", absent: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace\'s catalog' } }),
+  });
+  await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).not.toBeNull());
+  expect(slot.queryByTestId("oats-spawn-no-bb")).toBeNull();
+  expect(slot.getByTestId("oats-new-agent-page").textContent).not.toContain("bb is not set up for this workspace.");
+  expect(describedBy(slot)).toContain("Acts are off.");
+  stale = false;
+  await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:26.000Z" });
+  await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).toBeNull());
+  expect(within(await slot.findByTestId("oats-spawn-no-bb")).getByTestId("oats-notice").querySelector("h3")!.textContent).toBe("bb is not set up for this workspace.");
+});
+
 test("Spawn applies the decision the preview showed, once: the form says Created, stays held, and opens the new agent's thread", async () => {
   const slot = await ready(previews({ spawn: () => ({ instance: "ranker-v4-probe", threadId: "thr_new" }) }));
   set(slot, "oats-spawn-task", "Try depth 7.");

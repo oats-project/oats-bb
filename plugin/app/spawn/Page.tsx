@@ -370,7 +370,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     return () => clearTimeout(timer);
   }, [rpc, key, held, again]);
   const preview = settled !== null && settled.key === key ? settled : null;
-  const refusal = refused !== null && refused.key === key ? refused.problem : null;
+  // A refusal is not drawn while the harness read is still out: on a deployment with no bb session provider the
+  // kernel refuses the preview (it asks for the bb backend), and the read's answer, a moment later, is what says so,
+  // once. Until it answers the column is read ("Reading…"), never a red notice that then goes.
+  const refusal = refused !== null && refused.key === key && harnesses.status !== "loading" ? refused.problem : null;
   const nameRefusal = refusal !== null && NAME_REFUSALS.has(refusal.code) ? refusal : null;
 
   // ---- the harness and the model ----

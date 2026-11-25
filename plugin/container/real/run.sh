@@ -99,11 +99,14 @@ printf '{"kernel":"%s","provider":"%s"}\n' "$KERNEL_OID" "$PROVIDER_OID" | docke
 
 run bash container/real/setup.sh
 # The pi run records no fixture: its own scenario, and nothing more.
+# After the run too: nothing in it made bb fetch its build toolchain (../no-toolchain-fetch.sh).
 if [ "$REAL_PI" = 1 ]; then
   run node container/real/pi/scenario.mjs
+  run sh container/no-toolchain-fetch.sh
   exit
 fi
 run node container/real/scenario.mjs
+run sh container/no-toolchain-fetch.sh
 if [ "${UPDATE_FIXTURES:-0}" = 1 ]; then
   docker cp "$NAME:/home/node/out/real/fixtures/." "$PLUGIN/test/fixtures/" > /dev/null
   echo "real: the recorded answers are in $PLUGIN/test/fixtures/ (git diff shows what changed)"

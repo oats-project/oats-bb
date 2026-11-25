@@ -72,7 +72,6 @@ export function FoldToggle({
   inside = null,
   insideTone = null,
   insideSays = null,
-  insideAsks = 0,
 }: {
   instance: string;
   /** the agent's name as words */ name: string;
@@ -83,10 +82,8 @@ export function FoldToggle({
   inside?: AgentState | null;
   /** "warning": that row's own mark is drawn in the warning tone. */
   insideTone?: "warning" | null;
-  /** That row's own words, as the row draws them ("Stopped · may still run"): the chevron's name over a row that WARNS. */
+  /** What the hidden rows say, as a count ("1 needs you", "1 failed, 1 unreachable", "1 may still run"): the toggle's name and title end with it. The caller's words (the sidebar's `hiddenSays`); without them, the state's own name. */
   insideSays?: string | null;
-  /** How many hidden rows ask (their state is needs-you): the toggle's name says the count. */
-  insideAsks?: number;
 }) {
   // Only a CLOSED parent hides rows: open, each row carries its own mark.
   const hides = open ? null : inside;
@@ -100,13 +97,13 @@ export function FoldToggle({
   //   dot (two plain dots side by side read as one more state of the parent, told apart by colour alone): the CHEVRON
   //   itself takes the tone: the failure's for the first two, the warning's for the others;
   // - the chevron and the mark are ONE button: pressing either opens the row;
-  // - its name and title say what is inside, in words: how many hidden rows ask ("1 needs you"); in the tone cases
-  //   what that row itself says (a failed or unreachable row: its state's name; a row in the warning tone: its own
-  //   words, as the row draws them: "Stopped · may still run", "Running outside OATS");
+  // - its name and title say what is inside, in words, as a COUNT (the fold hides those rows' words): "1 needs you";
+  //   "1 failed", "1 unreachable", both where both are hidden; "1 running outside OATS"; over rows that warn the
+  //   count and the reason's own words: "1 may still run" (`insideSays`: the sidebar's `hiddenSays`);
   // - opened, the marks leave: the rows show their own.
   const asks = hides === "needs-you";
   const tone = hides === null || asks ? "" : hides === "error" || hides === "unreachable" ? "text-destructive-text" : insideTone === "warning" ? "text-warning-text" : "";
-  const inWords = hides === null ? "" : asks ? `${insideAsks} ${insideAsks > 1 ? "need" : "needs"} you` : insideTone === "warning" && insideSays !== null && insideSays !== "" ? insideSays : STATE[hides].name;
+  const inWords = hides === null ? "" : insideSays !== null && insideSays !== "" ? insideSays : STATE[hides].name;
   const label = hides === null ? says : `${says}: ${inWords}`;
   return (
     <button

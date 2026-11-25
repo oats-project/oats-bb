@@ -323,9 +323,13 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const harnessChoice = offered.length > 1;
   const off: "soul" | "cannot" | "name" | "model" | "relation" | null =
     chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
+  // The preview waits for the harness read's answer: until it is known where a spawn may run here (whether the
+  // deployment has the bb session provider at all), nothing is asked of the kernel: the preview would be of a spawn
+  // the answer may change. Where the provider is there: the same preview, a moment later (the server keeps that read).
+  const harnessesRead = harnesses.status !== "loading";
   const input: Input | null = useMemo(
     () =>
-      off !== null
+      off !== null || !harnessesRead
         ? null
         : {
             soul,
@@ -336,7 +340,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             ...(model === "" ? {} : { model }),
             ...(relation === "unrelated" ? {} : { relation: { kind: relation, to: relative } }),
           },
-    [off, soul, task, name, harness, harnessChoice, backendChoice, place, harnesses.backends, model, relation, relative],
+    [off, harnessesRead, soul, task, name, harness, harnessChoice, backendChoice, place, harnesses.backends, model, relation, relative],
   );
   const key = input === null ? null : JSON.stringify(input);
 

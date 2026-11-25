@@ -83,24 +83,26 @@ describe("the mark of a closed parent: the most urgent row its subtree hides, af
   });
 
   test("insideOf, alone: nothing for a leaf and for quiet children; a rank 0 or 1 state otherwise", () => {
-    expect(insideOf(row("a", "needs-you"))).toEqual({ state: null, tone: null, node: null, asks: 0 });
-    expect(insideOf(row("a", "working", [row("b", "idle"), row("c", "stopped")]))).toEqual({ state: null, tone: null, node: null, asks: 0 });
+    expect(insideOf(row("a", "needs-you"))).toEqual({ state: null, tone: null, node: null, asks: 0, kin: [] });
+    expect(insideOf(row("a", "working", [row("b", "idle"), row("c", "stopped")]))).toEqual({ state: null, tone: null, node: null, asks: 0, kin: [] });
     const failed = row("c", "error");
     // (With the state: the row it is the state of, so that the caller can name the chevron with that row's own words.)
-    expect(insideOf(row("a", "working", [row("b", "idle", [failed])]))).toEqual({ state: "error", tone: null, node: failed, asks: 0 });
+    expect(insideOf(row("a", "working", [row("b", "idle", [failed])]))).toEqual({ state: "error", tone: null, node: failed, asks: 0, kin: [failed] });
     // HOW MANY hidden rows ASK (their state is needs-you): the toggle's name says the count; a row that runs outside
     // OATS is not one of them. WHICH row the parent speaks for, wherever each stands: one that asks; then one that
     // failed or cannot be reached (never hidden behind a milder one); then one that runs outside OATS or warns.
     const asking = row("d", "needs-you");
-    expect(insideOf(row("a", "working", [failed, row("b", "idle", [asking, row("e", "outside")]), row("f", "needs-you")]))).toEqual({ state: "needs-you", tone: null, node: asking, asks: 2 });
+    const second = row("f", "needs-you");
+    expect(insideOf(row("a", "working", [failed, row("b", "idle", [asking, row("e", "outside")]), second]))).toEqual({ state: "needs-you", tone: null, node: asking, asks: 2, kin: [asking, second] }); // (`kin`: every hidden row of the winner's kind, in the tree's order: the toggle's name counts them)
     const out = row("g", "outside");
     const broken = row("h", "error");
-    expect(insideOf(row("a", "working", [out, broken]))).toEqual({ state: "error", tone: null, node: broken, asks: 0 }); // the failed row, though the outside one stands first
-    expect(insideOf(row("a", "working", [out]))).toEqual({ state: "outside", tone: "warning", node: out, asks: 0 });
+    expect(insideOf(row("a", "working", [out, broken]))).toEqual({ state: "error", tone: null, node: broken, asks: 0, kin: [broken] }); // the failed row, though the outside one stands first
+    expect(insideOf(row("a", "working", [out]))).toEqual({ state: "outside", tone: "warning", node: out, asks: 0, kin: [out] });
     const lost = row("i", "unreachable");
     const warned = row("j", "stopped");
-    expect(insideOf(row("a", "working", [warned, lost]), (each) => each === warned)).toEqual({ state: "unreachable", tone: null, node: lost, asks: 0 }); // an unreachable row before one that warns
-    expect(insideOf(row("a", "working", [warned, out]), (each) => each === warned)).toEqual({ state: "stopped", tone: "warning", node: warned, asks: 0 }); // among equals, the tree's order
+    expect(insideOf(row("a", "working", [warned, lost]), (each) => each === warned)).toEqual({ state: "unreachable", tone: null, node: lost, asks: 0, kin: [lost] }); // an unreachable row before one that warns
+    expect(insideOf(row("a", "working", [warned, out]), (each) => each === warned)).toEqual({ state: "stopped", tone: "warning", node: warned, asks: 0, kin: [warned, out] }); // among equals, the tree's order
+    expect(insideOf(row("a", "working", [lost, broken])).kin).toEqual([lost, broken]); // a failed row and an unreachable one are of one kind: the name counts each
   });
 
   // ONE principle: a closed parent carries a mark for any row inside it that itself carries one. A row whose own mark

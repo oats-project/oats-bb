@@ -59,20 +59,19 @@ test.each([
   // Nobody asked: NO second dot beside the chevron; the chevron itself takes the WARNING tone (the lead's ruling on P23).
   const glyph = toggle().querySelector<HTMLElement>('[data-testid="oats-row-toggle-mark"]')!;
   expect([glyph.textContent, toggle().querySelectorAll("[data-mark]").length, glyph.className.split(/\s+/).includes("text-warning-text")]).toEqual(["▸", 0, true]);
-  // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then WHAT THAT ROW ITSELF SAYS: its state's word and its reason,
-  // as the row draws them (ruled 25 Nov 2026: the warning's tone is a colour, and the state's name alone, "stopped", says nothing of it).
+  // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then what it hides AS A COUNT (the fold hides the row's
+  // words): the count and the REASON's own words, as that row draws them ("1 may still run", "1 deleted in bb": the lead's ruling of 25 Nov 2026).
   const named = toggle().getAttribute("aria-label")!;
-  // (The reason is the outside feature's word for that row: "may still run" for a thread archived in bb, since its change after the lead's read; "deleted in bb".)
-  expect(named).toMatch(/^Show Redesign ui lead's agents: (Idle|Stopped) · (may still run|archived in bb|deleted in bb)$/);
+  expect(named).toMatch(/^Show Redesign ui lead's agents: 1 (may still run|archived in bb|deleted in bb)$/);
   expect(toggle().getAttribute("title")).toBe(named);
   expect(within(parent()).getByTestId("oats-row-facts").textContent).toMatch(/^Working/); // the parent's own word stays its own
   // Opened: the child's row is there with that same mark, and the parent carries none.
   fireEvent.click(toggle());
   const row = slot.getAllByTestId("oats-agent-row-threadless").find((each) => each.getAttribute("data-instance") === CHILD)!;
   expect([row.querySelector("[data-mark]")!.getAttribute("data-state"), row.querySelector("[data-mark]")!.getAttribute("data-tone")]).toEqual([state, "warning"]);
-  // … and those were the row's own words: what a sighted person reads now that it is shown.
-  const drawn = ["state", "reason"].map((phrase) => row.querySelector(`[data-phrase="${phrase}"]`)?.textContent?.replace(/^[\s·]+|[\s·]+$/g, "") ?? "").filter((part) => part !== "").join(" · ");
-  expect(named).toBe(`Show Redesign ui lead's agents: ${drawn}`);
+  // … and the words after the count are the reason that row itself draws, now that it is shown.
+  const reason = row.querySelector('[data-phrase="reason"]')?.textContent?.replace(/^[\s·]+|[\s·]+$/g, "") ?? "";
+  expect(named).toBe(`Show Redesign ui lead's agents: 1 ${reason}`);
   expect(inside()).toBeNull();
 });
 
@@ -101,3 +100,29 @@ test("a closed parent carries no warning mark for a hidden row that says Reading
   expect([row.querySelector('[data-testid="oats-row-reading"]')?.textContent, row.querySelector('[data-testid="oats-row-facts"]'), row.querySelector("[data-mark]")!.getAttribute("data-tone")]).toEqual(["Reading…", null, null]);
 });
 
+
+// THE COUNT over rows that warn (the lead's ruling: "1 may still run"): the count is of the hidden rows that say the
+// SAME reason as the row the chevron speaks for; a row with another reason is not counted under it, and one that runs
+// outside OATS is counted by its own name only. Two children of the lead, both with no thread bb lists.
+async function two(first: { child: Partial<Agent>; archived: boolean }, second: { child: Partial<Agent>; archived: boolean }) {
+  const SECOND = "desktop-mockups-developer"; // the lead's other child, on thr_mockups
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === CHILD ? { ...agent, waiting: null, ...first.child } : agent.instance === SECOND ? { ...agent, waiting: null, ...second.child } : agent));
+  const app = await loadApp();
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    app.threadLists[0]!,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    { rpc: handlers({}, agents), sidebarThreads: { status: "ready" as const, threads: fixtureThreads().filter((thread) => thread.id !== "thr_harvest" && thread.id !== "thr_mockups") }, sdk: bb([...(first.archived ? ["thr_harvest"] : []), ...(second.archived ? ["thr_mockups"] : [])]) },
+  );
+  await slot.findByTestId("oats-tree");
+  return () => slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "redesign-ui-lead")!.getAttribute("aria-label");
+}
+
+test("the count over rows that warn is of those that say the SAME reason: two with one reason are \"2 …\"; two with different reasons are \"1 …\" of the first", async () => {
+  const ran = { child: { running: true, runtimeState: "unknown" } as Partial<Agent>, archived: true }; // its thread archived in bb while it ran
+  const same = await two(ran, ran);
+  await waitFor(() => expect(same()).toMatch(/^Show Redesign ui lead's agents: 2 (may still run|archived in bb)$/));
+  resetApp();
+  const deleted = { child: { running: false, runtimeState: "stopped", sessionEnd: "stopped" } as Partial<Agent>, archived: false }; // its thread deleted in bb
+  const mixed = await two(ran, deleted);
+  await waitFor(() => expect(mixed()).toMatch(/^Show Redesign ui lead's agents: 1 (may still run|archived in bb|deleted in bb)$/));
+});

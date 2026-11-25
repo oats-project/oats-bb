@@ -697,6 +697,64 @@ test("Runs in, where the deployment has the bb session provider and the kernel i
   await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: "oats-developer-3" } }]));
 });
 
+test("the preview waits for the harness read: in flight, with a soul chosen, the kernel is asked nothing and no notice is drawn; then the preview is asked: of a bb thread where the provider is there, of the kernel's own choice where it is not", async () => {
+  type List = { harnesses: string[]; hostId: string | null; provider?: boolean; backends?: string[]; kernelHarnesses?: string[] };
+  const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
+  let answer: (list: List) => void = () => undefined;
+  const slot = await form("oats-developer", { spawnHarnesses: () => new Promise<List>((resolve) => (answer = resolve)), spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }) });
+  // In flight, a soul on the form: longer than the preview's own delay, nothing is asked and nothing red is drawn.
+  await waitFor(() => expect((slot.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 700));
+  });
+  expect(calls(slot, "spawnPlan")).toEqual([]);
+  expect(slot.queryByTestId("oats-notice")).toBeNull();
+  expect(within(slot.getByTestId("oats-new-agent-page")).queryByRole("button", { name: "Retry" })).toBeNull();
+  expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading…"]);
+  // The read answers that the provider is absent: the preview is asked, and it is the kernel's own choice of a place.
+  await act(async () => {
+    answer({ harnesses: [], hostId: "host_falcon", provider: false, backends: ["tmux"], kernelHarnesses: ["pi", "claude", "codex"] });
+  });
+  await waitFor(() => expect(calls(slot, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
+  await waitFor(() => expect(rows(slot).inView).toContainEqual(["Runs in", "tmux session"]));
+  expect(slot.queryByTestId("oats-notice")).toBeNull();
+  slot.unmount();
+  resetApp();
+  // The read answers that the provider is there: the preview is asked, as before.
+  const present = await form("oats-developer", previews({ spawnHarnesses: () => new Promise<List>((resolve) => (answer = resolve)) }));
+  await waitFor(() => expect((present.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 700));
+  });
+  expect(calls(present, "spawnPlan")).toEqual([]);
+  await act(async () => {
+    answer({ harnesses: ["claude", "pi"], hostId: "host_falcon" });
+  });
+  await waitFor(() => expect(calls(present, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
+  await waitFor(() => expect(column(present).textContent).toContain("numbered by the kernel"));
+});
+
+test("no bb session provider, while the roster cannot be read: the roster's notice stands alone and holds the form; nothing is asked of the kernel until it reads again", async () => {
+  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
+  let stale = true;
+  const live = handlers().snapshot;
+  const slot = await form("oats-developer", {
+    snapshot: (input) => (stale ? { ok: false as const, at: "2026-11-23T18:16:56.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last } : live(input)),
+    spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, backends: ["tmux"], kernelHarnesses: ["pi", "claude", "codex"] }),
+    spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }),
+  });
+  await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).not.toBeNull());
+  expect(slot.getAllByTestId("oats-notice")).toHaveLength(1);
+  expect(describedBy(slot)).toContain("Acts are off.");
+  expect(calls(slot, "spawnPlan")).toEqual([]);
+  stale = false;
+  await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:26.000Z" });
+  await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).toBeNull());
+  await waitFor(() => expect(rows(slot).inView).toContainEqual(["Runs in", "tmux session"]));
+  expect(slot.queryByTestId("oats-notice")).toBeNull();
+});
+
 test("Spawn applies the decision the preview showed, once: the form says Created, stays held, and opens the new agent's thread", async () => {
   const slot = await ready(previews({ spawn: () => ({ instance: "ranker-v4-probe", threadId: "thr_new" }) }));
   set(slot, "oats-spawn-task", "Try depth 7.");

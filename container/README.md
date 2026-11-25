@@ -68,7 +68,10 @@ plugin's build agree with it. So one change moves them all:
   builds);
 - the provider's default `version` (`oats-package/`), with its contract test;
 - the plugin's `bb-app` dev dependency (`plugin/package.json`), and its `engines.bb`
-  range if the new version falls outside it.
+  range if the new version falls outside it;
+- the lock the plugin's checks install bb-app from (`plugin/container/locks/bb-app/package.json`,
+  then `plugin/container/relock.sh bb-app`), with bb's build toolchain where the new version asks
+  for other versions of it (`plugin/container/locks/README.md`, "When a pin moves").
 
 Review the files of this directory and build a new image.
 

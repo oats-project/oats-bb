@@ -12,6 +12,8 @@ sh container/real/bb-plugin-command.test.sh
 if [ -f app.tsx ]; then
   echo "== build"
   npx bb plugin build
+  # bb built with the toolchain of the plugin's own lock, and fetched none (no-toolchain-fetch.sh).
+  sh container/no-toolchain-fetch.sh
 else
   echo "== build: skipped, app.tsx is not in this tree yet (the live tests build the backend)"
 fi

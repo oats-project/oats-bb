@@ -54,7 +54,7 @@ echo "pi tarball: @earendil-works/pi-coding-agent@$PI_LOCKED_VERSION, integrity 
 [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] || sh "$HERE/../../locked-install.sh" pi
 [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] || { echo "pi setup: pi $PI_VERSION could not be installed" >&2; exit 1; }
 # pi finds fd and ripgrep on the PATH (the image holds them), so it will not fetch them by itself.
-sh "$HERE/../../no-pi-tools-fetch.sh" "$PI_AGENT_DIR"
+sh "$HERE/../../no-pi-tools-fetch.sh"
 
 echo "== the OATS bridge for pi, @awebai/oats-pi@$OATS_PI_VERSION, in bb's pi configuration ($PI_AGENT_DIR)"
 mkdir -p "$PI_AGENT_DIR/extensions" "$REAL/mock"

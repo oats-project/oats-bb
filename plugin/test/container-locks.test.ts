@@ -114,6 +114,7 @@ test("the image holds the two tools pi would else download by itself, and the pi
   const image = readFileSync(join(CONTAINER, "Dockerfile"), "utf8");
   const installed = /apt-get install [^\n]*/.exec(image)?.[0] ?? "";
   for (const name of ["fd-find", "ripgrep"]) expect(installed.split(/\s+/), `the image installs ${name}`).toContain(name);
-  expect(readFileSync(join(CONTAINER, "real", "pi", "setup.sh"), "utf8"), "the pi run's setup asks pi what it finds").toContain("no-pi-tools-fetch.sh");
-  expect(readFileSync(join(CONTAINER, "real", "run.sh"), "utf8"), "the pi run's end looks for a tool pi fetched").toContain("no-pi-tools-fetch.sh");
+  // The CALLS, not a comment that names the script.
+  expect(readFileSync(join(CONTAINER, "real", "pi", "setup.sh"), "utf8"), "the pi run's setup asks pi what it finds").toMatch(/^sh "\$HERE\/\.\.\/\.\.\/no-pi-tools-fetch\.sh"$/m);
+  expect(readFileSync(join(CONTAINER, "real", "run.sh"), "utf8"), "the pi run's end looks for a tool pi fetched").toMatch(/^\s*run sh container\/no-pi-tools-fetch\.sh$/m);
 });

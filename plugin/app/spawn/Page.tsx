@@ -741,8 +741,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                     label={RUNS_IN}
                     options={harnesses.backends.map((id) => ({ id, label: backendLabel(id) }))}
                     value={place}
-                    // (A harness is one of the place's own list: chosen for another place, it is not kept.)
+                    // (A harness is one of the place's own list: chosen for another place, it is not kept. A press on
+                    // the place already chosen changes nothing.)
                     onChange={(next) => {
+                      if (next === place) return;
                       setBackend(next);
                       setHarness("");
                     }}

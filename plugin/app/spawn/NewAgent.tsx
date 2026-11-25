@@ -10,6 +10,7 @@ import { errorMessage } from "../store";
 import type { Contract, Result } from "../store";
 import { Button, ErrorLine } from "../ui";
 import { shown } from "../ui/text";
+import { useHarnesses } from "./models";
 
 type Soul = Result<"souls">["souls"][number];
 type Summary = Result<"spawnPreview">["summary"];
@@ -41,7 +42,7 @@ function SummaryView({ summary }: { summary: Summary }) {
 }
 
 /** Name, task, Preview, Spawn in bb. One idempotency key per filled form, reused on a retry. */
-function SpawnForm({ soul }: { soul: Soul }) {
+function SpawnForm({ soul, onBb }: { soul: Soul; onBb: boolean }) {
   const rpc = useRpc<Contract>();
   const navigate = useBbNavigate();
   const [name, setName] = useState("");
@@ -148,7 +149,7 @@ function SpawnForm({ soul }: { soul: Soul }) {
           {busy === "preview" ? "Reading…" : "Preview"}
         </Button>
         <Button type="submit" variant="primary" data-testid="oats-spawn-submit" disabled={!ready}>
-          {busy === "spawn" ? "Spawning…" : "Spawn in bb"}
+          {busy === "spawn" ? "Spawning…" : onBb ? "Spawn in bb" : "Spawn"}
         </Button>
       </div>
       {error === null ? null : <ErrorLine>{error}</ErrorLine>}
@@ -159,12 +160,17 @@ function SpawnForm({ soul }: { soul: Soul }) {
 
 /** What a soul's page shows under "New agent" for a soul that can be spawned: the mode, in words, and the form. */
 export function NewAgent({ soul }: { soul: Soul }) {
+  // The line and "in bb" are true of a bb thread alone. On a deployment with no bb session provider this spawn names
+  // no backend and no mode (the kernel decides): nothing says "full mode" or "in bb" there.
+  const onBb = useHarnesses().provider;
   return (
     <>
-      <p data-testid="oats-spawn-mode" className="text-xs text-muted-foreground">
-        Runs in bb's full mode: no sandbox.
-      </p>
-      <SpawnForm soul={soul} />
+      {onBb ? (
+        <p data-testid="oats-spawn-mode" className="text-xs text-muted-foreground">
+          Runs in bb's full mode: no sandbox.
+        </p>
+      ) : null}
+      <SpawnForm soul={soul} onBb={onBb} />
     </>
   );
 }

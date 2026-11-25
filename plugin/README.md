@@ -882,8 +882,10 @@ root>`: the root is the anchor's home, as the roster's row names it, without its
 `<agent>/instances/<instance>` (the kernel's status names no agents root on a row, and derives it
 from the home the same way); a home of another shape passes none.
 
-Every spawn is `--backend bb --yolo`: the form says so in one line by the button, "Runs in bb's
-full mode: no sandbox.", with no control, and the preview says what the kernel decided
+A spawn of a bb thread is `--backend bb --yolo`, bb's full mode with no sandbox: the form's column
+says so in its Access row ("full mode: no sandbox"), with no control. A spawn that is not a bb thread
+(the form's "Runs in: tmux session", or a deployment with no bb session provider) names no mode,
+and the column says only what the kernel's preview decided
 ([How it is built](#how-it-is-built)).
 
 The live checks show the form in flight and count the spawns the kernel was asked for; they take no

@@ -73,6 +73,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
     // Where it runs. A deployment with no bb session provider: the spawn names no backend unless one is chosen.
     let absent: boolean;
+    let kernelHarnesses: string[] = [];
     if (harness === undefined && backend === undefined) {
       // NOTHING of a list is named, so no list is needed: the spawn does not wait on them. A provider read that
       // FAILS (an answer the plugin cannot read, a timeout, a member with no such capability) leaves the spawn what it
@@ -86,12 +87,13 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       // Something IS named: it is one of the lists, so both reads must answer.
       const places = await placesOf(core);
       absent = places.absent;
+      kernelHarnesses = places.kernelHarnesses;
       if (backend !== undefined && !places.backends.includes(backend)) throw invalid(`"${backend}" is not a session backend a spawn can name here (${places.backends.join(", ") || "none"})`);
     }
     const onBb = !absent && (backend === undefined || backend === BB_BACKEND);
     if (harness !== undefined) {
       // A bb thread: a harness the provider declares. Anywhere else: one the kernel itself launches.
-      const named = onBb ? checkHarness(harness, await harnessesOf(core)) : checkHarness(harness, (await placesOf(core)).kernelHarnesses, "this OATS launches");
+      const named = onBb ? checkHarness(harness, await harnessesOf(core)) : checkHarness(harness, kernelHarnesses, "this OATS launches");
       if (!named.ok) throw invalid(named.error.message);
     }
     if (model !== undefined) {

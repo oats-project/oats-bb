@@ -674,6 +674,11 @@ test("Runs in, where the deployment has the bb session provider and the kernel i
   // A harness of bb's is chosen, then tmux: the harness is not kept (it is one of the place's own list).
   choose(slot, "oats-spawn-harness", "pi");
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toMatchObject({ harness: "pi" }));
+  // (A press on the place already chosen changes nothing: the harness stays, and nothing is asked again.)
+  const before = calls(slot, "spawnPlan").length;
+  fireEvent.click(slot.getByRole("radio", { name: "bb thread" }));
+  expect(slot.getByTestId("oats-spawn-harness").textContent).toMatch(/^pi/);
+  expect(calls(slot, "spawnPlan")).toHaveLength(before);
   const asked = listed;
   fireEvent.click(slot.getByRole("radio", { name: "tmux session" }));
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", backend: "tmux" }));

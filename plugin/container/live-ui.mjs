@@ -629,10 +629,24 @@ function busyStage() {
         existing = list();
       }
       const chatted = Date.now();
+      const { failedAtStart } = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/threads.json"), "utf8"));
+      // The rows the kernel says run: a thread of its own each, whose first turn is held open (bb, not the kernel, says
+      // that an agent on a thread works). (Not the busy chat's: a held turn would add a message to its conversation,
+      // and it asks: the screen says so whatever bb says.)
+      const working = onBb.filter((row) => row.running === true && row.outsideOats === undefined && row.instance !== chat.agent);
+      // Every other one: an idle fork of a healthy fixture thread (no turn is run, no harness started). The forks
+      // come FIRST: bb 0.50.1 refuses a fork while another thread's first message is
+      // still queued, and a thread that failed at its start keeps its one ("Stored queued message … is malformed", HTTP
+      // 500; seen in this stage's third look): so they come before both.
+      for (const row of onBb.filter((each) => !working.includes(each) && !failedAtStart.includes(each.instance))) {
+        const title = providerTitle(row.instance);
+        if (!existing.some((thread) => thread.title === title)) bb("thread", "fork", source.id, "--title", title);
+      }
+      existing = list();
+      const forkedAt = Date.now();
       // FAILED AT ITS START: the set's row of such an agent is a lost session's; what says "failed" is bb's own record
       // of the thread (an error and never a turn). So its thread is made to fail at its start: a model the harness
       // cannot start with (TRIED HERE: a provider whose harness is not installed). What bb then holds of each is said.
-      const { failedAtStart } = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/threads.json"), "utf8"));
       {
         const project = listOf(bbJson("project", "list"), "projects")[0];
         const root = (project.sources ?? []).find((each) => each.path)?.path;
@@ -660,10 +674,6 @@ function busyStage() {
         }
       }
       const failedMade = Date.now();
-      // The rows the kernel says run: a thread of its own each, whose first turn is held open (bb, not the kernel, says
-      // that an agent on a thread works). (Not the busy chat's: a held turn would add a message to its conversation,
-      // and it asks: the screen says so whatever bb says.)
-      const working = onBb.filter((row) => row.running === true && row.outsideOats === undefined && row.instance !== chat.agent);
       mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
       writeFileSync(BUSY_HOLD_FILE, "");
       {
@@ -676,11 +686,6 @@ function busyStage() {
         existing = list();
       }
       const heldMade = Date.now();
-      // Every other one: an idle fork of a healthy fixture thread (no turn is run, no harness started).
-      for (const row of onBb) {
-        const title = providerTitle(row.instance);
-        if (!existing.some((thread) => thread.title === title)) bb("thread", "fork", source.id, "--title", title);
-      }
       existing = list();
       const byInstance = new Map();
       for (const row of onBb) {
@@ -700,7 +705,7 @@ function busyStage() {
         const deadline = Date.now() + 180_000;
         while (Date.now() < deadline && working.some((row) => statusNow(byInstance.get(row.instance).id) !== "active")) await sleep(2000);
       }
-      const held = Date.now();
+      const heldAt = Date.now();
       const all = Object.fromEntries(working.map((row) => [row.instance, statusNow(byInstance.get(row.instance).id)]));
       const idle = working.filter((row) => all[row.instance] !== "active");
       check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${working.length} busy agents that work`, idle.map((row) => `${row.instance}: ${all[row.instance]}`).join(" | "));
@@ -719,7 +724,7 @@ function busyStage() {
       });
       const total = rowsOf(status).length;
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === total, 60);
-      console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; ${failedAtStart.length} threads failed at their start in ${Math.round((failedMade - chatted) / 1000)} s; ${working.length} threads spawned with a held turn in ${Math.round((heldMade - failedMade) / 1000)} s; the other bb threads made as idle forks in ${Math.round((forked - heldMade) / 1000)} s; the held turns all active after ${Math.round((held - forked) / 1000)} more s; ${Math.round((Date.now() - started) / 1000)} s in all`);
+      console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; the bb threads with no turn made as idle forks in ${Math.round((forkedAt - chatted) / 1000)} s; ${failedAtStart.length} threads failed at their start in ${Math.round((failedMade - forkedAt) / 1000)} s; ${working.length} threads spawned with a held turn in ${Math.round((heldMade - failedMade) / 1000)} s; the held turns all active after ${Math.round((heldAt - heldMade) / 1000)} more s; ${Math.round((Date.now() - started) / 1000)} s in all`);
     },
     leave: async () => {
       // The held turns are answered, and every thread this stage made is archived: no later stage sees one.

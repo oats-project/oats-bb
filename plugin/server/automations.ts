@@ -39,7 +39,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     );
   /** Both lists: this read, or the one made beside the same roster read, if it is recent. */
   const lists = async (): Promise<Lists> => {
-    const snapshot = await core.clientSnapshot();
+    const snapshot = await core.cachedSnapshot(); // (never the window's waiting read: an automations act must not stand still for a lifecycle act's read)
     const roster = snapshot.at;
     if (held !== null && !held.stale && held.roster === roster && Date.now() - held.at < LISTS_TTL_MS) return held.value;
     // What the plugin itself lacks (no machine, no deployment, no `oats` there) is said once, in

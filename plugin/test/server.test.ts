@@ -676,6 +676,53 @@ describe("the event path", () => {
     }
   }, 90_000);
 
+  // The clock is set back while NO read is in flight (the review of the wait). The pause before a read was counted
+  // from the last read's end, which then lies ahead of the clock: the next read slept the whole step, and a snapshot
+  // that waits for an act's read with it. The pause is never longer than the pause; and a last read that started
+  // "after now" is as stale as an old one, so a client's snapshot asks for its poll's read at once.
+  // (No elapsed time is asserted: with the flaw the snapshot below is still asleep when this test's own limit ends it.)
+  it("the clock is set back while no read is in flight: a snapshot after an act is still answered with the act's own read, and a client's snapshot still asks for the poll's read", async () => {
+    const real = Date.now.bind(Date);
+    const status = async () => (await fake.calls()).filter((call) => call.verb === "status").length;
+    await rpc<Shown>("snapshot");
+    const plan = await rpc<{ revision: string }>("stopPlan", { instance: LEAD });
+    await new Promise((resolve) => setTimeout(resolve, 300)); // nothing is in flight
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => real() - 600_000); // ten minutes back
+    try {
+      // The poll: the last read started "after now": a client's snapshot asks for a read at once.
+      const before = await status();
+      await rpc<Shown>("snapshot");
+      let polled = false;
+      for (let tries = 0; tries < 400 && !polled; tries += 1) {
+        polled = (await status()) > before;
+        if (!polled) await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect(polled).toBe(true);
+      // An act, and the snapshot asked at once after it: answered with the act's own read.
+      const receipt = await rpc<{ endedAt: string }>("stopApply", { instance: LEAD, revision: plan.revision, key: "stop-7f3a9c2e41b8" });
+      const asked = await rpc<Shown>("snapshot");
+      expect(asked.ok).toBe(true);
+      expect(Date.parse(asked.at)).toBeGreaterThan(Date.parse(receipt.endedAt));
+    } finally {
+      clock.mockRestore();
+    }
+  }, 30_000);
+
+  // The wait is the WINDOW's (`snapshot`). A caller inside the server that reads the roster on the way to something
+  // else does not stand still for a lifecycle act's read: the automations' lists, and through them its acts.
+  it("while an act's read is owed, the automations' read does not wait for it: only a window's snapshot does", async () => {
+    const plan = await rpc<{ revision: string }>("stopPlan", { instance: LEAD });
+    await rpc("automations"); // (its lists are read once before: what follows is not their first read)
+    await fake.behave({ status: { sleepMs: 3_000 } }); // the act's own status read is slow
+    const receipt = await rpc<{ endedAt: string }>("stopApply", { instance: LEAD, revision: plan.revision, key: "stop-7f3a9c2e41b8" });
+    const order: string[] = [];
+    const window = rpc<Shown>("snapshot").then((answer) => (order.push("snapshot"), answer));
+    const page = rpc<{ at: string }>("automations").then((answer) => (order.push("automations"), answer));
+    const [asked] = await Promise.all([window, page]);
+    expect(order).toEqual(["automations", "snapshot"]); // the page's read answered while the window's was still waiting
+    expect(Date.parse(asked.at)).toBeGreaterThan(Date.parse(receipt.endedAt));
+  }, 60_000);
+
   // A client that decides on the roster (the home's card asks `snapshot` at the press, and sends a message only to an
   // agent it sees running) must not be answered, right after a stop, with the roster from before it: the server
   // answers `snapshot` from its cache, and from the act's end until the read the act asked for has ended that cache is

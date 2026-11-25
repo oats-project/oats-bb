@@ -601,7 +601,14 @@ export function createCore(bb: BbPluginApi) {
             : `oats status is read again after the pause: asked for while a read was in flight, which ${lastStartedAtOnce ? "was itself read at once" : lastAnsweredInMs === null ? "gave no answer to count (it failed, or the settings changed under it)" : `answered in ${lastAnsweredInMs} ms, over ${FOLLOW_UP_WITHIN_MS} ms`}`,
         );
       }
-      if (!atOnce) await sleep(Math.max(0, lastEnd + Math.max(MIN_INTERVAL_MS, lastAnsweredInMs ?? 0) - Date.now()), lifetime.signal);
+      if (!atOnce) {
+        // The pause is counted from the last read's end by the clock, and is NEVER longer than the pause itself: after
+        // the machine's clock is set back, `lastEnd` lies ahead of it, and what was a pause of a second became a sleep
+        // of the whole step (an hour set back: an hour with no read, and with it every snapshot that waits for an
+        // act's read: the review of the wait).
+        const pause = Math.max(MIN_INTERVAL_MS, lastAnsweredInMs ?? 0);
+        await sleep(Math.min(pause, Math.max(0, lastEnd + pause - Date.now())), lifetime.signal);
+      }
       queued = null;
       lastStartedAtOnce = atOnce;
       const mine = read();
@@ -767,9 +774,21 @@ export function createCore(bb: BbPluginApi) {
    * cost is that read's length for a snapshot asked inside it, for every window.
    */
   async function clientSnapshot(): Promise<Snapshot> {
-    clientSeenAt = Date.now();
+    clientSeenAt = Date.now(); // (a client that waits is a client that is there)
     while (afterAct !== null) await afterAct; // (`while`: an act that ended meanwhile owes its own read)
-    if (cached && Date.now() - lastStart > POLL_MS) rereadSoon();
+    return cachedSnapshot();
+  }
+  /**
+   * The cached snapshot, read again behind it when nobody refreshed it for a while, WITHOUT the wait for an act's
+   * read: for a caller inside the server that reads the roster on the way to something else (the automations'
+   * lists, and through them its acts: none of them decides on an agent's state, and none must stand still for a
+   * lifecycle act's read). A WINDOW is answered by `clientSnapshot`.
+   */
+  async function cachedSnapshot(): Promise<Snapshot> {
+    clientSeenAt = Date.now();
+    // (A last read that started "after now" is one from before the clock was set back: as stale as an old one.)
+    const since = Date.now() - lastStart;
+    if (cached && (since > POLL_MS || since < 0)) rereadSoon();
     return current();
   }
   /** Retry: the pages' answers are dropped and OATS is read again now. */
@@ -863,6 +882,7 @@ export function createCore(bb: BbPluginApi) {
     versionOf,
     threadOf,
     clientSnapshot,
+    cachedSnapshot,
     clientRefresh,
     start,
   };

@@ -3,6 +3,7 @@
 // reason, the act that applies) and the way to the instance panel, which holds who the agent is
 // (its soul, its parent and children, its messaging ID). The block wraps: nothing in it is cut or
 // scrolls out of sight, at any width.
+import { focusBoardQuestion } from "../board/focus";
 import { showPanelTab } from "../panel/Panel";
 import {
   experimental_useAppPanel as useAppPanel,
@@ -115,10 +116,13 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         onClick={() => {
           // "Needs input" is on the panel's Instance tab, and the panel keeps the tab a person left it
           // on: turn it there first, whether the panel is open or opens now. A question of the agent's
-          // BOARD is on the Board tab, with its options: there, for an agent whose board asks.
-          showPanelTab(agent.boardAsks === true ? "board" : "instance");
+          // BOARD is on the Board tab, with its options: there, for an agent whose board asks. Either
+          // way the focus lands on what is to be answered (the board's question does not take it by itself).
+          const onBoard = agent.boardAsks === true;
+          showPanelTab(onBoard ? "board" : "instance");
           openPanel();
-          if (agent.boardAsks !== true) focusNeedsInput();
+          if (onBoard) focusBoardQuestion();
+          else focusNeedsInput();
         }}
       >
         Answer

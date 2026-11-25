@@ -3,6 +3,7 @@ export { Board, BoardAsk } from "./Board";
 export { useBoardTab } from "./tab";
 export { BOARD } from "./words";
 export { forgetHidden } from "./hidden";
+export { focusBoardQuestion } from "./focus";
 export { command } from "./command";
 import type { PluginAppBuilder } from "@get-bb/plugin-sdk/app";
 import { command } from "./command";

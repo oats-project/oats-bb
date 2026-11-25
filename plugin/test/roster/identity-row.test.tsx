@@ -415,3 +415,32 @@ test("Answer turns the instance panel to its Instance tab, where Needs input is,
   const needs = await slot.findByTestId("oats-panel-waiting");
   await vi.waitFor(() => expect(needs.contains(document.activeElement)).toBe(true));
 });
+
+// A question of an agent's BOARD is on the panel's Board tab, with its options: Answer leads there.
+test("Answer on an agent whose board asks shows the Board tab, opens the panel and lands the focus on the question's first option: it does not look for Needs input", async () => {
+  const app = await loadApp();
+  const { InstancePanel, showPanelTab } = await import("../../app/panel/Panel");
+  const Row = app.threadHeaderRows[0]!.component;
+  const agents = fixtureAgents().map((agent) => (agent.threadId === "thr_release" ? { ...agent, hasBoard: true as const, boardAsks: true as const } : agent));
+  const instance = agents.find((agent) => agent.threadId === "thr_release")!.instance;
+  const question = { id: "q3", question: "Which base branch?", options: ["main: the default", "release: the 0.1 line"], hasContext: false, since: "2026-11-23T18:01:45.724Z" };
+  const opened: unknown[] = [];
+  const slot = renderSlot<ExperimentalThreadHeaderRowProps, Contract>(
+    { component: (props: ExperimentalThreadHeaderRowProps) => (<><Row {...props} /><InstancePanel threadId={props.threadId} /></>) } as never,
+    { threadId: "thr_release", projectId: "p", environment: null },
+    {
+      rpc: handlers({ board: ({ instance: asked }: { instance: string }) => ({ at: "2026-11-23T18:17:00.000Z", supported: true, board: asked === instance ? { facts: [], questions: [question] } : null, claim: { producer: "oats.board", reason: "attention" } }) } as never, agents),
+      sidebarThreads: sidebarThreads(),
+      sdk: { threads: { interactions: { list: async () => [] } } } as never,
+      experimental_panel: { openTab: (options: unknown) => (opened.push(options), true) } as never,
+    },
+  );
+  await slot.findByTestId("oats-status-act");
+  showPanelTab("soul"); // the panel was left on the Soul tab
+  await vi.waitFor(() => expect(slot.container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Soul"));
+  fireEvent.click(slot.getByTestId("oats-status-act"));
+  await vi.waitFor(() => expect(slot.container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Board"));
+  await vi.waitFor(() => expect(slot.getAllByTestId("oats-board-answer")[0]!.contains(document.activeElement)).toBe(true));
+  expect(opened).toEqual([{ tab: { id: "home", context: { kind: "thread" }, availability: "fixed" } }]); // the thread's OATS tab is opened
+  expect(slot.queryByTestId("oats-panel-waiting")).toBeNull(); // "Needs input" is on the Instance tab: not shown, and not looked for
+});

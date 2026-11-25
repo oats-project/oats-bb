@@ -916,17 +916,21 @@ function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; 
       {head}
       {stale}
       {notice}
-      <Section title={NEEDS_YOU} n={made.needsYou.length} testId="oats-home-needs">
-        {made.needsYou.length === 0 ? (
+      {made.needsYou.length === 0 ? (
+        // Nobody needs a person: the sentence ALONE (the lead's reader, P31: a heading "Needs you 0" over "Nothing needs
+        // you." said it twice, the first time as a count of nothing).
+        <div data-testid="oats-home-needs">
           <p data-testid="oats-home-nothing" className="m-0 text-muted-foreground">
             {NOTHING_NEEDS_YOU}
           </p>
-        ) : (
+        </div>
+      ) : (
+        <Section title={NEEDS_YOU} n={made.needsYou.length} testId="oats-home-needs">
           <Cropped items={made.needsYou} shown={NEEDS_YOU_SHOWN} more={showAll} testId="oats-home-needs-all">
             {(entry) => (entry.status.state === "outside" ? <OutsideCard key={entry.agent.instance} entry={entry} oats={oats} held={held} /> : <NeedsYouCard key={entry.agent.instance} entry={entry} oats={oats} held={held} />)}
           </Cropped>
-        )}
-      </Section>
+        </Section>
+      )}
       <Tiles visible={visible} />
       {made.working.length === 0 ? null : (
         <Section title={WORKING} n={made.working.length} testId="oats-home-working">

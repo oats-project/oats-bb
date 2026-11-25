@@ -246,8 +246,12 @@ export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boo
   const walk = (nodes: readonly T[]) => {
     for (const each of nodes) {
       const warned = warns(each);
+      // A row a person must find behind a closed parent: one that needs a person (rank 0), one of rank 1 (outside,
+      // failed, or one that warns), and an UNREACHABLE one (the reader's P23: its rank in the ORDER stays 2, with
+      // working, idle and stopped; behind a fold it is marked, after every row of rank 0 or 1).
       const rank = Math.min(RANK[each.state], warned ? 1 : 2);
-      if (rank < 2 && (best[0] === undefined || rank < best[0].rank)) best[0] = { state: each.state, tone: warned ? "warning" : null, rank, node: each };
+      const weight = rank < 2 ? rank : each.state === "unreachable" ? 1.5 : 2;
+      if (weight < 2 && (best[0] === undefined || weight < best[0].rank)) best[0] = { state: each.state, tone: warned ? "warning" : null, rank: weight, node: each };
       walk(each.children);
     }
   };

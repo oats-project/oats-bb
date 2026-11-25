@@ -121,7 +121,9 @@ test("a card says who (the name as words, its soul on its line, and no machine),
 test('with none: "Nothing needs you.", once and here; no summary line, and an empty group is not drawn', async () => {
   const slot = await homePage({ rpc: handlers({}, quiet()), sidebarThreads: calm() });
   const needs = await slot.findByTestId("oats-home-needs");
-  expect(needs.textContent).toBe("Needs you0Nothing needs you.");
+  // The sentence ALONE (the lead's reader, P31): no heading "Needs you 0" over it.
+  expect(needs.textContent).toBe("Nothing needs you.");
+  expect(needs.querySelector("h2")).toBeNull();
   expect(slot.queryByTestId("oats-home-summary")).toBeNull();
   expect(slot.queryByTestId("oats-home-working")).toBeNull();
   expect(slot.queryByTestId("oats-home-finished")).toBeNull();

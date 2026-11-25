@@ -314,28 +314,32 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   has full mode only). Nothing of `.claude` is read or written, and `sandbox`, `trees`,
   `protected` and `unset` are not read.
 - **launch `env`, for pi.** The provider carries exactly `OATS_INSTANCE` and
-  `OATS_INSTANCE_HOME` (entries of source `kernel`, not marked secret) and `PATH`, which
-  it composes from `pathPrepend` and the PATH it was called with: paths only, never the
-  value of an env entry. They go into the env of the home's bb project (`bb machine env
+  `OATS_INSTANCE_HOME` (entries of source `kernel`, not marked secret), `PATH`, which
+  it composes from `pathPrepend` and the PATH it was called with (paths only, never the
+  value of an env entry), and `AWEB_IDENTITY_HOME`, where an entry of source
+  `capability`, not marked secret, names with it a path that is the launch's `home` or
+  inside it, written plainly (absolute, no `.` or `..` step, no doubled or trailing
+  slash): where the agent's messaging identity is (oats-bb#87). They go into the env of the home's bb project (`bb machine env
   set <NAME> --project <id>`, the value on stdin, never an argument), which bb keeps in
   its database. Every other entry is not carried: one of source `kernel` or `capability`
-  is left out, a secret mark on it included; one of a launch configuration (its literal,
+  is left out, a secret mark on it included, and so is an `AWEB_IDENTITY_HOME` that is
+  not such a path; one of a launch configuration (its literal,
   `launch-config`, or its secret reference), or of a source the provider does not know,
   refuses the launch by name (`E_BACKEND_LAUNCH_ENV`). A
   `PATH` with no executable `pi` on it, or with pi and not the program pi's script asks
   `env` for, refuses the launch too, naming which is missing.
 - **The project's env is the provider's, whole.** A pi launch reads the names bb holds
   for the project (`bb machine env list --project <id>`), unsets every one that is not
-  among the three it carries, and sets those. A project with a root other than the home
+  among those it carries, and sets those. A project with a root other than the home
   refuses a pi launch (`E_SESSION_START_FAILED`) before anything is changed. The env
   reaches no process before the spawn and the next launch rewrites it, so a launch that
   is refused after writing it is still a refusal: nothing was started. A Claude launch
-  of a home whose project exists reads the project's env and unsets those three names
+  of a home whose project exists reads the project's env and unsets the four names a pi launch may carry
   wherever it finds them, whoever set them (a pi launch of the same home leaves them, and
   bb starts `claude` by a project `PATH`); it sets none, and leaves every other name. A
   read or an unset that bb refuses there fails the launch: a refusal
-  (`E_SESSION_START_FAILED`) when nothing but those unsets came before it (some of the
-  three names may then be gone already: the env reaches no process before the spawn),
+  (`E_SESSION_START_FAILED`) when nothing but those unsets came before it (some of those
+  names may then be gone already: the env reaches no process before the spawn),
   otherwise in doubt, as every failure after a launch's first effect is (above).
 - **inspect, `running` for a thread at rest** (both harnesses; contract r25, A16). bb says
   `idle` of a thread whose agent is loaded and waits for its next message, and of one
@@ -522,7 +526,7 @@ the real bb and pi by `test/contract/pi.test.mjs`.
     provider-maintenance directory.
 - **Hooks.** The retire hook unsets every name of the env of each bb project rooted at
   the home (`meta.env` is how many), after its threads are archived; from a project that
-  is also rooted elsewhere, only the three names a pi launch writes. The launch hook
+  is also rooted elsewhere, only the four names a pi launch writes. The launch hook
   does the same when the home starts on another backend and `OATS_PREVIOUS_BACKEND` is
   `bb`, and only then. A bb that cannot be asked is a warning in both, in the hook's one
   last line.

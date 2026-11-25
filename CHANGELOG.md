@@ -4,6 +4,20 @@
 
 ### The session provider
 
+- **A pi agent with a grant identity can send its mail** (#87). A pi thread was given
+  three variables and no more (`OATS_INSTANCE`, `OATS_INSTANCE_HOME`, `PATH`), so
+  oats.aweb's `AWEB_IDENTITY_HOME` was left out with the rest of a capability's launch
+  env. `aw` finds an identity in `.aw` of the directory it runs in: a local seat's `aw`
+  worked from the home, and a seat with a global identity through a session grant, whose
+  identity is in `<home>/.aweb-identity`, received mail and could not send ("current
+  directory is not initialized for aw"). A pi launch now carries a fourth name,
+  `AWEB_IDENTITY_HOME`, where a capability's entry names with it a path that is the home
+  or inside it, not marked secret; any other value of it is left out as before. The rule
+  stays a list of names (now four), since nothing marks a launch env name as holding no
+  secret: no other entry of a capability or a launch configuration is carried. The home's
+  bb project env therefore holds one more name, written whole at each pi launch and
+  removed by the retire hook, by a move to another backend and by a Claude launch of the
+  home, as the other three are. README, "pi".
 - **`hostDaemonPort` alone works under a real kernel** (#88). The manifest declared a
   default for `daemon` (bb's own default address), and the kernel hands a provider its
   manifest's defaults as values. So a deployment that set `hostDaemonPort` and no

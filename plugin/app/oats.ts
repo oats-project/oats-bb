@@ -1,7 +1,7 @@
 // What every slot reads: the kernel's snapshot (through the plugin's server) joined to bb's own
 // live thread list. bb's thread fields cost no `oats` call.
 import { useGone } from "./roster/gone";
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { experimental_useSidebarThreads as useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { isKernelCode } from "../kernel/result";
@@ -9,6 +9,25 @@ import type { Agent, Node, ThreadWhere, View } from "../model/types";
 import { flatten, view } from "../model/view";
 import { useStartedThreads, useThreadWhere } from "./outside/threads";
 import { useRead } from "./store";
+
+// How many times a person asked for the roster again (its Retry, wherever it stands). While the roster cannot be read
+// that Retry is the ONE on the screen (app/roster/unreadable.tsx), so what else failed for the same cause is read
+// again on the same press: a place with a read of its own listens here (app/panel/state.tsx).
+let asked = 0;
+const askedListeners = new Set<() => void>();
+function noteAsked(): void {
+  asked += 1;
+  for (const listener of askedListeners) listener();
+}
+/** The count of presses on the roster's Retry: it changes on each, and says nothing else. */
+export const useRosterAsked = (): number =>
+  useSyncExternalStore(
+    (listener) => {
+      askedListeners.add(listener);
+      return () => askedListeners.delete(listener);
+    },
+    () => asked,
+  );
 
 /**
  * The app's own code for a snapshot call that did not answer at all. Like the plugin's other
@@ -96,7 +115,15 @@ export function useOats(): Oats {
   const gone = useGone(roster?.at ?? null);
   const soulNames = useMemo(() => new Map((souls ?? []).map((soul) => [soul.agent, soul.name])), [souls]);
   const soulOf = (agent: Agent) => soulNames.get(agent.soul) ?? agent.soul;
-  const base = { threads, threadById, retry: read.retry, soulOf };
+  const base = {
+    threads,
+    threadById,
+    retry: () => {
+      noteAsked();
+      read.retry();
+    },
+    soulOf,
+  };
   // Why OATS cannot be read now, if it cannot: the call to the plugin's server failed, or the server says so.
   const failure =
     read.status === "error" ? { code: RPC_FAILED, message: read.error } : snapshot !== undefined && !snapshot.ok ? { code: snapshot.code, message: snapshot.message } : null;

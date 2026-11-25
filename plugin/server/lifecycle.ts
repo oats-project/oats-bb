@@ -2,8 +2,11 @@
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { rpc } from "../contract/lifecycle.js";
-import { HOST_TIMEOUT, invalid, type Core, type Value } from "./core.js";
+import { HOST_TIMEOUT, invalid, refusedWith, type Core, type Value } from "./core.js";
 import { harnessesOf, providerVersionOf } from "./spawn.js";
+
+/** The kernel's code for a capability its workspace's catalog does not hold (recorded: test/fixtures/lifecycle/capabilities-show-no-provider.json). */
+const NO_PROVIDER = "E_CAPABILITY_UNKNOWN";
 
 /** What the Start and Restart dialogs show of the kernel's own row, beside what `Agent` holds. */
 const launch = z.looseObject({ harness: z.string().nullish(), model: z.string().nullish(), sessionEnd: z.string().nullish() });
@@ -41,10 +44,23 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
    * key is a new act, on an agent the kernel names now.
    */
   const retires = new Map<string, { instance: string; revision: string }>();
+  /**
+   * The harnesses the bb session provider declares; NONE where the deployment does not hold that
+   * provider: the kernel then refuses `oats capabilities show oats.bb` with E_CAPABILITY_UNKNOWN
+   * (a deployment whose agents all run on tmux). Its agents are started all the same: a start that
+   * names no harness needs no list. With none declared the dialog offers no choice of a harness,
+   * and a harness that IS named is refused below, as any other that nothing declares.
+   * ANY OTHER failure of that read (OATS not reached, an answer that is none) stays the refusal it is.
+   */
+  const declared = (): Promise<string[]> =>
+    harnessesOf(core).catch((cause: unknown) => {
+      if (typeof cause === "object" && cause !== null && refusedWith.get(cause) === NO_PROVIDER) return [];
+      throw cause;
+    });
   /** A harness a caller names must be one the provider declares: nothing else reaches the argv. */
   async function chosen(harness: string | undefined): Promise<string | undefined> {
     if (harness === undefined) return undefined;
-    if (!(await harnessesOf(core)).includes(harness)) throw invalid(`"${harness}" is not a harness the bb session provider declares`);
+    if (!(await declared()).includes(harness)) throw invalid(`"${harness}" is not a harness the bb session provider declares`);
     return harness;
   }
   async function begin(verb: "start" | "restart", { instance, harness, model, resume }: { instance: string; harness?: string | undefined; model?: string | undefined; resume?: true | undefined }) {
@@ -99,7 +115,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       await core.reread();
       // What a start is decided on: the agent the kernel names NOW. While OATS cannot be read this refuses with why, as every act does.
       const agent = await core.agentForAct(instance);
-      const [{ row }, declared] = await Promise.all([core.rowOf(instance), harnessesOf(core)]);
+      // (Where the deployment does not hold the provider, none is declared, and this answers: `declared`.)
+      const [{ row }, harnesses] = await Promise.all([core.rowOf(instance), declared()]);
       const read = launch.safeParse(row);
       return {
         instance: agent.instance,
@@ -112,7 +129,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         runtimeError: agent.runtimeError,
         sessionEnd: read.success ? (read.data.sessionEnd ?? null) : null,
         backend: agent.backend,
-        harnesses: declared,
+        harnesses,
       };
     },
     start: (input) => begin("start", input),

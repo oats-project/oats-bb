@@ -40,12 +40,11 @@ describe("whether the reason stays on the line (pure)", () => {
 });
 
 /** Gives the DOM the widths a layout would: the line's, and each part's full width by what it is. (jsdom lays nothing out.) */
-function laidOut(line: number, widths: { state: number; soul: number; reason: number; where: number; sep: number; inside?: number }) {
+function laidOut(line: number, widths: { state: number; soul: number; reason: number; where: number; sep: number }) {
   const of = (element: Element): number => {
     const phrase = element.getAttribute("data-phrase");
     if (phrase === "state" || phrase === "soul" || phrase === "reason" || phrase === "where") return widths[phrase];
     if (element.hasAttribute("data-sep")) return widths.sep;
-    if (element.getAttribute("data-testid") === "oats-row-inside") return widths.inside ?? 0;
     return 0;
   };
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
@@ -121,12 +120,12 @@ describe("the row's line", () => {
     expect([view.getByTestId("facts").getAttribute("data-reason"), parts(view.getByTestId("facts"))]).toEqual(["shown", ["state", "soul", "reason", "where"]]);
   });
 
-  test("the mark a closed parent carries takes its room too", () => {
-    // A line that holds a shortened reason by ten pixels, and a mark of 18: it no longer does.
-    laidOut(OTHERS + LEAST + 10, { ...W, inside: 18 });
-    expect(draw({ inside: "needs-you" }).getAttribute("data-reason")).toBe("left");
-    cleanup();
-    expect(draw().getAttribute("data-reason")).toBe("shown");
+  test("the line carries no mark of what a closed parent hides (that is its chevron's: the lead's T1): the line's room is its own words'", () => {
+    // A line that holds a shortened reason by ten pixels keeps it: nothing else stands on the line to take the room.
+    laidOut(OTHERS + LEAST + 10, W);
+    const line = draw();
+    expect(line.getAttribute("data-reason")).toBe("shown");
+    expect([line.querySelector('[data-testid="oats-row-inside"]'), line.querySelectorAll("[data-mark]").length]).toEqual([null, 0]);
   });
 
   test("THE GUARD: a reason in the warning tone is never the one to go: it stays whole however narrow the line, and the soul gives way first", () => {
@@ -136,6 +135,21 @@ describe("the row's line", () => {
     expect(line.getAttribute("data-reason")).toBe("shown");
     expect(shrinks(line)).toEqual({ state: false, soul: true, reason: false, where: false });
     expect(line.querySelector('[data-phrase="reason"]')!.getAttribute("data-tone")).toBe("warning");
+  });
+
+  // A place can ask for the same guard for ANY reason (the home's card: for an agent whose thread is gone the reason is
+  // the card's only word on why it has no reply; "deleted in bb" does not warn on an agent that runs). The tone is not
+  // touched: a plain reason stays plain.
+  test("a reason a place KEEPS is held like one that warns, whatever its tone: it stays whole however narrow the line, the soul gives way first, and its tone is not changed", () => {
+    laidOut(120, W);
+    const line = draw({ reason: "deleted in bb", reasonKept: true });
+    expect(parts(line)).toEqual(["state", "soul", "reason", "where"]);
+    expect(line.getAttribute("data-reason")).toBe("shown");
+    expect(shrinks(line)).toEqual({ state: false, soul: true, reason: false, where: false });
+    expect(line.querySelector('[data-phrase="reason"]')!.getAttribute("data-tone")).toBeNull();
+    // Without it, on the same line, that reason leaves (the row's rule).
+    cleanup();
+    expect(draw({ reason: "deleted in bb" }).getAttribute("data-reason")).toBe("left");
   });
 
   test("with no layout to measure (nothing drawn yet) the reason stays", () => {

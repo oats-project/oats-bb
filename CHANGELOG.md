@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.6.0
+
+Two new plugin features:
+- **Terminal** on the page of an agent that runs on tmux;
+- a read-only **Mail** tab for every agent with a messaging layer.
+
+The session provider doesn't change: package `oats.bb` 0.6.0 is 0.5.1's provider, unchanged apart from its version.
+
+**Upgrade:**
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.6.0`, then `oats sync`. The floor stays OATS 0.70.5, and bb-app stays 0.50.1.
+- Install the plugin in bb again at `v0.6.0` (`plugin/README.md`, "Install").
+- A home's provider copy needs no move: it is the same provider.
+
+**Known in this release:**
+- New agent needs the `oats.bb` package in the workspace. Without it, the form says "bb is not set up for this workspace." and spawns nothing. Spawning a tmux agent from bb comes later.
+- A workspace whose lock doesn't yet hold `oats.bb` (run `oats sync`), or a member missing the capability, also reads "bb is not set up for this workspace.". The form keeps that answer for 30 seconds and has no Retry.
+- bb can't send a message to an agent on tmux. Its Terminal tab types straight into the agent's window.
+- A grant seat on an aweb registry other than the default may still need `AWID_REGISTRY_URL`, which a pi thread is not given.
+- The real mail stage of the checks runs by hand, not in CI.
+
+### The plugin
+
+- **Terminal, for an agent on tmux** (#94). The agent's page, in its Session card, gets **Terminal**:
+  - It opens bb's own Terminal tab on the kernel's viewer of the agent (`oats session attach --home`), titled with the agent's name.
+  - Pressing it again, or reloading, shows the same tab.
+  - What is typed there is typed to the agent. Closing the tab leaves the agent running.
+  - Where the tab doesn't come up, the page says "Terminal did not open.", with the command and why under Details.
+
+  The attach command to copy stays beside it. It needs `oats` reachable by an absolute path on the machine: the plugin's `oatsBin` setting, or the first `oats` on the host's PATH. It uses bb's `experimental_openTerminal`.
+- **Mail, read-only** (#97). An agent with a messaging layer gets a Mail tab:
+  - It shows the mail the agent received, newest first. A press opens one message as plain text.
+  - Reading marks nothing read, and nothing can be sent or answered from bb.
+  - Message text is filtered line by line on the machine, and a line that looks like a credential reads "[withheld]".
+  - "Unverified sender" or "Signature failed" says what the messaging layer could not confirm.
+
+  It reads through `oats operation run messaging:mail`, the same read as the OATS Desktop's mail sheet.
+- **A retire never calls a child "stopped" that did not stop** (#102). It names that child first, in the Stop result's words, with its code, and the result is not shown as done. Today's kernel refuses such a retire whole, so this is a guard.
+
+### Development
+
+- **The checks never read a record half-written** (#103): the harness writes its files whole and renames them into place, and reads appended logs by complete lines.
+
 ## 0.5.1
 
 The pilot's fixes. The session provider changes:

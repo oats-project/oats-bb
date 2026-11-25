@@ -42,12 +42,6 @@ test("an empty workspace: the sidebar says \"No agents yet.\" unless a home on t
   expect(slot.getByTestId("oats-new-agent")).not.toBeNull(); // the one New agent of the screen stays
   act(() => leave());
   expect(slot.getByTestId("oats-no-agents")).not.toBeNull();
-  // The held rule holds for whichever New agent is drawn: while the home on the screen holds it behind its CLI card, this one is off too.
-  expect((slot.getByTestId("oats-new-agent") as HTMLButtonElement).disabled).toBe(false);
-  act(() => void (leave = announce("home-holds-new-agent", true)));
-  expect((slot.getByTestId("oats-new-agent") as HTMLButtonElement).disabled).toBe(true);
-  act(() => leave());
-  expect((slot.getByTestId("oats-new-agent") as HTMLButtonElement).disabled).toBe(false);
   cleanup();
   resetApp();
   // In a drawer (bb says the viewport is compact): not beside anything, and not the primary button (the home's own is).

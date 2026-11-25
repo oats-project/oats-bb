@@ -20,7 +20,7 @@ import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
-import { useAnnounceEmptyHome, useAnnounceHomeHolds, useSidebarBeside } from "../roster/beside";
+import { useAnnounceEmptyHome, useSidebarBeside } from "../roster/beside";
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
 import { READING as READING_WORD, ReadingLine, readingNow, useActed } from "../roster/reading";
@@ -728,8 +728,6 @@ function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; 
   const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} onCheck={check} />;
   // Behind the card New agent is off: a spawn through a CLI the plugin does not work with is not offered.
   const incompatible = cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api");
-  // (Said to the sidebar too, whose New agent is the screen's one where it is beside this pane: app/roster/beside.ts.)
-  useAnnounceHomeHolds(visible && incompatible && oats.phase === "ready");
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is. The page has no heading of its own:
   // bb's bar over it names it.

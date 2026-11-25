@@ -884,9 +884,6 @@ test("behind the card New agent is off, and the card on the same screen says why
   await slot.findByTestId("oats-home-cli");
   const button = slot.getByTestId("oats-home-new-agent") as HTMLButtonElement;
   expect(button.disabled).toBe(true);
-  // The home says so to the sidebar, whose New agent is the screen's one where it is beside this pane (P13): it is held by the same card.
-  const { besideNow } = await import("../../app/roster/beside");
-  await waitFor(() => expect(besideNow().homeHolds).toBe(true));
   // No reason stands beside the button, in words or in a title: the card under it is why, with what to do.
   expect(slot.queryByTestId("oats-disabled-reason")).toBeNull();
   expect(button.title).toBe("");

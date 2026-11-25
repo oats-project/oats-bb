@@ -54,9 +54,10 @@ none; where bb keeps the sidebar in a drawer (a phone's width), or the home does
 sidebar, the home keeps its own: it acts only on a positive fact (a sidebar mounted, which bb says
 is not compact), since a screen with two is better than a screen with none. "No agents yet." is
 the home's while it says it in view, and the sidebar's beside every other pane. On an empty
-workspace the screen's one New agent is the primary button. It is held by one rule whichever is
-drawn: off while the roster is the last one read, and off behind the home's card of an oats CLI
-the plugin does not work with (the home says so to the sidebar).
+workspace the screen's one New agent is the primary button. Whichever is drawn is off while the roster
+is the last one read; the home's own is off behind its card of an oats CLI the plugin does not
+work with (ONE rule for both buttons, the sidebar's too, comes with the roster's change of the
+sidebar, `newAgentHeld`: it is not this change's).
 
 When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
 is missing in a person's words (its title), Retry, and Open settings where a setting mends it;

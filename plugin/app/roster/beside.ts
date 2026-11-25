@@ -12,7 +12,6 @@ import { onWindowReset } from "../store";
 
 let sidebarsBeside = 0;
 let homesSayingEmpty = 0;
-let homesHolding = 0;
 const listeners = new Set<() => void>();
 const changed = () => {
   for (const listener of listeners) listener();
@@ -24,17 +23,15 @@ const subscribe = (listener: () => void) => {
 onWindowReset(() => {
   sidebarsBeside = 0;
   homesSayingEmpty = 0;
-  homesHolding = 0;
   changed();
 });
 
 /** Counts one place in (while `on`) and out again; the effect of the two announcing hooks, and a test's own hand. */
-export function announce(what: "sidebar-beside" | "home-says-empty" | "home-holds-new-agent", on: boolean): () => void {
+export function announce(what: "sidebar-beside" | "home-says-empty", on: boolean): () => void {
   if (!on) return () => undefined;
   const by = (n: number) => {
     if (what === "sidebar-beside") sidebarsBeside = Math.max(0, sidebarsBeside + n);
-    else if (what === "home-says-empty") homesSayingEmpty = Math.max(0, homesSayingEmpty + n);
-    else homesHolding = Math.max(0, homesHolding + n);
+    else homesSayingEmpty = Math.max(0, homesSayingEmpty + n);
     changed();
   };
   by(1);
@@ -42,17 +39,7 @@ export function announce(what: "sidebar-beside" | "home-says-empty" | "home-hold
 }
 
 /** What the store holds now, for a place that is no component (a test). */
-export const besideNow = (): { sidebarBeside: boolean; homeSaysEmpty: boolean; homeHolds: boolean } => ({ sidebarBeside: sidebarsBeside > 0, homeSaysEmpty: homesSayingEmpty > 0, homeHolds: homesHolding > 0 });
-
-// The home's "New agent" is OFF behind its card of an oats CLI this plugin does not work with (the card says why). Where
-// the sidebar's button is the screen's one, it is held by the same fact: the home, which read the CLI, says so here, and
-// the card that says why is on the same screen.
-/** The home, in view, while its CLI card holds New agent. */
-export function useAnnounceHomeHolds(holding: boolean): void {
-  useEffect(() => announce("home-holds-new-agent", holding), [holding]);
-}
-/** For the sidebar: a home on this screen holds New agent behind its CLI card. */
-export const useHomeHolds = (): boolean => useSyncExternalStore(subscribe, () => homesHolding > 0);
+export const besideNow = (): { sidebarBeside: boolean; homeSaysEmpty: boolean } => ({ sidebarBeside: sidebarsBeside > 0, homeSaysEmpty: homesSayingEmpty > 0 });
 
 /** The sidebar, mounted: it is BESIDE the panes while bb says the viewport is not compact (compact: bb keeps it in a drawer). */
 export function useAnnounceSidebar(compact: boolean): void {

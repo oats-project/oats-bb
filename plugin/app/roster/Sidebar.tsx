@@ -1,7 +1,7 @@
 // The sidebar's thread list (experimental_threadList): the workspace's name, the roster (every agent
 // OATS has, as a tree whose parents open), under it New agent, the plugin's pages under "Workspace",
 // then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
-import { useAnnounceSidebar, useHomeHolds, useHomeSaysEmpty } from "./beside";
+import { useAnnounceSidebar, useHomeSaysEmpty } from "./beside";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
@@ -82,7 +82,6 @@ export function Sidebar({ activeThreadId, onNavigate, isCompactViewport }: Plugi
   // The home beside this sidebar draws no "New agent" of its own, and this sidebar no "No agents yet." while the home says it (app/roster/beside.ts: P13).
   useAnnounceSidebar(isCompactViewport);
   const homeSaysEmpty = useHomeSaysEmpty();
-  const homeHolds = useHomeHolds();
   const oats = useOats();
   const now = useNow();
   const outside = outsideOf(oats);
@@ -358,8 +357,7 @@ export function Sidebar({ activeThreadId, onNavigate, isCompactViewport }: Plugi
             variant={shownAgents === 0 && !isCompactViewport ? "primary" : "default"}
             data-testid="oats-new-agent"
             {...(shownAgents === 0 && !isCompactViewport ? { "data-primary": "" } : {})}
-            // (Also off while the home on this screen holds it behind its CLI card, which says why: the one button of the screen obeys the one rule.)
-            disabled={oats.stale !== null || homeHolds}
+            disabled={oats.stale !== null}
             onClick={() => {
               if (openNewAgent(navigate, pagesNow.has("souls"))) onNavigate();
             }}

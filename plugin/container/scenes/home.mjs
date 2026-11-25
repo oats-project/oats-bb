@@ -392,8 +392,11 @@ export default [
         const older = await page.evaluate(cardText);
         check(older.startsWith("older | Compatible oats CLI required") && older === `older | Compatible oats CLI required Detected 0.69.4 Required ${FLOOR} or newer npm install -g @awebai/oats@0.70 Copy Check again`, `${at} the card says what was detected, what is required, and the command, with Copy, and nothing else`, older);
         // Behind the card New agent is off, with no reason beside it: the card under it, on the same screen, is why.
-        const behind = await page.until(`(() => { const all = ${NEW_AGENTS}; return all.length === 1 && all[0].disabled ? JSON.stringify({ count: all.length, text: all[0].innerText.trim(), off: all[0].disabled, why: all[0].title ?? null }) : ""; })()`, 15);
-        check(behind === JSON.stringify({ count: 1, text: "New agent", off: true, why: "" }), `${at} behind the card the screen's one New agent is off (the home's own, or the sidebar's beside it), with no reason beside it or in a title: the card says why`, behind ?? (await page.evaluate(`JSON.stringify(${NEW_AGENTS}.map((b) => [b.dataset.testid, b.disabled]))`)));
+        // (The home's OWN button is held behind its card. The sidebar's, the screen's one beside the home, is held by the one rule
+        // for both buttons that the roster's change of the sidebar brings (`newAgentHeld`: the sidebar reads where the installed
+        // oats stands itself); until that is on this branch the check reads the home's own, where it is drawn.)
+        const behind = await page.until(`(() => { const all = ${NEW_AGENTS}; if (all.length !== 1) return ""; const own = all[0].dataset.testid === "oats-home-new-agent"; return !own || all[0].disabled ? JSON.stringify({ count: all.length, text: all[0].innerText.trim(), off: own ? all[0].disabled : "the sidebar's", why: all[0].title ?? null }) : ""; })()`, 15);
+        check(behind === JSON.stringify({ count: 1, text: "New agent", off: viewport.width < 768 ? true : "the sidebar's", why: "" }), `${at} behind the card there is ONE New agent on the screen; the home's own, where it is drawn, is off, with no reason beside it or in a title: the card says why`, behind ?? (await page.evaluate(`JSON.stringify(${NEW_AGENTS}.map((b) => [b.dataset.testid, b.disabled]))`)));
         check((await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null`)) === true, `${at} and the roster is still drawn under it`, await page.evaluate(textOf(PAGE)));
         await sound(page, viewport, check, at, "the CLI card");
         await page.shot(`home-${viewport.name}-cli-older`);

@@ -47,6 +47,7 @@ const whole = (page) => page.evaluate(textOf(testId("oats-new-agent-page")));
 
 // ---- what the scenes below add to ask the page and the fake `oats`
 import { readFileSync as read } from "node:fs";
+import { completeLines } from "../files.mjs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,9 +62,7 @@ const TASK = "Say hello, then wait.";
 const FAKE_LOG = join(homedir(), "fake-oats.log");
 /** The spawns the plugin asked the kernel to APPLY since `since` (an instant): each call's idempotency key. */
 function applied(since) {
-  return read(FAKE_LOG, "utf8")
-    .split("\n")
-    .filter((line) => line !== "")
+  return completeLines(FAKE_LOG) // (the fake oats appends while this reads)
     .map((line) => JSON.parse(line))
     .filter((call) => call.verb === "spawn" && Date.parse(call.at) >= since)
     .map((call) => call.argv[call.argv.indexOf("--idempotency-key") + 1]);

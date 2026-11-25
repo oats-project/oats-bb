@@ -34,10 +34,11 @@
 //   the acts   each goes through its dialog, from the agent's page, with the result read: what
 //              happened, where the agent runs, and for a resume what the kernel's `resume` said.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { showSidebar } from "../../browser.mjs";
+import { atomicWrite } from "../../files.mjs";
 import { click, closed, dialog, phaseIs } from "../../scenes/lifecycle.mjs";
 
 const NAME = "lost-tmux-developer";
@@ -101,8 +102,7 @@ export default async (run) => {
     const state = join(homedir(), ".claude.json");
     const held = existsSync(state) ? JSON.parse(readFileSync(state, "utf8")) : {};
     const approved = new Set([...(held.customApiKeyResponses?.approved ?? []), KEY.slice(-20)]);
-    writeFileSync(`${state}.lost-part`, JSON.stringify({ ...held, hasCompletedOnboarding: true, customApiKeyResponses: { approved: [...approved], rejected: held.customApiKeyResponses?.rejected ?? [] } }, null, 2));
-    renameSync(`${state}.lost-part`, state);
+    atomicWrite(state, JSON.stringify({ ...held, hasCompletedOnboarding: true, customApiKeyResponses: { approved: [...approved], rejected: held.customApiKeyResponses?.rejected ?? [] } }, null, 2));
     // The folder trust, by the kernel's own command (docs/harness-trust.md): it writes one leaf of that file.
     const trust = oats("harness", "trust", "--dir", DEPLOY, "--harness", "claude", "--json");
     check(trust.exit === 0 && JSON.parse(trust.stdout).ok === true, "oats harness trust: Claude Code trusts the deployment's folder", trust.stdout.slice(0, 400) || trust.stderr);

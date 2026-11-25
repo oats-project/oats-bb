@@ -24,6 +24,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, lowTargets, gapsIn, tight, loose, MAX_GAP } from "./browser.mjs";
+import { atomicWrite, completeLines } from "./files.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
 import { TMUX_ROSTER } from "./tmux-roster.mjs";
@@ -72,7 +73,8 @@ function rpc(method) {
   return answer.result ?? answer;
 }
 const fake = (verbs = {}) =>
-  writeFileSync(FAKE_CONFIG, JSON.stringify({ fixtures: join(PLUGIN, "test/fixtures"), log: FAKE_LOG, verbs }));
+  // (Written whole and renamed into place: every fake oats the plugin starts reads it, at any moment.)
+  atomicWrite(FAKE_CONFIG, JSON.stringify({ fixtures: join(PLUGIN, "test/fixtures"), log: FAKE_LOG, verbs }));
 
 /**
  * By hand only, never in CI: LIVE_PILOT_IMAGES=1 takes the image set of the pilot's six screens as
@@ -598,7 +600,7 @@ function recordFor(threads, { agent, instance }, { changes = {}, said = {}, stat
 function statusAnsweredSinceRecord() {
   let calls = [];
   try {
-    calls = readFileSync(FAKE_LOG, "utf8").split("\n").filter((line) => line !== "").map((line) => JSON.parse(line));
+    calls = completeLines(FAKE_LOG).map((line) => JSON.parse(line)); // (the fake oats appends while this reads)
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }

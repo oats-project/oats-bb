@@ -1,0 +1,64 @@
+# The mail part of the real run (README.md): aweb's own local stack, as awebai/aweb's
+# docker-compose.e2e.yml starts it (postgres, redis, awid, aweb), WITHOUT a port on the host and
+# without its `library` service, each container with a CPU and a memory limit.
+#
+# Two things this stack needs that the upstream file does not say (README.md, "What the stack needs"):
+#   - awid: APP_ENV=development and AWID_ALLOW_INSECURE_DELIVERY_ORIGIN=1, or it refuses a team's
+#     server record on plain http (422 server_url_invalid);
+#   - aweb, and the client container, share awid's network namespace: a team's server URL may be
+#     plain http only on loopback, so aweb is http://127.0.0.1:8000 and awid http://127.0.0.1:8010.
+#
+# The database password and the service token below are the upstream e2e file's own test values,
+# for a database on tmpfs that no port reaches: they are no secret.
+name: "${STACK_NAME:-bb-mail-real}"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: aweb, POSTGRES_PASSWORD: aweb, POSTGRES_DB: aweb }
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U aweb -d aweb"], interval: 2s, timeout: 5s, retries: 30 }
+    tmpfs: [/var/lib/postgresql/data]
+    cpus: 1
+    mem_limit: 1g
+  redis:
+    image: redis:7-alpine
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 2s, timeout: 5s, retries: 30 }
+    cpus: 0.5
+    mem_limit: 256m
+  awid:
+    build: { context: "${AWEB_CHECKOUT}", dockerfile: awid/Dockerfile }
+    environment:
+      AWID_DATABASE_URL: postgresql://aweb:aweb@postgres:5432/aweb
+      AWID_REDIS_URL: redis://redis:6379/0
+      AWID_HOST: 0.0.0.0
+      AWID_PORT: 8010
+      AWID_DB_SCHEMA: awid
+      AWID_LOG_JSON: "false"
+      AWID_RATE_LIMIT_BACKEND: redis
+      AWID_RATE_LIMIT_DISABLED: "true"
+      AWID_SERVICE_TOKEN: library-e2e-service-token-with-at-least-32-bytes
+      AWID_SKIP_DNS_VERIFY: "1"
+      AWID_PUBLIC_ORIGINS: http://127.0.0.1:8010
+      APP_ENV: development
+      AWID_ALLOW_INSECURE_DELIVERY_ORIGIN: "1"
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8010/ready"], interval: 2s, timeout: 5s, start_period: 5s, retries: 30 }
+    cpus: 1
+    mem_limit: 1g
+  aweb:
+    network_mode: service:awid
+    build: { context: "${AWEB_CHECKOUT}", dockerfile: server/Dockerfile }
+    environment:
+      AWEB_DATABASE_URL: postgresql://aweb:aweb@postgres:5432/aweb
+      AWEB_REDIS_URL: redis://redis:6379/0
+      AWEB_HOST: 0.0.0.0
+      AWEB_PORT: 8000
+      AWEB_PUBLIC_ORIGIN: http://127.0.0.1:8000
+      APP_ENV: development
+      AWEB_LOG_JSON: "false"
+      AWID_REGISTRY_URL: http://127.0.0.1:8010
+      AWID_SERVICE_TOKEN: library-e2e-service-token-with-at-least-32-bytes
+      AWID_PUBLIC_REGISTRY_URL: http://127.0.0.1:8010
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy }, awid: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/ready"], interval: 2s, timeout: 5s, start_period: 5s, retries: 30 }
+    cpus: 1
+    mem_limit: 1g

@@ -1,0 +1,48 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "operationsApi": 2,
+  "operation": "messaging:mail",
+  "capability": "oats.aweb",
+  "version": "1.48.0",
+  "argv": [
+   "aweb",
+   "mail",
+   "--limit",
+   "50"
+  ],
+  "cwd": "/abs/deployment/agents/oats-developer/instances/mail-empty",
+  "target": {
+   "home": "/abs/deployment/agents/oats-developer/instances/mail-empty",
+   "instance": "mail-empty"
+  },
+  "result": {
+   "documents": [
+    {
+     "label": "Mail",
+     "kind": "markdown",
+     "text": "# Mail\n\nRead 2026-11-25T12:00:14.657Z; never acknowledges. 0 messages, newest first.\n- mailspike: mail\\-empty (primary)"
+    }
+   ],
+   "mail": {
+    "mailApi": 1,
+    "acknowledges": false,
+    "observedAt": "2026-11-25T12:00:14.657Z",
+    "identities": [
+     {
+      "team": "mailspike",
+      "alias": "mail-empty",
+      "identity": "did:key:placeholder-3",
+      "primary": true,
+      "error": null
+     }
+    ],
+    "messages": [],
+    "conversations": [],
+    "hasMore": false,
+    "nextCursor": null
+   }
+  }
+ }
+}

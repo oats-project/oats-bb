@@ -3,6 +3,7 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { MAIL, Mail } from "../mail";
 import { TerminalButton } from "../terminal/Terminal";
 import { OutsideAgent, OutsideAgentDetails, pageActs, pageParts, words as outsideWords } from "../outside";
 import type { ReactNode } from "react";
@@ -42,11 +43,28 @@ const NO_NODES: ReadonlyMap<string, Node> = new Map();
 type RosterFailure = { code: string; message: string; machine: string | null; line: string; /** when the roster kept was read; null where none ever was */ at: string | null; retry(): void };
 
 /** The panel's tabs. */
-export type TabId = "instance" | "soul";
+export type TabId = "instance" | "soul" | "mail";
 const TABS: readonly TabItem<TabId>[] = [
   { id: "instance", label: "Instance" },
   { id: "soul", label: "Soul" },
+  // The agent's incoming mail, read-only: a view of its own (app/mail) that takes the agent's name and nothing of the panel's.
+  // Drawn only for an agent that has a messaging id (`NO_MAIL`): what cannot be done is not offered.
+  { id: "mail", label: MAIL.tab },
 ];
+const NO_MAIL = TABS.filter((tab) => tab.id !== "mail");
+/**
+ * The agent whose Mail tab a person pressed. Mail is NOT remembered from one agent to the next, as
+ * the other tabs are: showing an agent's mail reads it (over the network, with the agent's own
+ * identities), and that takes a press on THAT agent's tab. Another agent's panel opens on Instance.
+ */
+let mailOf: string | null = null;
+/** A tab pressed in the panel of `instance`. */
+function pressTab(instance: string, tab: TabId): void {
+  mailOf = tab === "mail" ? instance : null;
+  showPanelTab(tab);
+}
+/** The tab the panel of `instance` shows: the one remembered, but Mail only where it was pressed for this agent and this agent has mail to read. */
+const tabOf = (instance: string, remembered: TabId, hasMail: boolean): TabId => (remembered === "mail" && !(hasMail && mailOf === instance) ? "instance" : remembered);
 /** The id of the panel's one tab panel: the tabs name it, and it names the tab it shows. */
 const PANEL_ID = "oats-panel-page";
 
@@ -70,7 +88,10 @@ const subscribe = (listener: () => void) => {
   return () => void listeners.delete(listener);
 };
 const useShownTab = (): TabId => useSyncExternalStore(subscribe, () => shownTab, () => shownTab);
-onWindowReset(() => showPanelTab("instance"));
+onWindowReset(() => {
+  mailOf = null;
+  showPanelTab("instance");
+});
 
 /** The panel as the plugin's fixed thread tab shows it on an agent's own thread. */
 export function AgentTab({ agent, threadId }: AgentTabProps) {
@@ -170,7 +191,7 @@ function useVisibleWidth(element: HTMLElement | null): number | null {
   return width;
 }
 
-function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster; agent: Agent; node: Node | undefined; thread: BbThread | null; tab: TabId; failure: RosterFailure | null; /** the panel is an agent's page, not the tab beside its thread */ page: boolean }) {
+function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { oats: Roster; agent: Agent; node: Node | undefined; thread: BbThread | null; tab: TabId; failure: RosterFailure | null; /** the panel is an agent's page, not the tab beside its thread */ page: boolean }) {
   const read = usePanelInstance(agent.instance);
   const now = useNow();
   // Beside a thread (the tab: `threadId`) the thread's own line says that the roster is the last one read; on an
@@ -184,6 +205,13 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
   const line = pageParts(agent, oats, status);
   const reading = useReading(agent.instance);
   const soul = shown(oats.soulOf(agent));
+  // The Mail tab stands only for an agent the roster's row gives a messaging id: one with no messaging layer has no mail to read.
+  const hasMail = read.data !== undefined && read.data.facts.messagingId !== null;
+  const tab = tabOf(agent.instance, remembered, hasMail);
+  // The memory itself leaves Mail too, so that a press on this agent's Mail tab is a change.
+  useEffect(() => {
+    if (remembered === "mail" && tab !== "mail") showPanelTab("instance");
+  }, [remembered, tab]);
   return (
     <>
       {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}
@@ -233,10 +261,10 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
         )}
       </header>
       <div className="shrink-0 px-3">
-        <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
+        <Tabs label="Instance context" tabs={hasMail ? TABS : NO_MAIL} value={tab} onChange={(id) => pressTab(agent.instance, id)} panelId={PANEL_ID} />
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} unread={failure !== null} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} />}
+        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} unread={failure !== null} /> : tab === "soul" ? <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} /> : <Mail instance={agent.instance} />}
       </div>
     </>
   );

@@ -12,7 +12,13 @@ import { soulsOf } from "./workspace.js";
  * order: one read for every client and every feature, reused like a page's answer. A spawn, a
  * start and a restart refuse a harness that is not in it before any process.
  */
-export const harnessesOf = async (core: Core): Promise<string[]> => (await providerOf(core)).harnesses;
+export const harnessesOf = async (core: Core): Promise<string[]> => (await synced(core)).harnesses;
+/** The provider's read, for whatever ACTS on it (a spawn, a start that names a harness): a provider that is pinned and not synced is the kernel's refusal, with its sentence (which names `oats sync`). Only the New agent form's own read takes it as an answer, to say the way on. */
+const synced = async (core: Core): Promise<Value<"spawnHarnesses">> => {
+  const provider = await providerOf(core);
+  if (provider.unsynced !== undefined) throw refusal(provider.unsynced);
+  return provider;
+};
 /**
  * The bb session provider's own version, as the kernel prints it for the capability the
  * deployment resolves (a release, or a commit for one taken from a repository); null when the
@@ -25,7 +31,7 @@ export const providerVersionOf = async (core: Core): Promise<string | null> => (
  * every feature shares (the provider's, the kernel's version): no process of its own.
  */
 const placesOf = async (core: Core): Promise<{ absent: boolean; backends: string[]; kernelHarnesses: string[] }> => {
-  const [provider, kernel] = await Promise.all([providerOf(core), core.versionOf()]);
+  const [provider, kernel] = await Promise.all([synced(core), core.versionOf()]);
   const absent = provider.absent === true;
   return { absent, backends: [...(absent ? [] : [BB_BACKEND]), ...kernel.sessionBackends.filter((id) => id !== BB_BACKEND)], kernelHarnesses: kernel.harnesses };
 };
@@ -91,6 +97,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     /** What the bb session provider declares: one read for every client and every place that offers the choice. */
     async spawnHarnesses() {
       const provider = await providerOf(core);
+      // Pinned and not synced: the form's read answers it (the way on is said there); nothing else is offered.
+      if (provider.unsynced !== undefined) return { harnesses: [], hostId: core.target()?.hostId ?? null, unsynced: provider.unsynced };
       const { backends, kernelHarnesses } = await placesOf(core);
       return { harnesses: provider.harnesses, hostId: core.target()?.hostId ?? null, provider: provider.absent !== true, backends, kernelHarnesses };
     },

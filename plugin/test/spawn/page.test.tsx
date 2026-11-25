@@ -755,6 +755,32 @@ test("no bb session provider, while the roster cannot be read: the roster's noti
   expect(slot.queryByTestId("oats-notice")).toBeNull();
 });
 
+test("the bb session provider is pinned and not synced: ONE line with the way on (oats sync), the kernel's sentence under Details, Retry; no preview is asked, the fields and Spawn are held; after the sync, Retry opens the form", async () => {
+  const kernelSays = "package oats.bb is not in the lock — run `oats sync`";
+  let synced = false;
+  const slot = await form("oats-developer", previews({ spawnHarnesses: () => (synced ? { harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true } : { harnesses: [], hostId: "host_falcon", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: kernelSays } }) }));
+  const notice = within(await slot.findByTestId("oats-spawn-not-synced")).getByTestId("oats-notice");
+  expect(notice.querySelector("h3")!.textContent).toBe("bb is not synced for this workspace: run oats sync.");
+  expect(slot.getAllByTestId("oats-notice")).toHaveLength(1);
+  // The kernel's own code and sentence, one press away; nothing red, no "could not be read".
+  expect(notice.querySelector("details")!.textContent).toContain(`E_CAPABILITY_UNKNOWN: ${kernelSays}`);
+  expect(slot.getByTestId("oats-new-agent-page").textContent).not.toMatch(/could not be read|not set up/);
+  // Nothing is asked of the kernel, and nothing can be pressed but Retry and Cancel: Spawn is off, described by the line.
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 700));
+  });
+  expect(calls(slot, "spawnPlan")).toEqual([]);
+  expect(fieldset(slot).disabled).toBe(true);
+  expect(submit(slot).disabled).toBe(true);
+  expect(describedBy(slot)).toContain("bb is not synced for this workspace: run oats sync.");
+  // `oats sync` has run: Retry reads again, the line goes and the form asks its preview.
+  synced = true;
+  fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(slot.queryByTestId("oats-spawn-not-synced")).toBeNull());
+  await waitFor(() => expect(calls(slot, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
+  await waitFor(() => expect(fieldset(slot).disabled).toBe(false));
+});
+
 test("Spawn applies the decision the preview showed, once: the form says Created, stays held, and opens the new agent's thread", async () => {
   const slot = await ready(previews({ spawn: () => ({ instance: "ranker-v4-probe", threadId: "thr_new" }) }));
   set(slot, "oats-spawn-task", "Try depth 7.");

@@ -81,6 +81,12 @@ export const harnessList = z.object({
    */
   backends: z.array(z.string()).optional(),
   kernelHarnesses: z.array(z.string()).optional(),
+  /**
+   * The workspace pins the bb session provider and it is not synced yet (the kernel's `E_CAPABILITY_UNKNOWN` naming a
+   * package that is not in the lock): the kernel's own code and sentence. Nothing can be spawned until `oats sync` has
+   * run: the form says that way on, asks no preview and holds Spawn; a spawn asked all the same is refused with it.
+   */
+  unsynced: z.object({ code: z.string(), message: z.string() }).optional(),
 });
 export type HarnessList = z.infer<typeof harnessList>;
 
@@ -120,7 +126,7 @@ const hostSpawn = z.object({
 
 export const host = defineRpcContract({
   /** `oats capabilities show oats.bb --json`: the harnesses the provider declares, and the provider's own version as the kernel prints it (null when it prints none that can be read). */
-  spawnHarnesses: { experimental_retryable: true, input: z.object(hostBase).strict(), output: answer(z.object({ harnesses: z.array(z.string()), version: z.string().nullable(), /** the deployment has no bb session provider at all */ absent: z.boolean().optional() })) },
+  spawnHarnesses: { experimental_retryable: true, input: z.object(hostBase).strict(), output: answer(z.object({ harnesses: z.array(z.string()), version: z.string().nullable(), /** the deployment has no bb session provider at all */ absent: z.boolean().optional(), /** the workspace pins the provider and it is not synced yet: the kernel's code and sentence */ unsynced: z.object({ code: z.string(), message: z.string() }).optional() })) },
   /**
    * `revision` is the kernel's decision revision for these choices; `summary` is for a soul's
    * page, `facts` for the form; `problem` is why this preview is no decision a spawn could apply

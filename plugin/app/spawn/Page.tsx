@@ -104,7 +104,7 @@ const MARK = { soul: "oats-spawn-soul-mark", model: "oats-spawn-model-mark", nam
  * roster's notice. An off Spawn is described by it too (aria-describedby): no word is added to the screen, and for a
  * screen reader the button is never just dimmed (the review of part 7).
  */
-const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice" } as const;
+const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice", unsynced: "oats-spawn-not-synced" } as const;
 /** How long Spawn waits for bb's list of models before it goes without it (the wait a thread's start is given too). */
 const MODELS_WAIT_MS = 10_000;
 type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
@@ -321,8 +321,11 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const onBb = harnesses.provider && (place === "" || place === "bb");
   const offered = onBb ? harnesses.options : harnesses.kernel;
   const harnessChoice = offered.length > 1;
-  const off: "soul" | "cannot" | "name" | "model" | "relation" | null =
-    chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
+  // The provider is pinned and not synced: nothing can be spawned until `oats sync` has run. The form says so once
+  // (its notice, with the way on), asks the kernel for no preview and holds its fields and Spawn.
+  const unsynced = harnesses.unsynced;
+  const off: "unsynced" | "soul" | "cannot" | "name" | "model" | "relation" | null =
+    unsynced !== null ? "unsynced" : chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
   // The preview waits for the harness read's answer: until it is known where a spawn may run here (whether the
   // deployment has the bb session provider at all), nothing is asked of the kernel: the preview would be of a spawn
   // the answer may change. Where the provider is there: the same preview, a moment later (the server keeps that read).
@@ -555,14 +558,14 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     if (phaseNow.current === "idle") setFailure(null);
   }, [key]);
 
-  const fieldsHeld = held || phase !== "idle";
+  const fieldsHeld = held || phase !== "idle" || unsynced !== null;
   /**
    * What holds Spawn while the form can be changed; null when nothing does. Only a read in flight is SAID beside the
    * button ("Reading…"). Every other hold is said once, where it is: the roster's notice while OATS cannot be read
    * ("Acts are off."), the field that is empty or marked, the column's refusal, the button's own word for a spawn
    * that is in flight. The button is described by the mark of the field that holds it, for a screen reader.
    */
-  const hold: "held" | "flight" | "soul" | "cannot" | "name" | "model" | "relation" | "refused" | "reading" | "model-mark" | null =
+  const hold: "held" | "flight" | "unsynced" | "soul" | "cannot" | "name" | "model" | "relation" | "refused" | "reading" | "model-mark" | null =
     phase !== "idle"
       ? null
       : held
@@ -590,6 +593,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     relation: SAYS.relative,
     refused: SAYS.column,
     held: SAYS.held,
+    unsynced: SAYS.unsynced,
     // A read in flight says "Reading…" beside the button; a spawn in flight is the button's own word.
     reading: undefined,
     flight: undefined,
@@ -673,6 +677,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         <div id={SAYS.held} className="empty:hidden">
           <RosterNotice oats={oats} />
         </div>
+        {/* The provider is pinned and not synced: said ONCE, with the way on; the kernel's own code and sentence under Details; Retry reads again once `oats sync` has run. Spawn is described by it. */}
+        {unsynced === null || held ? null : (
+          <div id={SAYS.unsynced} data-testid="oats-spawn-not-synced">
+            <Notice title={W.NOT_SYNCED} details={`${unsynced.code}: ${unsynced.message}`} actions={<Button onClick={harnesses.retry}>{W.RETRY_HARNESSES}</Button>} />
+          </div>
+        )}
         {/* While OATS cannot be read the roster's notice says so, alone: never a second one for the same cause. */}
         {souls.status === "error" && list === undefined && !held ? (
           <Notice title="The souls could not be read" tone="error" code={refusalCode(souls.error)} details={souls.error} actions={<Button onClick={souls.retry}>Retry</Button>} />

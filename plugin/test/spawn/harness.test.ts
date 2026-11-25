@@ -62,7 +62,7 @@ describe("the harnesses the bb session provider declares", () => {
     expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", provider: false, backends: ["tmux"], kernelHarnesses: ["pi", "claude", "codex"] });
   });
 
-  it("the same code for a provider the workspace DOES hold is a failed read, told by what the refusal names, not by its sentence: the form's read and the dialogs' are refused alike", async () => {
+  it("the same code for a provider the workspace DOES hold is told by what the refusal names, not by its sentence: pinned and not synced is an answer for the form (the way on) and a refusal for every act; a member with none is a failed read", async () => {
     // SHAPED, from the kernel's source (OATS 0.70.5 lib/capability-show.mjs `capabilitySource`): the two other things
     // it answers E_CAPABILITY_UNKNOWN for, with the `details` it gives each. The sentences are reworded here on
     // purpose: nothing reads them.
@@ -72,8 +72,16 @@ describe("the harnesses the bb session provider declares", () => {
     ];
     for (const error of others) {
       backend = await startBackend({ verbs: { "capabilities show": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", ...error } }), exit: 1 } } });
-      await expect(backend.rpc("spawnHarnesses"), error.message).rejects.toThrow(`E_CAPABILITY_UNKNOWN: ${error.message}`);
-      await expect(backend.rpc("startCheck", { instance: "kernel-fix-developer" }), error.message).rejects.toThrow(`E_CAPABILITY_UNKNOWN: ${error.message}`);
+      const refused = `E_CAPABILITY_UNKNOWN: ${error.message}`;
+      // The form's read: pinned and not synced is ANSWERED, with the kernel's code and sentence and nothing offered
+      // (the form says the way on); a member with no such capability is a failed read.
+      if ("package" in error.details) expect(await backend.rpc("spawnHarnesses"), error.message).toEqual({ harnesses: [], hostId: "host_falcon", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: error.message } });
+      else await expect(backend.rpc("spawnHarnesses"), error.message).rejects.toThrow(refused);
+      // Every ACT is refused with the kernel's sentence, and no spawn reaches the kernel: the dialogs' read, a preview, a spawn.
+      await expect(backend.rpc("startCheck", { instance: "kernel-fix-developer" }), error.message).rejects.toThrow(refused);
+      await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "" }), error.message).rejects.toThrow(refused);
+      await expect(backend.rpc("spawn", { soul: "oats-developer", task: "", key: "spawn-9a8b7c6d" }), error.message).rejects.toThrow(refused);
+      expect((await backend.fake.calls()).filter((call) => call.verb.startsWith("spawn"))).toEqual([]);
       await backend.dispose();
     }
     // And the true case with its sentence reworded is still the answer: the code and the structure decide.

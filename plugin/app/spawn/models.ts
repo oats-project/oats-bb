@@ -42,6 +42,8 @@ export type Harnesses = {
   backends: string[];
   /** The harnesses the kernel launches itself: what a spawn that is not a bb thread may name. */
   kernel: HarnessOption[];
+  /** The workspace pins the bb session provider and it is not synced yet: the kernel's own code and sentence; null otherwise. */
+  unsynced: { code: string; message: string } | null;
   retry(): void;
 };
 /** The first entry of the harness field: selected at the start, and nothing is passed while it is. */
@@ -63,6 +65,7 @@ export function useHarnesses(): Harnesses {
     provider: read.data?.provider !== false,
     backends: read.data?.backends ?? [],
     kernel: (read.data?.kernelHarnesses ?? []).map((id) => ({ id, label: harnessLabel(id) })),
+    unsynced: read.data?.unsynced ?? null,
     error: read.status === "error" ? read.error : null,
     retry: read.retry,
   };

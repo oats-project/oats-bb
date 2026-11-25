@@ -278,6 +278,11 @@ export function checkModel(model: string): Result<string> {
  * The ONE predicate, for the New agent form and for the dialogs (server/lifecycle.ts reads the same answer).
  */
 export const providerAbsent = (error: KernelError): boolean => error.code === "E_CAPABILITY_UNKNOWN" && error.within === undefined;
+/**
+ * The second of those: the workspace PINS the provider and its package is not in the lock yet (`details.package`).
+ * Not absent, and not a failure a Retry mends: the way on is `oats sync`, and the New agent form says so.
+ */
+export const providerUnsynced = (error: KernelError): boolean => error.code === "E_CAPABILITY_UNKNOWN" && error.within === "package";
 
 /** Spawn's commands. */
 export const verbs = (oats: Runner) => ({
@@ -286,10 +291,13 @@ export const verbs = (oats: Runner) => ({
    * `absent`: the deployment does not have the bb session provider at all (`providerAbsent`). That is an answer, not
    * a failed read: there is then no harness to choose and no bb thread to spawn on. Any other failure of the read is
    * a failure, with the kernel's sentence.
+   * `unsynced`: the workspace pins the provider and it is not synced yet (`providerUnsynced`): an answer too, with the
+   * kernel's own code and sentence: nothing can be spawned on bb until `oats sync` has run.
    */
-  spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null; absent: boolean }>> => {
+  spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null; absent: boolean; unsynced?: { code: string; message: string } }>> => {
     const read = await oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal);
     if (read.ok) return ok({ ...read.value, absent: false });
+    if (providerUnsynced(read.error)) return ok({ harnesses: [], version: null, absent: false, unsynced: { code: read.error.code, message: read.error.message } });
     return providerAbsent(read.error) ? ok({ harnesses: [], version: null, absent: true }) : read;
   },
 

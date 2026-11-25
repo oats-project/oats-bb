@@ -25,7 +25,8 @@ failures=0
 say() { printf '%s\n' "$*"; }
 pass() { say "PASS $1"; }
 fail() { say "FAIL $1"; failures=$((failures + 1)); }
-fake() { printf '{"fixtures":"%s/test/fixtures","log":"%s","verbs":%s}' "$PLUGIN" "$FAKE_LOG" "${1:-{\}}" > "$FAKE_CONFIG"; }
+# (Written whole beside its place and renamed into it: every fake oats the plugin starts reads it, at any moment.)
+fake() { printf '{"fixtures":"%s/test/fixtures","log":"%s","verbs":%s}' "$PLUGIN" "$FAKE_LOG" "${1:-{\}}" > "$FAKE_CONFIG.writing" && mv "$FAKE_CONFIG.writing" "$FAKE_CONFIG"; }
 rpc() { # rpc <method> [json input] -> the result's JSON on stdout
   local input=$OUT/input.json
   printf '%s' "${2:-null}" > "$input"

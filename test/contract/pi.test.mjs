@@ -324,24 +324,69 @@ test("a model added to pi a moment ago is not in bb's list yet, and bb starts a 
   await refusesAgain();
 });
 
-test("P2 the kernel's two variables and the PATH reach the thread's pi and its tools through the project's env, and nothing else of the launch does; the home's skills load", async () => {
+test("P2 the kernel's two variables, the PATH and where the agent's identity is reach the thread's pi and its tools through the project's env, and nothing else of the launch does; the home's skills load", async () => {
   const { home, endpoint, since } = await launched("p2", {
     // As the kernel hands a launch of a home with messaging: oats.aweb's entries beside its own.
     env: [{ name: "OATS_INSTANCE", value: "p2", source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: "/home/node/homes/p2", source: "kernel" },
       { name: "AWEB_DELIVERY", value: "session", source: "capability", capability: "oats.aweb" }, { name: "AWEB_IDENTITY_HOME", value: "/home/node/homes/p2/.aw", source: "capability", capability: "oats.aweb" }],
     unset: ["CONTRACT_AMBIENT"],
   });
-  assert.deepEqual(await projectEnv(endpoint.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"], "only these three ever go into bb's database");
+  assert.deepEqual(await projectEnv(endpoint.projectId), ["AWEB_IDENTITY_HOME", "OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"], "only these four ever go into bb's database");
   // bb shows no value back: nothing of the launch's env can be read out of bb's CLI.
   for (const variable of (await bbJson(`machine env list --project ${endpoint.projectId}`)).variables) assert.equal(variable.value, null, variable.name);
-  // The agent's own shell: the kernel's two variables, and the home's shim found by its
-  // bare name. A capability's entry did not come, and neither did the launch's unset: the
-  // thread's pi inherits what the bb server's own environment holds.
+  // The agent's own shell: the kernel's two variables, the home's shim found by its bare
+  // name, and where the agent's identity is (a capability's entry, a path inside the home:
+  // oats-bb#87). A capability's other entry did not come, and neither did the launch's
+  // unset: the thread's pi inherits what the bb server's own environment holds.
   const seen = await bash(endpoint.threadId, `printf '%s|%s|%s|%s|%s|%s|' "$OATS_INSTANCE" "$OATS_INSTANCE_HOME" "$(contract-shim)" "\${AWEB_DELIVERY-unset}" "\${AWEB_IDENTITY_HOME-unset}" "\${CONTRACT_AMBIENT-unset}"`);
-  assert.ok(seen.includes(`p2|${home}|shim-on-path|unset|unset|from-the-bb-server|`), seen);
+  assert.ok(seen.includes(`p2|${home}|shim-on-path|unset|${home}/.aw|from-the-bb-server|`), seen);
   // @awebai/oats-pi loads the home's composed skills only when OATS_INSTANCE_HOME names the home.
   const first = (await turns())[since];
   assert.ok(first.sys.includes("contract-skill"), "the home's skill is in pi's system prompt");
+});
+
+// oats-bb#87. `aw` finds an identity in `.aw` of the directory it runs in. A seat with a
+// GLOBAL identity through a session grant keeps its identity in `<home>/.aweb-identity`,
+// and oats.aweb says so with AWEB_IDENTITY_HOME in the launch's env: left out of a pi
+// thread, such a seat received mail and could not send ("current directory is not
+// initialized for aw"). The variable now reaches the thread.
+// What this shows, with the real aw (the one @awebai/pi brought into the image's second pi
+// configuration) run by the agent's own shell: without the variable aw answers the issue's
+// very words; with it, aw takes the identity home the launch named, and says so. What it
+// does NOT show is a grant seat sending: that needs aweb's server, its registry and a
+// resident's custody, none of which this container has, so the identity home here is an
+// empty directory and aw stops at reading it.
+test("a grant seat's identity home reaches the pi thread: the agent's own aw takes it from the thread's environment (#87); a launch that names none leaves aw where it was", async () => {
+  const AW = "/home/node/pi-with-aweb/npm/node_modules/.bin/aw";
+  assert.equal((await sh(`test -x ${AW} && echo there || echo none`)).trim(), "there", "the image holds aw, as a dependency of @awebai/pi");
+  const ask = `printf '%s|' "\${AWEB_IDENTITY_HOME-unset}"; ${AW} whoami 2>&1 | head -n 1`;
+  // A seat as it was before: no identity home named, so aw looks in the directory it runs in.
+  const plain = await launched("grant-none");
+  assert.deepEqual(await projectEnv(plain.endpoint.projectId), ["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
+  const before = await bash(plain.endpoint.threadId, ask);
+  assert.ok(before.includes("unset|current directory is not initialized for aw"), before);
+  // A grant seat: its identity is in the home's .aweb-identity, and the launch's env says so, as oats.aweb hands it.
+  const home = await makeHome("grant-seat");
+  await sh(`mkdir -m 700 ${home}/.aweb-identity`);
+  const since = (await turns()).length;
+  const answer = await provider("launch", launchInput(home, "grant-seat", { env: [{ name: "OATS_INSTANCE", value: "grant-seat", source: "kernel" }, { name: "OATS_INSTANCE_HOME", value: home, source: "kernel" },
+    { name: "AWEB_DELIVERY", value: "session", source: "capability", capability: "oats.aweb" }, { name: "AWEB_IDENTITY_HOME", value: `${home}/.aweb-identity`, source: "capability", capability: "oats.aweb" },
+    { name: "AWID_REGISTRY_URL", value: "https://registry.invalid", source: "capability", capability: "oats.aweb" }] }));
+  assert.equal(answer.ok, true, JSON.stringify(answer));
+  const { endpoint } = answer.result;
+  started.push(endpoint.threadId);
+  await waitFor(`the first turn of ${endpoint.threadId}`, async () => (await turns()).length > since, { timeoutMs: 120_000 });
+  await idle(endpoint.threadId);
+  assert.deepEqual(await projectEnv(endpoint.projectId), ["AWEB_IDENTITY_HOME", "OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH"]);
+  const after = await bash(endpoint.threadId, ask);
+  assert.ok(after.includes(`${home}/.aweb-identity|selected identity home ${home}/.aweb-identity:`), after);
+  assert.ok(!after.includes("current directory is not initialized"), after);
+  // bb shows no value of it back, as of the others.
+  for (const variable of (await bbJson(`machine env list --project ${endpoint.projectId}`)).variables) assert.equal(variable.value, null, variable.name);
+  // The retire hook removes it with the rest: the project's env is the provider's, whole.
+  assert.equal((await provider("stop", { home, endpoint, graceSeconds: 10 })).ok, true);
+  await hook("retire-hook", home);
+  assert.deepEqual(await projectEnv(endpoint.projectId), []);
 });
 
 test("P2 without the project's env the home's skills do not load: the env is what carries them", async () => {

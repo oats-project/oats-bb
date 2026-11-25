@@ -194,7 +194,10 @@ thread's own row says its agent's state at every width).
 - **The recording wrapper**: the plugin's `oatsBin` setting names `oats-record`, which runs the
   real `oats` with the same arguments, passes its output and exit code through, and keeps one file
   per call (`records/`): the argv, the exit code, stdout, stderr. Its configuration can also make
-  every call, or the calls of one command, slower: the run's "oats taking seconds".
+  every call, or the calls of one command, slower: the run's "oats taking seconds". A record is
+  written whole beside its place and renamed into it, and so are the wrapper's settings: the run
+  reads the records, and each wrapper its settings, while the other side may be writing
+  (`../files.mjs`; a record read half written once failed a run on main).
 
 ## pi agents: a run of its own, and what a deployment must have
 

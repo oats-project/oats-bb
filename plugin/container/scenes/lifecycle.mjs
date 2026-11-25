@@ -13,6 +13,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fill, FOCUSED, showSidebar, testId, textOf, visible } from "../browser.mjs";
+import { completeLines } from "../files.mjs";
 
 /** The fake kernel's own log of the calls it answered: what the plugin really asked of `oats`. */
 const FAKE_LOG = join(homedir(), "fake-oats.log");
@@ -1037,7 +1038,7 @@ export default [
 
         // Restart does not stop what it cannot start: a model the person changed to one bb's list does not serve
         // is HELD (the kernel stops the running session before the provider judges the model). Nothing is sent.
-        const restartsAsked = () => readFileSync(FAKE_LOG, "utf8").split("\n").filter((line) => line !== "").map((line) => JSON.parse(line)).filter((call) => call.argv[0] === "session" && call.argv[1] === "restart").length;
+        const restartsAsked = () => completeLines(FAKE_LOG).map((line) => JSON.parse(line)).filter((call) => call.argv[0] === "session" && call.argv[1] === "restart").length;
         const asked = restartsAsked();
         check((await openThreadMenu(page)) && (await pick(page, "Restart (OATS)")), `${at} Restart is asked once more from the thread's menu`);
         await page.until(phaseIs("ready"), 30);

@@ -59,9 +59,11 @@ the retire's result is an array of strings). To be recorded when a run produces 
 No recorded receipt holds it: OATS 0.70.5 refuses the whole retire when a child does not stop
 (`E_CHILDREN_RUNNING`, "nothing was retired": `lib/core.mjs`), so a receipt of a retire that went
 through has every `childrenStopped` row `ok`. The words for such a row are held all the same
-(`test/lifecycle/words.test.ts`, "a retire whose CHILD did not stop"), on `retire-apply.json` SHAPED
-in the test: one child's row with `ok: false`, its `code`, `stillRunning` and `detail`. To be
-recorded if a kernel ever answers one.
+(`test/lifecycle/words.test.ts`, "a retire whose CHILD did not stop"), on the DOCUMENT
+`retire-apply.json` SHAPED in the test: its one `childrenStopped` row written as the kernel writes a
+row that did not stop (`stopRecordedChildren`: `ok: false`, `code`, `message`, `stillRunning`), and
+read by the plugin's own parser. The dialog's test (`test/lifecycle/actions.test.tsx`) shapes the
+parsed receipt's row the same way. To be recorded if a kernel ever answers one.
 
 ## The retire refused while a process works in the home (`E_RUNTIME_QUIESCE_FAILED`)
 

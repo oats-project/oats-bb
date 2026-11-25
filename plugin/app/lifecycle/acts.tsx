@@ -433,7 +433,7 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
             const outcome = retireOutcome(receipt, plan);
             // (A retire that was only accepted, or did not finish, does not say its agent was retired: the children it stopped are named all the same.
             // One that went through while a child of it did not stop DID retire its agent: its result is not "done", and its agent changed.)
-            const retired = outcome.tone === "done" || (outcome.tone === "unknown" && !receipt.deferred);
+            const retired = !receipt.deferred && outcome.tone !== "failed";
             return { outcome, changed: receipt.replayed ? null : { agents: [...(retired ? [receipt.instance] : []), ...receipt.children.filter((row) => row.ok).map((row) => row.instance)], endedAt: receipt.endedAt } };
           });
     answered.then(

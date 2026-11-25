@@ -1199,8 +1199,10 @@ test("the Start gate is the Desktop's: running is already running; what is not k
 // SHAPED: the recorded retire receipt with its one child's row changed to `ok: false` (OATS 0.70.5 refuses the whole
 // retire then and answers no such receipt: test/fixtures/lifecycle/README.md, "A retire's child that did not stop").
 test("a retire whose child did not stop (the recorded receipt, that child's row ok: false) is not told as done: \"… retired.\" in the not-confirmed tone, the child named as a stop names a session that did not stop, and its code", async () => {
+  const { actedAt } = await import("../../app/roster/reading");
+  const END = "2026-11-19T12:30:03.000Z"; // the act's command returned, on the server's clock
   const recorded = retireReceiptOf();
-  const receipt = { ...recorded, children: recorded.children.map((child) => ({ ...child, ok: false, alreadyIdle: false, code: "E_SESSION_STOP_FAILED", stillRunning: [4242], detail: null })) };
+  const receipt = { ...recorded, endedAt: END, children: recorded.children.map((child) => ({ ...child, ok: false, alreadyIdle: false, code: "E_SESSION_STOP_FAILED", stillRunning: [4242], detail: null })) };
   const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => receipt });
   await pick("retire");
   await ready(slot);
@@ -1218,6 +1220,8 @@ test("a retire whose child did not stop (the recorded receipt, that child's row 
   expect(more.textContent).toContain("E_SESSION_STOP_FAILED");
   expect(more.textContent).toContain("digest-links-helper: still running: 4242");
   expect(slot.getByTestId("oats-confirm").textContent).not.toContain("Review again");
+  // The agent WAS retired: its row reads again ("Reading…" until the roster is one read after the act). The child that did not stop is not said to have changed.
+  expect([actedAt("weekly-digest-helper"), actedAt("digest-links-helper")]).toEqual([END, null]);
 });
 
 // ---- from the third review round

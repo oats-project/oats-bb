@@ -394,7 +394,7 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
     title: "Retirement didn't finish",
     lines: [...running, ...lines, "Check what was kept before trying again."],
     code: "RETIRE_INCOMPLETE",
-    details: under(...quotes(receipt.children.filter((child) => !child.ok)), ...where, compensation, ...receipt.incomplete, ...receipt.warnings, receipt.replayed && REPLAYED),
+    details: under(...quotes(receipt.children), ...where, compensation, ...receipt.incomplete, ...receipt.warnings, receipt.replayed && REPLAYED),
     offers: ["review"],
     ...(keptOnBb ? { warning: { title: HOME_KEPT, details: HOME_KEPT_DETAILS } } : {}),
   };

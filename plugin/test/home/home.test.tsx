@@ -1176,6 +1176,58 @@ test("behind a result the home's card of a stopped agent that asks says \"Readin
   expect(within(card).getByTestId("oats-needs-stopped").textContent).not.toContain(said!);
 });
 
+// P20, as ruled after the polish's second round: a row of the home's lists is ONE line at every width, and ONE thing may
+// cost it a second line: a reason that WARNS, or the tmux glyph, that cannot stand whole beside the name. The fit is
+// measured from the row's own boxes; jsdom has no layout, so the measure is the pure function's and the widths are given.
+test("whether a row's facts need a line of their own: only when what they never give up does not fit beside the name", async () => {
+  const { factsNeedOwnLine } = await import("../../app/home/Home");
+  // 356: a row at a phone's width; a name, the gap, then the held part (the soul's least, a reason that warns, the glyph).
+  expect(factsNeedOwnLine({ line: 356, name: 150, gap: 8, held: 120 })).toBe(false);
+  expect(factsNeedOwnLine({ line: 356, name: 228, gap: 8, held: 120 })).toBe(false); // exactly
+  expect(factsNeedOwnLine({ line: 356, name: 229, gap: 8, held: 120 })).toBe(true);
+  expect(factsNeedOwnLine({ line: 900, name: 229, gap: 8, held: 120 })).toBe(false); // the same row in a wide window
+  expect(factsNeedOwnLine({ line: 356, name: 330, gap: 8, held: 18 })).toBe(false); // a plain row holds only its soul's least: it stays one line
+});
+
+test("a row with nothing to hold (a plain reason, no glyph) never takes a second line; one that holds a warning reason or the glyph takes it only when the measure says so", async () => {
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "kernel-fix-developer" ? { ...agent, running: true, runtimeState: "running" } : agent));
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  const rows = await slot.findAllByTestId("oats-working-row");
+  // With no layout every row is one line: the facts beside the name, never wrapping.
+  expect(rows.length).toBeGreaterThan(0);
+  for (const row of rows) {
+    const line = row.querySelector("[data-facts]")!;
+    expect([line.getAttribute("data-facts"), line.className.split(/\s+/).includes("flex-wrap")]).toEqual(["beside", false]);
+  }
+  // A row on tmux (the glyph is held): given boxes in which the name leaves no room for the glyph, its facts go under the name, whole.
+  const tmux = rows.find((row) => row.querySelector('[data-phrase="where"]') !== null)!;
+  expect(tmux).toBeDefined();
+  const line = tmux.querySelector<HTMLElement>("[data-facts]")!;
+  const name = line.firstElementChild as HTMLElement;
+  const width = (of: Element) => (of === name ? 340 : 20);
+  const box = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const w = width(this);
+    return { x: 0, y: 0, left: 0, top: 0, right: w, bottom: 16, width: w, height: 16, toJSON: () => ({}) };
+  });
+  const client = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+    return this === line ? 356 : 0;
+  });
+  try {
+    act(() => void window.dispatchEvent(new Event("resize")));
+    // (No ResizeObserver in this DOM: the row measures after each draw; a new roster draws it again.)
+    await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:26.000Z" }));
+    await waitFor(() => expect(line.getAttribute("data-facts")).toBe("under"));
+    expect(line.className.split(/\s+/)).toContain("flex-wrap");
+    expect(within(tmux).getByTestId("oats-home-agent-where").className.split(/\s+/)).toContain("basis-full");
+    // A plain row beside it, in the same boxes, stays one line.
+    const plain = rows.find((row) => row !== tmux && row.querySelector('[data-phrase="where"]') === null && row.querySelector('[data-tone="warning"]') === null)!;
+    expect(plain.querySelector("[data-facts]")!.getAttribute("data-facts")).toBe("beside");
+  } finally {
+    box.mockRestore();
+    client.mockRestore();
+  }
+});
+
 /** The one count line of the home, on Home › Agents ("2 running · 4 need you · …"), for a roster. */
 async function agentsLine(agents: Agent[]): Promise<string> {
   const app = await loadApp();

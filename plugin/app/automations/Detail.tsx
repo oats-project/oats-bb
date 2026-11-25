@@ -11,7 +11,7 @@ import type { AutomationHost, AutomationProblem, AutomationRow, TriggerStatus } 
 import { droppedCount, pageRuns, scheduleCut, triggerCut } from "../../model/automation-runs";
 import { displayLine, shown, shownBlock } from "../ui/text";
 import { readAge } from "../ui/words";
-import { Button, Card, Disclosure, Empty, LINK, Loading, Menu, Notice } from "../ui";
+import { Button, Card, Disclosure, Empty, LINK, Loading, Menu, Notice, TARGET } from "../ui";
 import type { MenuItem } from "../ui";
 import { RunningContext, useHere } from "./here";
 import { DETAIL, ICON_BUTTON, ICONS, PLAIN, PLAIN_FOOT, SECTION, SECTION_HEAD, SEPARATED } from "./bb";
@@ -61,7 +61,7 @@ function Prose({ text, children }: { /** the text, for its length */ text: strin
         {children}
       </div>
       {bounded ? (
-        <button type="button" data-testid="oats-automation-prose-more" aria-expanded={whole} className={`${LINK} text-xs text-muted-foreground`} onClick={() => setWhole((before) => !before)}>
+        <button type="button" data-testid="oats-automation-prose-more" aria-expanded={whole} className={`${LINK} ${TARGET} inline-flex items-center text-xs text-muted-foreground`} onClick={() => setWhole((before) => !before)}>
           {whole ? "Show less" : "Show more"}
         </button>
       ) : null}
@@ -280,7 +280,7 @@ function Details({ row, host, status, source, running, file, onOpenFile, canOpen
       "Source",
       "source",
       lookup !== null && onOpenCapability !== undefined && canOpenCapability?.(lookup) === true ? (
-        <button type="button" data-testid="oats-automation-open-capability" aria-label={`Open capability ${lookup}`} className={`${LINK} min-w-0 break-words text-left`} onClick={() => onOpenCapability(lookup)}>
+        <button type="button" data-testid="oats-automation-open-capability" aria-label={`Open capability ${lookup}`} className={`${LINK} ${TARGET} inline-flex min-w-0 items-center break-words text-left`} onClick={() => onOpenCapability(lookup)}>
           {sourceLabel(source) ?? source.id}
         </button>
       ) : (
@@ -294,7 +294,7 @@ function Details({ row, host, status, source, running, file, onOpenFile, canOpen
     "File",
     "file",
     path === null ? null : file !== null && onOpenFile !== undefined ? (
-      <button type="button" data-testid="oats-automation-open-file" className={`${LINK} min-w-0 break-all text-left`} onClick={() => onOpenFile(file)}>
+      <button type="button" data-testid="oats-automation-open-file" className={`${LINK} ${TARGET} inline-flex min-w-0 items-center break-all text-left`} onClick={() => onOpenFile(file)}>
         {shown(path)}
       </button>
     ) : (

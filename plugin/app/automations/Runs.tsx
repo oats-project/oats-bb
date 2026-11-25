@@ -48,7 +48,7 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, open, onTogg
   // What is drawn over the row's own button lets a press through to it; a control of its own (the automation's name, Answer, the menu) takes its press.
   const THROUGH = "pointer-events-none relative";
   return (
-    <div role="listitem" data-testid="oats-run" data-of={entry.of} data-mark={agent?.asks ? "asks" : line.mark}>
+    <div role="listitem" data-testid="oats-run" data-of={entry.of} data-outcome={agent?.asks ? "asks" : line.mark}>
       {/* The row: the mark, when, (in the Runs tab: its automation), what came of it, the agent. Nothing else. */}
       <div className={`${RUN_ROW} ${TARGET} relative`}>
         {/* The WHOLE row is the way into the chat of the agent the run made: one button under the row's content. A run whose agent is gone, or that made none, has none, and no chevron. */}
@@ -60,7 +60,7 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, open, onTogg
           {when?.label ?? "—"}
         </time>
         {withOwner ? (
-          <button type="button" data-testid="oats-run-owner" className="relative order-last min-w-0 basis-full break-words rounded-sm pl-[1.625rem] text-left text-sm text-foreground hover:underline @2xl:order-none @2xl:flex-1 @2xl:basis-0 @2xl:pl-0" onClick={() => onOpenOwner?.(entry.owner)}>
+          <button type="button" data-testid="oats-run-owner" className={`${TARGET} relative order-last inline-flex min-w-0 basis-full items-center break-words rounded-sm pl-[1.625rem] text-left text-sm text-foreground hover:underline @2xl:order-none @2xl:flex-1 @2xl:basis-0 @2xl:pl-0`} onClick={() => onOpenOwner?.(entry.owner)}>
             {shown(entry.owner.name)}
           </button>
         ) : null}

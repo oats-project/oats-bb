@@ -777,7 +777,7 @@ test("while what is shown is the roster as last read, a card's answers and its r
 
 test("a page's tile carries the mark its feature gives it: Automations while a run failed", async () => {
   const { addPageLink } = await import("../../app/workspace/pages");
-  const remove = addPageLink({ path: "automations", title: "Automations", useMark: () => ({ label: "Automations, a run failed" }) });
+  const remove = addPageLink({ path: "automations", title: "Automations", useMark: () => ({ label: "Automations, a failure" }) });
   try {
     const slot = await plainTab();
     const tile = await slot.findByTestId("oats-tile-automations");

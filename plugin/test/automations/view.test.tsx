@@ -627,7 +627,7 @@ describe("an automation's runs", () => {
     const asks = page({ agentLink: (instance) => ({ open: () => log.push(`open ${instance}`), asks: true, start: null }) });
     asks.open("local/daily-review");
     const [asking] = asks.runs();
-    expect([asking!.dataset.mark, mark(asking!), said(asking!)]).toEqual(["asks", "Needs you", "Needs you"]);
+    expect([asking!.dataset.outcome, mark(asking!), said(asking!)]).toEqual(["asks", "Needs you", "Needs you"]);
     fireEvent.click(within(asking!).getByTestId("oats-run-answer"));
     expect(log).toEqual(["open oats-developer-review-202611212017"]);
     cleanup();
@@ -645,7 +645,7 @@ describe("an automation's runs", () => {
     const view = page();
     view.open("local/hourly-check");
     const [run] = view.runs();
-    expect([mark(run!), said(run!), run!.dataset.mark]).toEqual(["Failed", "Launch failed", "failed"]);
+    expect([mark(run!), said(run!), run!.dataset.outcome]).toEqual(["Failed", "Launch failed", "failed"]);
     const error = within(run!).getByTestId("oats-run-error");
     expect(error.textContent).toMatch(/^E_BACKEND_SANDBOXED_MODEoats-developer-hourly-check-202611212017 was not launched: /);
     const toggle = within(run!).getByTestId("oats-run-toggle");

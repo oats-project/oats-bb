@@ -638,6 +638,25 @@ test("when bb cannot list its threads the line says so, with Retry", async () =>
   expect(slot.queryByTestId("oats-tree")).toBeNull();
 });
 
+test("a page whose hook gives two marks draws two dots after its title, in the order given, each with its own name; the first in the tone of what waits on a person", async () => {
+  const remove = addPageLink({ path: "example", title: "Example", useMark: () => [{ label: "Example, needs you", tone: "warning" }, { label: "Example, a failure" }] });
+  try {
+    const { slot } = await sidebar();
+    const row = await slot.findByTestId("oats-page-link-example");
+    const marks = Array.from(row.querySelectorAll<HTMLElement>('[data-testid="oats-mark"]'));
+    expect(marks.map((mark) => [mark.getAttribute("role"), mark.getAttribute("aria-label"), mark.dataset.tone])).toEqual([
+      ["img", "Example, needs you", "warning"],
+      ["img", "Example, a failure", undefined],
+    ]);
+    // After the title, in that order.
+    expect(row.firstChild?.textContent).toBe("Example");
+    expect(marks[0]!.compareDocumentPosition(marks[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    slot.unmount();
+  } finally {
+    remove();
+  }
+});
+
 test("a feature's own page is a row under the four pages, with its mark while its hook gives one", async () => {
   let failed = true;
   const remove = addPageLink({ path: "example", title: "Example", useMark: () => (failed ? { label: "Example, a run failed" } : null) });

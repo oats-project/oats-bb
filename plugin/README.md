@@ -582,7 +582,7 @@ the OATS Desktop's Home: what needs you first, then what you have.
 | Part | What it shows |
 |---|---|
 | **Needs you** | one card per agent that waits on you: those you can answer here (they have a thread in bb) first, then those answered elsewhere; within each, the newest claim first. Eight, then **Show all N**. A card says who (the instance's name as words; under it, on one line, its soul, the reason for an agent with no thread in bb ("deleted in bb", "session lost"), and for one on tmux bb's terminal glyph named "tmux"), its state on the shared status line with how long it has waited ("4 d"), what it asks in the agent's own words, and offers the answer its request takes (below). **Open** and the name lead to the agent's thread (to its own page, for an agent with none). With none: "Nothing needs you." |
-| the tiles | **Agents** (Home › Agents) and the plugin's pages, each with its count; "Counting…" while a page is read, "Couldn't count" when that failed (the tile still leads to its page, which says why). A page's tile carries the mark its row in the sidebar carries (Automations, while a run failed), read only while the home is seen |
+| the tiles | **Agents** (Home › Agents) and the plugin's pages, each with its count; "Counting…" while a page is read, "Couldn't count" when that failed (the tile still leads to its page, which says why). A page's tile carries the marks its row in the sidebar carries (Automations: amber while an agent of an automation asks, red while one is failing), read only while the home is seen |
 | **Running** | the agents that run (a bb agent that works; a tmux agent that runs: the heading is true of every row), five, then **Show all N** / **Show fewer**; each row is the agent's name (the heading says the state) and opens its agent; a row is ONE line at every width (the soul gives way, then is not drawn), and takes a second only where a reason that warns or the tmux glyph cannot stand whole beside the name: neither is ever clipped (P20; THE FIT in `app/home/Home.tsx`, the one measure a card's first line uses too) |
 | **Lost** | the agents whose session was lost (their roster row says "Lost"; not the ones a person stopped), in the roster's order, one line each: the name, the soul, where it runs, and its act: **Start…**, which opens that agent's Start dialog (off while the roster shown is the last one read, and behind a done Start until the roster is read again); or, for an agent on bb whose thread bb lists, **Open**, which opens that thread: a message there is the way on (one rule with the thread's line: Start… would begin a new conversation). Headed with the roster's own word and their count ("Lost 8"); not drawn with none. The one place where eight lost agents are eight presses in one list |
 | **Unread** | idle agents whose thread holds something you have not read; not drawn with none |
@@ -907,89 +907,144 @@ spawn in flight (D-259); a failed spawn kept with Reopen (D-262); the draft kept
 
 ## Automations
 
-**Automations** (in the sidebar's block, under Machines; `/plugins/oats/automations`) shows OATS's
-own schedules and triggers: the ones this deployment holds and the ones the workspace's members
-share through Git. They are the kernel's (`oats schedule …`, `oats trigger …`): the plugin is a
-front for them and never uses bb's own automations. The page is the OATS Desktop's Automations
-page, in its words.
+**Automations** (in the sidebar's block; `/plugins/oats/automations`) shows OATS's own schedules
+and triggers: the ones this deployment holds and the ones the workspace's members share through
+Git. They are the kernel's (`oats schedule …`, `oats trigger …`): the plugin is a front for them
+and never uses bb's own automations. The page is drawn in the manner of bb's OWN Automations page,
+with bb's type, sizes and spacing (`app/automations/bb.tsx` holds the classes, each read from bb's
+page on bb-app 0.50.1; a live check compares the two pages' computed type and fails on a
+difference). Where it departs from bb's page, on purpose, `WORDS.md` says why.
 
-- **Two tabs, Schedules and Triggers**, each with its count. A list groups its rows by where they
-  run, because the first question is what the machine that holds the deployment does: **Runs on
-  <machine>** (by bb's name for it, since the browser that draws the page may be anywhere; the
-  Desktop's "this computer" stands only while bb gives no name), **Needs attention here** (wrong account here, not trusted here, an invalid or unreadable definition) and
-  **Runs elsewhere**. All / Workspace / Local filters by where the definition lives; the search
-  reads the id, the soul, the task or wake message, the summary, the host and the account.
-- **A row** says its name and where it is from, its summary (or the first line of its prompt, in
-  italics), its soul, when it runs in words, where it runs and as whom, and its last and next run.
-  A last run that failed is marked as a failure, one whose launch is not known as a warning, each
-  with its word. A next run whose time has passed reads "Was due <age>", and while the host
-  scheduler is off no row is drawn as one that runs: the group is "Set to run on <machine>", the
-  mark is muted and "Scheduler off" stands where the next run would be.
-  The kernel places every row (`runsHere`, `reason`, `enabledHere`); the plugin reads those facts
-  and derives none.
-- **A row's page** shows what it sends, whole (the prompt, the wake message, the command's argv,
-  the operation), when it runs or what it watches, what it spawns, its recent runs or fires on
-  that machine, what is wrong with it, its run state, where it runs and where it comes from, as
-  cards of equal width; a schedule whose agent is woken again has a **Recurring wake-up** card.
-  What is wrong (an invalid or unreadable definition, a source check that failed, an unknown run
-  state, a failed poll) is one sentence in a person's words, with the kernel's own message, code
-  and field under **Details**. A run that did not happen says why in the kernel's words. **Open file** previews the definition from
-  the machine that holds the deployment, or opens its web page for a member with no clone here. A schedule's or a trigger's Prompt and a wake's message are
-  the one exception to the display filter: they are drawn whole, as the Desktop draws them (their
-  lines, blank lines and indentation kept, nothing withheld, nothing cut), because they are the
-  definition a person or their workspace wrote and the page is there to read it. Only a character
-  that is not text (a control, a bidi override, a zero-width space) is drawn as U+FFFD, so a
-  definition from a shared repository cannot reorder or hide what the page shows.
-- **A trigger's page** reads `oats trigger status`: what is live, what fired, what waits, the last
-  poll and the last error. For a trigger on a capability's source, the trigger file's parameters
-  and the source's own words (what it skipped, what OATS refused, its refusal) are shown as quoted
-  text under whose text it is, never as a link or as one of the plugin's sentences. **Open
-  capability** opens the Capabilities page when that page lists the source's capability once.
-- **The header** says the host scheduler's state ("Scheduler on · checked … · up to N at once", or
-  "Scheduler off"); when it is off and something here would run, a banner says nothing runs until
-  it is enabled.
-- **The sidebar's row** carries a red dot, announced "Automations, a run failed", while a
-  schedule's last run is launch failed or invalid.
+- **Two tabs: Automations (with the count) and Runs.** bb's own header says the page's title as
+  text, and on an automation's page the title, a slash and the automation's name
+  (`experimental_headerTitle`, `experimental_usePageTitle`): the page draws no breadcrumb of its
+  own. The way back from an automation's page is bb's own back arrow, the sidebar's link and Escape.
+- **The list is ONE list**, schedules and triggers together. **What needs a person comes first**
+  (an automation whose agent asks), **then what is failing**, then the rest in the kernel's order
+  (what runs on the machine, what needs attention there, what another host runs). Over it, from
+  twelve rows, a search (the name, the id, who it starts, when, what it sends, the summary, the
+  host, the account), and one filter with counts: **All · Schedules · Triggers · Needs you ·
+  Failing**. The card of rows scrolls alone: the tabs, the search and the filter stay. There are
+  no pages and no sort.
+- **A row** is an icon (its kind; the roster's needs-you mark; bb's failing mark), its **name**
+  (never cut: it wraps), **one short sentence of what it does** (the automation's own
+  `description`, one line; none where none is written: never a made-up one), and one small line:
+  **when** (a cadence in words, else the cron; "On a pull request, acme/app"; "On
+  <capability>: <source>") · **the machine it runs on** (by bb's name for the machine that holds
+  the deployment, since the browser that draws the page may be anywhere; another host by the
+  kernel's name for it) · **its owner** where the kernel gives one (`owner`: the account a
+  workspace automation acts as, "@ana"; a local one has none) · **its last run** ("Last 2 h ago,
+  Agent launched"; a trigger: "Last 2 h ago, #41"), with what failed in red ("Launch failed",
+  "Poll failed") and, where an agent of it asks, "Needs you". A row that cannot run on the
+  machine does not say "Runs on": it says why, in red ("Wrong account", "Not trusted", "Invalid",
+  "Unreadable"). Then **Answer** (where an agent asks: it opens that agent's chat), the row's
+  **switch** (bb's own: alone, 28 x 16, dark when on), its **"…" menu** and a chevron. The list
+  says no next run: an automation's own page does. The kernel places every row (`runsHere`,
+  `reason`, `enabledHere`); the plugin reads those facts and derives none.
+- **What is failing, and what needs a person, is ONE rule** (`words.ts` `attention`, `failing`),
+  read by the row's mark and line, by the filter's two counts, and by the sidebar's link, which
+  carries an amber dot ("Automations, needs you") beside a red one ("Automations, a failure"). A
+  row is failing exactly when its line holds a red part: a schedule's last run that did not
+  launch, a trigger's failed last poll or a failed spawn that no later spawn followed, or a
+  definition that cannot run here. A run whose state nobody knows is a warning, not a failure.
+  **"Needs you" is bounded by what the kernel keeps**: it comes from the roster, by the agents
+  that the runs an automation KEEPS made (a schedule's newest 50 runs, `session.instance`; a
+  trigger's newest 50 fires): an agent of an older run that asks is on the roster and the home,
+  not on this list.
+- **An automation's page**: its name (whole) with its switch and its "…" menu (and Answer); its
+  sentence; the same small line, with the next run ("Next in 8 h"; "Was due 3 min ago" for a time
+  that has passed; none while the scheduler is off); what is wrong under it, in red. Then **what
+  it does** as plain text between bb's separators, headed by what a run does (**Instruction**,
+  **Message**, **Command**, **Operation**), with the soul, the harness and the model at its foot:
+  no box around it. A long text is drawn to a bound, with **Show more** to the rest. A schedule's
+  or a trigger's instruction and a wake's message are the one exception to the display filter:
+  they are drawn whole (their lines, blank lines and indentation kept, nothing withheld), because
+  they are the definition a person or their workspace wrote and the page is there to read it. Only
+  a character that is not text (a control, a bidi override, a zero-width space) is drawn as
+  U+FFFD, so a definition from a shared repository cannot reorder or hide what the page shows.
+  What is wrong with the definition (invalid, unreadable, a source check that failed) is one
+  sentence in a person's words, with the kernel's code, field and message under **Details**.
+- **Runs**, on an automation's page: one row per run: a mark (with its name: never a glyph or a
+  colour alone), when, what came of it in a person's word, and the agent the run made: nothing
+  else. **The whole row opens that agent's chat** (bb's thread; the agent's own page for one with
+  no thread) while the roster still lists it, and then it has a chevron; an agent the roster no
+  longer lists is its name as plain text, and its row opens nothing. A run whose agent asks says
+  "Needs you", with **Answer**; one whose agent is stopped has **Start…** in its menu (the
+  lifecycle's own dialog). A failed run opens to the kernel's code and message, as plain text;
+  the newest one stands open. Ten runs, then **Older** (ten more a press). A schedule's rows are
+  the kernel's `recentRuns` (its newest 50), led by a launch with no recorded result ("Running",
+  or "Launch state unknown") and a wake that waits; where the kernel says older runs were dropped
+  (`history.truncated`) the table ends with "Earlier runs are not kept". A trigger's rows are
+  its waiting events, then its `fired` events (the newest 50), each by what fired ("#41 opened"),
+  and, ONLY where the kernel lists the feature `trigger-failure-history`, its failed spawns as
+  rows of the same table (`failures[]`; which attempt it was, and that a later one launched,
+  under the row's fold); without the feature the last error alone is said, as the kernel words
+  it, and nothing claims a history. Where a trigger fired more often than its state lists, the
+  table ends with the kernel's own count ("3 earlier runs are not kept").
+- **Details**, one closed fold under Runs, in bb's own rows (`experimental_DetailRow`), for the
+  few facts bb's manner has no place for, each only where it is set: where it runs (and why not
+  here, in the kernel's words), a schedule's cron and time zone, a trigger's event, labels, base
+  and poll (or its capability's source, which opens the Capabilities page where that page lists
+  the capability once), its file (which opens it: a preview from the machine that holds the
+  deployment, or its web page for a member with no clone there), teams, concurrency, a launch
+  configuration, a recurring wake-up, the last poll in counts. For a trigger on a capability's
+  source, the trigger file's parameters and what the source's last good poll refused and skipped
+  are quoted text under whose text it is, never a link or one of the plugin's sentences. A failed
+  poll is a notice over the runs: when, its cause in words, the kernel's error one press away.
+- **The Runs tab**: every automation's runs in one list, newest first, each led by its
+  automation's name (which opens the automation), filtered **by automation** and **by result**
+  (All · Failed); fifty rows, then **Older**. The kernel has no single read of "all runs": the
+  list is MERGED IN THE PLUGIN (`model/automation-runs.ts`) from the two reads the page makes
+  anyway (every schedule's `recentRuns`; every trigger's `fired` and, with the feature, its
+  `failures`), so it is **bounded by what each automation keeps** (its newest 50), never by a
+  time: where any automation keeps less than it ran, the list ends with "Earlier runs are not kept".
+- **Above the list**, one line each: "The scheduler is off on <machine>" with **Enable
+  scheduler**, while the host timer is off and something there would run; "<machine> has no host
+  name in OATS", with where the key is under the notice's Details.
 
-The lists are read together and kept beside the roster read they were made with: whatever makes
-the server read OATS again (an event of the deployment, an act, Retry, the poll) renews them, and
-the app asks again every 30 s while the page shows them (once a minute for the sidebar's mark
-alone), since a run that fails writes no event the server watches. A trigger's state is read when its page opens, for an id the
-current list names. An OATS that does not list the feature `automations` (before 0.29) is not
-asked: the page says which OATS it needs.
+**The reads.** `oats schedule list --json`, `oats trigger list --json` and ONE `oats trigger
+status --json` (every trigger's state: a row's last fire and failure, the Runs tab's merge, the
+sidebar's marks) are read together, the status after the trigger list (which names each trigger's
+source), and kept beside the roster read they were made with: whatever makes the server read OATS
+again (an event of the deployment, an act, Retry, the poll) renews them, and the app asks again
+every 30 s while the page shows them (once a minute for the sidebar's marks alone), since a run
+that fails writes no event the server watches. That is the cadence of the marks: no read is added
+per roster read. The sidebar's marks read which agents ask from the window's own copy of the
+roster, with no read of their own. An automation's page of a trigger also reads that trigger's
+own state when it opens (`oats trigger status <id> --json`), and shows the one read beside the
+lists until it answers. A list or a state that could not be read says so in a person's words,
+with the kernel's code and Retry, over what was read before; one fault that fails both lists is
+said once ("Automations could not be read"). An OATS that does not list the feature `automations`
+(before 0.29) is not asked: the page says which OATS it needs.
 
 **Acting on a row** goes through the kernel's own verbs, for a row the current list names:
 
-- **The switch** (and Turn off here / Turn on here in the row's ⋯ menu) turns a row on or off on
-  that machine: a local item's own switch, a workspace item's entry in this host's opt-outs.
+- **The switch** turns a row on or off on that machine: a local item's own switch, a workspace
+  item's entry in this host's opt-outs.
 - **Run now** (a schedule that runs here) says what the run did in words: Agent launched, Launch
   failed with the kernel's reason, Launch state unknown. **Check run state** asks the kernel about
   a run whose state is unknown.
-- **Test** runs nothing and says whether the row would run here, who `gh` acts as, and what would
-  fire now, with what is held and why. Its answer is on the row's page, so Test from the list's
-  menu opens that page. For a trigger on a capability's source it first says what will run and
-  with which parameters; only **Run test** runs that source's command, once, and only while the
-  trigger is what the confirmation showed (a change of its source or parameters, Back or another
-  row's page withdraws it).
-- **Edit summary** (a local item) and **Delete…** (a local schedule, after a confirmation); a
-  workspace item is changed and removed in its repository.
-- **Enable scheduler**, where the scheduler is off: a confirmation says what it installs on this
-  computer (the timer of `oats schedule host install`, for the account bb's machine runs as)
+- **Test** starts nothing, and says so: "Test passed. It would start." (while the scheduler is
+  off: "… once the scheduler is on."), or "Test failed." and each reason on a line; then who `gh`
+  acts as and what would fire now, with what is held and why. Its answer is on the automation's
+  page, so Test from the list's menu opens that page. For a trigger on a capability's source it
+  first says what will run and with which parameters; only **Run test** runs that source's
+  command, once, and only while the trigger is what the confirmation showed.
+- **Edit summary** (a local item: the sentence of its row) and **Delete…** (a local schedule,
+  after a confirmation); a workspace item is changed and removed in its repository. **Open file**.
+- **Enable scheduler**, where the scheduler is off: a confirmation says what it installs on the
+  machine (the timer of `oats schedule host install`, for the account bb's machine runs as)
   before it does.
 
 One act runs at a time. While it runs the page says so in words where its answer will be
 ("Running daily-review…"); the answer, a test's result and a confirmation take the focus when they
-arrive, which brings them into view at any width. Where a row's page is one column (a phone, a
-narrow panel) they come first, right under the buttons; from bb's wide layout up they lead the
-second column. The lists are read again after every act. While
-a list is one that could not be read again its rows stay, with their acts held (what each row is now
-is not known) and the notice saying so; Open and Open file stay. An act
-is refused before any process starts for an id the list does not name; the kernel's own refusal is
-shown in a person's words with its code after.
+arrive, which brings them into view at any width. The lists are read again after every act. While
+a list is one that could not be read again its rows stay, with their acts held (what each row is
+now is not known) and the notice saying so. An act is refused before any process starts for an id
+the list does not name; the kernel's own refusal is shown in a person's words with its code after.
 
-Not there yet: creating and editing a schedule (its own change). Two of the Desktop's ways into
-the page wait for a product decision and are not built: its ⌘3 / Ctrl+3 shortcut and its palette
-entry (bb takes both from a plugin command registered with a default shortcut).
+Not there yet: "New automation" (it opens the OATS agent: its own change), and creating and
+editing a schedule in a form (decided against: an automation is made by talking to the OATS agent).
 
 `test/fixtures/automations/` holds what the real kernel printed for every command the feature
 runs, and `record/` there makes the recording again (its README says what was arranged).

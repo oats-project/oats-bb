@@ -58,7 +58,8 @@ test.each([
   // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then WHAT THAT ROW ITSELF SAYS: its state's word and its reason,
   // as the row draws them (ruled 25 Nov 2026: the warning's tone is a colour, and the state's name alone, "stopped", says nothing of it).
   const named = toggle().getAttribute("aria-label")!;
-  expect(named).toMatch(/^Show Redesign ui lead's agents: (Idle|Stopped) · (archived|deleted) in bb$/);
+  // (The reason is the outside feature's word for that row: "may still run" for a thread archived in bb, since its change after the lead's read; "deleted in bb".)
+  expect(named).toMatch(/^Show Redesign ui lead's agents: (Idle|Stopped) · (may still run|archived in bb|deleted in bb)$/);
   expect(toggle().getAttribute("title")).toBe(named);
   expect(within(parent()).getByTestId("oats-row-facts").textContent).toMatch(/^Working/); // the parent's own word stays its own
   // Opened: the child's row is there with that same mark, and the parent carries none.

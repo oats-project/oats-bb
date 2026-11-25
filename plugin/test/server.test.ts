@@ -607,6 +607,68 @@ describe("the event path", () => {
     expect(tokens()).toHaveLength(1);
   }, 60_000);
 
+  // The stamp is for the roster's `at` and an act's end ALONE. The server's pacing and the poll a client's snapshot
+  // asks for compare a read's start with the bare clock, and must go on doing so when the stamp runs ahead of it: a
+  // read is in flight, the clock is set back (a time sync), and the read that follows at once takes a stamp LATER
+  // than the one before, ahead of the clock by the whole step. Fifteen seconds of the clock later a client's snapshot
+  // must still ask for its poll.
+  it("the clock is set back while a read is in flight: the next roster's `at` is still later than the one before, and the snapshot's poll still fires after its fifteen seconds of the clock", async () => {
+    const real = Date.now.bind(Date);
+    const status = async () => (await fake.calls()).filter((call) => call.verb === "status").length;
+    const seen = async (more: () => Promise<boolean>) => {
+      for (let tries = 0; tries < 400; tries += 1) {
+        if (await more()) return true;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      return false;
+    };
+    await rpc<Shown>("snapshot");
+    await fake.behave({ status: { sleepMs: 800 } });
+    const before = await status();
+    const one = rpc<{ at: string }>("refresh");
+    expect(await seen(async () => (await status()) > before)).toBe(true); // that read is in flight
+    let offset = -60_000; // the clock is set back a minute
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => real() + offset);
+    try {
+      const two = rpc<{ at: string }>("refresh"); // asked while the first is in flight: it follows it
+      const [first, second] = [await one, await two];
+      expect(Date.parse(second.at)).toBeGreaterThan(Date.parse(first.at)); // the stamp: later, though the clock went back
+      expect(Date.parse(second.at)).toBeGreaterThan(Date.now() + 30_000); // and so ahead of the clock, by most of the step
+      await fake.behave({});
+      const settled = await status();
+      offset += 20_000; // twenty seconds of the clock later
+      await rpc<Shown>("snapshot"); // a client asks: more than the poll's fifteen seconds since the last read STARTED, by the clock
+      expect(await seen(async () => (await status()) > settled)).toBe(true); // the poll's read is made
+    } finally {
+      clock.mockRestore();
+    }
+  }, 90_000);
+
+  // The clock is set back while NO read is in flight. The pause before a read was counted from the last read's end,
+  // which then lies ahead of the clock: the next read slept the whole step (an hour set back: an hour with no read).
+  // The pause is never longer than the pause; and a last read that started "after now" is as stale as an old one, so
+  // a client's snapshot asks for its poll's read at once.
+  // (No elapsed time is asserted: with either flaw no read is made while this test looks, and its loop ends without one.)
+  it("the clock is set back while no read is in flight: a client's snapshot still asks for the poll's read, and it is made within the pause", async () => {
+    const real = Date.now.bind(Date);
+    const status = async () => (await fake.calls()).filter((call) => call.verb === "status").length;
+    await rpc<Shown>("snapshot");
+    await new Promise((resolve) => setTimeout(resolve, 300)); // nothing is in flight
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => real() - 600_000); // ten minutes back
+    try {
+      const before = await status();
+      await rpc<Shown>("snapshot"); // the last read started "after now": the poll's read is asked for at once
+      let polled = false;
+      for (let tries = 0; tries < 400 && !polled; tries += 1) {
+        polled = (await status()) > before;
+        if (!polled) await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect(polled).toBe(true);
+    } finally {
+      clock.mockRestore();
+    }
+  }, 30_000);
+
   // The roster's `at` and an act's `endedAt` are whole milliseconds of this server's clock. A status read that STARTS in
   // the very millisecond the act ended is the read after the act, and the window reads a tie as "before" (`<=`), with no
   // later read owed: "Reading…" to its bound. The server stamps both from ONE strictly increasing stamp: the later

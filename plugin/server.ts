@@ -6,6 +6,7 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { rpcContract } from "./contract/index.js";
 import * as automations from "./server/automations.js";
+import * as board from "./server/board.js";
 import { createCore } from "./server/core.js";
 import * as home from "./server/home.js";
 import * as lifecycle from "./server/lifecycle.js";
@@ -27,6 +28,7 @@ export default async function plugin(bb: BbPluginApi) {
     ...lifecycle.handlers(core),
     ...automations.handlers(core),
     ...panel.handlers(core),
+    ...board.handlers(core),
   });
   core.start();
 }

@@ -12,6 +12,7 @@ import { forgetCli } from "../../app/home/cli";
 import { PAGE_IDS, showEveryPageWhenUnset } from "../../app/workspace/pages";
 import type { Agent } from "../../model/types";
 import * as automations from "../automations/handlers";
+import * as board from "../board/handlers";
 import * as home from "../home/handlers";
 import * as lifecycle from "../lifecycle/handlers";
 import * as panel from "../panel/handlers";
@@ -68,6 +69,7 @@ export function handlers(over: Partial<GivenHandlers> = {}, agents: Agent[] = fi
     ...lifecycle.defaults(),
     ...automations.defaults(),
     ...panel.defaults(),
+    ...board.defaults(),
     ...over,
   });
 }

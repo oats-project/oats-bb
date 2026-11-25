@@ -8,6 +8,7 @@
 import type { ExperimentalHostSignals } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import * as automations from "./automations.js";
+import * as board from "./board.js";
 import * as home from "./home.js";
 import * as lifecycle from "./lifecycle.js";
 import * as panel from "./panel.js";
@@ -31,6 +32,7 @@ export const rpcContract = {
   ...lifecycle.rpc,
   ...automations.rpc,
   ...panel.rpc,
+  ...board.rpc,
 };
 
 /**
@@ -47,6 +49,7 @@ export const hostContract = {
   ...lifecycle.host,
   ...automations.host,
   ...panel.host,
+  ...board.host,
 };
 
 /** The closed list of the host's verbs: the methods of `hostContract`. */

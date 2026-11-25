@@ -47,18 +47,21 @@ export function driftLines(drift: PanelInstance["drift"]): string[] | null {
   return ["Built from an older state of the workspace:", ...said.map((line) => `• ${line}`), "Re-spawning picks up the new state; this instance keeps what it was built with."];
 }
 
-/** A part of the Work sentence: plain words, or one of the row's own facts (drawn in the code face). */
+/** A part of the Work fact: plain words, or one of the row's own facts (drawn in the code face). */
 export type SentencePart = string | { code: string };
 
+// Where it works, as a fact and not a sentence: the mode in a word or two, then the one thing that
+// tells it from another of its kind (the branch of its worktree, the repository of a shared
+// checkout, whose tree it shares). plugin/WORDS.md holds the Desktop's sentences they stand for.
 const WORK_SENTENCE: Record<string, (facts: Pick<PanelInstance, "repo" | "branch" | "parent">) => SentencePart[]> = {
-  worktree: ({ repo, branch }) => ["Works in its own worktree of ", repo === null ? "its soul's repository" : { code: repo }, ...(branch === null ? [] : [", on branch ", { code: branch }]), "."],
-  checkout: ({ repo }) => ["Works in the shared checkout of ", repo === null ? "its soul's repository" : { code: repo }, ", alongside the other instances that use it."],
-  attached: ({ parent }) => ["Works in ", ...(parent === null ? ["its parent's tree"] : [{ code: parent }, "'s tree"]), ", sharing its branch and changes."],
-  directory: () => ["Has its own folder, not tied to one repository: free to work across repos as its task needs."],
-  workspace: () => ["Sees the whole workspace: reads across every member repository."],
+  worktree: ({ branch }) => ["worktree", ...(branch === null ? [] : [" · ", { code: branch }])],
+  checkout: ({ repo }) => ["shared checkout", ...(repo === null ? [] : [" · ", { code: repo }])],
+  attached: ({ parent }) => (parent === null ? ["its parent's tree"] : [{ code: parent }, "'s tree"]),
+  directory: () => ["own folder"],
+  workspace: () => ["workspace"],
 };
 
-/** The work mode in one sentence, or null for a mode the row does not report or this plugin does not know. */
+/** The work mode as a fact, or null for a mode the row does not report or this plugin does not know. */
 export function workSentence(facts: Pick<PanelInstance, "work" | "repo" | "branch" | "parent">): SentencePart[] | null {
   const sentence = facts.work === null || !Object.hasOwn(WORK_SENTENCE, facts.work) ? undefined : WORK_SENTENCE[facts.work];
   return sentence === undefined ? null : sentence(facts);
@@ -139,8 +142,8 @@ export function whenText(iso: string, now: number): string {
 const shellWord = (text: string): string => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(text) ? text : `'${text.replaceAll("'", `'\\''`)}'`);
 /** The kernel's own way into an agent's session, by its home (docs/execution-targets.md, "Attach"): it runs from any directory of that machine. */
 export const attachCommand = (home: string): string => `oats session attach --home ${shellWord(home)}`;
-/** Where an agent on tmux runs, and that its session is reached from a terminal; the command follows. */
-export const attachWhere = (machine: string | null): string => (machine === null ? "Runs in tmux. Attach from a terminal:" : `Runs in tmux on ${machine}. Attach from a terminal:`);
+/** Over the command that reaches the session of an agent on tmux ("Runs in" beside it already says tmux). */
+export const ATTACH = "Attach:";
 /**
  * Whether the attach line is drawn: for an agent on tmux, while the kernel's own word is that it
  * runs (`running === true`) and its state is one of an agent that runs (it works, or it waits on a

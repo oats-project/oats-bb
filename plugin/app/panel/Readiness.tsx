@@ -6,10 +6,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { PanelReadiness } from "../../kernel/panel-readiness";
 import { Button, Disclosure, Fact, Facts, Section, Toned } from "../ui";
+import { readAge, showingRead } from "../ui/words";
 import { shown } from "../ui/text";
 import { usePanelReadiness } from "./read";
 import {
-  CHECKS_AND_POLICY, CHECKS_PLAIN, LOADING, NOT_PERMISSION, NO_ITEMS, POLICY_NOTE, REFRESH, REFRESHING, SIGN_IN_HOW, TITLE, UPDATED, VIEW_POLICY, checkLabel, checkState, checkTone, contextLabel, itemFacts,
+  CHECKS_AND_POLICY, CHECKS_PLAIN, LOADING, NOT_PERMISSION, NO_ITEMS, POLICY_NOTE, REFRESH, REFRESHING, SIGN_IN_HOW, TITLE, VIEW_POLICY, checkLabel, checkState, checkTone, contextLabel, itemFacts,
   itemLine, itemOpens, itemProblems, itemTone, observedLine, policyLine, providerSays, signIn, summaryLine, warningLine,
 } from "./readiness-words";
 import { PathText } from "./parts";
@@ -113,15 +114,17 @@ function Checks({ readiness, of, context, now }: { readiness: PanelReadiness; of
 /** `context` names what was observed, once it is known. */
 export function Readiness({ instance, of, context, now }: { instance: string; of: "instance" | "soul"; context: Context | null; now: number }) {
   const read = usePanelReadiness(instance, of);
-  // A person's Refresh says what it does: "Refreshing…" while it reads, then that it is updated.
-  const [refreshed, setRefreshed] = useState<"no" | "reading" | "updated">("no");
+  // A person's Refresh says what it does while it reads: "Refreshing…". What it read then stands in its place.
+  const [refreshing, setRefreshing] = useState(false);
   const wasFetching = useRef(false);
   useEffect(() => {
-    if (wasFetching.current && !read.fetching && refreshed === "reading") setRefreshed(read.status === "ready" ? "updated" : "no");
+    if (wasFetching.current && !read.fetching) setRefreshing(false);
     wasFetching.current = read.fetching;
-  }, [read.fetching, read.status, refreshed]);
+  }, [read.fetching]);
+  // OATS has no readiness check for this kind of agent: there is nothing to show, and the block is not drawn.
+  if (read.status === "error" && !mendable(read, "readiness")) return null;
   return (
-    <Section title={TITLE[of]} testId={`oats-panel-readiness-${of}`}>
+    <Section title={TITLE} testId={`oats-panel-readiness-${of}`}>
       <CommandState read={read} of="readiness" reading={LOADING} failed="Readiness could not be read" at={read.data?.at ?? null} now={now} />
       {read.data === undefined ? null : (
         <>
@@ -135,23 +138,31 @@ export function Readiness({ instance, of, context, now }: { instance: string; of
       )}
       <div className="flex flex-wrap items-center gap-2">
         {/* One act at a time: while the first read runs the line above says so, and after a failure that reading again can
-            change, the notice's Retry is the act; where OATS has none of it for this kind of agent there is nothing to press.
+            change, the notice's Retry is the act.
             Over what is shown the button is off while a read runs, and the words beside it say why. */}
-        {(read.fetching && read.data === undefined) || offersRetry(read, "readiness") || (read.status === "error" && !mendable(read, "readiness")) ? null : (
+        {(read.fetching && read.data === undefined) || offersRetry(read, "readiness") ? null : (
           <Button
             data-testid="oats-panel-readiness-refresh"
             disabled={read.fetching}
             onClick={() => {
-              setRefreshed("reading");
+              setRefreshing(true);
               read.retry();
             }}
           >
             {REFRESH}
           </Button>
         )}
-        {refreshed === "no" || read.data === undefined ? null : (
+        {!refreshing || read.data === undefined ? null : (
           <span role="status" data-testid="oats-panel-readiness-status" className="text-xs text-muted-foreground">
-            {refreshed === "reading" ? REFRESHING : UPDATED}
+            {REFRESHING}
+          </span>
+        )}
+        {/* It is read once for the window, and again only on Refresh: once what is shown is older than a minute, how old it
+            is, in the plugin's one form for content read earlier ("Ready" of two hours ago is not "Ready" now). Nothing
+            while it is fresh, while it is read again, or under the notice of a read that failed (which says the age). */}
+        {refreshing || read.fetching || read.status !== "ready" || read.readAt === null || now - read.readAt < 60_000 ? null : (
+          <span data-testid="oats-panel-readiness-read" className="text-xs text-muted-foreground">
+            {showingRead(readAge(read.readAt, now))}
           </span>
         )}
       </div>

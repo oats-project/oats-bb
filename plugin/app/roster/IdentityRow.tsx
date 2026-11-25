@@ -1,32 +1,27 @@
 // Where this agent is and who it is (experimental_threadHeaderRow): one block under the thread's
-// header. First the status line: the state in words, since when, the question or the reason, and
-// the act that applies. Then its facts, each with its label. The block wraps: nothing in it is
-// cut or scrolls out of sight, at any width.
+// header: the status line (the state in words, how long it has waited, the question or the
+// reason, the act that applies) and the way to the instance panel, which holds who the agent is
+// (its soul, its parent and children, its messaging ID). The block wraps: nothing in it is cut or
+// scrolls out of sight, at any width.
 import { showPanelTab } from "../panel/Panel";
-import { usePanelEvents } from "../panel/read";
-import { agentName } from "../ui/words";
 import {
   experimental_useAppPanel as useAppPanel,
-  experimental_usePluginId as usePluginId,
   useBbNavigate,
   useRpc,
 } from "@get-bb/plugin-sdk/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
-import { useEffect, useRef } from "react";
-import type { ReactNode } from "react";
 import { openAgentPage } from "../home/agent-tab";
 import { askPlan, run } from "../lifecycle/acts";
 import { claimOf } from "../../model/view";
 import { lineActs, lineParts, outsideOf, OutsideThreadRow, OutsideWarning } from "../outside";
 import { useOats } from "../oats";
 import type { Contract } from "../store";
-import { Button, LINK, plainClick } from "../ui";
-import { shown } from "../ui/text";
-import { openSoul, usePageShown } from "../workspace/pages";
+import { Button } from "../ui";
 import { useNow } from "./now";
 import { AgentStatusLine } from "./AgentStatusLine";
+import { useReading } from "./reading";
 import { agentStatus } from "./status";
-import { failureWords, HELD_REASON, Unreadable } from "./unreadable";
+import { failureWords, Unreadable } from "./unreadable";
 
 /** The fixed thread tab that shows the OATS home, or the agent's view, on desktop. */
 export const HOME_TAB = { id: "home", context: { kind: "thread" }, availability: "fixed" } as const;
@@ -57,46 +52,15 @@ export function focusNeedsInput(tries = 10): void {
 
 const FRAME = "flex flex-col gap-1.5 border-b border-border px-3 py-2 text-sm text-foreground";
 
-/** One fact of the row: its label, muted, then its value. */
-function RowFact({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
-  return (
-    <span data-testid={testId} className="inline-flex min-w-0 items-baseline gap-1">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 break-words">{children}</span>
-    </span>
-  );
-}
-
 export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   const oats = useOats();
   const navigate = useBbNavigate();
   const panel = useAppPanel();
   const rpc = useRpc<Contract>();
-  const pluginId = usePluginId();
-  const soulsShown = usePageShown("souls");
   const now = useNow();
   const outside = outsideOf(oats);
-  // A stopped agent: since when is in the instance's recorded events (its last "stopped"), which
-  // the instance panel reads too. Asked for this thread's agent alone, and only while it is
-  // stopped; a hook, so it is called at every render, before any early return.
-  const mine = oats.phase === "ready" ? oats.nodeByThread.get(threadId) : undefined;
-  // (An agent that runs outside OATS was recorded stopped too: the same event says since when.)
-  const recorded = mine === undefined ? null : agentStatus(mine.agent, mine.thread, now).state;
-  const stopped = recorded === "stopped" || recorded === "outside";
-  const events = usePanelEvents(mine?.agent.instance ?? "", stopped);
-  // That read runs once and is kept (by bb, also across threads and for the panel's Events tab): an
-  // answer held from before THIS stop does not hold it. So each time the agent is seen to turn
-  // stopped (and when its row is come back to), events already held are read again.
-  const eventsNow = useRef(events);
-  // Kept in an effect, never written while rendering; declared BEFORE the effect that reads it, so
-  // that in one commit it holds this render's read when that effect runs (effects run in order).
-  useEffect(() => {
-    eventsNow.current = events;
-  });
-  const stoppedInstance = stopped ? mine?.agent.instance : undefined;
-  useEffect(() => {
-    if (stoppedInstance !== undefined && eventsNow.current.data !== undefined) eventsNow.current.retry();
-  }, [stoppedInstance]);
+  // Behind a lifecycle result that says this thread's agent changed, until the roster is read again: "Reading…" (./reading.tsx).
+  const reading = useReading(oats.phase === "ready" ? (oats.nodeByThread.get(threadId)?.agent.instance ?? null) : null);
   if (oats.phase === "loading") return null; // nothing is known yet; the sidebar says that OATS is being read
   if (oats.phase === "failed") {
     // Whether this thread is an agent's is not known: say that OATS cannot be read, never nothing.
@@ -112,13 +76,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
   if (node === undefined) return <OutsideThreadRow threadId={threadId} oats={oats} outside={outside} />;
 
   const { agent } = node;
-  // (The state, for the act that applies; the line itself, with a stopped agent's time, is AgentStatusLine's.)
+  // (The state, for the act that applies; the line itself is AgentStatusLine's.)
   const status = agentStatus(agent, node.thread, now);
-  const parent = agent.parent === null ? undefined : oats.nodeByInstance.get(agent.parent);
-  const parentThread = parent === undefined ? undefined : oats.threadById.get(parent.thread.id);
-  const children = oats.agents.filter((other) => other.parent === agent.instance).length;
-  const identity = agent.address ?? agent.alias;
-  const soul = oats.soulOf(agent);
 
   const openPanel = () => {
     // On desktop it is the thread's fixed tab. On a phone bb has no side panel: the agent's own
@@ -129,24 +88,27 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     } else if (!panel.openTab({ tab: HOME_TAB })) navigate.toPluginPanel("home");
   };
   // While the roster is the last one read the OATS acts are held (the Desktop's rule): the act
-  // stays in its place, off, with the reason; the notice under the line has Retry.
-  const held = oats.stale !== null;
+  // stays in its place, off; the notice under the line says that the acts are off, and has Retry.
+  // (And behind a lifecycle result that says the agent changed, until the roster is read again: app/roster/reading.tsx.)
+  const held = oats.stale !== null || reading;
   // The act that applies to the state, through OATS: a stopped agent is started, one whose session
   // ended is restarted, one the kernel cannot reach is read again.
   // One that never ran (bb says its thread failed at its start: `status.bb`) is started, not restarted: nothing runs.
-  const verb = status.state === "stopped" || (status.state === "error" && status.bb !== undefined) ? (["start", "Start"] as const) : status.state === "error" ? (["restart", "Restart"] as const) : null;
+  const verb = status.state === "stopped" || (status.state === "error" && status.bb !== undefined) ? (["start", "Start…"] as const) : status.state === "error" ? (["restart", "Restart…"] as const) : null; // (the dots: each opens its dialog, and nothing runs on the press)
   const act =
     verb !== null ? (
-      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
+      <Button data-testid="oats-status-act" disabled={held} onClick={() => void run(verb[0], agent.instance, rpc, navigate)}>
         {verb[1]}
       </Button>
     ) : status.state === "needs-you" && claimOf(agent) !== null ? (
       // The agent asked through OATS: what it asks is on the line; "Answer" is the way to reply. It
       // opens the instance panel at "Needs input", and with the panel already open it moves the focus
       // there (never a dead press). A question bb itself shows is answered in the thread: no act.
+      // (Behind a result that says the agent changed, the claim is from before the act: off with every act of it, until the roster is read again.)
       <Button
         data-testid="oats-status-act"
         title="Answer in the instance panel"
+        disabled={reading}
         onClick={() => {
           // "Needs input" is on the panel's Instance tab, and the panel keeps the tab a person left it
           // on: turn it there first, whether the panel is open or opens now.
@@ -161,7 +123,7 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       // An agent that runs is stopped from its own thread, through OATS: the plan first (what stops
       // with it), then the confirmation. bb's own stop of a turn is not this. "Stop…": it opens a
       // dialog, as the same act says in the instance panel (the lifecycle's rule for what asks first).
-      <Button data-testid="oats-status-act" disabled={held} title={held ? HELD_REASON : "Stop this agent through OATS"} onClick={() => askPlan("stop", agent.instance)}>
+      <Button data-testid="oats-status-act" disabled={held} title={held ? undefined : "Stop this agent through OATS"} onClick={() => askPlan("stop", agent.instance)}>
         Stop…
       </Button>
     ) : held ? undefined : status.state === "unreachable" ? (
@@ -193,8 +155,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         agent={agent}
         thread={node.thread}
         now={now}
-        events={events.data?.events}
         gone={gone}
+        reading={reading}
         parts={(own) => lineParts(said, own)}
         action={
           gone ? (
@@ -210,59 +172,6 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
       <OutsideWarning said={said} instance={agent.instance} held={held} />
       {/* The row is from the last roster read: the one drawing of that, on one line (its age, that the acts are held, Retry). */}
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
-      <div data-testid="oats-identity-facts" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <RowFact label="instance of" testId="oats-fact-soul">
-          {/* A link to the soul's page where that page is shown in this release; else its name alone: no link leads nowhere. */}
-          {soulsShown ? (
-            <a
-              href={`/plugins/${encodeURIComponent(pluginId)}/souls/${soul.split("/").map(encodeURIComponent).join("/")}`}
-              className={LINK}
-              onClick={(event) => {
-                if (!plainClick(event)) return;
-                event.preventDefault();
-                openSoul(navigate, soul);
-              }}
-            >
-              {shown(soul)}
-            </a>
-          ) : (
-            shown(soul)
-          )}
-        </RowFact>
-        {agent.parent !== null ? (
-          <RowFact label="Parent" testId="oats-fact-parent">
-            {parentThread === undefined ? (
-              agentName(agent.parent)
-            ) : (
-              <a
-                href={parentThread.href}
-                className={LINK}
-                onClick={(event) => {
-                  if (!plainClick(event)) return;
-                  event.preventDefault();
-                  navigate.toThread(parentThread.id);
-                }}
-              >
-                {agentName(agent.parent)}
-              </a>
-            )}
-          </RowFact>
-        ) : agent.human !== null ? (
-          <RowFact label="Owning human" testId="oats-fact-parent">
-            {shown(agent.human)}
-          </RowFact>
-        ) : null}
-        {children > 0 ? (
-          <RowFact label="Children" testId="oats-fact-children">
-            {String(children)}
-          </RowFact>
-        ) : null}
-        {identity === null ? null : (
-          <RowFact label="Messaging ID" testId="oats-fact-identity">
-            {shown(identity)}
-          </RowFact>
-        )}
-      </div>
     </div>
   );
 }

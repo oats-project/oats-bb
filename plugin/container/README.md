@@ -18,6 +18,20 @@ bb's light theme and `plugin-live-dark` in its dark one; `plugin-real`), and the
 (`plugin-pi`), so each line after the first installs and builds what it needs by itself.
 `LIVE_THEMES=light` (or `dark`) makes the live stage draw one theme, as each of CI's two live jobs
 does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a machine.
+`LIVE_PILOT_IMAGES=1`, by hand only and never in CI, takes the images of the pilot's six screens as a
+fresh install shows them: the plugin's `pages` stays at its default (the home alone) through every
+stage, and only those screens' scenes run. It is a pass for images: a check that asserts another
+page's link or tile does not hold in it, and the gate is the run without it.
+In a scene, `showSidebar(page, viewport)` opens every parent of the roster's tree (the children are
+collapsed when the page loads), so a scene reads a child's row as a person who opened it;
+`showSidebar(page, viewport, { fold: "asLoaded" })` leaves the tree as the page drew it: the fold's
+own scenes, and the image of the sidebar as a fresh install shows it (`a13-<width>-sidebar`).
+`LIVE_ONLY_STAGES="tmux-roster"` (stage names, commas between), by hand only and never in CI, runs
+those stages alone: a look at one screen in minutes, never a gate.
+`LIVE_ONLY_SCENE="words of a scene's name"` runs the scenes whose name holds them, alone, and
+`LIVE_REPEAT=10` each that many times in every view: by hand only, to show whether a check that
+failed once is the scene's or the product's. A scene is given `snapshot()`: the server's roster as
+the app gets it now, so that it waits on the roster it needs and not on a number of seconds.
 `LIVE_WINDOW_LOADS=<n>` (by hand; passed into the container by name) makes the scene "a window that
 loads right after a change …" load n windows a view, where the gate loads two: a count of how
 often a window that loads while the server may still be reading a change ends on the roster with
@@ -128,24 +142,40 @@ Beside the features' scenes, `scenes/patterns.mjs` reads the pattern book (`/plu
 open, a confirmation before its act, in progress, done, refused and with another agent's plan.
 
 - **A13** the sidebar with the tree, an agent's thread with its header row, the thread of an agent
-  that needs you (the thread's own row says "Needs you", since when and its question; in the sidebar
+  that needs you (the thread's own row says "Needs you", how long and its question; in the sidebar
   its row is the open one, with its "!"), the thread of a stopped agent ("Stopped", Start), the home (its badge
   shows 3) and its reply box with a message typed (Send enabled), the four pages, and a soul's
   page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
   and their preview (Preview and Spawn enabled).
 - **TM** a deployment that is mostly tmux agents (stage `tmux-roster`, the agents in
   `tmux-roster.mjs`): three agents on bb threads and nineteen on tmux over seven souls, five of them
-  waiting, four stopped, some with a parent. The real run holds one tmux-backed agent (`real/parts/lost.mjs`), not a
+  waiting, two stopped with OATS, two whose session was lost, some with a parent. The real run holds one tmux-backed agent (`real/parts/lost.mjs`), not a
   deployment of them, so the nineteen rows are not recorded as a set: each is the one row the kernel printed for a tmux home
   (`test/fixtures/roster/status.json`, kernel-fix-developer) with its name, home, window, soul group
   and parent changed, the claim the kernel printed for another agent on the waiting ones, and
-  `running` true or false with no `runtimeState`, as the kernel prints a tmux home today. The scene
-  holds: every one is a row that says its state, its soul and "tmux"; the foot counts every
+  what the kernel says of the session (`running`, `runtimeState`, `sessionEnd`) taken from the
+  RECORDED tmux row of its kind (`test/fixtures/lifecycle/tmux-row-{running,stopped,lost}.json`,
+  OATS 0.70.5): one that runs has `running: true` and no word; one stopped with OATS `running:
+  false`, the word "shell" and `sessionEnd: "stopped"`; one whose session was lost `running:
+  false`, no word and `sessionEnd: "lost"`. These rows are DERIVED, not recorded. The scene
+  holds: every one is a row that says its state, its soul and "tmux" (the longest row, "Stopped · oats-contrib-developer · session lost · tmux", is ONE line: the reason shortens, then leaves the row, and only then the soul shortens; the state and the glyph never; and with every session lost every row keeps that order); the foot counts every
   agent that waits; no row is over three lines (the name on one or two, cut only after the
-  second; the second block on one line, where only the soul gives way, with its "…"); the
+  second; the second block on one line); the
   selected row of a bb-thread agent with a name longer than two lines holds it cut after the
   second, whole in its title; the last row and the foot can be scrolled into view; a row opens
   its agent's own page.
+  The stage also holds the ONE TREE and its fold: as the page loads the roots alone are drawn,
+  every root that has agents under it with its chevron closed (four of them on tmux), and the two
+  closed tmux parents that hide a waiting agent carry its mark; then every parent is opened by its
+  chevron and each tmux agent that has a parent is under it, one step in, a child's child two.
+  A scene of its own draws the PILOT'S OWN ROSTER SHAPE (`tmux-roster.mjs` `PILOT_ROSTER`: eight
+  agents on tmux and none on a thread, every session lost, one a child of another; made-up names,
+  derived rows like the stage's): seven rows and one closed parent as the page loads; opened, the
+  child under it; closed again with the child waiting, the parent first, saying what it is itself
+  and carrying the child's mark; opened, the child second. A scene may draw a roster of its own
+  (`tmuxStatus(as, roster)`) and puts the stage's back. In the pilot's image pass
+  (`LIVE_PILOT_IMAGES`, by hand) that scene archives the test container's own threads for its
+  images and puts them back (`ownThreads`): bb's own pane may then differ in the views after it.
 - **LR**, by hand only, never in CI: `LOCAL_STATUS=<path> container/ci.sh live` draws ONE stage,
   `local-roster`, from an `oats status --json` answer of a real deployment, with the release's
   default pages (the setting `pages` left as a fresh install has it, unset with bb's own `plugin
@@ -158,15 +188,15 @@ open, a confirmation before its act, in progress, done, refused and with another
   arrive, a failed contrast check print no name); the images are in `container/out/`
   (`local-roster-<width>-sidebar[-dark].png`), which git ignores: they stay with whoever ran it.
 - **A14** with `oats` removed after it was read: the roster stays as last read under the notice
-  ("OATS is not installed on …", "Showing what was read <age>.", that the acts are held, Retry,
-  Open settings); a thread opens from it and its own row says the same on one line, with its act
-  off; the home keeps its cards under the same notice.
+  ("OATS is not installed on …", "Read <age>. Acts are off.", Retry, Open settings; what to do,
+  the code and the message under its Details); a thread opens from it and its own row says the
+  same on one line, with its act off; the home keeps its cards under the same notice.
 - **A16** an agent whose thread bb does not have: its soul's page says "thread missing", and
   Retire opens the plan dialog with the kernel's plan. Then the two states no fixture row is in,
   each in the thread's own row and in the sidebar's: an agent the kernel cannot reach
-  ("Unreachable", Retry) and one whose session fell back to a shell ("Failed", "Its session
-  ended", and what brings it back, Restart); and the agent whose bb thread is gone, which stays in the
-  roster and says that its conversation was deleted in bb.
+  ("Unreachable", Retry) and one whose session fell back to a shell ("Failed", "session ended",
+  Restart); and the agent whose bb thread is gone, which stays in the
+  roster and says "deleted in bb".
   With A13's rows, all six states are drawn, each with its word.
 - **OUTA**, **OUT**, **OUTH**, **OUTQ** (`scenes/outside.mjs`, in the order they run; stages of its own) every row of the table of
   "Outside OATS" (`../README.md`) on the sidebar's rows, on each thread's line and on the agent's

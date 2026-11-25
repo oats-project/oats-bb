@@ -23,7 +23,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renam
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { launchBrowser, lowTargets } from "./browser.mjs";
+import { launchBrowser, lowTargets, gapsIn, tight, loose, MAX_GAP } from "./browser.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
 import { TMUX_ROSTER } from "./tmux-roster.mjs";
@@ -74,9 +74,27 @@ function rpc(method) {
 const fake = (verbs = {}) =>
   writeFileSync(FAKE_CONFIG, JSON.stringify({ fixtures: join(PLUGIN, "test/fixtures"), log: FAKE_LOG, verbs }));
 
-/** Every page's id, as live.sh sets them for the checks; and how a stage or a scene sets the plugin's `pages`. */
-const ALL_PAGES = "home, automations, souls, capabilities, teams, machines";
-const pages = (value) => void bb("plugin", "config", "oats", "set", "pages", value);
+/**
+ * By hand only, never in CI: LIVE_PILOT_IMAGES=1 takes the image set of the pilot's six screens as
+ * a fresh install shows them: the plugin's `pages` stays UNSET, its default (the home alone), through
+ * every stage, so no image holds the "Workspace" block of the five other pages, and only the
+ * scenes of the six screens' features run (`PILOT_FEATURES`). A scene is told (`pilot: true`) and
+ * reaches its screen as a person does then (an agent with no bb thread from its row in the
+ * sidebar, not from its soul's page). Its checks that assert a page link or a tile of another page
+ * do not hold in this pass and are not counted against it: the pass is for images; the gate is
+ * the run without it.
+ */
+const PILOT = process.env.LIVE_PILOT_IMAGES === "1";
+/** By hand only: LIVE_ONLY_STAGES="tmux-roster,…" runs those stages alone (a look at one screen, in minutes; never a gate). */
+const ONLY_STAGES = (process.env.LIVE_ONLY_STAGES ?? "").split(",").map((name) => name.trim()).filter((name) => name !== "");
+/** By hand only, never a gate: LIVE_ONLY_SCENE="words of a scene's name" runs the scenes whose name holds them, alone; LIVE_REPEAT=10 runs each that many times in every view (to show whether a check that failed once is the scene's or the product's). */
+const ONLY_SCENE = (process.env.LIVE_ONLY_SCENE ?? "").trim();
+const REPEAT = Math.max(1, Number.parseInt(process.env.LIVE_REPEAT ?? "1", 10) || 1);
+const PILOT_FEATURES = ["roster", "outside", "panel", "home", "lifecycle", "spawn"];
+/** Every page's id, as live.sh sets them for the checks (the default alone in the pilot's image pass); and how a stage or a scene sets the plugin's `pages`. */
+const ALL_PAGES = PILOT ? "home" : "home, automations, souls, capabilities, teams, machines";
+// (In the pilot's image pass "every page" is the setting as a fresh install has it: UNSET, by bb's own unset, never set to "home".)
+const pages = (value) => void (PILOT && value === ALL_PAGES ? bb("plugin", "config", "oats", "unset", "pages") : bb("plugin", "config", "oats", "set", "pages", value));
 /**
  * The setting `pages` as a fresh install has it: UNSET (bb's own `plugin config <id> unset <key>`),
  * not set to its default's value. A stage that shows the release's default leaves it so, and so
@@ -172,6 +190,34 @@ const bbSays = (id, status = statusNow(id)) => `status ${status}; its log's end:
 // "local-roster" from that file; without it that stage is skipped. The file is never part of the
 // repository, and its scene prints counts only, never a name (container/README.md).
 const LOCAL_STATUS = process.env.LIVE_UI_STATUS_FILE ?? "";
+/**
+ * The run's own bb threads (the fixtures'), for a scene of the pilot's image pass that draws a
+ * roster with no agent on a bb thread: archived, nothing of the test container stands under that
+ * roster ("Other threads"), as on a deployment whose bb has no such threads; `back()` puts back
+ * exactly what `away()` archived. (By hand only, with LIVE_PILOT_IMAGES: an archived thread holds
+ * no turn, so the scenes after it in that pass may read another state of those agents.)
+ */
+const awayThreads = [];
+const ownThreads = {
+  away: (threads) => {
+    for (const thread of threads.values()) {
+      bb("thread", "archive", thread.id);
+      awayThreads.push(thread.id);
+    }
+  },
+  back: () => {
+    // Each one is tried: one that cannot be put back does not keep the others archived. What failed is said, then thrown.
+    const failed = [];
+    for (const id of awayThreads.splice(0)) {
+      try {
+        bb("thread", "unarchive", id);
+      } catch (error) {
+        failed.push(`${id}: ${String(error?.message ?? error).split("\n")[0]}`);
+      }
+    }
+    if (failed.length > 0) throw new Error(`the image pass could not put back ${failed.length} thread(s) it archived: ${failed.join("; ")}`);
+  },
+};
 /** The bb threads the local stage archived for its image, to put back when it leaves. */
 const archivedForLocal = [];
 const START_SECONDS = Number(process.env.LIVE_UI_START_SECONDS) || 120; // unset, empty or no number: 120
@@ -262,29 +308,46 @@ function statusWithRealIds(threads, changes = {}) {
  * are not recorded as a set: each tmux row is the ONE row the kernel printed for a tmux home
  * (status.json's kernel-fix-developer), with its name, home, window, soul group and parent changed;
  * a waiting one carries the claim the kernel printed for release-070-maintainer; and each says
- * whether it runs as the kernel prints it for a tmux home today: `running` true or false, and no
- * runtimeState word (README).
+ * whether it runs in the three keys of a RECORDED tmux row of its kind (`SESSION_KEYS` of
+ * test/fixtures/lifecycle/tmux-row-{running,stopped,lost}.json, OATS 0.70.5: one that runs, one
+ * stopped with OATS, one whose session was lost), a key the recorded row does not have left out.
+ * So the rows are DERIVED, not recorded (README).
  */
-function tmuxRoster(threads) {
+const SESSION_KEYS = ["running", "runtimeState", "sessionEnd"];
+const recordedTmuxRow = (kind) => JSON.parse(readFileSync(join(PLUGIN, `test/fixtures/lifecycle/tmux-row-${kind}.json`), "utf8"));
+/** `as`: by instance, another `how` than the roster's own (a scene that starts a lost agent draws it running after). */
+/** `roster`: another set of agents than the stage's own, in the shape of `TMUX_ROSTER` (a scene that draws one of its own, and puts the stage's back). */
+function tmuxRoster(threads, as = {}, roster = TMUX_ROSTER) {
   const status = JSON.parse(statusWithRealIds(threads));
   const rows = status.agents.flatMap((group) => group.instances);
   const model = rows.find((row) => row.instance === "kernel-fix-developer");
   const claim = rows.find((row) => row.instance === "release-070-maintainer").waitingOnYou;
-  for (const group of status.agents) group.instances = group.instances.filter((row) => TMUX_ROSTER.bb.includes(row.instance));
-  for (const row of status.agents.flatMap((group) => group.instances)) row.instance = TMUX_ROSTER.renamed[row.instance] ?? row.instance;
-  for (const [instance, soul, parent, how] of TMUX_ROSTER.tmux) {
+  const recorded = { running: recordedTmuxRow("running"), waiting: recordedTmuxRow("running"), stopped: recordedTmuxRow("stopped"), lost: recordedTmuxRow("lost") };
+  for (const group of status.agents) group.instances = group.instances.filter((row) => roster.bb.includes(row.instance));
+  for (const row of status.agents.flatMap((group) => group.instances)) row.instance = roster.renamed[row.instance] ?? row.instance;
+  for (const [instance, soul, parent, listed] of roster.tmux) {
+    const how = as[instance] ?? listed;
     const row = structuredClone(model);
     Object.assign(row, { agent: soul, instance, home: model.home.replace("/oats-developer/instances/kernel-fix-developer", `/${soul}/instances/${instance}`), parentInstance: parent, waitingOnYou: how === "waiting" ? structuredClone(claim) : null });
     row.tmux = { ...model.tmux, window: instance };
     if (row.identity) row.identity = { ...row.identity, alias: instance };
     if (row.capabilityMeta?.["oats.aweb"]) row.capabilityMeta = { ...row.capabilityMeta, "oats.aweb": { ...row.capabilityMeta["oats.aweb"], alias: instance } };
-    // What the kernel prints for a tmux home (awebai/oats lib/instance-listing.mjs `tmuxLiveness`):
-    // `{ running: true }` for one whose harness runs and `{ running: false }` for one whose window is
-    // gone, with NO runtimeState word in either. (status.json's own tmux row carries "unknown", from
-    // the kernel it was recorded with.)
-    delete row.runtimeState;
-    row.running = how !== "stopped";
-    status.agents.find((group) => group.name === soul).instances.push(row);
+    // What the kernel printed of the session of a tmux home of this kind, and nothing else of that
+    // row: running `running: true` and no word; stopped with OATS `running: false`, the word "shell"
+    // and `sessionEnd: "stopped"`; lost `running: false`, no word and `sessionEnd: "lost"`.
+    // (status.json's own tmux row carries "unknown", from the kernel it was recorded with.)
+    if (!Object.hasOwn(recorded, how)) throw new Error(`tmux-roster.mjs: ${instance} is "${how}", which is none of ${Object.keys(recorded).join(", ")}`);
+    for (const key of SESSION_KEYS) {
+      if (key in recorded[how]) row[key] = recorded[how][key];
+      else delete row[key];
+    }
+    // (A soul the fixtures' status does not list gets a group of its own, shaped as the model's.)
+    let group = status.agents.find((each) => each.name === soul);
+    if (group === undefined) {
+      group = { ...structuredClone(status.agents.find((each) => each.instances.length > 0 || each.name === "oats-developer") ?? status.agents[0]), name: soul, instances: [] };
+      status.agents.push(group);
+    }
+    group.instances.push(row);
   }
   return JSON.stringify(status);
 }
@@ -314,7 +377,13 @@ async function themedPage(browser, viewport, theme, at) {
   const shot = page.shot;
   // `plugin: false`: a scene in which the plugin may draw nothing (a thread while OATS cannot be read).
   // `targets: true`: every control of the plugin in the page is as high as a person can press (32 px, 44 at phone width).
-  page.shot = async (name, { plugin = true, targets = false } = {}) => {
+  // `gaps: "<selector>"`: every block the selector finds is as high as what it holds (browser.mjs `gapsIn`): no empty
+  // room over MAX_GAP px between two of its lines or at its edges.
+  page.shot = async (name, { plugin = true, targets = false, gaps = null } = {}) => {
+    if (gaps !== null) {
+      const measured = JSON.parse(await page.evaluate(gapsIn(gaps)));
+      check(tight(measured), `${at} ${name}: ${measured.length} block(s) as high as what they hold: no gap over ${MAX_GAP} px between two lines or at an edge (heights ${measured.map((block) => block.height).join(", ")} px)`, measured.length === 0 ? `nothing drawn matches ${gaps}` : loose(measured));
+    }
     if (targets) {
       const min = viewport.mobile ? 44 : 32;
       const low = JSON.parse(await page.evaluate(lowTargets(min)));
@@ -363,7 +432,7 @@ const SCENES = join(PLUGIN, "container", "scenes");
 
 async function loadScenes() {
   const files = readdirSync(SCENES).filter((file) => file.endsWith(".mjs")).map((file) => file.slice(0, -4));
-  const order = [...FEATURES.filter((feature) => files.includes(feature)), ...files.filter((feature) => !FEATURES.includes(feature)).sort()];
+  const order = [...FEATURES.filter((feature) => files.includes(feature)), ...files.filter((feature) => !FEATURES.includes(feature)).sort()].filter((feature) => !PILOT || PILOT_FEATURES.includes(feature));
   const scenes = [];
   const stages = {};
   for (const feature of order) {
@@ -409,7 +478,14 @@ const BUILT_IN = {
   "tmux-roster": {
     label: "TM",
     enter: async ({ threads }) => {
-      fake({ status: { stdout: tmuxRoster(threads) } });
+      const status = tmuxRoster(threads);
+      // Held here, with the three keys written out (not through the builder's list): what the screen
+      // draws cannot tell a leftover word of the model row from none.
+      const built = new Map(JSON.parse(status).agents.flatMap((group) => group.instances).map((row) => [row.instance, row]));
+      const sessionOf = (row) => JSON.stringify(["running", "runtimeState", "sessionEnd"].map((key) => (key in row ? row[key] : "ABSENT")));
+      const off = TMUX_ROSTER.tmux.filter(([instance, , , how]) => sessionOf(built.get(instance) ?? {}) !== sessionOf(recordedTmuxRow(how === "waiting" ? "running" : how))).map(([instance]) => instance);
+      check(off.length === 0, `TM each of the ${TMUX_ROSTER.tmux.length} tmux rows says of its session exactly what the recorded row of its kind says: running, runtimeState and sessionEnd, a key that row lacks absent`, off.join(", "));
+      fake({ status: { stdout: status } });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === TMUX_ROSTER.bb.length + TMUX_ROSTER.tmux.length);
     },
   },
@@ -592,10 +668,12 @@ let stages;
 try {
   // (Everything that takes the hold is inside the `try` whose `finally` lifts it: whatever throws, no turn stays held.)
   ({ scenes, stages } = await loadScenes());
+  if (PILOT) pages(ALL_PAGES); // live.sh showed every page for its own checks: the default from here on
   browser = await launchBrowser({ chromium: CHROMIUM, out: OUT, base: BASE });
   for (const [name, stage] of Object.entries({ ...BUILT_IN, ...stages })) {
-    const mine = scenes.filter((scene) => scene.stage === name);
+    const mine = scenes.filter((scene) => scene.stage === name && (ONLY_SCENE === "" || scene.name.includes(ONLY_SCENE))).flatMap((scene) => Array.from({ length: REPEAT }, () => scene));
     if (mine.length === 0) continue;
+    if (ONLY_STAGES.length > 0 && !ONLY_STAGES.includes(name)) continue;
     if ((name === "local-roster") !== (LOCAL_STATUS !== "")) continue; // the local stage alone, or every stage but it
     // The hold for this stage: taken, or lifted where the stage tells a thread itself.
     // (None for the local stage either: it archives the fixtures' threads, and no turn is held on an archived thread.)
@@ -608,7 +686,18 @@ try {
           const at = `${stage.label} ${theme} ${viewport.name}`;
           const page = await themedPage(browser, viewport, theme, at);
           try {
-            for (const scene of mine) await scene.run({ page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, record: (changes) => record(threads, changes), recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, snapshot: () => rpc("snapshot") });
+            for (const scene of mine) {
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads, recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
+              if (!PILOT) await scene.run(given);
+              else {
+                // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.
+                try {
+                  await scene.run(given);
+                } catch (error) {
+                  fail(`${at} (image pass) the scene "${scene.name}" stopped`, String(error?.message ?? error).split("\n")[0]);
+                }
+              }
+            }
           } finally {
             await page.close();
           }

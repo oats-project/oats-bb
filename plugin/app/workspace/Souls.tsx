@@ -6,7 +6,7 @@ import { askPlan, run } from "../lifecycle/acts";
 import { count } from "../format";
 import { hasAgentPage, openAgentPage } from "../home/agent-tab";
 import { useOats } from "../oats";
-import { HELD_REASON, RosterNotice } from "../roster/unreadable";
+import { RosterNotice } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import { NewAgent } from "../spawn/NewAgent";
 import { openSoul } from "./pages";
@@ -78,11 +78,12 @@ function SoulAgents({ soul, oats }: { soul: Soul; oats: Ready }) {
             <li key={agent.instance} data-testid="oats-soul-agent-detached" data-instance={agent.instance} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
               <span className="min-w-0 flex-1 break-words" title={shown(agent.instance)}>{agentName(agent.instance)}</span>
               <span className="text-xs text-muted-foreground">thread missing</span>
-              <Button data-testid="oats-detached-start" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => void run("start", agent.instance, rpc, navigate)}>
-                Start
+              {/* (The dots: each opens its dialog, and nothing runs on the press; one rule for every act of the plugin.) */}
+              <Button data-testid="oats-detached-start" disabled={held} onClick={() => void run("start", agent.instance, rpc, navigate)}>
+                Start…
               </Button>
-              <Button data-testid="oats-detached-retire" disabled={held} title={held ? HELD_REASON : undefined} onClick={() => askPlan("retire", agent.instance)}>
-                Retire
+              <Button data-testid="oats-detached-retire" disabled={held} onClick={() => askPlan("retire", agent.instance)}>
+                Retire…
               </Button>
             </li>
           );

@@ -145,7 +145,7 @@ export default async (run) => {
   await run.views("real-panel", async ({ page, at: where, shot }) => {
     await page.goto(`/plugins/oats/agent/${CHILD}`);
     const header = await page.until(`(() => { const name = ${read(at("oats-panel-name"))}; const state = ${read(at("oats-panel-state"))}; return name !== "" && /Needs you/.test(state) && document.querySelector(${JSON.stringify(at("oats-panel-work"))}) !== null ? name + " | " + state : ""; })()`, 40);
-    check(typeof header === "string" && header.startsWith("Panel worktree helper | ") && /Needs you . waiting /.test(header), `${where}: the panel names the real child in words and says it needs the person, since when`, header ?? (await page.evaluate(read('[data-testid="oats-panel"]'))));
+    check(typeof header === "string" && header.startsWith("Panel worktree helper | ") && /Needs you . (under a minute|\d+ (min|h|d))$/.test(header), `${where}: the panel names the real child in words and says it needs the person, and how long it has waited`, header ?? (await page.evaluate(read('[data-testid="oats-panel"]'))));
     const asks = await page.until(`(() => { const text = ${read(at("oats-panel-waiting"))}; return text.includes("Which base branch?") ? text : ""; })()`, 20);
     check(Boolean(asks), `${where}: and what it asks, as the kernel recorded it`, asks ?? (await page.evaluate(read('[data-testid="oats-panel"]'))));
     await page.until(`document.getAnimations().every((animation) => animation.playState !== "running")`, 5);

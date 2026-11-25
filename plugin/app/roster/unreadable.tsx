@@ -2,7 +2,8 @@
 // that help (the UX standard, section 3; the design of the unreadable state). The same component
 // for every place that draws the roster or a count from it: the sidebar, the home, a soul's page,
 // Teams and Machines (`RosterNotice`), and a confirmation asked meanwhile; the thread's row says its
-// title in one line. With a roster still shown (stale) it says how old that roster is.
+// title in one line. With a roster still shown (stale) it says how old that roster is. What to do
+// in a sentence, the code and the kernel's own message are one press away, under Details.
 import { useEffect, useSyncExternalStore } from "react";
 import { experimental_usePluginId as usePluginId } from "@get-bb/plugin-sdk/app";
 import { codes, isKernelCode } from "../../kernel/result";
@@ -16,9 +17,9 @@ import { readAge, showingRead } from "../ui/words";
 export type Failure = { code: string; message: string };
 
 /**
- * A failure in a person's words: a title, a sentence, and whether the plugin's settings can mend
- * it. `machine` is the machine's name where it is known. The kernel's or the plugin's own message
- * stays one press away (Details); a kernel refusal's first line is said after "OATS says:".
+ * A failure in a person's words: a title, a sentence (drawn under Details, with the code and the
+ * kernel's or the plugin's own message), and whether the plugin's settings can mend it. `machine`
+ * is the machine's name where it is known. A kernel refusal's first line is said after "OATS says:".
  * plugin/WORDS.md holds which of these are the Desktop's and which are the plugin's.
  */
 export function failureWords(failure: Failure, machine: string | null): { title: string; sentence: string | null; settings: boolean; retry: boolean } {
@@ -57,21 +58,18 @@ export function useSettingsHref(): string {
 
 /**
  * While the roster shown is the last one read, the OATS acts are HELD (the Desktop's rule, D-085):
- * the one sentence that says so, in the notice; and the reason an act that is off carries, in a
- * menu or beside a button. It names Retry first, so that a person is not left with bb's own Stop.
- * plugin/WORDS.md holds both.
+ * the one sentence that says so, in the notice. Design carries the rest: every OATS act is drawn
+ * off, and the notice's own button (Retry, or Open settings where only the settings mend it) is
+ * the way out. plugin/WORDS.md holds it, and the sentences it replaced.
  */
-export const HELD = "Press Retry: Stop, Start, Restart, Retire and New agent return when OATS is read again.";
-/** The same where the notice has no Retry, because only the plugin's settings can mend it (which machine holds the agents). */
-export const HELD_SETTINGS = "Open settings: Stop, Start, Restart, Retire and New agent return when OATS is read again.";
+export const HELD = "Acts are off.";
 export const HELD_REASON = "Comes back when OATS is read again";
 
 /**
  * The Notice: the ONE drawing of "OATS cannot be read". `at` is when what is still shown was read
- * (the roster kept as last read): the notice then says its age, once and in one form ("Showing what
- * was read <age>."), and that the acts are held; left out when nothing is shown. `compact` is the
- * same words on one wrapping line, for the thread's own row: the title, the age, the held
- * sentence, Retry.
+ * (the roster kept as last read): the notice then says its age, once and in one form ("Read
+ * <age>."), and that the acts are off; left out when nothing is shown. `compact` is the same
+ * words on one wrapping line, for the thread's own row: the title, the age, "Acts are off.", Retry.
  */
 export function Unreadable({ failure, machine, at, now, onRetry, compact = false, inSidebar = false }: { failure: Failure; machine: string | null; at?: string; now?: number; onRetry: () => void; compact?: boolean; inSidebar?: boolean }) {
   const words = failureWords(failure, machine);
@@ -93,7 +91,7 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
     return (
       <div role="alert" data-testid="oats-unreadable" data-code={failure.code} data-compact="" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground">
         <span className="font-semibold text-destructive-text">{words.title}</span>
-        <span className="min-w-0 text-muted-foreground">{at === undefined ? (words.sentence ?? "") : `${showingRead(readAge(at, now))} ${words.retry ? HELD : HELD_SETTINGS}`}</span>
+        {at === undefined ? null : <span className="min-w-0 text-muted-foreground">{`${showingRead(readAge(at, now))} ${HELD}`}</span>}
         {words.retry ? (
           <span className="ml-auto shrink-0">
             <Button onClick={onRetry}>Retry</Button>
@@ -111,9 +109,8 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
       <Notice
         title={words.title}
         tone="error"
-        code={failure.code}
-        details={failure.message}
-        {...(at === undefined ? {} : { age: readAge(at, now) })}
+        // (A kernel refusal's sentence is its own first line: the message under it holds that line already.)
+        details={[isKernelCode(failure.code) ? null : words.sentence, `${failure.code}: ${failure.message}`]}
         actions={
           <>
             {words.retry ? <Button onClick={onRetry}>Retry</Button> : null}
@@ -125,8 +122,12 @@ export function Unreadable({ failure, machine, at, now, onRetry, compact = false
           </>
         }
       >
-        {words.sentence === null ? null : <p>{words.sentence}</p>}
-        {at === undefined ? null : <p data-testid="oats-held">{words.retry ? HELD : HELD_SETTINGS}</p>}
+        {/* How old what is still shown is, then that the acts are off: one line, as on the thread's row. */}
+        {at === undefined ? null : (
+          <p className="text-xs text-muted-foreground">
+            {showingRead(readAge(at, now))} <span data-testid="oats-held">{HELD}</span>
+          </p>
+        )}
       </Notice>
     </div>
   );
@@ -146,7 +147,7 @@ export function RosterNotice({ oats }: { oats: Oats }) {
 
 // ---- one full notice on a screen ----
 // The sidebar and a page are drawn side by side. While a page shows the full notice over what it
-// keeps, the sidebar says ONE line (how old the roster is, and Retry): `LastObservation`.
+// keeps, the sidebar says ONE line (how old the roster is, that the acts are off, and Retry): `LastObservation`.
 let pagesWithNotice = 0;
 const noticeWatchers = new Set<() => void>();
 const tell = () => {
@@ -165,13 +166,18 @@ export function usePageShowsNotice(): boolean {
   );
 }
 
-/** The sidebar's one line beside a page's full notice: "Last observation — 2 min ago", and Retry (or the settings, where only they mend it). */
+/**
+ * The sidebar's one line beside a page's full notice: "Read 2 min ago. Acts are off.", and Retry (or
+ * the settings, where only they mend it). It says that the acts are off itself, as the thread's
+ * compact line does: at a phone's width the sidebar is bb's drawer, OVER the page, and New agent,
+ * off under this line, would have only an age above it (an off control is never alone on a screen).
+ */
 export function LastObservation({ failure, machine, at, now, onRetry }: { failure: Failure; machine: string | null; at: string; now: number; onRetry: () => void }) {
   const words = failureWords(failure, machine);
   const settings = useSettingsHref();
   return (
     <div role="status" data-testid="oats-last-observation" data-code={failure.code} title={words.title} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 text-xs text-muted-foreground">
-      <span className="min-w-0">{`Last observation — ${readAge(at, now) ?? "its time is not known"}`}</span>
+      <span className="min-w-0">{`${showingRead(readAge(at, now))} ${HELD}`}</span>
       {words.retry ? (
         <span className="ml-auto shrink-0">
           <Button onClick={onRetry}>Retry</Button>

@@ -6,7 +6,7 @@
 // row, the home's cards and reply box, a soul's page, the capabilities and the machines, the spawn
 // preview (and, in test/lifecycle/actions.test.tsx, a plan's lines).
 import { afterEach, expect, test } from "vitest";
-import { fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { ExperimentalThreadHeaderRowProps, PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { fixtureAgents, fixtureSnapshot } from "../helpers/fixtures";
@@ -41,7 +41,7 @@ test("the home's card: an agent's message with a line break and a bidi override 
   expect(questions.join("")).not.toMatch(/[\n\t\u202E]|abc123/);
 });
 
-test("the sidebar: the workspace, the machine and a soul's name are each one filtered line", async () => {
+test("the sidebar: the workspace's name and a soul's name are each one filtered line; the machine is not drawn", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, soul: `oats${BIDI}developer` } : agent));
   const snapshot = { ...fixtureSnapshot(agents), deployment: { root: "/abs/deployment", workspace: `oats${BIDI}`, machine: "fal\ncon" } };
   const app = await loadApp();
@@ -50,9 +50,11 @@ test("the sidebar: the workspace, the machine and a soul's name are each one fil
     { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
     { rpc: handlers({ snapshot: () => snapshot, souls: () => ({ souls: [] }) }), sidebarThreads: sidebarThreads() },
   );
-  expect((await slot.findByTestId("oats-workspace-line")).textContent).toBe(`oats${GONE} · fal con · 8 agents`);
+  expect((await slot.findByTestId("oats-workspace-line")).textContent).toBe(`oats${GONE}`);
+  // The soul is on the row, through the display filter; the machine is not on the line.
   const row = slot.getAllByTestId("oats-agent-row").find((candidate) => candidate.getAttribute("data-sidebar-thread-id") === "thr_ci")!;
-  expect(row.textContent).toContain(`oats${GONE}developer`);
+  expect(within(row).getByTestId("oats-row-facts").textContent).toBe(`Needs you · oats${GONE}developer`);
+  expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/fal con|falcon/);
   expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/[\n\u202E]/);
 });
 
@@ -78,12 +80,15 @@ test("the machines page: a server's id, its route and its note are each one filt
   expect(Array.from(row.children).map((part) => part.textContent)).toEqual([`dev${GONE}box`, "[withheld]", "workspace /srv/oats 2 saved instance routes"]);
 });
 
-test("the thread's row: a soul's name and an alias with a character that is no text are drawn with U+FFFD", async () => {
-  const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, soul: `oats${BIDI}developer`, alias: `flaky\u200Bci`, address: null } : agent));
+test("the thread's row: an agent's question with a character that is no text is drawn with U+FFFD; its soul and its alias are not drawn there", async () => {
+  const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, soul: `oats${BIDI}developer`, alias: `flaky\u200Bci`, address: null, waiting: { reason: "question", message: `Which${BIDI} branch?\nmain`, since: null } } : agent));
   const app = await loadApp();
   const row = renderSlot<ExperimentalThreadHeaderRowProps, Contract>(app.threadHeaderRows[0]!, { threadId: "thr_ci", projectId: "proj_ci", environment: null }, { rpc: handlers({ souls: () => ({ souls: [] }) }, agents), sidebarThreads: sidebarThreads() });
-  expect((await row.findByTestId("oats-fact-soul")).textContent).toBe(`instance ofoats${GONE}developer`);
-  expect(row.getByTestId("oats-fact-identity").textContent).toBe(`Messaging IDflaky${GONE}ci`);
+  expect((await row.findByTestId("oats-status-line")).textContent).toBe(`!Needs you· Which${GONE} branch? mainAnswerInstance panel`);
+  // Who it is (its soul, its messaging ID) is the instance panel's: no such fact is on the row.
+  expect(row.queryByTestId("oats-fact-soul")).toBeNull();
+  expect(row.queryByTestId("oats-fact-identity")).toBeNull();
+  expect(row.getByTestId("oats-identity-row").textContent).not.toMatch(/developer.*oats|flaky.ci\b/);
 });
 
 test("a soul's page: its description and its problem, and a capability's description, are one filtered line each", async () => {

@@ -6,9 +6,9 @@
 // stop, what a provider of the VERSION the kernel prints does (`stopArchivesThread`: a release
 // from 0.4.0 on archives); after it, what bb shows of the thread. Every other part of the run has
 // the provider pinned by a COMMIT, as the run's workspace pins it, so the kernel prints a commit
-// as its version and the confirmation keeps the sentence that warns ("A message sent in its
-// thread starts it again without OATS…"): parts/lifecycle.mjs asserts that case. A release's
-// confirmation ("Its thread is archived. To talk to it again, start it.") can only be seen with a
+// as its version and the confirmation keeps the line that warns ("A message in its thread
+// starts it outside OATS."): parts/lifecycle.mjs asserts that case. A release's
+// confirmation ("Archives its thread.") can only be seen with a
 // provider the kernel calls 0.4.0 or later, and no such release exists yet.
 //
 // So, once every other part has run, this one pins the SAME commit of the provider by a SCRATCH
@@ -26,8 +26,8 @@ import { click, closed, dialog, openRowMenu, phaseIs, pick } from "../../scenes/
 
 /** The tag the run gives the provider's commit: the first release that archives at stop (the plugin's threshold, app/lifecycle/words.ts `ARCHIVES_AT_STOP_FROM`). */
 const TAG = "v0.4.0";
-const ARCHIVED = "Its thread is archived. To talk to it again, start it.";
-const WARNS = "A message sent in its thread starts it again without OATS. To talk to it again, use Start.";
+const ARCHIVED = "Archives its thread.";
+const WARNS = "A message in its thread starts it outside OATS.";
 
 export default async (run) => {
   const { step, check, show, note, until, oats, rowOf, rpc, recorded, evidence, views, DEPLOY, OUT } = run;
@@ -98,7 +98,7 @@ export default async (run) => {
     const drawn = await page.until(`document.querySelector('[data-testid="oats-agent-row"][data-sidebar-thread-id="${threadId}"]') !== null`, 60);
     check(Boolean(drawn), `${at} ${called} has a row in the sidebar`, String(threadId));
     check(await openRowMenu(page, viewport, threadId), `${at} its row's menu opens`);
-    check(await pick(page, "Stop agent (OATS)"), `${at} Stop agent (OATS) is pressed`);
+    check(await pick(page, "Stop (OATS)"), `${at} Stop (OATS) is pressed`);
     await page.until(phaseIs("ready"), 60);
     let said = await dialog(page);
     check(said.title === `Stop ${called}?` && said.about === name, `${at} the Stop dialog is for ${name}`, JSON.stringify(said));
@@ -111,7 +111,7 @@ export default async (run) => {
     await page.until(phaseIs("done"), 120);
     said = await dialog(page);
     check(said.phase === "done" && said.body.includes(`${called} stopped.`), `${at} the dialog says that it stopped`, JSON.stringify(said));
-    check(said.body.includes(ARCHIVED) && !said.body.includes(WARNS), `${at} AFTER the stop the result says the same of the thread: "${ARCHIVED}"`, said.body);
+    check(!said.body.includes(ARCHIVED) && !said.body.includes(WARNS), `${at} AFTER the stop the result is its title alone: bb shows the thread archived, so nothing warns, and nothing repeats "${ARCHIVED}"`, said.body);
     const stopped = await until(`${name} to read stopped in oats status`, () => {
       const row = rowOf(name);
       return row?.running === false && row.runtimeState === "stopped" ? row : undefined;

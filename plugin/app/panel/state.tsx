@@ -5,8 +5,8 @@
 // drawing whether or not something read earlier is still shown: with it, the notice says how old
 // that is, once.
 import { codes } from "../../kernel/result";
-import { Fragment, useEffect, useState } from "react";
-import { Button, Code, Loading, Notice } from "../ui";
+import { useEffect, useState } from "react";
+import { Button, Loading, Notice } from "../ui";
 import type { Read } from "../store";
 import { readAge } from "../ui/words";
 import { refusalWords } from "./refusal-words";
@@ -20,25 +20,16 @@ export function codeOf(error: string): string | null {
   return lead !== undefined && (lead.startsWith("E_") || (Object.values(codes) as string[]).includes(lead)) ? lead : null;
 }
 
-/** A sentence of the plugin's with the kernel's words in it (a command between backticks): each drawn as code. */
-function Sentence({ children }: { children: string }) {
-  return (
-    <p className="m-0">
-      {children.split("`").map((part, index) => (index % 2 === 1 ? <Code key={index}>{part}</Code> : <Fragment key={index}>{part}</Fragment>))}
-    </p>
-  );
-}
-
 type CommandRead = Read<unknown> & { retry(): void; fetching: boolean; readAt: number | null };
 
 /**
  * Whether the notice of a failed read offers Retry: the part's own button to read again is then
  * not drawn beside it. For a refusal that reading again cannot change as things are, the notice
- * offers none and the part keeps its own button (Refresh readiness, Refresh activity, Read the
- * soul again): for the person who mended what was wrong.
+ * offers none and the part keeps its own button (Refresh, Retry on the Soul tab): for the person
+ * who mended what was wrong.
  */
 export const offersRetry = (read: CommandRead, of: "readiness" | "activity" | "soul"): boolean => read.status === "error" && refusalWords(of, codeOf(read.error), read.error).retry;
-/** Whether a failed read is something a person could mend and read again: not where OATS simply has none of it for this agent. */
+/** Whether a failed read is something a person could mend and read again: not where OATS simply has none of it for this agent (the part then draws nothing: there is nothing to show, and no sentence says so). */
 export const mendable = (read: CommandRead, of: "readiness" | "activity" | "soul"): boolean => read.status === "error" && refusalWords(of, codeOf(read.error), read.error).fault;
 
 /**
@@ -61,19 +52,19 @@ export function CommandState({ read, of, reading, failed, at = null, now }: { re
   const stale = at ?? read.readAt;
   const words = refusalWords(of, code, read.error);
   const kept = read.data !== undefined;
-  // OATS has none of it for this kind of agent: a fact, said once and not drawn as a failure; nothing to press.
-  if (!words.fault && words.sentence !== null) return <Notice title={words.sentence.replace(/\.$/, "")} tone="info" code={code} details={read.error} />;
+  // OATS has none of it for this kind of agent: nothing to show and nothing to press, so nothing is drawn (the part leaves the page).
+  if (!words.fault) return null;
   return (
     <Notice
       title={kept ? `${failed} again` : failed}
       tone="error"
       code={code}
-      details={read.error}
+      // What to do next is one press away, with the kernel's own message: the notice's face is what happened.
+      details={[words.next, read.error]}
       {...(kept ? { age: stale === null ? null : readAge(stale, Math.max(now, seen)) } : {})}
       actions={words.retry ? <Button onClick={read.retry}>{read.fetching ? "Reading…" : "Retry"}</Button> : undefined}
     >
-      {words.sentence === null ? null : <Sentence>{words.sentence}</Sentence>}
-      {words.next === null ? null : <Sentence>{words.next}</Sentence>}
+      {words.sentence === null ? null : <p className="m-0">{words.sentence}</p>}
     </Notice>
   );
 }

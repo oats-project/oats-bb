@@ -9,9 +9,10 @@ import { rest } from "../../model/rest";
 import { recordedStopped, state } from "../../model/view";
 import { useOats } from "../oats";
 import { onWindowReset } from "../store";
-import { failureWords, HELD_REASON } from "../roster/unreadable";
+import { READING, readingNow, useActed, useReading } from "../roster/reading";
+import { failureWords } from "../roster/unreadable";
 import type { Oats } from "../oats";
-import { Button, DisabledReason } from "../ui";
+import { Button } from "../ui";
 import { ActsOverlay, openAct } from "./acts";
 import { notify } from "../ui";
 import { agentName, STATE } from "../ui/words";
@@ -55,7 +56,7 @@ export const ACTS: readonly {
   /** `thread`: bb's own row of the agent's thread, where the roster draws it on one (null: none). */
   when: (state: AgentState, agent: Agent, thread: BbThread | null) => boolean;
 }[] = [
-  { verb: "stop", button: "Stop…", menu: "Stop agent (OATS)", command: "OATS: Stop agent…", key: "x", icon: ICON.stop, destructive: false, 
+  { verb: "stop", button: "Stop…", menu: "Stop (OATS)", command: "OATS: Stop agent…", key: "x", icon: ICON.stop, destructive: false, 
     // An agent that runs is stopped. So is one that runs outside OATS (the state "outside": OATS
     // recorded it stopped and the kernel reports its harness running): Stop asks the provider to
     // stop it again. README, "Outside OATS".
@@ -64,7 +65,7 @@ export const ACTS: readonly {
   {
     verb: "start",
     button: "Start…",
-    menu: "Start agent (OATS)",
+    menu: "Start (OATS)",
     command: "OATS: Start agent…",
     key: "s",
     icon: ICON.start,
@@ -78,12 +79,12 @@ export const ACTS: readonly {
     // (`recordedStopped`: the kernel calls it stopped beside any word where the row says how its session ended.)
     when: (state, agent) => state === "error" || state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped" || atRest(agent),
   },
-  { verb: "restart", button: "Restart…", menu: "Restart agent (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, 
+  { verb: "restart", button: "Restart…", menu: "Restart (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, 
     // Not for a stopped agent, nor one that runs outside OATS; nor one that NEVER RAN (bb says its
     // thread failed at its start): nothing runs, and Start offers the harness and the model.
     when: (state, agent, thread) => state !== "stopped" && state !== "outside" && rest(agent, thread) !== "never-started",
   },
-  { verb: "retire", button: "Retire…", menu: "Retire agent (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
+  { verb: "retire", button: "Retire…", menu: "Retire (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
 ];
 const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shift: true });
 
@@ -94,13 +95,13 @@ const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shif
  * for an agent on tmux as for one on bb (and for no other session provider's): its dialog starts it (bringing back a session that was
  * lost: `oats session start --resume`) or restarts it, opens no thread, and says where it runs.
  */
-export function actsFor(oats: Oats, instance: string): { verb: Verb; label: string; destructive: boolean; held: string | null }[] {
+export function actsFor(oats: Oats, instance: string): { verb: Verb; label: string; destructive: boolean; held: boolean }[] {
   if (oats.phase !== "ready") return [];
   const agent = oats.nodeByInstance.get(instance)?.agent ?? oats.agents.find((each) => each.instance === instance);
   if (agent === undefined) return [];
   const node = oats.nodeByInstance.get(instance);
   const now = node?.state ?? state(agent, null);
-  const held = oats.stale !== null ? HELD_REASON : null;
+  const held = oats.stale !== null;
   // Start and Restart are this plugin's for an agent on bb and for one on tmux; an agent of another session provider has neither.
   const starts = agent.backend === "bb" || agent.backend === "tmux";
   return ACTS.filter((act) => act.when(now, agent, node?.thread ?? null) && (starts || (act.verb !== "start" && act.verb !== "restart"))).map((act) => ({ verb: act.verb, label: act.button, destructive: act.destructive, held }));
@@ -108,24 +109,26 @@ export function actsFor(oats: Oats, instance: string): { verb: Verb; label: stri
 
 /**
  * The acts of one agent as buttons, for a place that shows that agent (the instance panel, the
- * agent's own page): the ones that apply to its state, each opening its dialog; off, with the
- * reason beside them, while the roster is the last one read. It reads the roster itself and needs
+ * agent's own page): the ones that apply to its state, each opening its dialog; off while the
+ * roster is the last one read, with no reason of their own: every place that draws them draws
+ * the notice that says "Acts are off.", with Retry (the thread's line, the outside line, the
+ * panel's notice): an act that is off is never alone on a screen. It reads the roster itself and needs
  * nothing mounted above it (the dialogs are the app overlay's). Nothing where no act applies, and
  * for an agent the roster does not name.
  */
 export function AgentActs({ instance }: { instance: string }) {
   const oats = useOats();
+  // Behind a result that says the agent changed, until the roster is read again: the acts are off (app/roster/reading.tsx).
+  const reading = useReading(instance);
   const acts = actsFor(oats, instance);
   if (acts.length === 0) return null;
-  const held = acts[0]!.held;
   return (
     <div data-testid="oats-agent-acts" className="flex min-w-0 flex-wrap items-center gap-2">
       {acts.map((act) => (
-        <Button key={act.verb} data-testid={`oats-agent-act-${act.verb}`} disabled={act.held !== null} onClick={() => openAct(act.verb, instance)}>
+        <Button key={act.verb} data-testid={`oats-agent-act-${act.verb}`} disabled={act.held || reading} onClick={() => openAct(act.verb, instance)}>
           {act.label}
         </Button>
       ))}
-      {held === null ? null : <DisabledReason>{held}</DisabledReason>}
     </div>
   );
 }
@@ -136,6 +139,8 @@ const READING_AFTER_MS = 1_000;
 type ActionData = { oats: Oats; /** the first read has been in flight for more than READING_AFTER_MS */ slow: boolean };
 function useActionData(): ActionData {
   const oats = useOats();
+  // (The menu's entries ask whether an agent is behind a result, `readingNow`: drawn again when such a mark comes or goes.)
+  useActed();
   const reading = oats.phase === "loading";
   const [slow, setSlow] = useState(false);
   useEffect(() => {
@@ -174,6 +179,9 @@ function runCommand(verb: Verb, threadId: string | null): void {
   if (node === undefined) return say(NO_TARGET);
   if (roster.stale !== null) return say(`Stop, Start, Restart and Retire come back when OATS is read again.`);
   const { state, agent } = node;
+  // Behind a result that says this agent changed: its acts are off until the roster is read again, and a key does
+  // nothing meanwhile (and says nothing: the thread's line says "Reading…").
+  if (readingNow(roster, agent.instance)) return;
   // (An agent that runs outside OATS runs: its harness does, whatever OATS recorded. Never "is stopped" of it.)
   // And never "is already running" of a row that says no harness is loaded.
   const why = cannotAct(verb, agent.instance, { running: state === "outside" || ((state === "working" || state === "idle" || state === "needs-you") && !atRest(agent)), known: state !== "unreachable" });
@@ -187,7 +195,10 @@ function runCommand(verb: Verb, threadId: string | null): void {
  * settings (the Desktop's D-174, with bb's own keys: no leader). It acts on the agent whose thread
  * is in view. It is listed everywhere, as on the Desktop: where it cannot act (no thread in view, a
  * thread that is no agent's, a state the act does not apply to) its key says why in one line, and
- * never does nothing.
+ * never does nothing. ONE exception, ruled with L13's form (24 Nov 2026): behind a result that says
+ * the agent changed, until the roster is read again, the key does nothing AND says nothing: every
+ * act of that agent is off for those seconds, and no sentence was to be added for it (its thread's
+ * line says "Reading…").
  */
 export const commands: readonly PluginCommandRegistration[] = ACTS.map((act) => ({
   id: `agent-${act.verb}`,
@@ -199,7 +210,7 @@ export const commands: readonly PluginCommandRegistration[] = ACTS.map((act) => 
 /**
  * The OATS entries are a group of their own in bb's thread menus, which bb sets apart with a
  * separator: by the SDK's string order of groups it stands after bb's organize group and before
- * bb's settings and lifecycle groups (Stop, Archive, Delete), so that "Retire agent (OATS)" never
+ * bb's settings and lifecycle groups (Stop, Archive, Delete), so that "Retire (OATS)" never
  * stands directly over bb's Delete. The SDK allows no more: bb's own entries cannot be taken out
  * of an agent's menu, nor asked to confirm.
  */
@@ -219,7 +230,9 @@ export function register(app: PluginAppBuilder): void {
     useData: useActionData,
     item: ({ thread, data }: PluginThreadActionItemInput<ActionData>): PluginThreadAction | null => {
       const node = data.oats.phase === "ready" ? data.oats.nodeByThread.get(thread.id) : undefined;
-      return node === undefined ? null : { label: `${agentName(node.agent.instance)} · ${STATE[node.state].word}`, icon: ICON.oats, disabled: true, run: () => undefined };
+      if (node === undefined) return null;
+      // Behind a result that says the agent changed, until the roster is read again: never the state of before, stated plainly (app/roster/reading.tsx).
+      return { label: `${agentName(node.agent.instance)} · ${readingNow(data.oats, node.agent.instance) ? READING : STATE[node.state].word}`, icon: ICON.oats, disabled: true, run: () => undefined };
     },
   });
 
@@ -240,9 +253,11 @@ export function register(app: PluginAppBuilder): void {
         if (node === undefined || !act.when(node.state, node.agent, node.thread)) return null;
         const variant = act.destructive ? "destructive" : "default";
         // On the last roster read, while OATS cannot be read, the acts are HELD (the Desktop's rule):
-        // the entry stays where it was, off, with the reason, so that a person sees that the act
-        // exists and when it comes back, and does not reach for bb's own Stop. The notice has Retry.
-        if (oats.stale !== null) return { label: act.menu, icon: act.icon, variant, disabled: true, detail: HELD_REASON, run: () => undefined };
+        // the entry stays where it was, off, so that a person sees that the act exists and does not
+        // reach for bb's own Stop. A menu has no place for a reason: the roster's notice says "Acts are off.", with Retry.
+        if (oats.stale !== null) return { label: act.menu, icon: act.icon, variant, disabled: true, run: () => undefined };
+        // And behind a result that says this agent changed: every act of it is off until the roster is read again (the row over them says "Reading…").
+        if (readingNow(oats, node.agent.instance)) return { label: act.menu, icon: act.icon, variant, disabled: true, run: () => undefined };
         return { label: act.menu, icon: act.icon, variant, run: () => openAct(act.verb, node.agent.instance) };
       },
     });

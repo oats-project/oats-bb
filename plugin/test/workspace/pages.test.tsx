@@ -108,7 +108,7 @@ test("Machines while OATS cannot be read after it was: the notice with the age, 
   const slot = await page("machines", { snapshot: unread(LAST()) });
   const notice = await slot.findByRole("alert");
   expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
-  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(notice.textContent).toContain("Read 40 min ago.");
   expect(slot.getByTestId("oats-this-machine").textContent).toContain("7 agents in bb · 1 agent elsewhere");
   expect(notice.compareDocumentPosition(slot.getByText("7 agents in bb · 1 agent elsewhere")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
@@ -125,6 +125,6 @@ test("Machines with no roster ever read: the notice in a person's words, the cod
 test("Teams while OATS cannot be read after it was: the notice with the age, and the counts as last read", async () => {
   const slot = await page("teams", { snapshot: unread(LAST()) });
   const notice = await slot.findByRole("alert");
-  expect(notice.textContent).toContain("Showing what was read 40 min ago.");
+  expect(notice.textContent).toContain("Read 40 min ago.");
   expect((await slot.findAllByTestId("oats-team-row")).some((row) => /\d+ agents?/.test(row.textContent ?? ""))).toBe(true);
 });

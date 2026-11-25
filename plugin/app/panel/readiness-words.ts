@@ -6,15 +6,15 @@ import type { PanelReadiness, PanelReadinessItem } from "../../kernel/panel-read
 import { shown } from "../ui/text";
 import { whenText } from "./words";
 
-export const TITLE = { instance: "Instance readiness", soul: "Soul readiness" } as const;
-export const REFRESH = "Refresh readiness";
+/** One heading for both: the tab it stands on says whose readiness it is. */
+export const TITLE = "Readiness";
+export const REFRESH = "Refresh";
 export const REFRESHING = "Refreshing…";
-export const UPDATED = "Readiness updated";
-export const LOADING = "Reading readiness…";
+export const LOADING = "Reading…";
 /** In a person's words, over the kernel's own sentence for the same thing (plugin/WORDS.md). */
 export const CHECKS_PLAIN = "What OATS checked for this to run. Reading it starts nothing and allows nothing.";
 /** What to do about a provider that is set up and not signed in: the plugin has no act for it. */
-export const SIGN_IN_HOW = "Sign in to it on this computer, then press Refresh readiness.";
+export const SIGN_IN_HOW = "Sign in to it on this computer, then press Refresh.";
 export const NOT_PERMISSION = "Independent kernel observations, not launch permission. Unknown is not granted; an empty required set is not Ready.";
 export const CHECKS_AND_POLICY = "Checks and policy";
 export const NO_ITEMS = "No items reported for this check.";
@@ -23,7 +23,7 @@ export const POLICY_NOTE = "Lifecycle authority, not an OS sandbox.";
 
 /** The one line that says whether it is ready. */
 export function summaryLine(summary: PanelReadiness["summary"]): string {
-  if (summary.ready) return "Ready — every required check passes or is not applicable.";
+  if (summary.ready) return "Ready";
   if (summary.required === 0) return "Readiness not established — no required checks reported.";
   return `${summary.fail} failing · ${summary.unknown} unknown · ${summary.required} required checks`;
 }

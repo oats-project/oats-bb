@@ -11,6 +11,7 @@ export { Confirm } from "./ui/confirm";
 export type { ConfirmProps } from "./ui/confirm";
 export { CopyButton, Menu, SearchField, Segmented, Switch, Tabs } from "./ui/controls";
 export { notified, notify } from "./ui/notify";
+export { TMUX, TmuxMark } from "./ui/tmux";
 export type { Notification } from "./ui/notify";
 export type { MenuItem, TabItem } from "./ui/controls";
 export { Card, Code, DisabledReason, Disclosure, Empty, Fact, Facts, Field, INPUT, KernelSays, LINK, Loading, Notice, Result, Section, Stale, State, StateMark, StatusLine, TARGET, Toned } from "./ui/patterns";

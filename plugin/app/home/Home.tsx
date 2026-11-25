@@ -22,6 +22,7 @@ import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideNeeds, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
+import { guarded, sendText } from "./send";
 import { READING as READING_WORD, ReadingFacts, ReadingLine, readingNow, useActed } from "../roster/reading";
 import { LastObservation, RosterNotice, useLineShowsNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
@@ -284,17 +285,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     setBusy(kind);
     setFailure(null);
     setSaid(null);
-    attempt(async () => {
-      const now = await rpc.call("snapshot", null);
-      if (!now.ok) throw new Error(NOT_NOW_UNREAD);
-      const agent = now.agents.find((each) => each.instance === entry.agent.instance);
-      if (agent === undefined) throw new Error(NOT_NOW_GONE);
-      // The AGENT is the server's roster's, read now; the THREAD is the card's own (bb's row as it
-      // was drawn): the guard is fresh on what OATS says, not on what bb says of the thread.
-      const why = refusal(agent, entry.thread);
-      if (why !== null) throw new Error(why === "unreachable" ? NOT_NOW_UNREACHABLE : NOT_NOW_STOPPED);
-      return run();
-    }).then(
+    // The one guarded send (send.ts): the roster asked of the server at the press.
+    attempt(() => guarded(rpc, { agent: entry.agent, thread: entry.thread, held }, run)).then(
       () => {
         setBusy(null);
         done();
@@ -317,7 +309,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const send = () => {
     const body = text.trim();
     if (body === "" || threadId === undefined) return;
-    act("send", () => sdk.threads.send({ threadId, mode: "auto", input: [{ type: "text", text: body, mentions: [] }] }), () => {
+    act("send", () => sendText(sdk, threadId, body), () => {
       setText("");
       setSaid(SENT);
     });

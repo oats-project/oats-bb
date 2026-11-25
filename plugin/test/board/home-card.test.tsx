@@ -101,3 +101,32 @@ test("while the roster is the last one read (OATS cannot be read), the card's qu
   expect(within(zone).queryAllByTestId("oats-board-answer")).toEqual([]);
   expect(zone.querySelectorAll("button")).toHaveLength(0);
 });
+
+test("on the card the question has no border of its own and no second age (the card has both); on its Board tab it has both", async () => {
+  const { card } = await home({ boardAsks: true, waiting: { reason: "attention", message: "Which base branch?", since: "2026-11-23T18:01:45.726Z" } });
+  const zone = await within(card).findByTestId("oats-board-questions");
+  expect(zone.hasAttribute("data-in-card")).toBe(true);
+  expect(zone.className).not.toMatch(/\bborder\b/);
+  expect(within(zone).queryByTestId("oats-board-age")).toBeNull();
+});
+
+test("the thread line's Answer turns the panel to BOARD for an agent whose board asks (the question is there, with its options), and to Instance for any other claim", async () => {
+  const app = await loadApp();
+  const { InstancePanel, showPanelTab } = await import("../../app/panel/Panel");
+  const Row = app.threadHeaderRows[0]!.component;
+  const selected = (slot: { container: HTMLElement }) => slot.container.querySelector('[role="tab"][aria-selected="true"]')?.textContent;
+  for (const [change, tab] of [[{ boardAsks: true as const, hasBoard: true as const }, "Board"], [{}, "Instance"]] as const) {
+    const agents = fixtureAgents().map((agent): Agent => (agent.instance === ASKS ? { ...agent, ...change } : agent));
+    const slot = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(
+      { component: (props: { threadId: string; projectId: string; environment: null }) => (<><Row {...props} /><InstancePanel threadId={props.threadId} /></>) } as never,
+      { threadId: "thr_research", projectId: "p", environment: null },
+      { rpc: handlers({ board: () => ({ at: BOARD_AT, supported: true, board: "boardAsks" in change ? { facts: [], questions: [QUESTION] } : null, claim: { producer: "oats.board", reason: "attention" } }) }, agents), sidebarThreads: sidebarThreads(), sdk: { threads: { interactions: { list: async () => [] } } } as never },
+    );
+    await slot.findByTestId("oats-status-act");
+    act(() => showPanelTab("soul")); // the panel was left on the Soul tab
+    await waitFor(() => expect(selected(slot)).toBe("Soul"));
+    fireEvent.click(slot.getByTestId("oats-status-act"));
+    await waitFor(() => expect(selected(slot), JSON.stringify(change)).toBe(tab));
+    resetApp();
+  }
+});

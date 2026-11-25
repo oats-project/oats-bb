@@ -103,7 +103,10 @@ test("a fact is its label, its value and unit, its age; bb's own list is given e
   expect(rows.map((row) => row.getAttribute("data-key"))).toEqual(["a", "b", "c", "d", "e"]);
   expect(facts.querySelector("ul")!.getAttribute("data-limit")).toBe("3");
   expect(within(rows[0]!).getByTestId("oats-board-fact-value").textContent).toBe("0 failing");
-  expect(rows[0]!.textContent).toContain("Fact a · 0 failing");
+  // The value first, then the label: on a narrow row the label is the part that gives way, never the value.
+  expect(rows[0]!.textContent).toContain("0 failingFact a");
+  expect(within(rows[0]!).getByTestId("oats-board-fact-value").className).toMatch(/shrink-0/);
+  expect(within(rows[0]!).getByTestId("oats-board-fact-label").className).toMatch(/truncate/);
   const age = within(rows[0]!).getByTestId("oats-board-age");
   expect([age.textContent, age.getAttribute("title")]).toEqual(["16 min ago", AT]);
   expect(facts.textContent).not.toMatch(/updated/);
@@ -131,10 +134,33 @@ test("a fact hidden on this computer leaves the list and is counted; \"N hidden 
   await waitFor(() => expect(keys()).toEqual(["tests", "pr"]));
 });
 
-test("a fact's address: the agent's words and the host; a press shows the whole address as text; only then Open in browser, which leaves bb", async () => {
+test("a value is never cut: one longer than 24 characters has a line of its own under the label, whole and wrapping; a short one stays on the row", async () => {
+  const long = "1000 of 2000 checks passed on the release candidate, the rest wait for a runner"; // 78: within the kernel's 80
+  const { slot } = await drawn({ board: { facts: [fact("long", { label: "Checks", value: long, unit: null }), fact("short", { label: "Tests", value: "3", unit: "failing" })], questions: [] } });
+  const [first, second] = within(slot.getByTestId("oats-board-facts")).getAllByTestId("oats-board-fact");
+  const value = within(first!).getByTestId("oats-board-fact-value");
+  expect([first!.hasAttribute("data-long"), value.textContent]).toEqual([true, long]);
+  expect(value.className).toMatch(/break-words/);
+  expect(value.className).not.toMatch(/truncate|whitespace-nowrap/);
+  expect(value.closest("li, [data-testid=oats-board-fact]")).toBeTruthy();
+  expect(second!.hasAttribute("data-long")).toBe(false);
+});
+
+test("who says the addresses is said ONCE, on the Facts heading's line, and only where a fact in view has an address", async () => {
+  const link = "https://github.com/oats-project/oats-bb/pull/42";
+  const { slot } = await drawn({ board: { facts: [fact("a", { link }), fact("b", { link: "https://ci.example.org/runs/7" }), fact("c")], questions: [] } });
+  expect(slot.getAllByTestId("oats-board-says").map((each) => each.textContent)).toEqual(["Panel worktree helper says"]);
+  expect(slot.getAllByTestId("oats-board-link-show").map((each) => each.textContent)).toEqual(["github.com", "ci.example.org"]);
+  resetApp();
+  const none = await drawn({ board: { facts: [fact("c")], questions: [] } });
+  expect(none.slot.queryByTestId("oats-board-says")).toBeNull();
+});
+
+test("a fact's address: the host alone at the row, as text; a press shows the whole address as text; only then Open in browser, which leaves bb", async () => {
   const { slot } = await drawn({ board: { facts: [fact("pr", { label: "Pull request", value: "#42", unit: null, link: "https://github.com/oats-project/oats-bb/pull/42" })], questions: [] } });
   const link = slot.getByTestId("oats-board-link");
-  expect(within(link).getByTestId("oats-board-link-show").textContent).toBe("Panel worktree helper says: github.com");
+  expect(within(link).getByTestId("oats-board-link-show").textContent).toBe("github.com");
+  expect(within(link).getByTestId("oats-board-link-show").className).not.toMatch(/underline/); // the agent's text, not a link of ours
   expect(within(link).queryByTestId("oats-board-link-address")).toBeNull();
   expect(link.querySelector("a")).toBeNull(); // never a link a click follows
   fireEvent.click(within(link).getByTestId("oats-board-link-show"));
@@ -179,6 +205,9 @@ test("a question's context is a fold, offered only where the agent sent one: the
   const fold = slot.getByTestId("oats-board-context");
   expect(fold.querySelector("summary")!.textContent).toMatch(/Context$/);
   const text = within(fold).getByTestId("oats-board-context-text");
+  expect(text.className).toMatch(/max-h-\[33vh\]/); // a long context has a bound: a third of the window,
+  expect(text.className).toMatch(/overflow-y-auto/); // and scrolls alone (reached by the keyboard: it takes the focus)
+  expect(text.getAttribute("tabindex")).toBe("0");
   expect(text.textContent).toBe("main is protected.\n<b>release</b> is the 0.1 line.");
   expect(text.querySelector("b")).toBeNull(); // text, never markup
 });

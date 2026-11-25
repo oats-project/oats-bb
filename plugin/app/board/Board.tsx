@@ -23,11 +23,11 @@ import { noteSent, useSent } from "./sent";
 import { shown, shownBlock } from "../../model/text";
 import { useNow } from "../roster/now";
 import { Button } from "../ui";
-import { Disclosure } from "../ui/patterns";
+import { Disclosure, TARGET } from "../ui/patterns";
 import { agentName, readAge } from "../ui/words";
 import { useHiddenFacts } from "./hidden";
 import { useBoard, useBoardDetail, type DetailRead } from "./read";
-import { BOARD, droppedSaid, hiddenSaid, linkSaid, placeSaid } from "./words";
+import { BOARD, droppedSaid, hiddenSaid, LONG_VALUE, placeSaid, saysSaid } from "./words";
 
 /** A quiet line: what cannot be shown, in its place. `failed`: a read FAILED (the warning tone); else muted. */
 function Quiet({ children, failed = false, testId }: { children: string; failed?: boolean; testId: string }) {
@@ -59,14 +59,18 @@ function Spark({ values }: { values: readonly number[] }) {
   );
 }
 
-/** A fact's address: the agent's words and the host; a press shows the whole address as text; only then "Open in browser". */
-function FactLink({ name, link }: { name: string; link: NonNullable<BoardFact["link"]> }) {
+/**
+ * A fact's address: its HOST alone at the row, as plain text that reads as the agent's (who says
+ * it is said once, on the heading's line); a press shows the whole address as text; only then
+ * "Open in browser".
+ */
+function FactLink({ link }: { link: NonNullable<BoardFact["link"]> }) {
   const navigate = useBbNavigate();
   const [whole, setWhole] = useState(false);
   return (
     <span data-testid="oats-board-link" className="flex min-w-0 flex-col gap-1">
-      <button type="button" data-testid="oats-board-link-show" aria-expanded={whole} className="min-w-0 break-words text-left text-xs text-muted-foreground underline hover:text-foreground" onClick={() => setWhole((was) => !was)}>
-        {linkSaid(name, shown(link.host))}
+      <button type="button" data-testid="oats-board-link-show" aria-expanded={whole} className={`${TARGET} inline-flex min-w-0 items-center self-start break-all text-left text-xs text-muted-foreground hover:text-foreground`} onClick={() => setWhole((was) => !was)}>
+        {shown(link.host)}
       </button>
       {whole ? (
         <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -91,43 +95,66 @@ function Facts({ instance, board, detail, now }: { instance: string; board: Boar
   const history = detail.status === "read" && detail.detail.state === "ok" ? detail.detail.facts : null;
   return (
     <div data-testid="oats-board-facts" className="flex min-w-0 flex-col gap-1">
-      <InfoSection label={BOARD.facts} count={view.shown.length}>
+      {/* Who says the addresses below: once, on the heading's line, and only where a fact in view has one. */}
+      <InfoSection label={BOARD.facts} count={view.shown.length} trailing={view.shown.some((fact) => fact.link !== null) ? <span data-testid="oats-board-says" className="min-w-0 break-words text-xs text-muted-foreground">{saysSaid(name)}</span> : undefined}>
         <InfoList
           items={view.shown}
           getKey={(fact) => fact.key}
           limit={FACTS_SHOWN}
           renderItem={(fact) => {
             const values = sparkValues(history?.get(fact.key)?.history);
+            const value = `${shown(fact.value)}${fact.unit === null ? "" : ` ${shown(fact.unit)}`}`;
+            // A VALUE IS NEVER CUT. A short one is on bb's row, first, and the label after it is the
+            // part that gives way where the row is narrow; a long one has a line of its own under
+            // the label, whole, wrapping. The small line of its history stands after the value.
+            const long = value.length > LONG_VALUE;
+            const spark = values === null ? null : <Spark values={values} />;
             return (
-              <div data-testid="oats-board-fact" data-key={fact.key} className="flex min-w-0 flex-col gap-1">
+              <div data-testid="oats-board-fact" data-key={fact.key} data-long={long ? "" : undefined} className="flex min-w-0 flex-col">
                 <InfoListRow
-                  leading={values === null ? null : <Spark values={values} />}
+                  leading={null}
                   name={
-                    <span className="min-w-0 break-words">
-                      <span className="text-muted-foreground">{shown(fact.label)} · </span>
-                      <span data-testid="oats-board-fact-value" className="font-medium text-foreground">
-                        {shown(fact.value)}
-                        {fact.unit === null ? "" : ` ${shown(fact.unit)}`}
+                    long ? (
+                      <span data-testid="oats-board-fact-label" className="block min-w-0 truncate text-muted-foreground">
+                        {shown(fact.label)}
                       </span>
-                    </span>
+                    ) : (
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span data-testid="oats-board-fact-value" className="shrink-0 whitespace-nowrap font-medium text-foreground">
+                          {value}
+                        </span>
+                        {spark}
+                        <span data-testid="oats-board-fact-label" className="min-w-0 truncate text-muted-foreground">
+                          {shown(fact.label)}
+                        </span>
+                      </span>
+                    )
                   }
                   trailing={
-                    <span className="flex shrink-0 items-center gap-2">
+                    <span className="flex shrink-0 items-center gap-1">
                       <Age at={fact.at} now={now} />
-                      <button type="button" data-testid="oats-board-fact-hide" aria-label={`${BOARD.hide}: ${shown(fact.label)}`} className="text-muted-foreground hover:text-foreground" onClick={() => hide(fact.key, fact.value)} onKeyDown={(event) => event.stopPropagation()}>
+                      <button type="button" data-testid="oats-board-fact-hide" aria-label={`${BOARD.hide}: ${shown(fact.label)}`} className={`${TARGET} inline-flex min-w-8 items-center justify-center text-muted-foreground hover:text-foreground`} onClick={() => hide(fact.key, fact.value)} onKeyDown={(event) => event.stopPropagation()}>
                         ×
                       </button>
                     </span>
                   }
                 />
-                {fact.link === null ? null : <FactLink name={name} link={fact.link} />}
+                {long ? (
+                  <span className="flex min-w-0 items-start gap-1.5">
+                    <span data-testid="oats-board-fact-value" className="min-w-0 break-words text-sm font-medium text-foreground">
+                      {value}
+                    </span>
+                    {spark}
+                  </span>
+                ) : null}
+                {fact.link === null ? null : <FactLink link={fact.link} />}
               </div>
             );
           }}
         />
       </InfoSection>
       {view.hidden.length === 0 ? null : (
-        <button type="button" data-testid="oats-board-hidden" className="self-start text-xs text-muted-foreground underline hover:text-foreground" onClick={showAll}>
+        <button type="button" data-testid="oats-board-hidden" className={`${TARGET} inline-flex items-center self-start text-xs text-muted-foreground underline hover:text-foreground`} onClick={showAll}>
           {hiddenSaid(view.hidden.length)}
         </button>
       )}
@@ -160,7 +187,7 @@ function Context({ asked, detail }: { asked: BoardQuestion; detail: DetailRead }
           {BOARD.contextFailed}
         </Quiet>
       ) : (
-        <p data-testid="oats-board-context-text" className="m-0 whitespace-pre-wrap break-words text-sm text-foreground">
+        <p data-testid="oats-board-context-text" tabIndex={0} className="m-0 max-h-[33vh] overflow-y-auto whitespace-pre-wrap break-words text-sm text-foreground">
           {shownBlock(text)}
         </p>
       )}
@@ -266,7 +293,8 @@ function Options({ instance, asked, answering }: { instance: string; asked: Boar
   );
 }
 
-function Questions({ instance, board, claim, detail, now }: { instance: string; board: BoardData; claim: BoardClaim; detail: DetailRead; now: number }) {
+/** `inCard`: drawn inside a card that has a border and says the age already (the home's): no border and no age of its own. */
+function Questions({ instance, board, claim, detail, now, inCard = false }: { instance: string; board: BoardData; claim: BoardClaim; detail: DetailRead; now: number; inCard?: boolean }) {
   const answering = useAnswering(instance, claim);
   const [at, setAt] = useState<string | null>(null);
   const zone = useRef<HTMLElement>(null);
@@ -284,7 +312,8 @@ function Questions({ instance, board, claim, detail, now }: { instance: string; 
       data-testid="oats-board-questions"
       aria-label={BOARD.questions}
       tabIndex={-1}
-      className="flex min-w-0 flex-col gap-2 rounded-md border border-border p-3 text-sm text-foreground"
+      data-in-card={inCard ? "" : undefined}
+      className={`flex min-w-0 flex-col gap-2 text-sm text-foreground ${inCard ? "" : "rounded-md border border-border p-3"}`}
       onKeyDown={(event) => {
         if (total < 2 || event.target !== zone.current) return;
         if (event.key === "ArrowLeft") turn(-1);
@@ -295,10 +324,10 @@ function Questions({ instance, board, claim, detail, now }: { instance: string; 
     >
       <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {place === null ? null : <span data-testid="oats-board-place">{place}</span>}
-        <Age at={asked.since} now={now} />
+        {inCard ? null : <Age at={asked.since} now={now} />}
         {total < 2 ? null : (
           <span className="ml-auto flex shrink-0 items-center gap-1">
-            <button type="button" data-testid="oats-board-previous" aria-label={BOARD.previous} className="px-1 hover:text-foreground" onClick={() => turn(-1)}>
+            <button type="button" data-testid="oats-board-previous" aria-label={BOARD.previous} className={`${TARGET} inline-flex min-w-8 items-center justify-center hover:text-foreground`} onClick={() => turn(-1)}>
               ‹
             </button>
             <span aria-hidden="true" data-testid="oats-board-dots" className="flex items-center gap-1">
@@ -306,7 +335,7 @@ function Questions({ instance, board, claim, detail, now }: { instance: string; 
                 <span key={questionOccurrence(each)} data-current={dot === index ? "" : undefined} className={`inline-block size-1.5 rounded-full ${dot === index ? "bg-foreground" : "bg-muted-foreground/40"}`} />
               ))}
             </span>
-            <button type="button" data-testid="oats-board-next" aria-label={BOARD.next} className="px-1 hover:text-foreground" onClick={() => turn(1)}>
+            <button type="button" data-testid="oats-board-next" aria-label={BOARD.next} className={`${TARGET} inline-flex min-w-8 items-center justify-center hover:text-foreground`} onClick={() => turn(1)}>
               ›
             </button>
           </span>
@@ -333,7 +362,7 @@ export function BoardAsk({ instance }: { instance: string }) {
   const board = read.status === "ready" ? read.board : null;
   const detail = useBoardDetail(instance, board === null ? null : { ...board, facts: [] }, true);
   if (read.status !== "ready" || board === null || board.questions.length === 0) return null;
-  return <Questions instance={instance} board={board} claim={read.claim} detail={detail} now={now} />;
+  return <Questions instance={instance} board={board} claim={read.claim} detail={detail} now={now} inCard />;
 }
 
 /** The agent's board, read and drawn. `instance`: the agent's name; nothing else is asked of the place. */

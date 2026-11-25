@@ -23,8 +23,7 @@ export const BOARD = {
   noLongerAsked: "No longer asked. Nothing sent.",
   /** At the press, the agent waits on an approval of its harness: a message then would answer that. Nothing was sent. */
   approvalFirst: "It waits on an approval. Nothing sent.",
-  /** The palette command, and what it says where there is nothing to focus. */
-  focus: "Agent: questions and facts (focus)",
+  /** An agent with neither a question nor a fact, where its board is drawn all the same (an agent's page opened on it). */
   nothing: "This agent has no questions or facts to show.",
 } as const;
 
@@ -34,5 +33,7 @@ export const placeSaid = (index: number, total: number): string | null => (total
 export const hiddenSaid = (count: number): string => `${count} hidden · show`;
 /** Entries of the board that were out of the kernel's contract and are left out. */
 export const droppedSaid = (count: number): string => `${count} ${count === 1 ? "entry" : "entries"} of this agent's board could not be shown.`;
-/** A fact's address, as the agent's words: who says it, and the host alone until a person asks for the whole. */
-export const linkSaid = (name: string, host: string): string => `${name} says: ${host}`;
+/** Who says the addresses of the facts: once, on the Facts heading's line. Each fact then shows its address's host alone. */
+export const saysSaid = (name: string): string => `${name} says`;
+/** A fact's value (with its unit) longer than this has a line of its own, whole: a value is never cut. */
+export const LONG_VALUE = 24;

@@ -114,10 +114,11 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
         disabled={reading}
         onClick={() => {
           // "Needs input" is on the panel's Instance tab, and the panel keeps the tab a person left it
-          // on: turn it there first, whether the panel is open or opens now.
-          showPanelTab("instance");
+          // on: turn it there first, whether the panel is open or opens now. A question of the agent's
+          // BOARD is on the Board tab, with its options: there, for an agent whose board asks.
+          showPanelTab(agent.boardAsks === true ? "board" : "instance");
           openPanel();
-          focusNeedsInput();
+          if (agent.boardAsks !== true) focusNeedsInput();
         }}
       >
         Answer

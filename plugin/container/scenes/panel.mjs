@@ -89,7 +89,9 @@ function states(threads, model = RUNNING_MODEL, idleClaim = null) {
     Object.assign(row, { waitingOnYou: null, board: null }, change);
     return row;
   };
-  // the child: running, with a messaging id, an owning human and a sibling
+  // the child: running, with a messaging id, an owning human and a sibling. Its claim is cleared, and its board's
+  // question with it (as the kernel does: a question that is cleared takes its claim with it); its facts stay.
+  if (child.board) child.board = { ...child.board, questions: [] };
   Object.assign(child, { running: true, waitingOnYou: null, model, identityAddress: "oats.aweb.ai/panel-worktree-helper", attributedHuman: "Ana", siblingInstance: PARENT.instance });
   delete child.parentInstance;
   // its parent: the kernel cannot reach its session
@@ -198,6 +200,15 @@ async function open(page, viewport, threads, agent) {
     if (!viewport.mobile) whole = Boolean(await page.until(panelWhole, 30));
   }
   const shown = await page.until(`${visible(testId("oats-panel"))} && document.querySelector(${JSON.stringify(inPanel("oats-panel-name"))})?.getAttribute("title") === ${JSON.stringify(agent.instance)}`, 30);
+  // The panel OPENS on its Board tab where the agent's board holds an open question (the recorded child's does:
+  // scenes/board.mjs holds that): these scenes are of the Instance and Soul tabs, so the Instance tab is turned to,
+  // as a person would, where it is not the one shown.
+  if (shown) {
+    const instanceTab = `document.getElementById("oats-panel-page-tab-instance")`;
+    await page.until(`${instanceTab} !== null`, 10);
+    await page.evaluate(`(() => { const tab = ${instanceTab}; if (tab && tab.getAttribute("aria-selected") !== "true") tab.click(); })()`);
+    await page.until(`${instanceTab}?.getAttribute("aria-selected") === "true"`, 10);
+  }
   // At the phone's width, and for an agent with no thread, that is the agent's own page.
   const onPage = viewport.mobile || agent.thread === null;
   const name = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-name"))})?.getAttribute("title") ?? null`);
@@ -279,7 +290,8 @@ const first = [
       }
       await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
       const tabs = await page.evaluate(`[...document.querySelectorAll('${testId("oats-panel")} [role="tablist"][aria-label="Instance context"] [role="tab"]')].map((e) => e.innerText.trim() + ":" + e.getAttribute("aria-selected")).join(" ")`);
-      check(tabs === "Instance:true Soul:false", `${at} the tabs, named Instance context: Instance (selected), Soul`, tabs);
+      // The recorded child has a board: its tab is the first (the panel opened on it; `open` turned to Instance, which these scenes are of).
+      check(tabs === "Board:false Instance:true Soul:false", `${at} the tabs, named Instance context: Board (the agent has a board), Instance (selected), Soul`, tabs);
       {
         const read = await page.evaluate(textOf(inPanel("oats-panel-name")));
         check(read === "Panel worktree helper", `${at} the header names the instance as words`, read);

@@ -280,6 +280,37 @@ docker rm -f bb-plugin-dev
 `test/kernel-compat.test.ts` holds the plugin's OATS floor against theirs. A container made by hand
 needs them there too.
 
+## The busy workspace: every screen's worst case
+
+The stage `busy` (`live-ui.mjs`, `busyStage`) answers the ONE shared busy set
+(`test/fixtures/busy/`, its README: sixty agents four levels deep, 52 of them on bb threads, eleven
+asking, 24 souls, 37 automations, seven teams, five machines, names of sixty characters, and one
+agent with a long conversation and a full board). Every screen has a worst-case twin here, and it
+is the one judged first.
+
+**To add your screen's busy scene**: one more scene in your feature's file under `scenes/`, with
+`stage: "busy"`, and its images named `busy-<view>-<what>`. Nothing else: no fixture of your own, no
+stage of your own. The fake `oats` answers `status`, `souls`, `teams`, `server list`, `schedule
+list` and `trigger list` from the set for the stage's length. A verb the set does not hold (yours)
+answers its recorded fixture as always; if your screen needs a busy answer of it, the answer goes
+INTO the set, made by its generator from your recorded answer (`test/fixtures/busy/generate.mjs`,
+whose test holds that every busy row is a recorded row with only names, ids, times and relations
+varied): ask the set's owner, never shape one beside it.
+
+What the stage does when it starts, and says in a `NOTE BUSY` line with the seconds each took:
+the busy chat's thread is made and its ten turns are had with the mock model (`say.json`,
+`real/mock-anthropic.mjs`); every other busy agent on bb gets a thread of this run, an idle fork of
+a fixture thread titled as the provider titles it; a turn is held open on the thread of each agent
+the set says runs; the thread of each agent whose session was lost on bb is archived; the
+fixtures' own agents' threads are archived. When it leaves, the turns are answered, its threads
+are archived and the fixtures' are put back.
+
+A busy scene MEASURES what the worst-case rule asks and the screen does not yet do, and prints it
+as a `NOTE` (the roster's: rows, names cut, New agent on the screen): a number in every run's log,
+not a failure, until its mend is ruled.
+
+By hand: `LIVE_ONLY_STAGES=busy` runs the stage alone.
+
 ## Against a real kernel
 
 `real/` holds the other run: the plugin against a real OATS kernel and the bb session provider,

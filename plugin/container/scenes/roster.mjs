@@ -975,4 +975,77 @@ export default [
       await page.shot(`local-roster-${viewport.name}-sidebar`);
     },
   },
+  {
+    // THE BUSY WORKSPACE (test/fixtures/busy; the worst-case rule): the roster's own screens on it: the sidebar as a
+    // person finds it and with every parent opened, and the home. Sixty agents, four levels, eleven asking. Its images
+    // are the ones a change to these screens is judged by FIRST. What the rule asks of a busy screen and these do
+    // not yet do (the rule's open points: names cut alike, a parent that asks over a child that asks, eleven cards,
+    // New agent and the page links pushed off by the list) is MEASURED and said as a NOTE, not failed: they are
+    // proposals in the making, and a note keeps their numbers in every run's log.
+    stage: "busy",
+    name: "the busy workspace: the sidebar as loaded, with every parent opened, and at its foot; the home and what is under its first screen",
+    run: async ({ page, at, viewport, check }) => {
+      const rowsOf = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})]`;
+      // What a busy sidebar measures: its rows; the names that are cut and how many of those read the same as another
+      // as drawn; whether New agent and the first page link are on the screen without scrolling.
+      const measure = `(() => { const rows = ${rowsOf}; const names = rows.map((row) => row.querySelector(${JSON.stringify(testId("oats-row-name"))})); const cut = names.filter((name) => name && (name.scrollHeight > name.clientHeight + 1 || name.scrollWidth > name.clientWidth + 1)); const seen = (el) => { if (!el) return null; const box = el.getBoundingClientRect(); return box.height > 0 && box.top >= 0 && box.bottom <= window.innerHeight; }; const alike = (() => { const drawn = new Map(); for (const name of cut) { const key = name.innerText.slice(0, 30); drawn.set(key, (drawn.get(key) ?? 0) + 1); } return [...drawn.values()].filter((n) => n > 1).reduce((sum, n) => sum + n, 0); })(); return JSON.stringify({ rows: rows.length, cut: cut.length, cutAndSameFirst30: alike, asking: document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} [data-mark][data-state="needs-you"]`)}).length, newAgent: seen(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-new-agent")}`)})), pageLink: seen(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-pages")} a, ${testId("oats-sidebar")} ${testId("oats-pages")} button`)})) }); })()`;
+      const note = (what, measured) => console.log(`NOTE ${at} busy, ${what}: ${measured}`);
+      await page.goto("/");
+      check(await showSidebar(page, viewport, { fold: "asLoaded" }), `${at} the thread list is the OATS sidebar`);
+      // As a person finds it: the eighteen roots, every parent closed.
+      const loaded = await page.until(`(() => { const rows = ${rowsOf}; return rows.length === 18 ? String(rows.length) : ""; })()`, 60);
+      check(loaded === "18", `${at} the busy roster is drawn as it loads: eighteen roots (six efforts' leads and twelve agents alone), every parent closed`, loaded ?? (await page.evaluate(`String(${rowsOf}.length)`)));
+      note("the sidebar as loaded", await page.evaluate(measure));
+      await page.shot(`busy-${viewport.name}-sidebar`);
+      // Every parent opened, to the fourth level: sixty rows (less the ones whose thread is archived? no: a row with no listed thread is still a row).
+      await openParents(page);
+      const opened = await page.until(`${rowsOf}.length === 60 ? "60" : ""`, 30);
+      check(opened === "60", `${at} with every parent opened the roster is its sixty agents, four levels deep`, opened ?? (await page.evaluate(`String(${rowsOf}.length)`)));
+      note("the sidebar with every parent opened", await page.evaluate(measure));
+      await page.shot(`busy-${viewport.name}-sidebar-opened`);
+      // Its foot: what stands under the list (New agent, the page links), reached by scrolling the list to its end.
+      await page.evaluate(`(() => { const last = ${rowsOf}.at(-1); last?.scrollIntoView({ block: "end" }); const button = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-new-agent")}`)}); button?.scrollIntoView({ block: "center" }); return "1"; })()`);
+      note("the sidebar scrolled to New agent", await page.evaluate(measure));
+      await page.shot(`busy-${viewport.name}-sidebar-foot`);
+      // THE HOME: who asks first; then what is under the first screen.
+      await page.goto("/plugins/oats/home");
+      const cards = `document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)}).length`;
+      // The home crops what needs the person (its first eight) and offers the rest: both are shown.
+      const drawn = await page.until(`${cards} >= 8 ? String(${cards}) : ""`, 60);
+      check(Number(drawn) >= 8, `${at} the busy home draws the first cards of what needs the person`, drawn ?? (await page.evaluate(`String(${cards})`)));
+      note("the home", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: Math.round((document.scrollingElement?.scrollHeight ?? 0) / window.innerHeight * 10) / 10, cardsOnFirstScreen: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})].filter((card) => card.getBoundingClientRect().bottom <= window.innerHeight).length })`));
+      await page.shot(`busy-${viewport.name}-home`);
+      const more = `document.querySelector(${JSON.stringify(`${testId("oats-home")} ${testId("oats-home-needs-all")}, ${testId("oats-home-needs-all")}`)})`;
+      if (await page.evaluate(`Boolean(${more})`)) {
+        await page.evaluate(`${more}.click()`);
+        const all = await page.until(`${cards} >= 11 ? String(${cards}) : ""`, 30);
+        check(Number(all) >= 11, `${at} with the rest shown the busy home draws a card for each agent that asks (eleven) and each that runs outside OATS`, all ?? (await page.evaluate(`String(${cards})`)));
+        note("the home with every card", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: Math.round((document.scrollingElement?.scrollHeight ?? 0) / window.innerHeight * 10) / 10 })`));
+        await page.shot(`busy-${viewport.name}-home-all-cards`);
+      }
+      await page.evaluate(`(() => { const all = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})]; all.at(-1)?.scrollIntoView({ block: "start" }); return "1"; })()`);
+      await page.shot(`busy-${viewport.name}-home-after-the-cards`);
+      // THE BUSY CHAT: the thread of the agent with the long conversation and the full board (nine questions, twelve
+      // facts), as its conversation and with the agent's panel (at the phone's width: the agent's own page).
+      const chat = JSON.parse(readFileSync(new URL("../../test/fixtures/busy/chat.json", import.meta.url), "utf8"));
+      await page.goto("/");
+      await showSidebar(page, viewport, { fold: "asLoaded" });
+      const href = await page.until(`(() => { const row = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} a[href]`)})].find((a) => a.querySelector(${JSON.stringify(testId("oats-row-name"))})?.getAttribute("title")?.includes(${JSON.stringify(chat.agent)})); return row?.getAttribute("href") ?? ""; })()`, 30);
+      check(typeof href === "string" && href.includes("/threads/"), `${at} the busy chat's agent is a row of the sidebar, on its thread`, String(href));
+      if (typeof href !== "string" || href === "") return;
+      await page.goto(href);
+      const last = chat.turns.at(-1).agent.slice(0, 40);
+      const read = await page.until(`document.body.innerText.includes(${JSON.stringify(last)}) ? "1" : ""`, 60);
+      check(read === "1", `${at} the busy chat's thread shows its conversation, to its last answer`, "the last answer is not on the page");
+      await page.shot(`busy-${viewport.name}-chat`);
+      const chip = await page.until(visible(testId("oats-open-panel")), 30);
+      check(Boolean(chip), `${at} the busy chat's thread carries the OATS chip`);
+      if (!chip) return;
+      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-open-panel"))}).click()`);
+      const named = await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-panel-name")}`)})?.getAttribute("title") === ${JSON.stringify(chat.agent)} ? "1" : ""`, 30);
+      check(named === "1", `${at} the busy chat's panel names its agent`);
+      note("the busy chat's panel", await page.evaluate(`JSON.stringify({ screens: Math.round(((document.querySelector(${JSON.stringify(testId("oats-panel"))})?.scrollHeight ?? 0) / window.innerHeight) * 10) / 10 })`));
+      await page.shot(`busy-${viewport.name}-chat-panel`);
+    },
+  },
 ];

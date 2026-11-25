@@ -74,38 +74,697 @@
     },
     {
      "agent": "code-reviewer",
+     "kind": "persistent",
      "instance": "nightly-dependency-audit-probe",
      "home": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe",
-     "parentInstance": null,
-     "attributedHuman": "joan",
-     "identity": {
-      "alias": "nightly-dependency-audit-probe",
-      "team": "default:oats.aweb.ai"
+     "soulDir": "/abs/deployment/agents/code-reviewer/souls/ca07fa89ba7b",
+     "repo": "/abs/deployment/oats-real",
+     "work": "worktree",
+     "branch": "agents/nightly-dependency-audit-probe",
+     "base": {
+      "ref": "local//abs/real/src/oats-real",
+      "oid": "ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea"
      },
-     "identityAddress": null,
-     "capabilityMeta": {
-      "oats.aweb": {
-       "alias": "nightly-dependency-audit-probe",
-       "team": "default:oats.aweb.ai"
+     "harness": "claude",
+     "model": "claude-opus-5-5",
+     "modelFrom": "soul",
+     "launchFrom": "soul",
+     "launchAt": "local//abs/real/src/oats-real:souls/oats-expert/soul.yaml#/launch",
+     "launchDeclared": {
+      "harness": "claude",
+      "model": "claude-opus-5-5"
+     },
+     "yolo": true,
+     "parentInstance": null,
+     "relation": "child",
+     "relativeTo": "redesign-ui-lead",
+     "spawnOrigin": "operator",
+     "spawnedBy": null,
+     "policy": {
+      "childSpawns": {
+       "allowed": true,
+       "origin": {
+        "kind": "default",
+        "detail": "no spawn option: children allowed"
+       }
+      }
+     },
+     "capabilities": [
+      {
+       "id": "oats.bb",
+       "command": "bb",
+       "origin": "package:oats.bb@ce546bb879b58d1a16400eccc0e964c9487f4621",
+       "level": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "provenance": [
+        "package oats.bb vce546bb879b58d1a16400eccc0e964c9487f4621"
+       ],
+       "skills": [],
+       "hooks": [
+        "launch",
+        "retire"
+       ],
+       "trusted": true
+      },
+      {
+       "id": "oats.core",
+       "origin": "package:oats.framework@1.26.0",
+       "level": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe",
+       "settings": {},
+       "settingsOrigins": {},
+       "provenance": [
+        "package oats.framework v1.26.0"
+       ],
+       "skills": [
+        "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.agents/skills/oats-operate",
+        "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.agents/skills/oats-souls",
+        "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.agents/skills/oats-token-saving"
+       ],
+       "hooks": [
+        "spawn",
+        "launch",
+        "upgrade"
+       ],
+       "trusted": true
+      }
+     ],
+     "skills": [
+      {
+       "name": "oats-operate",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-souls",
+       "source": "module:oats.core"
+      },
+      {
+       "name": "oats-token-saving",
+       "source": "module:oats.core"
+      }
+     ],
+     "instructions": [
+      {
+       "source": "capability:oats.core",
+       "file": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.oats/modules/oats.core/injects/oats.md"
+      },
+      {
+       "source": "kernel:instance-boundary",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+      },
+      {
+       "source": "work-mode:worktree",
+       "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-worktree.md"
+      }
+     ],
+     "composition": {
+      "expected": [
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-operate",
+        "resolved": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-souls",
+        "resolved": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "skill-tree",
+        "source": "oats.core",
+        "declared": "skills/oats-token-saving",
+        "resolved": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.agents/skills",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "injection",
+        "source": "oats.core",
+        "declared": "injects/oats.md",
+        "resolved": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.oats/modules/oats.core/injects/oats.md",
+        "origin": "package:oats.framework@1.26.0",
+        "deferred": "materialize"
+       },
+       {
+        "type": "instruction-block",
+        "source": "capability:oats.core",
+        "declared": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.oats/modules/oats.core/injects/oats.md",
+        "resolved": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.oats/modules/oats.core/injects/oats.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "kernel:instance-boundary",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+       },
+       {
+        "type": "instruction-block",
+        "source": "work-mode:worktree",
+        "declared": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-worktree.md",
+        "resolved": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-worktree.md"
+       }
+      ],
+      "materialized": {
+       "skills": [
+        {
+         "name": "oats-operate",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.oats/modules/oats.core/skills/oats-operate"
+        },
+        {
+         "name": "oats-souls",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.oats/modules/oats.core/skills/oats-souls"
+        },
+        {
+         "name": "oats-token-saving",
+         "source": "module:oats.core",
+         "from": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.oats/modules/oats.core/skills/oats-token-saving"
+        }
+       ],
+       "instructions": [
+        {
+         "source": "capability:oats.core",
+         "file": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.oats/modules/oats.core/injects/oats.md"
+        },
+        {
+         "source": "kernel:instance-boundary",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/instance-boundary.md"
+        },
+        {
+         "source": "work-mode:worktree",
+         "file": "/abs/home/.npm-global/lib/node_modules/@awebai/oats/injects/work-worktree.md"
+        }
+       ],
+       "harnessPackages": [],
+       "harnessPosture": {
+        "oatsComposed": "skills via .claude/skills -> ../.agents/skills; instructions via CLAUDE.md -> AGENTS.md",
+        "ambient": [
+         "user skills",
+         "project and ancestor skills to the repository root",
+         "user and project plugins",
+         "user and project settings",
+         "user and ancestor CLAUDE.md"
+        ],
+        "why": "founder ruling: Claude Code's own global and per-repo configuration stays enabled — it is powerful, and the operator decides. An all-OATS setup is the way to opt out."
+       },
+       "canonicalSkillTree": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.agents/skills",
+       "skillAlias": {
+        "path": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe/.claude/skills",
+        "target": "../.agents/skills"
+       }
       }
      },
      "backend": "bb",
-     "tmux": null,
      "session": {
       "provider": "oats.bb",
       "threadId": "thr_busy_49"
      },
-     "running": null,
+     "launch": {
+      "version": 2,
+      "harness": "claude",
+      "launchConfig": null,
+      "launchConfigSource": null,
+      "executable": null,
+      "executableDeclared": null,
+      "executableResolvedFrom": "session provider bb",
+      "args": [],
+      "env": {},
+      "model": "claude-opus-5-5",
+      "yolo": true,
+      "hooks": {
+       "launch": {},
+       "env": {},
+       "contributions": [
+        {
+         "capability": "oats.bb",
+         "layer": null,
+         "level": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe",
+         "settings": {
+          "server": "http://127.0.0.1:38886",
+          "daemon": "http://127.0.0.1:38887",
+          "version": "0.50.1",
+          "cli": "bb",
+          "trust": "container"
+         },
+         "settingsOrigins": {
+          "/server": {
+           "kind": "manifest-default",
+           "at": "oats.json#/settings/server/default"
+          },
+          "/daemon": {
+           "kind": "manifest-default",
+           "at": "oats.json#/settings/daemon/default"
+          },
+          "/cli": {
+           "kind": "manifest-default",
+           "at": "oats.json#/settings/cli/default"
+          },
+          "/trust": {
+           "kind": "host",
+           "at": "oats-local.yaml#/settings/oats.bb"
+          },
+          "/version": {
+           "kind": "host",
+           "at": "oats-local.yaml#/settings/oats.bb"
+          }
+         },
+         "trust": {
+          "trusted": true,
+          "integrity": null
+         },
+         "launch": {},
+         "env": [],
+         "source": "launch-hook"
+        },
+        {
+         "capability": "oats.core",
+         "layer": null,
+         "level": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe",
+         "settings": {},
+         "settingsOrigins": {},
+         "trust": {
+          "trusted": true,
+          "integrity": null
+         },
+         "launch": {},
+         "env": [],
+         "source": "launch-hook"
+        }
+       ]
+      },
+      "prompt": {
+       "kind": "task-file",
+       "file": "TASK.md"
+      }
+     },
+     "createdAt": "2026-11-23T18:00:56.149Z",
+     "modules": [
+      {
+       "name": "oats.bb",
+       "from": {
+        "kind": "package",
+        "package": "oats.bb",
+        "version": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+        "commit": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+        "integrity": "sha256-d07c9b40f1c8b24e8f3ec9834902fb424ac1057e01d9b2b45bba3905c404a2c7",
+        "repoKey": "local//abs/real/oats-bb.git"
+       },
+       "commit": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+       "current": {
+        "commit": "ce546bb879b58d1a16400eccc0e964c9487f4621",
+        "version": "ce546bb879b58d1a16400eccc0e964c9487f4621"
+       },
+       "status": "current"
+      },
+      {
+       "name": "oats.core",
+       "from": {
+        "kind": "package",
+        "package": "oats.framework",
+        "version": "1.26.0",
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "integrity": "sha256-31c2e826c3afea507469afdbdc63cc24ea3f5a539b57acd52b551ab78f3a09e7",
+        "repoKey": "github.com/awebai/oats"
+       },
+       "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+       "current": {
+        "commit": "41d862390e8053a84d6ea61426fe635f5b224105",
+        "version": "1.26.0"
+       },
+       "status": "current"
+      }
+     ],
+     "workspace": {
+      "key": "local//abs/real/src/oats-real",
+      "name": "bbreal",
+      "deployment": "/abs/deployment",
+      "commit": "ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea",
+      "resolution": "87f8b33b005e749b5f9f75e2",
+      "standalone": false,
+      "soul": {
+       "id": "local//abs/real/src/oats-real#oats-expert",
+       "repoKey": "local//abs/real/src/oats-real",
+       "commit": "ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea"
+      },
+      "layers": {
+       "knowledge": null,
+       "messaging": null,
+       "tasks": null
+      }
+     },
+     "teams": [],
+     "defaultTeam": null,
+     "launched": true,
+     "startId": "4778f47f-96d1-41e8-bfb2-25d14a803739",
+     "launchPrompts": {
+      "status": "not-engaged",
+      "startId": "4778f47f-96d1-41e8-bfb2-25d14a803739",
+      "at": "2026-11-23T18:01:44.100Z"
+     },
+     "restarts": [
+      {
+       "startedAt": "2026-11-23T18:01:21.145Z",
+       "model": "claude-opus-5-5",
+       "reused": "new"
+      },
+      {
+       "startedAt": "2026-11-23T18:01:40.458Z",
+       "model": "claude-opus-5-5",
+       "reused": "new"
+      }
+     ],
+     "restartCount": 2,
+     "capabilityRuntime": [
+      {
+       "id": "oats.bb",
+       "level": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe",
+       "settings": {
+        "server": "http://127.0.0.1:38886",
+        "daemon": "http://127.0.0.1:38887",
+        "version": "0.50.1",
+        "cli": "bb",
+        "trust": "container"
+       },
+       "settingsOrigins": {
+        "/server": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/server/default"
+        },
+        "/daemon": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/daemon/default"
+        },
+        "/cli": {
+         "kind": "manifest-default",
+         "at": "oats.json#/settings/cli/default"
+        },
+        "/trust": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        },
+        "/version": {
+         "kind": "host",
+         "at": "oats-local.yaml#/settings/oats.bb"
+        }
+       },
+       "hooks": {
+        "launch": "node '/abs/deployment/agents/code-reviewer/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/0b47c668f48e/oats.bb/bin/oats-bb.mjs' launch-hook",
+        "retire": "node '/abs/deployment/agents/code-reviewer/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/0b47c668f48e/oats.bb/bin/oats-bb.mjs' retire-hook"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": true
+      },
+      {
+       "id": "oats.core",
+       "level": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe",
+       "settings": {},
+       "settingsOrigins": {},
+       "hooks": {
+        "spawn": "node '/abs/deployment/agents/code-reviewer/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/0b47c668f48e/oats.core/bin/oats-core.mjs' spawn",
+        "launch": "node '/abs/deployment/agents/code-reviewer/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/0b47c668f48e/oats.core/bin/oats-core.mjs' launch",
+        "upgrade": "node '/abs/deployment/agents/code-reviewer/instances/.oats-retirement/modules/3471e75f99338b9239d0ded69625c03c4e8b2510e16395758de5ec554bce4304/0b47c668f48e/oats.core/bin/oats-core.mjs' upgrade"
+       },
+       "requiredHooks": [],
+       "environment": [],
+       "environmentNamespaces": [],
+       "missingRequires": [],
+       "trust": {
+        "trusted": true,
+        "reason": "declared workspace package"
+       },
+       "executable": false
+      }
+     ],
+     "providers": {
+      "oats.bb": {
+       "server": "http://127.0.0.1:38886",
+       "daemon": "http://127.0.0.1:38887",
+       "version": "0.50.1",
+       "cli": "bb",
+       "trust": "container"
+      },
+      "oats.core": {}
+     },
+     "startedAt": "2026-11-23T18:01:40.458Z",
+     "identityAddress": null,
+     "attributedHuman": null,
+     "color": null,
+     "tmux": null,
+     "open": {
+      "label": "Open in bb",
+      "url": "http://127.0.0.1:38886/projects/proj_8izh5rh3rj/threads/thr_busy_49"
+     },
+     "moduleCopy": {
+      "runs": "kernel-copy",
+      "homeCopy": "same",
+      "differs": []
+     },
+     "running": true,
      "runtimeState": "unknown",
      "waitingOnYou": {
       "since": "2026-11-20T13:36:00.000Z",
-      "producer": "oats.core",
+      "producer": "oats.board",
       "reason": "attention",
-      "message": "The migration is ready to run against production.\nIt rewrites 48 000 invoices and cannot be undone once the old table is dropped.\nA dry run on the copy of last night took 41 minutes and changed nothing it should not.\nRun it now, wait for the Sunday window, or stop here?"
+      "message": "Which base branch?"
      },
-     "open": {
-      "label": "Open in bb",
-      "url": "http://127.0.0.1:38886/projects/proj_release/threads/thr_busy_49"
+     "board": {
+      "facts": [
+       {
+        "key": "pr-1",
+        "label": "Pull request",
+        "value": "#1842",
+        "unit": null,
+        "link": "https://github.com/oats-project/oats-bb/pull/42",
+        "at": "2026-11-20T13:36:00.000Z"
+       },
+       {
+        "key": "tests-2",
+        "label": "Tests",
+        "value": "17",
+        "unit": "failing",
+        "link": null,
+        "at": "2026-11-20T13:37:00.000Z"
+       },
+       {
+        "key": "pr-3",
+        "label": "Branch",
+        "value": "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-its-three-transitive-pins",
+        "unit": null,
+        "link": "https://github.com/oats-project/oats-bb/pull/42",
+        "at": "2026-11-20T13:38:00.000Z"
+       },
+       {
+        "key": "tests-4",
+        "label": "Checks",
+        "value": "3",
+        "unit": "failing",
+        "link": null,
+        "at": "2026-11-20T13:39:00.000Z"
+       },
+       {
+        "key": "pr-5",
+        "label": "Build",
+        "value": "#20418",
+        "unit": null,
+        "link": "https://github.com/oats-project/oats-bb/pull/42",
+        "at": "2026-11-20T13:40:00.000Z"
+       },
+       {
+        "key": "tests-6",
+        "label": "Advisories",
+        "value": "9",
+        "unit": "failing",
+        "link": null,
+        "at": "2026-11-20T13:41:00.000Z"
+       },
+       {
+        "key": "pr-7",
+        "label": "Reviewer",
+        "value": "release-notes-drafting-helper",
+        "unit": null,
+        "link": "https://github.com/oats-project/oats-bb/pull/42",
+        "at": "2026-11-20T13:42:00.000Z"
+       },
+       {
+        "key": "tests-8",
+        "label": "Lockfile checks",
+        "value": "14",
+        "unit": "failing",
+        "link": null,
+        "at": "2026-11-20T13:43:00.000Z"
+       },
+       {
+        "key": "pr-9",
+        "label": "Estimated time left for the whole upgrade across every service",
+        "value": "about three working days",
+        "unit": null,
+        "link": "https://github.com/oats-project/oats-bb/pull/42",
+        "at": "2026-11-20T13:44:00.000Z"
+       },
+       {
+        "key": "tests-10",
+        "label": "End-to-end tests across every service and both mobile clients",
+        "value": "41",
+        "unit": "failing",
+        "link": null,
+        "at": "2026-11-20T13:45:00.000Z"
+       },
+       {
+        "key": "pr-11",
+        "label": "Blocked on",
+        "value": "the payments team's answer",
+        "unit": null,
+        "link": "https://github.com/oats-project/oats-bb/pull/42",
+        "at": "2026-11-20T13:46:00.000Z"
+       },
+       {
+        "key": "tests-12",
+        "label": "Audits",
+        "value": "2",
+        "unit": "failing",
+        "link": null,
+        "at": "2026-11-20T13:47:00.000Z"
+       }
+      ],
+      "questions": [
+       {
+        "id": "q1",
+        "question": "Which base branch?",
+        "options": [
+         "main: the default",
+         "release: the 0.1 line"
+        ],
+        "hasContext": false,
+        "since": "2026-11-20T13:36:00.000Z"
+       },
+       {
+        "id": "q2",
+        "question": "Upgrade the payment client across a major version now, or pin it until the release?",
+        "options": [
+         "main: the default",
+         "release: the 0.1 line"
+        ],
+        "hasContext": false,
+        "since": "2026-11-20T13:47:00.000Z"
+       },
+       {
+        "id": "q3",
+        "question": "Who signs off the licence change in the image library?",
+        "options": [
+         "main: the default",
+         "release: the 0.1 line"
+        ],
+        "hasContext": false,
+        "since": "2026-11-20T13:58:00.000Z"
+       },
+       {
+        "id": "q4",
+        "question": "The migration is ready to run against production.\nIt rewrites 48 000 invoices and cannot be undone once the old table is dropped.\nA dry run on the copy of last night took 41 minutes and changed nothing it should not.\nRun it now, wait for the Sunday window, or stop here?",
+        "options": [
+         "main: the default",
+         "release: the 0.1 line"
+        ],
+        "hasContext": false,
+        "since": "2026-11-20T14:09:00.000Z"
+       },
+       {
+        "id": "q5",
+        "question": "Drop support for the old runtime in this pass?",
+        "options": [
+         "main: the default",
+         "release: the 0.1 line"
+        ],
+        "hasContext": false,
+        "since": "2026-11-20T14:20:00.000Z"
+       },
+       {
+        "id": "q6",
+        "question": "Open one pull request per service, or one for all fourteen?",
+        "options": [
+         "main: the default",
+         "release: the 0.1 line"
+        ],
+        "hasContext": false,
+        "since": "2026-11-20T14:31:00.000Z"
+       },
+       {
+        "id": "q7",
+        "question": "The advisory on the archive reader has no fix yet: accept it with a note, or replace the library?",
+        "options": [
+         "main: the default",
+         "release: the 0.1 line"
+        ],
+        "hasContext": false,
+        "since": "2026-11-20T14:42:00.000Z"
+       },
+       {
+        "id": "q8",
+        "question": "Run the audit nightly from now on?",
+        "options": [
+         "main: the default",
+         "release: the 0.1 line"
+        ],
+        "hasContext": false,
+        "since": "2026-11-20T14:53:00.000Z"
+       },
+       {
+        "id": "q9",
+        "question": "Tell the mobile team before or after the lockfiles change?",
+        "options": [
+         "main: the default",
+         "release: the 0.1 line"
+        ],
+        "hasContext": false,
+        "since": "2026-11-20T15:04:00.000Z"
+       }
+      ]
+     },
+     "soul": {
+      "repoKey": "local//abs/real/src/oats-real",
+      "commit": "ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea",
+      "current": "bd67121a08cf55224dd4053449dd7220e54ba643",
+      "status": "moved"
      }
     }
    ]
@@ -247,7 +906,7 @@
       "since": "2026-11-19T09:14:00.000Z",
       "producer": "oats.core",
       "reason": "attention",
-      "message": "Green light at 9f2e1c? Second reader done. (customer onboarding redesign for enterprise tier helper 1)"
+      "message": "The migration is ready to run against production.\nIt rewrites 48 000 invoices and cannot be undone once the old table is dropped.\nA dry run on the copy of last night took 41 minutes and changed nothing it should not.\nRun it now, wait for the Sunday window, or stop here?"
      },
      "open": {
       "label": "Open in bb",
@@ -608,12 +1267,12 @@
      "waitingOnYou": {
       "since": "2026-11-20T16:41:00.000Z",
       "producer": "oats.core",
-      "reason": "permission",
-      "message": "needs your permission to use Bash (api deprecation sweep developer)"
+      "reason": "attention",
+      "message": "Green light at 9f2e1c? Second reader done. (api deprecation sweep developer)"
      },
      "open": {
       "label": "Open in bb",
-      "url": "http://127.0.0.1:38886/projects/proj_ci/threads/thr_busy_54"
+      "url": "http://127.0.0.1:38886/projects/proj_release/threads/thr_busy_54"
      }
     }
    ]
@@ -2828,7 +3487,7 @@
       "since": "2026-11-20T04:58:00.000Z",
       "producer": "oats.core",
       "reason": "permission",
-      "message": "needs your permission to use Bash (mobile offline sync conflict resolution helper 1)"
+      "message": "The migration is ready to run against production.\nIt rewrites 48 000 invoices and cannot be undone once the old table is dropped.\nA dry run on the copy of last night took 41 minutes and changed nothing it should not.\nRun it now, wait for the Sunday window, or stop here?"
      },
      "open": {
       "label": "Open in bb",
@@ -2960,12 +3619,12 @@
      "waitingOnYou": {
       "since": "2026-11-20T20:23:00.000Z",
       "producer": "oats.core",
-      "reason": "question",
-      "message": "Keep depth 6 and sweep lr, or try depth 7? (design token export developer)"
+      "reason": "permission",
+      "message": "needs your permission to use Bash (design token export developer)"
      },
      "open": {
       "label": "Open in bb",
-      "url": "http://127.0.0.1:38886/projects/proj_research/threads/thr_busy_60"
+      "url": "http://127.0.0.1:38886/projects/proj_ci/threads/thr_busy_60"
      }
     }
    ]
@@ -3168,7 +3827,7 @@
       "since": "2026-11-20T07:26:00.000Z",
       "producer": "oats.core",
       "reason": "question",
-      "message": "Keep depth 6 and sweep lr, or try depth 7? (mobile offline sync conflict resolution developer 3)"
+      "message": "The migration is ready to run against production.\nIt rewrites 48 000 invoices and cannot be undone once the old table is dropped.\nA dry run on the copy of last night took 41 minutes and changed nothing it should not.\nRun it now, wait for the Sunday window, or stop here?"
      },
      "open": {
       "label": "Open in bb",

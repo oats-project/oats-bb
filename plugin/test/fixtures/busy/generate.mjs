@@ -69,10 +69,40 @@ const ALONE = ["nightly-dependency-audit", "release-notes-drafting", "flaky-test
 const SOUL_WORDS = ["platform", "payments", "search", "mobile", "compliance", "growth", "data", "design", "support", "infrastructure", "security", "billing", "documentation", "release", "research"];
 const iso = (minutes) => new Date(Date.UTC(2026, 10, 19, 8, 0, 0) + minutes * 60_000).toISOString();
 const QUESTION = ["The migration is ready to run against production.", "It rewrites 48 000 invoices and cannot be undone once the old table is dropped.", "A dry run on the copy of last night took 41 minutes and changed nothing it should not.", "Run it now, wait for the Sunday window, or stop here?"].join("\n");
+// The busy chat's board: twelve facts [label, value] and nine questions (the fourth is four lines long).
+// (The recorded facts are two, taken in turn: one with a link, one counted "failing": the made-up labels follow them.)
+const BOARD_FACTS = [["Pull request", "#1842"], ["Tests", "17"], ["Branch", "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-its-three-transitive-pins"], ["Checks", "3"], ["Build", "#20418"], ["Advisories", "9"], ["Reviewer", "release-notes-drafting-helper"], ["Lockfile checks", "14"], ["Estimated time left for the whole upgrade across every service", "about three working days"], ["End-to-end tests across every service and both mobile clients", "41"], ["Blocked on", "the payments team's answer"], ["Audits", "2"]];
+const BOARD_QUESTIONS = [
+  "Which base branch?",
+  "Upgrade the payment client across a major version now, or pin it until the release?",
+  "Who signs off the licence change in the image library?",
+  QUESTION,
+  "Drop support for the old runtime in this pass?",
+  "Open one pull request per service, or one for all fourteen?",
+  "The advisory on the archive reader has no fix yet: accept it with a note, or replace the library?",
+  "Run the audit nightly from now on?",
+  "Tell the mobile team before or after the lockfiles change?",
+];
+// THE BUSY CHAT (chat.json): a long conversation with the agent that holds the full board: many turns, long messages,
+// paragraphs, a list, a code block. A conversation is no answer of the kernel's: nothing of it is recorded, and all of
+// it is made up here. The live stage `busy` has it with the mock model, turn by turn (each `agent` is what the mock
+// answers to `you`). Every `you` differs from every other: the mock finds its answer by it.
+const CHAT = [
+  ["Audit the dependencies of every service in this repository and tell me what is behind, what has an open advisory, and what you would upgrade first.", "I went through all fourteen lockfiles. Here is where things stand.\n\n**Behind.** 63 packages are behind their latest release. Most are a patch or a minor version away and upgrade without a change of ours. Nine are a major version behind, and three of those are in the request path of the payments service, which is where I would be most careful.\n\n**Open advisories.** Nine, in five packages:\n\n- the payment client (two, both fixed in its next major version)\n- the archive reader (one, no fix published yet)\n- the image library (three, fixed in a release that also changes its licence)\n- the template engine (two, fixed in a patch release)\n- the date parser (one, fixed in a patch release)\n\n**What I would upgrade first.** The template engine and the date parser: both are patch releases, both close advisories, and neither changes an interface we call. After that the payment client, which is the largest piece of work and the one that matters most."],
+  ["Start with the two patch releases. Show me the change before you commit anything.", "Both are one line each in four lockfiles. This is the whole change for the template engine in the billing service; the other three services read the same.\n\n```diff\n--- a/services/billing/package.json\n+++ b/services/billing/package.json\n@@ -31,7 +31,7 @@\n     \"dependencies\": {\n       \"date-parser\": \"4.2.0\",\n-      \"template-engine\": \"7.1.3\",\n+      \"template-engine\": \"7.1.9\",\n       \"payment-client\": \"2.18.4\"\n     }\n```\n\nI ran the unit suites of the four services against it: 2 318 tests, all passing, in a little under six minutes. Nothing is committed yet."],
+  ["Good. Commit those and open the pull request. Then tell me what the payment client's major version changes for us.", "Committed and opened as pull request #1842; the board has its number and the state of its checks.\n\nThe payment client's next major version changes three things we depend on.\n\nFirst, every amount is an integer of the currency's smallest unit; today we pass decimals as strings in eleven places, and each of them needs a conversion that rounds the way the ledger does. I would write that conversion once, with the ledger's own rounding tests run against it, and call it from all eleven.\n\nSecond, a retried request must carry an idempotency key of ours. The client used to make one itself; it no longer does. Our retry wrapper has to make the key before the first attempt and reuse it, or a timeout followed by a retry can charge a card twice.\n\nThird, webhooks are verified with a new signature scheme, and the old one stops being accepted ninety days after the upgrade. Both can be accepted side by side during that window."],
+  ["How long is that, honestly? And what could go wrong that the tests would not catch?", "About three working days for the change and its tests, and I would not compress it.\n\nWhat the tests would not catch:\n\n1. A rounding difference on a currency with no minor unit or with three decimals. Our fixtures cover two-decimal currencies almost exclusively. I would add cases for each kind before touching the code.\n2. A retry that crosses a deploy. The key is made in memory today; if the process restarts between the first attempt and the retry, the key is gone and the retry is a new charge. It has to be stored with the payment attempt.\n3. A webhook that arrives signed the old way after the window closes, from an account that was never migrated. Nothing in our suite plays the provider's side of that.\n\nThe second is the one I would lose sleep over."],
+  ["Agreed on the second. Write the key with the payment attempt, in the same transaction. What about the archive reader, with no fix published?", "The advisory on the archive reader is a path that escapes the directory it unpacks into when an archive holds a crafted entry. We unpack archives in exactly one place: the import of a customer's export, in the support tools, run by a person of ours on a file a customer sent.\n\nThere are two ways forward and I have put the choice on the board, because it is yours:\n\n- **Accept it with a note** until a fix is published. The exposure is one internal tool, and I can add a check of every entry's path before it is unpacked, which closes this hole whatever the library does.\n- **Replace the library** with the one the build tooling already uses. It has no open advisory, but its interface differs and the import would need rewriting: about a day, with a real risk of breaking an import nobody has a test for.\n\nI would take the first, with the check."],
+  ["Take the first, with the check. Now the image library and its licence.", "The fixed release of the image library moves from a permissive licence to one that requires the source of a distributed work that links to it to be offered on request. We link to it in the mobile clients, which we distribute, and in the thumbnail service, which we do not.\n\nThat is a question for whoever signs off licences here, not for me, and it is on the board as one. What I can say about the code: the three advisories are all in the decoder for one image format, and we could turn that format off in the build of the version we have today. That closes the three advisories without the upgrade and without the licence, at the cost of not reading that format, which last month was 0.3 % of uploads."],
+  ["Turn the format off in the mobile builds for now, keep it in the thumbnail service, and leave the licence question on the board.", "Done in both mobile builds, behind the build flag that already selects decoders, so it is one line each and reverts the same way. An upload in that format now gets the message we already show for a format we do not read.\n\nThe thumbnail service keeps the format and is upgraded to the fixed release: it is not distributed, so the licence asks nothing of us there. Its suite passes, and I compared the thumbnails of the two hundred sample images before and after, byte for byte: 197 are identical, and the three that differ are the three whose decoding the fix changes."],
+  ["Where are we overall? Short.", "Short:\n\n- Patch releases: merged-ready in #1842, checks green but for one flaky test I have rerun twice.\n- Payment client: design agreed, key stored with the attempt; not started. Three days.\n- Archive reader: accepted with a path check; the check is written and tested.\n- Image library: format off in mobile, upgraded in thumbnails; licence question open on the board.\n- Everything else behind: 51 packages, patch and minor, in one pull request per service unless you would rather have one for all fourteen. That is on the board too.\n\nNine questions are open on the board. The first one blocks me now: which base branch."],
+  ["Which test is flaky?", "`ledger › closes a period that spans a daylight-saving change`. It fails when the suite starts within a minute of the hour in the build machine's zone: the test builds its period from the current time instead of a fixed one. It failed once in the first run and passed in the two after it.\n\nIt is not caused by this change, and I have not touched it. I would fix it in a pull request of its own, by giving the test a fixed clock, so that #1842 stays the two patch releases and nothing else."],
+  ["Yes, its own pull request. Keep going on the rest while I look at the board.", "Understood. While you look at the board I am doing what needs none of its answers: the fixed clock for the ledger test, and the rounding cases for currencies with no minor unit and with three decimals, written against the code as it is today so that they pass before the payment client changes anything.\n\nI will stop at the payment client itself until the base branch is settled."],
+];
 const LONG = (what) => `${what}: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone`;
 
 export function build() {
-  const made = { agents: [], souls: [], schedules: [], triggers: [], teams: [], servers: [], runs: [] };
+  const made = { agents: [], souls: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], facts: [], questions: [] };
 
   // ---- souls: the recorded souls, each multiplied (24) ----
   const soulsDoc = recorded("workspace/souls.json");
@@ -97,6 +127,7 @@ export function build() {
   const outside = rowsOf(recorded("outside/status-outside.json"))[0];
   const lostBb = rowsOf(recorded("outside/status-archived-while-running.json"))[0];
   const tmuxLost = { row: recorded("lifecycle/tmux-row-lost.json"), soul: recorded("lifecycle/tmux-row-lost.json").agent };
+  const boardRow = rowsOf(recorded("panel/status-board.json")).find((each) => each.row.board !== undefined && each.row.board !== null);
   const MODELS = {
     ask: ["release-070-maintainer", "flaky-ci-developer", "ranker-v3-probe"].map((name) => byName.get(name)),
     work: [byName.get("redesign-ui-lead"), byName.get("desktop-mockups-developer")],
@@ -109,6 +140,8 @@ export function build() {
     lost: [lostBb],
     tmux: [byName.get("kernel-fix-developer")],
     "tmux-lost": [tmuxLost],
+    // THE BUSY CHAT's agent: the recorded row with a board (panel/status-board.json), its board multiplied (below).
+    board: [boardRow],
   };
   // Who there is: six efforts of eight (a lead, three developers, a helper under each, a reviewer under the first
   // helper: four levels) and twelve agents alone. [name, parent, kind]
@@ -118,7 +151,7 @@ export function build() {
     developer: ["ask", "work", "idle", "work", "idle", "stopped", "ask", "work", "tmux", "idle", "work", "lost", "work", "idle", "ask", "outside", "work", "tmux-lost"],
     helper: ["ask", "idle", "tmux", "work", "idle", "failed", "idle", "ask", "tmux-lost", "idle", "work", "stopped", "ask", "idle", "tmux", "lost", "idle", "work"],
     reviewer: ["ask", "idle", "tmux-lost", "work", "idle", "failed"],
-    alone: ["ask", "work", "idle", "stopped", "tmux", "ask", "outside", "idle", "tmux-lost", "lost", "stopped", "ask"],
+    alone: ["board", "work", "idle", "stopped", "tmux", "ask", "outside", "idle", "tmux-lost", "lost", "stopped", "ask"],
   };
   TOPICS.forEach((topic, effort) => {
     const lead = `${topic}-lead`;
@@ -146,14 +179,34 @@ export function build() {
     const thread = model.row.session?.threadId;
     if (typeof thread === "string") swaps.push([thread, `thr_busy_${String(n + 1).padStart(2, "0")}`]);
     const set = [[["agent"], soul], [["parentInstance"], parent]];
-    if (kind === "ask") set.push([["waitingOnYou", "since"], iso(n * 37)], [["waitingOnYou", "message"], n % 4 === 0 ? QUESTION : `${model.row.waitingOnYou.message} (${instance.replace(/-/g, " ")})`]);
+    if (kind === "ask") set.push([["waitingOnYou", "since"], iso(n * 37)], [["waitingOnYou", "message"], n % 2 === 0 ? QUESTION : `${model.row.waitingOnYou.message} (${instance.replace(/-/g, " ")})`]);
     if (kind === "failed") set.push([["running"], false], [["runtimeState"], "shell"]);
+    if (kind === "board") {
+      // A FULL BOARD: the recorded facts and the recorded question, multiplied: twelve facts, nine open questions (one
+      // of four lines). The claim follows the board, as the kernel's does: it says the oldest question.
+      const board = model.row.board;
+      const facts = Array.from({ length: 12 }, (_, f) => {
+        const from = board.facts[f % board.facts.length];
+        const [label, value] = BOARD_FACTS[f];
+        const fact = vary(from, [], [[["key"], `${from.key}-${f + 1}`], [["label"], label], [["value"], value], [["at"], iso(n * 37 + f)]]);
+        made.facts.push(fact);
+        return fact.row;
+      });
+      const questions = BOARD_QUESTIONS.map((question, q) => {
+        const from = board.questions[0];
+        const asked = vary(from, [], [[["id"], `q${q + 1}`], [["question"], question], [["since"], iso(n * 37 + q * 11)]]);
+        made.questions.push(asked);
+        return asked.row;
+      });
+      set.push([["board"], { ...copy(board), facts, questions }], [["waitingOnYou", "since"], questions[0].since], [["waitingOnYou", "message"], questions[0].question]);
+    }
     const row = vary(model.row, swaps, set);
     made.agents.push({ ...row, kind, shaped: kind === "failed" ? ["running", "runtimeState"] : [] });
     if (!groups.has(soul)) groups.set(soul, { ...copy(status.agents[0]), name: soul, instances: [] });
     groups.get(soul).instances.push(row.row);
   });
-  const busyStatus = { ...copy(status), features: copy(recorded("outside/status-outside.json").features), agents: [...groups.values()] };
+  const chatAgent = made.agents.find((each) => each.kind === "board").row.instance;
+  const busyStatus = { ...copy(status), features: copy(recorded("panel/status-board.json").features), agents: [...groups.values()] };
 
   // ---- automations: the recorded schedules (25) and triggers (12); five fail; some hold fifty runs ----
   const scheduleDoc = recorded("automations/schedule-list.json");
@@ -218,7 +271,7 @@ export function build() {
   });
   const servers = { ...copy(serversDoc), servers: made.servers.map((each) => each.row) };
 
-  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers }, made };
+  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

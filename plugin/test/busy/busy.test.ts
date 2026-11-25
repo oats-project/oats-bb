@@ -13,7 +13,7 @@ import { build, restored } from "../fixtures/busy/generate.mjs";
 
 const BUSY = join(fileURLToPath(new URL("..", import.meta.url)), "fixtures", "busy");
 type Made = { row: Record<string, unknown>; from: Record<string, unknown>; swaps: [string, string][]; was: [string[], unknown][]; kind?: string; shaped?: string[] };
-const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs", Made[]> };
+const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions", Made[]> };
 
 describe("the busy set", () => {
   it("is exactly what its generator makes: the same files, byte for byte, and no other", async () => {
@@ -32,12 +32,14 @@ describe("the busy set", () => {
         rows += 1;
       }
     }
-    expect(rows).toBeGreaterThan(300); // 60 agents, 24 souls, 37 automations, 200 runs, 7 teams, 5 machines
+    expect(rows).toBeGreaterThan(350); // 60 agents, 24 souls, 37 automations, 200 runs, 7 teams, 5 machines, 12 facts, 9 questions
   });
 
   it("what is varied is a name, an id, a time, a relation or a text, and nothing else; the ONE shaped kind is said", () => {
     const ALLOWED: Record<string, string[]> = {
-      agents: ["agent", "parentInstance", "waitingOnYou.since", "waitingOnYou.message", "running", "runtimeState"],
+      agents: ["agent", "parentInstance", "waitingOnYou.since", "waitingOnYou.message", "running", "runtimeState", "board"],
+      facts: ["key", "label", "value", "at"],
+      questions: ["id", "question", "since"],
       souls: ["description"],
       schedules: ["cron", "description", "recentRuns", "history.stored"],
       triggers: ["description"],
@@ -66,6 +68,17 @@ describe("the busy set", () => {
     expect(Math.max(...agents.map((agent) => depth(agent.instance)))).toBe(3); // four levels
     expect(agents.filter((agent) => agent.parent !== null && !parent.has(agent.parent))).toEqual([]);
     expect(agents.filter((agent) => agent.waiting !== null)).toHaveLength(11);
+    // THE BUSY CHAT: one agent on bb holds a full board (twelve facts; nine questions, one of four lines) and a long conversation.
+    const raws = (files["status.json"] as { agents: { instances: { instance: string; backend: string; board?: { facts: { key: string }[]; questions: { id: string; question: string }[] } | null; waitingOnYou?: { message: string } | null }[] }[] }).agents.flatMap((group) => group.instances);
+    const boards = raws.filter((row) => row.board);
+    expect(boards.map((row) => [row.backend, row.board!.facts.length, new Set(row.board!.facts.map((fact) => fact.key)).size, row.board!.questions.length, new Set(row.board!.questions.map((question) => question.id)).size, row.board!.questions.filter((question) => question.question.split("\n").length === 4).length])).toEqual([["bb", 12, 12, 9, 9, 1]]);
+    expect(boards[0]!.waitingOnYou?.message).toBe(boards[0]!.board!.questions[0]!.question); // the claim says the oldest question, as the kernel's does
+    const chat = files["chat.json"] as { agent: string; turns: { you: string; agent: string }[] };
+    expect(chat.agent).toBe(boards[0]!.instance);
+    expect(chat.turns.length).toBeGreaterThanOrEqual(10);
+    expect(new Set(chat.turns.map((turn) => turn.you)).size).toBe(chat.turns.length); // the mock model finds an answer by its message
+    expect(chat.turns.filter((turn) => chat.turns.some((other) => other !== turn && other.you.includes(turn.you)))).toEqual([]);
+    expect([chat.turns.some((turn) => turn.agent.includes("```")), chat.turns.some((turn) => /^- /m.test(turn.agent)), chat.turns.some((turn) => /^1\. /m.test(turn.agent)), chat.turns.filter((turn) => turn.agent.split("\n\n").length >= 3).length >= 5]).toEqual([true, true, true, true]);
     expect(agents.filter((agent) => agent.runtimeState === "shell").length).toBeGreaterThanOrEqual(3);
     expect(agents.filter((agent) => agent.sessionEnd === "lost").length).toBeGreaterThanOrEqual(5);
     expect(agents.filter((agent) => agent.outsideOats !== undefined).length).toBeGreaterThanOrEqual(2);

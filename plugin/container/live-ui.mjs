@@ -544,6 +544,9 @@ const BUILT_IN = {
     },
     leave: async () => pages(ALL_PAGES),
   },
+  // THE BUSY WORKSPACE (test/fixtures/busy; the worst-case rule): every feature's worst-case scenes run here, on the
+  // one shared set (`busyStage`, below).
+  busy: busyStage(),
   // The fake oats is removed for the length of the stage, then put back.
   "no-oats": {
     label: "A14",
@@ -556,6 +559,146 @@ const BUILT_IN = {
     },
   },
 };
+
+/**
+ * THE STAGE "busy": the fake oats answers the busy set (test/fixtures/busy: about sixty agents four levels deep, 24
+ * souls, 37 automations, seven teams, five machines: its README), for every feature's worst-case scenes.
+ *
+ * The busy agents on a bb thread each stand on a REAL thread of this run (a busy workspace is mostly agents on bb: a
+ * row with no thread standing for an agent that has one would be a picture of another problem). The stage MAKES
+ * them. ONE has THE BUSY CHAT (the set's chat.json: a long conversation, with the agent that holds the full board): a
+ * thread of its own, whose turns the mock model answers with the set's long answers (its say.json), one after the
+ * other. Each of the others is an idle FORK of one healthy fixture thread (`bb thread fork --title`, with no prompt: no turn is
+ * run and no harness is started for it), titled as the provider titles that agent's thread. Then, as the set says:
+ * - an agent whose session was lost on bb has its thread ARCHIVED (the recorded row is of a thread a person archived);
+ * - an agent the kernel says runs has a turn HELD OPEN on its thread (bb, not the kernel, says that an agent on a
+ *   thread works: the same hold as the fixtures' two, with a hold of its own), so that the screen says "Working".
+ * What it costs is said (a NOTE: the seconds, the threads made). When the stage leaves, the held turns are answered
+ * and every thread it made is archived: the stages after it see none of them.
+ */
+const BUSY_HOLD = "live-ui-busy";
+const BUSY_HOLD_FILE = join(homedir(), "mock", "hold", BUSY_HOLD);
+const BUSY_SAY_FILE = join(homedir(), "mock", "say.json");
+function busyStage() {
+  const made = []; // the threads this stage made: { instance, id }
+  const away = []; // the fixtures' own threads it archived for its length
+  const set = () => JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/status.json"), "utf8"));
+  const rowsOf = (status) => status.agents.flatMap((group) => group.instances);
+  const statusOf = (id, all) => all.find((thread) => thread.id === id)?.status ?? "absent";
+  return {
+    label: "BUSY",
+    // The fixtures' own agents are not of this workspace: their threads are archived for the stage's length (but the
+    // one that is no agent's: a person has threads of their own), and no turn is held on an archived thread.
+    tellsAThread: true,
+    enter: async ({ threads }) => {
+      const started = Date.now();
+      const status = set();
+      const onBb = rowsOf(status).filter((row) => row.backend === "bb" && typeof row.session?.threadId === "string");
+      const source = threads.get("thr_harvest"); // an idle fixture thread: its one turn was answered
+      const list = () => listOf(bbJson("thread", "list"), "threads");
+      let existing = list();
+      // THE BUSY CHAT: its thread is made by its first message and told the rest, each turn answered before the next.
+      const chat = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/chat.json"), "utf8"));
+      const chatTitle = providerTitle(chat.agent);
+      if (!existing.some((thread) => thread.title === chatTitle)) {
+        const project = listOf(bbJson("project", "list"), "projects")[0];
+        const root = (project.sources ?? []).find((each) => each.path)?.path;
+        atomicWrite(BUSY_SAY_FILE, JSON.stringify(Object.fromEntries(chat.turns.map((turn) => [turn.you, turn.agent]))));
+        // A turn is answered when the thread's last output is that turn's answer and bb shows it idle (never by
+        // "idle" alone: a thread just told is still idle for a moment).
+        const answered = async (id, turn) => {
+          const deadline = Date.now() + 90_000;
+          const read = () => (tell("thread", "output", id).includes(turn.agent.slice(0, 60)) ? statusNow(id) : "not answered yet");
+          let now = read();
+          while (Date.now() < deadline && now !== "idle") {
+            await sleep(1000);
+            now = read();
+          }
+          return now;
+        };
+        bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", chatTitle, "--prompt", chat.turns[0].you, "--json");
+        const id = list().find((thread) => thread.title === chatTitle)?.id;
+        if (id === undefined) throw new Error(`live-ui: bb did not keep the busy chat's thread, titled "${chatTitle}"`);
+        const stuck = [];
+        for (const [n, turn] of chat.turns.entries()) {
+          if (n > 0) bb("thread", "tell", id, turn.you);
+          const now = await answered(id, turn);
+          if (now !== "idle") stuck.push(`turn ${n + 1}: ${now}`);
+        }
+        rmSync(BUSY_SAY_FILE, { force: true });
+        check(stuck.length === 0, `BUSY the busy chat's ${chat.turns.length} turns were each answered`, stuck.join(" | "));
+        existing = list();
+      }
+      const chatted = Date.now();
+      for (const row of onBb) {
+        const title = providerTitle(row.instance);
+        if (!existing.some((thread) => thread.title === title)) bb("thread", "fork", source.id, "--title", title);
+      }
+      existing = list();
+      const byInstance = new Map();
+      for (const row of onBb) {
+        const thread = existing.find((candidate) => candidate.title === providerTitle(row.instance));
+        if (thread === undefined) throw new Error(`live-ui: bb did not keep the busy thread titled "${providerTitle(row.instance)}"`);
+        byInstance.set(row.instance, thread);
+        made.push({ instance: row.instance, id: thread.id });
+      }
+      for (const [fixtureId, thread] of threads) {
+        if (instanceOn(fixtureId) === undefined) continue;
+        bb("thread", "archive", thread.id);
+        away.push(thread.id);
+      }
+      const forked = Date.now();
+      // The rows the kernel says run: a turn held open on each, in batches (a harness starts for each one told).
+      // (Not the busy chat's: a held turn would add a message to its conversation, and it asks: the screen says so whatever bb says.)
+      const working = onBb.filter((row) => row.running === true && row.outsideOats === undefined && row.instance !== chat.agent);
+      mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
+      writeFileSync(BUSY_HOLD_FILE, "");
+      const BATCH = 7;
+      for (let from = 0; from < working.length; from += BATCH) {
+        const batch = working.slice(from, from + BATCH).map((row) => byInstance.get(row.instance).id);
+        for (const id of batch) bb("thread", "tell", id, `carry on MOCK-HOLD:${BUSY_HOLD}`);
+        const deadline = Date.now() + 120_000;
+        while (Date.now() < deadline && !batch.every((id) => statusOf(id, list()) === "active")) await sleep(2000);
+      }
+      const all = list();
+      const idle = working.filter((row) => statusOf(byInstance.get(row.instance).id, all) !== "active");
+      check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${working.length} busy agents that work`, idle.map((row) => `${row.instance}: ${statusOf(byInstance.get(row.instance).id, all)}`).join(" | "));
+      // An agent whose session was lost on bb: its thread is archived, as the recorded row's was.
+      for (const row of onBb.filter((each) => each.sessionEnd === "lost")) bb("thread", "archive", byInstance.get(row.instance).id);
+      // The set, with this run's thread in each slot.
+      let text = JSON.stringify(status);
+      for (const row of onBb) text = text.split(row.session.threadId).join(byInstance.get(row.instance).id);
+      fake({
+        status: { stdout: text },
+        souls: { file: "busy/souls.json" },
+        teams: { file: "busy/teams.json" },
+        "server list": { file: "busy/servers.json" },
+        "schedule list": { file: "busy/schedule-list.json" },
+        "trigger list": { file: "busy/trigger-list.json" },
+      });
+      const total = rowsOf(status).length;
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === total, 60);
+      console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; ${made.length - 1} bb threads made as idle forks in ${Math.round((forked - chatted) / 1000)} s; ${working.length} turns held open in ${Math.round((Date.now() - forked) / 1000)} s; ${Math.round((Date.now() - started) / 1000)} s in all`);
+    },
+    leave: async () => {
+      // The held turns are answered, and every thread this stage made is archived: no later stage sees one.
+      rmSync(BUSY_HOLD_FILE, { force: true });
+      const ids = made.splice(0).map((thread) => thread.id);
+      const deadline = Date.now() + 120_000;
+      const list = () => listOf(bbJson("thread", "list"), "threads");
+      while (Date.now() < deadline && list().some((thread) => ids.includes(thread.id) && thread.status === "active")) await sleep(2000);
+      const failed = [];
+      for (const id of ids) {
+        const said = tell("thread", "archive", id);
+        if (said.startsWith("(bb thread archive failed") && !/already archived/i.test(said)) failed.push(`${id}: ${said}`);
+      }
+      check(failed.length === 0, `BUSY the ${ids.length} threads the stage made are archived when it leaves`, failed.slice(0, 3).join(" | "));
+      // And the fixtures' own threads are back, for the stages after this one.
+      const kept = away.splice(0).filter((id) => tell("thread", "unarchive", id).startsWith("(bb thread unarchive failed"));
+      check(kept.length === 0, "BUSY the fixtures' own threads are put back when the stage leaves", kept.join(" | "));
+    },
+  };
+}
 
 /**
  * A change the kernel records, as a scene makes one to time how soon the screen shows it (the UX
@@ -717,6 +860,8 @@ try {
   check(same.length === 0, "no two images of this run are the same image", same.map((names) => names.join(" = ")).join(" | "));
 } finally {
   rmSync(WORK_HOLD_FILE, { force: true }); // the two held turns are answered now, whatever was thrown
+  rmSync(BUSY_HOLD_FILE, { force: true }); // and the busy stage's
+  rmSync(BUSY_SAY_FILE, { force: true });
   await browser?.close();
   fake(); // the fixtures as they are, for the checks that follow in live.sh
   try {

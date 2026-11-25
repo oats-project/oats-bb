@@ -622,6 +622,9 @@ export default [
       const rows = await page.until(`(() => { const rows = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-agent-row-threadless")}`)})]; return rows.length >= ${tmux.length} ? JSON.stringify(rows.map((row) => [row.getAttribute("data-instance"), (row.querySelector(${JSON.stringify(testId("oats-row-facts"))})?.getAttribute("title") ?? "")])) : ""; })()`, 30);
       const read = rows === null ? [] : JSON.parse(rows);
       const wanted = tmux.map(([instance, soul, , how]) => [instance, `${how === "waiting" ? "Needs you" : how === "stopped" ? "Stopped" : how === "lost" ? "Stopped" : "Working"} · ${soul}${how === "lost" ? " · session lost" : ""} · tmux`]);
+      const KINDS = ["waiting", "running", "stopped", "lost"];
+      const kinds = KINDS.map((how) => tmux.filter((agent) => agent[3] === how).length);
+      check(kinds.every((count) => count >= 2), `${at} the stage holds each kind of tmux row the kernel records, twice at least: ${KINDS.map((how, i) => `${kinds[i]} ${how}`).join(", ")}`, JSON.stringify(kinds));
       const bySort = (list) => [...list].sort((a, b) => a[0].localeCompare(b[0]));
       check(JSON.stringify(bySort(read)) === JSON.stringify(bySort(wanted)), `${at} each of the ${tmux.length} tmux agents is a row: its state in a word, its soul, then "tmux"`, rows ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // ONE tree: each tmux agent that has a parent is drawn under it, one step in (deeper than 2 at 2), in its parent's own block of rows.

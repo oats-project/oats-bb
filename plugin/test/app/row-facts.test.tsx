@@ -137,6 +137,21 @@ describe("the row's line", () => {
     expect(line.querySelector('[data-phrase="reason"]')!.getAttribute("data-tone")).toBe("warning");
   });
 
+  // A place can ask for the same guard for ANY reason (the home's card: for an agent whose thread is gone the reason is
+  // the card's only word on why it has no reply; "deleted in bb" does not warn on an agent that runs). The tone is not
+  // touched: a plain reason stays plain.
+  test("a reason a place KEEPS is held like one that warns, whatever its tone: it stays whole however narrow the line, the soul gives way first, and its tone is not changed", () => {
+    laidOut(120, W);
+    const line = draw({ reason: "deleted in bb", reasonKept: true });
+    expect(parts(line)).toEqual(["state", "soul", "reason", "where"]);
+    expect(line.getAttribute("data-reason")).toBe("shown");
+    expect(shrinks(line)).toEqual({ state: false, soul: true, reason: false, where: false });
+    expect(line.querySelector('[data-phrase="reason"]')!.getAttribute("data-tone")).toBeNull();
+    // Without it, on the same line, that reason leaves (the row's rule).
+    cleanup();
+    expect(draw({ reason: "deleted in bb" }).getAttribute("data-reason")).toBe("left");
+  });
+
   test("with no layout to measure (nothing drawn yet) the reason stays", () => {
     expect(draw().getAttribute("data-reason")).toBe("shown");
     expect(REASON_MIN_EM).toBe(4);

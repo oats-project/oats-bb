@@ -360,8 +360,13 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
               was clipped mid-word). */}
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" least />
-            {waitInline ? <span className="shrink-0">{wait}</span> : null}
+            {/* ONE unit that wraps as one: the facts, then the mark with its age, which is never left alone on a line of
+                its own. It keeps a least width (nine rem); on the card the reason is never cut nor left out, whatever its
+                tone (the soul gives way): for an agent whose thread is gone it is the card's only word on why there is no reply. */}
+            <div data-testid="oats-needs-facts" className="flex min-w-0 flex-1 basis-36 items-center gap-x-2">
+              <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" least />
+              {waitInline ? <span className="shrink-0">{wait}</span> : null}
+            </div>
           </div>
           {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page.
               Where the request can only be answered in its thread the word is "Answer": the same press, the same place. */}
@@ -469,7 +474,7 @@ function reasonOf(entry: Entry, oats: Ready): { reason: string | null; tone: "wa
   return { reason, tone: said?.rowTone === "warning" ? "warning" : undefined, onTmux };
 }
 
-function AgentFacts({ entry, oats, testId, least = false }: { entry: Entry; oats: Ready; testId: string; /** on a card: the line keeps a least width (nine rem: a reason that warns, a short soul, the glyph), and wraps under the name where the name's line cannot give it; in a list's row it takes what is left, from nothing, and never wraps (P20) */ least?: boolean }) {
+function AgentFacts({ entry, oats, testId, least = false }: { entry: Entry; oats: Ready; testId: string; /** on a card: the reason is held on the line whatever its tone (the soul gives way), and the line stands in a unit with a least width that wraps under the name where the name's line cannot hold it; in a list's row it takes what is left and never wraps (P20) */ least?: boolean }) {
   const { reason, tone, onTmux } = reasonOf(entry, oats);
   // A lost session is said in the state's place on a row ("Lost": app/outside `rowWords`), so its line has no reason to hold; its title keeps it.
   const words = rowWords(entry.status.word, entry.status.state, reason);
@@ -479,7 +484,7 @@ function AgentFacts({ entry, oats, testId, least = false }: { entry: Entry; oats
   // phone's width). It always stands in a ROW, beside a name (a list's row, a card's first line): in a COLUMN a
   // flex base is a HEIGHT (a base of ten rem once made every card's line ten rem tall: an empty gap of about 150 px
   // under the soul; the specialist's finding on the image set of 24 Nov 2026).
-  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} className={least ? "min-w-0 flex-1 basis-36" : "min-w-0 flex-1 basis-0"} />;
+  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} reasonKept={least} className="min-w-0 flex-1 basis-0" />;
 }
 
 /**

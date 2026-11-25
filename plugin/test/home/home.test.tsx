@@ -65,7 +65,7 @@ test("what needs you first, then the tiles, who works and what is unread; no hea
   for (let i = 1; i < order.length; i++) expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-test("a card says who (the name as words, its soul under it, and no machine), what it asks and how long it has waited; its name and Open lead to its thread", async () => {
+test("a card says who (the name as words, its soul on its line, and no machine), what it asks and how long it has waited; its name and Open lead to its thread", async () => {
   const slot = await homePage();
   const release = await cardOf(slot, "release-070-maintainer");
   expect(within(release).getByTestId("oats-needs-name").textContent).toBe("Release 070 maintainer");
@@ -88,17 +88,26 @@ test("a card says who (the name as words, its soul under it, and no machine), wh
   // scene measures the cards' boxes.) On a card and in a list's row alike it takes what the name leaves, from nothing.
   const cardFacts = within(release).getByTestId("oats-needs-where");
   expect(cardFacts.parentElement!.className.split(/\s+/)).not.toContain("flex-col");
-  expect(cardFacts.parentElement!.contains(within(release).getByTestId("oats-needs-name"))).toBe(true); // the name's own line
+  expect(cardFacts.parentElement!.parentElement!.contains(within(release).getByTestId("oats-needs-name"))).toBe(true); // the name's own line
   expect(cardFacts.className.split(/\s+/).filter((name) => /^(h-|min-h-)/.test(name))).toEqual([]);
   expect(workerFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-0"]));
   // On a card the line keeps a LEAST width and the name's line may wrap: where it cannot hold them (a phone's width, a
   // long name) the facts go under the name whole, never squeezed to nothing nor a reason cut mid-word (the polish's
   // review; the live scene measures their width at 390). A list's row never wraps (P20): its facts start from nothing.
-  expect(cardFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-36"]));
-  expect(cardFacts.parentElement!.className.split(/\s+/)).toContain("flex-wrap");
+  // On a card the reason is held whatever its tone (app/ui/row-facts.tsx `reasonKept`): never cut, never left out.
+  expect(cardFacts.querySelector('[data-phrase="soul"]')!.className.split(/\s+/)).toEqual(expect.arrayContaining(["shrink", "truncate"]));
+  // The facts and the mark with its age are ONE unit that wraps as one (the mark is never alone on a line): the unit
+  // keeps the least width, and stands in the name's line, which may wrap.
+  const unit = cardFacts.parentElement!;
+  expect(unit.getAttribute("data-testid")).toBe("oats-needs-facts");
+  expect(unit.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-36"]));
+  expect(unit.className.split(/\s+/)).not.toContain("flex-wrap");
+  expect(unit.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
+  expect(unit.parentElement!.className.split(/\s+/)).toContain("flex-wrap");
+  expect(unit.parentElement!.contains(within(release).getByTestId("oats-needs-name"))).toBe(true);
   expect(workerFacts.parentElement!.className.split(/\s+/)).not.toContain("flex-wrap");
   // The mark and the age stand at the end of that line (P5), not on a line of their own.
-  expect(cardFacts.parentElement!.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
+  expect(cardFacts.parentElement!.parentElement!.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
   expect(release.textContent).not.toMatch(/falcon/);
   expect(within(release).getByTestId("oats-needs-where").querySelector('[data-phrase="reason"], [data-phrase="where"]')).toBeNull(); // on its thread: no reason, no glyph
   // Under "Needs you" the heading says the word: the card keeps the mark, named for a screen reader, and the wait.
@@ -1532,13 +1541,16 @@ test("the home's one more try of the version waits for the roster: none while th
 // An agent whose thread bb no longer has and that still needs the person: nothing can be sent to
 // it from bb. The card's second line says what became of its thread, as the reason alone (bb's own
 // answer: "deleted in bb"); no sentence repeats it, and the card draws no reply. Open leads to its page.
-test("an agent whose bb thread was deleted that needs the person: the reason and its soul on its second line, no sentence under it, no reply, and Open to its page", async () => {
+test("an agent whose bb thread was deleted that needs the person: the reason and its soul on its name's line, the reason held whatever its tone, no sentence under it, no reply, and Open to its page", async () => {
   vi.useFakeTimers({ now: FOUR_DAYS_ON, toFake: ["Date"] }); // (the card's wait is pinned below: never the real clock)
   const sdk = { threads: { list: async () => [], interactions: { list: async () => [] } } } as never as RenderSlotOptions<Contract>["sdk"];
   const slot = await homePage({ sidebarThreads: { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_release") }, sdk });
   const card = await cardOf(slot, "release-070-maintainer");
   await waitFor(() => expect(within(card).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer · deleted in bb"));
   expect(card.textContent).toBe("Release 070 maintaineroats-maintainer · deleted in bb!4 dOpenGreen light at 9f2e1c? Second reader done.");
+  // The reason is the card's only word on why there is no reply: it never shrinks and never leaves (the soul gives way), though it does not warn here.
+  const why = card.querySelector('[data-testid="oats-needs-where"] [data-phrase="reason"]')!;
+  expect([why.textContent, why.getAttribute("data-tone"), why.className.split(/\s+/).includes("shrink-0"), card.querySelector('[data-testid="oats-needs-where"]')!.getAttribute("data-reason")]).toEqual(["deleted in bb", null, true, "shown"]);
   expect(card.textContent).not.toContain("so nothing can be sent to it from here");
   expect(within(card).queryByTestId("oats-needs-elsewhere")).toBeNull();
   expect(within(card).queryByTestId("oats-reply")).toBeNull();

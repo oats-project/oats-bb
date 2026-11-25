@@ -22,7 +22,7 @@ import { Button, DisabledReason, Disclosure, Fact, Facts, Heading, Lines, Loadin
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { newAgentHeld, openNewAgent, openSoul } from "./pages";
-import { Before, FILTER_FROM, Frame, matches, OneLine } from "./Workspace";
+import { Before, capabilityName, FILTER_FROM, Frame, matches, OneLine } from "./Workspace";
 
 type Soul = Result<"souls">["souls"][number];
 type Ready = Extract<Oats, { phase: "ready" }>;
@@ -96,6 +96,8 @@ function SoulList({ souls, oats, query, onQuery }: { souls: readonly Soul[]; oat
                           <Toned tone="ok">{`${running} running`}</Toned>
                         </span>
                       )}
+                      {/* How many capabilities it is composed of (not said of a soul the kernel could not resolve: not known is not none). */}
+                      {soul.unresolved === true ? null : <span data-testid="oats-soul-capabilities-count" className="shrink-0 text-xs text-muted-foreground">{`${soul.capabilities.length} ${soul.capabilities.length === 1 ? "capability" : "capabilities"}`}</span>}
                       {soul.spawnable ? null : <span data-testid="oats-soul-cannot" className="shrink-0 text-xs text-warning-text">Can't spawn</span>}
                     </span>
                     {/* What it does, on ONE line; whole on its page (and in this line's title). */}
@@ -183,9 +185,11 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
   // New agent is held, like every New agent, wherever the roster is not the one just read: never read, or kept from an earlier read.
   const stale = oats.phase !== "ready" || oats.stale !== null;
   const { cli } = useCli(true, oats.phase === "ready");
-  // Which capabilities fill a core place: they stand first, tagged.
-  const layers = new Map((useRead("capabilities").data?.capabilities ?? []).map((capability) => [capability.id, capability.layer ?? null]));
-  const capabilities = [...soul.capabilities].sort((a, b) => Number(Boolean(layers.get(b))) - Number(Boolean(layers.get(a))));
+  // Its capabilities in the Capabilities tab's order: the one most souls have first (of two that as many have, by
+  // their id); the ones that fill a core place are tagged.
+  const known = new Map((useRead("capabilities").data?.capabilities ?? []).map((capability) => [capability.id, capability]));
+  const layers = new Map([...known].map(([id, capability]) => [id, capability.layer ?? null]));
+  const capabilities = [...soul.capabilities].sort((a, b) => (known.get(b)?.souls ?? 0) - (known.get(a)?.souls ?? 0) || a.localeCompare(b));
   const mine = oats.phase === "ready" ? agentsOf(soul, oats) : null;
   // (The harness by the name the New agent form gives it; the model as the kernel has it.)
   const launch = [soul.harness ? harnessLabel(soul.harness) : null, soul.model].filter((part): part is string => typeof part === "string" && part !== "").map((part) => shown(part)).join(" · ");
@@ -224,8 +228,8 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
             {capabilities.map((id) => {
               const why = soul.why?.[id];
               return (
-                <li key={id} data-testid="oats-soul-capability" className="flex min-w-0 flex-wrap items-baseline gap-x-2 px-2 py-1">
-                  <span className="min-w-0 break-words font-semibold">{shown(id)}</span>
+                <li key={id} data-testid="oats-soul-capability" title={shown(id)} className="flex min-w-0 flex-wrap items-baseline gap-x-2 px-2 py-1">
+                  <span className="min-w-0 break-words font-semibold">{shown(capabilityName(id))}</span>
                   {layers.get(id) ? <span className="text-xs text-muted-foreground">core</span> : null}
                   {/* Why the soul has it, in the kernel's own word ("workspace", "soul"). */}
                   {why === undefined ? null : <span className="text-xs text-muted-foreground">{shown(why)}</span>}

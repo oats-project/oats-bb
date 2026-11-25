@@ -77,6 +77,14 @@ export function Frame({ tab, testId, found, children }: { tab: WorkspaceTab; /**
   );
 }
 
+/**
+ * A capability's name as a list shows it: without OATS's own prefix ("aweb" for `oats.aweb`); another prefix stays.
+ * The whole id is the row's title, and stands on the capability's own page.
+ */
+export const capabilityName = (id: string): string => (id.startsWith("oats.") && id.length > 5 ? id.slice(5) : id);
+/** Capabilities in a list's order: the one most souls have first; of two that as many have, by their id. */
+export const bySouls = <T extends { id: string; souls: number }>(capabilities: readonly T[]): T[] => [...capabilities].sort((a, b) => b.souls - a.souls || a.id.localeCompare(b.id));
+
 /** From how many rows a list has a search field: a short list needs none (the ruling on the pages' audit). */
 export const FILTER_FROM = 12;
 

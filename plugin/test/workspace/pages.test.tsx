@@ -104,12 +104,12 @@ const CAPABILITIES = [
 ];
 const capabilityRows = (slot: Awaited<ReturnType<typeof page>>) => slot.getAllByTestId("oats-capability-row").map((row) => [Array.from(row.firstElementChild!.children).map((part) => part.textContent), within(row).queryByTestId("oats-capability-does")?.textContent ?? null]);
 
-test("Capabilities: the three core places and what fills each; then each capability: its id, its tags, who made it, and ONE line of what it does; no count of souls, no origin, no sentence", async () => {
+test("Capabilities: the three core places and the capabilities of each, by their short names", async () => {
   const slot = await page("capabilities", { capabilities: () => ({ capabilities: CAPABILITIES }) });
   await slot.findAllByTestId("oats-capability-row");
   // Core: Knowledge, Messaging, Tasks, each with the capability that fills it, or "none".
   expect(Array.from(slot.getByTestId("oats-capabilities-core").querySelectorAll('[data-testid="oats-fact"]')).map((fact) => [fact.querySelector("dt")!.textContent, fact.querySelector("dd")!.textContent])).toEqual([
-    ["Knowledge", "oats.okf"],
+    ["Knowledge", "okf"], // without OATS's own prefix
     ["Messaging", "none"],
     ["Tasks", "none"],
   ]);
@@ -118,32 +118,44 @@ test("Capabilities: the three core places and what fills each; then each capabil
   resetApp();
   const two = await page("capabilities", { capabilities: () => ({ capabilities: [...CAPABILITIES, { ...CAPABILITIES[0]!, id: "oats.jira", layer: "tasks" }, { ...CAPABILITIES[0]!, id: "oats.linear", layer: "tasks" }] }) });
   await two.findAllByTestId("oats-capability-row");
-  expect(Array.from(two.getByTestId("oats-capabilities-core").querySelectorAll("dd")).map((value) => value.textContent)).toEqual(["oats.okf", "none", "oats.jira, oats.linear"]);
+  expect(Array.from(two.getByTestId("oats-capabilities-core").querySelectorAll("dd")).map((value) => value.textContent)).toEqual(["okf", "none", "jira, linear"]);
   two.unmount();
   resetApp();
   // A kernel that says nothing of core places: no Core part, and no "core" tag.
   const older = await page("capabilities", { capabilities: () => ({ capabilities: CAPABILITIES.map(({ layer: _layer, ...rest }) => rest) }) });
   await older.findAllByTestId("oats-capability-row");
   expect(older.queryByTestId("oats-capabilities-core")).toBeNull();
-  expect(capabilityRows(older).map(([head]) => head)).toEqual([["oats.okf", "by oats.okf"], ["oats.build", "by workspace"], ["oats.desktop-ui", "repo only", "by workspace"]]);
+  expect(capabilityRows(older).map(([head]) => head)).toEqual([["okf", "by oats.okf", "9 souls"], ["build", "by workspace", "5 souls"], ["desktop-ui", "repo only", "by workspace", "1 soul"]]);
 });
 
-test("the Capabilities tab's rows: each capability's id, its tags, who made it, and ONE line of what it does; no count of souls, no origin, no sentence", async () => {
+test("the Capabilities tab's rows: each capability's name without OATS's prefix (its whole id the row's title), its tags, who made it (a package by its whole name), how many souls have it, and ONE line of what it does; the one most souls have first; no origin, no sentence", async () => {
   const slot = await page("capabilities", { capabilities: () => ({ capabilities: CAPABILITIES }) });
   await slot.findAllByTestId("oats-capability-row");
   expect(capabilityRows(slot)).toEqual([
-    [["oats.okf", "core", "by oats.okf"], "Knowledge."],
-    [["oats.build", "by workspace"], "What the team adds to building a change. A second line the list does not need."],
-    [["oats.desktop-ui", "repo only", "by workspace"], null],
+    [["okf", "core", "by oats.okf", "9 souls"], "Knowledge."],
+    [["build", "by workspace", "5 souls"], "What the team adds to building a change. A second line the list does not need."],
+    [["desktop-ui", "repo only", "by workspace", "1 soul"], null],
   ]);
-  const does = within(slot.getAllByTestId("oats-capability-row")[1]!).getByTestId("oats-capability-does");
+  expect(slot.getAllByTestId("oats-capability-row").map((row) => row.getAttribute("title"))).toEqual(["oats.okf", "oats.build", "oats.desktop-ui"]);
+  slot.unmount();
+  resetApp();
+  // The order is the number of souls, most first; of two that as many have, by their id. Another prefix than OATS's stays; none has "0 souls".
+  const mixed = [{ ...CAPABILITIES[2]!, id: "acme.tools", souls: 0 }, { ...CAPABILITIES[2]!, id: "oats.zeta", souls: 5 }, ...CAPABILITIES];
+  const sorted = await page("capabilities", { capabilities: () => ({ capabilities: mixed }) });
+  await sorted.findAllByTestId("oats-capability-row");
+  expect(capabilityRows(sorted).map(([head]) => [(head as string[])[0], (head as string[]).at(-1)])).toEqual([["okf", "9 souls"], ["build", "5 souls"], ["zeta", "5 souls"], ["desktop-ui", "1 soul"], ["acme.tools", "0 souls"]]);
+  sorted.unmount();
+  resetApp();
+  const again = await page("capabilities", { capabilities: () => ({ capabilities: CAPABILITIES }) });
+  await again.findAllByTestId("oats-capability-row");
+  const does = within(again.getAllByTestId("oats-capability-row")[1]!).getByTestId("oats-capability-does");
   expect([does.className.includes("truncate"), does.getAttribute("title")]).toEqual([true, "What the team adds to building a change. A second line the list does not need."]);
-  const face = Array.from(slot.getByTestId("oats-capabilities-page").querySelectorAll("li, section")).map((part) => part.textContent).join(" ");
-  expect(face).not.toMatch(/used by|\d+ souls?|from (package|member)|github\.com/);
-  expect(slot.getByTestId("oats-tab-capabilities").getAttribute("aria-selected")).toBe("true");
-  expect(slot.queryByTestId("oats-search")).toBeNull(); // three need no search
+  const face = Array.from(again.getByTestId("oats-capabilities-page").querySelectorAll("li, section")).map((part) => part.textContent).join(" ");
+  expect(face).not.toMatch(/used by|from (package|member)|github\.com/);
+  expect(again.getByTestId("oats-tab-capabilities").getAttribute("aria-selected")).toBe("true");
+  expect(again.queryByTestId("oats-search")).toBeNull(); // three need no search
   // Nothing of this tab is the roster's: while OATS cannot be read it draws no notice of the roster (the sidebar has it).
-  expect(slot.queryByTestId("oats-unreadable")).toBeNull();
+  expect(again.queryByTestId("oats-unreadable")).toBeNull();
 });
 
 test("what capabilities are is ONE disclosure, closed: the Desktop's words, and no paragraph on the page", async () => {
@@ -161,7 +173,7 @@ test("a kernel that names no place and no source: the capabilities alone, with n
   const slot = await page("capabilities"); // the old shape: id, description, origin, souls
   await slot.findAllByTestId("oats-capability-row");
   expect(slot.queryByTestId("oats-capabilities-core")).toBeNull();
-  expect(capabilityRows(slot)).toEqual([[["oats.core"], "Day-to-day operation."]]);
+  expect(capabilityRows(slot)).toEqual([[["core", "9 souls"], "Day-to-day operation."]]);
 });
 
 test("from twelve capabilities on there is a search field; while it narrows the list the tab says how many of how many; nothing found, and none at all, are two words each", async () => {

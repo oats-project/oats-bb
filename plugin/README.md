@@ -1088,12 +1088,14 @@ a capability's and a team's own page, and three more reads follow in their own c
 - **Souls.** The souls in groups by where they come from ("workspace", a member repository's
   name, a package with its version), a heading only where it tells groups apart. A row: the soul's
   own name (its key is the row's title), one line of what it does, how many of its agents RUN
-  (a dot and "2 running"; nothing where none does), "Can't spawn" where a spawn would be refused.
+  (a dot and "2 running"; nothing where none does), how many capabilities it has ("5 capabilities";
+  not said of a soul the kernel could not resolve), "Can't spawn" where a spawn would be refused.
 - **A soul's page** (`/plugins/oats/souls/<key>`) opens over the list, at every width, with
   "← Souls": its key; **New agent** (off, with "Can't spawn here", for a soul that cannot be
   spawned); its group's word ("workspace", "oats.okf 6.2.0"); what it does, whole; **Harness ·
   model** (the harness by the New agent form's name for it) and **Teams** (the default first); its
-  **Capabilities** as rows, the ones that fill a core place first and tagged "core", each with why
+  **Capabilities** as rows by their short names, in the Capabilities tab's order (the one most
+  souls have first), the ones that fill a core place tagged "core", each with why
   the soul has it (the kernel's word: "workspace", "soul"); its **Agents** as the roster says them
   (the state as a mark and its word, the reason after it, the tmux mark; a row opens the agent's
   thread or its own page; one whose thread bb does not list has its acts on the row); and under
@@ -1103,7 +1105,9 @@ a capability's and a team's own page, and three more reads follow in their own c
   agent is held wherever the roster is not the one just read. A soul the kernel could not resolve has no Capabilities section:
   the kernel answers no list for it, which is "not known", never "none".
 - **Capabilities.** **Core**: Knowledge, Messaging, Tasks, each with every capability of that
-  place or "none" (no Core part where the kernel's answer says nothing of places). Then each capability: its id, "core" and "repo only" where they hold, "by <source>",
+  place or "none" (no Core part where the kernel's answer says nothing of places). A capability
+  is named WITHOUT OATS's own prefix ("aweb" for `oats.aweb`; its whole id is the row's title), and
+  the list is in the order of how many souls have each, most first ("9 souls" at the row's end). Then each capability: its id, "core" and "repo only" where they hold, "by <source>",
   one line of what it does.
 - **Teams.** Each team: its label, "Default team", how many of this deployment's agents are on it,
   what it is for; under its Details its address on the messaging provider, who may join (and whose

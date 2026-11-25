@@ -10,7 +10,7 @@ import { useRead } from "../store";
 import type { Result } from "../store";
 import { Disclosure, Fact, Facts, Heading, Note, Notice, SearchField } from "../ui";
 import { shown } from "../ui/text";
-import { Before, FILTER_FROM, Frame, matches, OneLine, TEAM_UNMAPPED } from "./Workspace";
+import { Before, bySouls, capabilityName, FILTER_FROM, Frame, matches, OneLine, TEAM_UNMAPPED } from "./Workspace";
 
 const ROW = "flex min-w-0 flex-col gap-0.5 border-b border-border py-2 last:border-b-0";
 const TAG = "shrink-0 text-xs text-muted-foreground";
@@ -59,11 +59,12 @@ const foundCapabilities = (capabilities: readonly Capability[], query: string): 
 
 function CapabilityList({ capabilities, query, onQuery }: { capabilities: readonly Capability[]; query: string; onQuery: (query: string) => void }) {
   if (capabilities.length === 0) return <Note>No capabilities.</Note>;
-  const found = foundCapabilities(capabilities, query);
+  // The one most souls have first.
+  const found = bySouls(foundCapabilities(capabilities, query));
   // The kernel says which place a capability fills; one that says nothing of any (an older answer) has no Core part.
   const told = capabilities.some((capability) => capability.layer !== undefined);
   // EVERY capability of a place: the read does not say which of two a soul gets, so none is picked.
-  const fills = (layer: string) => capabilities.filter((capability) => capability.layer === layer).map((capability) => capability.id);
+  const fills = (layer: string) => bySouls(capabilities.filter((capability) => capability.layer === layer)).map((capability) => capabilityName(capability.id));
   return (
     <>
       {capabilities.length >= FILTER_FROM ? <SearchField label="Search capabilities" placeholder="Search capabilities" value={query} onChange={onQuery} /> : null}
@@ -84,11 +85,14 @@ function CapabilityList({ capabilities, query, onQuery }: { capabilities: readon
         {found.map((capability) => (
           <li key={capability.id} data-testid="oats-capability-row" title={shown(capability.id)} className={ROW}>
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-              <span className="min-w-0 break-words font-semibold">{shown(capability.id)}</span>
+              {/* Its name without OATS's own prefix; the whole id is the row's title. */}
+              <span data-testid="oats-capability-name" className="min-w-0 break-words font-semibold">{shown(capabilityName(capability.id))}</span>
               {capability.layer ? <span className={TAG}>core</span> : null}
               {capability.repoOnly === true ? <span className={TAG}>repo only</span> : null}
               {/* Who made it, as the Desktop's row says it: "by <source>". */}
               {capability.source === undefined ? null : <span className={TAG}>{`by ${shown(capability.source.label)}`}</span>}
+              {/* How many souls have it, at the row's end: the list's order. */}
+              <span data-testid="oats-capability-souls" className="ml-auto shrink-0 text-xs text-muted-foreground">{count(capability.souls, "soul")}</span>
             </div>
             {/* What it does, on ONE line; whole in the line's title (and, later, on the capability's own page). */}
             {capability.description === "" ? null : <OneLine testId="oats-capability-does" text={capability.description} />}

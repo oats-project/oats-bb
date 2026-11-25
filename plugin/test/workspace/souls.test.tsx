@@ -75,7 +75,9 @@ test("a row's order: the name, how many run, then \"Can't spawn\"; and souls of 
   await slot.findAllByTestId("oats-soul-row");
   const last = slot.getAllByTestId("oats-soul-row")[2]!;
   await waitFor(() => expect(within(last).queryByTestId("oats-soul-running")).not.toBeNull());
-  expect(Array.from(last.firstElementChild!.children).map((part) => part.getAttribute("data-testid"))).toEqual(["oats-soul-name", "oats-soul-running", "oats-soul-cannot"]);
+  expect(Array.from(last.firstElementChild!.children).map((part) => part.getAttribute("data-testid"))).toEqual(["oats-soul-name", "oats-soul-running", "oats-soul-capabilities-count", "oats-soul-cannot"]);
+  // How many capabilities a soul is composed of; one: "1 capability"; a soul the kernel could not resolve: no count (not known is not none).
+  expect(slot.getAllByTestId("oats-soul-row").map((row) => within(row).queryByTestId("oats-soul-capabilities-count")?.textContent ?? null)).toEqual(["3 capabilities", "0 capabilities", expect.stringMatching(/^\d+ capabilit(y|ies)$/)]);
   slot.unmount();
   resetApp();
   const packaged = await souls("", { souls: () => ({ souls: [LISTED[2]!] }) });
@@ -301,17 +303,18 @@ test("a soul that cannot be spawned keeps New agent, off, with the one reason be
   expect(detail.querySelector("header")!.textContent).not.toContain("E_REMOVED");
 });
 
-test("a soul's capabilities are rows: the ones that fill a core place first, tagged, then the rest; each says why the soul has it; none: two words", async () => {
+test("a soul's capabilities are rows, by their short names (the whole id the row's title), in the Capabilities tab's order: the one most souls have first; a core one tagged; each says why the soul has it; none: two words", async () => {
   const capabilities = () => ({
     capabilities: [
-      { id: "oats.aweb", description: "", origin: "", souls: 1, layer: "messaging" },
-      { id: "oats.core", description: "", origin: "", souls: 1, layer: null },
-      { id: "oats.developer", description: "", origin: "", souls: 1, layer: null },
+      { id: "oats.aweb", description: "", origin: "", souls: 7, layer: "messaging" },
+      { id: "oats.core", description: "", origin: "", souls: 9, layer: null },
+      { id: "oats.developer", description: "", origin: "", souls: 2, layer: null },
     ],
   });
   const slot = await souls("oats-developer", { ...listed, capabilities });
   await slot.findByTestId("oats-soul-detail");
-  await waitFor(() => expect(slot.getAllByTestId("oats-soul-capability").map((row) => Array.from(row.children).map((part) => part.textContent))).toEqual([["oats.aweb", "core", "workspace"], ["oats.developer", "soul"], ["oats.core", "workspace"]]));
+  await waitFor(() => expect(slot.getAllByTestId("oats-soul-capability").map((row) => Array.from(row.children).map((part) => part.textContent))).toEqual([["core", "workspace"], ["aweb", "core", "workspace"], ["developer", "soul"]]));
+  expect(slot.getAllByTestId("oats-soul-capability").map((row) => row.getAttribute("title"))).toEqual(["oats.core", "oats.aweb", "oats.developer"]);
   expect(within(slot.getByTestId("oats-soul-capabilities")).getByRole("heading").textContent).toBe("Capabilities3");
   slot.unmount();
   resetApp();
@@ -327,6 +330,12 @@ test("a soul the kernel could not resolve (it cannot be spawned): nothing is sai
   expect(slot.queryByTestId("oats-soul-capabilities")).toBeNull();
   expect(slot.getByTestId("oats-soul-detail").textContent).not.toMatch(/No capabilities|Capabilities/);
   expect(Array.from(slot.getByTestId("oats-soul-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["from member github.com/awebai/oats @ e5b6c5ac", "Defined in souls/knowledge-maintainer/soul.yaml", "E_TEAM_UNKNOWN: team \"reviewers\" is not declared"]);
+  // And on its row: "Can't spawn", and no count of capabilities.
+  slot.unmount();
+  resetApp();
+  const list = await souls("", { souls: () => ({ souls: [broken] }) });
+  const row = (await list.findAllByTestId("oats-soul-row"))[0]!;
+  expect([within(row).queryByTestId("oats-soul-capabilities-count"), within(row).getByTestId("oats-soul-cannot").textContent]).toEqual([null, "Can't spawn"]);
 });
 
 test("New agent on a soul's page is held, like every New agent, behind an oats the plugin does not work with", async () => {

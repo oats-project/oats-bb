@@ -1,0 +1,23 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_AW_TOO_OLD",
+  "message": "messaging:mail: aw 1.36.33 cannot list mail threads, so mail can't be read without acknowledging it: messaging:mail needs aw >= 1.36.53; upgrade with `npm i -g @awebai/aw@latest`",
+  "details": {
+   "exit": 1,
+   "envelope": {
+    "schemaVersion": 1,
+    "ok": false,
+    "error": {
+     "code": "E_AW_TOO_OLD",
+     "message": "aw 1.36.33 cannot list mail threads, so mail can't be read without acknowledging it: messaging:mail needs aw >= 1.36.53; upgrade with `npm i -g @awebai/aw@latest`",
+     "details": {
+      "version": "1.36.33",
+      "needs": "1.36.53"
+     }
+    }
+   }
+  }
+ }
+}

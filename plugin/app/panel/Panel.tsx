@@ -3,7 +3,7 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { BOARD, Board } from "../board";
+import { BOARD, Board, useBoardTab } from "../board";
 import { OutsideAgent, OutsideAgentDetails, pageActs, pageParts, words as outsideWords } from "../outside";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
@@ -45,10 +45,18 @@ type RosterFailure = { code: string; message: string; machine: string | null; li
 export type TabId = "board" | "instance" | "soul";
 const TABS: readonly TabItem<TabId>[] = [
   // The agent's questions and facts, FIRST: a view of its own (app/board) that takes the agent's name and nothing of the panel's.
+  // Drawn only for an agent whose board has a fact or a question (`NO_BOARD` else): what there is nothing of is not offered.
   { id: "board", label: BOARD.tab },
   { id: "instance", label: "Instance" },
   { id: "soul", label: "Soul" },
 ];
+const NO_BOARD = TABS.filter((tab) => tab.id !== "board");
+/**
+ * The tab the panel of one agent shows. It OPENS on Board where the agent's board has an open
+ * question (a question is what needs the person), until a tab is chosen on this panel; else on
+ * the tab remembered, but never on a Board the agent does not have.
+ */
+const boardTabOf = (remembered: TabId, board: { shown: boolean; asks: boolean }, chosen: boolean): TabId => (board.asks && !chosen ? "board" : remembered === "board" && !board.shown ? "instance" : remembered);
 /** The id of the panel's one tab panel: the tabs name it, and it names the tab it shows. */
 const PANEL_ID = "oats-panel-page";
 
@@ -172,7 +180,7 @@ function useVisibleWidth(element: HTMLElement | null): number | null {
   return width;
 }
 
-function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster; agent: Agent; node: Node | undefined; thread: BbThread | null; tab: TabId; failure: RosterFailure | null; /** the panel is an agent's page, not the tab beside its thread */ page: boolean }) {
+function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { oats: Roster; agent: Agent; node: Node | undefined; thread: BbThread | null; tab: TabId; failure: RosterFailure | null; /** the panel is an agent's page, not the tab beside its thread */ page: boolean }) {
   const read = usePanelInstance(agent.instance);
   const now = useNow();
   // Beside a thread (the tab: `threadId`) the thread's own line says that the roster is the last one read; on an
@@ -186,6 +194,15 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
   const line = pageParts(agent, oats, status);
   const reading = useReading(agent.instance);
   const soul = shown(oats.soulOf(agent));
+  // Whether this agent has a board, and whether it asks: the Board tab is drawn, and the panel opens on it, by that.
+  const board = useBoardTab(agent.instance);
+  // A tab was chosen on this agent's panel since it opened (a press here, or another feature's `showPanelTab`): the panel no longer opens by itself.
+  const opened = useRef(remembered);
+  const [chosen, setChosen] = useState(false);
+  useEffect(() => {
+    if (remembered !== opened.current) setChosen(true);
+  }, [remembered]);
+  const tab = boardTabOf(remembered, board, chosen);
   return (
     <>
       {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}
@@ -235,7 +252,16 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
         )}
       </header>
       <div className="shrink-0 px-3">
-        <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
+        <Tabs
+          label="Instance context"
+          tabs={board.shown ? TABS : NO_BOARD}
+          value={tab}
+          onChange={(id) => {
+            setChosen(true);
+            showPanelTab(id);
+          }}
+          panelId={PANEL_ID}
+        />
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
         {tab === "board" ? <Board instance={agent.instance} /> : tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} unread={failure !== null} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} />}

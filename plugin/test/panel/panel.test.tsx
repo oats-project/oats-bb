@@ -45,13 +45,13 @@ function stateOf(slot: { getByTestId(id: string): HTMLElement }): string {
   return line.textContent ?? "";
 }
 
-test("three tabs, Board first, then Instance (shown) and Soul; the header names the instance as words, its soul, and its state as a mark and its word", async () => {
+test("two tabs, Instance first; the header names the instance as words, its soul, and its state as a mark and its word", async () => {
   const slot = panel({ threadId: CHILD_THREAD }, { agent: (agent) => ({ ...agent, waiting: null }) });
   await slot.findByTestId("oats-panel-work");
   const tabs = within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab");
-  expect(tabs.map((tab) => `${text(tab)} ${tab.getAttribute("aria-selected")}`)).toEqual(["Board false", "Instance true", "Soul false"]);
-  expect(slot.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(tabs[1]!.id);
-  expect(tabs[1]!.getAttribute("aria-controls")).toBe(slot.getByRole("tabpanel").id);
+  expect(tabs.map((tab) => `${text(tab)} ${tab.getAttribute("aria-selected")}`)).toEqual(["Instance true", "Soul false"]);
+  expect(slot.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(tabs[0]!.id);
+  expect(tabs[0]!.getAttribute("aria-controls")).toBe(slot.getByRole("tabpanel").id);
   // The name as words; the kernel's own name stays one hover away.
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   expect(slot.getByTestId("oats-panel-name").getAttribute("title")).toBe(CHILD);

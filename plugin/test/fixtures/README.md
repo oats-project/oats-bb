@@ -5,7 +5,10 @@ its `verbs.json`: the `oats` verbs the fake answers for that feature, and the fi
 `teams.json`, `servers.json`), `spawn/` (`spawn-preview.json`, `spawn.json`) and `lifecycle/` (the
 stop, start, restart and retire answers). `outside/` has a README of its own: its five files are
 recorded live by the real run's outside part (`container/real/parts/outside.mjs`), the kernel's own
-`outsideOats` among them.
+`outsideOats` among them. `busy/` has a README of its own too: the busy workspace (the worst case
+every screen is judged by first), MADE by its generator from the recorded answers of the other
+directories, each row a recorded row with only its names, ids, times and relations varied: the one
+set that is multiplied, never shaped, and for scenes and images only.
 
 Pinned by the spec.
 - `status.json`: `oats status --json` reduced to the fields the plugin reads, in the shape agreed

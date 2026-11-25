@@ -1016,7 +1016,7 @@ oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=ok ms=
 oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> [homes=<ok>/<all>] [code=<CODE>]
 oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=DEFERRED ms=<n> homes=<ok>/<all>
 oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=<CODE> ms=<n>
-oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<words>
+oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<word>
 ```
 
 - `<subject>`: `instance=<name>`; for a spawn `soul=<soul> name=<the name asked, or ->`; for an
@@ -1071,8 +1071,9 @@ oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<c
   gone. `made`: the instance a spawn made or a schedule's run launched. `code`: the kernel's code
   on a run that did not launch. `ms`: how long the kernel took, from the moment the act was sent.
 - `HELD:<code>`: the kernel was NOT asked. `<code>` is `invalid` (the plugin's guard refused what
-  was asked), a kernel CODE (a read the act rests on was refused), `error` (the guard itself
-  failed), or the code of an act that could not be sent. `why` is ONE word of a closed list, never
+  was asked), the CODE of a read the act rests on, which was refused (the kernel's, or the plugin's
+  own where OATS was not reached), `error` (the guard itself failed), or the code of an act that
+  could not be sent. `why` is ONE word of a closed list, never
   a message (a refusal's message quotes what a caller sent and may hold a path: it is the window's,
   not the log's):
 
@@ -1108,7 +1109,8 @@ read what bb did to an agent: `grep 'oats act' plugins/oats/logs/plugin.log | gr
 
 What never goes in: a spawn's opening instruction, a description's text, a message, a path, the
 kernel's sentence, the plugin's own refusal's message, a secret. Every value is one word: whatever is not a letter, a digit or one of
-`._:/@-` becomes `_`, cut at 120 characters.
+`._:/@-` becomes `_`, cut at 120 characters; and a CODE (a result, a hold's code, a run's code) is
+letters, digits and `_` alone, whatever a kernel prints as its code.
 
 No act can go round it: `core.act` (`server/core.ts`) is the only way a verb that changes something
 reaches the kernel (`core.call` refuses one, in its types and when it runs), and every verb of the

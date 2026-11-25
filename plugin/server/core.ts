@@ -116,7 +116,6 @@ export function refusal(error: KernelError): experimental_PluginRpcRefusal {
 }
 /** The word an act's guard gives for its refusal, for the act log's `why` (server/act-log.ts HOLD_REASONS): the message is the window's, never the log's. */
 const heldFor = new WeakMap<object, HoldReason>();
-export const holdReasonOf = (error: unknown): HoldReason | undefined => (typeof error === "object" && error !== null ? heldFor.get(error) : undefined);
 /** A refusal of the plugin's own. `reason`: where it is the refusal of an ACT's guard, the word the act log writes for it. */
 export const invalid = (message: string, reason?: HoldReason) => {
   const refused = new experimental_PluginRpcRefusal({ code: "invalid", message });
@@ -734,7 +733,7 @@ export function createCore(bb: BbPluginApi) {
       // read the act rests on was refused: the code says which); `fault` for a guard that FAILED with no refusal (a
       // fault of the plugin's own: `error`, not a judgement on what was asked); `refused` where a refusal names none.
       const refused = error instanceof experimental_PluginRpcRefusal;
-      const why: HoldReason = code !== undefined ? "read-refused" : refused ? (holdReasonOf(error) ?? "refused") : "fault";
+      const why: HoldReason = code !== undefined ? "read-refused" : refused ? (heldFor.get(error) ?? "refused") : "fault";
       say("warn", () => actLine(method, "held", about(), who(null), { held: code ?? (refused ? "invalid" : "error"), why }));
       throw error;
     }

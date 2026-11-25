@@ -10,7 +10,7 @@
 //   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> [homes=<ok>/<all>] [code=<CODE>]
 //   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=DEFERRED ms=<n> homes=<ok>/<all>
 //   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=<CODE> ms=<n>
-//   oats act <verb> held  <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<words>
+//   oats act <verb> held  <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<word>
 // <subject>: `instance=<name>`; for a spawn `soul=<soul> name=<name asked, or ->`; for an automation
 // `automation=<kind>:<id>`; for the scheduler `scheduler=-`.
 // <c>: what bb says of who asked: `plugin:<id>` (another plugin), or `client`: everything else: the
@@ -35,8 +35,9 @@
 // spawn made, or a schedule's run launched. `code`: the kernel's code on a run that did not launch.
 // `ms`: from the moment the act was sent.
 // `HELD:<code>`: the kernel was NOT asked: the plugin's own guard refused (`invalid`: what was asked
-// names nothing the roster or the provider holds; a kernel CODE: a read the act rests on was
-// refused; `error`: the guard itself failed), or the act could not be sent (its code). `why` is ONE
+// names nothing the roster or the provider holds; the CODE of a read the act rests on, which was
+// refused: the kernel's, or the plugin's own where OATS was not reached; `error`: the guard itself
+// failed), or the act could not be sent (its code). `why` is ONE
 // word of a closed list (`HOLD_REASONS`, below), never a message.
 //
 // WHAT NEVER GOES IN: a spawn's opening instruction, a description's text, a message, a path, the
@@ -84,7 +85,7 @@ export const HOLD_REASONS = [
   "key-reused", // a spawn's key that belongs to another spawn
   "row-gone", // an automation's row that the list does not hold
   "no-source", // a test asked to run a source the trigger has none of
-  "read-refused", // a read the act rests on was refused (the roster, a row's list, the provider, a spawn's decision): `result=HELD:<its code>` says which
+  "read-refused", // a read the act rests on was refused (the roster, a row's list, the provider, a spawn's decision): `result=HELD:<its code>` says which (the kernel's code, or the plugin's own where OATS was not reached)
   "machine-not-reached", // the act could not be sent: no machine, no deployment
   "cancelled-before-sent", // the act's call was cancelled before it left
   "fault", // the guard itself failed, with no refusal
@@ -97,6 +98,8 @@ export type Subject = { instance: string } | { soul: string; name: string | null
 /** What bb says of who asked (the second argument of every handler). */
 export type Asker = { readonly experimental_caller?: { readonly kind: "client" } | { readonly kind: "plugin"; readonly pluginId: string } | undefined };
 
+/** A CODE on a line (a result, a hold's code, a run's code): letters, digits and `_` alone: whatever a kernel prints as its code, no path and no sentence comes through it. */
+export const codeWord = (value: string): string => value.replace(/[^A-Za-z0-9_]+/g, "_").slice(0, 80) || "-";
 /** One word of a line: nothing that could end the value, break the line or carry a sentence whole. */
 export const word = (value: string): string => value.replace(/[^A-Za-z0-9._:/@-]+/g, "_").slice(0, 120) || "-";
 
@@ -184,9 +187,9 @@ export function actLine(verb: ActVerb, phase: "asked" | "ended" | "held", subjec
   const head = `oats act ${verb} ${phase} ${subjectOf(subject)} caller=${who.caller} host=${who.host === null ? "-" : word(who.host)} at=${who.at} n=${who.n}`;
   if (more === null) return head;
   // (`why` is a word of the closed list: one that is not, whatever handed it, is written as the list's fallback.)
-  if ("held" in more) return `${head} result=HELD:${word(more.held)} why=${(HOLD_REASONS as readonly string[]).includes(more.why) ? more.why : "refused"}`;
+  if ("held" in more) return `${head} result=HELD:${codeWord(more.held)} why=${(HOLD_REASONS as readonly string[]).includes(more.why) ? more.why : "refused"}`;
   const extra = more.homes !== undefined ? ` homes=${word(more.homes)}` : "";
   const made = more.made !== undefined ? ` made=${word(more.made)}` : "";
-  const code = more.code !== undefined ? ` code=${word(more.code)}` : "";
-  return `${head} result=${word(more.result)} ms=${Math.max(0, Math.round(more.ms))}${extra}${made}${code}`;
+  const code = more.code !== undefined ? ` code=${codeWord(more.code)}` : "";
+  return `${head} result=${codeWord(more.result)} ms=${Math.max(0, Math.round(more.ms))}${extra}${made}${code}`;
 }

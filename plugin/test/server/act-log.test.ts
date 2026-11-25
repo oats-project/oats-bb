@@ -74,6 +74,21 @@ describe("the act log's line", () => {
     expect(await held(refusal({ code: "E_WORKSPACE_UNREADABLE", message: MESSAGE }))).toBe("result=HELD:E_WORKSPACE_UNREADABLE why=read-refused");
   }, 40_000);
 
+  it("a CODE on a line is letters, digits and _ alone: a kernel that printed a path or a sentence as its code writes neither", () => {
+    const CODE = "E_/home/someone/work: no such file=1\nresult=ok";
+    const lines = [
+      actLine("stopApply", "ended", { instance: "a" }, who, { result: CODE, ms: 1 }),
+      actLine("stopApply", "held", { instance: "a" }, who, { held: CODE, why: "read-refused" }),
+      actLine("scheduleRun", "ended", { automation: "schedule:x" }, who, { result: "INCOMPLETE", ms: 1, code: CODE }),
+    ];
+    for (const line of lines) expect(line).not.toMatch(/\/|\n|someone work| no such/);
+    expect(lines[0]).toMatch(/ result=E__home_someone_work_no_such_file_1_result_ok ms=1$/);
+    expect(lines[1]).toMatch(/ result=HELD:E__home_someone_work_no_such_file_1_result_ok why=read-refused$/);
+    expect(lines[2]).toMatch(/ result=INCOMPLETE ms=1 code=E__home_someone_work_no_such_file_1_result_ok$/);
+    // The codes there are today are written as they are.
+    for (const code of ["ok", "INCOMPLETE", "DEFERRED", "E_PLAN_STALE", "OATS_TIMEOUT", "HOST_UNREACHABLE", "invalid", "error", "FAILED"]) expect(actLine("start", "ended", { instance: "a" }, who, { result: code, ms: 1 })).toContain(` result=${code} `);
+  });
+
   it("a name the prototype holds is no act, and throws nothing", () => {
     for (const verb of ["__proto__", "constructor", "toString", "hasOwnProperty"]) expect(isAct(verb, { runSource: true })).toBe(false);
   });
@@ -182,6 +197,24 @@ describe("why an act was held", () => {
     expect(reads.every((call) => /is not an agent of this OATS deployment's|OATS names no soul for/.test(call.line))).toBe(true);
     // Every other names a word of the list.
     expect(calls.filter((call) => call.reason !== null && !(HOLD_REASONS as readonly string[]).includes(call.reason!))).toEqual([]);
+    // A refusal of the plugin's own is BUILT in two places alone, both in core.ts (`refusal`, `invalid`), and `invalid`
+    // has no other name: a guard cannot refuse round the word (a refusal built by hand, or through an alias).
+    const built: string[] = [];
+    const aliased: string[] = [];
+    for (const file of files) {
+      const source = await readFile(join(SERVER, file), "utf8");
+      for (const line of source.split("\n")) {
+        if (/^\s*(\*|\/\/)/.test(line)) continue;
+        if (/new experimental_PluginRpcRefusal\(/.test(line)) built.push(file);
+        if (/(=|:|,|\()\s*invalid\b(?!\()/.test(line) && !/^import /.test(line) && !/export const invalid/.test(line)) aliased.push(`${file}: ${line.trim()}`);
+      }
+    }
+    expect(built).toEqual(["core.ts", "core.ts"]);
+    expect(aliased).toEqual([]);
+    // The README's table of the words is the list: each word once, in the list's order.
+    const readme = await readFile(join(SERVER, "..", "README.md"), "utf8");
+    const section = readme.slice(readme.indexOf("| `why` | the hold |"));
+    expect([...section.slice(0, section.indexOf("\n\n")).matchAll(/^\s*\| `([a-z-]+)` \|/gm)].map((match) => match[1]).filter((word) => word !== "why")).toEqual([...HOLD_REASONS]);
     // And every word is used: by a guard, or (the last five) by `core.act` itself.
     const core = await readFile(join(SERVER, "core.ts"), "utf8");
     const used = new Set([...calls.map((call) => call.reason), ...["read-refused", "machine-not-reached", "cancelled-before-sent", "fault", "refused"].filter((word) => core.includes(`"${word}"`))]);

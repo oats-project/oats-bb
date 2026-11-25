@@ -3,9 +3,10 @@
 // declined: the terminal probe of 21 Nov 2026). Two calls of bb's: `terminals.create`, then
 // `experimental_openTerminal`; and two more that make it safe: `terminals.get` after the open,
 // which says a command that ended at once (the tab then never shows, and bb says nothing), and
-// `terminals.close` for a terminal bb did not show (it would stay attached, on no tab).
+// `terminals.close` for a terminal this press created and bb did not show (it would stay
+// attached, on no tab).
 //
-// ONE tab per agent: a terminal of the same title that still runs on that machine is shown again,
+// ONE tab per agent: a terminal of the same title, in the agent's home, that still runs on that machine is shown again,
 // never a second viewer.
 
 /** What this needs of bb's SDK (`useSdk().terminals`) and of its navigation, narrowed to what is called. */

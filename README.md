@@ -686,6 +686,19 @@ or a git URL, or an extension loaded by an `extensions` entry or dropped into th
 directory, is not recognised; and nothing proves the directory is the one bb's server
 uses.
 
+**oh-my-pi on the same host.** bb-app runs oh-my-pi (`omp`) as its `acp-omp` provider,
+with its server's environment, and oh-my-pi follows `PI_CODING_AGENT_DIR`: on a pi folder
+with no `config.yml` it renames `settings.json` to `settings.json.bak` and writes its own
+`config.yml`, which pi does not read (seen with bb-app 0.50.1 and oh-my-pi 19.1). pi then
+loads none of the folder's packages. Readiness, `oats bb doctor` and a pi launch then
+name it:
+`bb's pi has no settings.json, and settings.json.bak is there instead: oh-my-pi moved it
+… Turn that off (bb provider disable acp-omp), then copy settings.json.bak back to
+settings.json` (with config.yml alone: give it a settings.json listing
+`npm:@awebai/oats-pi`, `PI_CODING_AGENT_DIR=<that directory> pi install
+npm:@awebai/oats-pi`). On a host with oh-my-pi installed, disable `acp-omp` in bb before bb's
+server first starts on its pi folder.
+
 **oats.aweb 1.48.0 or later, for pi on bb.** Up to 1.47.0, oats.aweb requires
 `@awebai/pi` in the pi folder of every pi launch when its `delivery` setting is `channel`
 (the default), on any backend: the very package this provider refuses in bb's pi, so no

@@ -269,7 +269,7 @@ while its Terminal tab has the focus.
 bb's own composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts
 on its own when one of them is used: an agent whose thread was archived or deleted in bb stays in
 the roster, as a row that says which of the two happened and what to do
-([Outside OATS](#outside-oats)), and its soul's page says "thread missing", with Start… and Retire…. Nothing is retired because a thread was
+([Outside OATS](#outside-oats)), and its soul's page says the same of it, with its acts. Nothing is retired because a thread was
 deleted. A thread stopped in bb alone is not stopped for OATS: stop an agent with the OATS act, so
 that it stays stopped.
 
@@ -678,7 +678,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 | Tab | Shows |
 |---|---|
 | **Instance** | the instance's name as words, with the two letters of that name in a tile beside it (the name's own initials, never its soul's), its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message alone (with none, "approval" for a tool approval). How long it waits is the status line's to say, once ("Needs you · 5 d"); since when, by the clock, is no second line of the page and no tooltip: the Activity's "Waiting claim" row holds the claim's instant. **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the card's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: on the page's face the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; under its fold (**Details**, closed) the owning human and the messaging ID, with its Copy: asked for, not read on every page. |
-| **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's: its fold says what was observed, the soul and the agents root). No fold stands alone at the tab's foot. The soul's description is two lines at most here, whole on the soul's page. |
+| **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls tab is shown in this release (the setting `pages`; the default shows it; where a deployment hides it the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's: its fold says what was observed, the soul and the agents root). No fold stands alone at the tab's foot. The soul's description is two lines at most here, whole on the soul's page. |
 
 The Instance tab ends with two more sections. **Readiness** (`oats readiness`): one line
 that says whether it is ready ("Ready", or how many checks fail), then, behind "Checks and
@@ -885,9 +885,8 @@ image of the created agent's thread, because their `oats` is a fake that makes n
 it names is one of the fixture's). The created state is shown by the unit tests and by the real
 run, whose image is the new agent's own thread, new in the roster under its parent.
 
-A soul's page (the Souls page is not shown in a release's default) still holds the earlier form: a
-name, a task, Preview (`spawnPreview`, the kernel's preview as short lines) and Spawn in bb. It
-goes when the workspace's pages are rebuilt.
+A soul's page has ONE button, **New agent**, which opens this form with that soul chosen (the
+earlier short form that stood there, a name, a task and Preview, is gone).
 
 Not in the form yet (a later change), by the Desktop's rows: where to run, on another machine
 (D-242, D-263: the agent runs on the machine that holds the deployment, which the preview names);
@@ -898,6 +897,56 @@ at spawn (D-255, D-264); the Launch prompts of the preview (D-256; what sets up 
 shown); "Changed: press Spawn again" (D-257: Spawn is off while the values on screen have no
 preview, so a press is never for other values); the keys to a field (D-258); "Show its row" for a
 spawn in flight (D-259); a failed spawn kept with Reopen (D-262); the draft kept (D-265).
+
+## The Workspace page
+
+ONE row of the sidebar's block, **Workspace**, as the Desktop has it, and one page with four tabs:
+**Souls**, **Capabilities**, **Teams**, **Machines** (the Desktop's order; Souls and Capabilities
+with their count in the tab). A tab is a route of its own (`/plugins/oats/souls`, …: a link to a
+tab, or to a soul, holds); `/plugins/oats/workspace` opens the first tab that is shown. The setting
+`pages` names the tabs that are shown (all four by default); the page is there while one is. It
+was four pages, hidden by default until their text and layout met the standard: they were audited
+row by row against it and against the Desktop, and built by the ruling on that audit (25 Nov 2026).
+
+Rules of every tab: **no sentence** in the ordinary state (none of the Desktop's explaining
+paragraphs came over: the tabs carry the counts; "About capabilities" is the one fold that
+explains); a description is **one line** in a list, cut at a word with "…" (`OneLine`,
+`app/workspace/Workspace.tsx`: the words that fit are measured), whole in the line's title and on
+the thing's own page; a list of twelve or more has a search field; an empty list is two words
+("No souls."); while a tab is read it says "Reading…"; a read that failed is a notice in a
+person's words with Retry, the kernel's or the host's message under its Details; what a tab draws
+of the roster (counts of agents, a soul's agents) stands under the roster's one notice while OATS
+cannot be read. Nothing on these tabs acts on the workspace yet (a team's and a machine's acts,
+a capability's and a team's own page, and three more reads follow in their own change).
+
+- **Souls.** The souls in groups by where they come from ("workspace", a member repository's
+  name, a package with its version), a heading only where it tells groups apart. A row: the soul's
+  own name (its key is the row's title), one line of what it does, how many of its agents RUN
+  (nothing where none does), "Can't spawn" where a spawn would be refused.
+- **A soul's page** (`/plugins/oats/souls/<key>`) opens over the list, at every width, with
+  "← Souls": its key; **New agent** (off, with "Can't spawn here", for a soul that cannot be
+  spawned); what it does, whole; **Harness · model** and **Teams** (the default first); its
+  **Capabilities** as rows, the ones that fill a core place first and tagged "core", each with why
+  the soul has it (the kernel's word: "workspace", "soul"); its **Agents** as the roster says them
+  (the state as a mark and its word, the reason after it, the tmux mark; a row opens the agent's
+  thread or its own page; one whose thread bb does not list has its acts on the row); and under
+  the page's one **Details**, where it is defined and why it cannot be spawned.
+- **Capabilities.** **Core**: Knowledge, Messaging, Tasks, each with the capability that fills it
+  or "none". Then each capability: its id, "core" and "repo only" where they hold, "by <source>",
+  one line of what it does.
+- **Teams.** Each team: its label, "Default team", how many of this deployment's agents are on it,
+  what it is for; under its Details its address on the messaging provider, who may join, where it
+  is declared. A team with no address yet says "No address yet"; where it is the default team it
+  is a notice first, since nothing can be spawned until it has one. The workspace's teams and this
+  computer's own stand under a heading each only where both are there. "Which teams each soul may
+  join" is one fold.
+- **Machines.** One list: this computer first, by its name, with its agents; then each machine
+  OATS has registered, by its name; its id, ssh host and the workspace's folder under its Details.
+  No check is run.
+
+What the kernel answers and the tabs read is in `kernel/workspace.ts` (`oats souls`, `oats
+capabilities`, `oats teams`, `oats server list`); a kernel that answers less draws less (no Core
+part, no "by", no groups), never a guess.
 
 ## Automations
 
@@ -1068,7 +1117,7 @@ What the features share, beyond the entries:
   `setNewAgent((navigate, target) => …)`, where `target.soul` is a soul's key to start with. Every
   "New agent" then opens it through `openNewAgent`; until a feature names one it opens the Souls
   page where that page is shown, and is absent where it is not.
-- **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
+- **A row in the sidebar's block.** A feature with a page of its own lists it under Workspace
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
   `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.
 - **A server test of a feature's verbs** starts the whole backend with `startBackend()`

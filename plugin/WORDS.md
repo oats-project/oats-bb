@@ -308,6 +308,29 @@ labels, hints, statuses and refusals are used as they are; these differ.
 | Under the fields | a soul's description under Soul; "Instance name: <name>" or "Left empty, the kernel numbers it." under Name; a line under Relationship; "Which instance" over its choice | nothing: the description is in the soul's list, the name and the relationship are rows of the column, and the instance's choice says "Choose an instance…". (The audit's N4 also names the Soul field's title for the description: not set: the description is whole in the list's option, and a title would say it a second time) | Each repeated the field or the column beside it (the text cut). |
 | "Preview ready" | in the status line once the preview is read | not said | The column itself shows it is read; a status is said only for what a person waits on. |
 
+## The Workspace page: Souls, Capabilities, Teams, Machines
+
+By the audit of these pages and its ruling (25 Nov 2026). Joan's principle ("little text, only when
+absolutely necessary") wins here over "the Desktop's words are the words" wherever the Desktop
+explains.
+
+| what | the Desktop says | the plugin says | why |
+|---|---|---|---|
+| The page | **Workspace**, with a breadcrumb (Home › Workspace › Souls) and five tabs | **Workspace**, one row of the sidebar, four tabs: Souls, Capabilities, Teams, Machines | The Desktop's one entry. No breadcrumb (bb's own bar names the page); no Setup tab (not built). |
+| What a soul is, what a capability is, what a team is | a paragraph over each list | nothing over the lists; **About capabilities**, one fold, closed, with the Desktop's text ("agent" for "instance") | No sentence that states the ordinary. |
+| A soul's or a capability's description in a list | two lines, cut with "…" | ONE line, cut at a word with "…"; whole on its page and in the line's title | One line per row; never cut mid-word. |
+| How many agents a soul has | "2 agents running" / "No agents running · 1 stopped" | "2 running"; nothing where none runs | "No agents running" ten times says the ordinary; the soul's page lists them all. |
+| A soul that cannot be spawned, on its row | "Can't spawn here · <reason>" | **Can't spawn**; on its page "Can't spawn here" beside New agent, the kernel's words under Details | Two words on a row; the reason is one press away. |
+| The souls' groups | "WORKSPACE · member repo · host · 8 souls" | "WORKSPACE 8"; "OATS.OKF 6.2.0 2" | The group and its count; the rest is under a soul's Details. |
+| A soul's capabilities | rows: name, **by** source, one line, a ✓ | rows: name, "core", why the soul has it ("workspace", "soul") | What a person asks on a soul's page is why it is there; what it does is on the capability. |
+| An agent of the soul whose thread bb does not list | (the Desktop has no thread) | the roster's words ("Stopped · deleted in bb", "Needs you · may still run") and its acts | One sentence per thing everywhere; "thread missing" was said only here. |
+| A team's default mark | the tag **Default team** | **Default team**, as text after the label | The Desktop's words; no bare chip. |
+| A team with no provider id | "The default team <label> has no provider id yet: nothing can be spawned until it has one." | on its row **No address yet**; where it is the default team, the notice "The default team <label> has no address yet: nothing can be spawned until it has one.", the kernel's words and remedy under Details | "Address" is the Desktop's word for the team on the provider; "not mapped" was nobody's. |
+| A team's address, who may join | on the card | under the row's **Details** | Read once, when wiring a machine. |
+| Machines | "The computers this workspace runs on."; **This computer**; reachable; the OATS version | one list: "<name> · this computer · N agents", then each machine by its name; ssh host and folder under Details | No sentence; no check is run yet, so nothing is said of reach or version. |
+| No other machine | "No other machine runs this workspace yet." | nothing under this computer's row | A row alone says it. |
+| An empty list | "No souls are materialized in this deployment yet." and the like | "No souls.", "No capabilities.", "No teams.", "No machines.", "No agents." | Two words. |
+
 ## Not kept
 
 Joan's direction of 23 Nov 2026: "Design principles: luxury software, little text (only when

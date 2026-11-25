@@ -14,10 +14,11 @@
 // answer with one named field changed: test/mail/mail.test.tsx): "Unverified sender", "Signature
 // failed", "(no subject)", "<team>: <N> conversations can't be read", and the lines of
 // E_MAIL_TOO_LARGE and of a read that ran out of time.
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
+import { atomicWrite } from "../files.mjs";
 
 const AGENT = { instance: "redesign-ui-lead", thread: "thr_redesign" };
 const VERB = "operation run messaging:mail";
@@ -29,9 +30,8 @@ function answer(behaviour) {
   const verbs = { ...config.verbs };
   if (behaviour === null) delete verbs[VERB];
   else verbs[VERB] = typeof behaviour === "string" ? { file: `mail/${behaviour}` } : behaviour;
-  // Written beside and moved into place: the fake reads this file at every `oats` it stands for.
-  writeFileSync(`${FAKE_CONFIG}.next`, JSON.stringify({ ...config, verbs }));
-  renameSync(`${FAKE_CONFIG}.next`, FAKE_CONFIG);
+  // Renamed into place (../files.mjs): the fake reads this file at every `oats` it stands for.
+  atomicWrite(FAKE_CONFIG, JSON.stringify({ ...config, verbs }));
 }
 
 const inMail = (id) => `${testId("oats-mail")} ${testId(id)}`;

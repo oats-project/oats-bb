@@ -901,7 +901,8 @@ awebai/oats 7355f353; the decoder in `kernel/mail.ts` is otherwise its rules, on
    answers both as `""` for an identity it could not read (`identity-missing`,
    `identity-unreadable`: recorded in `test/fixtures/mail/mail-identity-missing.json`), and the
    Desktop's decoder wants them non-empty: read by its rule, the answer that says one team's mail
-   can't be read would be unreadable whole.
+   can't be read would be unreadable whole. The rule here is the one decided for the contract on
+   oats-project/oats#2138; once the Desktop's decoder takes it, this is no difference any more.
 
 **Why mail cannot be read.** ONE line, then Retry, and under Details the kernel's code with its
 own sentence (the plugin's sentence for the two codes that quote the process, above):

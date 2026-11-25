@@ -9,9 +9,9 @@
 //   5  an agent with no messaging layer has no Mail tab
 // No check prints a body: a failing one prints subjects, counts or an argv.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { launchBrowser, testId, textOf, texts, visible } from "../../browser.mjs";
+import { completeLines } from "../../files.mjs";
 
 const OUT = process.env.OUT ?? "/home/node/out";
 const REAL = process.env.MAIL_REAL ?? "/home/node/mailreal";
@@ -25,8 +25,9 @@ const check = (ok, what, detail = "") => {
 };
 /** The agent's unread mail, as `aw` counts it without acknowledging anything. */
 const unread = () => execFileSync("aw", ["mail", "inbox", "--count-only"], { cwd: READER, encoding: "utf8" }).trim().split("\n").pop();
+// The wrapper appends one line a call while the plugin runs: read by its complete lines (../../files.mjs).
 const mailCalls = () =>
-  readFileSync(join(REAL, "argv.jsonl"), "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)).filter((argv) => argv[0] === "operation");
+  completeLines(join(REAL, "argv.jsonl")).map((line) => JSON.parse(line)).filter((argv) => argv[0] === "operation");
 const inMail = (id) => `${testId("oats-mail")} ${testId(id)}`;
 const click = (selector, index = 0) => `document.querySelectorAll(${JSON.stringify(selector)})[${index}].click()`;
 const subjects = `JSON.stringify(${texts(inMail("oats-mail-subject"))})`;

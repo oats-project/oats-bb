@@ -22,7 +22,8 @@
 // could not read (`identity-missing`, `identity-unreadable`: lib/mail-read.mjs, `s.self?.alias ?? ""`).
 // Read by that rule, the very answer that says "this team's mail can't be read" is unreadable
 // whole. Here an identity WITH an error may have them empty (the plugin draws neither); one
-// without an error may not.
+// without an error may not. That is the rule decided for the contract on oats-project/oats#2138:
+// once the Desktop's decoder takes it, this is no difference any more.
 //
 // What leaves this module is what the plugin draws, and nothing else of a message but a key the
 // app only compares (a hash of the message's team and id, made here: neither crosses): RECEIVED mail

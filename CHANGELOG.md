@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### The session provider
+
+- **Readiness says when the pi model check is off.** The check refuses a model only where
+  bb's list of pi's models is whole, and bb's pi keeps the settings it started with: after
+  a change to bb's pi `settings.json` under a running bb (pi writes it itself), every id
+  that is not listed passed, one pi does not have failed as its thread started, and
+  nothing said the check was off. A read with no planned launch (`oats readiness`, `oats
+  bb doctor`) now carries the warning `session-provider-pi-model-check-off`: "the pi model
+  check is off until bb restarts: bb's pi settings changed after it started (restart
+  bb-app to turn it back on)". A warning: nothing is refused for it. It is given where a
+  pi launch would go on and bb-app's record of its start can be read; not where
+  `enabledModels` is set (a restart does not turn the check on there), nor for a bb with
+  no pi. README, "pi" and "Readiness".
+
+### Development
+
+- **The contract tests' first bb is off bb's default ports.** Each contract container's
+  bb ran on 38886 and 38887, which are in Linux's ephemeral range (32768-60999): a
+  listener on port 0 or any outgoing connection of the container can hold one, and bb's
+  start then fails. It now runs on 18886 and 18887 (`test/contract/rig.mjs`), named to
+  the provider as a deployment names such a bb (`server`, `hostDaemonPort`). The
+  provider's defaults are unchanged: a person's bb stays on bb's own ports.
+
 ## 0.4.0
 
 A stop archives the agent's thread, so an agent OATS stopped stays stopped. A host stop is

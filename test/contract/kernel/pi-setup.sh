@@ -10,6 +10,9 @@
 set -eu
 RUN=${RUN:-/home/node/pi-kernel-run}
 BB_VERSION=$(bb --version)
+# Where the container's bb is (test/contract/rig.mjs: not on bb's default ports), as the
+# rig's shell names it for bb's CLI; the deployment names it to the provider below.
+: "${BB_SERVER_URL:?} ${BB_HOST_DAEMON_PORT:?}"
 FRAMEWORK=${FRAMEWORK:-v1.28.0}
 commit() { git -c user.name=kernel-run -c user.email=kernel-run@example.invalid commit -q "$@"; }
 
@@ -57,7 +60,7 @@ git clone -q --bare . "$WORKSPACE"
 cd "$RUN/deploy"
 oats onboard "$RUN/deploy" --workspace "file://$WORKSPACE" > /dev/null
 # bb's pi configuration is the container's own ~/.pi/agent (the image installed @awebai/oats-pi there).
-printf '%s\n' 'settings:' '  oats.bb:' '    trust: container' "    version: $BB_VERSION" "    dataDir: $HOME/bbdata" "    piAgentDir: $HOME/.pi/agent" \
+printf '%s\n' 'settings:' '  oats.bb:' '    trust: container' "    version: $BB_VERSION" "    dataDir: $HOME/bbdata" "    server: $BB_SERVER_URL" "    hostDaemonPort: $BB_HOST_DAEMON_PORT" "    piAgentDir: $HOME/.pi/agent" \
   'launch-configs:' '  pi-full:' '    harness: pi' '    yolo: true' '    default: true' '  claude-full:' '    harness: claude' '    yolo: true' '    default: true' >> oats-local.yaml
 oats sync --dir "$RUN/deploy" > /dev/null
 echo "pi-kernel-run: kernel $KERNEL_VERSION, provider $SHIPPED, bb $BB_VERSION, pi $(pi --version)"

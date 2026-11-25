@@ -27,12 +27,12 @@ import { execFileSync } from "node:child_process";
 import { after, before, test } from "node:test";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BB_VERSION, repo, rig, sleep, waitFor } from "../rig.mjs";
+import { BB_SETTINGS, BB_VERSION, repo, rig, sleep, waitFor } from "../rig.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RUN = "/home/node/pi-kernel-run";
 const name = `oats-bb-pi-kernel-run-${process.pid}`;
-const SETTINGS = { version: BB_VERSION, trust: "container", dataDir: "/home/node/bbdata" };
+const SETTINGS = { ...BB_SETTINGS, version: BB_VERSION, trust: "container", dataDir: "/home/node/bbdata" };
 const box = rig({
   name,
   image: `oats-bb-contract-pi:${BB_VERSION}`,

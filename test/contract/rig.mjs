@@ -16,6 +16,23 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const repo = resolve(here, "../..");
 export const BB_VERSION = readFileSync(resolve(repo, "bb-version"), "utf8").trim();
 export const MODEL = "claude-opus-5-5";
+// Where the container's bb listens: not on bb's default ports (38886 and 38887), which are
+// in Linux's ephemeral range (32768-60999). A port in that range can be held by a listener
+// on port 0 or by any outgoing connection of the container (curl, bb's CLI, bb's own
+// workers), and bb-app's bind of it then fails. These are below the range, as the extra
+// bbs of contract.test.mjs are.
+export const BB_SERVER_PORT = 18886, BB_DAEMON_PORT = 18887;
+export const BB_SERVER = `http://127.0.0.1:${BB_SERVER_PORT}`;
+/** The flags that put bb-app there. */
+export const BB_PORT_ARGS = `--server-port ${BB_SERVER_PORT} --host-daemon-port ${BB_DAEMON_PORT}`;
+/** What the provider is told of that bb, as a deployment whose bb is not on bb's default
+ *  ports names it: its server, and its host daemon's port (README, "Two bbs on one host"). */
+export const BB_SETTINGS = Object.freeze({ server: BB_SERVER, hostDaemonPort: BB_DAEMON_PORT });
+/** What begins every shell line run in the container: bb's own CLI, run there by a test,
+ *  finds that bb as a person's shell would be told to (the provider's calls are told by
+ *  its settings, and take neither variable from its environment). bb-app itself is not
+ *  started through such a line: its server and what it runs carry neither. */
+export const BB_CLI_ENV = `export BB_SERVER_URL=${BB_SERVER} BB_HOST_DAEMON_PORT=${BB_DAEMON_PORT}`;
 export const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 export async function waitFor(what, read, { timeoutMs = 60_000, everyMs = 400 } = {}) {
@@ -30,7 +47,7 @@ export async function waitFor(what, read, { timeoutMs = 60_000, everyMs = 400 } 
 
 /** One container of `image` (built from `dockerfileDir` at the pinned bb), named `name`.
  *  `runArgs`: more `docker run` arguments. `entry`: the provider's command in the
- *  container. `settings`: the provider's settings for every call. `mock`: the model endpoint's
+ *  container. `settings`: the provider's settings for every call, beside where bb is (BB_SETTINGS). `mock`: the model endpoint's
  *  script in this directory, or several. `bbEnv`: what bb's server gets in its environment (the mock
  *  Anthropic endpoint and a dummy key, for Claude threads). `ready`: what the start waits
  *  for (a check that answers ready, with no planned launch). */
@@ -39,7 +56,7 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
   /** Run a shell line in the container. → stdout. `ok: false` tolerates a nonzero exit. */
   function sh(line, { input, ok = true } = {}) {
     return new Promise((done, reject) => {
-      const child = spawn("docker", ["exec", "-i", name, "sh", "-c", `cd ~ && ${line}`], { stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn("docker", ["exec", "-i", name, "sh", "-c", `${BB_CLI_ENV}; cd ~ && ${line}`], { stdio: ["pipe", "pipe", "pipe"] });
       let stdout = "", stderr = "";
       child.stdout.on("data", (chunk) => { stdout += chunk; });
       child.stderr.on("data", (chunk) => { stderr += chunk; });
@@ -54,7 +71,7 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
    *  settings in OATS_SETTINGS. → the answer envelope. */
   async function provider(verb, input, overrides = {}) {
     const request = { schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb, input };
-    const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify({ ...settings, ...overrides })}' node ${entry} session ${verb}`, { input: JSON.stringify(request) });
+    const stdout = await sh(`OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify({ ...BB_SETTINGS, ...settings, ...overrides })}' node ${entry} session ${verb}`, { input: JSON.stringify(request) });
     const answer = JSON.parse(stdout);
     assert.equal(answer.verb, verb);
     return answer;
@@ -100,7 +117,7 @@ export function rig({ name, image, dockerfileDir, runArgs = [], entry = "/repo/o
   const isReady = ready ?? (async () => (await provider("check", { home: null, soul: null })).result?.status === "ready");
   async function startBb() {
     await run("docker", ["exec", "-d", ...Object.entries(bbEnv).flatMap(([key, value]) => ["-e", `${key}=${value}`]), name, "sh", "-c",
-      "cd ~ && bb-app --data-dir ~/bbdata --server-bind-host 127.0.0.1 --no-in-app-updates >> bb-app.out 2>&1"]);
+      `cd ~ && bb-app --data-dir ~/bbdata --server-bind-host 127.0.0.1 ${BB_PORT_ARGS} --no-in-app-updates >> bb-app.out 2>&1`]);
     await waitFor("bb to be ready", isReady, { timeoutMs: 180_000, everyMs: 1_000 });
   }
 

@@ -1107,6 +1107,15 @@ test("a session OATS lost has no Stopped row: an earlier stop's time is never pu
   expect(eventReads(stopped)).toBe(1);
 });
 
+// The lead's second look (25 Nov 2026): the page of an agent that runs outside OATS said "Stopped <date>" in its
+// Session card under a header that says it runs. The card says what the line says: "Stopped in OATS", and when.
+test("an agent that runs outside OATS: its Session card says \"Stopped in OATS\" and when OATS recorded the stop, never \"Stopped\" alone", async () => {
+  const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in this home on bb, and OATS recorded this instance stopped" };
+  const outside = panel({ threadId: CHILD_THREAD }, { agent: (agent: Agent): Agent => ({ ...agent, waiting: null, running: false, runtimeState: "stopped", sessionEnd: "stopped", startedAt: null, outsideOats: report }) });
+  await waitFor(() => expect(stoppedFact(outside)).toBe(`Stopped in OATS${waitingClock("2026-11-23T18:01:33.424Z", NOW)}`));
+  expect(within(outside.getByTestId("oats-panel-state")).getByTestId("oats-state").textContent).toBe("Running outside OATS");
+});
+
 // The time of a stop is an extra: when the read of the events fails, the Session says none, and
 // nothing of the failure is drawn on the card or in the header (the Activity, read on a press, has its own notice).
 test("a stopped agent whose events cannot be read has no Stopped row, and no error in its header or its Session", async () => {

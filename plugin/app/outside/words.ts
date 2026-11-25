@@ -102,6 +102,8 @@ export const OUTSIDE_RECORDED = "stopped in OATS";
  * Nov 2026 on T7's form: not "Stop it to bring it back.", which reads as a contradiction.)
  */
 export const OUTSIDE_NEEDS = "Stop, then Start.";
+/** The label of the time OATS recorded the stop, on the page of an agent that runs outside OATS: what its line says ("stopped in OATS"), never "Stopped" alone beside a header that says it runs. */
+export const OUTSIDE_STOPPED_FACT = "Stopped in OATS";
 export const OUTSIDE_WHAT = `Someone sent it a message in bb. ${OUTSIDE_NEEDS}`;
 /** The same, of an agent the lifecycle offers no Start for here (its session provider is neither bb nor tmux; the report is never a tmux agent's): the one remedy this plugin has is Stop. */
 export const OUTSIDE_WHAT_STOP = "Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.";

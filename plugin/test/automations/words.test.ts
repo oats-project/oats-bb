@@ -363,7 +363,7 @@ describe("a run's row", () => {
   it("a run's time is a date and a time, with its year only when it is not this one; no time is no label", () => {
     const at = "2026-11-21T20:17:32.946Z";
     const when = runWhen(at, Date.parse("2026-11-25T12:00:00.000Z"))!;
-    expect(when.label).toBe(new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+    expect(when.label).toBe(new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
     expect(when.title).toBe(new Date(at).toLocaleString());
     expect(runWhen(at, Date.parse("2027-01-02T12:00:00.000Z"))!.label).toContain("2026");
     expect(runWhen(null, NOW)).toBeNull();

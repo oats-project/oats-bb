@@ -8,7 +8,8 @@ import type { ReactNode } from "react";
 import type { AutomationKind, AutomationList, AutomationRow, TriggerStatus, TriggerStatuses } from "../../contract/automations";
 import { allRuns } from "../../model/automation-runs";
 import type { RunOwner } from "../../model/automation-runs";
-import { Button, Lines, Loading, Notice, Stale, Tabs } from "../ui";
+import { Button, Lines, Loading, Notice, Stale } from "../ui";
+import { BUTTON_OUTLINE, PillTabs } from "./bb";
 import { readAge } from "../ui/words";
 import { Detail } from "./Detail";
 import type { DetailProps } from "./Detail";
@@ -68,20 +69,16 @@ export type ViewProps = {
   /** Above the list: what an act just did (a result). */
   result?: ReactNode;
   agentLink?: AgentLink;
-  /**
-   * The page's first thing, over the tabs and over a row's page: the place of the call to the OATS
-   * agent (a composer bar every OATS page mounts). It is its own block of the page's column, so the
-   * list's head stands where it stands with or without it.
-   */
-  above?: ReactNode;
 } & Pick<DetailProps, "onOpenFile" | "canOpenCapability" | "onOpenCapability">;
 
 const PANEL = "oats-automations-panel";
 /** A list read longer ago than this is marked with its age (the UX standard, freshness). */
 export const STALE_MS = 30_000;
-const FRAME = "mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 text-sm text-foreground";
+// Room is kept under the page's content (pb-16): the dock of every OATS page stands at its bottom right, and must cover no last row.
+// bb's own page's frame (its width and its paddings), with that room under it.
+const FRAME = "mx-auto box-border flex w-full max-w-5xl flex-col gap-4 px-4 pb-16 pt-3 text-sm text-foreground md:px-5 md:pt-4";
 
-export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, canOpenCapability, onOpenCapability, agentLink, above }: ViewProps) {
+export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, canOpenCapability, onOpenCapability, agentLink }: ViewProps) {
   // The filter and the search are the list's own, kept while a row's page or the other tab is shown.
   const [filter, setFilter] = useState<ListFilter>("all");
   const [query, setQuery] = useState("");
@@ -173,10 +170,9 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
   return (
     <div data-testid="oats-automations-page" className={fixed ? "flex h-full min-h-0 flex-col" : "h-full min-h-0 overflow-y-auto"}>
       <div data-testid="oats-automations" data-tab={tab} className={`@container ${FRAME} ${fixed ? "min-h-0 flex-1" : ""}`}>
-        {above === undefined || above === null ? null : <div data-testid="oats-automations-above">{above}</div>}
         {onRowPage ? null : (
-          <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-            <Tabs
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <PillTabs
               label="Automations"
               tabs={[
                 { id: "list", label: "Automations", count: any ? total : undefined },
@@ -186,12 +182,9 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
               onChange={onTab}
               panelId={PANEL}
             />
-            <span className="min-w-0 flex-1" />
-            <span className="flex items-center gap-2 pb-1">
-              <Button data-testid="oats-automations-refresh" aria-label="Refresh automations" title="Refresh" disabled={loading || refreshing} onClick={onRefresh}>
-                Refresh
-              </Button>
-            </span>
+            <button type="button" data-testid="oats-automations-refresh" aria-label="Refresh automations" title="Refresh" className={BUTTON_OUTLINE} disabled={loading || refreshing} onClick={onRefresh}>
+              Refresh
+            </button>
           </div>
         )}
         {/* A row's page draws no tabs, so no tab is there to name the panel: it is named in words. */}

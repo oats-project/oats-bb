@@ -11,6 +11,7 @@ import { openAgentPage } from "../home/agent-tab";
 import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { HELD_REASON, isUnreadable, Unreadable } from "../roster/unreadable";
+import { displayLine } from "../ui/text";
 import { useActs } from "./acts";
 import { HereContext } from "./here";
 import { PAGE_REREAD_MS, useAutomations } from "./read";
@@ -51,6 +52,21 @@ export const subPathOf = (tab: Tab, open: Open | null = null): string => (open !
 export function gateOf(answer: { code: string; message: string } | null, here: Here = HERE): Gate | null {
   if (answer === null || answer.code !== NO_AUTOMATIONS) return null;
   return { title: "Automations need OATS 0.29 or later", detail: `Update OATS to see the workspace's schedules and triggers and ${here.on}'s own, and where each one runs.`, code: answer.code };
+}
+
+/**
+ * The page's title in bb's own header: on a row's page a breadcrumb, as bb's own Automations page
+ * has one (bb draws the page's title, then the automation's name); else the page's title alone.
+ * The name is the list's; until the lists are read, the id's last part.
+ */
+export function usePageTitle({ subPath }: PluginNavPanelProps) {
+  const { open } = routeOf(subPath);
+  const read = useRead("automations", { live: false });
+  if (open === null) return null;
+  const answer = read.data?.[open.kind];
+  const row = answer !== undefined && answer.ok ? answer.list.rows.find((entry) => entry.id === open.id) : undefined;
+  const name = displayLine(row?.name ?? open.id.split("/").pop()) ?? "";
+  return { breadcrumbs: [{ label: name }], windowTitle: name };
 }
 
 type Lists = Result<"automations">;

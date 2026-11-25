@@ -122,7 +122,7 @@ export function SearchField({ label, value, onChange, placeholder }: { label: st
 }
 
 /** An on/off switch with its label beside it: `checked` is what is, `onChange` asks for the other. Space and Enter press it. */
-export function Switch({ label, name, title, checked, onChange, disabled = false, bare = false }: { label: string; /** the accessible name, where a list has many switches with one visible label: "local/daily-review enabled on this computer" (whether it is on is said by the switch's state) */ name?: string; /** what a press does, as the Desktop says it: "On here: click to turn it off on this computer" */ title?: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean; /** the switch alone, as bb's own rows draw one: no label and no "On" or "Off" beside it; `name` is then its only name */ bare?: boolean }) {
+export function Switch({ label, name, title, checked, onChange, disabled = false }: { label: string; /** the accessible name, where a list has many switches with one visible label: "local/daily-review enabled on this computer" (whether it is on is said by the switch's state) */ name?: string; /** what a press does, as the Desktop says it: "On here: click to turn it off on this computer" */ title?: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }) {
   return (
     <button
       type="button"
@@ -138,8 +138,8 @@ export function Switch({ label, name, title, checked, onChange, disabled = false
       <span aria-hidden="true" className={`inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-border p-0.5 ${checked ? "justify-end bg-primary" : "justify-start bg-muted"}`}>
         <span className={`size-3.5 rounded-full ${checked ? "bg-primary-foreground" : "bg-muted-foreground"}`} />
       </span>
-      {bare ? null : <span>{label}</span>}
-      {bare ? null : <span className="text-muted-foreground">{checked ? "On" : "Off"}</span>}
+      <span>{label}</span>
+      <span className="text-muted-foreground">{checked ? "On" : "Off"}</span>
     </button>
   );
 }

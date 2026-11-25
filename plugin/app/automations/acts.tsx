@@ -12,7 +12,8 @@ import { isKernelCode } from "../../kernel/result";
 import { DESCRIPTION_MAX, DESCRIPTION_RULE, descriptionValid } from "../../model/automations";
 import { attempt, errorMessage } from "../store";
 import type { Rpc } from "../store";
-import { Button, Card, Confirm, Field, INPUT, Lines, Loading, Modal, Result, Switch } from "../ui";
+import { Button, Card, Confirm, Field, INPUT, Lines, Loading, Modal, Result } from "../ui";
+import { RowSwitch } from "./bb";
 import type { ConfirmProps, MenuItem } from "../ui";
 import { displayLine, shown } from "../ui/text";
 import type { DetailProps } from "./Detail";
@@ -558,7 +559,7 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
 
   const switchOf = (row: AutomationRow): ReactNode =>
     row.group === "elsewhere" ? null : (
-      <Switch bare label={here.name} name={`${row.id} enabled on ${here.on}`} title={held[row.kind] ?? switchTitle(row, here)} checked={row.enabledHere} disabled={off(row)} onChange={() => void toggle(row)} />
+      <RowSwitch name={`${row.id} enabled on ${here.on}`} title={held[row.kind] ?? switchTitle(row, here)} checked={row.enabledHere} disabled={off(row)} onChange={() => void toggle(row)} />
     );
 
   const rowParts: Acts["rowParts"] = (row, now, host) => {

@@ -612,7 +612,7 @@ export function runWhen(iso: string | null, now: number): { label: string; title
   if (!Number.isFinite(at)) return null;
   const date = new Date(at);
   const sameYear = date.getFullYear() === new Date(now).getFullYear();
-  return { label: date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", ...(sameYear ? {} : { year: "numeric" }) }), title: date.toLocaleString() };
+  return { label: date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(sameYear ? {} : { year: "numeric" }) }), title: date.toLocaleString() };
 }
 
 /** Under a Runs table whose automation keeps less than it ran: with the count where the kernel gives one. */

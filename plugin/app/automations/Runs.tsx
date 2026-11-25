@@ -9,7 +9,8 @@
 import { useState } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { RunEntry, RunOwner } from "../../model/automation-runs";
-import { Button, LINK, Segmented, TARGET } from "../ui";
+import { LINK, TARGET } from "../ui";
+import { BUTTON_OUTLINE, FilterPills, RUN_ERROR, RUN_ROW, RUNS_BOX } from "./bb";
 import { shown } from "../ui/text";
 import { earlierNotKept, NO_RUNS, OLDER, runFailed, runLine, runWhen, RUNS_SHOWN } from "./words";
 import type { RunLine, RunMark } from "./words";
@@ -50,43 +51,45 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, open, onTogg
   const when = runWhen(line.at, now);
   const said = line.error !== null && (line.error.code !== null || line.error.message !== null) ? line.error : null;
   return (
-    <div role="listitem" data-testid="oats-run" data-of={entry.of} data-mark={line.mark} className="border-t border-border first:border-t-0">
-      {/* Fixed places: the mark, the time, then what takes the room (the automation and the agent), then the outcome's word at the right. At a phone's width the room-taker goes under. */}
-      <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 px-3 py-1.5 text-sm @2xl:grid-cols-[auto_auto_minmax(0,1fr)_auto]">
-        <span role="img" aria-label={mark.name} className={`flex size-4 shrink-0 translate-y-0.5 items-center justify-center ${mark.tone}`}>
+    <div role="listitem" data-testid="oats-run" data-of={entry.of} data-mark={line.mark}>
+      {/* bb's run row: the mark, the time, then what takes the room (the automation, the agent), and the outcome's word at the row's end. At a phone's width what takes the room goes under. */}
+      <div className={RUN_ROW}>
+        <span role="img" aria-label={mark.name} className={`inline-flex shrink-0 ${mark.tone}`}>
           <Icon name={mark.icon} className="size-4" />
         </span>
-        <time dateTime={line.at ?? undefined} title={when?.title} className="w-28 shrink-0 whitespace-nowrap tabular-nums text-foreground">
+        <time dateTime={line.at ?? undefined} title={when?.title} className="min-w-[16ch] shrink-0 whitespace-nowrap text-sm tabular-nums text-foreground">
           {when?.label ?? "—"}
         </time>
-        <span data-testid="oats-run-said" className={`min-w-0 break-words text-xs @2xl:col-start-4 @2xl:row-start-1 @2xl:text-right ${line.mark === "failed" ? "text-destructive-text" : line.mark === "unknown" ? "text-warning-text" : "text-muted-foreground"}`}>
-          {[line.what, line.word, ...line.notes].filter(Boolean).map((text) => shown(text as string)).join(" · ")}
-        </span>
-        <span className="col-span-3 flex min-w-0 flex-col gap-0.5 @2xl:col-span-1 @2xl:col-start-3 @2xl:row-start-1">
+        <span className="order-last flex min-w-0 basis-full flex-col gap-0.5 pl-[1.625rem] @2xl:order-none @2xl:flex-1 @2xl:basis-0 @2xl:pl-0">
           {withOwner ? (
-            <button type="button" data-testid="oats-run-owner" className="min-w-0 break-words rounded text-left text-sm text-foreground hover:underline" onClick={() => onOpenOwner?.(entry.owner)}>
+            <button type="button" data-testid="oats-run-owner" className="min-w-0 break-words rounded-sm text-left text-sm text-foreground hover:underline" onClick={() => onOpenOwner?.(entry.owner)}>
               {shown(entry.owner.name)}
             </button>
           ) : null}
           {line.agent === null ? null : <Agent name={line.agent} agentLink={agentLink} />}
         </span>
+        <span data-testid="oats-run-said" className={`ml-auto min-w-0 break-words text-right text-xs ${line.mark === "failed" ? "text-destructive-text" : line.mark === "unknown" ? "text-warning-text" : "text-muted-foreground"}`}>
+          {[line.what, line.word, ...line.notes].filter(Boolean).map((text) => shown(text as string)).join(" · ")}
+        </span>
       </div>
       {said === null ? null : (
-        <div className="px-3 pb-2">
-          <button type="button" data-testid="oats-run-toggle" aria-expanded={open} className={`${TARGET} inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground`} onClick={onToggle}>
-            <span aria-hidden="true" className={`inline-block transition-transform ${open ? "rotate-90" : ""}`}>
-              ▸
-            </span>
-            Details
-          </button>
+        <>
+          <div className="px-2 pb-1">
+            <button type="button" data-testid="oats-run-toggle" aria-expanded={open} className={`${TARGET} inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground`} onClick={onToggle}>
+              <span aria-hidden="true" className={`inline-block transition-transform ${open ? "rotate-90" : ""}`}>
+                ▸
+              </span>
+              Details
+            </button>
+          </div>
           {open ? (
-            // The kernel's own words, as text, in bb's look for a run's error: its code, then its message.
-            <div data-testid="oats-run-error" className="mt-1 flex min-w-0 flex-col gap-1 break-words rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
+            // The kernel's own words, as text, in bb's block for a run's error: its code, then its message.
+            <div data-testid="oats-run-error" className={RUN_ERROR}>
               {said.code === null ? null : <span>{shown(said.code)}</span>}
               {said.message === null ? null : <span>{shown(said.message)}</span>}
             </div>
           ) : null}
-        </div>
+        </>
       )}
     </div>
   );
@@ -120,7 +123,7 @@ export function Runs({ entries, now, withOwner = false, onOpenOwner, agentLink, 
     );
   return (
     <div data-testid="oats-runs" className="@container flex min-w-0 flex-col gap-2">
-      <div role="list" aria-label="Runs" className="overflow-hidden rounded-lg border border-border bg-card">
+      <div role="list" aria-label="Runs" className={RUNS_BOX}>
         {drawn.map((entry, at) => {
           const key = keyOf(entry, at);
           const line = runLine(entry);
@@ -128,10 +131,10 @@ export function Runs({ entries, now, withOwner = false, onOpenOwner, agentLink, 
           return <Row key={key} entry={entry} line={line} now={now} withOwner={withOwner} onOpenOwner={onOpenOwner} agentLink={agentLink} open={open} onToggle={() => setToggled((before) => new Map(before).set(key, !open))} />;
         })}
         {entries.length > shownCount ? (
-          <div className="border-t border-border p-1">
-            <Button variant="ghost" data-testid="oats-runs-older" className="w-full" onClick={() => setShownCount((count) => count + step)}>
+          <div className="p-1">
+            <button type="button" data-testid="oats-runs-older" className={`${BUTTON_OUTLINE} w-full border-transparent`} onClick={() => setShownCount((count) => count + step)}>
               {OLDER}
-            </Button>
+            </button>
           </div>
         ) : null}
       </div>
@@ -163,7 +166,7 @@ export function RunsTab({ entries, cut, now, onOpenOwner, agentLink }: { entries
           <select
             aria-label="Automation"
             data-testid="oats-runs-by-automation"
-            className={`${TARGET} min-w-0 max-w-full rounded-md border border-border bg-background px-2 text-sm text-foreground`}
+            className={`${TARGET} min-w-0 max-w-full flex-1 rounded-md border border-input bg-transparent px-2 text-sm text-foreground`}
             value={owner ?? ""}
             onChange={(event) => setFilter((before) => ({ ...before, owner: event.target.value === "" ? null : event.target.value }))}
           >
@@ -174,7 +177,7 @@ export function RunsTab({ entries, cut, now, onOpenOwner, agentLink }: { entries
               </option>
             ))}
           </select>
-          <Segmented
+          <FilterPills
             label="Result"
             options={[
               { id: "all", label: "All" },

@@ -14,6 +14,7 @@ import { readAge } from "../ui/words";
 import { Button, Card, Disclosure, Empty, LINK, Loading, Menu, Notice } from "../ui";
 import type { MenuItem } from "../ui";
 import { RunningContext, useHere } from "./here";
+import { BOX, BOX_FOOT, DETAIL, ICON_BUTTON, ICONS, SECTION, SECTION_HEAD } from "./bb";
 import { iconOf, SmallLine } from "./List";
 import { FactList, Quote } from "./parts";
 import type { QuoteLine } from "./parts";
@@ -165,12 +166,12 @@ function Does({ row }: { row: AutomationRow }) {
     );
   };
   return (
-    <section data-testid="oats-automation-sends" aria-label={doesTitle(row)} className="flex min-w-0 flex-col gap-2">
-      <h3 className="text-sm font-semibold text-foreground">{doesTitle(row)}</h3>
-      <div className="flex min-w-0 flex-col rounded-lg border border-border bg-card">
-        <div className="min-w-0 p-3">{body()}</div>
+    <section data-testid="oats-automation-sends" aria-label={doesTitle(row)} className={SECTION}>
+      <h3 className={SECTION_HEAD}>{doesTitle(row)}</h3>
+      <div className={BOX}>
+        <div className="min-w-0 px-3 py-3">{body()}</div>
         {foot.length === 0 ? null : (
-          <p data-testid="oats-automation-foot" className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          <p data-testid="oats-automation-foot" className={BOX_FOOT}>
             {foot.map((part, at) => (
               <span key={at} className="min-w-0 break-words">
                 {part}
@@ -385,7 +386,7 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
         ref={page}
         data-testid="oats-automation-detail"
         data-id={row.id}
-        className="@container mx-auto flex w-full max-w-3xl flex-col gap-5"
+        className={`@container ${DETAIL}`}
         onKeyDown={(event) => {
           if (event.key !== "Escape" || event.defaultPrevented) return;
           event.preventDefault();
@@ -406,7 +407,7 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
         </nav>
         <div data-testid="oats-automation-identity" className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-start gap-2">
-            <span aria-hidden="true" className={`mt-1 flex size-5 shrink-0 items-center justify-center ${bad ? "text-destructive-text" : "text-muted-foreground"}`}>
+            <span aria-hidden="true" className={`flex h-6 w-4 shrink-0 items-center justify-center ${bad ? "text-destructive-text" : "text-muted-foreground"}`}>
               <Icon name={iconOf(row, bad)} className="size-4" />
             </span>
             <h2 title={shown(row.id)} className="min-w-0 flex-1 break-words text-base font-semibold text-foreground">
@@ -416,16 +417,23 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
               {identityAction}
               {menu === undefined || menu.length === 0 ? null : (
                 <div data-testid="oats-automation-detail-menu">
-                  <Menu label={`Actions for ${shown(row.name)}`} items={menu} />
+                  <Menu label={`Actions for ${shown(row.name)}`} items={menu}>
+                    <span className={ICON_BUTTON}>
+                      <Icon name={ICONS.menu} className="size-4" />
+                    </span>
+                  </Menu>
                 </div>
               )}
             </div>
           </div>
-          <div className="flex min-w-0 flex-col gap-1 pl-7">
+          <div className="flex min-w-0 flex-col gap-1.5 pl-6">
             <SmallLine parts={plain} />
             {wrong.map((part, at) => (
-              <p key={at} data-testid="oats-automation-wrong" className="min-w-0 break-words text-xs text-destructive-text">
-                {shown(part.text)}
+              <p key={at} data-testid="oats-automation-wrong" className="flex min-w-0 items-start gap-1.5 text-xs text-destructive-text">
+                <span aria-hidden="true" className="flex h-4 shrink-0 items-center">
+                  <Icon name={ICONS.failing} className="size-3.5" />
+                </span>
+                <span className="min-w-0 break-words">{shown(part.text)}</span>
               </p>
             ))}
             {row.description === null ? null : (
@@ -441,8 +449,8 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
         </div>
         <Problem row={row} check={check} now={now} />
         <Does row={row} />
-        <section data-testid="oats-automation-history" aria-label="Runs" className="flex min-w-0 flex-col gap-2">
-          <h3 className="text-sm font-semibold text-foreground">Runs</h3>
+        <section data-testid="oats-automation-history" aria-label="Runs" className={SECTION}>
+          <h3 className={SECTION_HEAD}>Runs</h3>
           {statusFailure == null ? null : (
             // The state could not be read (again): said in words, the kernel's message and its code after, over what was read before.
             <div data-testid="oats-automation-status-failed">

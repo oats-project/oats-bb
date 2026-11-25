@@ -9,9 +9,10 @@
 import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { AutomationList, AutomationRow, TriggerStatuses } from "../../contract/automations";
-import { Empty, Menu, Notice, SearchField, Segmented, TARGET } from "../ui";
+import { Empty, Menu, Notice, TARGET } from "../ui";
 import type { MenuItem } from "../ui";
 import { shown } from "../ui/text";
+import { CARD, Chevron, FilterPills, ICON_BUTTON, ICONS, NAME, ROW, ROW_ICON, ROWS, SearchBox, SMALL } from "./bb";
 import { useHere } from "./here";
 import { EMPTY, failing, failingFirst, filterList, hostNameHow, hostUnnamed, LIST_FILTERS, listBanners, NO_MATCH, oneList, rowLine, schedulerOffLine, schedulerOn, SEARCH_FROM, searchRows, statusFor } from "./words";
 import type { LinePart, ListFilter } from "./words";
@@ -19,11 +20,6 @@ import type { LinePart, ListFilter } from "./words";
 /** What a row's acts add to it, where the page has them: its switch and its menu, at the row's end. */
 export type RowActs = { switchOf: (row: AutomationRow) => ReactNode; menuOf: (row: AutomationRow) => MenuItem[] };
 
-/**
- * The icons, by bb's own names for them (`experimental_Icon` draws bb's generic glyph for a name
- * its set does not hold, so each name here is one the live check saw resolve on bb-app 0.50.1).
- */
-export const ICONS = { schedule: "Repeat", trigger: "GitPullRequest", wake: "AlarmClock", failing: "CircleX", open: "ChevronRight" } as const;
 /** A row's icon: bb's red mark while it is failing, else its kind's (a wake has its own). */
 export const iconOf = (row: AutomationRow, bad: boolean): string => (bad ? ICONS.failing : row.kind === "trigger" ? ICONS.trigger : row.run === "wake" ? ICONS.wake : ICONS.schedule);
 const KIND_NAME = { schedule: "Schedule", trigger: "Trigger" } as const;
@@ -37,11 +33,11 @@ const TONE = { bad: "text-destructive-text", warn: "text-warning-text" } as cons
  */
 export function SmallLine({ parts }: { parts: readonly LinePart[] }) {
   return (
-    <span data-testid="oats-automation-line" className="flex min-w-0 flex-col text-xs text-muted-foreground @2xl:flex-row @2xl:flex-wrap @2xl:items-baseline">
+    <span data-testid="oats-automation-line" className={`${SMALL} flex min-w-0 flex-col gap-y-0.5 @2xl:min-h-5 @2xl:flex-row @2xl:flex-wrap @2xl:items-center`}>
       {parts.map((part, at) => (
         <span key={at} data-part="" data-tone={part.tone ?? undefined} title={part.title} className={`min-w-0 break-words ${part.tone === undefined ? "" : TONE[part.tone]}`}>
           {at === 0 ? null : (
-            <span aria-hidden="true" className="mx-1.5 hidden text-muted-foreground @2xl:inline">
+            <span aria-hidden="true" className="mx-1.5 hidden shrink-0 text-muted-foreground @2xl:inline">
               ·
             </span>
           )}
@@ -55,20 +51,14 @@ export function SmallLine({ parts }: { parts: readonly LinePart[] }) {
 function Row({ row, parts, bad, onOpen, acts }: { row: AutomationRow; parts: readonly LinePart[]; bad: boolean; onOpen: (row: AutomationRow) => void; acts?: RowActs }) {
   const off = !row.enabledHere && row.group !== "elsewhere";
   return (
-    <div role="listitem" data-testid="oats-automation-row" data-id={row.id} data-kind={row.kind} data-failing={bad} className="flex items-start gap-3 border-t border-border px-3 py-2.5 first:border-t-0">
-      {/* The icon's fixed place, at the name's height. Its name is said: a kind is never told by a glyph alone. */}
-      <span role="img" aria-label={bad ? "Failing" : KIND_NAME[row.kind]} data-testid="oats-automation-icon" className={`mt-0.5 flex size-5 shrink-0 items-center justify-center ${bad ? TONE.bad : "text-muted-foreground"}`}>
-        <Icon name={iconOf(row, bad)} className="size-4" />
+    <div role="listitem" data-testid="oats-automation-row" data-id={row.id} data-kind={row.kind} data-failing={bad} className={ROW}>
+      {/* The icon's fixed place. Its name is said: a kind is never told by a glyph alone. */}
+      <span role="img" aria-label={bad ? "Failing" : KIND_NAME[row.kind]} data-testid="oats-automation-icon" className={`${ROW_ICON} ${bad ? TONE.bad : "text-muted-foreground"}`}>
+        <Icon name={iconOf(row, bad)} className="size-4 shrink-0" />
       </span>
       {/* The name and its line take the room that is left, and only that. */}
-      <button
-        type="button"
-        data-testid="oats-automation-open"
-        aria-label={`Open ${shown(row.name)}`}
-        className={`${TARGET} flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded text-left`}
-        onClick={() => onOpen(row)}
-      >
-        <span data-testid="oats-automation-name" title={shown(row.id)} className={`min-w-0 max-w-full break-words text-sm font-medium ${off ? "text-muted-foreground" : "text-foreground"}`}>
+      <button type="button" data-testid="oats-automation-open" aria-label={`Open ${shown(row.name)}`} className={`${TARGET} flex min-w-0 flex-col items-start justify-center rounded-sm text-left`} onClick={() => onOpen(row)}>
+        <span data-testid="oats-automation-name" title={shown(row.id)} className={`${NAME} max-w-full ${off ? "text-muted-foreground" : "text-foreground"}`}>
           {shown(row.name)}
         </span>
         <SmallLine parts={parts} />
@@ -78,12 +68,16 @@ function Row({ row, parts, bad, onOpen, acts }: { row: AutomationRow; parts: rea
         {acts === undefined ? null : <div data-testid="oats-automation-switch">{acts.switchOf(row)}</div>}
         {acts === undefined ? null : (
           <div data-testid="oats-automation-menu">
-            <Menu label={`Actions for ${shown(row.name)}`} items={acts.menuOf(row)} />
+            <Menu label={`Actions for ${shown(row.name)}`} items={acts.menuOf(row)}>
+              <span className={ICON_BUTTON}>
+                <Icon name={ICONS.menu} className="size-4" />
+              </span>
+            </Menu>
           </div>
         )}
         {/* The chevron says the row opens; the row's own button is the control. */}
         <span aria-hidden="true" className="flex size-5 items-center justify-center text-muted-foreground" onClick={() => onOpen(row)}>
-          <Icon name={ICONS.open} className="size-4" />
+          <Chevron />
         </span>
       </div>
     </div>
@@ -139,18 +133,18 @@ export function List({ schedules, triggers, statuses, now, filter, onFilter, que
         <>
           <div className="flex flex-wrap items-center gap-2">
             {all.length < SEARCH_FROM ? null : (
-              <div className="min-w-40 flex-1">
-                <SearchField label="Search automations" value={query} onChange={onQuery} />
+              <div className="flex min-w-40 flex-1">
+                <SearchBox label="Search automations" value={query} onChange={onQuery} />
               </div>
             )}
-            <Segmented label="Show" options={LIST_FILTERS.map((option) => ({ ...option, count: count(option.id) }))} value={filter} onChange={onFilter} />
+            <FilterPills label="Show" options={LIST_FILTERS.map((option) => ({ ...option, count: count(option.id) }))} value={filter} onChange={onFilter} />
           </div>
           {drawn.length === 0 ? (
             <div data-testid="oats-automations-no-match">
               <Empty title={NO_MATCH} />
             </div>
           ) : (
-            <div role="list" aria-label="Automations" data-testid="oats-automations-rows" className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border bg-card">
+            <div role="list" aria-label="Automations" data-testid="oats-automations-rows" className={`${CARD} ${ROWS} min-h-0 flex-1 overflow-y-auto`}>
               {drawn.map((row) => {
                 const status = statusFor(row, statuses);
                 return <Row key={`${row.kind}:${row.id}`} row={row} parts={rowLine(row, status, now, running)} bad={failing(row, status)} onOpen={onOpen} acts={acts} />;

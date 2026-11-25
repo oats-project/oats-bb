@@ -178,6 +178,25 @@ for (const [name, value, extra] of [
   });
 }
 
+test("a launch that is refused says nothing of an identity home it would not have carried: no thread is started for it to be true of", async (t) => {
+  const { home, bb, seen, withoutPi } = await setup(t);
+  const outside = IDENTITY("/home/someone/.aweb-identity");
+  // Refused for a later entry of its env; for an argument; for a PATH with no pi on it.
+  for (const extra of [
+    { env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home), outside, entry("EDITOR", "vi", { source: "launch-config" })] },
+    { env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home), outside], args: ["--thinking", "high"] },
+    { env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home), outside], pathPrepend: [withoutPi] },
+  ]) {
+    const { doc, stderr } = await callSeen("launch", { home, instance: "dev-a", harness: "pi", model: "mock/echo", yolo: true, unset: [], args: [], promptFile: join(home, "TASK.md"), previous: null, ...extra }, { settings: (await fakeBackend(t)).settings(), bb, env: { PATH: PATH_WITHOUT_BWRAP } });
+    assert.equal(doc.ok, false, JSON.stringify(doc));
+    assert.equal(stderr, "", doc.error.code);
+  }
+  // The same env on a launch that goes on: said, once, before anything is written to bb.
+  const went = await seen({ env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home), outside] });
+  assert.equal(went.doc.ok, true);
+  assert.equal(went.stderr, NOT_CARRIED);
+});
+
 test("a home reached through a link: an identity home written by the other name of the home is still the home's, by where the two really are; one that is really elsewhere is not", async (t) => {
   const { dir, home, bb, seen } = await setup(t);
   mkdirSync(join(home, ".aweb-identity"));

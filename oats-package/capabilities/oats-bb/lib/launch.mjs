@@ -77,7 +77,10 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   if (notOffered !== null) throw fail(notOffered.code, notOffered.message);
   // A pi thread is given four variables at most and no more (lib/project-env.mjs); Claude's
   // whole launch env goes into its settings file.
-  const launchEnv = pi ? piLaunchEnv(input.env, input.pathPrepend, env.PATH, home, warn) : withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
+  // (What piLaunchEnv has to say of an entry it leaves out is kept until the launch is past
+  // its refusals: a launch that starts no thread says nothing of "this pi thread".)
+  const envNotes = [];
+  const launchEnv = pi ? piLaunchEnv(input.env, input.pathPrepend, env.PATH, home, (message) => envNotes.push(message)) : withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
   const unset = pi ? [] : readUnset(input.unset, launchEnv);
   // bb starts `pi` by the PATH the launch gives the thread: one with no pi on it would
   // answer a thread that ends at once.
@@ -216,7 +219,10 @@ export async function launch(input, settings, { deadline, env = process.env, spa
     // A pi launch's env goes into the env of the home's bb project, which is then exactly
     // this launch's. It reaches no process before the spawn, and the next launch rewrites
     // it whole, so a launch refused after it is still a refusal: nothing was started.
-    if (pi) await writeProjectEnv(bb, project.id, launchEnv);
+    if (pi) {
+      for (const message of envNotes) warn(message);
+      await writeProjectEnv(bb, project.id, launchEnv);
+    }
     // A Claude launch of a home that ran pi before: the names the pi launch left in
     // the project's env go. bb gives a project's env to every thread of it, and starts
     // `claude` by a project PATH: one composed for pi may hold no claude ("bb could not find

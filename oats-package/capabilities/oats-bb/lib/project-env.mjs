@@ -66,7 +66,8 @@ function pathInHome(value, home) {
  *  directory of `home` with it (pathInHome), not marked secret; any other value of it is
  *  left out, as before it was carried at all, and `note` is told so (never the value): a
  *  seat whose identity is not in the home's `.aw` then receives mail and cannot send, and
- *  nothing else would say why.
+ *  nothing else would say why. (`note` is told as the entry is read, before a later entry
+ *  may refuse the launch: the caller says it only of a launch that goes on.)
  *
  *  Every other entry is not carried. What becomes of it depends on who asked:
  *  - the kernel's and a capability's (oats.aweb's AWEB_DELIVERY and AWID_REGISTRY_URL come

@@ -14,7 +14,8 @@
 // body over the contract's 16 KiB is not the whole page unreadable here. The adapter cuts it at
 // 16 KiB, at a character's boundary, and marks the message shortened. (oats.aweb cuts such a body
 // itself and says `truncated: true`: `test/fixtures/mail/mail.json` holds one. The cut here acts
-// only on an answer that breaks the bound.)
+// only on an answer that breaks the bound.) A message is marked shortened too where the display
+// filter cut one of its lines at 2048 characters, or the body had more than MAIL_BODY_LINES lines.
 //
 // A SECOND DIFFERENCE, found on the recorded answers: the Desktop's decoder wants every identity's
 // `alias` and `identity` non-empty, and oats.aweb 1.48.0 answers both as "" for an identity it
@@ -29,7 +30,7 @@
 // looks like a credential reads "[withheld]"; the others show). Mail is other people's text: no
 // function here logs, throws with, or names a body.
 import { z } from "zod";
-import { displayLine, shown } from "../model/text.js";
+import { DETAIL_WITHHELD, MAX_DISPLAY_LINE, displayLine, shown } from "../model/text.js";
 import { checkHome } from "./input.js";
 import { codes, err, ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
@@ -122,7 +123,7 @@ export const mailMessage = z.object({
   at: z.string(),
   /** the body as display lines, line breaks kept; trailing blank lines gone */
   lines: z.array(z.string()),
-  /** the provider cut the message to fit its bounds, or the adapter cut the body at 16 KiB or at MAIL_BODY_LINES lines */
+  /** the provider cut the message to fit its bounds, or the adapter cut the body: at 16 KiB, at MAIL_BODY_LINES lines, or one of its lines at the display filter's 2048 characters */
   shortened: z.boolean(),
   /** what the provider says of who sent it, where it is a safety fact; null for a verified sender */
   sender: z.enum(["unverified", "failed"]).nullable(),
@@ -131,8 +132,6 @@ export const mailMessage = z.object({
 export const mailUnread = z.object({
   /** the team's label, one display line */
   team: z.string(),
-  /** the provider's word for what happened, one display line (oats.aweb: identity-missing, identity-unreadable, no-mail-read, threads-unreadable, conversation-unreadable, too-many-threads) */
-  code: z.string(),
   /** how many conversations the provider names as unreadable; null where it names none */
   conversations: z.number().int().nullable(),
 });
@@ -183,13 +182,22 @@ function cutBytes(body: string, bytes: number): { text: string; cut: boolean } {
 /**
  * A body as display lines: line breaks kept (CRLF and a lone CR as one), each line through the
  * display filter by itself, so a line that looks like a credential is withheld and the others
- * show; a line with nothing to show is an empty line. Trailing blank lines go.
+ * show; a line with nothing to show is an empty line. Trailing blank lines go. `cut`: the body had
+ * more lines than MAIL_BODY_LINES, or one of its lines was longer than the filter's one line
+ * (MAX_DISPLAY_LINE, 2048 characters) and is drawn cut there.
  */
 export function bodyLines(body: string): { lines: string[]; cut: boolean } {
   const all = body.replace(/\r\n?/g, "\n").split("\n");
-  const lines = all.slice(0, MAIL_BODY_LINES).map(shown);
+  let cut = all.length > MAIL_BODY_LINES;
+  const lines = all.slice(0, MAIL_BODY_LINES).map((line) => {
+    const drawn = shown(line);
+    // The display filter cuts a line at MAX_DISPLAY_LINE: a line it cut is a message shortened, and said so.
+    // (A cut line is MAX_DISPLAY_LINE long, less one where the cut fell inside a surrogate pair and one where it left a space at the end.)
+    if (line.length > MAX_DISPLAY_LINE && drawn !== DETAIL_WITHHELD && drawn.length >= MAX_DISPLAY_LINE - 2) cut = true;
+    return drawn;
+  });
   while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-  return { lines, cut: all.length > MAIL_BODY_LINES };
+  return { lines, cut };
 }
 
 /** The run's answer, decoded; an answer outside the contract is unreadable whole, and no part of it is shown. */
@@ -228,7 +236,8 @@ export function parseMail(document: unknown): Result<MailPage> {
     });
   const unread = (mail.identities as Row[])
     .filter((row) => row.error !== null)
-    .map((row): MailUnread => ({ team: shown(row.team), code: shown(row.error), conversations: Array.isArray(row[UNREADABLE]) && row[UNREADABLE].length > 0 ? row[UNREADABLE].length : null }));
+    // The provider's word for why (`error`) is not drawn, so it does not leave the machine.
+    .map((row): MailUnread => ({ team: shown(row.team), conversations: Array.isArray(row[UNREADABLE]) && row[UNREADABLE].length > 0 ? row[UNREADABLE].length : null }));
   return ok({ at: mail.observedAt, messages, unread, older: mail.hasMore && cursorUsable(mail.nextCursor) ? mail.nextCursor : null });
 }
 

@@ -14,7 +14,7 @@ import { attempt, errorMessage, onWindowReset, type Contract } from "../store";
 export type Held = {
   /** the received mail read so far, newest first: the first page, then each older page asked for */
   messages: MailMessage[];
-  /** of the first page: the teams whose mail could not be read */
+  /** of the last page read: the teams whose mail, or some of it, could not be read (the messaging layer says it per read) */
   unread: MailUnread[];
   /** the cursor of the next older page; null: none */
   older: string | null;
@@ -34,11 +34,20 @@ export type MailRead = {
 };
 
 const kept = new Map<string, Held>();
-onWindowReset(() => kept.clear());
+/**
+ * The read of an agent's first page that is on its way, by instance: a view shown while one is in
+ * flight (the tab turned away from and back to) takes that one's answer and starts no second
+ * process. Each is an `oats` that may run for minutes, with one `aw` call per identity.
+ */
+const flying = new Map<string, Promise<MailPage>>();
+onWindowReset(() => {
+  kept.clear();
+  flying.clear();
+});
 
 const merged = (held: Held, page: MailPage): Held => {
   const known = new Set(held.messages.map((message) => message.key));
-  return { ...held, messages: [...held.messages, ...page.messages.filter((message) => !known.has(message.key))], older: page.older };
+  return { ...held, messages: [...held.messages, ...page.messages.filter((message) => !known.has(message.key))], unread: page.unread, older: page.older };
 };
 
 export function useMail(instance: string): MailRead {
@@ -52,7 +61,19 @@ export function useMail(instance: string): MailRead {
       if (of === "older" && cursor === null) return;
       const mine = ++serial.current;
       setState({ instance, held, fetching: of, error: null });
-      void attempt(() => rpc.call("mail", { instance, older: cursor })).then(
+      const ask = () => attempt(() => rpc.call("mail", { instance, older: cursor }));
+      let asked: Promise<MailPage>;
+      if (of === "older") asked = ask();
+      else {
+        asked = flying.get(instance) ?? ask();
+        if (!flying.has(instance)) {
+          const mine = asked;
+          flying.set(instance, mine);
+          const landed = () => void (flying.get(instance) === mine && flying.delete(instance));
+          mine.then(landed, landed);
+        }
+      }
+      void asked.then(
         (page) => {
           if (serial.current !== mine) return;
           const before = kept.get(instance);

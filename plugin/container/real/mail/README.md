@@ -14,7 +14,8 @@ plugin/container/real/mail/run.sh        # about ten minutes the first time (the
 KEEP=1 plugin/container/real/mail/run.sh # leave the five containers up, to look or to run inside.sh again
 ```
 
-The artefacts are in `plugin/container/real/mail/out/` (ignored by git): the checks' images
+The artefacts are in `plugin/container/real/out/mail/` (ignored by git, and left out of the tree
+`ci.sh` copies into its container: the checkout of aweb is kept there, `out/mail/aweb`): the checks' images
 (`mail-real-<width>-list.png`, `-message.png`) and what each setup step printed. No account, no
 login, nothing spent: the stack is local, and no agent is launched.
 

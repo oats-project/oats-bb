@@ -7,7 +7,10 @@
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(cd "$HERE/../../.." && pwd)
-OUT=$HERE/out
+# Beside the real run's own artefacts, in a directory `ci.sh` leaves out of the tree it copies into
+# its container (`container/real/out`): the checkout of aweb kept here holds test files of its own,
+# which the unit stage would else collect.
+OUT=$HERE/../out/mail
 IMAGE=${IMAGE:-bb-plugin-oats-test}
 export STACK_NAME=${STACK_NAME:-bb-mail-real}
 CLIENT=${NAME:-$STACK_NAME-client}
@@ -43,7 +46,7 @@ docker rm -f "$CLIENT" > /dev/null 2>&1 || true
 docker run -d --name "$CLIENT" --init --cpus 2 --memory 6g -e BB_TELEMETRY=false --network "container:$STACK_NAME-awid-1" "$IMAGE" sleep infinity > /dev/null
 BB_VERSION=$(tr -d '[:space:]' < "$PLUGIN/../bb-version")
 run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e KERNEL_NPM -e AW_NPM -e AWEB_PROVIDER -e CLAUDE_CODE_VERSION -w /home/node/plugin "$CLIENT" "$@"; }
-(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/mail/out --exclude ./container/real/pi/out .) | docker exec -i -u node "$CLIENT" tar -x -C /home/node/plugin
+(cd "$PLUGIN" && tar -c --exclude ./node_modules --exclude ./dist --exclude ./container/out --exclude './container/out.*' --exclude ./container/real/out --exclude './container/real/out.*' --exclude ./container/real/pi/out .) | docker exec -i -u node "$CLIENT" tar -x -C /home/node/plugin
 run mkdir -p /home/node/out
 run sh container/setup.sh
 run bash container/real/mail/inside.sh

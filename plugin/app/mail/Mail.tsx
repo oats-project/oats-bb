@@ -91,7 +91,7 @@ function Message({ message, now, onBack }: { message: MailMessage; now: number; 
           {message.from}
         </p>
         {message.lines.map((line, index) => (
-          <p key={index} className="min-h-[1.25rem] whitespace-pre-wrap break-words">
+          <p key={index} className="min-h-[1.25rem] break-words">
             {line}
           </p>
         ))}

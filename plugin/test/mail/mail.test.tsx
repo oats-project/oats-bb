@@ -189,6 +189,36 @@ test("Older: only while there is an older page; it reads the page after the curs
   expect(slot.queryByTestId("oats-mail-older")).toBeNull();
 });
 
+test("Older: the teams that could not be read are those of the page just read (a recorded older page with ONE field changed: a team's `conversations`)", async () => {
+  const first = recordedMail("mail-first-page.json");
+  const older = recordedMail("mail-older-page.json");
+  older.unread = [{ team: "mailspike", conversations: 3 }];
+  const slot = mail({ mail: ({ older: cursor }) => (cursor === null ? first : older) });
+  await slot.findByTestId("oats-mail-list");
+  expect(slot.queryByTestId("oats-mail-unread")).toBeNull();
+  fireEvent.click(slot.getByTestId("oats-mail-older"));
+  await waitFor(() => expect(slot.getAllByTestId("oats-mail-unread").map(text)).toEqual(["mailspike: 3 conversations can't be read"]));
+});
+
+test("shown again while its first read is still on its way: it takes that read's answer and starts no second one", async () => {
+  const slow = pending<MailPage>();
+  let asked = 0;
+  const slot = mail({ mail: () => (++asked, slow.promise) });
+  await slot.findByTestId("oats-loading");
+  slot.unmount();
+  const again = mail({ mail: () => (++asked, recordedMail("mail-none.json")) });
+  await again.findByTestId("oats-loading");
+  expect(asked).toBe(1);
+  await act(async () => slow.resolve(recordedMail()));
+  expect(rows(await again.findByTestId("oats-mail-list"))).toHaveLength(3);
+  expect(asked).toBe(1);
+  // Once it has landed, a view shown again reads again.
+  again.unmount();
+  const third = mail({ mail: () => (++asked, recordedMail()) });
+  await third.findByTestId("oats-mail-list");
+  await waitFor(() => expect(asked).toBe(2));
+});
+
 test("it reads when it is shown, on Refresh and on Older, and at no other time: not when the clock ticks, and not when OATS changes", async () => {
   vi.useFakeTimers({ now: NOW });
   const slot = renderSlot<{ instance: string }, Contract>({ component: Mail }, { instance: AGENT }, { rpc: handlers() });

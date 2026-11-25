@@ -796,7 +796,8 @@ network; the messaging layer's own budget is 150 s), so it has a time limit of i
 **When it reads.** When the view is shown, on **Refresh**, and on **Older** (the page after the
 last one, while the messaging layer says there is one): never on the roster's poll, never when
 OATS changes, never on a timer. What was read is kept for the window: a view shown again shows it
-at once and reads again behind it. "Read <age>." stands beside Refresh once what is shown is older
+at once and reads again behind it; shown while a read of that agent's first page is still on its
+way, it takes that read's answer and starts no second one. "Read <age>." stands beside Refresh once what is shown is older
 than a minute.
 
 **Where the tab stands, and when.** The tab is drawn only for an agent whose roster row gives a
@@ -812,14 +813,16 @@ sender's alias, the subject and a team's label each as one display line; the bod
 that a line with a control character or one shaped like a credential reads "[withheld]" and the
 others show. The app draws those lines as text: never markup, never a link. Only received mail,
 and only what is drawn, leaves the machine: no identity, no address, no message id, nothing of the
-mail the agent sent. Nothing of a message is ever logged, and no fixture is taken from a real
+mail the agent sent, and not the messaging layer's word for why a team's mail could not be read. Nothing of a message is ever logged, and no fixture is taken from a real
 workspace (`test/fixtures/mail/README.md`).
 
 **What is said of a message.** "Unverified sender" (the messaging layer says unverified, or does
 not know) and "Signature failed", in the warning tone, on the row and under the message's subject:
 they are safety facts. "(no subject)" for a message with neither a subject nor a thread title.
 "Shortened." under a message that was cut: by the messaging layer, which cuts a body at 16 KiB and
-says so, or by the adapter (below).
+says so, or by the adapter: a line longer than the display filter's one line (2048 characters) is
+drawn cut there, a body of more than 2000 lines is cut there, and a body over the bound is cut
+(below).
 
 **Two named differences from the Desktop's decoder** (`packages/client/mail-contract.mjs`, read at
 awebai/oats 7355f353; the decoder in `kernel/mail.ts` is otherwise its rules, one for one):

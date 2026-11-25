@@ -126,11 +126,11 @@ describe("the recorded mail", () => {
     expect(page.unread).toEqual([]);
   });
 
-  it("one team's identity is missing, or cannot be read: the other team's mail shows, and the team is named with the provider's word", () => {
+  it("one team's identity is missing, or cannot be read: the other team's mail shows, and the team is named, without the provider's word", () => {
     const missing = read("mail-identity-missing.json");
-    expect(missing.unread).toEqual([{ team: "wider", code: "identity-missing", conversations: null }]);
+    expect(missing.unread).toEqual([{ team: "wider", conversations: null }]);
     expect(missing.messages).toHaveLength(3);
-    expect(read("mail-identity-unreadable.json").unread).toEqual([{ team: "wider", code: "identity-unreadable", conversations: null }]);
+    expect(read("mail-identity-unreadable.json").unread).toEqual([{ team: "wider", conversations: null }]);
     // The provider names neither the alias nor the identity of one it could not read: both are "" as recorded.
     expect(run("mail-identity-missing.json").result.mail.identities[1]).toMatchObject({ alias: "", identity: "", error: "identity-missing" });
   });
@@ -187,6 +187,29 @@ describe("the named difference from the Desktop's decoder: a body over the bound
     expect(page.value.messages).toHaveLength(3);
   });
 
+  it("a body under the bound with ONE line longer than the display filter's line (2048 characters): that line is drawn cut, and the message is said to be shortened", () => {
+    const changed = run("mail.json");
+    const target = changed.result.mail.messages[3];
+    if (!target) throw new Error("no fourth message");
+    expect(target.truncated).toBe(false);
+    target.body = `first line\n${"word ".repeat(1000)}\nlast line`; // 5 KB in one line, under 16 KiB
+    const page = parseMail(changed);
+    expect(page.ok).toBe(true);
+    if (!page.ok) return;
+    const cut = page.value.messages[2];
+    expect(cut?.lines.map((line) => line.length)).toEqual([10, 2048, 9]);
+    expect(cut?.shortened).toBe(true);
+  });
+
+  it("a long line that fits once its runs of spaces are one space each is whole, and the message is not said to be shortened; nor is one whose long line is withheld", () => {
+    expect(bodyLines(`a${" ".repeat(3000)}b`)).toEqual({ lines: ["a b"], cut: false });
+    expect(bodyLines(`password: ${"x".repeat(3000)}`)).toEqual({ lines: ["[withheld]"], cut: false });
+    expect(bodyLines("x".repeat(2048))).toEqual({ lines: ["x".repeat(2048)], cut: false });
+    expect(bodyLines("x".repeat(2049))).toEqual({ lines: ["x".repeat(2048)], cut: true });
+    // A cut that falls inside a surrogate pair leaves one character less.
+    expect(bodyLines(`${"x".repeat(2047)}😀y`).cut).toBe(true);
+  });
+
   it("a body of very many lines carries MAIL_BODY_LINES of them and is said to be shortened", () => {
     const changed = run("mail.json");
     const target = changed.result.mail.messages[3];
@@ -216,15 +239,17 @@ describe("what the stage could not produce (a recorded answer with ONE named fie
     expect(page.ok && page.value.messages[0]?.sender).toBe(sender);
   });
 
-  it.each(["no-mail-read", "threads-unreadable", "too-many-threads", "a word the plugin does not know"])("an identity's `error` %s: the team is named with it, and its mail still shows", (error) => {
+  it.each(["no-mail-read", "threads-unreadable", "too-many-threads", "a word the plugin does not know"])("an identity's `error` %s: the team is named, without that word, and its mail still shows", (error) => {
     const page = withMail((mail) => void ((mail.identities[0] as Row).error = error));
-    expect(page.ok && page.value.unread).toEqual([{ team: "mailspike", code: error, conversations: null }]);
+    expect(page.ok && page.value.unread).toEqual([{ team: "mailspike", conversations: null }]);
     expect(page.ok && page.value.messages).toHaveLength(3);
+    // The provider's word for why is not drawn, so it does not leave the machine.
+    expect(JSON.stringify(page)).not.toContain(error);
   });
 
   it("an identity's `error` conversation-unreadable with its `unreadableConversations`: how many, and never their ids", () => {
     const page = withMail((mail) => Object.assign(mail.identities[0] as Row, { error: "conversation-unreadable", unreadableConversations: ["c-1", "c-2"] }));
-    expect(page.ok && page.value.unread).toEqual([{ team: "mailspike", code: "conversation-unreadable", conversations: 2 }]);
+    expect(page.ok && page.value.unread).toEqual([{ team: "mailspike", conversations: 2 }]);
     expect(JSON.stringify(page)).not.toContain("c-1");
   });
 

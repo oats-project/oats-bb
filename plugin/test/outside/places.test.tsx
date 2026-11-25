@@ -611,6 +611,9 @@ test("the page of an agent that runs outside OATS has Stop… and Start… on it
   ]);
   fireEvent.click(within(lineOf(loading)).getByRole("button", { name: "Stop…" }));
   expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
+  // Each act of the line opens its own dialog: Retire…, the last on the row, too.
+  fireEvent.click(within(lineOf(loading)).getByRole("button", { name: "Retire…" }));
+  expect(asked()).toEqual({ verb: "retire", instance: DIGEST });
   loading.unmount();
   resetApp();
   // The roster read: the line is the page's ONE row of acts (Stop…, Start…, Retire… last), the lifecycle's own row draws none, and nothing of it is under the tabs. No act is there twice.

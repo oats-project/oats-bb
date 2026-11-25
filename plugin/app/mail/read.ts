@@ -71,15 +71,15 @@ export function useMail(instance: string): MailRead {
       const mine = ++serial.current;
       setState({ instance, held, fetching: of, error: null });
       const ask = () => attempt(() => rpc.call("mail", { instance, older: cursor }));
-      let asked: Promise<MailPage>;
-      if (of === "older") asked = ask();
-      else {
-        asked = flying.get(instance) ?? ask();
-        if (!flying.has(instance)) {
-          const flight = asked;
-          flying.set(instance, flight);
-          const landed = () => void (flying.get(instance) === flight && flying.delete(instance));
-          flight.then(landed, landed);
+      // A first page takes the read of it that is on its way, if one is; else it starts one, and keeps it for the next view until it lands.
+      let flight = of === "first" ? flying.get(instance) : undefined;
+      if (flight === undefined) {
+        flight = ask();
+        if (of === "first") {
+          const started = flight;
+          flying.set(instance, started);
+          const landed = () => void (flying.get(instance) === started && flying.delete(instance));
+          started.then(landed, landed);
         }
       }
       /** The pages after the first of this press, while a page added no received mail and an older one is there. */
@@ -102,7 +102,7 @@ export function useMail(instance: string): MailRead {
         }
         return { next, failed: undefined };
       };
-      void asked.then(followed).then(
+      void flight.then(followed).then(
         ({ next, failed }) => {
           if (serial.current !== mine) return;
           kept.set(instance, next);

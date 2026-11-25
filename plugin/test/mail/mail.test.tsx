@@ -460,7 +460,7 @@ test("one team's mail cannot be read (recorded): ONE line at the list's end, in 
 });
 
 test("some of a team's conversations cannot be read: how many, never which (a recorded answer with ONE field changed: the team's `error`, with the conversations it names)", async () => {
-  const some = (ids: string[]) => recordedMail("mail-identity-missing.json", (recorded) => Object.assign(recorded.identities[1] as Record<string, unknown>, { alias: "mail-reader", identity: "did:key:placeholder-2", error: "conversation-unreadable", unreadableConversations: ids }));
+  const some = (ids: string[]) => recordedMail("mail-identity-missing.json", (recorded) => Object.assign(recorded.identities[1] as Record<string, unknown>, { error: "conversation-unreadable", unreadableConversations: ids }));
   const page = some(["c-1", "c-2"]);
   const slot = mail({ mail: () => page });
   await slot.findByTestId("oats-mail-list");

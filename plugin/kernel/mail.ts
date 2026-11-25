@@ -201,6 +201,13 @@ function cutBytes(body: string, bytes: number): { text: string; cut: boolean } {
   return { text: body, cut: false };
 }
 
+/** A line as the display filter folds it before it cuts it (model/text.ts `oneLine`: its first three steps; the replacement of a character changes no length). */
+const folded = (line: string): string =>
+  line
+    .replace(/[\t\n\u2028\u2029]/g, " ")
+    .replace(/ {2,}/g, " ")
+    .replace(/^ | $/g, "");
+
 /**
  * A body as display lines: line breaks kept (CRLF and a lone CR as one), each line through the
  * display filter by itself, so a line that looks like a credential is withheld and the others
@@ -214,8 +221,10 @@ export function bodyLines(body: string): { lines: string[]; cut: boolean } {
   const lines = all.slice(0, MAIL_BODY_LINES).map((line) => {
     const drawn = shown(line);
     // The display filter cuts a line at MAX_DISPLAY_LINE: a line it cut is a message shortened, and said so.
-    // (A cut line is MAX_DISPLAY_LINE long, less one where the cut fell inside a surrogate pair and one where it left a space at the end.)
-    if (line.length > MAX_DISPLAY_LINE && drawn !== DETAIL_WITHHELD && drawn.length >= MAX_DISPLAY_LINE - 2) cut = true;
+    // Whether it cut is judged on the line as the filter folds it before it cuts (a tab and a line
+    // separator are a space, runs of spaces are one, the ends are trimmed: model/text.ts `oneLine`),
+    // not on the line as written: a line that fits once folded is drawn whole.
+    if (drawn !== DETAIL_WITHHELD && line.length > MAX_DISPLAY_LINE && folded(line).length > MAX_DISPLAY_LINE) cut = true;
     return drawn;
   });
   while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
@@ -270,11 +279,21 @@ export function parseMail(document: unknown): Result<MailPage> {
  * answer that ended part-way (the process ended by a signal, a pipe closed) is one line of JSON
  * holding bodies, sent mail and addresses, and it would travel in the refusal's message, unfiltered.
  * So of those two refusals only how the process ended is kept ("`oats` exited 1", "`oats` did not
- * answer JSON"). A kernel's own refusal (`E_*`) is the kernel's sentence, which names no mail.
+ * answer JSON"). Two of the KERNEL's refusals quote the messaging layer's process too
+ * (`E_OPERATION_RESULT`: an answer it could not read; `E_OPERATION_FAILED`: its stderr, to which
+ * an operation's stdout is redirected): each is answered as its code with a sentence of the
+ * plugin's. Every other refusal of the kernel's is its own sentence, which names no mail.
  */
+const OPERATION_REFUSALS: Record<string, string> = {
+  E_OPERATION_RESULT: "the messaging layer's answer could not be read (what it printed is not shown: it may hold mail)",
+  E_OPERATION_FAILED: "the messaging layer's mail operation failed (what it printed is not shown: it may hold mail)",
+};
 export function withoutOutput<Value>(read: Result<Value>): Result<Value> {
-  if (read.ok || (read.error.code !== codes.notJson && read.error.code !== codes.failed)) return read;
-  return err(read.error.code, read.error.message.split(":")[0] ?? "");
+  if (read.ok) return read;
+  const { code, message } = read.error;
+  if (code === codes.notJson || code === codes.failed) return err(code, message.split(":")[0] ?? "");
+  const said = OPERATION_REFUSALS[code];
+  return said === undefined ? read : err(code, said);
 }
 
 export const verbs = (oats: Runner) => ({

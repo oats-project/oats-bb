@@ -211,6 +211,14 @@ describe("the named difference from the Desktop's decoder: a body over the bound
     expect(bodyLines("x".repeat(2049))).toEqual({ lines: ["x".repeat(2048)], cut: true });
     // A cut that falls inside a surrogate pair leaves one character less.
     expect(bodyLines(`${"x".repeat(2047)}😀y`).cut).toBe(true);
+    // At the edge: longer than the filter's line as written, and exactly its length or under once folded: whole, and not said to be shortened.
+    for (const whole of [`${"x".repeat(2046)}  y`, `${"x".repeat(2048)} `, `${"x".repeat(2046)}\t\ty`, ` ${"x".repeat(2048)}`]) {
+      const read = bodyLines(whole);
+      expect(read.cut).toBe(false);
+      expect(read.lines[0]).toBe(whole.replace(/\t/g, " ").replace(/ {2,}/g, " ").trim());
+    }
+    // One character past it once folded: cut, and said.
+    expect(bodyLines(`${"x".repeat(2047)}  yz`)).toEqual({ lines: [`${"x".repeat(2047)} `.trimEnd()], cut: true });
   });
 
   it("a body of very many lines carries MAIL_BODY_LINES of them and is said to be shortened", () => {
@@ -326,6 +334,16 @@ describe("an answer that ended part-way (the recorded mail, printed on one line 
     const refused = withoutOutput(read());
     expect(refused).toEqual({ ok: false, error });
     expect(JSON.stringify(refused)).not.toMatch(/parser|report|mail-writer|bold|body/i);
+  });
+
+  it.each([
+    ["E_OPERATION_RESULT", "messaging:mail: the operation's answer is not JSON: {\"schemaVersion\":1,\"ok\":true,\"result\":{\"documents\":[{\"text\":\"a line of a body"],
+    ["E_OPERATION_FAILED", "messaging:mail: oats.aweb exited 1 without an answer: a line of a body"],
+  ])("the kernel's %s, which quotes what the messaging layer's process printed, is answered as its code and a sentence of the plugin's", (code, message) => {
+    const refused = withoutOutput({ ok: false, error: { code, message } });
+    expect(refused.ok === false && refused.error.code).toBe(code);
+    expect(JSON.stringify(refused)).not.toContain("a line of a body");
+    expect(JSON.stringify(refused)).toContain("what it printed is not shown");
   });
 
   it("a kernel's own refusal, a timeout and an answer that was read are left as they are", () => {

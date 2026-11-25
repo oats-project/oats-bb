@@ -19,10 +19,6 @@ The artefacts are in `plugin/container/real/out/mail/` (ignored by git, and left
 (`mail-real-<width>-list.png`, `-message.png`) and what each setup step printed. No account, no
 login, nothing spent: the stack is local, and no agent is launched.
 
-**Its run for the change that added it** (2026-11-25, on this checkout at the merge of main
-aeebfce5, the versions of the table below): all 14 checks passed, from a fresh stack; unread was 2
-before and 2 after; the five containers were removed at its end.
-
 ## What it checks (`check.mjs`)
 
 1. The tab **Mail** of the agent's page lists the mail the agent RECEIVED, newest first; the
@@ -56,7 +52,7 @@ Every word of mail is made up by the script. Nothing is taken from a real worksp
 ## What the stack needs
 
 Two things that awebai/aweb's `docker-compose.e2e.yml` and the `oats-aweb` repository's CI recipe
-do not say, and that cost half a day to find (2026-11-25):
+do not say:
 
 - **awid needs `APP_ENV=development` and `AWID_ALLOW_INSECURE_DELIVERY_ORIGIN=1`.** Without them
   `oats aweb setup --create` stops at "publishing the AWID team-server record … failed … http
@@ -74,6 +70,6 @@ And one of the kernel's: a team must be declared in `oats-workspace.yaml` (`team
 ## The fixtures
 
 The recorded answers the unit tests and the live scenes read (`../../../test/fixtures/mail/`) were
-made on this stack by hand on 2026-11-25, with more states than this run sets up (a second team,
+made on this stack by hand, with more states than this run sets up (a second team,
 an identity moved aside, an older `aw`, an older messaging layer): its README says how each was
 made. This run does not write them again.

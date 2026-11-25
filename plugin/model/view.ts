@@ -243,7 +243,7 @@ export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance
  * quiet and none warns. The parent's own state is never part of it: its own word and mark stay
  * its own. (The roster's ORDER, `RANK`, is another thing and is not touched by this.)
  */
-export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null; /** how many hidden rows ask (their state is needs-you) */ asks: number; /** every hidden row of that row's KIND (those that ask; or those that failed or cannot be reached; or those that run outside OATS or warn), in the tree's order: the caller counts them in the toggle's name */ kin: T[] } {
+export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null; /** how many hidden rows ask (their state is needs-you): the model's own fact (the toggle's name counts `kin`, which is these rows when one that asks wins) */ asks: number; /** every hidden row of that row's KIND (those that ask; or those that failed or cannot be reached; or those that run outside OATS or warn), in the tree's order: the caller counts them in the toggle's name */ kin: T[] } {
   // The best so far, in a list of at most one (a local a closure assigns is not narrowed after it).
   const best: { state: AgentState; tone: "warning" | null; rank: number; node: T }[] = [];
   let asks = 0;
@@ -251,9 +251,8 @@ export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boo
   const walk = (nodes: readonly T[]) => {
     for (const each of nodes) {
       const warned = warns(each);
-      // A row a person must find behind a closed parent: one that needs a person (rank 0), one of rank 1 (outside,
-      // failed, or one that warns), and an UNREACHABLE one (the reader's P23: its rank in the ORDER stays 2, with
-      // working, idle and stopped; behind a fold it is marked, after every row of rank 0 or 1).
+      // (An UNREACHABLE row's rank in the roster's ORDER stays 2, with working, idle and stopped; behind a fold a
+      // person must find it: there it is the failed row's equal.)
       // WHICH hidden row the closed parent speaks for, wherever each stands: one that ASKS first (its disc beside the
       // chevron, and the count); then one that FAILED or cannot be REACHED (the chevron in the failure's tone: a failed
       // row is never hidden behind a milder one); then one that runs outside OATS, or WARNS (the warning tone).

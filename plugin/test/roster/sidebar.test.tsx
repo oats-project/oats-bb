@@ -240,8 +240,9 @@ test("a closed parent whose subtree holds a row that needs a person carries that
 const OUTSIDE_NAME = "Show Redesign ui lead's agents: 1 running outside OATS";
 // The lead's ruling, the other cases. A hidden row that FAILED or CANNOT BE REACHED, with nobody asked: NO second dot
 // (two dots side by side read as one more state of the parent, told apart by colour alone): the chevron itself takes
-// the tone, and the name says the row's state. A hidden row that runs OUTSIDE OATS needs a person (the home lists it
-// under "Needs you"): its own mark beside the chevron, counted. Two that ask: "2 need you". Pressing the disc opens the row.
+// the tone (the failure's), and the name counts them in the state's own name ("1 failed"). A hidden row that runs
+// OUTSIDE OATS: no second dot either: the chevron in the WARNING tone, named "1 running outside OATS"; it is not counted
+// among those that ask. Two that ask: "2 need you". Pressing the disc opens the row.
 test.each([
   ["failed", { runtimeState: "shell" }, { inside: "error", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: 1 failed" }],
   ["unreachable", { running: null, runtimeState: "unreachable" }, { inside: "unreachable", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: 1 unreachable" }],
@@ -279,6 +280,20 @@ test("the toggle's name counts the hidden rows of the kind it speaks for: \"1 fa
   const third = await sidebar({ snapshot: () => fixtureSnapshot(mixed) });
   await third.slot.findByTestId("oats-tree");
   await waitFor(() => expect(toggles(third.slot)[0]!.getAttribute("aria-label")).toBe("Show Redesign ui lead's agents: 1 failed")); // its sibling works: not counted
+});
+
+test("a hidden row that runs outside OATS is counted by its own name only: beside a hidden sibling that warns the name says \"1 running outside OATS\", never two", async () => {
+  // The lead's two children: one runs outside OATS (first in the roster's order); the other's thread was deleted in bb (it warns).
+  const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in desktop-mockups-developer on bb, and OATS recorded this instance stopped" };
+  const agents = fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, sessionEnd: "stopped" as const, outsideOats: report } : agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false as const, runtimeState: "stopped", sessionEnd: "stopped" as const } : agent));
+  const threads = sidebarThreads();
+  const sdk = { threads: { list: async () => [], interactions: { list: async () => [] } } } as never;
+  const app = await loadApp();
+  const slot = renderSlot<PluginThreadListProps, Contract>(app.threadLists[0]!, { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" }, { rpc: handlers({ snapshot: () => fixtureSnapshot(agents) }), sidebarThreads: { ...threads, threads: threads.threads.filter((thread) => thread.id !== "thr_harvest") }, sdk });
+  await slot.findByTestId("oats-tree");
+  await waitFor(() => expect(toggles(slot)[0]!.getAttribute("aria-label")).toMatch(/^Show Redesign ui lead's agents: 1 (running outside OATS|deleted in bb)$/));
+  // Whichever of the two stands first in the roster's order is the one the chevron speaks for: its count is ONE.
+  expect(toggles(slot)[0]!.getAttribute("aria-label")).not.toMatch(/: 2 /);
 });
 
 test("a hidden row that is GONE (the kernel no longer knows it) is neither counted nor toned by its closed parent: its state in this roster is from before it went", async () => {

@@ -100,3 +100,29 @@ test("a closed parent carries no warning mark for a hidden row that says Reading
   expect([row.querySelector('[data-testid="oats-row-reading"]')?.textContent, row.querySelector('[data-testid="oats-row-facts"]'), row.querySelector("[data-mark]")!.getAttribute("data-tone")]).toEqual(["Reading…", null, null]);
 });
 
+
+// THE COUNT over rows that warn (the lead's ruling: "1 may still run"): the count is of the hidden rows that say the
+// SAME reason as the row the chevron speaks for; a row with another reason is not counted under it, and one that runs
+// outside OATS is counted by its own name only. Two children of the lead, both with no thread bb lists.
+async function two(first: { child: Partial<Agent>; archived: boolean }, second: { child: Partial<Agent>; archived: boolean }) {
+  const SECOND = "desktop-mockups-developer"; // the lead's other child, on thr_mockups
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === CHILD ? { ...agent, waiting: null, ...first.child } : agent.instance === SECOND ? { ...agent, waiting: null, ...second.child } : agent));
+  const app = await loadApp();
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    app.threadLists[0]!,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    { rpc: handlers({}, agents), sidebarThreads: { status: "ready" as const, threads: fixtureThreads().filter((thread) => thread.id !== "thr_harvest" && thread.id !== "thr_mockups") }, sdk: bb([...(first.archived ? ["thr_harvest"] : []), ...(second.archived ? ["thr_mockups"] : [])]) },
+  );
+  await slot.findByTestId("oats-tree");
+  return () => slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "redesign-ui-lead")!.getAttribute("aria-label");
+}
+
+test("the count over rows that warn is of those that say the SAME reason: two with one reason are \"2 …\"; two with different reasons are \"1 …\" of the first", async () => {
+  const ran = { child: { running: true, runtimeState: "unknown" } as Partial<Agent>, archived: true }; // its thread archived in bb while it ran
+  const same = await two(ran, ran);
+  await waitFor(() => expect(same()).toMatch(/^Show Redesign ui lead's agents: 2 (may still run|archived in bb)$/));
+  resetApp();
+  const deleted = { child: { running: false, runtimeState: "stopped", sessionEnd: "stopped" } as Partial<Agent>, archived: false }; // its thread deleted in bb
+  const mixed = await two(ran, deleted);
+  await waitFor(() => expect(mixed()).toMatch(/^Show Redesign ui lead's agents: 1 (may still run|archived in bb|deleted in bb)$/));
+});

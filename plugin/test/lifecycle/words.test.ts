@@ -369,6 +369,35 @@ describe("a result", () => {
     expect(replayed.details!.split("\n").at(-1)).toBe("This is the result already recorded for this confirmation; nothing ran again.");
   });
 
+  // SHAPED, not recorded: the recorded receipt (retire-apply.json) with ONE child row changed: `ok: false` and its code.
+  // The kernel this was written against (OATS 0.70.5, lib/core.mjs) answers no such receipt: it refuses the whole
+  // retire (E_CHILDREN_RUNNING: "nothing was retired"). The words hold for an answer that says it all the same:
+  // "stopped" is a claim only a row that is `ok` makes (test/fixtures/lifecycle/README.md, "A retire's child that did not stop").
+  it("a retire whose CHILD did not stop (the recorded receipt with that child's row changed to ok: false): never \"stopped and kept\", never done: the title stays, the child is named in the Stop result's words, with its code", () => {
+    const recorded = value(parseRetireApply(fixture("retire-apply.json")));
+    expect(recorded.children.map((child) => child.ok)).toEqual([true]);
+    const child = recorded.children[0]!;
+    const receipt = { ...recorded, children: [{ ...child, ok: false, alreadyIdle: false, code: "E_SESSION_STOP_FAILED", stillRunning: [4242], detail: "the session's process did not exit" }] };
+    const outcome = retireOutcome(receipt, retirePlan());
+    expect(outcome.tone).toBe("unknown");
+    expect(outcome.title).toBe("Weekly digest helper retired.");
+    expect(child.instance).toBe("digest-links-helper");
+    expect(outcome.lines[0]).toBe("Digest links helper: Didn't stop");
+    expect(outcome.lines.join(" ")).not.toMatch(/stopped and kept/);
+    expect(outcome.lines.slice(1)).toEqual(["Worktree kept.", "Recovery copy saved.", "Conversation archived in bb."]);
+    expect([outcome.code, outcome.offers, outcome.warns]).toEqual(["E_SESSION_STOP_FAILED", [], true]); // no "Review again": the retire's plan is of an agent that is retired
+    // The kernel's word on the row, and what still runs, lead the Details.
+    expect(outcome.details!.split("\n").slice(0, 2)).toEqual([`${child.instance}: the session's process did not exit`, `${child.instance}: still running: 4242`]);
+    // Two children, one stopped: the one that stopped is counted, alone.
+    const two = retireOutcome({ ...recorded, children: [child, { ...child, instance: "panel-worktree-helper", ok: false, alreadyIdle: false, code: "E_LIFECYCLE_BUSY", stillRunning: null, detail: null }] }, retirePlan());
+    expect(two.lines.slice(0, 2)).toEqual(["Panel worktree helper: Not stopped: OATS couldn't lock its home", "1 child agent stopped and kept."]);
+    expect(two.tone).toBe("unknown");
+    // And a retire that also did not finish: the child is named there too, first.
+    const unfinished = retireOutcome({ ...value(parseRetireApply(fixture("retire-incomplete.json"))), children: receipt.children }, retirePlan());
+    expect([unfinished.tone, unfinished.title, unfinished.lines[0]]).toEqual(["failed", "Retirement didn't finish", "Digest links helper: Didn't stop"]);
+    expect(unfinished.lines.join(" ")).not.toMatch(/stopped and kept/);
+  });
+
   it("a retire whose cleanup did not finish: what ran, that the home is kept, the kernel's lines under Details", () => {
     const outcome = retireOutcome(value(parseRetireApply(fixture("retire-incomplete.json"))), retirePlan());
     expect(outcome).toMatchObject({ tone: "failed", title: "Retirement didn't finish", code: "RETIRE_INCOMPLETE", offers: ["review"] });

@@ -431,8 +431,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
           })
         : flying(rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard })).then((receipt) => {
             const outcome = retireOutcome(receipt, plan);
-            // (A retire that was only accepted, or did not finish, does not say its agent was retired: the children it stopped are named all the same.)
-            return { outcome, changed: receipt.replayed ? null : { agents: [...(outcome.tone === "done" ? [receipt.instance] : []), ...receipt.children.filter((row) => row.ok).map((row) => row.instance)], endedAt: receipt.endedAt } };
+            // (A retire that was only accepted, or did not finish, does not say its agent was retired: the children it stopped are named all the same.
+            // One that went through while a child of it did not stop DID retire its agent: its result is not "done", and its agent changed.)
+            const retired = outcome.tone === "done" || (outcome.tone === "unknown" && !receipt.deferred);
+            return { outcome, changed: receipt.replayed ? null : { agents: [...(retired ? [receipt.instance] : []), ...receipt.children.filter((row) => row.ok).map((row) => row.instance)], endedAt: receipt.endedAt } };
           });
     answered.then(
       ({ outcome, changed }) => settle(outcome, null, changed),

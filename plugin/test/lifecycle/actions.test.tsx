@@ -1196,6 +1196,30 @@ test("the Start gate is the Desktop's: running is already running; what is not k
   expect(await gated({ running: true, runtimeState: "unreachable" }, "restart")).toBe(UNKNOWN);
 });
 
+// SHAPED: the recorded retire receipt with its one child's row changed to `ok: false` (OATS 0.70.5 refuses the whole
+// retire then and answers no such receipt: test/fixtures/lifecycle/README.md, "A retire's child that did not stop").
+test("a retire whose child did not stop (the recorded receipt, that child's row ok: false) is not told as done: \"… retired.\" in the not-confirmed tone, the child named as a stop names a session that did not stop, and its code", async () => {
+  const recorded = retireReceiptOf();
+  const receipt = { ...recorded, children: recorded.children.map((child) => ({ ...child, ok: false, alreadyIdle: false, code: "E_SESSION_STOP_FAILED", stillRunning: [4242], detail: null })) };
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => receipt });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  const result = slot.getByTestId("oats-result");
+  expect(result.querySelector("h3")!.textContent).toBe("Weekly digest helper retired.");
+  // Not the done tone: the result is drawn as one that is not confirmed, and its first line, the child, in the warning tone.
+  expect(result.getAttribute("data-tone")).toBe("unknown");
+  const first = result.querySelector("p")!;
+  expect([first.getAttribute("data-tone"), first.textContent]).toEqual(["warning", "Digest links helper: Didn't stop"]);
+  expect(result.textContent).not.toContain("stopped and kept");
+  // The Stop result's code is one press away, with what still runs. No "Review again": the agent of that plan is retired.
+  const more = slot.getByTestId("oats-act-details");
+  expect(more.textContent).toContain("E_SESSION_STOP_FAILED");
+  expect(more.textContent).toContain("digest-links-helper: still running: 4242");
+  expect(slot.getByTestId("oats-confirm").textContent).not.toContain("Review again");
+});
+
 // ---- from the third review round
 
 test("a retire that kept the home of an agent on bb warns first, in the warning tone, that a message in its thread would start it outside OATS; the release lane's words are one press away, under the result's one Details", async () => {

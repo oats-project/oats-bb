@@ -412,8 +412,10 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
     // places that say their state say "Reading…" until the window holds a roster READ AFTER THE ACT ENDED (the
     // receipt's `endedAt`; app/roster/reading.tsx). EVERY agent the receipt names is marked: each session a stop
     // stopped (also in a stop that did not stop them all), a retire's agent, and the children a retire stopped.
-    // A REPLAYED receipt ("Check again": the kernel answers the receipt of an act it already did) marks nobody: the
-    // act is not new, and the server's stamp on a replay is when the REPLAY returned, not when the act ended.
+    // A REPLAYED receipt ("Check again": the kernel answers the receipt of an act it already did) marks as any other:
+    // pressed in the second or two between the act's end and its own read's publish, the window's roster is still the
+    // one from before. Its stamp is when the replay returned, which only makes "before" last until the read the
+    // replay itself asks for is published: a second of "Reading…", on the safe side.
     const settle = (outcome: Outcome, refusal: Refusal | null, changed: { agents: readonly string[]; endedAt: string } | null = null) => {
       if (changed !== null) noteActed(changed.agents, changed.endedAt);
       if (live.current && current === request) setState({ phase: "settled", outcome, refusal, sent });
@@ -427,12 +429,12 @@ function PlanDialog({ request }: { request: Request & { verb: PlanVerb } }) {
             const onBb = plan.targets.some((target) => target.backend === "bb");
             // What the stop left of the agent's thread is what bb SHOWS of it now, where bb answers; else what the confirmation said.
             const archived = receipt.ok && onBb && threadId !== null ? await threadArchived(sdk, threadId) : null;
-            return { outcome: stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? stopArchivesThread(versionOf(plan))), changed: receipt.replayed ? null : { agents: receipt.results.filter((row) => row.ok).map((row) => row.instance), endedAt: receipt.endedAt } };
+            return { outcome: stopOutcome(receipt, plan.instance ?? instance, onBb, archived ?? stopArchivesThread(versionOf(plan))), changed: { agents: receipt.results.filter((row) => row.ok).map((row) => row.instance), endedAt: receipt.endedAt } };
           })
         : flying(rpc.call("retireApply", { instance, revision: plan.revision, key, discardWorktree: discard })).then((receipt) => {
             const outcome = retireOutcome(receipt, plan);
             // (A retire that was only accepted, or did not finish, does not say its agent was retired: the children it stopped are named all the same.)
-            return { outcome, changed: receipt.replayed ? null : { agents: [...(outcome.tone === "done" ? [receipt.instance] : []), ...receipt.children.filter((row) => row.ok).map((row) => row.instance)], endedAt: receipt.endedAt } };
+            return { outcome, changed: { agents: [...(outcome.tone === "done" ? [receipt.instance] : []), ...receipt.children.filter((row) => row.ok).map((row) => row.instance)], endedAt: receipt.endedAt } };
           });
     answered.then(
       ({ outcome, changed }) => settle(outcome, null, changed),

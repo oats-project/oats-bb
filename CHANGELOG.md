@@ -4,6 +4,20 @@
 
 ### The session provider
 
+- **`hostDaemonPort` alone works under a real kernel** (#88). The manifest declared a
+  default for `daemon` (bb's own default address), and the kernel hands a provider its
+  manifest's defaults as values. So a deployment that set `hostDaemonPort` and no
+  `daemon`, as "Two bbs on one host" tells a second bb to, was refused at every spawn and
+  every readiness read: `E_BACKEND_SETTINGS`, "hostDaemonPort is … and
+  settings.oats.bb.daemon names port 38887". The manifest no longer declares that
+  default. Nothing else moves: with neither set the provider still reads bb's default,
+  `http://127.0.0.1:38887` (its own fallback, the same address); a `daemon` a deployment
+  sets is still the address. One sentence is better for it: where the daemon at bb's
+  default address does not answer, the finding names `hostDaemonPort` as what to set
+  (it named `daemon`, taking the default for the deployment's own). **This retires the
+  workaround** of setting `daemon` on the same port beside `hostDaemonPort`: a
+  deployment that wrote it can remove the `daemon` line, or leave it (the two agree).
+  A unit test now reads the manifest's defaults into the settings it checks.
 - **Readiness says when the pi model check is off.** The check refuses a model only where
   bb's list of pi's models is whole, and bb's pi keeps the settings it started with: after
   a change to bb's pi `settings.json` under a running bb (pi writes it itself), every id

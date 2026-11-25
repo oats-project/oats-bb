@@ -450,7 +450,8 @@ const header = (slot: Awaited<ReturnType<typeof agentPage>>) => {
     alone: block?.querySelector(":scope > p")?.textContent ?? null,
     acts: block === null ? [] : actsIn(block),
     /** The lifecycle's own acts for the agent's state, in the panel's header (`AgentActs`, the panel's). */
-    headed: actsIn(within(head).getByTestId("oats-agent-acts")),
+    /** The lifecycle's own row of acts in the header (none where the status line holds them all: an agent that runs outside OATS). */
+    headed: within(head).queryByTestId("oats-agent-acts") === null ? [] : actsIn(within(head).getByTestId("oats-agent-acts")),
     head,
     block,
   };
@@ -540,7 +541,7 @@ test("no act is drawn twice on the agent's page: the three agents whose thread b
   expect(header(failed)).toMatchObject({ block: null, alone: null, acts: [] });
   once(verbs(failed));
   resetApp();
-  // It runs outside OATS: the header's Stop, Start and Retire; the notice says what Stop and Start do.
+  // It runs outside OATS: Stop, Start and Retire, once each, all on the header's line; its Details says what to do.
   const outside = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(outside).kind).toBe("outside"));
   expect(verbs(outside)).toEqual(["Stop", "Start", "Retire"]);
@@ -595,6 +596,7 @@ test("the page of an agent that runs outside OATS has Stop… and Start… on it
   expect(buttons(lineOf(failed))).toEqual([
     ["Stop…", true, true],
     ["Start…", true, false],
+    ["Retire…", true, false],
   ]);
   expect(failed.queryByTestId("oats-outside-agent-block")).toBeNull();
   failed.unmount();
@@ -605,23 +607,28 @@ test("the page of an agent that runs outside OATS has Stop… and Start… on it
   expect(buttons(lineOf(loading))).toEqual([
     ["Stop…", false, true],
     ["Start…", false, false],
+    ["Retire…", false, false],
   ]);
   fireEvent.click(within(lineOf(loading)).getByRole("button", { name: "Stop…" }));
   expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
   loading.unmount();
   resetApp();
-  // The roster read: the line has the two, the lifecycle's row has what is left (Retire…), and nothing of it is under the tabs. No act is there twice.
+  // The roster read: the line is the page's ONE row of acts (Stop…, Start…, Retire… last), the lifecycle's own row draws none, and nothing of it is under the tabs. No act is there twice.
   const read = await drawn(sidebarThreads(), false);
-  await waitFor(() => expect(actsIn(read.getByTestId("header-acts"))).toEqual(["Retire…"]));
-  expect(actsIn(lineOf(read))).toEqual(["Stop…", "Start…"]);
+  await waitFor(() => expect(read.getByTestId("header-line").querySelectorAll("button")).toHaveLength(3));
+  expect(actsIn(read.getByTestId("header-acts"))).toEqual([]);
+  expect(actsIn(lineOf(read))).toEqual(["Stop…", "Start…", "Retire…"]);
   expect(read.queryByTestId("oats-outside-agent-block")).toBeNull();
   expect(within(read.getByTestId("header-details")).getByTestId("oats-outside-details")).toBeTruthy();
   read.unmount();
   resetApp();
   // An agent on another session provider has no Start of the lifecycle's: its line has Stop… alone, and nobody reads "Start" with nothing to press.
   const other = await drawn(sidebarThreads(), false, "other");
-  await waitFor(() => expect(actsIn(other.getByTestId("header-acts"))).toEqual(["Retire…"]));
-  expect(buttons(lineOf(other))).toEqual([["Stop…", false, true]]);
+  expect(actsIn(other.getByTestId("header-acts"))).toEqual([]);
+  expect(buttons(lineOf(other))).toEqual([
+    ["Stop…", false, true],
+    ["Retire…", false, false],
+  ]);
   expect(other.queryByTestId("oats-outside-agent-block")).toBeNull();
   // No box and no title; under Details (in the header, under the state), for it: a sentence that does not say to start it (then the kernel's own).
   expect(other.getByTestId("header-details").querySelector("h3")).toBeNull();
@@ -633,14 +640,17 @@ test("the page of an agent that runs outside OATS has Stop… and Start… on it
   // The same agent with the read failed: its line keeps Stop…, held (off), and still no Start; nothing under the tabs.
   const otherFailed = await drawn({ status: "error", threads: [] }, true, "other");
   expect(actsIn(otherFailed.getByTestId("header-acts"))).toEqual([]);
-  expect(buttons(lineOf(otherFailed))).toEqual([["Stop…", true, true]]);
+  expect(buttons(lineOf(otherFailed))).toEqual([
+    ["Stop…", true, true],
+    ["Retire…", true, false],
+  ]);
   expect(otherFailed.queryByTestId("oats-outside-agent-block")).toBeNull();
   expect(sentenceOf(otherFailed.getByTestId("header-details"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
   otherFailed.unmount();
   resetApp();
   // An agent on bb: its Details says the two steps.
   const onBb = await drawn(sidebarThreads(), false);
-  await waitFor(() => expect(actsIn(onBb.getByTestId("header-acts"))).toEqual(["Retire…"]));
+  expect(actsIn(onBb.getByTestId("header-acts"))).toEqual([]);
   expect(sentenceOf(onBb.getByTestId("header-details"))).toBe("Someone sent it a message in bb. Stop, then Start.");
   expect(onBb.getByTestId("header-details").textContent).not.toMatch(/stops the harness|in a new conversation|but OATS recorded it as stopped/);
 });
@@ -649,10 +659,11 @@ test("the panel's header of an agent on its thread carries the kernel's report, 
   const reported = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(reported).kind).toBe("outside"));
   // The header's LINE is the thread's line: the reason "stopped in OATS" in the warning tone, with Stop… (the primary act) and Start… as the line's own acts; the lifecycle's row of acts has what is left (no act twice); and UNDER ITS STATE the ONE fold, Details: no box, no title; nothing of it under the tabs.
-  expect(header(reported)).toMatchObject({ state: "Running outside OATS", sentence: "stopped in OATS", tone: "warning", acts: [], headed: ["Retire…"], block: null });
+  expect(header(reported)).toMatchObject({ state: "Running outside OATS", sentence: "stopped in OATS", tone: "warning", acts: [], headed: [], block: null });
   const state = within(header(reported).head).getByTestId("oats-panel-state");
-  expect(within(state).getAllByTestId("oats-status-act").map((act) => [act.textContent, act.hasAttribute("data-primary")])).toEqual([["Stop…", true], ["Start…", false]]);
+  expect(within(state).getAllByTestId("oats-status-act").map((act) => [act.textContent, act.hasAttribute("data-primary")])).toEqual([["Stop…", true], ["Start…", false], ["Retire…", false]]);
   expect(Array.from(header(reported).head.querySelectorAll(ACT)).map((act) => act.textContent)).toEqual(["Stop…", "Start…", "Retire…"]);
+  expect(within(header(reported).head).queryByTestId("oats-agent-acts")).toBeNull(); // ONE row of acts: the line's; no row of its own for Retire…
   expect(within(state).queryByTestId("oats-notice")).toBeNull();
   expect(state.querySelector("h3")).toBeNull();
   expect(state.querySelectorAll("details")).toHaveLength(1);
@@ -661,10 +672,10 @@ test("the panel's header of an agent on its thread carries the kernel's report, 
   // Behind a lifecycle result that says this agent changed, until the roster is read again: "Reading…" in the state's place, and the line's two acts OFF (as every act is then), still there to see.
   const { noteActed } = await import("../../app/roster/reading");
   const lineActs = () => within(reported.getByTestId("oats-panel-state")).getAllByTestId("oats-status-act").map((button) => [button.textContent, (button as HTMLButtonElement).disabled]);
-  expect(lineActs()).toEqual([["Stop…", false], ["Start…", false]]);
+  expect(lineActs()).toEqual([["Stop…", false], ["Start…", false], ["Retire…", false]]);
   act(() => noteActed([DIGEST], fixtureSnapshot().at));
   await waitFor(() => expect(within(reported.getByTestId("oats-panel-state")).getByTestId("oats-reading").textContent).toBe("Reading…"));
-  expect(lineActs()).toEqual([["Stop…", true], ["Start…", true]]);
+  expect(lineActs()).toEqual([["Stop…", true], ["Start…", true], ["Retire…", true]]);
   expect(reported.getByTestId("oats-panel-state").textContent).not.toMatch(/Running outside OATS/); // never the state of before, stated plainly
   resetApp();
   const plain = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { host } from "../../contract/spawn";
-import { checkHarness, checkModel, harnessListArgv, parseHarnessList } from "../../kernel/spawn";
+import { checkHarness, checkModel, harnessListArgv, idsOf, parseHarnessList } from "../../kernel/spawn";
 import { startBackend, type Backend } from "../support/backend";
 
 const recorded = JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/capabilities-show-bb.json"), "utf8")) as { result: unknown };
@@ -77,11 +77,23 @@ describe("the harnesses the bb session provider declares", () => {
       // (the form says the way on); a member with no such capability is a failed read.
       if ("package" in error.details) expect(await backend.rpc("spawnHarnesses"), error.message).toEqual({ harnesses: [], hostId: "host_falcon", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: error.message } });
       else await expect(backend.rpc("spawnHarnesses"), error.message).rejects.toThrow(refused);
-      // Every ACT is refused with the kernel's sentence, and no spawn reaches the kernel: the dialogs' read, a preview, a spawn.
+      // The dialogs' read is refused with the kernel's sentence in both.
       await expect(backend.rpc("startCheck", { instance: "kernel-fix-developer" }), error.message).rejects.toThrow(refused);
-      await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "" }), error.message).rejects.toThrow(refused);
-      await expect(backend.rpc("spawn", { soul: "oats-developer", task: "", key: "spawn-9a8b7c6d" }), error.message).rejects.toThrow(refused);
-      expect((await backend.fake.calls()).filter((call) => call.verb.startsWith("spawn"))).toEqual([]);
+      if ("package" in error.details) {
+        // Pinned and not synced: every spawn is refused with the kernel's sentence, and none reaches the kernel.
+        await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "" }), error.message).rejects.toThrow(refused);
+        await expect(backend.rpc("spawn", { soul: "oats-developer", task: "", key: "spawn-9a8b7c6d" }), error.message).rejects.toThrow(refused);
+        expect((await backend.fake.calls()).filter((call) => call.verb.startsWith("spawn"))).toEqual([]);
+      } else {
+        // A failed read: a spawn that names nothing of a list goes to the kernel as before (a bb thread on the
+        // soul's default: the kernel takes or refuses it); one that names a harness is refused with the read's failure.
+        await backend.rpc("spawnPlan", { soul: "oats-developer", task: "" });
+        const asked = (await backend.fake.calls()).filter((call) => call.verb === "spawn --preview");
+        expect(asked).toHaveLength(1);
+        expect(asked[0]!.argv.slice(2, 5)).toEqual(["--backend", "bb", "--yolo"]);
+        await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", harness: "pi" }), error.message).rejects.toThrow(refused);
+        expect((await backend.fake.calls()).filter((call) => call.verb === "spawn --preview")).toHaveLength(1);
+      }
       await backend.dispose();
     }
     // And the true case with its sentence reworded is still the answer: the code and the structure decide.
@@ -113,6 +125,34 @@ describe("the harnesses the bb session provider declares", () => {
     await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", harness: "gemini" })).rejects.toThrow('"gemini" is not a harness this OATS launches (pi, claude, codex)');
     await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "bb" })).rejects.toThrow('"bb" is not a session backend a spawn can name here (tmux)');
     expect((await backend.fake.calls()).filter((call) => call.verb.startsWith("spawn")).length).toBe(before);
+  });
+
+  it("a provider read or a version read that FAILS does not hold a spawn that names nothing of a list: it goes as a bb thread on the soul's default, as before the choice; a harness or a place named needs the lists", async () => {
+    // (The form then says "Harnesses could not be read: the soul's default is used.": that must be true.)
+    const unreadable = { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: [] }) };
+    const failing: Record<string, typeof unreadable>[] = [{ "capabilities show": unreadable }, { version: unreadable }];
+    for (const verbs of failing) {
+      backend = await startBackend({ verbs });
+      await backend.rpc("spawnPlan", { soul: "oats-developer", task: "" });
+      expect(await backend.rpc("spawn", { soul: "oats-developer", task: "", key: "spawn-3c2b1a0f" })).toMatchObject({ instance: "flaky-ci-2-developer" });
+      const spawns = (await backend.fake.calls()).filter((call) => call.verb === "spawn --preview" || call.verb === "spawn");
+      expect(spawns.length).toBeGreaterThanOrEqual(2);
+      for (const call of spawns) expect(call.argv.slice(2, 5), call.verb).toEqual(["--backend", "bb", "--yolo"]);
+      // What IS named is one of a list: with the list unread, it starts no process.
+      await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "tmux" }), Object.keys(verbs)[0]).rejects.toThrow();
+      if ("capabilities show" in verbs) await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "", harness: "pi" })).rejects.toThrow("OATS_BAD_ANSWER");
+      expect((await backend.fake.calls()).filter((call) => call.verb === "spawn --preview" || call.verb === "spawn")).toHaveLength(spawns.length);
+      await backend.dispose();
+    }
+    backend = undefined;
+  });
+
+  it("of the kernel's two lists only ids are offered, each once: nothing else in them is drawn or can be named", async () => {
+    expect(idsOf(["tmux", "tmux", "--yolo", "../x", 3, "Tmux", "screen", "two words", null, "x".repeat(41)])).toEqual(["tmux", "screen"]);
+    // SHAPED: the recorded `oats version --json` with its two lists made dirty.
+    const printed = JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/roster/version.json"), "utf8")) as Record<string, unknown>;
+    backend = await startBackend({ verbs: { version: { stdout: JSON.stringify({ ...printed, sessionBackends: ["tmux", "tmux", "--yolo", "bb"], harnesses: ["pi", "<b>claude</b>", "pi", "codex"] }) } } });
+    expect(await backend.rpc("spawnHarnesses")).toMatchObject({ backends: ["bb", "tmux"], kernelHarnesses: ["pi", "codex"] });
   });
 
   // THE ARGV TABLE: what a spawn names, by where it runs. (`--yolo` is what the plugin asks of bb, and of bb alone.)

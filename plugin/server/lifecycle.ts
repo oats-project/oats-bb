@@ -5,8 +5,6 @@ import type { rpc } from "../contract/lifecycle.js";
 import { HOST_TIMEOUT, invalid, type Core, type Value } from "./core.js";
 import { harnessesOf, providerVersionOf } from "./spawn.js";
 
-/** The kernel's code for a capability its workspace's catalog does not hold (recorded: test/fixtures/lifecycle/capabilities-show-no-provider.json). */
-
 /** What the Start and Restart dialogs show of the kernel's own row, beside what `Agent` holds. */
 const launch = z.looseObject({ harness: z.string().nullish(), model: z.string().nullish(), sessionEnd: z.string().nullish() });
 

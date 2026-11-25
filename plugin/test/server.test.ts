@@ -901,9 +901,9 @@ describe("acts", () => {
     const spawned = await rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix the flaky CI job.", key: "spawn-1f0c9a7e" });
     expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" });
     const calls = await fake.calls();
-    // (The provider and the kernel's version are each read once, like a page: where a spawn may run, and what it names there.)
-    expect(calls.map((call) => call.verb).filter((verb) => verb !== "status" && verb !== "version")).toEqual(["souls", "capabilities show", "spawn --preview", "spawn"]);
-    expect(calls.filter((call) => call.verb === "version")).toHaveLength(1);
+    // (The provider is read once, like a page: whether the deployment has it decides what the spawn names. Nothing of
+    // a list is named here, so the kernel's version, which holds the lists, is not asked for it.)
+    expect(calls.map((call) => call.verb).filter((verb) => verb !== "status")).toEqual(["souls", "capabilities show", "spawn --preview", "spawn"]);
     const apply = calls.find((call) => call.verb === "spawn")!;
     expect(apply.argv).toContain("--backend");
     expect(apply.argv).toContain("--yolo");

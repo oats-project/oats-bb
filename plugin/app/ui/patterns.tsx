@@ -222,7 +222,8 @@ export function Notice({
   age,
   actions,
 }: {
-  title: string;
+  /** The notice's line. Words; a node where a part of it has a face of its own (a command, in the code face). */
+  title: ReactNode;
   children?: ReactNode;
   tone?: keyof typeof TONE;
   code?: string | null;

@@ -43,10 +43,13 @@ type Checked = {
   backend: string | null;
 };
 
-/** A harness's id as a manifest declares it: never an option, never a path. */
-const HARNESS_ID = /^[a-z][a-z0-9-]{0,39}$/;
-/** A session backend's id as the kernel lists it: never an option, never a path. */
-const BACKEND_ID = /^[a-z][a-z0-9-]{0,39}$/;
+/** A harness's id as a manifest declares it, and a session backend's as the kernel lists it: never an option, never a path. */
+const ID = /^[a-z][a-z0-9-]{0,39}$/;
+/**
+ * Of a list the kernel printed, the entries that are ids, each once, in its order: what may be offered, drawn and
+ * named (the provider's own list is held to the same: `parseHarnessList`). Anything else in it is left out.
+ */
+export const idsOf = (listed: readonly unknown[]): string[] => [...new Set(listed.filter((id): id is string => typeof id === "string" && ID.test(id)))];
 /** The bb session provider's backend: what a spawn on bb names (`--backend bb`). */
 export const BB_BACKEND = "bb";
 
@@ -65,7 +68,7 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
   }
   const soul = checkSoul(input.soul, knownSouls);
   if (!soul.ok) return soul;
-  if (input.harness !== undefined && !HARNESS_ID.test(input.harness)) return err(codes.invalidInput, `"${input.harness}" is not a harness id`);
+  if (input.harness !== undefined && !ID.test(input.harness)) return err(codes.invalidInput, `"${input.harness}" is not a harness id`);
   let model: string | null = null;
   if (input.model !== undefined) {
     const checked = checkModel(input.model);
@@ -82,7 +85,7 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
     relation = { kind: input.relation.kind, to: to.value, ...(root === undefined ? {} : { root }) };
   }
   // A backend named is one of the kernel's own: bb is asked for by naming none (where the provider is there).
-  if (input.backend !== undefined && (!BACKEND_ID.test(input.backend) || input.backend === BB_BACKEND)) return err(codes.invalidInput, `"${input.backend}" is not a session backend of the kernel's own`);
+  if (input.backend !== undefined && (!ID.test(input.backend) || input.backend === BB_BACKEND)) return err(codes.invalidInput, `"${input.backend}" is not a session backend of the kernel's own`);
   return ok({ soul: soul.value, name, harness: input.harness ?? null, model, relation, bb: input.provider !== false && input.backend === undefined, backend: input.backend ?? null });
 }
 
@@ -243,7 +246,7 @@ export function parseHarnessList(document: unknown): Result<{ harnesses: string[
   const parsed = shaped(shownCapability, document, "oats capabilities show oats.bb");
   if (!parsed.ok) return parsed;
   const declared = parsed.value.sessionProviders?.bb?.harnesses;
-  const harnesses = (Array.isArray(declared) ? declared : []).filter((id): id is string => typeof id === "string" && HARNESS_ID.test(id));
+  const harnesses = (Array.isArray(declared) ? declared : []).filter((id): id is string => typeof id === "string" && ID.test(id));
   // The provider's own version (`result.version`), for a place that must know what this provider does (the lifecycle dialogs).
   const version = typeof parsed.value.version === "string" && VERSION.test(parsed.value.version) ? parsed.value.version : null;
   return ok({ harnesses: [...new Set(harnesses)], version });
@@ -255,7 +258,7 @@ export function parseHarnessList(document: unknown): Result<{ harnesses: string[
  * for a spawn that is not a bb thread the kernel itself.)
  */
 export function checkHarness(harness: string, declared: readonly string[], by = "the bb session provider declares"): Result<string> {
-  return HARNESS_ID.test(harness) && declared.includes(harness) ? ok(harness) : err(codes.invalidInput, `"${harness}" is not a harness ${by} (${declared.join(", ") || "none"})`);
+  return ID.test(harness) && declared.includes(harness) ? ok(harness) : err(codes.invalidInput, `"${harness}" is not a harness ${by} (${declared.join(", ") || "none"})`);
 }
 /**
  * A model named for a spawn, a start or a restart (`--model <id>`): any id a person typed or picked,

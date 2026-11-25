@@ -2,7 +2,7 @@
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
 import type { host, rpc } from "../contract/spawn.js";
-import { BB_BACKEND, checkHarness, checkModel } from "../kernel/spawn.js";
+import { BB_BACKEND, checkHarness, checkModel, idsOf } from "../kernel/spawn.js";
 import type { Agent } from "../model/types.js";
 import { HOST_TIMEOUT, invalid, refusal, refusedWith, type Core, type Value } from "./core.js";
 import { soulsOf } from "./workspace.js";
@@ -33,7 +33,8 @@ export const providerVersionOf = async (core: Core): Promise<string | null> => (
 const placesOf = async (core: Core): Promise<{ absent: boolean; backends: string[]; kernelHarnesses: string[] }> => {
   const [provider, kernel] = await Promise.all([synced(core), core.versionOf()]);
   const absent = provider.absent === true;
-  return { absent, backends: [...(absent ? [] : [BB_BACKEND]), ...kernel.sessionBackends.filter((id) => id !== BB_BACKEND)], kernelHarnesses: kernel.harnesses };
+  // (Only ids, each once: nothing else of the kernel's two lists is offered, drawn or named.)
+  return { absent, backends: [...(absent ? [] : [BB_BACKEND]), ...idsOf(kernel.sessionBackends).filter((id) => id !== BB_BACKEND)], kernelHarnesses: idsOf(kernel.harnesses) };
 };
 /** The one read behind both (`oats capabilities show oats.bb --json`), kept like a page's answer. */
 const providerOf = (core: Core): Promise<Value<"spawnHarnesses">> => core.page("spawnHarnesses", (signal) => core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal));
@@ -71,12 +72,26 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   const checked = async ({ soul, name, task, harness, model, relation, backend }: Choices): Promise<HostChoices> => {
     if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
     // Where it runs. A deployment with no bb session provider: the spawn names no backend unless one is chosen.
-    const { absent, backends, kernelHarnesses } = await placesOf(core);
-    if (backend !== undefined && !backends.includes(backend)) throw invalid(`"${backend}" is not a session backend a spawn can name here (${backends.join(", ") || "none"})`);
+    let absent: boolean;
+    if (harness === undefined && backend === undefined) {
+      // NOTHING of a list is named, so no list is needed: the spawn does not wait on them. A provider read that
+      // FAILS (an answer the plugin cannot read, a timeout, a member with no such capability) leaves the spawn what it
+      // was before there was a choice: a bb thread on the soul's default, which the kernel takes or refuses in its
+      // own words (the form says "the soul's default is used"). What the read ANSWERS still decides: no provider (the
+      // kernel's own place), or pinned and not synced (refused, with the way on).
+      const provider = await providerOf(core).catch((): null => null);
+      if (provider !== null && provider.unsynced !== undefined) throw refusal(provider.unsynced);
+      absent = provider !== null && provider.absent === true;
+    } else {
+      // Something IS named: it is one of the lists, so both reads must answer.
+      const places = await placesOf(core);
+      absent = places.absent;
+      if (backend !== undefined && !places.backends.includes(backend)) throw invalid(`"${backend}" is not a session backend a spawn can name here (${places.backends.join(", ") || "none"})`);
+    }
     const onBb = !absent && (backend === undefined || backend === BB_BACKEND);
     if (harness !== undefined) {
       // A bb thread: a harness the provider declares. Anywhere else: one the kernel itself launches.
-      const named = onBb ? checkHarness(harness, await harnessesOf(core)) : checkHarness(harness, kernelHarnesses, "this OATS launches");
+      const named = onBb ? checkHarness(harness, await harnessesOf(core)) : checkHarness(harness, (await placesOf(core)).kernelHarnesses, "this OATS launches");
       if (!named.ok) throw invalid(named.error.message);
     }
     if (model !== undefined) {

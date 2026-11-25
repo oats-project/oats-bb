@@ -1,5 +1,6 @@
 // The New agent form: a name and a task, the kernel's preview (`oats spawn --preview`), and the
-// spawn of exactly that decision in bb, through `oats spawn --backend bb --yolo`.
+// spawn of exactly that decision (a bb thread where the deployment has the bb session provider:
+// `oats spawn --backend bb --yolo`; where it has none, where the kernel puts it).
 import { openAgentPage } from "../home/agent-tab";
 import { useRef, useState } from "react";
 import { useBbNavigate, useRpc } from "@get-bb/plugin-sdk/app";

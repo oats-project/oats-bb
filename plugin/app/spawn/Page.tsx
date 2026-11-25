@@ -680,13 +680,18 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         {/* The provider is pinned and not synced: said ONCE, with the way on; the kernel's own code and sentence under Details; Retry reads again once `oats sync` has run. Spawn is described by it. */}
         {unsynced === null || held ? null : (
           <div id={SAYS.unsynced} data-testid="oats-spawn-not-synced">
-            <Notice title={W.NOT_SYNCED} details={`${unsynced.code}: ${unsynced.message}`} actions={<Button onClick={harnesses.retry}>{W.RETRY_HARNESSES}</Button>}>
-              <p>
-                {W.NOT_SYNCED_WAY.before}
-                <Code>{W.NOT_SYNCED_WAY.command}</Code>
-                {W.NOT_SYNCED_WAY.after}
-              </p>
-            </Notice>
+            <Notice
+              // ONE line, two short sentences, the command in the code face.
+              title={
+                <>
+                  {W.NOT_SYNCED.before}
+                  <Code>{W.NOT_SYNCED.command}</Code>
+                  {W.NOT_SYNCED.after}
+                </>
+              }
+              details={`${unsynced.code}: ${unsynced.message}`}
+              actions={<Button onClick={harnesses.retry}>{W.RETRY_HARNESSES}</Button>}
+            />
           </div>
         )}
         {/* While OATS cannot be read the roster's notice says so, alone: never a second one for the same cause. */}

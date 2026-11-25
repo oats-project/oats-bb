@@ -760,7 +760,9 @@ test("the bb session provider is pinned and not synced: ONE line, \"bb is not sy
   let synced = false;
   const slot = await form("oats-developer", previews({ spawnHarnesses: () => (synced ? { harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true } : { harnesses: [], hostId: "host_falcon", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: kernelSays } }) }));
   const notice = within(await slot.findByTestId("oats-spawn-not-synced")).getByTestId("oats-notice");
-  expect([notice.querySelector("h3")!.textContent, notice.querySelector("p")!.textContent, notice.querySelector("p code")!.textContent]).toEqual(["bb is not synced.", "Run oats sync.", "oats sync"]);
+  // ONE line: the notice's own heading holds both sentences, the command in the code face; no row under it but Details and Retry.
+  expect([notice.querySelector("h3")!.textContent, notice.querySelector("h3 code")!.textContent]).toEqual(["bb is not synced. Run oats sync.", "oats sync"]);
+  expect(Array.from(notice.children).map((child) => child.tagName)).toEqual(["H3", "DETAILS", "DIV"]);
   expect(slot.getAllByTestId("oats-notice")).toHaveLength(1);
   // The kernel's own code and sentence, one press away; nothing red, no "could not be read".
   expect(notice.querySelector("details")!.textContent).toContain(`E_CAPABILITY_UNKNOWN: ${kernelSays}`);
@@ -772,7 +774,7 @@ test("the bb session provider is pinned and not synced: ONE line, \"bb is not sy
   expect(calls(slot, "spawnPlan")).toEqual([]);
   expect(fieldset(slot).disabled).toBe(true);
   expect(submit(slot).disabled).toBe(true);
-  expect(describedBy(slot)).toContain("bb is not synced.Run oats sync.");
+  expect(describedBy(slot)).toContain("bb is not synced. Run oats sync.");
   // `oats sync` has run: Retry reads again, the line goes and the form asks its preview.
   synced = true;
   fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));

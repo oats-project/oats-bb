@@ -1107,7 +1107,8 @@ level, written before the act goes on; it holds the plugin's other lines too, an
 `[plugin:oats] `, at bb's own log level: `info` and above by default, written a moment later). To
 read what bb did to an agent: `grep 'oats act' plugins/oats/logs/plugin.log | grep 'instance=<name> '`.
 
-What never goes in: a spawn's opening instruction, a description's text, a message, a path, the
+**A line carries no path and no sentence in ANY field:** `why` is a word of the closed list, and a
+CODE is letters, digits and `_` alone. What never goes in: a spawn's opening instruction, a description's text, a message, a path, the
 kernel's sentence, the plugin's own refusal's message, a secret. Every value is one word: whatever is not a letter, a digit or one of
 `._:/@-` becomes `_`, cut at 120 characters; and a CODE (a result, a hold's code, a run's code) is
 letters, digits and `_` alone (`-` for an empty one), whatever a kernel prints as its code.

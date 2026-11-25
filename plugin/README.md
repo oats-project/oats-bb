@@ -993,6 +993,56 @@ entry (bb takes both from a plugin command registered with a default shortcut).
 `test/fixtures/automations/` holds what the real kernel printed for every command the feature
 runs, and `record/` there makes the recording again (its README says what was arranged).
 
+## The act log
+
+Every ACT the plugin asks of the kernel is written to bb's log of the plugin (bb's own logger: the
+plugin's lines stand beside bb's, with bb's level and time before them): one line when the kernel
+is asked, one when it ends, and one where the plugin HELD the act before it asked. It answers "what
+did this bb do to that agent, and when" after the fact (a stop nobody remembers pressing; "I
+pressed Stop and nothing happened").
+
+An act is a verb that changes something: `start`, `restart`, `stopApply`, `retireApply`, `spawn`,
+and the automations' `automationEnable`, `scheduleRun`, `automationDescribe`, `scheduleRemove`,
+`scheduleReconcile`, `schedulerEnable`. A read, a preview, a plan and a test are not logged (the
+roster is read every few seconds).
+
+The line is a contract: one act, one line, `key=value` separated by one space, in this order
+(`server/act-log.ts`):
+
+```
+oats act <verb> asked <subject> caller=<c> host=<h> at=<iso>
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> result=<CODE> ms=<n>
+oats act <verb> held <subject> caller=<c> host=<h> at=<iso> result=HELD:<code> why=<words>
+```
+
+- `<subject>`: `instance=<name>`; for a spawn `soul=<soul> name=<the name asked, or ->`; for an
+  automation `automation=<kind>:<id>`; for the scheduler `scheduler=-`.
+- `caller`: what bb says of who asked: `client` (a window of bb) or `plugin:<id>` (another plugin).
+  **bb has no person to name**: a bb is one person's, and it gives a plugin no user.
+- `host`: bb's id of the machine `oats` ran on (`-` where the server holds none: after a read of
+  OATS that failed).
+- `at`: the plugin server's clock, UTC.
+- `result`: `ok`; the kernel's CODE for a refusal (never its sentence); `FAILED` for an act that
+  ended with no code. `homes`: of a stop or a retire, how many homes its receipt says it took, of
+  how many it names. `made`: the instance a spawn made. `ms`: how long the kernel took.
+- `HELD:<code>`: the plugin refused before the kernel was asked: `invalid` (what was asked names
+  nothing the roster or the provider holds: an agent that is not in the roster now, a harness
+  nothing declares, a row that is gone), or the code of the read the act rests on (OATS could not
+  be read). `why` says which guard, in the plugin's own words, as one word. A button that is OFF in
+  the window (while the roster is stale, or "Reading…") asks the server nothing: there is no line
+  for a press that could not be made.
+- `asked` and `ok` are written at bb's level `info`; a refusal and a hold at `warn`.
+
+What never goes in: a spawn's opening instruction, a description's text, a message, a path, the
+kernel's sentence, a secret. Every value is one word: whatever is not a letter, a digit or one of
+`._:/@-` becomes `_`, cut at 120 characters.
+
+No act can go round it: `core.act` (`server/core.ts`) is the only way a verb that changes something
+reaches the kernel (`core.call` refuses one, in its types and when it runs), and every verb of the
+host's contract is a read (marked `experimental_retryable`), an act, or named with why it is
+neither (`NOT_ACTS`): a new verb fails `test/server/act-log.test.ts` until it is one of the three.
+
 ## How it is built
 
 | File | Runs in | Does |

@@ -1,0 +1,215 @@
+// THE ACT LOG (P-51; server/act-log.ts, server/core.ts `act`): every act the plugin asks of the
+// kernel is logged, an act has ONE way to the kernel, and a hold is logged too.
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it } from "vitest";
+import type { BbPluginApi } from "@get-bb/plugin-sdk";
+import { hostContract } from "../../contract/index.js";
+import plugin from "../../server.js";
+import { ACTS, actLine, callerOf, isAct, NOT_ACTS, word } from "../../server/act-log.js";
+import { createCore, HOST_TIMEOUT, type Core } from "../../server/core.js";
+import { startBackend, type Backend } from "../support/backend.js";
+
+const SERVER = join(fileURLToPath(new URL("../..", import.meta.url)), "server");
+const ISO = "\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z";
+
+let backend: Backend | undefined;
+afterEach(async () => {
+  await backend?.dispose();
+  backend = undefined;
+});
+
+/** The backend with bb's logger recorded: every line the plugin logs, by level; and the core, where a test asks for it. */
+async function logged(options: Parameters<typeof startBackend>[0] = {}, load?: (bb: BbPluginApi) => void | Promise<void>) {
+  const lines: { level: string; line: string }[] = [];
+  const log = Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [level, (line: string) => void lines.push({ level, line })]));
+  const recorded = (bb: BbPluginApi): BbPluginApi => new Proxy(bb, { get: (target, key, receiver) => (key === "log" ? log : Reflect.get(target, key, receiver)) });
+  backend = await startBackend({ ...options, load: (bb) => (load ?? plugin)(recorded(bb)) });
+  const acts = () => lines.filter((each) => each.line.startsWith("oats act "));
+  return { backend, lines, acts };
+}
+const refused = (promise: Promise<unknown>) =>
+  promise.then(
+    () => {
+      throw new Error("expected a refusal");
+    },
+    () => undefined,
+  );
+
+describe("the act log's line", () => {
+  const who = { caller: "client", host: "host_falcon", at: "2026-11-25T12:00:00.000Z" };
+  it("is one line of key=value, in one order, for each moment of an act", () => {
+    expect(actLine("stopApply", "asked", { instance: "redesign-ui-lead" }, who)).toBe("oats act stopApply asked instance=redesign-ui-lead caller=client host=host_falcon at=2026-11-25T12:00:00.000Z");
+    expect(actLine("stopApply", "ended", { instance: "redesign-ui-lead" }, who, { result: "ok", ms: 1234.4, homes: "3/3" })).toBe("oats act stopApply ended instance=redesign-ui-lead caller=client host=host_falcon at=2026-11-25T12:00:00.000Z result=ok ms=1234 homes=3/3");
+    expect(actLine("spawn", "ended", { soul: "oats-developer", name: null }, who, { result: "ok", ms: 9, made: "oats-developer-3" })).toBe("oats act spawn ended soul=oats-developer name=- caller=client host=host_falcon at=2026-11-25T12:00:00.000Z result=ok ms=9 made=oats-developer-3");
+    expect(actLine("start", "ended", { instance: "a" }, who, { result: "E_RESUME_NOT_LOST", ms: 3 })).toBe("oats act start ended instance=a caller=client host=host_falcon at=2026-11-25T12:00:00.000Z result=E_RESUME_NOT_LOST ms=3");
+    expect(actLine("start", "held", { instance: "a" }, { ...who, host: null }, { held: "invalid", why: '"pi" is not a harness the bb session provider declares' })).toBe(
+      "oats act start held instance=a caller=client host=- at=2026-11-25T12:00:00.000Z result=HELD:invalid why=_pi_is_not_a_harness_the_bb_session_provider_declares",
+    );
+    expect(actLine("automationEnable", "asked", { automation: "schedule:local/weekly-cleanup" }, who)).toContain(" automation=schedule:local/weekly-cleanup ");
+    expect(actLine("schedulerEnable", "asked", { scheduler: true }, who)).toContain(" scheduler=- ");
+  });
+  it("a value is one word: nothing in it ends the value, breaks the line or carries a sentence whole", () => {
+    expect(word("two words\nand a line=x")).toBe("two_words_and_a_line_x");
+    expect(word("")).toBe("-");
+    expect(word("x".repeat(500))).toHaveLength(120);
+    for (const made of ["a b", "a\nb", "a=b", "a\tb", 'a"b']) expect(actLine("start", "asked", { instance: made }, who).split(" ")).toHaveLength(8);
+  });
+  it("the caller is what bb says of who asked: a window, or another plugin by its id", () => {
+    expect(callerOf({ experimental_caller: { kind: "client" } })).toBe("client");
+    expect(callerOf({ experimental_caller: { kind: "plugin", pluginId: "other plugin" } })).toBe("plugin:other_plugin");
+    expect(callerOf(undefined)).toBe("unknown");
+  });
+});
+
+describe("an act has one way to the kernel", () => {
+  it("every verb of the host's contract is a read (marked so in the contract), an act, or named with why it is neither: a new verb that is no read must be classified", () => {
+    const verbs = Object.keys(hostContract);
+    const reads = verbs.filter((verb) => (hostContract as Record<string, { experimental_retryable?: boolean }>)[verb]!.experimental_retryable === true);
+    const rest = verbs.filter((verb) => !reads.includes(verb));
+    // Every verb that is not a read: an act, or one of the named few. And nothing is in two lists.
+    expect(rest.filter((verb) => !isAct(verb) && !(verb in NOT_ACTS))).toEqual([]);
+    expect(ACTS.filter((verb) => reads.includes(verb) || verb in NOT_ACTS)).toEqual([]);
+    expect([...ACTS, ...Object.keys(NOT_ACTS)].filter((verb) => !verbs.includes(verb))).toEqual([]);
+    for (const why of Object.values(NOT_ACTS)) expect(why.length).toBeGreaterThan(20);
+  });
+
+  it("core.call refuses an act when it runs, and the kernel is asked nothing: only core.act carries one", async () => {
+    let core: Core | undefined;
+    const { backend, acts } = await logged({}, (bb) => {
+      core = createCore(bb);
+    });
+    for (const verb of ACTS) {
+      await expect((core!.call as (method: string, extra: unknown, ms: number, signal: AbortSignal) => Promise<unknown>)(verb, {}, HOST_TIMEOUT.act, core!.signal)).rejects.toThrow(/is an act: it reaches the kernel through core\.act alone/);
+    }
+    expect(await backend.verbs()).toEqual([]);
+    expect(acts()).toEqual([]);
+  });
+
+  it("no file of the server names an act's verb in a core.call, and none but core.ts speaks to the host: a new act that goes round core.act fails here", async () => {
+    const files = (await readdir(SERVER)).filter((name) => name.endsWith(".ts"));
+    expect(files).toContain("core.ts");
+    const around: string[] = [];
+    for (const name of files) {
+      const source = await readFile(join(SERVER, name), "utf8");
+      for (const verb of ACTS) if (new RegExp(`\\.call\\(\\s*["'\`]${verb}["'\`]`).test(source)) around.push(`${name}: call("${verb}")`);
+      if (name !== "core.ts" && /\bhosts\.experimental_client\b|\bhost\.call\(/.test(source)) around.push(`${name}: speaks to the host itself`);
+    }
+    expect(around).toEqual([]);
+    // And core.ts asks the host for a verb in ONE place, behind `call` and `act` (the two that find and watch the deployment have their own).
+    const core = await readFile(join(SERVER, "core.ts"), "utf8");
+    expect(core.match(/host\.call\(method,/g)).toHaveLength(1);
+  });
+});
+
+describe("core.act's own order", () => {
+  it("`after` runs once the kernel was asked, answered or refused, and never for a hold; and the act's end is stamped BEFORE `after` (the read an act asks for must be stamped after the act's end)", async () => {
+    let core: Core | undefined;
+    const { backend, acts } = await logged({}, (bb) => {
+      core = createCore(bb);
+    });
+    const STOP = { instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" };
+    const afters: string[] = [];
+    const after = () => void afters.push(core!.actEnded());
+    // A hold: the guard throws; `after` does not run, the kernel is asked nothing, and what the guard threw is thrown on.
+    const thrown = new Error("the guard's own refusal");
+    await expect(core!.act("stopApply", { instance: STOP.instance }, undefined, HOST_TIMEOUT.act, () => Promise.reject(thrown), after)).rejects.toBe(thrown);
+    expect(afters).toEqual([]);
+    expect(await backend.verbs()).toEqual([]);
+    expect(acts().map((each) => each.line.split(" ").slice(0, 4).join(" "))).toEqual(["oats act stopApply held"]);
+    // Answered: `after` once, and the act's stamp is before the one `after` then took.
+    const { endedAt } = await core!.act("stopApply", { instance: STOP.instance }, undefined, HOST_TIMEOUT.act, () => STOP, after);
+    expect(afters).toHaveLength(1);
+    expect(Date.parse(endedAt)).toBeLessThan(Date.parse(afters[0]!));
+    expect((await backend.verbs()).filter((verb) => verb === "instance stop --apply")).toHaveLength(1);
+  }, 40_000);
+
+  it("`after` runs too when the kernel refuses the act", async () => {
+    let core: Core | undefined;
+    const refusal = { schemaVersion: 1, ok: false, error: { code: "E_PLAN_STALE", message: "moved" } };
+    await logged({ verbs: { "instance stop --apply": { stdout: JSON.stringify(refusal), exit: 1 } } }, (bb) => {
+      core = createCore(bb);
+    });
+    let ran = 0;
+    await refused(core!.act("stopApply", { instance: "redesign-ui-lead" }, undefined, HOST_TIMEOUT.act, () => ({ instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-1" }), () => void (ran += 1)));
+    expect(ran).toBe(1);
+  }, 40_000);
+});
+
+describe("what the log holds of an act, through the whole backend", () => {
+  const STOP = { instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" };
+
+  it("a stop: one line when the kernel is asked, one when it ends, with the homes its receipt names; nothing else is an act's line", async () => {
+    const { backend, acts } = await logged();
+    await backend.rpc("stopPlan", { instance: "redesign-ui-lead" }); // a plan is a read: no line
+    expect(acts()).toEqual([]);
+    await backend.rpc("stopApply", STOP);
+    const lines = acts();
+    expect(lines.map((each) => each.level)).toEqual(["info", "info"]);
+    expect(lines[0]!.line).toMatch(new RegExp(`^oats act stopApply asked instance=redesign-ui-lead caller=(client|unknown|plugin:\\S+) host=host_falcon at=${ISO}$`));
+    expect(lines[1]!.line).toMatch(new RegExp(`^oats act stopApply ended instance=redesign-ui-lead caller=\\S+ host=host_falcon at=${ISO} result=ok ms=\\d+ homes=3/3$`));
+  }, 40_000);
+
+  it("an act the kernel refuses ends with the kernel's CODE, as a warning, and never its sentence", async () => {
+    const refusal = { schemaVersion: 1, ok: false, error: { code: "E_PLAN_STALE", message: "the plan moved: SENTENCE-OF-THE-KERNEL" } };
+    const { backend, acts, lines } = await logged({ verbs: { "instance stop --apply": { stdout: JSON.stringify(refusal), exit: 1 } } });
+    await refused(backend.rpc("stopApply", STOP));
+    expect(acts().map((each) => [each.level, each.line.replace(new RegExp(ISO), "AT").replace(/ms=\d+/, "ms=N")])).toEqual([
+      ["info", "oats act stopApply asked instance=redesign-ui-lead caller=client host=host_falcon at=AT"],
+      ["warn", "oats act stopApply ended instance=redesign-ui-lead caller=client host=host_falcon at=AT result=E_PLAN_STALE ms=N"],
+    ]);
+    expect(lines.some((each) => each.line.startsWith("oats act") && each.line.includes("SENTENCE"))).toBe(false);
+  }, 40_000);
+
+  it("an act HELD before the kernel is asked has its line: an agent the roster does not name, a harness nothing declares; and the kernel was asked no act", async () => {
+    const { backend, acts } = await logged();
+    await refused(backend.rpc("stopApply", { ...STOP, instance: "not-in-the-snapshot" }));
+    await refused(backend.rpc("start", { instance: "weekly-digest-helper", harness: "no-such-harness" }));
+    await refused(backend.rpc("retireApply", { instance: "not-in-the-snapshot", revision: STOP.revision, key: "retire-1" }));
+    const held = acts();
+    expect(held.map((each) => each.level)).toEqual(["warn", "warn", "warn"]);
+    expect(held[0]!.line).toMatch(/^oats act stopApply held instance=not-in-the-snapshot caller=client host=\S+ at=\S+ result=HELD:invalid why=_not-in-the-snapshot_is_not_an_agent_of_this_OATS_deployment_s_current_snapshot$/);
+    expect(held[1]!.line).toMatch(/^oats act start held instance=weekly-digest-helper caller=client host=\S+ at=\S+ result=HELD:invalid why=_no-such-harness_is_not_a_harness_the_bb_session_provider_declares$/);
+    expect(held[2]!.line).toMatch(/^oats act retireApply held instance=not-in-the-snapshot /);
+    expect((await backend.verbs()).filter((verb) => /--apply|^instance start|^instance restart/.test(verb))).toEqual([]);
+  }, 40_000);
+
+  it("an act held because OATS cannot be read says the code of that read, and not the kernel's sentence", async () => {
+    const refusal = { schemaVersion: 1, ok: false, error: { code: "E_WORKSPACE_UNREADABLE", message: "SENTENCE-OF-THE-KERNEL about the workspace" } };
+    const { backend, acts } = await logged({ verbs: { status: { stdout: JSON.stringify(refusal), exit: 1 } } });
+    await refused(backend.rpc("stopApply", STOP));
+    // (host=-: after a failed read the server holds no machine: core.ts `target`.)
+    expect(acts().map((each) => each.line.replace(new RegExp(ISO), "AT"))).toEqual(["oats act stopApply held instance=redesign-ui-lead caller=client host=- at=AT result=HELD:E_WORKSPACE_UNREADABLE why=refused_before_the_act_was_asked"]);
+  }, 40_000);
+
+  it("a spawn names the soul and the name asked, then the instance made; the opening instruction is in no line", async () => {
+    const TASK = "OPENING-INSTRUCTION do the thing with the customer's data";
+    const { backend, acts, lines } = await logged();
+    await backend.rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: TASK, harness: "pi", key: "spawn-1f0c9a7e", revision: "0123456789abcdef01234567" });
+    expect(acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ms=\d+/, "ms=N"))).toEqual([
+      "oats act spawn asked soul=oats-developer name=flaky-ci-2-developer caller=client host=host_falcon at=AT",
+      "oats act spawn ended soul=oats-developer name=flaky-ci-2-developer caller=client host=host_falcon at=AT result=ok ms=N made=flaky-ci-2-developer",
+    ]);
+    expect(lines.filter((each) => /OPENING|customer/.test(each.line))).toEqual([]);
+  }, 40_000);
+
+  it("the automations' acts and the scheduler's are acts too: the row, by its kind and id; a description's text is in no line", async () => {
+    const { backend, acts, lines } = await logged();
+    await backend.rpc("automationEnable", { kind: "schedule", id: "local/weekly-cleanup", enabled: true });
+    await backend.rpc("automationDescribe", { kind: "schedule", id: "local/weekly-cleanup", description: "DESCRIPTION-TEXT of the row" });
+    await backend.rpc("schedulerEnable");
+    await refused(backend.rpc("scheduleRun", { id: "no-such-row" }));
+    const said = acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ms=\d+/, "ms=N").replace(/ why=\S+$/, " why=W"));
+    expect(said).toEqual([
+      "oats act automationEnable asked automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT",
+      "oats act automationEnable ended automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT result=ok ms=N",
+      "oats act automationDescribe asked automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT",
+      "oats act automationDescribe ended automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT result=ok ms=N",
+      "oats act schedulerEnable asked scheduler=- caller=client host=host_falcon at=AT",
+      "oats act schedulerEnable ended scheduler=- caller=client host=host_falcon at=AT result=ok ms=N",
+      "oats act scheduleRun held automation=schedule:no-such-row caller=client host=host_falcon at=AT result=HELD:invalid why=W",
+    ]);
+    expect(lines.filter((each) => each.line.includes("DESCRIPTION-TEXT"))).toEqual([]);
+  }, 40_000);
+});

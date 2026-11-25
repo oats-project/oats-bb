@@ -10,6 +10,7 @@ import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
 import { withEvents, type EventsSaid } from "../model/events.js";
 import type { Agent } from "../model/types.js";
+import { actLine, callerOf, isAct, type Act, type Asker, type Subject } from "./act-log.js";
 
 /** What the kernel printed for one instance: its own row, and its agent group's row without the instances. */
 export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly agent: Readonly<Record<string, unknown>> };
@@ -648,7 +649,7 @@ export function createCore(bb: BbPluginApi) {
   // ---- calls to the host entry ----
 
   /** Runs one verb on the machine; a kernel refusal, a failed `oats` and an unreachable machine are RPC refusals. */
-  async function call<Method extends Verb>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal): Promise<Value<Method>> {
+  async function ask<Method extends Verb>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal): Promise<Value<Method>> {
     let where: Awaited<ReturnType<typeof base>>;
     let answer: Answer<unknown> | null = null;
     try {
@@ -665,6 +666,63 @@ export function createCore(bb: BbPluginApi) {
     if (answer === null) throw refusal({ code: codes.hostUnreachable, message: "The machine that runs oats did not answer." });
     if (!answer.ok) throw refusal(answer.error);
     return answer.value as Value<Method>;
+  }
+  /**
+   * A READ of the kernel (a read, a preview, a plan, a test): any verb that is no act. An ACT never comes this way:
+   * it is refused here, in the types and when it runs, so that no act reaches the kernel without its lines in the
+   * log (`act`, below; test/server/act-log.test.ts).
+   */
+  function call<Method extends Exclude<Verb, Act>>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal): Promise<Value<Method>> {
+    if (isAct(method)) return Promise.reject(new Error(`"${String(method)}" is an act: it reaches the kernel through core.act alone, which logs it`));
+    return ask(method, extra, timeoutMs, signal);
+  }
+
+  /**
+   * AN ACT: the ONLY way a verb that changes something reaches the kernel, and it is LOGGED (server/act-log.ts: the
+   * line's form, and what never goes in): one line when the kernel is asked, one when it ends (ok, or the kernel's
+   * code), and one where the act was HELD: `guards` is everything the plugin checks before it asks (the agent is one
+   * the roster names now, a harness is one the provider declares, the row exists): what it throws is logged as the
+   * hold and thrown on; what it returns is the verb's input.
+   * An act is not ended by its caller going away: only by the plugin's own end (the signal is the plugin's).
+   * → the kernel's answer, and `endedAt`: the server's stamp at the instant the command returned (`actEnded`), taken
+   * BEFORE `after` runs (the read an act asks for as it ends: its roster must be stamped after the act's end).
+   * `after` runs once the kernel was asked, whether it answered or refused; never for a hold.
+   */
+  async function act<Method extends Act>(method: Method, subject: Subject, asker: Asker | undefined, timeoutMs: number, guards: () => Promise<Extra<Method>> | Extra<Method>, after?: () => void): Promise<{ value: Value<Method>; endedAt: string }> {
+    const who = () => ({ caller: callerOf(asker), host: target?.hostId ?? null, at: new Date().toISOString() });
+    const codeOf = (error: unknown): string | undefined => (typeof error === "object" && error !== null ? refusedWith.get(error) : undefined);
+    let extra: Extra<Method>;
+    try {
+      extra = await guards();
+    } catch (error) {
+      const code = codeOf(error);
+      // The plugin's own words for its own guard; for a refusal that carries the kernel's code (the roster could not
+      // be read; a read the act rests on was refused) the code says it, and the kernel's sentence stays out.
+      bb.log.warn(actLine(method, "held", subject, who(), { held: code ?? "invalid", why: code === undefined ? String((error as Error)?.message ?? error) : "refused before the act was asked" }));
+      throw error;
+    }
+    bb.log.info(actLine(method, "asked", subject, who()));
+    const from = Date.now();
+    try {
+      const value = await ask(method, extra, timeoutMs, lifetime.signal);
+      const endedAt = actEnded();
+      const results = (value as { results?: unknown }).results;
+      const made = method === "spawn" ? (value as { instance?: unknown }).instance : undefined;
+      bb.log.info(
+        actLine(method, "ended", subject, who(), {
+          result: "ok",
+          ms: Date.now() - from,
+          ...(Array.isArray(results) ? { homes: `${results.filter((row) => (row as { ok?: unknown })?.ok === true).length}/${results.length}` } : {}),
+          ...(typeof made === "string" ? { made } : {}),
+        }),
+      );
+      return { value, endedAt };
+    } catch (error) {
+      bb.log.warn(actLine(method, "ended", subject, who(), { result: codeOf(error) ?? "FAILED", ms: Date.now() - from }));
+      throw error;
+    } finally {
+      after?.();
+    }
   }
 
   /**
@@ -805,6 +863,7 @@ export function createCore(bb: BbPluginApi) {
     /** Where `oats` runs, once found; null before, and after a failed read. */
     target: () => target,
     call,
+    act,
     page,
     reread,
     rereadSoon,

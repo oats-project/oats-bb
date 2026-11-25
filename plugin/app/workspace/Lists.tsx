@@ -10,14 +10,14 @@ import { useRead } from "../store";
 import type { Result } from "../store";
 import { Disclosure, Fact, Facts, Heading, Note, Notice, SearchField } from "../ui";
 import { shown } from "../ui/text";
-import { Before, FILTER_FROM, Frame, matches, OneLine } from "./Workspace";
+import { Before, FILTER_FROM, Frame, matches, OneLine, TEAM_UNMAPPED } from "./Workspace";
 
 const ROW = "flex min-w-0 flex-col gap-0.5 border-b border-border py-2 last:border-b-0";
 const TAG = "shrink-0 text-xs text-muted-foreground";
 /** A fact one press away, under a row's Details: its label, then its value on a line of its own (it can be selected whole). */
 const Under = ({ label, children }: { label: string; children: string }) => (
   <p className="break-all text-xs text-muted-foreground">
-    <span>{`${label}: `}</span>
+    <span>{`${shown(label)}: `}</span>
     <span className="text-foreground">{shown(children)}</span>
   </p>
 );
@@ -54,15 +54,17 @@ const ABOUT = {
   ],
 } as const;
 
-function CapabilityList({ capabilities }: { capabilities: readonly Capability[] }) {
-  const [query, setQuery] = useState("");
+/** The capabilities a search leaves: by a capability's id and what it does. */
+const foundCapabilities = (capabilities: readonly Capability[], query: string): Capability[] => capabilities.filter((capability) => matches(query, capability.id, capability.description));
+
+function CapabilityList({ capabilities, query, onQuery }: { capabilities: readonly Capability[]; query: string; onQuery: (query: string) => void }) {
   if (capabilities.length === 0) return <Note>No capabilities.</Note>;
-  const found = capabilities.filter((capability) => matches(query, capability.id, capability.description));
+  const found = foundCapabilities(capabilities, query);
   // The kernel says which place a capability fills; one that says nothing of any (an older answer) has no Core part.
   const told = capabilities.some((capability) => capability.layer !== undefined);
   return (
     <>
-      {capabilities.length >= FILTER_FROM ? <SearchField label="Search capabilities" placeholder="Search capabilities" value={query} onChange={setQuery} /> : null}
+      {capabilities.length >= FILTER_FROM ? <SearchField label="Search capabilities" placeholder="Search capabilities" value={query} onChange={onQuery} /> : null}
       {told && query === "" ? (
         <section data-testid="oats-capabilities-core" className="flex min-w-0 flex-col gap-1">
           <Heading>Core</Heading>
@@ -116,11 +118,12 @@ function CapabilityList({ capabilities }: { capabilities: readonly Capability[] 
 export function CapabilitiesPage() {
   const oats = useOats();
   const read = useRead("capabilities");
+  const [query, setQuery] = useState("");
   return (
-    <Frame tab="capabilities" testId="oats-capabilities-page">
+    <Frame tab="capabilities" testId="oats-capabilities-page" {...(read.data === undefined || query.trim() === "" ? {} : { found: foundCapabilities(read.data.capabilities, query).length })}>
       {/* (Nothing of this tab is the roster's: it says nothing of the roster.) */}
       <Before oats={oats} read={read} roster={false} />
-      {read.data === undefined ? null : <CapabilityList capabilities={read.data.capabilities} />}
+      {read.data === undefined ? null : <CapabilityList capabilities={read.data.capabilities} query={query} onQuery={setQuery} />}
     </Frame>
   );
 }
@@ -130,12 +133,21 @@ export function CapabilitiesPage() {
 type Teams = Result<"teams">;
 type Team = Teams["teams"][number];
 
-/** Who may join a team: "every soul" where the workspace's entry for every soul names it, else the souls that name it; null where the kernel says nothing of it. */
+/**
+ * Who may join a team; null where the kernel says nothing of it. A soul with an entry of its own
+ * goes by that entry alone (the kernel takes a soul's own entry in place of the one for every soul,
+ * "*"): so "every soul" where "*" names the team and no soul's own entry leaves it out; "every soul
+ * but a, b" where some do; else the souls whose own entry names it.
+ */
 function mayJoin(team: Team, answer: Teams): string | null {
   if (answer.mayJoin === undefined) return null;
-  const souls = answer.mayJoin.filter((entry) => entry.teams.includes(team.label)).map((entry) => entry.soul);
-  if (souls.includes("*")) return "every soul";
-  return souls.length === 0 ? "no soul" : souls.join(", ");
+  const own = answer.mayJoin.filter((entry) => entry.soul !== "*");
+  const named = own.filter((entry) => entry.teams.includes(team.label)).map((entry) => entry.soul);
+  if (answer.mayJoin.some((entry) => entry.soul === "*" && entry.teams.includes(team.label))) {
+    const out = own.filter((entry) => !entry.teams.includes(team.label)).map((entry) => entry.soul);
+    return out.length === 0 ? "every soul" : `every soul but ${out.join(", ")}`;
+  }
+  return named.length === 0 ? "no soul" : named.join(", ");
 }
 
 function TeamRow({ team, answer, agents }: { team: Team; answer: Teams; agents: number | null }) {
@@ -183,8 +195,11 @@ export function TeamsPage() {
       ))}
     </ul>
   );
-  // What stops a spawn is said first, as a notice: the default team has no address yet. The kernel's own words are under its Details.
-  const stops = (answer?.problems ?? []).filter((problem) => problem.isDefault);
+  // What stops a spawn is said first, as a notice: the default team has no address yet (the kernel's code for it, on
+  // the default team). The kernel's own words are under its Details. One notice on a screen: while the roster's own
+  // stands (OATS cannot be read), this one waits.
+  const unread = oats.phase === "failed" || (oats.phase === "ready" && oats.stale !== null);
+  const stops = unread ? [] : (answer?.problems ?? []).filter((problem) => problem.code === TEAM_UNMAPPED && problem.isDefault);
   return (
     <Frame tab="teams" testId="oats-teams-page">
       {/* Each team's count of agents is the roster's: while OATS cannot be read, the notice says so (the counts are then the last read, or absent). */}

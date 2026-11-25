@@ -38,6 +38,27 @@ test("the Workspace page's four tabs and the page itself are routes, each titled
   ]);
 });
 
+// The strip's keys: Left and Right choose the tab beside, and a tab is a ROUTE, a page of its own: the
+// page that is drawn next puts the focus on its own selected tab, so that the keys go on from there.
+test("Right on the strip goes to the next tab's route, and the next tab's page takes the focus on its selected tab; a tab drawn with no key before it takes no focus", async () => {
+  const first = await page("capabilities");
+  await first.findAllByTestId("oats-capability-row");
+  const tab = first.getByTestId("oats-tab-capabilities");
+  tab.focus();
+  fireEvent.keyDown(tab, { key: "ArrowRight" });
+  expect(first.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "teams" }]);
+  first.unmount();
+  // bb draws the route that was asked for: the Teams tab's own page.
+  const next = await page("teams");
+  await next.findAllByTestId("oats-team-row");
+  expect(document.activeElement).toBe(next.getByTestId("oats-tab-teams"));
+  next.unmount();
+  // Opened by itself (a link, the sidebar): the page takes no focus.
+  const plain = await page("machines");
+  await plain.findAllByTestId("oats-machine-row");
+  expect(document.activeElement).not.toBe(plain.getByTestId("oats-tab-machines"));
+});
+
 const tabsOf = (slot: Awaited<ReturnType<typeof page>>) => Array.from(slot.container.querySelectorAll('[role="tab"]')).map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]);
 
 test("a tab's page draws the strip over it: the four tabs in the Desktop's order, Souls and Capabilities with their count, the open one selected; a press goes to that tab's route", async () => {
@@ -125,14 +146,16 @@ test("a kernel that names no place and no source: the capabilities alone, with n
   expect(capabilityRows(slot)).toEqual([[["oats.core"], "Day-to-day operation."]]);
 });
 
-test("from twelve capabilities on there is a search field; nothing found, and none at all, are two words each", async () => {
+test("from twelve capabilities on there is a search field; while it narrows the list the tab says how many of how many; nothing found, and none at all, are two words each", async () => {
   const many = Array.from({ length: 12 }, (_, index) => ({ ...CAPABILITIES[1]!, id: `cap.${index + 1}`, description: index === 2 ? "Reviews." : "" }));
   const slot = await page("capabilities", { capabilities: () => ({ capabilities: many }) });
   await slot.findAllByTestId("oats-capability-row");
   const search = slot.getByTestId("oats-search") as HTMLInputElement;
   expect([search.getAttribute("aria-label"), search.placeholder]).toEqual(["Search capabilities", "Search capabilities"]);
+  expect(slot.getByTestId("oats-tab-capabilities").textContent).toBe("Capabilities12");
   fireEvent.change(search, { target: { value: "reviews" } });
   expect(capabilityRows(slot).map(([head]) => (head as string[])[0])).toEqual(["cap.3"]);
+  expect(slot.getByTestId("oats-tab-capabilities").textContent).toBe("Capabilities1 of 12");
   expect(slot.queryByTestId("oats-capabilities-core")).toBeNull(); // a search shows what it found
   fireEvent.change(search, { target: { value: "zzz" } });
   expect(slot.getByText("Nothing matches.").tagName).toBe("P");
@@ -151,7 +174,7 @@ const TEAMS = {
   ],
   mayJoin: [{ soul: "*", teams: ["oats"] }, { soul: "oats-developer", teams: ["oats", "docs"] }],
   localTeams: true,
-  problems: [{ label: "docs", isDefault: false, message: "shared team docs has no provider id yet", fix: "its owner runs `oats aweb setup`, then commits the id" }],
+  problems: [{ code: "team-unmapped", label: "docs", isDefault: false, message: "shared team docs has no provider id yet", fix: "its owner runs `oats aweb setup`, then commits the id" }],
 };
 const teamRows = (slot: Awaited<ReturnType<typeof page>>) => slot.getAllByTestId("oats-team-row").map((row) => [Array.from(row.firstElementChild!.children).map((part) => part.textContent), row.querySelector(":scope > p")?.textContent ?? null, Array.from(row.querySelectorAll("details p")).map((line) => line.textContent)]);
 
@@ -172,8 +195,22 @@ test("Teams: each team's label, \"Default team\", how many of this deployment's 
   // Which teams each soul may join: one fold, closed.
   const fold = slot.getByTestId("oats-teams-may-join") as HTMLDetailsElement;
   expect([fold.open, Array.from(fold.querySelectorAll("p")).map((line) => line.textContent)]).toEqual([false, ["every soul: oats", "oats-developer: oats, docs"]]);
-  // A team that is not the default and has no address stops nothing: no notice.
+  // A team that is not the default and has no address stops nothing: no notice, and no mark on the Teams tab.
   expect(slot.queryByTestId("oats-notice")).toBeNull();
+  expect(slot.getByTestId("oats-tab-teams").querySelector('[data-testid="oats-mark"]')).toBeNull();
+});
+
+test("who may join: a soul's own entry stands in place of the one for every soul, so a team every soul may join says who is left out", async () => {
+  const some = { ...TEAMS, mayJoin: [{ soul: "*", teams: ["oats", "docs"] }, { soul: "code-reviewer", teams: ["oats"] }, { soul: "oats-developer", teams: ["oats", "docs"] }] };
+  const slot = await page("teams", { teams: () => some });
+  await slot.findAllByTestId("oats-team-row");
+  expect(teamRows(slot).map((row) => (row[2] as string[]).find((line) => line.startsWith("May join")))).toEqual(["May join: every soul", "May join: every soul but code-reviewer"]);
+  // And a team the entry for every soul does not name: the souls whose own entry names it; none: "no soul".
+  slot.unmount();
+  resetApp();
+  const few = await page("teams", { teams: () => ({ ...TEAMS, mayJoin: [{ soul: "*", teams: [] }, { soul: "oats-developer", teams: ["docs"] }] }) });
+  await few.findAllByTestId("oats-team-row");
+  expect(teamRows(few).map((row) => (row[2] as string[]).find((line) => line.startsWith("May join")))).toEqual(["May join: no soul", "May join: oats-developer"]);
 });
 
 test("the default team with no address is said first, as a notice: nothing can be spawned; the kernel's words and its remedy are one press away", async () => {
@@ -185,6 +222,23 @@ test("the default team with no address is said first, as a notice: nothing can b
   const details = within(notice).getByTestId("oats-notice-details") as HTMLDetailsElement;
   expect([details.open, Array.from(details.querySelectorAll("p")).map((line) => line.textContent)]).toEqual([false, ["shared team docs has no provider id yet", "its owner runs `oats aweb setup`, then commits the id"]]);
   expect(notice.compareDocumentPosition(slot.getByTestId("oats-team-row")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // The Teams tab is marked for it, with words a screen reader says (the Desktop's dot on that tab).
+  const mark = slot.getByTestId("oats-tab-teams").querySelector('[data-testid="oats-mark"]')!;
+  expect([mark.getAttribute("role"), mark.getAttribute("aria-label")]).toEqual(["img", "Teams: the default team has no address yet"]);
+  slot.unmount();
+  resetApp();
+  // Decided on the kernel's CODE for it: another problem of the default team is no such notice and no mark.
+  const other = await page("teams", { teams: () => ({ ...unmapped, problems: [{ ...unmapped.problems[0]!, code: "team-something-else" }] }) });
+  await other.findAllByTestId("oats-team-row");
+  expect(other.queryByTestId("oats-notice")).toBeNull();
+  expect(other.getByTestId("oats-tab-teams").querySelector('[data-testid="oats-mark"]')).toBeNull();
+  other.unmount();
+  resetApp();
+  // One notice on a screen: while OATS cannot be read the roster's notice stands, and this one waits.
+  const stale = await page("teams", { teams: () => unmapped, snapshot: unread(LAST()) });
+  await stale.findAllByTestId("oats-team-row");
+  expect(stale.getAllByTestId("oats-unreadable")).toHaveLength(1);
+  expect(stale.queryByText(/has no address yet: nothing can be spawned/)).toBeNull();
 });
 
 test("the workspace's teams and this computer's own stand under a heading each, only where both are there", async () => {
@@ -249,8 +303,8 @@ test("Machines: ONE list: this computer first, by its name, with its agents; the
   // No heading, no sentence, nothing of the registry's bookkeeping.
   expect(slot.getByTestId("oats-machines-page").querySelectorAll("h2")).toHaveLength(0);
   expect(slot.getByTestId("oats-machines-page").textContent).not.toMatch(/Servers OATS knows|saved instance routes|elsewhere|in bb/);
-  // (The souls and the capabilities for their tabs' counts; no check of a machine.)
-  expect(slot.inspection.rpcCalls.map((call) => call.method).sort()).toEqual(["capabilities", "machines", "snapshot", "souls"]);
+  // (The souls and the capabilities for their tabs' counts, the teams for the Teams tab's mark; no check of a machine.)
+  expect(slot.inspection.rpcCalls.map((call) => call.method).sort()).toEqual(["capabilities", "machines", "snapshot", "souls", "teams"]);
 });
 
 test("with this computer alone the list is its one row and nothing more; with no machine at all: two words", async () => {

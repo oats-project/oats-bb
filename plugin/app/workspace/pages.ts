@@ -6,6 +6,9 @@ import { createElement, useEffect, useSyncExternalStore } from "react";
 import type { ComponentType } from "react";
 import { useBbNavigate, useSettings } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate } from "@get-bb/plugin-sdk/app";
+import { DEFAULT_PAGES } from "../../model/pages";
+
+export { DEFAULT_PAGES };
 
 /** The Workspace page's tabs, in the Desktop's order. */
 export const PAGES = [
@@ -129,7 +132,6 @@ export function useOpenPage(): string | null {
 
 /** The ids a page can have in the setting `pages`. The default shows the home and the Workspace page's four tabs (the ruling's R5); Automations is not in it. */
 export const PAGE_IDS = ["home", "automations", "souls", "capabilities", "teams", "machines"] as const;
-export const DEFAULT_PAGES = "home souls capabilities teams machines";
 /** The Workspace page is shown where any of its tabs is. */
 const shows = (ids: { has(id: string): boolean }, id: string): boolean => (id === WORKSPACE.path ? PAGES.some((page) => ids.has(page.path)) : ids.has(id));
 /** For the unit tests alone: an unset `pages` stands for every page, a feature's own included. */
@@ -137,7 +139,8 @@ let everyPageWhenUnset = false;
 /**
  * The unit tests' harness gives a slot no settings unless a test names them. There an unset
  * `pages` stands for a deployment that shows every page, so that each page's tests run
- * (test/helpers/render.ts); a test of the release's default names `settings: { pages: "home" }`.
+ * (test/helpers/render.ts); a test of a deployment that shows the home alone names `settings: { pages: "home" }`,
+ * and one of the release's default turns this off.
  */
 export function showEveryPageWhenUnset(on: boolean): void {
   everyPageWhenUnset = on;
@@ -178,8 +181,8 @@ export const usePageShown = (id: string): boolean => usePagesShown().has(id);
 
 // ---- "New agent" ----
 // The form is the spawn feature's own page. It names how to open it here, in its `register`
-// (`setNewAgent(openNewAgent)` of app/spawn); until it does, "New agent" opens the Souls page, where
-// the form is today, when that page is shown.
+// (`setNewAgent(openNewAgent)` of app/spawn); until it does, "New agent" opens the Souls tab (the
+// souls, to pick one from), when that tab is shown.
 /** Where "New agent" starts: with a soul chosen (its key, as `oats souls` names it), or with none. */
 export type NewAgentTarget = { soul?: string };
 type OpenNewAgent = (navigate: BbNavigate, target?: NewAgentTarget) => void;

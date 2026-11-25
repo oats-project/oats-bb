@@ -54,7 +54,7 @@ OATS_PI_INTEGRITY=… plugin/container/ci.sh pi`.
 The rest is the main run's, unchanged: the image, bb-app, the provider as a package, the workspace
 and its souls (each `launch: { harness: claude }`: no soul is changed for pi), the deployment with
 no launch configuration, the recording wrapper, the plugin installed from the checkout. The pages
-shown are the release's default (`home` alone), as the pilot has them. What a deployment must have
+shown are the release's default (the home and the Workspace page's four tabs). What a deployment must have
 for pi is in `../README.md`, "pi agents".
 
 ## What the run does

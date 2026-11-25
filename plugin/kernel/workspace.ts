@@ -41,6 +41,7 @@ const soulRow = z.looseObject({
   harness: text,
   model: text,
   teams: z.array(z.looseObject({ label: z.string(), default: z.boolean().nullish() })).nullish(),
+  file: z.looseObject({ path: text }).nullish(),
 });
 const soulsDocument = z.looseObject({ souls: z.array(soulRow), workspace });
 
@@ -66,7 +67,11 @@ export function parseSouls(document: unknown): Result<{ souls: Soul[] }> {
         // A kernel that does not say is taken at its word for the rest: a spawn it refuses says why.
         spawnable: row.spawnable ?? problem === null,
         problem,
+        // The kernel answers `capabilities: null` for a soul it could not resolve (one that cannot be spawned): what it
+        // is composed of is then NOT KNOWN, which is not "none".
+        ...(row.capabilities === null ? { unresolved: true as const } : {}),
         shortName: row.name,
+        ...(row.file?.path ? { file: row.file.path } : {}),
         ...(source === undefined ? {} : { source }),
         ...(row.harness === undefined ? {} : { harness: row.harness }),
         ...(row.model === undefined ? {} : { model: row.model }),
@@ -121,7 +126,7 @@ const teamsDocument = z.looseObject({
   /** which teams a soul may join, by the soul's key ("*": every soul with no entry of its own) */
   souls: z.record(z.string(), z.looseObject({ teams: z.array(z.string()).nullish() })).nullish(),
   localTeams: z.boolean().nullish(),
-  problems: z.array(z.looseObject({ label: text, default: z.boolean().nullish(), message: text, fix: text })).nullish(),
+  problems: z.array(z.looseObject({ code: text, label: text, default: z.boolean().nullish(), message: text, fix: text })).nullish(),
 });
 
 export type TeamsAnswer = { teams: Team[]; mayJoin?: MayJoin[]; localTeams?: boolean; problems?: TeamProblem[] };
@@ -142,7 +147,7 @@ export function parseTeams(document: unknown): Result<TeamsAnswer> {
     ...(souls == null ? {} : { mayJoin: Object.entries(souls).map(([soul, entry]) => ({ soul, teams: entry.teams ?? [] })) }),
     ...(localTeams == null ? {} : { localTeams }),
     // A problem with no words of the kernel's says nothing a person can read: left out.
-    ...(problems == null ? {} : { problems: problems.flatMap((problem) => (problem.message ? [{ label: problem.label ?? null, isDefault: problem.default === true, message: problem.message, fix: problem.fix ?? null }] : [])) }),
+    ...(problems == null ? {} : { problems: problems.flatMap((problem) => (problem.message ? [{ code: problem.code ?? null, label: problem.label ?? null, isDefault: problem.default === true, message: problem.message, fix: problem.fix ?? null }] : [])) }),
   });
 }
 

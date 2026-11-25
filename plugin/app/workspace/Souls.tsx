@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { rest } from "../../model/rest";
+import { harnessLabel } from "../../model/spawn";
 import type { Agent } from "../../model/types";
 import { openAgentPage } from "../home/agent-tab";
 import { useCli } from "../home/cli";
@@ -16,7 +17,7 @@ import { agentStatus, rowState } from "../roster/status";
 import { useNow } from "../roster/now";
 import { useRead } from "../store";
 import type { Result } from "../store";
-import { Button, DisabledReason, Disclosure, Fact, Facts, Heading, Lines, Loading, Note, Page, plainClick, SearchField, State, TmuxMark } from "../ui";
+import { Button, DisabledReason, Disclosure, Fact, Facts, Heading, Lines, Loading, Note, Page, plainClick, SearchField, State, TmuxMark, Toned } from "../ui";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { newAgentHeld, openNewAgent, openSoul } from "./pages";
@@ -49,6 +50,9 @@ const ROW = "flex w-full min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-le
 
 // ---- the list ----
 
+/** The souls a search leaves: by a soul's key and what it does. */
+const foundSouls = (souls: readonly Soul[], query: string): Soul[] => souls.filter((soul) => matches(query, soul.name, soul.description));
+
 /** The souls in groups, by where each comes from, in the order the kernel lists them; one group with no heading where the kernel names no source. */
 function grouped(souls: readonly Soul[]): { label: string | null; souls: Soul[] }[] {
   const groups: { label: string | null; souls: Soul[] }[] = [];
@@ -61,20 +65,20 @@ function grouped(souls: readonly Soul[]): { label: string | null; souls: Soul[] 
   return groups;
 }
 
-function SoulList({ souls, oats }: { souls: readonly Soul[]; oats: Oats }) {
+function SoulList({ souls, oats, query, onQuery }: { souls: readonly Soul[]; oats: Oats; query: string; onQuery: (query: string) => void }) {
   const navigate = useBbNavigate();
-  const [query, setQuery] = useState("");
   if (souls.length === 0) return <Note>No souls.</Note>;
-  const found = souls.filter((soul) => matches(query, soul.name, soul.description));
+  const found = foundSouls(souls, query);
   const groups = grouped(found);
+  // A heading only where it tells groups apart: where the souls are of one group it is left out.
+  const oneGroup = grouped(souls).length === 1;
   return (
     <>
-      {souls.length >= FILTER_FROM ? <SearchField label="Search souls" placeholder="Search souls" value={query} onChange={setQuery} /> : null}
+      {souls.length >= FILTER_FROM ? <SearchField label="Search souls" placeholder="Search souls" value={query} onChange={onQuery} /> : null}
       {found.length === 0 ? <Note>Nothing matches.</Note> : null}
       {groups.map((group) => (
         <section key={group.label ?? ""} data-testid="oats-soul-group" className="flex min-w-0 flex-col gap-1">
-          {/* A heading only where it tells groups apart. */}
-          {group.label === null || (groups.length === 1 && found.length === souls.length && grouped(souls).length === 1) ? null : <Heading n={group.souls.length}>{shown(group.label)}</Heading>}
+          {group.label === null || oneGroup ? null : <Heading n={group.souls.length}>{shown(group.label)}</Heading>}
           <ul className="flex min-w-0 flex-col">
             {group.souls.map((soul) => {
               // How many of its agents RUN: a soul none of whose agents runs says nothing (the soul's page lists them all).
@@ -86,7 +90,11 @@ function SoulList({ souls, oats }: { souls: readonly Soul[]; oats: Oats }) {
                       {/* Under its group's heading a soul is its own name; the key is whole in the row's title and on its page. Never cut. */}
                       <span data-testid="oats-soul-name" className="min-w-0 flex-1 break-words font-semibold">{shown(group.label === null ? soul.name : (soul.shortName ?? soul.name))}</span>
                       {soul.spawnable ? null : <span data-testid="oats-soul-cannot" className="shrink-0 text-xs text-warning-text">Can't spawn</span>}
-                      {running === 0 ? null : <span data-testid="oats-soul-running" className="shrink-0 text-xs text-muted-foreground">{`${running} running`}</span>}
+                      {running === 0 ? null : (
+                        <span data-testid="oats-soul-running" className="shrink-0 text-xs text-muted-foreground">
+                          <Toned tone="ok">{`${running} running`}</Toned>
+                        </span>
+                      )}
                     </span>
                     {/* What it does, on ONE line; whole on its page (and in this line's title). */}
                     {soul.description === "" ? null : <OneLine testId="oats-soul-does" text={soul.description} />}
@@ -102,9 +110,6 @@ function SoulList({ souls, oats }: { souls: readonly Soul[]; oats: Oats }) {
 }
 
 // ---- a soul's page ----
-
-/** The kernel's word for why a soul has a capability, as a person's: its own two, else the kernel's. */
-const WHY: Readonly<Record<string, string>> = { workspace: "workspace", soul: "soul" };
 
 /** One agent of the soul, as the roster says it: its state as a dot AND its word, the reason after it, where it runs; the row opens it. */
 function SoulAgent({ agent, oats }: { agent: Agent; oats: Ready }) {
@@ -169,9 +174,10 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
   const layers = new Map((useRead("capabilities").data?.capabilities ?? []).map((capability) => [capability.id, capability.layer ?? null]));
   const capabilities = [...soul.capabilities].sort((a, b) => Number(Boolean(layers.get(b))) - Number(Boolean(layers.get(a))));
   const mine = oats.phase === "ready" ? agentsOf(soul, oats) : null;
-  const launch = [soul.harness, soul.model].filter((part): part is string => typeof part === "string" && part !== "").map((part) => shown(part)).join(" · ");
+  // (The harness by the name the New agent form gives it; the model as the kernel has it.)
+  const launch = [soul.harness ? harnessLabel(soul.harness) : null, soul.model].filter((part): part is string => typeof part === "string" && part !== "").map((part) => shown(part)).join(" · ");
   const teams = (soul.teams ?? []).map((team) => shown(team.label)).join(", ");
-  const under = [soul.origin === "" ? null : `from ${soul.origin}`, soul.problem].filter((part): part is string => part !== null && part !== "");
+  const under = [soul.origin === "" ? null : `from ${soul.origin}`, soul.file ? `Defined in ${soul.file}` : null, soul.problem].filter((part): part is string => part !== null && part !== "");
   return (
     <article data-testid="oats-soul-detail" className="flex min-w-0 flex-col gap-4">
       <header className="flex min-w-0 flex-col gap-2">
@@ -183,12 +189,16 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
             New agent
           </Button>
         </div>
-        {soul.description === "" ? null : <p className="break-words">{shown(soul.description)}</p>}
+        {/* Where it comes from, in a word (its group's); the repository, the commit and its file are under Details. */}
+        {soul.source === undefined ? null : <p data-testid="oats-soul-source" className="text-xs text-muted-foreground">{shown(soul.source.label)}</p>}
+        {soul.description === "" ? null : <p data-testid="oats-soul-does" className="break-words">{shown(soul.description)}</p>}
       </header>
       <Facts>
         <Fact label="Harness · model">{launch}</Fact>
         <Fact label="Teams">{teams}</Fact>
       </Facts>
+      {/* A soul the kernel could not resolve (one that cannot be spawned): what it is composed of is not known, so nothing is said of it, never "none". */}
+      {soul.unresolved === true ? null : (
       <section data-testid="oats-soul-capabilities" className="flex min-w-0 flex-col gap-1">
         <Heading n={capabilities.length}>Capabilities</Heading>
         {capabilities.length === 0 ? (
@@ -201,13 +211,15 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
                 <li key={id} data-testid="oats-soul-capability" className="flex min-w-0 flex-wrap items-baseline gap-x-2 px-2 py-1">
                   <span className="min-w-0 break-words font-semibold">{shown(id)}</span>
                   {layers.get(id) ? <span className="text-xs text-muted-foreground">core</span> : null}
-                  {why === undefined ? null : <span className="text-xs text-muted-foreground">{shown(WHY[why] ?? why)}</span>}
+                  {/* Why the soul has it, in the kernel's own word ("workspace", "soul"). */}
+                  {why === undefined ? null : <span className="text-xs text-muted-foreground">{shown(why)}</span>}
                 </li>
               );
             })}
           </ul>
         )}
       </section>
+      )}
       <section data-testid="oats-soul-agents" className="flex min-w-0 flex-col gap-1">
         <Heading {...(mine === null ? {} : { n: mine.length })}>Agents</Heading>
         {/* The agents are the roster's, as last read while OATS cannot be read: the page's notice says so. */}
@@ -241,12 +253,13 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
   const souls = useRead("souls");
   const navigate = useBbNavigate();
   const picked = decode(subPath);
+  const [query, setQuery] = useState("");
   // The list: the Souls tab of the Workspace page.
   if (picked === null) {
     return (
-      <Frame tab="souls" testId="oats-souls-page">
+      <Frame tab="souls" testId="oats-souls-page" {...(souls.data === undefined || query.trim() === "" ? {} : { found: foundSouls(souls.data.souls, query).length })}>
         <Before oats={oats} read={souls} />
-        {souls.data === undefined ? null : <SoulList souls={souls.data.souls} oats={oats} />}
+        {souls.data === undefined ? null : <SoulList souls={souls.data.souls} oats={oats} query={query} onQuery={setQuery} />}
       </Frame>
     );
   }

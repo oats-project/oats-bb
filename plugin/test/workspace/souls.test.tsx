@@ -101,6 +101,17 @@ test("from twelve souls on the list has a search field: it narrows by a soul's k
   expect(fewer.queryByTestId("oats-search")).toBeNull();
 });
 
+test("while a search narrows the list the Souls tab says how many of how many", async () => {
+  const many = Array.from({ length: 12 }, (_, index) => soul(`soul-${index + 1}`));
+  const slot = await souls("", { souls: () => ({ souls: many }) });
+  await slot.findAllByTestId("oats-soul-row");
+  expect(slot.getByTestId("oats-tab-souls").textContent).toBe("Souls12");
+  fireEvent.change(slot.getByTestId("oats-search"), { target: { value: "soul-1" } });
+  expect(slot.getByTestId("oats-tab-souls").textContent).toBe("Souls4 of 12");
+  fireEvent.change(slot.getByTestId("oats-search"), { target: { value: "" } });
+  expect(slot.getByTestId("oats-tab-souls").textContent).toBe("Souls12");
+});
+
 test("no soul at all: two words", async () => {
   const slot = await souls("", { souls: () => ({ souls: [] }) });
   expect((await slot.findByText("No souls.")).tagName).toBe("P");
@@ -142,7 +153,9 @@ test("a soul's page opens over the list with the way back: its key, what it does
   expect(slot.queryByTestId("oats-tabs")).toBeNull();
   expect(slot.getByTestId("oats-back").textContent).toBe("← Souls");
   expect(detail.querySelector("h2")!.textContent).toBe("oats-developer");
-  expect(detail.querySelector("header p")!.textContent).toBe("Builds and proves one spec. And a second line the list does not need.");
+  // Where it comes from, in a word; then what it does, whole.
+  expect(within(detail).getByTestId("oats-soul-source").textContent).toBe("workspace");
+  expect(within(detail).getByTestId("oats-soul-does").textContent).toBe("Builds and proves one spec. And a second line the list does not need.");
   expect(Array.from(detail.querySelectorAll('[data-testid="oats-fact"]')).map((fact) => [fact.querySelector("dt")!.textContent, fact.querySelector("dd")!.textContent])).toEqual([
     ["Harness · model", "pi · gpt-6-astra"],
     ["Teams", "oats, wider"], // the default first
@@ -197,6 +210,23 @@ test("a soul's capabilities are rows: the ones that fill a core place first, tag
   const none = await souls("oats-expert", listed);
   await none.findByTestId("oats-soul-detail");
   expect(within(none.getByTestId("oats-soul-capabilities")).getByText("No capabilities.").tagName).toBe("P");
+});
+
+test("a soul the kernel could not resolve (it cannot be spawned): nothing is said of its capabilities, never \"none\"; its file is under Details", async () => {
+  const broken = soul("oats.okf/knowledge-maintainer", { agent: "knowledge-maintainer", spawnable: false, problem: "E_TEAM_UNKNOWN: team \"reviewers\" is not declared", unresolved: true as const, file: "souls/knowledge-maintainer/soul.yaml" });
+  const slot = await souls("oats.okf/knowledge-maintainer", { souls: () => ({ souls: [broken] }) });
+  await slot.findByTestId("oats-soul-detail");
+  expect(slot.queryByTestId("oats-soul-capabilities")).toBeNull();
+  expect(slot.getByTestId("oats-soul-detail").textContent).not.toMatch(/No capabilities|Capabilities/);
+  expect(Array.from(slot.getByTestId("oats-soul-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["from member github.com/awebai/oats @ e5b6c5ac", "Defined in souls/knowledge-maintainer/soul.yaml", "E_TEAM_UNKNOWN: team \"reviewers\" is not declared"]);
+});
+
+test("New agent on a soul's page is held, like every New agent, behind an oats the plugin does not work with", async () => {
+  const slot = await souls("oats-developer", { ...listed, homeCli: () => ({ version: "0.1.0", desktopApi: 1, state: "older" as const }) });
+  await slot.findByTestId("oats-soul-detail");
+  await waitFor(() => expect((slot.getByTestId("oats-soul-new-agent") as HTMLButtonElement).disabled).toBe(true));
+  fireEvent.click(slot.getByTestId("oats-soul-new-agent"));
+  expect(slot.inspection.navigateCalls).toEqual([]);
 });
 
 const agentRows = (slot: Slot) => slot.getAllByTestId("oats-soul-agent").map((row) => [row.getAttribute("data-instance"), row.getAttribute("data-where"), within(row).getByTestId("oats-soul-agent-state").textContent]);

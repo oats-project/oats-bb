@@ -1146,8 +1146,8 @@ export { FAILS, fits, printing, refresh, setVerb, settled };
 
 /**
  * The lifecycle's acts on the agent's own page, where an agent with no thread in bb has them. The
- * release's default shows the home alone: the Souls page, where such an agent's Start and Retire
- * also are, is not shown then, so the page its row opens is the one place for them.
+ * agent's own page is where its row opens; a soul's page (the Workspace page's Souls tab, shown by
+ * default) lists it too, with the acts of one whose thread bb does not have.
  */
 const acts = [
   {

@@ -625,7 +625,7 @@ that cannot be run at all is the roster's notice, not this one.
 **The pages shown.** A tile leads to a page, so the home has a tile only for a page this release
 shows (the plugin's setting `pages`; with `home` alone there is no tile), and reads a page's
 count only then. New agent is offered where it has somewhere to open
-(the New agent form's page, once that feature names it; else the Souls page when it is shown).
+(the New agent form's page, once that feature names it; else the Souls tab when it is shown).
 
 **What a card offers.** An agent is answered by the answer its request takes, and the card offers
 that one, not a free-text box beside it as an equal:
@@ -913,7 +913,9 @@ paragraphs came over: the tabs carry the counts; "About capabilities" is the one
 explains); a description is **one line** in a list, cut at a word with "…" (`OneLine`,
 `app/workspace/Workspace.tsx`: the words that fit are measured), whole in the line's title and on
 the thing's own page; a list of twelve or more has a search field; an empty list is two words
-("No souls."); while a tab is read it says "Reading…"; a read that failed is a notice in a
+("No souls."), and while a search narrows a list its tab says "3 of 22"; Left and Right on the
+strip go from tab to tab (each tab's page takes the focus on its own tab, so the keys go on);
+while a tab is read it says "Reading…"; a read that failed is a notice in a
 person's words with Retry, the kernel's or the host's message under its Details; what a tab draws
 of the roster (counts of agents, a soul's agents) stands under the roster's one notice while OATS
 cannot be read. Nothing on these tabs acts on the workspace yet (a team's and a machine's acts,
@@ -922,22 +924,27 @@ a capability's and a team's own page, and three more reads follow in their own c
 - **Souls.** The souls in groups by where they come from ("workspace", a member repository's
   name, a package with its version), a heading only where it tells groups apart. A row: the soul's
   own name (its key is the row's title), one line of what it does, how many of its agents RUN
-  (nothing where none does), "Can't spawn" where a spawn would be refused.
+  (a dot and "2 running"; nothing where none does), "Can't spawn" where a spawn would be refused.
 - **A soul's page** (`/plugins/oats/souls/<key>`) opens over the list, at every width, with
   "← Souls": its key; **New agent** (off, with "Can't spawn here", for a soul that cannot be
-  spawned); what it does, whole; **Harness · model** and **Teams** (the default first); its
+  spawned); its group's word ("workspace", "oats.okf 6.2.0"); what it does, whole; **Harness ·
+  model** (the harness by the New agent form's name for it) and **Teams** (the default first); its
   **Capabilities** as rows, the ones that fill a core place first and tagged "core", each with why
   the soul has it (the kernel's word: "workspace", "soul"); its **Agents** as the roster says them
   (the state as a mark and its word, the reason after it, the tmux mark; a row opens the agent's
   thread or its own page; one whose thread bb does not list has its acts on the row); and under
-  the page's one **Details**, where it is defined and why it cannot be spawned.
+  the page's one **Details**, where it is defined (the repository and commit, the soul's file)
+  and why it cannot be spawned. A soul the kernel could not resolve has no Capabilities section:
+  the kernel answers no list for it, which is "not known", never "none".
 - **Capabilities.** **Core**: Knowledge, Messaging, Tasks, each with the capability that fills it
   or "none". Then each capability: its id, "core" and "repo only" where they hold, "by <source>",
   one line of what it does.
 - **Teams.** Each team: its label, "Default team", how many of this deployment's agents are on it,
   what it is for; under its Details its address on the messaging provider, who may join, where it
   is declared. A team with no address yet says "No address yet"; where it is the default team it
-  is a notice first, since nothing can be spawned until it has one. The workspace's teams and this
+  is a notice first, since nothing can be spawned until it has one, and the Teams tab has a mark
+  (both decided on the kernel's code for it, `team-unmapped`; the notice waits while the roster's
+  own notice stands: one notice on a screen). The workspace's teams and this
   computer's own stand under a heading each only where both are there. "Which teams each soul may
   join" is one fold.
 - **Machines.** One list: this computer first, by its name, with its agents; then each machine
@@ -950,7 +957,7 @@ part, no "by", no groups), never a guess.
 
 ## Automations
 
-**Automations** (in the sidebar's block, under Machines; `/plugins/oats/automations`) shows OATS's
+**Automations** (in the sidebar's block, under Workspace; `/plugins/oats/automations`) shows OATS's
 own schedules and triggers: the ones this deployment holds and the ones the workspace's members
 share through Git. They are the kernel's (`oats schedule …`, `oats trigger …`): the plugin is a
 front for them and never uses bb's own automations. The page is the OATS Desktop's Automations
@@ -1112,11 +1119,12 @@ What the features share, beyond the entries:
   A place that links to a page asks `usePageShown("<id>")` (or `usePagesShown()` for several) and
   draws plain text, or nothing, where the page is not shown. A feature tests both cases: a slot
   rendered with no settings stands for every page shown (`test/helpers/render.ts`), and a test
-  of the default names `settings: { pages: "home" }`.
+  of a deployment that shows the home alone names `settings: { pages: "home" }` (the release's
+  default, the home and the Workspace page's four tabs, is `model/pages.ts` `DEFAULT_PAGES`).
 - **"New agent".** The form's feature names how to open it, once, in its `register`:
   `setNewAgent((navigate, target) => …)`, where `target.soul` is a soul's key to start with. Every
   "New agent" then opens it through `openNewAgent`; until a feature names one it opens the Souls
-  page where that page is shown, and is absent where it is not.
+  tab where that tab is shown (the souls, to pick one from), and is absent where it is not.
 - **A row in the sidebar's block.** A feature with a page of its own lists it under Workspace
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
   `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.

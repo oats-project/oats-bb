@@ -9,6 +9,7 @@ import { CHANGED_FILES_MAX, hostContract, hostSignals, REALTIME_CHANGED, type sn
 import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
 import { withEvents, type EventsSaid } from "../model/events.js";
+import { DEFAULT_PAGES } from "../model/pages.js";
 import type { Agent } from "../model/types.js";
 
 /** What the kernel printed for one instance: its own row, and its agent group's row without the instances. */
@@ -149,7 +150,7 @@ export function createCore(bb: BbPluginApi) {
       label: "Pages shown",
       description:
         "The plugin's pages that are shown, by id, separated by commas: home, souls, capabilities, teams, machines (the default: all five; the last four are the Workspace page's tabs) and automations (not shown by default).",
-      default: "home souls capabilities teams machines",
+      default: DEFAULT_PAGES,
     },
   });
   const host = bb.hosts.experimental_client({ contract: hostContract, experimental_signals: hostSignals });

@@ -5,7 +5,7 @@ import { answer, hostBase, instanceName, key } from "./shared.js";
 
 const soulName = z.string().min(1).max(128);
 
-/** What `spawnPreview` answers: the kernel's preview as short lines (a soul's page draws them; the form reads `spawnPlan`). */
+/** What `spawnPreview` answers: the kernel's preview as short lines. (NO CALLER in the app since the earlier short form on a soul's page went: the form reads `spawnPlan`.) */
 export const spawnSummary = z.object({
   modules: z.array(z.string()),
   teams: z.array(z.string()),
@@ -13,7 +13,7 @@ export const spawnSummary = z.object({
   warnings: z.array(z.string()),
   problems: z.array(z.string()),
 });
-/** A soul, a name and a task: what a soul's page asks a preview and a spawn with. */
+/** A soul, a name and a task: what `spawnPreview` is asked with (see above: no caller in the app). */
 const namedInput = z.object({ soul: soulName, name: instanceName, task: z.string().min(1).max(100_000) });
 
 /**
@@ -71,7 +71,7 @@ export type HarnessList = z.infer<typeof harnessList>;
 export const rpc = defineRpcContract({
   /** One read for the New agent form and the Start and Restart dialogs. */
   spawnHarnesses: { input: z.null(), output: harnessList },
-  /** A soul's page's preview: a soul, a name and a task; the kernel's preview as short lines. */
+  /** A preview for a soul, a name and a task: the kernel's preview as short lines. No caller in the app (the earlier short form's). */
   spawnPreview: { input: namedInput.strict(), output: z.object({ summary: spawnSummary }) },
   /**
    * The New agent form's preview, for what a person chose: what will be created, as facts (never

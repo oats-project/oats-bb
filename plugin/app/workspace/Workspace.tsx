@@ -1,35 +1,75 @@
 // The Workspace page's frame: its tab strip (Souls, Capabilities, Teams, Machines: the tabs this
 // release shows, in the Desktop's order, Souls and Capabilities with their count as the Desktop's
 // tabs have it) over the tab's own content. A tab is a route: a press navigates.
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
-import { useRead } from "../store";
+import { onWindowReset, useRead } from "../store";
 import type { Oats } from "../oats";
 import { RosterNotice } from "../roster/unreadable";
 import { shown } from "../ui/text";
-import { Button, Loading, Notice, Page, Tabs } from "../ui";
+import { Button, Loading, Mark, Notice, Page, Tabs } from "../ui";
 import type { TabItem } from "../ui";
 import { PAGES, usePagesShown } from "./pages";
 import type { WorkspaceTab } from "./pages";
 
 const PANEL = "oats-workspace-panel";
 
-export function Frame({ tab, testId, children }: { tab: WorkspaceTab; /** the tab's own test id (`oats-souls-page`, …) */ testId: string; children: ReactNode }) {
+/**
+ * The strip held the focus when a tab was last chosen. A tab is a ROUTE, and each route is a page of
+ * its own: choosing one takes the strip that held the focus out of the page, and the keyboard would
+ * be left nowhere (Left and Right would move one tab and stop). The tab's page that is drawn next
+ * puts the focus on its own selected tab.
+ */
+let stripHeldFocus = false;
+onWindowReset(() => {
+  stripHeldFocus = false;
+});
+
+/** The kernel's code for a team that has no id on the messaging provider yet (`oats teams`' problems). */
+export const TEAM_UNMAPPED = "team-unmapped";
+
+export function Frame({ tab, testId, found, children }: { tab: WorkspaceTab; /** the tab's own test id (`oats-souls-page`, …) */ testId: string; /** how many rows the tab shows now, where a search narrows it: its count then reads "N of M" */ found?: number; children: ReactNode }) {
   const navigate = useBbNavigate();
   const pages = usePagesShown();
   // The counts are the tabs' own reads (one read per method for the whole window: the tab that is open shares it).
   const souls = useRead("souls", { enabled: pages.has("souls") }).data?.souls.length;
   const capabilities = useRead("capabilities", { enabled: pages.has("capabilities") }).data?.capabilities.length;
+  // The Teams tab is marked while the default team has no address: nothing can be spawned until it has one (the Desktop's dot on that tab).
+  const blocked = (useRead("teams", { enabled: pages.has("teams") }).data?.problems ?? []).some((problem) => problem.code === TEAM_UNMAPPED && problem.isDefault);
   const counts: Partial<Record<WorkspaceTab, number | undefined>> = { souls, capabilities };
   const tabs: TabItem<WorkspaceTab>[] = PAGES.filter((page) => pages.has(page.path)).map((page) => {
     const n = counts[page.path];
-    return { id: page.path, label: page.title, ...(n === undefined ? {} : { count: n }) };
+    const narrowed = page.path === tab && found !== undefined && n !== undefined && found !== n;
+    return {
+      id: page.path,
+      label: page.title,
+      ...(n === undefined || narrowed ? {} : { count: n }),
+      ...(narrowed ? { mark: <span data-testid="oats-tab-found" className="font-normal text-muted-foreground">{`${found} of ${n}`}</span> } : {}),
+      ...(page.path === "teams" && blocked ? { mark: <Mark label="Teams: the default team has no address yet" /> } : {}),
+    };
   });
+  useEffect(() => {
+    if (!stripHeldFocus) return;
+    stripHeldFocus = false;
+    document.getElementById(`${PANEL}-tab-${tab}`)?.focus();
+  }, [tab]);
   return (
     <Page testId={testId}>
       {/* One tab alone is no strip: the page is that tab. */}
-      {tabs.length > 1 ? <Tabs label="Workspace" tabs={tabs} value={tab} onChange={(id) => navigate.toPluginPanel(id)} panelId={PANEL} /> : null}
+      {tabs.length > 1 ? (
+        <Tabs
+          label="Workspace"
+          tabs={tabs}
+          value={tab}
+          onChange={(id) => {
+            if (id === tab) return;
+            stripHeldFocus = document.activeElement?.getAttribute("role") === "tab";
+            navigate.toPluginPanel(id);
+          }}
+          panelId={PANEL}
+        />
+      ) : null}
       <div id={PANEL} role={tabs.length > 1 ? "tabpanel" : undefined} aria-labelledby={tabs.length > 1 ? `${PANEL}-tab-${tab}` : undefined} className="flex min-w-0 flex-col gap-3">
         {children}
       </div>
@@ -67,6 +107,33 @@ export function Before({ oats, read, roster = true }: { oats: Oats; read: { stat
   );
 }
 
+/** A mark that would be left dangling before the "…": a space, a comma, an opening bracket or quote, a dash, a slash, a dot between facts. */
+const DANGLING = /[\s,;:.([{\-–—/·"'“‘]+$/;
+/**
+ * As much of `text` as fits `room`, cut at a WORD with "…" after it; the whole text where it fits;
+ * null where not even its first word does (the page then cuts it at the line's end). `wide` is the
+ * width of a text in the line's own font. Pure: the lists' one rule for a one-line text.
+ */
+export function cutAtWord(text: string, room: number, wide: (words: string) => number): string | null {
+  if (wide(text) <= room) return text;
+  const words = text.split(" ");
+  // The most words that fit with "…" after them.
+  let low = 0;
+  let high = words.length - 1;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (wide(`${words.slice(0, middle).join(" ")}…`) <= room) low = middle;
+    else high = middle - 1;
+  }
+  if (low === 0) return null;
+  const kept = words.slice(0, low).join(" ").replace(DANGLING, "");
+  return kept === "" ? null : `${kept}…`;
+}
+
+/** One pen for every line's measure (a canvas is never drawn: it only measures text). Null where the page cannot measure (no layout: a unit test). */
+let pen: CanvasRenderingContext2D | null | undefined;
+const penOf = (): CanvasRenderingContext2D | null => (pen === undefined ? (pen = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d")) : pen);
+
 /**
  * A text on ONE line of a list, as much of it as the line holds: where it does not fit it ends at a
  * WORD, with "…" (never mid-word: the ruling's R3); the whole text is the line's title, and is on
@@ -84,21 +151,10 @@ export function OneLine({ text, testId }: { text: string; testId: string }) {
     if (element === null || typeof ResizeObserver === "undefined") return;
     const fit = () => {
       const room = element.clientWidth;
-      const pen = room === 0 ? null : document.createElement("canvas").getContext("2d");
-      if (pen === null) return setFits(null);
-      pen.font = getComputedStyle(element).font;
-      const wide = (words: string) => pen.measureText(words).width;
-      if (wide(whole) <= room) return setFits(null);
-      const words = whole.split(" ");
-      // The most words that fit with "…" after them.
-      let low = 0;
-      let high = words.length - 1;
-      while (low < high) {
-        const middle = Math.ceil((low + high) / 2);
-        if (wide(`${words.slice(0, middle).join(" ")}…`) <= room) low = middle;
-        else high = middle - 1;
-      }
-      setFits(low === 0 ? null : `${words.slice(0, low).join(" ").replace(/[\s,;:.(-]+$/, "")}…`);
+      const measure = room === 0 ? null : penOf();
+      if (measure === null) return setFits(null);
+      measure.font = getComputedStyle(element).font;
+      setFits(cutAtWord(whole, room, (words) => measure.measureText(words).width));
     };
     fit();
     const watch = new ResizeObserver(fit);

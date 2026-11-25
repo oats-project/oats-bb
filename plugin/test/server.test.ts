@@ -838,7 +838,7 @@ describe("the pages", () => {
     const { capabilities } = await rpc("capabilities");
     expect(capabilities.find((row: { id: string }) => row.id === "oats.core").souls).toBeGreaterThan(1);
     const { teams } = await rpc("teams");
-    expect(teams[0]).toMatchObject({ label: "oats", team: "default:oats.aweb.ai", isDefault: true });
+    expect(teams[0]).toEqual({ label: "oats", team: "default:oats.aweb.ai", isDefault: true, description: "The OATS framework team", local: false, at: "github.com/awebai/oats:oats-workspace.yaml#/teams/oats" });
     await rpc("snapshot");
     const { machines } = await rpc("machines");
     expect(machines.map((machine: { id: string; isThisMachine: boolean }) => [machine.id, machine.isThisMachine])).toEqual([

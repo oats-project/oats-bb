@@ -97,7 +97,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
 
 ## Automations
 
-- **Automations** (sidebar, under Machines) lists OATS's own schedules and triggers, local and
+- **Automations** (sidebar, under Workspace) lists OATS's own schedules and triggers, local and
   from the workspace's members. They are the kernel's: never use bb's own automations for an OATS
   agent. What the page shows is `oats schedule list` and `oats trigger list`.
 - Rows are grouped by where they run: on the machine that holds the deployment (named by bb's

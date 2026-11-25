@@ -3,7 +3,7 @@
 //
 //   detached     an agent whose session failed, one the kernel cannot reach, one whose bb thread is
 //                gone: in the summary and in Home › Agents
-//   pages-default  the release's default: the home alone, so no tile at all
+//   pages-default  the release's default: the home and the Workspace page's four tabs, so four tiles
 //   fixtures     the recorded roster: three agents need the person (each card with its own reply),
 //                the summary, the tiles, who works, what is finished; Home › Agents; a tile whose
 //                count cannot be read; how soon a change the kernel records is on the home

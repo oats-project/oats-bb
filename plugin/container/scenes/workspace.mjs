@@ -37,6 +37,24 @@ export default [
   },
   {
     stage: "fixtures",
+    name: "the strip's keys: Right, and Right again, go on from tab to tab: each tab's page takes the focus on its own selected tab",
+    run: async ({ page, at, check }) => {
+      await page.goto("/plugins/oats/souls");
+      await page.until(visible(testId("oats-soul-row")), 30);
+      await page.evaluate(`document.querySelector(${q("oats-tab-souls")}).focus()`);
+      /** The route, and the test id of what holds the focus. */
+      const held = (path, tab) => `location.pathname.endsWith("/plugins/oats/${path}") && document.activeElement?.getAttribute("data-testid") === "oats-tab-${tab}" && document.activeElement.getAttribute("aria-selected") === "true"`;
+      const now = `JSON.stringify([location.pathname, document.activeElement?.getAttribute("data-testid") ?? document.activeElement?.tagName])`;
+      await page.press("ArrowRight");
+      check(Boolean(await page.until(held("capabilities", "capabilities"), 30)), `${at} Right on Souls: the Capabilities tab's route, and the focus is on its tab`, await page.evaluate(now));
+      await page.press("ArrowRight");
+      check(Boolean(await page.until(held("teams", "teams"), 30)), `${at} Right again: the Teams tab's route, and the focus is on its tab (the keys go on, they do not stop after one)`, await page.evaluate(now));
+      await page.press("ArrowLeft");
+      check(Boolean(await page.until(held("capabilities", "capabilities"), 30)), `${at} Left: back on Capabilities, the focus on its tab`, await page.evaluate(now));
+    },
+  },
+  {
+    stage: "fixtures",
     name: "the four tabs: rows, no sentence, a description on one line that ends at a word",
     run: async ({ page, at, viewport, check }) => {
       const tabs = [

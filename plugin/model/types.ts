@@ -163,8 +163,12 @@ export type Soul = {
   /** "<code>: <message>", the kernel's, when the soul cannot be spawned */
   problem: string | null;
   // What `oats souls` says beside (each absent where the kernel's answer has none):
+  /** the kernel could not say what the soul is composed of (it answers no list for a soul it cannot resolve): `capabilities` is then empty and means "not known", never "none" */
+  unresolved?: true;
   /** the soul's own name, without its package ("knowledge-harvester" of `oats.okf/knowledge-harvester`) */
   shortName?: string;
+  /** the soul's own file, as a path in its repository */
+  file?: string;
   /** where it is defined: the group it is listed under */
   source?: Source;
   /** what its agents start with on this deployment */
@@ -212,7 +216,7 @@ export type Team = {
 };
 
 /** What `oats teams` says of a team that is not right, in the kernel's words. */
-export type TeamProblem = { label: string | null; isDefault: boolean; message: string; fix: string | null };
+export type TeamProblem = { /** the kernel's code for it ("team-unmapped": a team with no id on the messaging provider yet) */ code: string | null; label: string | null; isDefault: boolean; message: string; fix: string | null };
 /** Which teams a soul may join ("*": every soul with no entry of its own). */
 export type MayJoin = { soul: string; teams: string[] };
 

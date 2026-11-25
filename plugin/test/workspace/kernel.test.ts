@@ -84,6 +84,11 @@ describe("the pages' verbs", () => {
     const soul = (name: string) => answer.value.souls.find((each) => each.name === name)!;
     expect(soul("code-reviewer")).toMatchObject({ shortName: "code-reviewer", source: { kind: "member", label: "workspace" }, harness: "pi", model: "gpt-6-astra", teams: [{ label: "oats", isDefault: true }] });
     expect(soul("code-reviewer").why).toMatchObject({ "oats.aweb": "workspace", "oats.code-review": "soul" });
+    expect(soul("code-reviewer").file).toBe("souls/code-reviewer/soul.yaml");
+    expect(soul("code-reviewer").unresolved).toBeUndefined();
+    // A soul the kernel could not resolve (it cannot be spawned): the kernel answers no list of capabilities, which is "not known", never "none".
+    const broken = answer.value.souls.find((each) => !each.spawnable)!;
+    expect([broken.name, broken.capabilities, broken.unresolved, broken.teams]).toEqual(["oats.okf/knowledge-maintainer", [], true, undefined]);
     // A package soul: its group is the package with its version, its own name is the name without the package.
     expect(soul("oats.okf/knowledge-harvester")).toMatchObject({ shortName: "knowledge-harvester", source: { kind: "package", label: "oats.okf 6.2.0" } });
   });
@@ -100,7 +105,7 @@ describe("the pages' verbs", () => {
         // Who may join what ("*": every soul), whether this computer may declare teams, and what the kernel says is not right, in its words.
         mayJoin: [{ soul: "*", teams: ["oats"] }],
         localTeams: true,
-        problems: [{ label: "docs", isDefault: false, message: "shared team docs has no provider id yet", fix: "its owner runs `oats aweb setup`, then commits the id" }],
+        problems: [{ code: "team-unmapped", label: "docs", isDefault: false, message: "shared team docs has no provider id yet", fix: "its owner runs `oats aweb setup`, then commits the id" }],
       },
     });
   });

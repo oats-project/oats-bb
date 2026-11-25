@@ -918,7 +918,20 @@ test("behind the card New agent is off, and the card on the same screen says why
   expect(list.getByTestId("oats-home-agents")).toBeTruthy();
 });
 
-test("the release's default shows the home alone: no tile at all, no count read for a page that is not shown, and New agent, which opens the form", async () => {
+test("the release's default: the home has a tile for each tab of the Workspace page, in its order, and none for Automations", async () => {
+  const { showEveryPageWhenUnset } = await import("../../app/workspace/pages");
+  showEveryPageWhenUnset(false); // as in the built app: an unset `pages` is the default's
+  try {
+    const slot = await homePage();
+    await slot.findByTestId("oats-home-needs");
+    await waitFor(() => expect(Array.from(slot.getByTestId("oats-home-tiles").querySelectorAll("button")).map((tile) => tile.dataset.testid)).toEqual(["oats-tile-souls", "oats-tile-capabilities", "oats-tile-teams", "oats-tile-machines"]));
+    slot.unmount();
+  } finally {
+    showEveryPageWhenUnset(true);
+  }
+});
+
+test("a deployment that shows the home alone (pages: home): no tile at all, no count read for a page that is not shown, and New agent, which opens the form", async () => {
   const slot = await homePage({ settings: { pages: "home" } });
   await slot.findByTestId("oats-home-needs");
   expect(slot.queryByTestId("oats-home-tiles")).toBeNull(); // no page is shown, and the agents have no tile: nothing is drawn, not an empty list

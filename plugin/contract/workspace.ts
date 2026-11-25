@@ -1,5 +1,6 @@
-// The workspace's four pages: souls, capabilities, teams and machines.
-// The page rows carry only what the pages draw, filled from the kernel's real answers.
+// The Workspace page's four tabs: souls, capabilities, teams and machines.
+// The rows carry what the tabs draw, filled from the kernel's real answers; and three facts that a
+// later change draws (a capability's `version` on its own page; `localTeams`, for the teams' acts).
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { answer, hostRead } from "./shared.js";
@@ -16,7 +17,9 @@ export const soul = z.object({
   spawnable: z.boolean(),
   problem: z.string().nullable(),
   // (What the kernel says beside: model/types.ts `Soul`. Absent where its answer has none.)
+  unresolved: z.literal(true).optional(),
   shortName: z.string().optional(),
+  file: z.string().optional(),
   source: source.optional(),
   harness: z.string().nullable().optional(),
   model: z.string().nullable().optional(),
@@ -47,7 +50,7 @@ const teamsAnswer = z.object({
   teams: z.array(team),
   mayJoin: z.array(z.object({ soul: z.string(), teams: z.array(z.string()) })).optional(),
   localTeams: z.boolean().optional(),
-  problems: z.array(z.object({ label: z.string().nullable(), isDefault: z.boolean(), message: z.string(), fix: z.string().nullable() })).optional(),
+  problems: z.array(z.object({ code: z.string().nullable(), label: z.string().nullable(), isDefault: z.boolean(), message: z.string(), fix: z.string().nullable() })).optional(),
 });
 export const machine = z.object({
   id: z.string(),

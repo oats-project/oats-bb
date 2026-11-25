@@ -198,7 +198,7 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
           {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here.
               For an agent the roster draws on no thread, what happened to it outside OATS follows the state's word, as on its row ("Stopped · session lost"). */}
           {/* Behind a lifecycle result that says the agent changed, until the roster is read again: "Reading…", never the old state stated plainly. */}
-          {/* An agent that runs outside OATS: the line is its thread's line, with Stop… (the primary act) and Start… as the line's own acts (app/outside `pageActs`); off behind "Reading…" and while the roster is the last one read. */}
+          {/* An agent that runs outside OATS: the line is its thread's line, with Stop… (the primary act), Start… and then Retire… as the line's own acts, the page's ONE row of acts (app/outside `pageActs`; `AgentActs` below draws none for it); off behind "Reading…" and while the roster is the last one read. */}
           {reading ? (
             <ReadingLine action={pageActs(line.report, agent.instance, true)?.buttons} />
           ) : (

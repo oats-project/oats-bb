@@ -31,7 +31,7 @@ import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPa
 import type { PageLink } from "../workspace/pages";
 import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
-import { agentName } from "../ui/words";
+import { agentName, STATE } from "../ui/words";
 import { useOpenAgent } from "./open-agent";
 import { ReadingFacts, ReadingMark, readingNow, useActed } from "./reading";
 import { LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
@@ -176,18 +176,35 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * row opens it and Left closes it, as a tree's keys do. A closed parent's children are not in the
    * page at all: nothing of them takes the focus.
    */
-  /** What a row says of its agent after its name, as the row draws it: its state's word, then its reason ("Stopped · may still run"). The chevron of a closed parent is named with it over a row that warns. */
-  const saysOf = (row: Row): string => {
-    const isGone = gone.has(row.agent.instance);
-    const status = agentStatus(row.agent, row.thread, now);
-    const drawn = rowState(status, isGone);
-    const words = rowWords(drawn.word, drawn.state, rowParts(isGone ? null : outside.of(row.agent), status.state).note);
-    return [words.state, words.reason].filter((part): part is string => part !== null && part !== "").join(" · ");
+  /** The reason a row says after its state's word (the outside feature's: "may still run", "deleted in bb"); null: none. */
+  const reasonOf = (row: Row): string | null => (gone.has(row.agent.instance) ? null : rowParts(outside.of(row.agent), agentStatus(row.agent, row.thread, now).state).note) || null;
+  /**
+   * What a closed parent's toggle SAYS of the rows it hides, in its name and title: the folded parent hides those rows'
+   * WORDS, so the name carries them as a COUNT, in the form of "1 needs you" (the lead's ruling of 25 Nov 2026): how
+   * many hidden rows there are of the kind the chevron speaks for (`kin`: the model's `insideOf`):
+   * - they ask: "1 needs you", "2 need you";
+   * - they failed or cannot be reached: "1 failed", "2 unreachable", and both where both are hidden: "1 failed, 1 unreachable";
+   * - they run outside OATS: "1 running outside OATS";
+   * - they warn: the count, then the reason's own words: "1 may still run" (those that say the same reason as the row
+   *   the chevron speaks for).
+   * The states' words are the marks' own names (app/ui/words.ts): nothing is worded here.
+   */
+  const hiddenSays = (state: AgentState, winner: Row, kin: readonly Row[]): string => {
+    const count = (n: number, words: string) => `${n} ${words}`;
+    if (state === "needs-you") return count(kin.length, kin.length > 1 ? "need you" : "needs you");
+    if (state === "error" || state === "unreachable") {
+      const failed = kin.filter((row) => row.state === "error").length;
+      const lost = kin.filter((row) => row.state === "unreachable").length;
+      return [failed > 0 ? count(failed, STATE.error.name) : null, lost > 0 ? count(lost, STATE.unreachable.name) : null].filter((part): part is string => part !== null).join(", ");
+    }
+    if (state === "outside") return count(kin.filter((row) => row.state === "outside").length, STATE.outside.name);
+    const reason = reasonOf(winner);
+    return count(kin.filter((row) => row.state !== "outside" && reasonOf(row) === reason).length, reason ?? STATE[state].name);
   };
   const agentRows = (rows: readonly TreeRow<Row>[], guttered: boolean): ReactNode[] =>
-    rows.flatMap(({ node, parent, open, pinned, inside, insideTone, insideNode, insideAsks }) => {
+    rows.flatMap(({ node, parent, open, pinned, inside, insideTone, insideNode, insideKin }) => {
       const called = agentName(node.agent.instance);
-      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} inside={inside} insideTone={insideTone} insideAsks={insideAsks} insideSays={insideTone === "warning" && insideNode !== null ? saysOf(insideNode) : null} /> : null;
+      const toggle = parent ? <FoldToggle instance={node.agent.instance} name={called} open={open} pinned={pinned} depth={node.depth} inside={inside} insideTone={insideTone} insideSays={inside !== null && insideNode !== null ? hiddenSays(inside, insideNode, insideKin) : null} /> : null;
       const keys = parent ? foldKeys(node.agent.instance, open, pinned) : undefined;
       if (node.thread === null) return [threadlessRow(node.agent, node.where === "tmux" ? TMUX : undefined, outside.of(node.agent), guttered, node.depth, toggle, keys)];
       const thread = oats.threadById.get(node.thread.id);

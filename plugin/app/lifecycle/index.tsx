@@ -165,7 +165,7 @@ export function actsFor(oats: Oats, instance: string): { verb: Verb; label: stri
  * nothing mounted above it (the dialogs are the app overlay's). Nothing where no act applies, and
  * for an agent the roster does not name.
  */
-export function AgentActs({ instance, except }: { instance: string; /** verbs another part of the same place draws for this agent (the page's line of an agent that runs outside OATS has Stop… and Start…): left out here, so that no act is on a page twice */ except?: readonly Verb[] }) {
+export function AgentActs({ instance, except }: { instance: string; /** verbs another part of the same place draws for this agent (the page's line of an agent that runs outside OATS has Stop…, Start… and Retire…, so this draws nothing there): left out here, so that no act is on a page twice */ except?: readonly Verb[] }) {
   const oats = useOats();
   // Behind a result that says the agent changed, until the roster is read again: the acts are off (app/roster/reading.tsx).
   const reading = useReading(instance);

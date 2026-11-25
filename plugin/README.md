@@ -1160,7 +1160,10 @@ An act is a verb that changes something: `start`, `restart`, `stopApply`, `retir
 and the automations' `automationEnable`, `scheduleRun`, `automationDescribe`, `scheduleRemove`,
 `scheduleReconcile`, `schedulerEnable`; and a trigger's TEST that RUNS its source's command on the
 machine (`automationTest` on a confirmed press: an act by its argument). A read, a preview, a plan
-and a test that runs nothing are not logged (the roster is read every few seconds).
+and a test that runs nothing are not logged (the roster is read every few seconds). Nor is the
+terminal of an agent on tmux: `terminalCommand` answers the viewer's command and bb's own terminal
+runs it, so the plugin asks the kernel for nothing that changes; it is GUARDED like an act (refused
+while OATS cannot be read), which is a rule of who may ask, not of what is logged.
 
 The line is a contract: one act, one line, `key=value` separated by one space, in this order
 (`server/act-log.ts`):

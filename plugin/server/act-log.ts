@@ -56,6 +56,7 @@ export type Act = (typeof ACTS)[number];
 export const NOT_ACTS: Readonly<Record<string, string>> = {
   watch: "it starts the watch on the deployment's files: it runs no `oats`",
   mail: "a read of an agent's incoming mail: it acknowledges nothing; it is not retryable because bb cancels a retryable call at half its limit and sends it again, and this read may rightly run for minutes (contract/mail.ts)",
+  terminalCommand: "a read: it answers the viewer's command for an agent on tmux, and bb's own terminal runs it: the plugin asks the kernel for nothing that changes (it is GUARDED like an act, refused while OATS cannot be read: that is who may ask, not what is logged)",
   retirePlan: "a plan: it retires nothing; it is not retryable because each retire plan appends one `retire-planned` event to the workspace log (contract/lifecycle.ts): a record of a read, which the kernel keeps itself",
 };
 /**

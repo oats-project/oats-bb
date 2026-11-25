@@ -645,7 +645,7 @@ export default [
     name: "a workspace with no agent: \"No agents yet.\", and New agent",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
-      check(Boolean(await page.until(`${NEW_AGENTS}.length === 1`, 30)) && (await open(page, within("oats-empty"))), `${at} the screen of an empty workspace offers New agent, once`, await page.evaluate(`JSON.stringify(${NEW_AGENTS}.map((b) => b.dataset.testid))`));
+      check((await open(page, within("oats-empty"))) && Boolean(await page.until(`${NEW_AGENTS}.length === 1`, 30)), `${at} the screen of an empty workspace offers New agent, once`, await page.evaluate(`JSON.stringify(${NEW_AGENTS}.map((b) => b.dataset.testid))`));
       const words = await page.evaluate(textOf(within("oats-empty")));
       check(words === "No agents yet.", `${at} it says that there are no agents yet, in three words`, words);
       const head = await page.until(`(() => { const all = ${NEW_AGENTS}; const said = ${NO_AGENTS}; return all.length === 1 && said.length === 1 ? JSON.stringify({ text: all[0].innerText.trim(), off: all[0].disabled, own: all[0].dataset.testid === "oats-home-new-agent", primary: all[0].dataset.testid === "oats-home-new-agent" || all[0].hasAttribute("data-primary"), says: said[0].dataset.testid }) : ""; })()`, 15);

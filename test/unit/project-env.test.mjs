@@ -178,7 +178,7 @@ for (const [name, value, extra] of [
   });
 }
 
-test("a launch that is refused says nothing of an identity home it would not have carried: no thread is started for it to be true of", async (t) => {
+test("a launch the provider refuses says nothing of an identity home it would not have carried: no thread is started for it to be true of", async (t) => {
   const { home, bb, seen, withoutPi } = await setup(t);
   const outside = IDENTITY("/home/someone/.aweb-identity");
   // Refused for a later entry of its env; for an argument; for a PATH with no pi on it.

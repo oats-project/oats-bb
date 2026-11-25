@@ -1,0 +1,16 @@
+{
+  "name": "oats-bb-contract-lock-pi",
+  "private": true,
+  "description": "The exact tree of the contract image for pi threads (test/contract/pi/Dockerfile): bb-app with the build toolchain it would otherwise fetch by itself, pi, the OATS kernel and Claude Code (test/contract/locks/README.md).",
+  "tools": ["bb-app", "@earendil-works/pi-coding-agent", "@awebai/oats", "@anthropic-ai/claude-code"],
+  "dependencies": {
+    "bb-app": "0.50.1",
+    "esbuild": "0.28.2",
+    "@tailwindcss/node": "4.3.0",
+    "@tailwindcss/oxide": "4.3.0",
+    "tailwindcss": "4.3.0",
+    "@earendil-works/pi-coding-agent": "1.5.2",
+    "@awebai/oats": "0.70.5",
+    "@anthropic-ai/claude-code": "2.1.328"
+  }
+}

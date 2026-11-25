@@ -195,6 +195,12 @@ open, a confirmation before its act, in progress, done, refused and with another
   Restart); and the agent whose bb thread is gone, which stays in the
   roster and says "deleted in bb".
   With A13's rows, all six states are drawn, each with its word.
+- **A13**, a tmux agent's terminal (`scenes/terminal.mjs`, on the fixtures): the page of the tmux agent
+  that runs has Terminal over its attach command; pressed, bb's own terminal runs the command the
+  server answered (the fake `oats` by its absolute path, which does not know `session attach` and
+  ends at once), and the page says "Terminal did not open." with its fold. The live checks have no
+  tmux: that the tab comes up attached, takes keys and is one per agent is the real run's
+  (`real/parts/on-tmux.mjs`).
 - **OUTA**, **OUT**, **OUTH**, **OUTQ** (`scenes/outside.mjs`, in the order they run; stages of its own) every row of the table of
   "Outside OATS" (`../README.md`) on the sidebar's rows, on each thread's line and on the agent's
   own page. OUT, one roster: stopped with its thread archived, stopped on an open thread, the

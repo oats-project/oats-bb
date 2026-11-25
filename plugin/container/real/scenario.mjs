@@ -936,6 +936,17 @@ try {
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   const stopAt = Date.now();
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
+  // THE ACT LOG (P-51; README, "The act log"): bb's own log holds the stop's two lines, written by the plugin through
+  // bb's logger: the kernel was asked, and it ended ok. Read from bb's log files (the ones bb-logs.sh keeps for a
+  // failed run). Each line is looked for by its own words; the log is bb's, and bb puts its level and time before them.
+  {
+    const logs = join(homedir(), "bbdata", "logs");
+    const text = existsSync(logs) ? readdirSync(logs).filter((name) => name.endsWith(".log")).map((name) => readFileSync(join(logs, name), "utf8")).join("\n") : "";
+    const of = (phase) => text.split("\n").filter((line) => line.includes(`oats act stopApply ${phase} instance=${A.instance} `));
+    const [asked, ended] = [of("asked"), of("ended")];
+    check(asked.length === 1 && / caller=\S+ host=\S+ at=\d{4}-\d\d-\d\dT[\d:.]+Z/.test(asked[0]), "the act log: bb's log holds ONE line that the plugin asked the kernel to stop the agent (who asked, the machine, when)", `${asked.length} line(s) in ${logs}`);
+    check(ended.length === 1 && / result=ok ms=\d+ homes=1\/1/.test(ended[0]), "the act log: and ONE line that the stop ended ok, with how long it took and the home it took", `${ended.length} line(s)${ended[0] ? `: …${ended[0].slice(ended[0].indexOf("oats act"))}` : ""}`);
+  }
   // The stop is the plugin's own act: it rereads by itself afterwards, so this one measures how soon an act's result is on hand, not the watch (that the act rereads is test/lifecycle/server.test.ts's).
   await fresh("the agent stopped (the plugin's own act)", { instance: A.instance, home, kind: "stopped", since: stopAt }, (agent) => agent.runtimeState === "stopped");
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");

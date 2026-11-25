@@ -251,7 +251,7 @@ export default [
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/plugins/oats/souls/oats-expert");
       const row = `document.querySelector(${JSON.stringify(`${testId("oats-soul-agent")}[data-instance="weekly-digest-helper"]`)})`;
-      const line = await page.until(`(() => { const t = (${row}?.innerText ?? "").replace(/\\s+/g, " ").trim(); return /Retire…/.test(t) ? t : ""; /* the agent by its one name, the instance as words */ })()`, 30);
+      const line = await page.until(`(() => { const t = (${row}?.innerText ?? "").replace(/\\s+/g, " ").trim(); return /Retire…/.test(t) && /(archived|deleted) in bb/.test(t) ? t : ""; /* the agent by its one name, the instance as words; what bb did to its thread is bb's answer by id, which comes after the roster's */ })()`, 30);
       check(Boolean(line) && /Weekly digest helper/.test(line) && /(archived|deleted) in bb/.test(line) && !/thread missing/.test(line), `${at} the soul's page says of the agent whose thread bb does not have what the roster says of it ("archived in bb" or "deleted in bb"), with its acts`, line ?? (await page.evaluate(textOf(testId("oats-souls-page")))));
       await page.shot(`a16-${viewport.name}-soul`, { targets: true });
     },

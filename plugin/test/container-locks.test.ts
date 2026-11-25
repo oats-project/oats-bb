@@ -107,3 +107,14 @@ test("the plugin's own bb-app (the unit stage's build) finds bb's build toolchai
     expect(installed.version, `${name} is installed at the top of the plugin's tree at bb's pin, where the plugin's bb-app resolves it`).toBe(version);
   }
 });
+
+test("the image holds the two tools pi would else download by itself, and the pi run asks pi whether it finds them", () => {
+  // pi fetches the latest fd and ripgrep from github.com where they are not on the PATH
+  // (container/no-pi-tools-fetch.sh): the distribution's packages keep that from a check.
+  const image = readFileSync(join(CONTAINER, "Dockerfile"), "utf8");
+  const installed = /apt-get install [^\n]*/.exec(image)?.[0] ?? "";
+  for (const name of ["fd-find", "ripgrep"]) expect(installed.split(/\s+/), `the image installs ${name}`).toContain(name);
+  // The CALLS, not a comment that names the script.
+  expect(readFileSync(join(CONTAINER, "real", "pi", "setup.sh"), "utf8"), "the pi run's setup asks pi what it finds").toMatch(/^sh "\$HERE\/\.\.\/\.\.\/no-pi-tools-fetch\.sh"$/m);
+  expect(readFileSync(join(CONTAINER, "real", "run.sh"), "utf8"), "the pi run's end looks for a tool pi fetched").toMatch(/^\s*run sh container\/no-pi-tools-fetch\.sh$/m);
+});

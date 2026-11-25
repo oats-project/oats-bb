@@ -1,5 +1,55 @@
 # Changelog
 
+## Unreleased
+
+### The session provider
+
+- **`hostDaemonPort` alone works under a real kernel** (#88). The manifest declared a
+  default for `daemon` (bb's own default address), and the kernel hands a provider its
+  manifest's defaults as values. So a deployment that set `hostDaemonPort` and no
+  `daemon`, as "Two bbs on one host" tells a second bb to, was refused at every spawn and
+  every readiness read: `E_BACKEND_SETTINGS`, "hostDaemonPort is … and
+  settings.oats.bb.daemon names port 38887". The manifest no longer declares that
+  default. Nothing else moves: with neither set the provider still reads bb's default,
+  `http://127.0.0.1:38887` (its own fallback, the same address); a `daemon` a deployment
+  sets is still the address. One sentence is better for it: where the daemon at bb's
+  default address does not answer, the finding names `hostDaemonPort` as what to set
+  (it named `daemon`, taking the default for the deployment's own). **This retires the
+  workaround** of setting `daemon` on the same port beside `hostDaemonPort`: a
+  deployment that wrote it can remove the `daemon` line, or leave it (the two agree).
+  A unit test now reads the manifest's defaults into the settings it checks.
+- **Readiness says when the pi model check is off.** The check refuses a model only where
+  bb's list of pi's models is whole, and bb's pi keeps the settings it started with: after
+  a change to bb's pi `settings.json` under a running bb (pi writes it itself), every id
+  that is not listed passed, one pi does not have failed as its thread started, and
+  nothing said the check was off. A read with no planned launch (`oats readiness`, `oats
+  bb doctor`) now carries the warning `session-provider-pi-model-check-off`: "the pi model
+  check is off until bb restarts: bb's pi settings changed after it started (restart
+  bb-app to turn it back on)". A warning: nothing is refused for it. It is given where a
+  pi launch would go on and bb-app's record of its start can be read; not where
+  `enabledModels` is set (a restart does not turn the check on there), nor for a bb with
+  no pi. README, "pi" and "Readiness".
+
+### Development
+
+- **The contract tests' first bb is off bb's default ports.** Each contract container's
+  bb ran on 38886 and 38887, which are in Linux's ephemeral range (32768-60999): a
+  listener on port 0 or any outgoing connection of the container can hold one, and bb's
+  start then fails. It now runs on 18886 and 18887 (`test/contract/rig.mjs`), named to
+  the provider as a deployment names such a bb (`server`, `hostDaemonPort`). The
+  provider's defaults are unchanged: a person's bb stays on bb's own ports.
+- **The contract images install from locks.** The three images installed bb-app, Claude
+  Code, pi and the kernel with `npm install -g`, so each build resolved their dependency
+  trees anew, and a hiccup of the registry failed the contract job. They now install with
+  `npm ci` from committed locks (`test/contract/locks/`, the shape of the plugin's
+  checks): nothing is resolved when an image is built. `test/contract/relock.sh <lock>`
+  writes a lock again when a pin moves; a unit test holds the locks against `bb-version`
+  and the Dockerfiles against `npm install`. The locks hold bb's build toolchain too: bb
+  fetched it from npm by itself, with no lock, when the title test installed its plugin,
+  and that test now fails a run in which it does. What is not locked is named in the locks'
+  README (the aweb extension pi installs into the second pi configuration brings
+  `@awebai/aw` by a range).
+
 ## 0.5.0
 
 The pilot's release. The OATS plugin for bb gets its screens in their pilot form:

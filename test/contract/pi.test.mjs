@@ -10,12 +10,12 @@ import assert from "node:assert/strict";
 import { after, afterEach, before, test } from "node:test";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BB_VERSION, rig, sleep, waitFor } from "./rig.mjs";
+import { BB_SERVER, BB_SETTINGS, BB_VERSION, rig, sleep, waitFor } from "./rig.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PROVIDER = "/repo/oats-package/capabilities/oats-bb/bin/oats-bb.mjs";
 const MODEL = "mock/echo";
-const SETTINGS = { version: BB_VERSION, trust: "container", dataDir: "/home/node/bbdata" };
+const SETTINGS = { ...BB_SETTINGS, version: BB_VERSION, trust: "container", dataDir: "/home/node/bbdata" };
 // A check as the kernel makes it before a pi launch: with the launch it plans.
 const PLANNED = { harness: "pi", yolo: true, args: [] };
 
@@ -128,7 +128,7 @@ after(() => box.stop());
 
 test("the image runs the pinned bb-app with pi, and the check of a planned pi launch reads it ready", async () => {
   assert.equal((await sh("bb --version")).trim(), BB_VERSION);
-  const state = JSON.parse(await sh("curl -s 'http://127.0.0.1:38886/api/v1/system/providers/state?providerId=pi'"));
+  const state = JSON.parse(await sh(`curl -s '${BB_SERVER}/api/v1/system/providers/state?providerId=pi'`));
   assert.equal(state.providers.length, 1);
   assert.equal(state.providers[0].providerId, "pi");
   assert.equal(state.providers[0].status, "ready", "what the provider reads: bb's own word for its pi provider");
@@ -162,7 +162,7 @@ test("P1 launch: a pi thread in a project rooted at the home, with the launch's 
   // Idle after its turn, its pi still loaded in the home: it runs. (bb says `idle` of a
   // stopped thread too: `running` is read from the home's own harness process.)
   const inspected = (await provider("inspect", { home, endpoint })).result;
-  assert.deepEqual(inspected, { present: true, state: "unknown", running: true, open: { label: "Open in bb", url: `http://127.0.0.1:38886/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
+  assert.deepEqual(inspected, { present: true, state: "unknown", running: true, open: { label: "Open in bb", url: `${BB_SERVER}/projects/${endpoint.projectId}/threads/${endpoint.threadId}` } });
 });
 
 test("P1 bb itself runs pi in full mode only, and the provider refuses the same launch before bb is asked", async () => {
@@ -227,7 +227,7 @@ test("bb's list of pi's models, as the model check reads it: every id is its pro
 test("what the model check reads of bb and pi beside the list: bb-app's record of its start in its data directory, and the files that give pi its models in its configuration directory", async () => {
   // bb-app's record: this server, and when it started (after the image's pi settings were written).
   const record = JSON.parse(await sh("cat ~/bbdata/bb-app-runtime.json"));
-  assert.equal(record.serverUrl, "http://127.0.0.1:38886");
+  assert.equal(record.serverUrl, BB_SERVER);
   assert.match(record.startedAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
   const [now, settingsChanged] = (await sh("date +%s; stat -c %Z ~/.pi/agent/settings.json")).trim().split("\n").map(Number);
   const started = Date.parse(record.startedAt) / 1000;
@@ -862,12 +862,19 @@ test("K-28 a home moves between the harnesses on bb: claude, then pi, then claud
 // restarted. (Both seen at bb-app 0.50.1, pi 1.5.2, recorded here.) So a model that is not
 // listed is refused only where pi's settings set no enabledModels and have not changed
 // since bb started; otherwise it only warns.
+// That last case is the check's one silent off-switch (every id passes, for every home, and
+// no setting says so): a read with no planned launch, and `oats bb doctor`, say it, as the
+// warning session-provider-pi-model-check-off, until bb is restarted.
 test("with pi's enabledModels set, bb lists only those models, and goes on doing so after the setting is removed, until it is restarted: the bare id a soul names (claude-fable-5.1), left out of them, only warns at the check, and its launch runs", async () => {
   const settingsFile = "/home/node/.pi/agent/settings.json";
   const original = await sh(`cat ${settingsFile}`);
   const listedIds = async () => (await bbJson("provider models pi")).map((model) => model.id).sort();
   const unchecked = async (model) => (await checkModel(model)).warnings.filter((warning) => warning.code === "session-provider-pi-model-unchecked").map((warning) => warning.message);
   const sentence = (model, why) => `could not check the model ${JSON.stringify(model)} against pi's model list: ${why}`;
+  // What a read with no planned launch says of the check itself.
+  const CHECK_OFF = { code: "session-provider-pi-model-check-off", message: "the pi model check is off until bb restarts: bb's pi settings changed after it started (restart bb-app to turn it back on)" };
+  const checkOff = async () => (await provider("check", { home: null, soul: null })).result.warnings.filter((warning) => warning.code === CHECK_OFF.code);
+  assert.deepEqual(await checkOff(), [], "pi's settings are older than this bb's start: nothing is said");
   let restored = false;
   try {
     await sh(`cat > ${settingsFile}`, { input: JSON.stringify({ ...JSON.parse(original), enabledModels: ["mock/echo"] }, null, 2) });
@@ -890,6 +897,8 @@ test("with pi's enabledModels set, bb lists only those models, and goes on doing
     assert.deepEqual((await checkModel("claude-fable-9")).problems, []);
     // The listed model passes with nothing said.
     assert.deepEqual((await checkModel("mock/echo")).warnings, []);
+    // The check is off by the setting here, which a restart of bb does not end: the warning of that is not given.
+    assert.deepEqual(await checkOff(), []);
 
     // The setting removed, and bb not restarted: bb's list is still the narrowed one, and
     // the settings file no longer says so. Still no refusal: the file is newer than bb.
@@ -907,6 +916,13 @@ test("with pi's enabledModels set, bb lists only those models, and goes on doing
     assert.deepEqual((await checkModel("claude-fable-5.1")).problems, []);
     const again = await launched("model-narrowed-stale", { model: "claude-fable-5.1" });
     assert.equal(await threadStatus(again.endpoint.threadId), "idle");
+    // Nothing above said that the check is off for every model and every home: the read with no planned launch does,
+    // as a warning beside a ready status, and so does the doctor.
+    const plain = (await provider("check", { home: null, soul: null })).result;
+    assert.equal(plain.status, "ready", JSON.stringify(plain));
+    assert.deepEqual(plain.warnings.filter((warning) => warning.code === CHECK_OFF.code), [CHECK_OFF]);
+    const doctor = await sh(`OATS_SETTINGS='${JSON.stringify(SETTINGS)}' node ${PROVIDER} doctor`);
+    assert.ok(doctor.split("\n").includes(`  warning ${CHECK_OFF.code}: ${CHECK_OFF.message}`), doctor);
 
     // bb restarted: it lists by the settings as they are, and the check refuses again what pi does not have.
     await box.restartBb();
@@ -915,6 +931,7 @@ test("with pi's enabledModels set, bb lists only those models, and goes on doing
     // (Once the change of the settings is older than bb's list can be.)
     await refusesAgain();
     assert.deepEqual((await checkModel("claude-fable-5.1")).warnings, []);
+    assert.deepEqual(await checkOff(), [], "bb restarted: the check is on again, and the warning is gone");
   } finally {
     if (!restored) {
       await sh(`cat > ${settingsFile}`, { input: original });

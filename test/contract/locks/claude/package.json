@@ -1,0 +1,14 @@
+{
+  "name": "oats-bb-contract-lock-claude",
+  "private": true,
+  "description": "The exact tree of the contract images for Claude threads (test/contract/Dockerfile, test/contract/sandbox/Dockerfile): bb-app with the build toolchain it would otherwise fetch by itself, and Claude Code (test/contract/locks/README.md).",
+  "tools": ["bb-app", "@anthropic-ai/claude-code"],
+  "dependencies": {
+    "bb-app": "0.50.1",
+    "esbuild": "0.28.2",
+    "@tailwindcss/node": "4.3.0",
+    "@tailwindcss/oxide": "4.3.0",
+    "tailwindcss": "4.3.0",
+    "@anthropic-ai/claude-code": "2.1.328"
+  }
+}

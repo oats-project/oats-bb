@@ -81,6 +81,11 @@ async function withTitleService() {
   // From a copy in the container's home: the repository is mounted read-only.
   await sh("rm -rf ~/title-service && cp -r /repo/test/contract/title-service ~/title-service && bb plugin install ~/title-service --yes --json >/dev/null");
   await waitFor("bb to have the title service ready", async () => (await titleService())?.status?.ready === true, { timeoutMs: 60_000 });
+  // bb built it with the toolchain of the image's lock, not with one fetched from npm as the test ran: where its four
+  // build packages do not resolve from bb-app's own module path, bb installs them itself, with no lock, into
+  // toolchain-<versions> under its plugins, and says nothing (test/contract/locks/README.md, "bb's build toolchain").
+  // (It does so before the service reads ready: on an image without the four, the directory is there by now.)
+  assert.equal((await sh("ls -d ~/bbdata/plugins/toolchain-* ~/.bb/plugins/toolchain-* 2>/dev/null || true")).trim(), "", "bb fetched a build toolchain from npm to install the title service");
   const use = await bbJson("settings ai-services show");
   assert.deepEqual(use.selections["thread-title"], { mode: "automatic" }, "bb's own default: the first service that is ready");
   assert.deepEqual(use.services.filter((service) => service.status.ready).map((service) => service.pluginId), ["contract-titles"], "bb cloud and Codex are signed out here");

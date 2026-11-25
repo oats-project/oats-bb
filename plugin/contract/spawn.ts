@@ -29,8 +29,6 @@ export type SpawnRelation = z.infer<typeof spawnRelation>;
  *   - `task` may be empty: the agent starts and waits for its person;
  *   - `harness` left out: the kernel resolves it as for any spawn (the harness interface, point 2);
  *     named, it is one the bb session provider declares (for a spawn that is not a bb thread: one the kernel launches);
- *   - `backend` left out: a bb thread where the deployment has the bb session provider, and where it has none
- *     the kernel's own choice; named, one of `harnessList.backends` (a kernel backend, "tmux", names no mode);
  *   - `model` left out: the kernel resolves it for the harness; named, any id as one argument;
  *   - `relation` left out: independent.
  */
@@ -41,7 +39,6 @@ const spawnInput = z.object({
   harness: z.string().min(1).max(40).optional(),
   model: z.string().min(1).max(256).optional(),
   relation: spawnRelation.optional(),
-  backend: z.string().min(1).max(40).optional(),
 });
 
 // ---- what will be created: the facts of the kernel's preview, as model/spawn.ts `previewFacts` words them ----
@@ -74,12 +71,9 @@ export const harnessList = z.object({
   /** false: the deployment has no bb session provider (the kernel knows no capability `oats.bb`). A spawn there is not a bb thread: no harness to choose, and the kernel decides where it runs. Left out by an older server: there is one. */
   provider: z.boolean().optional(),
   /**
-   * Where a spawn may run, in the order offered: "bb" (a bb thread) first where the provider is there, then the
-   * kernel's own session backends (`sessionBackends` of `oats version --json`: "tmux"). One entry or none: nothing to
-   * choose. `kernelHarnesses`: the harnesses the kernel launches itself (`harnesses` of the same answer): what a spawn
-   * that is not a bb thread may name. Left out by a server from before the choice.
+   * The harnesses the kernel launches itself (`harnesses` of `oats version --json`): what a spawn that is not a bb
+   * thread (a deployment with no bb session provider) may name. Left out by a server from before it.
    */
-  backends: z.array(z.string()).optional(),
   kernelHarnesses: z.array(z.string()).optional(),
   /**
    * The workspace pins the bb session provider and it is not synced yet (the kernel's `E_CAPABILITY_UNKNOWN` naming a

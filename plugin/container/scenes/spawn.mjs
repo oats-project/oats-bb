@@ -124,9 +124,9 @@ export default [
     name: "the New agent form, empty: the soul first and in focus, nothing read, Spawn off with the empty field in view",
     run: async ({ page, at, viewport, check }) => {
       check(await open(page), `${at} /plugins/oats/new-agent is the form, with the souls OATS lists`, await whole(page));
-      const first = await page.evaluate(`JSON.stringify({ title: ${textOf(testId("oats-spawn-title"))}, first: ${FIRST}, labels: [...document.querySelector(${q("oats-spawn-form")}).querySelectorAll("label, #oats-spawn-relation-label, #oats-spawn-backend-label")].map((e) => e.innerText.trim()), spawn: ${SPAWN}.disabled, reason: ${reasonOf}, column: document.querySelector(${q("oats-spawn-preview")}) !== null, soul: ${textOf(testId("oats-spawn-soul"))}, heading: document.querySelector(${q("oats-spawn-title")}).getBoundingClientRect().width <= 1, key: document.querySelector(${q("oats-spawn-key")}) !== null, whole: /Choose a soul first|full mode|Enter/.test(document.querySelector(${q("oats-new-agent-page")}).innerText) })`);
+      const first = await page.evaluate(`JSON.stringify({ title: ${textOf(testId("oats-spawn-title"))}, first: ${FIRST}, labels: [...document.querySelector(${q("oats-spawn-form")}).querySelectorAll("label, #oats-spawn-relation-label")].map((e) => e.innerText.trim()), spawn: ${SPAWN}.disabled, reason: ${reasonOf}, column: document.querySelector(${q("oats-spawn-preview")}) !== null, soul: ${textOf(testId("oats-spawn-soul"))}, heading: document.querySelector(${q("oats-spawn-title")}).getBoundingClientRect().width <= 1, key: document.querySelector(${q("oats-spawn-key")}) !== null, whole: /Choose a soul first|full mode|Enter/.test(document.querySelector(${q("oats-new-agent-page")}).innerText) })`);
       check(
-        first === JSON.stringify({ title: "New agent", first: "oats-spawn-soul", labels: ["Soul", "Opening instruction · optional", "Runs in", "Harness", "Model", "Relationship", "Name · optional"], spawn: true, reason: "", column: false, soul: "Choose a soul… ▾", heading: true, key: false, whole: false }),
+        first === JSON.stringify({ title: "New agent", first: "oats-spawn-soul", labels: ["Soul", "Opening instruction · optional", "Harness", "Model", "Relationship", "Name · optional"], spawn: true, reason: "", column: false, soul: "Choose a soul… ▾", heading: true, key: false, whole: false }),
         `${at} the empty form: named New agent for a screen reader with no heading drawn (bb's bar says it), the soul first and saying "Choose a soul…", the Desktop's fields in its order, Spawn off with no sentence beside it, no column over nothing, no key hint, no line about the mode before there is an agent to make`,
         first,
       );
@@ -170,11 +170,11 @@ export default [
       // The focus order, by Tab from the first field.
       await page.evaluate(`document.querySelector(${q("oats-spawn-soul")}).focus()`);
       const stops = [await page.evaluate(FOCUSED)];
-      for (let i = 0; i < 9; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         await page.press("Tab");
         stops.push(await page.evaluate(FOCUSED));
       }
-      check(JSON.stringify(stops) === JSON.stringify(["oats-spawn-soul", "oats-spawn-task", "bb thread", "oats-spawn-harness", "oats-spawn-model", "Independent", "oats-spawn-name", "▸ Details", "oats-spawn-cancel", "oats-spawn-submit"]), `${at} Tab walks the form in its order: the soul, the instruction, where it runs, the harness, the model, the relationship, the name, the column's Details, Cancel, Spawn`, JSON.stringify(stops));
+      check(JSON.stringify(stops) === JSON.stringify(["oats-spawn-soul", "oats-spawn-task", "oats-spawn-harness", "oats-spawn-model", "Independent", "oats-spawn-name", "▸ Details", "oats-spawn-cancel", "oats-spawn-submit"]), `${at} Tab walks the form in its order: the soul, the instruction, the harness, the model, the relationship, the name, the column's Details, Cancel, Spawn`, JSON.stringify(stops));
       check(await page.evaluate(FITS), `${at} nothing of the form is wider than the page`);
       await page.evaluate(show("oats-spawn-task"));
       await page.shot(`spawn-${viewport.name}-filled`, { targets: true });

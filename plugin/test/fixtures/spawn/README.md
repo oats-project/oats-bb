@@ -65,13 +65,6 @@ other edit:
 - `status-row-no-provider.json`: the new agent's row of `oats status --json` there: `backend:
   "tmux"`, `running: true`.
 
-And two on the run's OWN deployment (the bb session provider is there), by the form's "Runs in:
-tmux session", recorded by the same part on 2026-11-24:
-
-- `spawn-preview-tmux-chosen.json`: `oats spawn <soul> --backend tmux --name … --preview --json`:
-  no `--yolo`. The kernel: `backend: "tmux"`, and NO mode (`decision.effective.yolo: null`).
-- `spawn-tmux-chosen.json`: the apply of that decision: launched in a tmux window, no thread.
-
 No file above is shaped. One answer of a spawn that is shaped is made where it is used, and says
 so there: a spawn the kernel refused and could not roll back completely (`details.unconfirmed`),
 which the real run cannot make (the kernel's own removal of the home would have to fail). The live

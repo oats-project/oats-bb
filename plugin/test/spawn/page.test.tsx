@@ -619,14 +619,14 @@ test("a deployment with NO bb session provider: nothing of bb's and no red sente
   let listed = 0;
   const slot = await ready(
     {
-      spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, backends: ["tmux"], kernelHarnesses: ["pi", "claude", "codex"] }),
+      spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] }),
       spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }),
       spawn: () => ({ instance: "oats-developer-3", threadId: null }),
     },
     { models: () => ((listed += 1), { modelLoadError: null, models: [] }) },
   );
   // Nothing of bb's is offered: the harnesses are the ones the kernel launches itself, no list of bb's models is
-  // asked, and there is one place to run in, so no choice of it; and nothing is said to have failed.
+  // asked, and there is no choice of where it runs; and nothing is said to have failed.
   expect(options(slot, "oats-spawn-harness").map(([label]) => label)).toEqual(["The soul's default: Claude Code", "pi", "Claude Code", "codex"]);
   expect(slot.queryByTestId("oats-spawn-backend")).toBeNull();
   expect(slot.queryByTestId("oats-spawn-harness-retry")).toBeNull();
@@ -652,58 +652,18 @@ test("a deployment with NO bb session provider: nothing of bb's and no red sente
   expect(notified().at(-1)).toMatchObject({ tone: "done", title: "Created Oats developer 3." });
 });
 
-test("Runs in, where the deployment has the bb session provider and the kernel its own tmux: a bb thread unless tmux is chosen; tmux names the backend, offers the kernel's harnesses and nothing of bb's, says where it runs once, and opens the agent's own page", async () => {
-  const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
-  let listed = 0;
-  const slot = await ready(
-    {
-      spawnHarnesses: () => ({ harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true, backends: ["bb", "tmux"], kernelHarnesses: ["pi", "claude", "codex"] }),
-      // (As the server answers: the kernel's preview of a bb thread, and of an agent on tmux with no mode asked.)
-      spawnPlan: (input) => ({ facts: input.backend === "tmux" ? formFacts(onTmux, { name: input.name ?? null, fullMode: false }) : formFacts(recorded, { name: input.name ?? null }), revision: REVISION }),
-      spawn: () => ({ instance: "oats-developer-3", threadId: null }),
-    },
-    { models: () => ((listed += 1), { modelLoadError: null, models: [] }) },
-  );
-  // The choice, a bb thread first and chosen; the spawn names no backend for it (the server asks for bb).
-  expect(within(slot.getByTestId("oats-spawn-form")).getByText("Runs in")).toBeTruthy();
-  const places = () => Array.from(slot.getByTestId("oats-spawn-backend").querySelectorAll('[role="radio"]')).map((radio) => [radio.textContent, radio.getAttribute("aria-checked")]);
-  expect(places()).toEqual([["bb thread", "true"], ["tmux session", "false"]]);
-  expect(calls(slot, "spawnPlan").every((call) => call.backend === undefined)).toBe(true);
+test("where the deployment has the bb session provider the form has NO choice of where the agent runs: every spawn is a bb thread, and nothing it sends names a backend", async () => {
+  // (The server answers no list of places any more; one that did, from an older build, draws nothing either.)
+  const slot = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true, backends: ["bb", "tmux"] }) as never }));
+  expect(slot.queryByTestId("oats-spawn-backend")).toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Runs in|tmux session/);
   expect(options(slot, "oats-spawn-harness").map(([label]) => label).slice(1)).toEqual(["Claude Code", "pi"]);
   expect(rows(slot).inView).toContainEqual(["Access", "full mode: no sandbox"]);
-  // A harness of bb's is chosen, then tmux: the harness is not kept (it is one of the place's own list).
-  choose(slot, "oats-spawn-harness", "pi");
-  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toMatchObject({ harness: "pi" }));
-  // (A press on the place already chosen changes nothing: the harness stays, and nothing is asked again.)
-  const before = calls(slot, "spawnPlan").length;
-  fireEvent.click(slot.getByRole("radio", { name: "bb thread" }));
-  expect(slot.getByTestId("oats-spawn-harness").textContent).toMatch(/^pi/);
-  expect(calls(slot, "spawnPlan")).toHaveLength(before);
-  const asked = listed;
-  fireEvent.click(slot.getByRole("radio", { name: "tmux session" }));
-  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", backend: "tmux" }));
-  expect(places()).toEqual([["bb thread", "false"], ["tmux session", "true"]]);
-  // The kernel's own harnesses; no list of bb's models asked for them; no model required of a harness chosen there.
-  expect(options(slot, "oats-spawn-harness").map(([label]) => label).slice(1)).toEqual(["pi", "Claude Code", "codex"]);
-  choose(slot, "oats-spawn-harness", "codex");
-  await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", backend: "tmux", harness: "codex" }));
-  await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
-  expect(listed).toBe(asked);
-  // Where it runs is said ONCE, by the choice: the column does not repeat it; and nothing says "no sandbox" (no mode is asked on tmux).
-  expect(slot.getByTestId("oats-new-agent-page").textContent!.split("tmux session")).toHaveLength(2);
-  expect(slot.getByTestId("oats-new-agent-page").textContent!.split("Runs in")).toHaveLength(2);
-  expect(rows(slot).inView.map(([label]) => label)).not.toContain("Runs in");
-  expect(rows(slot).inView.map(([label]) => label)).not.toContain("Access");
-  expect(slot.getByTestId("oats-new-agent-page").textContent).not.toMatch(/no sandbox/);
-  // Spawn: the backend goes with it; the agent has no bb thread, so its own page opens.
-  fireEvent.click(submit(slot));
-  await waitFor(() => expect(calls(slot, "spawn")).toHaveLength(1));
-  expect(calls(slot, "spawn")[0]).toEqual({ soul: "oats-developer", task: "", backend: "tmux", harness: "codex", revision: REVISION, key: expect.stringMatching(/^[0-9a-f]{32}$/) });
-  await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: "oats-developer-3" } }]));
+  expect(calls(slot, "spawnPlan").every((call) => !("backend" in call))).toBe(true);
 });
 
 test("the preview waits for the harness read: in flight, with a soul chosen, the kernel is asked nothing and no notice is drawn; then the preview is asked: of a bb thread where the provider is there, of the kernel's own choice where it is not", async () => {
-  type List = { harnesses: string[]; hostId: string | null; provider?: boolean; backends?: string[]; kernelHarnesses?: string[] };
+  type List = { harnesses: string[]; hostId: string | null; provider?: boolean; kernelHarnesses?: string[] };
   const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
   let answer: (list: List) => void = () => undefined;
   const slot = await form("oats-developer", { spawnHarnesses: () => new Promise<List>((resolve) => (answer = resolve)), spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }) });
@@ -718,7 +678,7 @@ test("the preview waits for the harness read: in flight, with a soul chosen, the
   expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading…"]);
   // The read answers that the provider is absent: the preview is asked, and it is the kernel's own choice of a place.
   await act(async () => {
-    answer({ harnesses: [], hostId: "host_falcon", provider: false, backends: ["tmux"], kernelHarnesses: ["pi", "claude", "codex"] });
+    answer({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] });
   });
   await waitFor(() => expect(calls(slot, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
   await waitFor(() => expect(rows(slot).inView).toContainEqual(["Runs in", "tmux session"]));
@@ -746,7 +706,7 @@ test("no bb session provider, while the roster cannot be read: the roster's noti
   const live = handlers().snapshot;
   const slot = await form("oats-developer", {
     snapshot: (input) => (stale ? { ok: false as const, at: "2026-11-23T18:16:56.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last } : live(input)),
-    spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, backends: ["tmux"], kernelHarnesses: ["pi", "claude", "codex"] }),
+    spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] }),
     spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }),
   });
   await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).not.toBeNull());

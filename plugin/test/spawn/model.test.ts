@@ -214,10 +214,6 @@ describe("the form's own rows of the preview", () => {
     expect(drawn(formFacts({ ...plain, decision: { effective: { yolo: true } } }, { fullMode: false }))).toEqual([["Runs in", "tmux session"], ["Access", "full mode: no sandbox"]]);
     expect(drawn(formFacts({ ...plain, decision: { effective: { yolo: false } } }, { fullMode: false }))).toEqual([["Runs in", "tmux session"], ["Access", "the harness asks before it acts"]]);
     expect(formFacts({}, { fullMode: false }).facts).toEqual([]);
-    // The same where tmux is CHOSEN on a deployment that has the provider (`--backend tmux`, no `--yolo`; recorded).
-    const chosen = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-tmux-chosen.json"), "utf8")) as { result: { backend: string; decision: { effective: { yolo: boolean | null } } } }).result;
-    expect([chosen.backend, chosen.decision.effective.yolo]).toEqual(["tmux", null]);
-    expect(drawn(formFacts(chosen, { fullMode: false }))).toEqual([["Runs in", "tmux session"]]);
     expect(formFacts({ ...preview, backend: "bb" }).facts.filter((fact) => ["Session", "Runs in"].includes(fact.label)).map((fact) => [fact.label, fact.parts[0]!.text])).toEqual([["Session", "bb thread"]]);
   });
 

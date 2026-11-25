@@ -83,14 +83,13 @@ export const host = defineRpcContract({
   },
   /**
    * `oats version --json`: the kernel's release, its features, and the version of each of its answers (`apis`).
-   * `harnesses` and `sessionBackends`, the kernel's own lists, are read as none where the answer lacks them: a host
-   * entry of the build before (a bb that has not reloaded the plugin's host yet) answers without them, and no version
-   * read fails for that.
+   * `harnesses`, the kernel's own list, is read as none where the answer lacks it: a host entry of the build before
+   * (a bb that has not reloaded the plugin's host yet) answers without it, and no version read fails for that.
    */
   version: {
     experimental_retryable: true,
     input: hostRead,
-    output: answer(z.object({ version: z.string(), desktopApi: z.number().nullable(), features: z.array(z.string()), apis: z.record(z.string(), z.number()), harnesses: z.array(z.string()).default([]), sessionBackends: z.array(z.string()).default([]) })),
+    output: answer(z.object({ version: z.string(), desktopApi: z.number().nullable(), features: z.array(z.string()), apis: z.record(z.string(), z.number()), harnesses: z.array(z.string()).default([]) })),
   },
   /**
    * `oats instance events <instance> --home <abs> --since <iso> --json`: what one instance's events

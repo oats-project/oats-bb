@@ -137,17 +137,16 @@ const versionDocument = z.looseObject({
   desktopApi: z.number().nullish(),
   features: z.array(z.string()).nullish(),
   harnesses: z.array(z.string()).nullish(),
-  sessionBackends: z.array(z.string()).nullish(),
 });
 
 /**
  * The kernel on this machine: its release, the version of its JSON answers, what it says it can do
  * (`features`), and the version of each of its answers that has one (`apis`: every `<name>Api`
- * number it prints, `desktopApi` and `automationsApi` among them). `harnesses` and `sessionBackends` are the
- * kernel's own lists: the harnesses it launches itself and the session backends it has with no capability (tmux):
- * what a spawn that is not a bb thread may name (kernel/spawn.ts). A kernel that prints neither has none to offer.
+ * number it prints, `desktopApi` and `automationsApi` among them). `harnesses` is the kernel's own list: the
+ * harnesses it launches itself: what a spawn that is not a bb thread may name (server/spawn.ts). A kernel that prints
+ * none has none to offer.
  */
-export type Version = { version: string; desktopApi: number | null; features: string[]; apis: Record<string, number>; harnesses: string[]; sessionBackends: string[] };
+export type Version = { version: string; desktopApi: number | null; features: string[]; apis: Record<string, number>; harnesses: string[] };
 
 export function parseVersion(document: unknown): Result<Version> {
   const parsed = shaped(versionDocument, document, "oats version");
@@ -155,7 +154,7 @@ export function parseVersion(document: unknown): Result<Version> {
   const apis: Record<string, number> = {};
   for (const [name, value] of Object.entries(parsed.value)) if (name.endsWith("Api") && typeof value === "number") apis[name] = value;
   // A kernel that lists no features has none the plugin may rely on.
-  return ok({ version: parsed.value.version, desktopApi: parsed.value.desktopApi ?? null, features: parsed.value.features ?? [], apis, harnesses: parsed.value.harnesses ?? [], sessionBackends: parsed.value.sessionBackends ?? [] });
+  return ok({ version: parsed.value.version, desktopApi: parsed.value.desktopApi ?? null, features: parsed.value.features ?? [], apis, harnesses: parsed.value.harnesses ?? [] });
 }
 
 /** The roster's commands, and the one read of the kernel's version that every feature shares. */

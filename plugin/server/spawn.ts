@@ -2,7 +2,7 @@
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
 import type { host, rpc } from "../contract/spawn.js";
-import { BB_BACKEND, checkHarness, checkModel, idsOf } from "../kernel/spawn.js";
+import { checkHarness, checkModel, idsOf } from "../kernel/spawn.js";
 import type { Agent } from "../model/types.js";
 import { HOST_TIMEOUT, invalid, refusal, refusedWith, type Core, type Value } from "./core.js";
 import { soulsOf } from "./workspace.js";
@@ -26,16 +26,11 @@ const synced = async (core: Core): Promise<Value<"spawnHarnesses">> => {
  */
 export const providerVersionOf = async (core: Core): Promise<string | null> => (await providerOf(core)).version;
 /**
- * Where a spawn may run on this deployment, and what it may name there: "bb" first where the bb session provider is
- * there, then the kernel's own session backends; and the harnesses the kernel launches itself. From the two reads
- * every feature shares (the provider's, the kernel's version): no process of its own.
+ * The harnesses the kernel launches itself: what a spawn that is not a bb thread (a deployment with no bb session
+ * provider) may name. From the version read every feature shares: no process of its own. Only ids, each once: nothing
+ * else of the kernel's list is offered, drawn or named.
  */
-const placesOf = async (core: Core): Promise<{ absent: boolean; backends: string[]; kernelHarnesses: string[] }> => {
-  const [provider, kernel] = await Promise.all([synced(core), core.versionOf()]);
-  const absent = provider.absent === true;
-  // (Only ids, each once: nothing else of the kernel's two lists is offered, drawn or named.)
-  return { absent, backends: [...(absent ? [] : [BB_BACKEND]), ...idsOf(kernel.sessionBackends).filter((id) => id !== BB_BACKEND)], kernelHarnesses: idsOf(kernel.harnesses) };
-};
+const kernelHarnessesOf = async (core: Core): Promise<string[]> => idsOf((await core.versionOf()).harnesses);
 /** The one read behind both (`oats capabilities show oats.bb --json`), kept like a page's answer. */
 const providerOf = (core: Core): Promise<Value<"spawnHarnesses">> => core.page("spawnHarnesses", (signal) => core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal));
 
@@ -69,31 +64,27 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
    * the roster. Answers them as the host entry takes them: a relation with its anchor's agents
    * root, from the roster's own row of it, never from the caller.
    */
-  const checked = async ({ soul, name, task, harness, model, relation, backend }: Choices): Promise<HostChoices> => {
+  const checked = async ({ soul, name, task, harness, model, relation }: Choices): Promise<HostChoices> => {
     if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
-    // Where it runs. A deployment with no bb session provider: the spawn names no backend unless one is chosen.
+    // Where it runs. A deployment with no bb session provider: the spawn names no backend.
     let absent: boolean;
-    let kernelHarnesses: string[] = [];
-    if (harness === undefined && backend === undefined) {
+    if (harness === undefined) {
       // NOTHING of a list is named, so no list is needed: the spawn does not wait on them. A provider read that
       // FAILS (an answer the plugin cannot read, a timeout, a member with no such capability) leaves the spawn what it
-      // was before there was a choice: a bb thread on the soul's default, which the kernel takes or refuses in its
+      // always was: a bb thread on the soul's default, which the kernel takes or refuses in its
       // own words (the form says "the soul's default is used"). What the read ANSWERS still decides: no provider (the
       // kernel's own place), or pinned and not synced (refused, with the way on).
       const provider = await providerOf(core).catch((): null => null);
       if (provider !== null && provider.unsynced !== undefined) throw refusal(provider.unsynced);
       absent = provider !== null && provider.absent === true;
     } else {
-      // Something IS named: it is one of the lists, so both reads must answer.
-      const places = await placesOf(core);
-      absent = places.absent;
-      kernelHarnesses = places.kernelHarnesses;
-      if (backend !== undefined && !places.backends.includes(backend)) throw invalid(`"${backend}" is not a session backend a spawn can name here (${places.backends.join(", ") || "none"})`);
+      // A harness IS named: it is one of a list, so the read of where the list is must answer.
+      absent = (await synced(core)).absent === true;
     }
-    const onBb = !absent && (backend === undefined || backend === BB_BACKEND);
+    const onBb = !absent;
     if (harness !== undefined) {
       // A bb thread: a harness the provider declares. Anywhere else: one the kernel itself launches.
-      const named = onBb ? checkHarness(harness, await harnessesOf(core)) : checkHarness(harness, kernelHarnesses, "this OATS launches");
+      const named = onBb ? checkHarness(harness, await harnessesOf(core)) : checkHarness(harness, await kernelHarnessesOf(core), "this OATS launches");
       if (!named.ok) throw invalid(named.error.message);
     }
     if (model !== undefined) {
@@ -108,7 +99,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       anchor = { ...relation, ...(root === null ? {} : { root }) };
     }
     // Only what was chosen goes to the host entry: a call carries no key without a value.
-    return { soul, task, ...(name === undefined ? {} : { name }), ...(harness === undefined ? {} : { harness }), ...(model === undefined ? {} : { model }), ...(anchor === undefined ? {} : { relation: anchor }), ...(onBb || backend === undefined ? {} : { backend }), ...(absent ? { provider: false } : {}) };
+    return { soul, task, ...(name === undefined ? {} : { name }), ...(harness === undefined ? {} : { harness }), ...(model === undefined ? {} : { model }), ...(anchor === undefined ? {} : { relation: anchor }), ...(absent ? { provider: false } : {}) };
   };
   return {
     /** What the bb session provider declares: one read for every client and every place that offers the choice. */
@@ -116,8 +107,9 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const provider = await providerOf(core);
       // Pinned and not synced: the form's read answers it (the way on is said there); nothing else is offered.
       if (provider.unsynced !== undefined) return { harnesses: [], hostId: core.target()?.hostId ?? null, unsynced: provider.unsynced };
-      const { backends, kernelHarnesses } = await placesOf(core);
-      return { harnesses: provider.harnesses, hostId: core.target()?.hostId ?? null, provider: provider.absent !== true, backends, kernelHarnesses };
+      // No provider: the harnesses a spawn may name are the kernel's own (one more shared read, asked only there).
+      if (provider.absent === true) return { harnesses: [], hostId: core.target()?.hostId ?? null, provider: false, kernelHarnesses: await kernelHarnessesOf(core) };
+      return { harnesses: provider.harnesses, hostId: core.target()?.hostId ?? null, provider: true };
     },
     async spawnPreview(input, context) {
       const { summary } = await core.call("spawnPreview", await checked(input), HOST_TIMEOUT.preview, context.experimental_signal);
@@ -156,7 +148,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         core.rereadSoon();
       }
       // Where the deployment has no bb session provider the new agent has no bb thread, and none is asked for: it runs where the kernel decided.
-      if (choices.provider === false || choices.backend !== undefined) return { instance: spawned.instance, threadId: spawned.threadId };
+      if (choices.provider === false) return { instance: spawned.instance, threadId: spawned.threadId };
       return { instance: spawned.instance, threadId: await core.threadOf(spawned.instance, spawned.threadId, "Spawned") };
     },
   };

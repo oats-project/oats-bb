@@ -20,7 +20,7 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import { isUnconfirmed } from "../../contract/shared";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
-import { backendLabel, bbDefaultModel, modelCheck, MODEL_HELD, RUNS_IN, spawnProblem, withoutDefault } from "../../model/spawn";
+import { bbDefaultModel, modelCheck, MODEL_HELD, RUNS_IN, spawnProblem, withoutDefault } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
 import { newKey } from "../keys";
 import { openAgentPage } from "../home/agent-tab";
@@ -288,8 +288,6 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   useEffect(() => setSoul(soulOf(subPath)), [subPath]);
   const [task, setTask] = useState("");
   const [harness, setHarness] = useState("");
-  // Where it runs: "" is the first place offered (a bb thread where the deployment has the bb session provider).
-  const [backend, setBackend] = useState("");
   const [modelPick, setModelPick] = useState("");
   const [modelTyped, setModelTyped] = useState("");
   const [relation, setRelation] = useState<W.RelationKind>("unrelated");
@@ -313,12 +311,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
    * Which field keeps these values from being asked of the kernel; null when they can be. No sentence says it beside
    * Spawn: the field is empty in view (its placeholder says what it wants) or carries its own mark.
    */
-  // ---- where it runs, and the harnesses that can be named there ----
-  // A choice only where there are two places (the bb session provider AND a backend of the kernel's own): the first
-  // is the default and names nothing. On a bb thread the harnesses are the provider's; anywhere else the kernel's own.
-  const backendChoice = harnesses.backends.length > 1;
-  const place = backendChoice && backend !== "" && harnesses.backends.includes(backend) ? backend : (harnesses.backends[0] ?? "");
-  const onBb = harnesses.provider && (place === "" || place === "bb");
+  // ---- the harnesses that can be named ----
+  // A bb thread (the deployment has the bb session provider): the provider's. Where there is no provider the agent
+  // runs where the kernel puts it, and the harnesses are the kernel's own.
+  const onBb = harnesses.provider;
   const offered = onBb ? harnesses.options : harnesses.kernel;
   const harnessChoice = offered.length > 1;
   // The provider is pinned and not synced: nothing can be spawned until `oats sync` has run. The form says so once
@@ -339,11 +335,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             task,
             ...(name === "" ? {} : { name }),
             ...(harness === "" || !harnessChoice ? {} : { harness }),
-            ...(!backendChoice || place === harnesses.backends[0] ? {} : { backend: place }),
             ...(model === "" ? {} : { model }),
             ...(relation === "unrelated" ? {} : { relation: { kind: relation, to: relative } }),
           },
-    [off, harnessesRead, soul, task, name, harness, harnessChoice, backendChoice, place, harnesses.backends, model, relation, relative],
+    [off, harnessesRead, soul, task, name, harness, harnessChoice, model, relation, relative],
   );
   const key = input === null ? null : JSON.stringify(input);
 
@@ -638,11 +633,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // ---- drawing ----
   // A model is required of the person: the column promises no default for the harness.
   const heldHarness = modelHeld.held === MODEL_HELD.required ? (modelAnswer?.facts.resolved?.harness ?? null) : null;
-  // Where it runs is said once: by the form's own field where there is one to choose in, else by the column's row.
-  const withoutModelDefault = (all: SpawnFacts): SpawnFacts => {
-    const facts = backendChoice ? { ...all, facts: all.facts.filter((fact) => fact.label !== RUNS_IN) } : all;
-    return heldHarness === null ? facts : { ...facts, facts: withoutDefault(facts.facts, heldHarness) };
-  };
+  const withoutModelDefault = (facts: SpawnFacts): SpawnFacts => (heldHarness === null ? facts : { ...facts, facts: withoutDefault(facts.facts, heldHarness) });
   let column: ReactNode;
   // No soul yet: nothing will be created, and nothing is drawn (the Soul field is empty, in view).
   if (chosen === undefined) column = null;
@@ -732,26 +723,6 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               <textarea data-testid="oats-spawn-task" data-field="task" rows={4} className={`${INPUT} py-2`} value={task} placeholder={W.TASK_PLACEHOLDER} onChange={(event) => setTask(event.target.value)} />
             </Field>
             {/* In its place while the provider's list is read, so that nothing jumps when it arrives; gone only where there is nothing to choose. */}
-            {backendChoice ? (
-              // The two places as the Relationship's choice is drawn: one line, the words whole, no sentence.
-              <div data-testid="oats-spawn-backend" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
-                <span id="oats-spawn-backend-label">{RUNS_IN}</span>
-                <div className="min-w-0 max-w-full [&_[role=radio]]:whitespace-nowrap max-md:[&_[role=radio]]:px-2 [&_[role=radiogroup]]:flex-wrap">
-                  <Segmented
-                    label={RUNS_IN}
-                    options={harnesses.backends.map((id) => ({ id, label: backendLabel(id) }))}
-                    value={place}
-                    // (A harness is one of the place's own list: chosen for another place, it is not kept. A press on
-                    // the place already chosen changes nothing.)
-                    onChange={(next) => {
-                      if (next === place) return;
-                      setBackend(next);
-                      setHarness("");
-                    }}
-                  />
-                </div>
-              </div>
-            ) : null}
             {harnessChoice || harnesses.status === "loading" || harnessFailed ? (
               <>
                 <Field

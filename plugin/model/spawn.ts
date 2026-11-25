@@ -172,7 +172,7 @@ export type FormFacts = Omit<PreviewFacts, "prompts">;
 /** The preview's row of an agent that will not run on a bb thread: where it runs (the instance panel's Session card says the same of it). */
 export const RUNS_IN = "Runs in";
 /** A session backend as a person reads it: where the agent's session is. One the plugin has no words for is its id. */
-export const backendLabel = (backend: string): string => (backend === "bb" ? "bb thread" : backend === "tmux" ? "tmux session" : backend);
+const backendLabel = (backend: string): string => (backend === "bb" ? "bb thread" : backend === "tmux" ? "tmux session" : backend);
 /** The model of a spawn on bb that names none for its harness: bb's own default for it. */
 export const bbDefaultModel = (harness: string): string => `bb’s default for ${harnessLabel(harness)}`;
 

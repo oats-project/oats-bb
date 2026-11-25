@@ -1520,6 +1520,31 @@ test("a reply sent while the server's roster is still the one from before a Stop
   expect((within(writes).getByTestId("oats-reply-text") as HTMLTextAreaElement).value).toBe("keep depth 6");
 });
 
+// While an ANSWER is on its way the card's other act, the message in the "Message instead" fold, is off; it does not say
+// "Sending…": no message is being sent (the fresh reviewer's nit on the wait at a press). And one press is one act: a
+// second press in the same turn, before the card is drawn again, asks nothing more.
+test("while an answer is on its way the fold's Send is off and still says Send; two presses in one turn ask once", async () => {
+  let hold = false;
+  const slot = await homePage({ rpc: handlers({ snapshot: () => (hold ? new Promise<never>(() => undefined) : fixtureSnapshot(fixtureAgents())) }), sdk: BB_ASKS });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice")).toHaveLength(2));
+  const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "snapshot").length;
+  const before = asked();
+  hold = true;
+  const [first, second] = within(card).getAllByTestId("oats-needs-choice");
+  act(() => {
+    // Two presses dispatched in ONE turn: the second finds the card not yet drawn again.
+    first!.click();
+    second!.click();
+  });
+  await waitFor(() => expect(asked()).toBe(before + 1));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(asked()).toBe(before + 1);
+  const send = within(card).getByTestId("oats-reply-send") as HTMLButtonElement;
+  expect([send.textContent, send.disabled]).toEqual(["Send", true]);
+  expect(within(card).getAllByTestId("oats-needs-choice").every((choice) => (choice as HTMLButtonElement).disabled)).toBe(true);
+});
+
 test("a press on an agent OATS stopped since its card was drawn sends nothing: the roster the server holds is asked at the press", async () => {
   // The card is drawn from a roster in which the agent runs. OATS then stops it, and nothing has told
   // this window yet (no change event, no redraw): the choice and the reply are still on the card.

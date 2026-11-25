@@ -3,7 +3,7 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { OutsideAgent, OutsideAgentDetails, pageParts } from "../outside";
+import { OutsideAgent, OutsideAgentDetails, pageActs, pageParts, words as outsideWords } from "../outside";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { AgentTabProps } from "../home/agent-tab";
@@ -198,11 +198,12 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
           {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here.
               For an agent the roster draws on no thread, what happened to it outside OATS follows the state's word, as on its row ("Stopped · session lost"). */}
           {/* Behind a lifecycle result that says the agent changed, until the roster is read again: "Reading…", never the old state stated plainly. */}
+          {/* An agent that runs outside OATS: the line is its thread's line, with Stop… (the primary act) and Start… as the line's own acts (app/outside `pageActs`); off behind "Reading…" and while the roster is the last one read. */}
           {reading ? (
-            <ReadingLine />
+            <ReadingLine action={pageActs(line.report, agent.instance, true)?.buttons} />
           ) : (
             <>
-              <StatusLine state={status.state} word={status.word} since={line.since} tone={line.tone} markTone={line.markTone} detail={status.state === "needs-you" && claimOf(agent) !== null ? line.reason : line.detail} />
+              <StatusLine state={status.state} word={status.word} since={line.since} tone={line.tone} markTone={line.markTone} detail={status.state === "needs-you" && claimOf(agent) !== null ? line.reason : line.detail} action={pageActs(line.report, agent.instance, failure !== null)?.buttons} />
               <KernelSays text={status.kernel} bb={status.bb} />
               {/* The kernel's report that it runs outside OATS: its Details, under the state it explains (app/outside). */}
               <OutsideAgentDetails agent={agent} roster={oats} />
@@ -210,7 +211,7 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
           )}
         </div>
         {/* What a person can do with the agent, where its state is said: the lifecycle's own acts (each opens its dialog; nothing runs on the press), the ones that apply to its state, held with the reason while the roster is the last one read. Here an agent with no thread in bb has them too: its row opens this panel on its own page. */}
-        <AgentActs instance={agent.instance} />
+        <AgentActs instance={agent.instance} except={pageActs(line.report, agent.instance, false)?.verbs} />
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
           {/* Its soul, by its name alone: the name is the way to the Soul tab. */}
           <button type="button" data-testid="oats-panel-soul-link" title={`${soul}: show the Soul tab`} className={`${TARGET} ${LINK} inline-flex min-w-0 items-center break-words text-foreground`} onClick={() => showPanelTab("soul", { focus: true })}>
@@ -479,7 +480,7 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
               )}
               {stopped === null ? null : (
                 // When OATS stopped it: the fact that left the thread's line and the sidebar's row.
-                <Fact label="Stopped">
+                <Fact label={state === "outside" ? outsideWords.OUTSIDE_STOPPED_FACT : "Stopped"}>
                   <span data-testid="oats-panel-stopped">{stopped}</span>
                 </Fact>
               )}

@@ -225,7 +225,8 @@ function Overlay() {
       ask: () =>
         rpc.call("refresh", null).then(
           ({ at }) => {
-            oats.retry();
+            // (Not `retry`: that is a PERSON's press of the roster's Retry, on which the places that failed for the same cause read again.)
+            oats.reread();
             return at;
           },
           () => null,

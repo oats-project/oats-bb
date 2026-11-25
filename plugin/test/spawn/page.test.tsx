@@ -301,6 +301,36 @@ test("the soul's own harness picked in the form, with no model declared, is stil
   expect(harnessRow()).toMatch(/^pi · bb’s default for pi/);
 });
 
+test("while the soul's own harness is still asked, the Model field says nothing is required: \"Default\", no mark; never \"Choose a model…\" with no \"Required\" under it", async () => {
+  // The soul's own harness is pi and it declares no model; the kernel's answer for the soul alone is held.
+  const unset = { ...recorded, harness: "pi", model: null, modelSource: null };
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const slot = await form("", {
+    spawnPlan: async (input) => {
+      if (input.harness === undefined) await held;
+      return { facts: formFacts(unset, { name: input.name ?? null }), revision: REVISION };
+    },
+  });
+  await waitFor(() => expect((slot.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
+  const modelError = () => slot.getByTestId("oats-spawn-model").closest('[data-testid="oats-field"]')!.querySelector('[role="alert"]')?.textContent ?? null;
+  choose(slot, "oats-spawn-harness", "pi");
+  choose(slot, "oats-spawn-soul", "oats-developer");
+  // The preview of the values on screen is in; whose harness pi is, is not: Spawn waits, and the field's words and its mark go together.
+  await waitFor(() => expect(calls(slot, "spawnPlan").some((call) => call.harness === "pi")).toBe(true));
+  await waitFor(() => expect(column(slot).textContent).toContain("pi"));
+  expect([submit(slot).disabled, reason(slot), modelError(), slot.getByTestId("oats-spawn-model").textContent]).toEqual([true, "Reading…", null, "Default▾"]);
+  expect(options(slot, "oats-spawn-model").map(([label]) => label)).toEqual(["Default", "Custom…"]);
+  await act(async () => {
+    release();
+  });
+  // It is the soul's own: not held, on bb's default.
+  await waitFor(() => expect([submit(slot).disabled, reason(slot), modelError()]).toEqual([false, null, null]));
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Choose a model…|Required/);
+});
+
 test("the same values arm or hold Spawn whatever the order of the clicks: a harness picked before the soul is read against the soul's own, asked once", async () => {
   // The soul's own harness is pi and it declares no model.
   const unset = { ...recorded, harness: "pi", model: null, modelSource: null };

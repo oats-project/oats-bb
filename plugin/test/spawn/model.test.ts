@@ -137,6 +137,10 @@ describe("a refusal, in a person's words, with what to do", () => {
 
   it("after the press: nothing was created is said, and what to look at before spawning again", () => {
     expect(spawnProblem({ code: "E_DECISION_STALE", message: null }, "spawn").sentence).toBe("Nothing was created. Check the values, then Spawn.");
+    expect(spawnProblem({ code: "E_IDEMPOTENCY_CONFLICT", message: null }, "spawn").sentence).toBe("Nothing was created. Check the values, then Spawn.");
+    // Those two alone take the shorter way on: every other "read it again" keeps its own.
+    expect(spawnProblem({ code: "E_PLAN_CHANGED", message: null }, "spawn").sentence).toBe("The workspace changed while this was loading. Check the values and press Spawn again.");
+    expect(spawnProblem({ code: "E_PLAN_CHANGED", message: null }).sentence).toBe("The workspace changed while this was loading. Check the values and press Spawn again.");
     expect(spawnProblem({ code: "E_PLACEMENT_TAKEN", message: null }, "spawn").sentence).toBe("Another spawn just took this name. Nothing was created — check the new name and press Spawn again.");
     expect(spawnProblem({ code: "E_OUTCOME_UNKNOWN", message: null }, "spawn").sentence).toBe("We couldn’t confirm whether the instance was created. Press Check result: nothing starts twice.");
     expect(spawnProblem({ code: "OATS_TIMEOUT", message: null }, "spawn")).toMatchObject({ sentence: "OATS took too long to answer. The instance may already exist. Press Check result: nothing starts twice.", next: "check-result" });

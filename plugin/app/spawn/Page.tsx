@@ -738,10 +738,11 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 value={modelPick}
                 // Required of the person: there is no default, so the field does not say "Default" over a mark that says
                 // "Required": it says what it wants ("Choose a model…"), and its list holds no entry that sends none.
-                placeholder={modelHeld.held === MODEL_HELD.required ? W.CHOOSE_MODEL : MODEL_DEFAULT}
+                // (By the mark: while the soul's own harness is still asked, nothing is said to be required, and the field says "Default" as it did.)
+                placeholder={modelMark === MODEL_HELD.required ? W.CHOOSE_MODEL : MODEL_DEFAULT}
                 filterLabel={W.FILTER}
                 options={[
-                  ...(modelHeld.held === MODEL_HELD.required ? [] : [{ id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined) }]),
+                  ...(modelMark === MODEL_HELD.required ? [] : [{ id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null && modelHeld.held !== MODEL_HELD.required ? resolved.model : undefined) }]),
                   // The ids that serve a bare model more than once are the ones offered: one of them is what to pick.
                   ...suggestions.models.filter((option) => modelHeld.held !== MODEL_HELD.ambiguous || modelHeld.offers.includes(option.id)).map((option) => ({ id: option.id, label: shown(option.label) })),
                   // A model picked before the harness changed stays what is sent, and is said.

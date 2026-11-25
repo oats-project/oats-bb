@@ -99,4 +99,3 @@ export const SPAWN_INCOMPLETE_TITLE = "The agent was created, and its start is n
 export const SPAWN_UNCONFIRMED_TITLE = "The spawn was refused, and could not be undone completely";
 /** The title of what a press came to, by what is known of the instance (model/spawn.ts `SpawnOutcome`). */
 export const FAILURE_TITLE = { refused: SPAWN_FAILED_TITLE, unconfirmed: SPAWN_UNCONFIRMED_TITLE, created: SPAWN_INCOMPLETE_TITLE, unknown: SPAWN_UNKNOWN_TITLE } as const;
-/** The button once an instance exists whose start did not finish (the Desktop's). */

@@ -330,7 +330,7 @@ const SPAWN_FAILED = said("OATS couldn’t complete the spawn.", "details");
 // The plugin's words for the act that follows, after the fact. They name the form's own controls
 // (Spawn, Details, the fields above), as the Desktop's name the Desktop's (spawn-words.mjs).
 const NEXT: Record<Exclude<SpawnNext, null | "change-options">, string> = {
-  "review-again": "Check the values, then Spawn.",
+  "review-again": "Check the values and press Spawn again.",
   "check-result": "Press Check result: nothing starts twice.",
   "update-oats": "Update OATS, then open this form again.",
   "sync-workspace": "Run oats sync in the deployment, then try again.",
@@ -364,6 +364,12 @@ const NO_HARNESS_FIELD: Record<string, string> = {
 };
 const SEE_DETAILS = "See Details.";
 
+// A spawn the kernel refused because something moved between the preview and the press: its own, shorter way on
+// (the second look's P25: "Nothing was created. Check the values, then Spawn."). No other sentence takes it.
+const REVIEW_TAIL: Record<string, string> = {
+  E_DECISION_STALE: "Check the values, then Spawn.",
+  E_IDEMPOTENCY_CONFLICT: "Check the values, then Spawn.",
+};
 // Sentences that go on after a dash, in lower case: the fact's full stop gives way to " — ".
 const DASHED: Record<string, readonly [SpawnNext, string]> = {
   E_PLACEMENT_TAKEN: ["review-again", "check the new name and press Spawn again."],
@@ -464,7 +470,7 @@ export function spawnProblem(
   const words = outcome === "unconfirmed" ? UNCONFIRMED : outcome === "unknown" ? (named !== undefined && named.next === "check-result" ? named : UNKNOWN) : (named ?? general);
   const dashed = Object.hasOwn(DASHED, code) && DASHED[code]![0] === words.next ? DASHED[code]![1] : null;
   const tail = BY_CODE[code] ?? null;
-  const after = words.next === null ? null : words.next !== "change-options" ? NEXT[words.next] : tail !== null && !harnessField && HARNESS_TAILS.has(code) ? (NO_HARNESS_FIELD[code] ?? SEE_DETAILS) : tail;
+  const after = words.next === null ? null : words.next !== "change-options" ? (REVIEW_TAIL[code] ?? NEXT[words.next]) : tail !== null && !harnessField && HARNESS_TAILS.has(code) ? (NO_HARNESS_FIELD[code] ?? SEE_DETAILS) : tail;
   const sentence = dashed !== null ? `${words.fact.replace(/\.$/, "")} — ${dashed}` : after === null ? words.fact : `${words.fact} ${after}`;
   // The message is not drawn twice: where it IS the sentence, no Details repeats it. (Where the kernel could not undo
   // the spawn the sentence is the plugin's, and Details holds the kernel's message: what to clean up.)

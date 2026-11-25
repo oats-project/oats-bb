@@ -1,6 +1,6 @@
 // THE ACT LOG (P-51): one line in bb's log of the plugin when an act is asked of the kernel, and one
 // when it ends; and one for an act that was HELD before the kernel was asked. An ACT is a host verb
-// that changes something (`ACTS`, below); a read or a preview is not logged (the roster's read every
+// that changes something (`ACTS`, below; and a test that RUNS a command: `ACTS_BY_ARGUMENT`); a read or a preview is not logged (the roster's read every
 // few seconds would bury the acts).
 //
 // THE LINE, a contract for whoever reads the log (README.md, "The act log"): one act, one line,
@@ -34,9 +34,17 @@ export type Act = (typeof ACTS)[number];
 export const NOT_ACTS: Readonly<Record<string, string>> = {
   watch: "it starts the watch on the deployment's files: it runs no `oats`",
   retirePlan: "a plan: it changes nothing (not retryable because its revision must be the one the person saw)",
-  automationTest: "a test: it changes nothing in the deployment (it may run a capability's source command, only on a confirmed press)",
 };
-export const isAct = (verb: string): verb is Act => (ACTS as readonly string[]).includes(verb);
+/**
+ * The verbs that are an act BY THEIR ARGUMENT, and which argument: `automationTest` with `runSource: true` RUNS a
+ * capability's source command on the machine, on a person's confirmed press: that is an act (logged, through
+ * `core.act`); without it a test reads and changes nothing: a read (`core.call`).
+ */
+export const ACTS_BY_ARGUMENT = { automationTest: (input: unknown): boolean => (input as { runSource?: unknown } | null)?.runSource === true } as const satisfies Partial<Record<keyof typeof hostContract, (input: unknown) => boolean>>;
+/** A verb `core.act` carries: an act, or one that is an act by its argument. */
+export type ActVerb = Act | keyof typeof ACTS_BY_ARGUMENT;
+/** Whether asking `verb` with this input is an act. */
+export const isAct = (verb: string, input?: unknown): boolean => (ACTS as readonly string[]).includes(verb) || (verb in ACTS_BY_ARGUMENT && ACTS_BY_ARGUMENT[verb as keyof typeof ACTS_BY_ARGUMENT](input));
 
 /** Who an act is about. */
 export type Subject = { instance: string } | { soul: string; name: string | null } | { automation: string } | { scheduler: true };
@@ -55,7 +63,7 @@ export const callerOf = (asker: Asker | undefined): string => {
 
 export type Ending = { result: "ok"; ms: number; homes?: string; made?: string } | { result: string; ms: number };
 /** The line of one moment of an act. */
-export function actLine(verb: Act, phase: "asked" | "ended" | "held", subject: Subject, who: { caller: string; host: string | null; at: string }, more: Ending | { held: string; why: string } | null = null): string {
+export function actLine(verb: ActVerb, phase: "asked" | "ended" | "held", subject: Subject, who: { caller: string; host: string | null; at: string }, more: Ending | { held: string; why: string } | null = null): string {
   const head = `oats act ${verb} ${phase} ${subjectOf(subject)} caller=${who.caller} host=${who.host === null ? "-" : word(who.host)} at=${who.at}`;
   if (more === null) return head;
   if ("held" in more) return `${head} result=HELD:${word(more.held)} why=${word(more.why)}`;

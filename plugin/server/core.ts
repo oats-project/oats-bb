@@ -10,7 +10,7 @@ import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
 import { withEvents, type EventsSaid } from "../model/events.js";
 import type { Agent } from "../model/types.js";
-import { actLine, callerOf, isAct, type Act, type Asker, type Subject } from "./act-log.js";
+import { actLine, callerOf, isAct, type Act, type ActVerb, type Asker, type Subject } from "./act-log.js";
 
 /** What the kernel printed for one instance: its own row, and its agent group's row without the instances. */
 export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly agent: Readonly<Record<string, unknown>> };
@@ -673,7 +673,7 @@ export function createCore(bb: BbPluginApi) {
    * log (`act`, below; test/server/act-log.test.ts).
    */
   function call<Method extends Exclude<Verb, Act>>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal): Promise<Value<Method>> {
-    if (isAct(method)) return Promise.reject(new Error(`"${String(method)}" is an act: it reaches the kernel through core.act alone, which logs it`));
+    if (isAct(method, extra)) return Promise.reject(new Error(`"${String(method)}" is an act: it reaches the kernel through core.act alone, which logs it`));
     return ask(method, extra, timeoutMs, signal);
   }
 
@@ -683,12 +683,13 @@ export function createCore(bb: BbPluginApi) {
    * code), and one where the act was HELD: `guards` is everything the plugin checks before it asks (the agent is one
    * the roster names now, a harness is one the provider declares, the row exists): what it throws is logged as the
    * hold and thrown on; what it returns is the verb's input.
-   * An act is not ended by its caller going away: only by the plugin's own end (the signal is the plugin's).
+   * An act is not ended by its caller going away: only by the plugin's own end (the signal is the plugin's), but
+   * where the act says otherwise (`signal`: a test that runs a command is ended with its caller, as it was).
    * → the kernel's answer, and `endedAt`: the server's stamp at the instant the command returned (`actEnded`), taken
    * BEFORE `after` runs (the read an act asks for as it ends: its roster must be stamped after the act's end).
    * `after` runs once the kernel was asked, whether it answered or refused; never for a hold.
    */
-  async function act<Method extends Act>(method: Method, subject: Subject, asker: Asker | undefined, timeoutMs: number, guards: () => Promise<Extra<Method>> | Extra<Method>, after?: () => void): Promise<{ value: Value<Method>; endedAt: string }> {
+  async function act<Method extends ActVerb>(method: Method, subject: Subject, asker: Asker | undefined, timeoutMs: number, guards: () => Promise<Extra<Method>> | Extra<Method>, after?: () => void, signal: AbortSignal = lifetime.signal): Promise<{ value: Value<Method>; endedAt: string }> {
     const who = () => ({ caller: callerOf(asker), host: target?.hostId ?? null, at: new Date().toISOString() });
     const codeOf = (error: unknown): string | undefined => (typeof error === "object" && error !== null ? refusedWith.get(error) : undefined);
     let extra: Extra<Method>;
@@ -704,7 +705,7 @@ export function createCore(bb: BbPluginApi) {
     bb.log.info(actLine(method, "asked", subject, who()));
     const from = Date.now();
     try {
-      const value = await ask(method, extra, timeoutMs, lifetime.signal);
+      const value = await ask(method, extra, timeoutMs, signal);
       const endedAt = actEnded();
       const results = (value as { results?: unknown }).results;
       const made = method === "spawn" ? (value as { instance?: unknown }).instance : undefined;

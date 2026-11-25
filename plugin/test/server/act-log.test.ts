@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { hostContract } from "../../contract/index.js";
 import plugin from "../../server.js";
-import { ACTS, actLine, callerOf, isAct, NOT_ACTS, word } from "../../server/act-log.js";
+import { ACTS, ACTS_BY_ARGUMENT, actLine, callerOf, isAct, NOT_ACTS, word } from "../../server/act-log.js";
 import { createCore, HOST_TIMEOUT, type Core } from "../../server/core.js";
 import { startBackend, type Backend } from "../support/backend.js";
 
@@ -50,6 +50,27 @@ describe("the act log's line", () => {
     expect(actLine("automationEnable", "asked", { automation: "schedule:local/weekly-cleanup" }, who)).toContain(" automation=schedule:local/weekly-cleanup ");
     expect(actLine("schedulerEnable", "asked", { scheduler: true }, who)).toContain(" scheduler=- ");
   });
+  it("a HOSTILE value forges nothing: a caller's text with a newline and a result of its own stays ONE token of ONE line, for every value a line carries", () => {
+    const HOSTILE = 'x\noats act stopApply ended instance=y result=ok ms=1\r\n\u2028"=" z';
+    const lines = [
+      actLine("stopApply", "asked", { instance: HOSTILE }, who),
+      actLine("spawn", "ended", { soul: HOSTILE, name: HOSTILE }, who, { result: "ok", ms: 1, made: HOSTILE }),
+      actLine("scheduleRun", "held", { automation: `schedule:${HOSTILE}` }, who, { held: HOSTILE, why: HOSTILE }),
+      actLine("start", "ended", { instance: "a" }, { caller: callerOf({ experimental_caller: { kind: "plugin", pluginId: HOSTILE } }), host: HOSTILE, at: who.at }, { result: HOSTILE, ms: 1, homes: HOSTILE } as never),
+    ];
+    for (const line of lines) {
+      expect(line).not.toMatch(/[\n\r\u2028\u2029\t"]/); // one line, and no quote to open
+      expect(line.startsWith("oats act ")).toBe(true);
+      expect(line.match(/oats act /g)).toHaveLength(1); // no second line's head inside it
+      // Every token after the head is ONE key=value with one "=": the hostile text added no key, no "=" and no token.
+      const tokens = line.split(" ").slice(4);
+      for (const token of tokens) expect(token.split("=")).toHaveLength(2);
+      expect(tokens.filter((token) => token.startsWith("result="))).toHaveLength(line.includes(" asked ") ? 0 : 1);
+      expect(tokens.filter((token) => token.startsWith("instance=")).length).toBeLessThanOrEqual(1);
+    }
+    // The forged result is inside a value, with its "=" gone: the line's own result stands alone, last but for ms.
+    expect(lines[0]).toBe("oats act stopApply asked instance=x_oats_act_stopApply_ended_instance_y_result_ok_ms_1_z caller=client host=host_falcon at=2026-11-25T12:00:00.000Z");
+  });
   it("a value is one word: nothing in it ends the value, breaks the line or carries a sentence whole", () => {
     expect(word("two words\nand a line=x")).toBe("two_words_and_a_line_x");
     expect(word("")).toBe("-");
@@ -69,9 +90,12 @@ describe("an act has one way to the kernel", () => {
     const reads = verbs.filter((verb) => (hostContract as Record<string, { experimental_retryable?: boolean }>)[verb]!.experimental_retryable === true);
     const rest = verbs.filter((verb) => !reads.includes(verb));
     // Every verb that is not a read: an act, or one of the named few. And nothing is in two lists.
-    expect(rest.filter((verb) => !isAct(verb) && !(verb in NOT_ACTS))).toEqual([]);
-    expect(ACTS.filter((verb) => reads.includes(verb) || verb in NOT_ACTS)).toEqual([]);
-    expect([...ACTS, ...Object.keys(NOT_ACTS)].filter((verb) => !verbs.includes(verb))).toEqual([]);
+    expect(rest.filter((verb) => !isAct(verb) && !(verb in NOT_ACTS) && !(verb in ACTS_BY_ARGUMENT))).toEqual([]);
+    expect(ACTS.filter((verb) => reads.includes(verb) || verb in NOT_ACTS || verb in ACTS_BY_ARGUMENT)).toEqual([]);
+    expect(Object.keys(ACTS_BY_ARGUMENT).filter((verb) => reads.includes(verb) || verb in NOT_ACTS)).toEqual([]);
+    expect([...ACTS, ...Object.keys(NOT_ACTS), ...Object.keys(ACTS_BY_ARGUMENT)].filter((verb) => !verbs.includes(verb))).toEqual([]);
+    // A test is an act by its argument: only one that RUNS the source's command.
+    expect([isAct("automationTest"), isAct("automationTest", { runSource: false }), isAct("automationTest", { runSource: true })]).toEqual([false, false, true]);
     for (const why of Object.values(NOT_ACTS)) expect(why.length).toBeGreaterThan(20);
   });
 
@@ -83,6 +107,9 @@ describe("an act has one way to the kernel", () => {
     for (const verb of ACTS) {
       await expect((core!.call as (method: string, extra: unknown, ms: number, signal: AbortSignal) => Promise<unknown>)(verb, {}, HOST_TIMEOUT.act, core!.signal)).rejects.toThrow(/is an act: it reaches the kernel through core\.act alone/);
     }
+    // A test that RUNS its source's command is an act by its argument: refused here too; one that does not is a read (it is asked).
+    const call = core!.call as (method: string, extra: unknown, ms: number, signal: AbortSignal) => Promise<unknown>;
+    await expect(call("automationTest", { kind: "trigger", id: "oats-real/harvest-review", source: "x", runSource: true }, HOST_TIMEOUT.preview, core!.signal)).rejects.toThrow(/is an act: it reaches the kernel through core\.act alone/);
     expect(await backend.verbs()).toEqual([]);
     expect(acts()).toEqual([]);
   });
@@ -200,6 +227,10 @@ describe("what the log holds of an act, through the whole backend", () => {
     await backend.rpc("automationDescribe", { kind: "schedule", id: "local/weekly-cleanup", description: "DESCRIPTION-TEXT of the row" });
     await backend.rpc("schedulerEnable");
     await refused(backend.rpc("scheduleRun", { id: "no-such-row" }));
+    // A test that RUNS the source's command (a confirmed press) is an act; one that reads is not.
+    await backend.rpc("automationTest", { kind: "trigger", id: "oats-real/proposal-review" });
+    await backend.rpc("automationTest", { kind: "trigger", id: "oats-real/harvest-review", runSource: true });
+    await refused(backend.rpc("automationTest", { kind: "trigger", id: "oats-real/proposal-review", runSource: true }));
     const said = acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ms=\d+/, "ms=N").replace(/ why=\S+$/, " why=W"));
     expect(said).toEqual([
       "oats act automationEnable asked automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT",
@@ -209,6 +240,9 @@ describe("what the log holds of an act, through the whole backend", () => {
       "oats act schedulerEnable asked scheduler=- caller=client host=host_falcon at=AT",
       "oats act schedulerEnable ended scheduler=- caller=client host=host_falcon at=AT result=ok ms=N",
       "oats act scheduleRun held automation=schedule:no-such-row caller=client host=host_falcon at=AT result=HELD:invalid why=W",
+      "oats act automationTest asked automation=trigger:oats-real/harvest-review caller=client host=host_falcon at=AT",
+      "oats act automationTest ended automation=trigger:oats-real/harvest-review caller=client host=host_falcon at=AT result=ok ms=N",
+      "oats act automationTest held automation=trigger:oats-real/proposal-review caller=client host=host_falcon at=AT result=HELD:invalid why=W",
     ]);
     expect(lines.filter((each) => each.line.includes("DESCRIPTION-TEXT"))).toEqual([]);
   }, 40_000);

@@ -1003,8 +1003,9 @@ pressed Stop and nothing happened").
 
 An act is a verb that changes something: `start`, `restart`, `stopApply`, `retireApply`, `spawn`,
 and the automations' `automationEnable`, `scheduleRun`, `automationDescribe`, `scheduleRemove`,
-`scheduleReconcile`, `schedulerEnable`. A read, a preview, a plan and a test are not logged (the
-roster is read every few seconds).
+`scheduleReconcile`, `schedulerEnable`; and a trigger's TEST that RUNS its source's command on the
+machine (`automationTest` on a confirmed press: an act by its argument). A read, a preview, a plan
+and a test that runs nothing are not logged (the roster is read every few seconds).
 
 The line is a contract: one act, one line, `key=value` separated by one space, in this order
 (`server/act-log.ts`):
@@ -1041,7 +1042,10 @@ kernel's sentence, a secret. Every value is one word: whatever is not a letter, 
 No act can go round it: `core.act` (`server/core.ts`) is the only way a verb that changes something
 reaches the kernel (`core.call` refuses one, in its types and when it runs), and every verb of the
 host's contract is a read (marked `experimental_retryable`), an act, or named with why it is
-neither (`NOT_ACTS`): a new verb fails `test/server/act-log.test.ts` until it is one of the three.
+neither (`NOT_ACTS`), or an act by its argument (`ACTS_BY_ARGUMENT`): a new verb fails
+`test/server/act-log.test.ts` until it is one of them. A value a caller sent (an id, a name) is
+never written as it came: it is one token of the line (above), so it cannot forge a line or a
+result.
 
 ## How it is built
 

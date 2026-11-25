@@ -109,12 +109,19 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       return (await core.act("scheduleRun", { automation: `schedule:${id}` }, context, HOST_TIMEOUT.long, async () => ({ id: (await rowOf("schedule", id)).id }), changed)).value;
     },
     async automationTest({ kind, id, runSource }, context) {
-      const row = await rowOf(kind, id);
-      const source = row.on?.source ?? null;
-      // Only a trigger on a capability's source has a command a test could run, and only a confirmed press runs it.
-      if (runSource === true && (kind !== "trigger" || source === null || source === PULL_REQUEST)) throw invalid(`${row.id} has no capability source for a test to run`);
-      // A test changes nothing: it is ended with its caller.
-      return core.call("automationTest", { kind, id: row.id, source, runSource: runSource === true }, HOST_TIMEOUT.preview, context.experimental_signal);
+      // What a test is asked with, read now: the row it names, and its source.
+      const guards = async (run: boolean) => {
+        const row = await rowOf(kind, id);
+        const source = row.on?.source ?? null;
+        // Only a trigger on a capability's source has a command a test could run, and only a confirmed press runs it.
+        if (run && (kind !== "trigger" || source === null || source === PULL_REQUEST)) throw invalid(`${row.id} has no capability source for a test to run`);
+        return { kind, id: row.id, source, runSource: run };
+      };
+      // A test changes nothing: it is ended with its caller. One that RUNS the source's command (a confirmed press) is an
+      // act all the same: it is logged, with its hold where the guard refuses (server/act-log.ts ACTS_BY_ARGUMENT), and
+      // `core.call` would refuse it.
+      if (runSource === true) return (await core.act("automationTest", { automation: `${kind}:${id}` }, context, HOST_TIMEOUT.preview, () => guards(true), undefined, context.experimental_signal)).value;
+      return core.call("automationTest", await guards(false), HOST_TIMEOUT.preview, context.experimental_signal);
     },
     async automationDescribe({ kind, id, description }, context) {
       return (await core.act("automationDescribe", { automation: `${kind}:${id}` }, context, HOST_TIMEOUT.act, async () => ({ kind, id: (await rowOf(kind, id)).id, description }), changed)).value;

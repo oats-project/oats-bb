@@ -506,8 +506,11 @@ describe("whether a start says that a message in the thread carries the conversa
     expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: null }, thread)).toBe(false);
     // A row with no word of the runtime's state is stopped (the one predicate): the thread's line warns there, and the dialog says nothing else.
     expect(carriesOn({ running: false, runtimeState: null, sessionEnd: null }, thread)).toBe(false);
-    // A harness that ended by itself is no stop (the agent failed): a message carries it on, as its line says.
-    expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: "exited" }, thread)).toBe(true);
+    // A harness that ended by itself is no stop (the agent failed), and no fact shows a message carrying it on: no carry-on line, as its thread's line says none (the one rule, model/rest.ts).
+    expect(carriesOn({ running: false, runtimeState: "stopped", sessionEnd: "exited" }, thread)).toBe(false);
+    // A row this plugin does not know: no carry-on line either (fail closed).
+    expect(carriesOn({ running: false, runtimeState: "unknown", sessionEnd: "something-new" }, thread)).toBe(false);
+    expect(carriesOn({ running: false, runtimeState: "something-new", sessionEnd: null }, thread)).toBe(false);
   });
   it("never of an agent that runs, or whose state is not known", () => {
     expect(carriesOn({ running: true, runtimeState: "unknown", sessionEnd: null }, thread)).toBe(false);
@@ -520,7 +523,8 @@ describe("whether a start says that a message in the thread carries the conversa
   it("never when bb shows no thread of it; a listed thread takes a message whatever bb says of its last turn", () => {
     const lost = { running: false, runtimeState: "stopped", sessionEnd: "lost" };
     expect(carriesOn(lost, null)).toBe(false);
-    expect(carriesOn(lost, { status: "error" })).toBe(true); // bb's last turn failed and the session is there: how a session is lost
+    expect(carriesOn(lost, { status: "error", startFailure: null } as { status: string })).toBe(true); // bb's last turn failed (bb said that a turn started there) and the session is there: how a session is lost
+    expect(carriesOn(lost, { status: "error" })).toBe(false); // before bb has answered for its events it may be a thread that never started: no line yet
     expect(carriesOn(lost, { status: "active" })).toBe(true);
   });
 });

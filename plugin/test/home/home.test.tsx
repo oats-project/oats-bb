@@ -938,9 +938,9 @@ test("Home › Agents says where an agent the roster draws on no thread is, from
   await waitFor(() => expect(stopped.list.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "thr_digest" }));
   stopped.list.unmount();
   resetApp();
-  // A session lost with its thread archived: the reason, as on the sidebar's row.
+  // A session lost with its thread archived: the reason, as on the sidebar's row: that it may still run.
   const lost = await rowOf(withEnd("lost"), DIGEST, { sidebarThreads: threads("thr_digest"), sdk: bb("thr_digest") });
-  await waitFor(() => expect(lost.words()).toBe("oats-expert · archived in bb"));
+  await waitFor(() => expect(lost.words()).toBe("oats-expert · may still run"));
   lost.list.unmount();
   resetApp();
   // bb answers that it has no thread of that id: deleted.
@@ -987,7 +987,7 @@ test("the card of an agent that asks and that bb lists no thread of says what be
   resetApp();
   // bb has it archived (and the agent still runs): the button leads to the archived thread, and its name says so.
   const archived = await cardOn(fixtureAgents(), bb("thr_ci"));
-  await waitFor(() => expect(archived.where()).toBe("oats-developer · archived in bb"));
+  await waitFor(() => expect(archived.where()).toBe("oats-developer · may still run")); // (the reason of its row: it runs, and bb has its thread archived)
   quiet(archived.card);
   expect(archived.leads()).toBe("Open thread: Flaky ci developer");
   fireEvent.click(within(archived.card).getByTestId("oats-needs-open"));
@@ -1039,10 +1039,23 @@ test("an agent that runs outside OATS is one of those that need you, in every pl
   expect(within(notice).getByTestId("oats-outside-details").querySelector("summary")!.textContent).toBe("▸Details");
   expect(notice.querySelectorAll("button")).toHaveLength(0);
   expect(Array.from(within(card).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop…", "Start…"]); // (the dots: each opens its dialog)
+  // The card is under "Needs you" and asks no question: it says, in the words of its line, what it needs; and Stop… is the primary act of the two.
+  expect(within(within(card).getByTestId("oats-status-line")).getByTestId("oats-status-part").textContent).toMatch(/stopped in OATS$/);
+  expect(within(card).getByTestId("oats-needs-outside").textContent).toBe("Stop, then Start.");
+  expect(Array.from(card.querySelectorAll("button[data-primary]")).map((button) => button.textContent)).toEqual(["Stop…"]);
   for (const id of ["oats-needs-choice", "oats-reply-send", "oats-needs-stopped", "oats-needs-message"]) expect(within(card).queryByTestId(id)).toBeNull();
   const { asked } = await import("../../app/lifecycle");
   fireEvent.click(within(card).getByRole("button", { name: "Stop…" }));
   expect(asked()).toEqual({ verb: "stop", instance: "weekly-digest-helper" });
+  resetApp();
+  // An agent of another session provider has Stop alone: its card says no "Stop, then Start." (nobody reads Start with nothing to press).
+  const others = fixtureAgents().map((agent): Agent => (agent.instance === "weekly-digest-helper" ? { ...agent, backend: "other", sessionEnd: "stopped", outsideOats: { ...report, backend: "other" } } : agent));
+  const elsewhere = await homePage({ rpc: handlers({}, others) });
+  const otherCard = await cardOf(elsewhere, "weekly-digest-helper");
+  expect(offerOf(otherCard)).toBe("outside");
+  expect(Array.from(within(otherCard).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => button.textContent)).toEqual(["Stop…"]);
+  expect(within(otherCard).queryByTestId("oats-needs-outside")).toBeNull();
+  expect(otherCard.textContent).not.toMatch(/then Start/);
 });
 
 // Behind a lifecycle result that says the agent changed, the home's cards read the same rule as its thread's line (ruled
@@ -1056,8 +1069,10 @@ test("behind a result the home's card of an agent that runs outside OATS says \"
   const card = await cardOf(slot, "weekly-digest-helper");
   const acts = () => Array.from(within(card).getByTestId("oats-status-line").querySelectorAll("button")).map((button) => [button.textContent, (button as HTMLButtonElement).disabled]);
   expect([within(card).queryByTestId("oats-reading"), acts()]).toEqual([null, [["Stop…", false], ["Start…", false]]]);
+  expect(within(card).getByTestId("oats-needs-outside").textContent).toBe("Stop, then Start.");
   act(() => noteActed(["weekly-digest-helper"], fixtureSnapshot(agents).at));
   expect([within(card).getByTestId("oats-reading").textContent, acts()]).toEqual(["Reading…", [["Stop…", true], ["Start…", true]]]);
+  expect(within(card).queryByTestId("oats-needs-outside")).toBeNull(); // what it needs is said of a state that is being read again: not behind "Reading…"
   expect(within(card).getByTestId("oats-status-line").textContent).not.toMatch(/Running outside OATS/); // never the state of before, stated plainly
 });
 
@@ -1244,7 +1259,9 @@ test("an agent the kernel cannot reach while bb holds a request on its thread: n
 test("an agent whose session was lost, on a thread whose last turn bb calls failed, is answered as on any listed thread", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false as const, runtimeState: "stopped", sessionEnd: "lost" } : agent));
   const threads = sidebarThreads();
-  const slot = await homePage({ rpc: handlers({}, agents), sdk: BB_ASKS, sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, status: "error" as const } : thread)) } });
+  // bb says of that thread's events that a turn started (its LATER turn failed): until it has, the thread may be one that never started, and the card would not answer.
+  const events = { list: async ({ types }: { types: readonly string[] }) => (types.includes("turn/started") ? [{ type: "turn/started", seq: 5, data: {} }] : []) };
+  const slot = await homePage({ rpc: handlers({}, agents), sdk: { threads: { ...BB_ASKS.threads, events } } as never, sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === "thr_ci" ? { ...thread, status: "error" as const } : thread)) } });
   const card = await cardOf(slot, "flaky-ci-developer");
   await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice").map((choice) => choice.textContent)).toEqual(["One", "Two"]));
   expect(within(card).queryByTestId("oats-needs-stopped")).toBeNull();
@@ -1452,13 +1469,25 @@ test("an agent whose bb thread was deleted that needs the person: the reason and
   expect(within(card).getByTestId("oats-needs-open").getAttribute("aria-label")).toBe("Open its page: Release 070 maintainer");
 });
 
-test("an agent nobody stopped (its session ended in a shell, was lost, or no harness is loaded) is answered from its card, on a thread bb lists: a message there is how it comes back", async () => {
-  // The one reading of "a message carries it on" (model/rest.ts), which the Start dialog's first line reads too. It
-  // narrows what the card refused before (every agent the kernel says does not run): only a STOP is refused, and an
-  // agent the kernel cannot reach.
+test("an agent nobody stopped whose way on is a message (no harness is loaded) is answered from its card, on a thread bb lists; one whose harness ended by itself is not", async () => {
+  // The one reading of "a message carries it on" (model/rest.ts), which the Start dialog's first line and the thread's
+  // line read too: said only where a fact shows it. A harness that ended by itself (a shell, "exited") has none: its
+  // card does not answer into the thread, and offers Start.
   for (const [what, change] of [
     ["its session ended in a shell", { running: false as const, runtimeState: "shell" }],
     ["its harness ended by itself", { running: false as const, runtimeState: "stopped", sessionEnd: "exited" }],
+  ] as const) {
+    const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change, waiting: { reason: "attention", message: "Which branch do I use?", since: "2026-11-19T12:00:00.000Z" } } : agent));
+    const slot = await homePage({ rpc: handlers({}, agents), sidebarThreads: calm() });
+    const card = await cardOf(slot, "flaky-ci-developer");
+    expect(card.dataset.offer, what).toBe("stopped");
+    expect(within(card).queryByTestId("oats-reply-send"), what).toBeNull();
+    expect(within(card).getByTestId("oats-needs-stopped"), what).toBeTruthy();
+    slot.unmount();
+    resetApp();
+  }
+  for (const [what, change] of [
+    // (A lost session's claim is not shown, the claim's gate: its card is the one of bb's own question, above.)
     ["no harness is loaded", { running: false as const, runtimeState: "unknown" }],
   ] as const) {
     const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, ...change, waiting: { reason: "attention", message: "Which branch do I use?", since: "2026-11-19T12:00:00.000Z" } } : agent));

@@ -306,17 +306,17 @@ never states.
 
 | What OATS says | What bb says of its thread | The thread's line | The sidebar's row | Acts |
 |---|---|---|---|---|
-| stopped by an operator, or stopped with no word how its session ended (`sessionEnd` "stopped" or none) | open: bb's composer is live under it | "Stopped · A message here starts it outside OATS.", in the warning tone. The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped" | Start |
-| its session lost (`sessionEnd: "lost"`: it ended without OATS stopping it) | open | "Stopped · session lost": the reason alone. No warning, no time (the kernel records none of the loss), no cause guessed, nothing promised, and no sentence: what to do is said where it is done (the Start dialog says first to message it instead). | "Stopped · session lost" | Start… (its dialog says first to message it instead: the lifecycle's) |
+| stopped by an operator, or stopped with no word how its session ended (`sessionEnd` "stopped" or none) | open: bb's composer is live under it | "Stopped · A message here starts it outside OATS.": the sentence in the warning tone, the mark the state's own grey (one colour for the agent's dot, the one its row in the sidebar draws). The interim warning, for as long as a stop leaves the thread open; afterwards for a home stopped before the provider archived at stop, and a thread a person unarchived. | "Stopped" | Start |
+| its session lost (`sessionEnd: "lost"`: it ended without OATS stopping it) | open | "Stopped · session lost · message to continue": the reason, then the way on. No warning, no time (the kernel records none of the loss), no cause guessed, nothing promised. | "Stopped · session lost" | none on the line: a message is the way on, and Start… would begin a new conversation. Start… is in the thread's menu, the panel and the agent's page (its dialog says first to message it instead: the lifecycle's) |
 | any row that does not run, where bb says the thread FAILED AT ITS START (below) | open, in "error" | "Failed", and nothing after it; bb's own reason under Details ("bb says: …") | "Failed · <soul>" | Start… on the line; Start… and Retire… on its page and in the thread's menu. No Restart, and the Start dialog has no carry-on line |
 | its session lost, on TMUX (no thread in bb) | none | on its page, under the header's "Stopped": "session lost", and no sentence (the Start dialog's one line says that Start tries to continue its last conversation, else starts fresh) | "Stopped · session lost", then bb's terminal glyph, named "tmux" | the header's (the lifecycle's) |
-| idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded". Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread, and its dialog says so first. | "Idle · not loaded" | Start (its dialog says first to send a message instead: the lifecycle's) |
+| idle, no harness loaded (`running: false` beside `runtimeState: "unknown"`) | open | "Idle · not loaded · message to continue". Never "Stopped", and no warning: a message carries the conversation on and OATS reads it running at its next read; Start would begin a new thread, and its dialog says so first. | "Idle · not loaded" | none on the line, as for a lost session; Start… in the menu, the panel and the page |
 | stopped, its session not lost | archived | "Stopped · archived in bb" (the Start dialog's one line says that Start begins a new conversation). The row opens the archived thread, which bb shows to read (no composer). | "Stopped", in the plain tone (once the provider archives at stop, this is every stopped agent) | Start…, Retire… |
-| its session lost (`sessionEnd: "lost"`) | archived | "Stopped · Archived in bb while running: it may still run.", in the warning tone | "Stopped · archived in bb", its mark in the warning tone | Stop, Retire (Start once it is stopped) |
-| still says it runs (not stopped, failed or unreachable, and not `running: false`) | archived | "<its state> · Archived in bb while running: it may still run.", in the warning tone, on the archived thread's own row: a person archived the conversation of an agent whose process goes on | "<its state> · archived in bb" (for example "Idle · archived in bb"), its mark in the warning tone | Stop, Retire |
+| its session lost (`sessionEnd: "lost"`) | archived | "Stopped · Archived in bb while running: it may still run.", in the warning tone | "Stopped · <soul> · may still run": the mark in the warning tone, and the reason never leaves the row (the soul gives way first; the row's title says the whole sentence). The state word stays "Stopped": it is the kernel's row | Stop, Retire (Start once it is stopped) |
+| still says it runs (not stopped, failed or unreachable, and not `running: false`) | archived | "<its state> · Archived in bb while running: it may still run.", in the warning tone, on the archived thread's own row: a person archived the conversation of an agent whose process goes on | "<its state> · <soul> · may still run" (for example "Idle · … · may still run"), the mark in the warning tone, and the reason never leaves the row | Stop, Retire |
 | stopped, or its session lost | deleted | "Stopped · deleted in bb" on the state's line of the agent's own page's header (it has no thread): the reason in the warning tone, on the line as on the row, never alone under the tabs | "Stopped · deleted in bb", its mark in the warning tone | Start…, Retire… |
-| recorded stopped, with the kernel's `outsideOats` | any | "Running outside OATS · recorded stopped", in the warning tone, with **Stop…** and **Start…** as the line's own acts (Stop… alone for an agent that is not on bb); under the line no box and no title: one fold, **Details**, with what happened in a person's words ("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again."), then the kernel's own code and sentence. The same drawing on the home's card; on the instance panel the acts are the header's. | "Running outside OATS" | Stop…, Start… |
-| failed (its session ended) | open | "Failed · session ended". No warning: status sees a message that starts it. | "Failed" | Start (the kernel's row says it does not run; Restart where its harness still runs or that is not known: the lifecycle's ONE act for a failed agent, `failedAct`) |
+| recorded stopped, with the kernel's `outsideOats` | any | "Running outside OATS · stopped in OATS", in the warning tone, with **Stop…** and **Start…** as the line's own acts (Stop… alone for an agent that is not on bb); under the line no box and no title: one fold, **Details**, with what happened in a person's words ("Someone sent it a message in bb. Stop, then Start."), then the kernel's own code and sentence. The same drawing on the home's card, with "Stop, then Start." under its line; on the instance panel the acts are the header's. | "Running outside OATS" | **Stop…, the primary act**: it ends the harness that runs and archives its thread, and the agent is stopped as OATS has it. Start… second: it begins a NEW conversation and does not adopt the one that runs; while the outside thread is in a turn the provider refuses it (`oats-package/capabilities/oats-bb/lib/launch.mjs`: "stop it … before starting again") |
+| failed (its session ended) | open | "Failed · session ended". No warning, and nothing of a message: no fact shows a message carrying it on (no provider prints this row on a bb thread). | "Failed" | Start (the kernel's row says it does not run; Restart where its harness still runs or that is not known: the lifecycle's ONE act for a failed agent, `failedAct`) |
 | unreachable | any | "Unreachable" (the kernel's own message under Details); nothing about a message | "Unreachable" | Retry |
 
 What it reads, and nothing else (nothing is derived from words): the agent's status row, as the
@@ -349,13 +349,17 @@ of who needs a person):
   not-loaded row is recorded live (`test/fixtures/outside/status-not-loaded.json`: the real run
   ends the thread's harness process and reads the row), on the provider that scans its harness
   (oats-bb #40); with a provider before it an idle bb thread reads `running: null` and says "Idle"
-  with nothing after it.
+  with nothing after it. A message is invited ("message to continue", the home's card, the Start
+  dialog's line) only for that recorded row exactly (`runtimeState: "unknown"` and no word how its
+  session ended) and for a lost session, on an agent of the bb provider: a row with a word this
+  plugin does not know reads "Idle · not loaded" too, and is invited nothing (`messageResumes`
+  fails closed).
 
 **Three rows read "not running", and they are never drawn alike**: an operator's stop (Start, and
 never a message), a session that was lost (nobody stopped it: a message carries it on), and no
 harness loaded (a message; Start begins a new conversation). The state word tells the third from the first two;
-the tone tells the first from the others (the line's `tone="warning"`: the state's mark and the
-sentence, `data-tone="warning"`); and the rows' words differ. One live scene draws the three side
+the tone tells the first from the others (the line's `tone="warning"`: the sentence,
+`data-tone="warning"`; the mark is the row's, the state's own grey); and the rows' words differ. One live scene draws the three side
 by side and asserts the word and the tone, not only the text. The tone never carries the meaning
 alone: the sentence does.
 
@@ -393,8 +397,10 @@ says what happened after the state's word, as the row does ("Stopped · session 
 for every reason a row can say: one that is only where the thread is stands after the roster's own
 words ("Failed · session ended · archived in bb", "Stopped · no bb thread"), so a reason that left
 a narrow row is whole on the page.
-The kernel's report, and the one act the header lacks, stand first on the Instance tab
-(`OutsideAgent`; the header over the tabs does not scroll, so that block is on the page). They are the lifecycle's buttons for the agent's state
+The kernel's report's Details is in the header too, under the state it explains
+(`OutsideAgentDetails`: one closed fold, the same place as under a thread's line and the home
+card's line; the lead's read of 24 Nov 2026, P19); only an act the header lacks stands first on the
+Instance tab (`OutsideAgent`). The acts are the lifecycle's buttons for the agent's state
 (`AgentActs`: Start… and Retire… for a stopped agent), but where a process runs, or may, with no
 thread a person can see: a session lost to bb's Archive and an agent archived while it ran have
 Stop and Retire on the archived thread's row (Start comes once it is stopped), and the kernel's
@@ -412,7 +418,7 @@ state, the feature is one pure function (`said`, `app/outside/say.ts`: an agent,
 whether the tree draws it on its thread in; the reason, its tone, the row's words, its acts and
 the kernel's report out), `outsideOf(oats)` that gives it its inputs from the caller's own roster,
 and its drawings (`OutsideWarning`: the notice; `OutsideThreadRow`: the thread's own row on a
-thread bb has archived; `OutsideAgent`: the block on the agent's page; `lineParts` and `lineActs`:
+thread bb has archived; `OutsideDetails`: its one fold, and `OutsideAgentDetails`: that fold for the agent's page's header; `OutsideAgent`: the block on the agent's page, for an act the header lacks; `lineParts` and `lineActs`:
 what a status line says and offers; `rowParts`: what a sidebar's row says after its state, only
 where the reason follows that state). It registers no slot and has no read and no `oats` verb of
 its own: the roster's row and line (`app/roster/Sidebar.tsx`, `IdentityRow.tsx`) and the instance
@@ -492,6 +498,12 @@ answer it, the Start dialog has no carry-on line), bb's reason (the event's `dat
   variables' values), which must not come into the page.
 - It is asked again at each roster read and each minute, as the archived threads are; a thread
   that has started a turn is not asked about again in the app window.
+- bb's answer rides on the thread in THREE values (`BbThread.startFailure`): the failure; `null`
+  (bb answered: a turn started there, so it is a thread whose LATER turn failed); or nothing at
+  all while bb has not answered. What invites a message fails CLOSED on the last (`messageResumes`,
+  model/rest.ts): until bb says that a turn started, a thread in "error" may be one that never
+  started, so its line says "session lost" alone and keeps Start…, the home's card does not
+  answer it, and the Start dialog has no carry-on line.
 - Until bb has answered, the row says what it says without the answer. Where bb cannot answer,
   what it last said of the thread stands (nothing, if it never answered): a row that said
   "Failed" does not go back to "Stopped · session lost" for a read that failed.
@@ -560,7 +572,7 @@ that one, not a free-text box beside it as an equal:
 | it asks in its own words (a question, its attention) | the **reply**, on its card, named for it ("Write to Release 070 maintainer…"), sent as the person at the screen through bb's own send. The box grows with what is written, so all of what will be sent is in view. There is no reply apart from a card: a message cannot go to another agent than the one read |
 | the kernel cannot reach its session, and it needs you all the same | no choices and no message: nobody can tell where either would go. The card says "Unreachable. Nothing is sent from here." (the word only where the card does not already draw it), with **Open** and no Start (the lifecycle offers none for it) |
 | the kernel calls it STOPPED (an operator's stop, or a stop with no word that its session was lost), and it needs you all the same (bb still holds a request on its thread) | no choices and no message: either would go to its thread and start its harness again outside OATS (a stopped agent stays stopped). The card says "Not running. Start it to answer.", and offers **Start…** (the lifecycle's own act and dialog: it asks the kernel first, and starts the agent through OATS; where the kernel cannot say whether the agent runs, the dialog says so and starts nothing) beside **Open** |
-| the kernel says it does not run and NOBODY STOPPED IT (its session was lost, it ended in a shell, or no harness is loaded), on a thread bb lists (one whose last turn bb calls failed included) | answered as any other agent: its choices, or the reply. A message in its thread is the provider's designed way back for such a session, and OATS reads it running at its next read; the Start dialog says the same first (`messageResumes`, `model/rest.ts`: one reading for the card, the dialog and the thread's line) |
+| the kernel says it does not run, NOBODY STOPPED IT, and a fact shows that a message carries it on (its session was lost, or no harness is loaded), on a thread bb lists (one whose LATER turn bb calls failed included, once bb has said that a turn started there) | answered as any other agent: its choices, or the reply. A message in its thread is the provider's designed way back for such a session, and OATS reads it running at its next read; the Start dialog says the same first (`messageResumes`, `model/rest.ts`: one reading for the card, the dialog and the thread's line). NOT a harness that ended by itself (a shell, "exited"), and not a thread in "error" bb has not answered for: those cards read "Not running. Start it to answer." |
 | it has no thread in bb: it runs in tmux | "tmux" under its name, "Answer it in its terminal.", and **Open**, which leads to its own page: the kernel's own command (`oats session attach --home <its home>`) is there, to copy |
 | it has no thread bb lists | what became of it under its name, as far as bb's answer goes, the reason alone: "deleted in bb", "archived in bb", "no bb thread" or "thread not shown in bb" (the sidebar's own words); no reply and no sentence; **Open**, whose accessible name says where it leads: the archived thread where bb has one (the press opens it, as the sidebar's row does), else the agent's own page |
 

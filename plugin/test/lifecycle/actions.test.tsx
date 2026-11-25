@@ -1466,20 +1466,24 @@ test.each([
 });
 
 test("a cut-off agent whose thread cannot take a message gets no line: bb does not list it (archived). A listed thread whose last turn bb calls failed takes a message, and gets the line", async () => {
-  const withThreads = async (threads: ReturnType<typeof fixtureThreads>) => {
+  // `turnStarted`: bb says of the thread's events that a turn started there (its later turn failed). Until bb has said so a
+  // thread in "error" may be one that never started, and no message is invited into it (model/rest.ts `messageResumes`).
+  const withThreads = async (threads: ReturnType<typeof fixtureThreads>, turnStarted = false) => {
     const app = await loadApp();
     const Overlay = app.appOverlays[0]!.component;
-    const slot = renderSlot<object, Contract>({ component: () => <Overlay /> }, {}, { rpc: handlers({ startCheck: ({ instance }) => startCheckOf(instance, LOST) }), sidebarThreads: { status: "ready" as const, threads }, sdk: modelsSdk() });
+    const events = { list: async ({ types }: { types: readonly string[] }) => (turnStarted && types.includes("turn/started") ? [{ type: "turn/started", seq: 5, data: {} }] : []) };
+    const slot = renderSlot<object, Contract>({ component: () => <Overlay /> }, {}, { rpc: handlers({ startCheck: ({ instance }) => startCheckOf(instance, LOST) }), sidebarThreads: { status: "ready" as const, threads }, sdk: { ...modelsSdk(), threads: { events } } as never });
     await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("snapshot"));
     await new Promise((resolve) => setTimeout(resolve, 0));
     const { openAct } = await import("../../app/lifecycle");
     openAct("start", "weekly-digest-helper");
     await ready(slot);
+    if (turnStarted) await waitFor(() => expect(slot.queryByTestId("oats-start-thread")).not.toBeNull());
     const said = { line: slot.queryByTestId("oats-start-thread") !== null, text: slot.getByTestId("oats-confirm").textContent! };
     resetApp();
     return said;
   };
-  const inError = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, status: "error" as const } : thread)));
+  const inError = await withThreads(fixtureThreads().map((thread) => (thread.id === "thr_digest" ? { ...thread, status: "error" as const } : thread)), true);
   // bb's last turn failed and the session is there (a harness killed in a turn is how a session is lost): bb's composer is live on it.
   expect(inError.line).toBe(true);
   // The one line is the same wherever its last conversation is: a start begins a new one.

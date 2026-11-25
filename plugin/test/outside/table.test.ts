@@ -17,10 +17,11 @@ const listed = { status: "idle" };
 /** A row as the roster's parser reads the fixture's sample with these fields; `sessionEnd` is the plugin's Agent's own field. */
 const row = (backend: "bb" | "tmux", running: boolean | null, runtimeState: string | null, sessionEnd?: string): Agent => ({ ...sample("harvest-knowledge-helper", { running, runtimeState }), backend, sessionEnd, waiting: null, ...(backend === "tmux" ? { threadId: null } : {}) });
 
-const failed = { status: "error" }; // bb's word for a thread whose last turn failed: the session is there
+const failed = { status: "error", startFailure: null }; // bb's word for a thread whose LATER turn failed (bb answered that a turn started there): the session is there
+const unanswered = { status: "error" }; // the same thread before bb has answered for its events: it may be one that never started
 // bb's word that the thread failed AT ITS START (its events: app/outside/threads.ts), joined on the thread: the agent never ran.
 const neverStarted = { status: "error", startFailure: { message: "Command thread.start failed", detail: 'Failed to resolve Pi model "x"' } };
-const ROWS: [string, Agent, { status: string; startFailure?: object }?][] = [
+const ROWS: [string, Agent, { status: string; startFailure?: object | null }?][] = [
   ["bb · an operator's stop", row("bb", false, "stopped", "stopped")],
   ["bb · stopped, no word how it ended", row("bb", false, "stopped")],
   ["bb · no word of the runtime's state", row("bb", false, null)],
@@ -33,6 +34,7 @@ const ROWS: [string, Agent, { status: string; startFailure?: object }?][] = [
   ["bb · session lost, on a thread whose last turn failed", row("bb", false, "stopped", "lost"), failed],
   ["bb · ended in a shell, on a thread whose last turn failed", row("bb", false, "shell"), failed],
   ["bb · an operator's stop, on a thread whose last turn failed", row("bb", false, "stopped", "stopped"), failed],
+  ["bb · session lost, on a thread in \"error\" bb has not answered for", row("bb", false, "stopped", "lost"), unanswered],
   ["bb · session lost, on a thread that failed at its start", row("bb", false, "stopped", "lost"), neverStarted],
   ["bb · runs outside OATS (the kernel's report), on a thread that failed at its start", { ...row("bb", false, "stopped", "stopped"), outsideOats: { code: "running-outside-oats", backend: "bb", message: "a harness runs" } }, neverStarted],
   ["bb · the kernel cannot reach it (the kernel's row)", row("bb", null, "unreachable")],
@@ -65,13 +67,16 @@ test("the table of every row, from the one function", () => {
     ["bb · the stale stop beside \"unknown\"", "stopped", "Stopped", "(the stop's warning)", "refuses (stopped)", "—"],
     ["bb · the word \"stopped\" beside \"lost\", and no word that it does not run", "stopped", "Stopped", "(the stop's warning)", "refuses (stopped)", "—"],
     ["bb · session lost", "lost", "Stopped", "session lost", "answers", "a message carries it on"],
-    ["bb · its harness ended by itself", "ended", "Failed", "failed-open", "answers", "a message carries it on"],
-    ["bb · ended in a shell", "ended", "Failed", "failed-open", "answers", "a message carries it on"],
+    // A harness that ended by itself: no provider prints it on a bb thread, and no fact shows a message carrying it on: no place invites one (the lead's condition of 24 Nov 2026).
+    ["bb · its harness ended by itself", "ended", "Failed", "failed-open", "refuses (stopped)", "—"],
+    ["bb · ended in a shell", "ended", "Failed", "failed-open", "refuses (stopped)", "—"],
     ["bb · no harness loaded", "unloaded", "Idle", "not loaded", "answers", "a message carries it on"],
     // A thread bb lists whose last turn failed takes a message as any other: the three places still say one thing.
     ["bb · session lost, on a thread whose last turn failed", "lost", "Stopped", "session lost", "answers", "a message carries it on"],
-    ["bb · ended in a shell, on a thread whose last turn failed", "ended", "Failed", "failed-open", "answers", "a message carries it on"],
+    ["bb · ended in a shell, on a thread whose last turn failed", "ended", "Failed", "failed-open", "refuses (stopped)", "—"],
     ["bb · an operator's stop, on a thread whose last turn failed", "stopped", "Stopped", "(the stop's warning)", "refuses (stopped)", "—"],
+    // bb has not answered for the thread's events: it may never have started, so no message is invited anywhere (fail closed).
+    ["bb · session lost, on a thread in \"error\" bb has not answered for", "lost", "Stopped", "session lost", "refuses (stopped)", "—"],
     // It never ran: failed, nothing of a lost session, no message.
     ["bb · session lost, on a thread that failed at its start", "never-started", "Failed", "—", "refuses (stopped)", "—"],
     // The kernel's report wins: it runs, whatever bb said of the thread's start.

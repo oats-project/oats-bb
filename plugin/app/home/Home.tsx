@@ -19,7 +19,7 @@ import { ACTS, openAct } from "../lifecycle";
 import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
-import { lineActs, lineParts, outsideOf, OutsideWarning, rowWords } from "../outside";
+import { lineActs, lineParts, outsideNeeds, outsideOf, OutsideWarning, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { READING as READING_WORD, ReadingLine, readingNow, useActed } from "../roster/reading";
 import { RosterNotice } from "../roster/unreadable";
@@ -209,6 +209,12 @@ function OutsideCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: b
         {/* The same drawing as under the thread's line: Stop… and Start… are the line's own acts, and Details is under it. */}
         {/* Behind a lifecycle result that says this agent changed, until the roster is read again: "Reading…" in the state's place, its acts off (app/roster/reading.tsx: L13). */}
         {reading ? <ReadingLine action={lineActs(said, entry.agent.instance, true, entry.status.state)} /> : <StatusLine state={entry.status.state} {...lineParts(said, entry.status)} action={lineActs(said, entry.agent.instance, held, entry.status.state)} />}
+        {/* What it needs, in the words of its line: the card is under "Needs you", and asks no question. (None for an agent whose one act is Stop; and none behind "Reading…": the state it is said of is being read again.) */}
+        {reading || outsideNeeds(said) === null ? null : (
+          <p data-testid="oats-needs-outside" className="m-0 min-w-0 break-words text-foreground">
+            {outsideNeeds(said)}
+          </p>
+        )}
         <OutsideWarning said={said} instance={entry.agent.instance} held={held || reading} />
       </Card>
     </li>

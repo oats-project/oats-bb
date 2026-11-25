@@ -91,7 +91,9 @@ test("stopped, its thread deleted in bb: the row says it was deleted, and opens 
 test("a session OATS lost: \"Stopped\" in the warning tone, then the reason, by bb's answer for the same row; never a state of its own", async () => {
   const lost = () => facts({ [DIGEST]: { sessionEnd: "lost" } });
   const archived = await sidebar({ rpc: lost(), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
-  await waitFor(() => expect(rowFacts(threadless(archived.slot))).toBe("Stopped · oats-expert · archived in bb"));
+  await waitFor(() => expect(rowFacts(threadless(archived.slot))).toBe("Stopped · oats-expert · may still run"));
+  // The row's title says the whole: where its thread is, and that it may still run.
+  expect(threadless(archived.slot).querySelector('[data-testid="oats-row-facts"]')!.getAttribute("title")).toBe("Stopped · oats-expert · Archived in bb while running: it may still run.");
   expect(markOf(threadless(archived.slot))).toEqual(["stopped", "warning"]);
   resetApp();
   const deleted = await sidebar({ rpc: lost(), sidebarThreads: withoutDigest(), sdk: bb([]).sdk });
@@ -160,27 +162,29 @@ const acts = (slot: Awaited<ReturnType<typeof line>>, within_ = "oats-identity-r
 const calls = (slot: Awaited<ReturnType<typeof line>>, method: string) => slot.inspection.rpcCalls.filter((call) => call.method === method).map((call) => call.input);
 const noEvents: Partial<Handlers> = { panelEvents: () => ({ events: [] }) as never };
 
-test("the kernel's report on the open thread: one statement, \"Running outside OATS · recorded stopped\", in the warning tone, with Stop… and Start… as the line's own acts; under it ONE fold, Details: what happened in a person's words, then the kernel's code and sentence; no box, no title", async () => {
+test("the kernel's report on the open thread: one statement, \"Running outside OATS · stopped in OATS\", in the warning tone, with Stop… (the primary act) and Start… as the line's own acts; under it ONE fold, Details: what happened in a person's words, then the kernel's code and sentence; no box, no title", async () => {
   const slot = await line("thr_digest", { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   const warning = await slot.findByTestId("oats-outside-warning");
   // The state, then what OATS recorded, as a fact with no time: never "Stopped" as the state of an agent that runs.
-  await waitFor(() => expect(words(slot)).toEqual(["Running outside OATS", "recorded stopped"]));
+  await waitFor(() => expect(words(slot)).toEqual(["Running outside OATS", "stopped in OATS"]));
   const status = within(slot.getByTestId("oats-identity-row")).getByTestId("oats-status-line");
-  // The warning tone is the line's: the state's mark, and "recorded stopped".
-  expect([status.getAttribute("data-state"), within(status).getByTestId("oats-state").getAttribute("data-tone"), within(status).getByTestId("oats-status-part").getAttribute("data-tone")]).toEqual(["outside", "warning", "warning"]);
+  // "stopped in OATS" is in the warning tone; the mark is the state's own, as on its row in the sidebar (the state "outside" has the warning colour for its fill: no tone over it).
+  expect([status.getAttribute("data-state"), within(status).getByTestId("oats-state").getAttribute("data-tone"), within(status).getByTestId("oats-status-part").getAttribute("data-tone")]).toEqual(["outside", null, "warning"]);
   // No box and no title under the line: nothing repeats it.
   expect(within(slot.getByTestId("oats-identity-row")).queryByTestId("oats-notice")).toBeNull();
   expect(slot.getByTestId("oats-identity-row").textContent).not.toMatch(/is running in bb, but OATS recorded it as stopped|stops the harness|starts it from OATS, in a new conversation/);
   // ONE fold, closed: a person's words first, then the kernel's code and sentence. Nothing in view has a backtick or a command.
   const details = within(warning).getByTestId("oats-outside-details");
   expect(details.hasAttribute("open")).toBe(false);
-  expect(Array.from(details.querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.", `running-outside-oats: ${MESSAGE}`]);
+  expect(Array.from(details.querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop, then Start.", `running-outside-oats: ${MESSAGE}`]);
   expect(warning.querySelectorAll("details")).toHaveLength(1);
   const inView = slot.getByTestId("oats-identity-row").cloneNode(true) as HTMLElement;
   inView.querySelector('[data-testid="oats-outside-details"]')!.remove();
   expect(inView.textContent).not.toMatch(/`|oats instance/);
   // Stop… and Start… are the line's own acts, once each: the fold draws no button.
   expect(within(status).getAllByTestId("oats-status-act").map((act) => act.textContent)).toEqual(["Stop…", "Start…"]);
+  // Of the two, Stop… is the primary act: the one that brings it back under OATS (Start… begins a new conversation, and is refused while the thread is in a turn).
+  expect(within(status).getAllByTestId("oats-status-act").filter((act) => act.hasAttribute("data-primary")).map((act) => act.textContent)).toEqual(["Stop…"]);
   expect(warning.querySelectorAll("button")).toHaveLength(0);
   // Start is the lifecycle's own act: its dialog is asked for, and nothing runs on one press.
   fireEvent.click(within(status).getByRole("button", { name: "Start…" }));
@@ -203,7 +207,7 @@ test("a stopped row with no report (an OATS that does not list the feature answe
   expect([words(slot)[0], acts(slot)]).toEqual(["Stopped", ["Start…"]]);
 });
 
-test("failed, on its open thread: \"Failed\", why in two words, and the ONE act of a failed agent whose session ended: Start (nothing runs); no warning", async () => {
+test("failed, on its open thread: \"Failed\", why in two words, and the ONE act of a failed agent whose session ended: Start (nothing runs); no warning, and never \"message to continue\"", async () => {
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "shell" } : agent));
   const slot = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
   await slot.findByTestId("oats-identity-row");
@@ -224,7 +228,7 @@ test("the archived thread of a stopped agent has its own row: who it is, \"Stopp
   expect(asked()).toEqual({ verb: "start", instance: DIGEST });
 });
 
-test("three agents whose thread bb has archived, side by side: an operator's stop says its state alone, plain; a lost session and one that still runs say \"archived in bb\" with the warning mark", async () => {
+test("three agents whose thread bb has archived, side by side: an operator's stop says its state alone, plain; a lost session and one that still runs say \"may still run\" with the warning mark", async () => {
   const HARVEST = "harvest-knowledge-helper";
   const RANKER = "ranker-v3-probe";
   const gone = new Set(["thr_digest", "thr_harvest", "thr_research"]);
@@ -236,8 +240,8 @@ test("three agents whose thread bb has archived, side by side: an operator's sto
   await waitFor(() => expect([DIGEST, RANKER, HARVEST].map((instance) => rowOf(instance).getAttribute("data-opens"))).toEqual(["thread", "thread", "thread"]));
   expect([DIGEST, RANKER, HARVEST].map((instance) => [rowFacts(rowOf(instance)), ...markOf(rowOf(instance))])).toEqual([
     ["Stopped · oats-expert", "stopped", null],
-    ["Stopped · research-expert · archived in bb", "stopped", "warning"],
-    ["Idle · knowledge-harvester · archived in bb", "idle", "warning"],
+    ["Stopped · research-expert · may still run", "stopped", "warning"],
+    ["Idle · knowledge-harvester · may still run", "idle", "warning"],
   ]);
 });
 
@@ -279,9 +283,9 @@ test("a stopped agent on its open thread: that a message here starts it outside 
   await new Promise((resolve) => setTimeout(resolve, 20)); // (time for a time to be drawn, if one were read)
   expect(words(slot)).toEqual(["Stopped", "A message here starts it outside OATS."]);
   expect(calls(slot, "panelEvents")).toEqual([]); // when it stopped is the instance panel's fact: the line reads no events
-  // The line warns: the state's mark and the sentence are in the warning tone.
+  // The SENTENCE warns, in the warning tone. The MARK is the state's own grey, the one colour of this agent's dot: the sidebar's row draws the same (the lead's P9).
   expect(within(slot.getByTestId("oats-status-line")).getAllByTestId("oats-status-part").map((part) => part.getAttribute("data-tone"))).toEqual(["warning"]);
-  expect(within(slot.getByTestId("oats-status-line")).getByTestId("oats-state").getAttribute("data-tone")).toBe("warning");
+  expect(within(slot.getByTestId("oats-status-line")).getByTestId("oats-state").getAttribute("data-tone")).toBeNull();
   expect(acts(slot)).toEqual(["Start…"]);
   expect(slot.queryByTestId("oats-outside-warning")).toBeNull();
 });
@@ -330,6 +334,8 @@ test("what a row draws in the state's place (rowWords): a lost session reads \"L
   // A lost session whose thread bb archived, or deleted: its row's reason is where the thread is, in the warning tone
   // (that is what needs a person: its process may still run), so it reads "Stopped" and that reason, never "Lost".
   expect(rowWords("Stopped", "stopped", "archived in bb")).toEqual({ state: "Stopped", reason: "archived in bb", title: whole("Stopped", "archived in bb") });
+  // "may still run" stays "Stopped" (no word of its own in the state's place), and its title says the whole sentence.
+  expect(rowWords("Stopped", "stopped", "may still run")).toEqual({ state: "Stopped", reason: "may still run", title: whole("Stopped", "Archived in bb while running: it may still run.") });
   expect(rowWords("Stopped", "stopped", "deleted in bb").state).toBe("Stopped");
   // Nothing else gets a word of its own in the state's place: not another reason, and not "session lost" after another state.
   expect(rowWords("Idle", "idle", "not loaded")).toEqual({ state: "Idle", reason: "not loaded", title: whole("Idle", "not loaded") });
@@ -355,11 +361,11 @@ test("a lost session's ROW reads \"Lost\" on bb and on tmux, side by side, and i
   expect(markOf(onTmux(slot))).toEqual(["stopped", null]);
   expect(markOf(slot.getAllByTestId("oats-agent-row").find((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")!)).toEqual(["stopped", null]);
   resetApp();
-  // The bb agent's line: the reason alone; no sentence, no time (the kernel records none of the loss), no cause, no promise.
+  // The bb agent's line: the reason, then that a message is the way on; no Start on the line, no time (the kernel records none of the loss), no cause, no promise.
   const bbLine = await line("thr_digest", { rpc: handlers(noEvents, lostRows), sidebarThreads: sidebarThreads() });
   await bbLine.findByTestId("oats-identity-row");
-  await waitFor(() => expect(words(bbLine)).toEqual(["Stopped", "session lost"]));
-  expect(acts(bbLine)).toEqual(["Start…"]);
+  await waitFor(() => expect(words(bbLine)).toEqual(["Stopped", "session lost", "message to continue"]));
+  expect(acts(bbLine)).toEqual([]);
   expect(bbLine.getByTestId("oats-identity-row").textContent).not.toMatch(/Nobody stopped|To carry on|Start begins/);
   resetApp();
   // The tmux agent's page: the reason on its header's state line, and no sentence (what Start does is its dialog's one line; when it started is its Session's); the header's own Start, and no Restart: nothing runs.
@@ -376,6 +382,14 @@ test("a lost session's ROW reads \"Lost\" on bb and on tmux, side by side, and i
   const stopped = await sidebar({ rpc: handlers({}, rows({ running: false, runtimeState: "shell", sessionEnd: "stopped" })), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(rowFacts(onTmux(stopped.slot))).toBe("Stopped · oats-developer · tmux"));
   expect(markOf(onTmux(stopped.slot))).toEqual(["stopped", null]);
+});
+
+test("an agent that is not loaded, on its own thread at rest: \"Idle · not loaded · message to continue\", and no Start on the line", async () => {
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "harvest-knowledge-helper" ? { ...agent, running: false, runtimeState: "unknown", waiting: null } : agent));
+  const slot = await line("thr_harvest", { rpc: handlers({}, agents), sidebarThreads: sidebarThreads() });
+  await slot.findByTestId("oats-identity-row");
+  await waitFor(() => expect(words(slot)).toEqual(["Idle", "not loaded", "message to continue"]));
+  expect(acts(slot)).toEqual([]);
 });
 
 test("an agent that is not loaded, on a thread bb says works (a turn runs): the row and the line say \"Working\", with no \"not loaded\" and no Start", async () => {
@@ -536,7 +550,7 @@ test("while no roster is read the lifecycle offers no act: the block of an agent
   // The panel holds the agent it showed while the roster is not read, and its header's `AgentActs` then draws
   // nothing. The block is drawn with what the panel gives it then (`held`: true once the read has FAILED, false
   // while it is still being read), beside the header's own acts.
-  const { OutsideAgent } = await import("../../app/outside");
+  const { OutsideAgent, OutsideAgentDetails } = await import("../../app/outside");
   const { AgentActs } = await import("../../app/lifecycle");
   const report = (backend: string) => ({ ...REPORT, backend });
   const drawn = async (threads: RenderSlotOptions<Contract>["sidebarThreads"], held: boolean, backend = "bb") => {
@@ -550,6 +564,10 @@ test("while no roster is read the lifecycle offers no act: the block of an agent
             <>
               <div data-testid="header-acts">
                 <AgentActs instance={DIGEST} />
+              </div>
+              {/* (As the panel's header has it: the report's Details under the state it explains.) */}
+              <div data-testid="header-details">
+                <OutsideAgentDetails agent={agent} roster={{ nodeByInstance: new Map(), whereOf: () => "unknown" }} />
               </div>
               <OutsideAgent agent={agent} roster={{ nodeByInstance: new Map(), whereOf: () => "unknown" }} held={held} />
             </>
@@ -583,22 +601,23 @@ test("while no roster is read the lifecycle offers no act: the block of an agent
   expect(asked()).toEqual({ verb: "stop", instance: DIGEST });
   loading.unmount();
   resetApp();
-  // The roster read: the header has them, and the notice draws none.
+  // The roster read: the header has them, and this feature draws none: no block under the tabs at all (its Details is in the header).
   const read = await drawn(sidebarThreads(), false);
   await waitFor(() => expect(actsIn(read.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
-  expect(actsIn(read.getByTestId("oats-outside-agent-block"))).toEqual([]);
+  expect(read.queryByTestId("oats-outside-agent-block")).toBeNull();
+  expect(within(read.getByTestId("header-details")).getByTestId("oats-outside-details")).toBeTruthy();
   read.unmount();
   resetApp();
   // Act by act: an agent on another session provider has no Start of the lifecycle's. The header has Stop, so the
   // notice draws none; and it draws no Start, which the lifecycle does not offer for it. No act is there twice.
   const other = await drawn(sidebarThreads(), false, "other");
   await waitFor(() => expect(actsIn(other.getByTestId("header-acts"))).toEqual(["Stop…", "Retire…"]));
-  expect(actsIn(other.getByTestId("oats-outside-agent-block"))).toEqual([]);
-  // No box and no title; under Details, for it: a sentence that does not say to start it (then the kernel's own).
-  expect(other.getByTestId("oats-outside-agent-block").querySelector("h3")).toBeNull();
-  expect(within(other.getByTestId("oats-outside-agent-block")).queryByTestId("oats-notice")).toBeNull();
-  const sentenceOf = (block: HTMLElement) => block.querySelector('[data-testid="oats-outside-details"] p')!.textContent;
-  expect(sentenceOf(other.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
+  expect(other.queryByTestId("oats-outside-agent-block")).toBeNull();
+  // No box and no title; under Details (in the header, under the state), for it: a sentence that does not say to start it (then the kernel's own).
+  expect(other.getByTestId("header-details").querySelector("h3")).toBeNull();
+  expect(within(other.getByTestId("header-details")).queryByTestId("oats-notice")).toBeNull();
+  const sentenceOf = (place: HTMLElement) => place.querySelector('[data-testid="oats-outside-details"] p')!.textContent;
+  expect(sentenceOf(other.getByTestId("header-details"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
   other.unmount();
   resetApp();
   // The same agent with the read failed: the header has none, so the notice has its own Stop, held (off), and still no Start.
@@ -606,26 +625,29 @@ test("while no roster is read the lifecycle offers no act: the block of an agent
   const otherBlock = await otherFailed.findByTestId("oats-outside-agent-block");
   expect(actsIn(otherFailed.getByTestId("header-acts"))).toEqual([]);
   expect(buttons(otherBlock)).toEqual([["Stop…", true, ""]]);
-  expect(sentenceOf(otherBlock)).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
+  // The block holds the act alone: Details is in the header, once.
+  expect(otherBlock.querySelector("details")).toBeNull();
+  expect(sentenceOf(otherFailed.getByTestId("header-details"))).toBe("Someone sent it a message. Stop it, so that it is stopped as OATS recorded it.");
   otherFailed.unmount();
   resetApp();
   // An agent on bb has both in its header (the cases above), and its Details says to stop it or to start it from OATS.
   const onBb = await drawn(sidebarThreads(), false);
   await waitFor(() => expect(actsIn(onBb.getByTestId("header-acts"))).toEqual(["Stop…", "Start…", "Retire…"]));
-  expect(sentenceOf(onBb.getByTestId("oats-outside-agent-block"))).toBe("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.");
-  expect(onBb.getByTestId("oats-outside-agent-block").textContent).not.toMatch(/stops the harness|in a new conversation|but OATS recorded it as stopped/);
+  expect(sentenceOf(onBb.getByTestId("header-details"))).toBe("Someone sent it a message in bb. Stop, then Start.");
+  expect(onBb.getByTestId("header-details").textContent).not.toMatch(/stops the harness|in a new conversation|but OATS recorded it as stopped/);
 });
 
 test("the panel's header of an agent on its thread carries the kernel's report, and nothing else of this feature's", async () => {
   const reported = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped", outsideOats: REPORT } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(reported).kind).toBe("outside"));
-  // The header has the lifecycle's acts; under it the block is ONE fold, Details, with no box, no title and no second button.
-  expect(header(reported)).toMatchObject({ state: "Running outside OATS", sentence: null, acts: [], headed: ["Stop…", "Start…", "Retire…"] });
-  const block = header(reported).block!;
-  expect(within(block).queryByTestId("oats-notice")).toBeNull();
-  expect(block.querySelector("h3")).toBeNull();
-  expect(block.querySelectorAll("details")).toHaveLength(1);
-  expect(Array.from(within(block).getByTestId("oats-outside-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again.", `running-outside-oats: ${MESSAGE}`]);
+  // The header has the lifecycle's acts, and UNDER ITS STATE the ONE fold, Details (the state it explains is there): no box, no title, no second button; and nothing of it under the tabs.
+  expect(header(reported)).toMatchObject({ state: "Running outside OATS", sentence: null, acts: [], headed: ["Stop…", "Start…", "Retire…"], block: null });
+  const state = within(header(reported).head).getByTestId("oats-panel-state");
+  expect(within(state).queryByTestId("oats-notice")).toBeNull();
+  expect(state.querySelector("h3")).toBeNull();
+  expect(state.querySelectorAll("details")).toHaveLength(1);
+  expect(reported.getByTestId("oats-agent-page").querySelectorAll('[data-testid="oats-outside-details"]')).toHaveLength(1);
+  expect(Array.from(within(state).getByTestId("oats-outside-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["Someone sent it a message in bb. Stop, then Start.", `running-outside-oats: ${MESSAGE}`]);
   resetApp();
   const plain = await agentPage(DIGEST, { rpc: facts({ [DIGEST]: { sessionEnd: "stopped" } }), sidebarThreads: sidebarThreads() });
   await waitFor(() => expect(header(plain)).toMatchObject({ state: "Stopped" })); // the page is drawn, in its state

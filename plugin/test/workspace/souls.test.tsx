@@ -185,10 +185,64 @@ test("a failed read's notice stays while the souls are read again: no \"Reading�
   expect(slot.queryByTestId("oats-loading")).toBeNull();
   expect(slot.getByRole("alert").querySelector("h3")!.textContent).toBe("OATS could not be read");
   expect(within(slot.getByRole("alert")).getByTestId("oats-notice-details").textContent).toContain("E_OATS_TIMEOUT");
+  // Retry is off while that read is on its way: a press is seen, and a second press asks nothing more.
+  expect((slot.getByTestId("oats-read-retry") as HTMLButtonElement).disabled).toBe(true);
   mode = "answer";
   release();
   expect((await slot.findAllByTestId("oats-soul-row")).length).toBeGreaterThan(0);
   expect(slot.queryByRole("alert")).toBeNull();
+});
+
+test("Retry pressed on a failed read: the notice stays with Retry off until the read answers; a read that fails again says its new message, Retry on", async () => {
+  let message = "E_OATS_TIMEOUT: oats souls did not answer in 20 s";
+  let release: (() => void) | null = null;
+  let hold = false;
+  const slot = await souls("", {
+    souls: async () => {
+      if (hold) await new Promise<void>((resolve) => (release = resolve));
+      throw new Error(message);
+    },
+  });
+  const retry = () => slot.getByTestId("oats-read-retry") as HTMLButtonElement;
+  await slot.findByTestId("oats-read-retry");
+  expect(retry().disabled).toBe(false);
+  hold = true;
+  message = "E_WORKSPACE_INVALID: oats-workspace.yaml: unknown key";
+  fireEvent.click(retry());
+  await waitFor(() => expect(retry().disabled).toBe(true));
+  expect(slot.queryByTestId("oats-loading")).toBeNull();
+  expect(within(slot.getByRole("alert")).getByTestId("oats-notice-details").textContent).toContain("E_OATS_TIMEOUT"); // what the last read said
+  await waitFor(() => expect(release).not.toBeNull());
+  act(() => release!());
+  await waitFor(() => expect(within(slot.getByRole("alert")).getByTestId("oats-notice-details").textContent).toContain("E_WORKSPACE_INVALID"));
+  expect(retry().disabled).toBe(false);
+});
+
+// Only a notice that was DRAWN is kept. While OATS cannot be read the roster's ONE notice stands and the tab draws none
+// of its own: when the roster is readable again before the tab's read has answered, the tab says "Reading…", and no
+// notice appears, new, with an old message.
+test("under the roster's notice a tab's failed read keeps no notice: when the roster is read again first, the tab says \"Reading…\" until its own read answers", async () => {
+  let down = true;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const slot = await souls("", {
+    snapshot: () => (down ? failed(null)() : fixtureSnapshot()),
+    souls: async () => {
+      if (down) throw new Error("oats was not found on falcon");
+      await held;
+      return handlers().souls(null);
+    },
+  });
+  await slot.findByTestId("oats-unreadable");
+  await waitFor(() => expect(rpcOf(slot, "souls").length).toBeGreaterThan(0));
+  expect(slot.queryByTestId("oats-read-retry")).toBeNull(); // one notice: the roster's
+  down = false;
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.000Z" }));
+  await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).toBeNull()); // the roster is read again; the souls are still on their way
+  expect(slot.queryByRole("alert")).toBeNull();
+  expect(slot.getByTestId("oats-loading").textContent).toBe("Reading…");
+  release();
+  expect((await slot.findAllByTestId("oats-soul-row")).length).toBeGreaterThan(0);
 });
 
 // ---- a soul's page ----

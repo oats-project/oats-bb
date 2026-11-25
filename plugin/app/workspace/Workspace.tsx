@@ -97,15 +97,19 @@ export function Before({ oats, read, roster = true }: { oats: Oats; read: { stat
   const unread = roster && (oats.phase === "failed" || (oats.phase === "ready" && oats.stale !== null));
   // A read that failed is read again with every roster read, and on Retry. While that read is on its way the notice
   // STAYS, with what the last read said: it does not give way to "Reading…" and come back (a notice that blinks).
+  // Only a notice that was DRAWN is kept: under the roster's own notice the tab draws none, so none appears, new and
+  // with an old message, in the moment the roster is readable again and the tab's read is still on its way.
   const failed = useRef<string | null>(null);
-  if (read.status === "error") failed.current = read.error ?? "";
-  else if (read.data !== undefined) failed.current = null;
+  if (unread || read.data !== undefined) failed.current = null;
+  if (read.status === "error" && !unread) failed.current = read.error ?? "";
   const error = read.status === "error" ? read.error : read.data === undefined ? failed.current : null;
+  // The failed read is on its way again (a roster read, or Retry pressed): Retry is off until it answers, so a press is seen.
+  const again = read.status === "loading" && error !== null;
   return (
     <>
       {roster ? <RosterNotice oats={oats} /> : null}
       {error !== null && !unread ? (
-        <Notice title="OATS could not be read" tone="error" details={error} actions={<Button data-testid="oats-read-retry" onClick={read.retry}>Retry</Button>} />
+        <Notice title="OATS could not be read" tone="error" details={error} actions={<Button data-testid="oats-read-retry" disabled={again} onClick={read.retry}>Retry</Button>} />
       ) : read.data === undefined && read.status === "loading" ? (
         <Loading>Reading…</Loading>
       ) : null}

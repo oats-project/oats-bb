@@ -158,8 +158,8 @@ export default [
         await page.shot(`workspace-${viewport.name}-souls-failed`, { targets: true });
         // Retry reads it again: the rows are back.
         setVerb("souls", null);
-        // (The lists are read again with every roster read too: the notice gives way to "Reading…" for that moment, so the press waits for the button, and is not needed once the rows are back.)
-        await page.until(`(() => { if (document.querySelector(${q("oats-soul-row")})) return "rows"; const retry = document.querySelector(${q("oats-read-retry")}); if (!retry) return ""; retry.click(); return "pressed"; })()`, 20);
+        // (The lists are read again with every roster read too: Retry is off for that moment, so the press waits for the button to be on, and is not needed once the rows are back.)
+        await page.until(`(() => { if (document.querySelector(${q("oats-soul-row")})) return "rows"; const retry = document.querySelector(${q("oats-read-retry")}); if (!retry || retry.disabled) return ""; retry.click(); return "pressed"; })()`, 20);
         check(Boolean(await page.until(visible(testId("oats-soul-row")), 30)), `${at} Retry reads the souls again: the rows are drawn`, await page.evaluate(face));
         // While it is read: "Reading…" in the rows' place.
         setVerb("souls", derived("souls.json", undefined, { sleepMs: 8000 }));

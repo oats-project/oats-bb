@@ -10,9 +10,16 @@
 // EVERY WORD OF A BOARD IS THE AGENT'S: plain text through the display filter (`shown`), never
 // markup; an address is text until a person presses it, and opens outside bb only on a second
 // press.
-import { useBbNavigate, experimental_InfoList as InfoList, experimental_InfoListRow as InfoListRow, experimental_InfoSection as InfoSection } from "@get-bb/plugin-sdk/app";
+import { useBbNavigate, useRpc, useSdk, experimental_InfoList as InfoList, experimental_InfoListRow as InfoListRow, experimental_InfoSection as InfoSection } from "@get-bb/plugin-sdk/app";
 import { useEffect, useRef, useState } from "react";
-import { factsView, FACTS_SHOWN, questionOccurrence, sparkValues, turnQuestion, type Board as BoardData, type BoardDetail, type BoardFact, type BoardQuestion } from "../../model/board";
+import type { rpcContract } from "../../contract";
+import { answerText, boardData, dialogOpen, factsView, FACTS_SHOWN, questionOccurrence, sparkValues, turnQuestion, type Board as BoardData, type BoardClaim, type BoardFact, type BoardQuestion } from "../../model/board";
+import { SENT } from "../home/home-words";
+import { guarded, mayWrite, sendText, type Target } from "../home/send";
+import { useOats } from "../oats";
+import { readingNow, useActed } from "../roster/reading";
+import { errorMessage } from "../store";
+import { noteSent, useSent } from "./sent";
 import { shown, shownBlock } from "../../model/text";
 import { useNow } from "../roster/now";
 import { Button } from "../ui";
@@ -161,7 +168,106 @@ function Context({ asked, detail }: { asked: BoardQuestion; detail: DetailRead }
   );
 }
 
-function Questions({ board, detail, now }: { board: BoardData; detail: DetailRead; now: number }) {
+/**
+ * How an option of a question is ANSWERED, for an agent on a bb thread: the press sends
+ * `<id>: <option>` to its thread, as a person's own message (the kernel's form: "answers arrive
+ * typed as `<id>: <text>`"), through the plugin's one guarded send. Null where it is not offered:
+ * an agent that is not on a listed bb thread (one on tmux: its options stay text), one that may
+ * not be written to now (it does not run; the roster is the last one read, or reads "Reading…"),
+ * a thread on which bb holds a request of its own (answer that first, in its card), and an agent
+ * that waits on an approval of its harness (a message then would answer that).
+ */
+type Answering = { target: Target; threadId: string } | null;
+
+function useAnswering(instance: string, claim: BoardClaim): Answering {
+  const oats = useOats();
+  useActed();
+  if (oats.phase !== "ready") return null;
+  const node = oats.nodeByInstance.get(instance);
+  if (node === undefined || node.agent.backend !== "bb") return null;
+  const target = { agent: node.agent, thread: node.thread, held: oats.stale !== null || readingNow(oats, instance) };
+  if (!mayWrite(target) || node.thread.hasPendingInteraction || dialogOpen(claim)) return null;
+  return { target, threadId: node.thread.id };
+}
+
+/** One question's options: buttons where an answer may be sent, text where not; "Sent." beside the one sent, and then all off for that occurrence. */
+function Options({ instance, asked, answering }: { instance: string; asked: BoardQuestion; answering: Answering }) {
+  const sdk = useSdk();
+  const rpc = useRpc<typeof rpcContract>();
+  const occurrence = questionOccurrence(asked);
+  const sent = useSent(instance, occurrence);
+  const [busy, setBusy] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+  const going = useRef(false);
+  // What was refused was said of the question it was pressed on.
+  useEffect(() => setRefused(null), [occurrence]);
+  const press = (index: number) => {
+    const text = answerText(asked, index);
+    if (answering === null || text === null || sent !== null || going.current) return;
+    going.current = true;
+    setBusy(true);
+    setRefused(null);
+    guarded(rpc, answering.target, async () => {
+      // What is sent is built from the ROW AT THE PRESS, not from what this window holds: the
+      // question must still be open on the server's roster, the same occurrence, with that option.
+      const row = await rpc.call("board", { instance });
+      if (dialogOpen(row.claim)) throw new Error(BOARD.approvalFirst);
+      const now = boardData(row.board)?.questions.find((each) => questionOccurrence(each) === occurrence);
+      const said = now === undefined ? null : answerText(now, index);
+      if (said === null || said !== text) throw new Error(BOARD.noLongerAsked);
+      return sendText(sdk, answering.threadId, said);
+    }).then(
+      () => {
+        going.current = false;
+        noteSent(instance, occurrence, index);
+        setBusy(false);
+      },
+      (cause: unknown) => {
+        going.current = false;
+        setBusy(false);
+        setRefused(errorMessage(cause));
+      },
+    );
+  };
+  return (
+    <>
+      <ol data-testid="oats-board-options" className="m-0 flex min-w-0 list-none flex-col gap-1 p-0">
+        {asked.options.map((option, number) => {
+          // An option the display filter withholds, or that is not one line, is never sent: it stays text.
+          const sendable = answering !== null && answerText(asked, number) !== null;
+          return (
+            <li key={number} data-testid="oats-board-option" className="flex min-w-0 flex-wrap items-center gap-2">
+              {sendable ? (
+                <Button data-testid="oats-board-answer" disabled={busy || sent !== null} className="min-w-0 max-w-full justify-start gap-2 text-left" onClick={() => press(number)}>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">{number + 1}</span>
+                  <span className="min-w-0 whitespace-normal break-words">{shown(option)}</span>
+                </Button>
+              ) : (
+                <>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">{number + 1}</span>
+                  <span className="min-w-0 break-words">{shown(option)}</span>
+                </>
+              )}
+              {sent === number ? (
+                <span data-testid="oats-board-sent" role="status" className="shrink-0 text-xs text-muted-foreground">
+                  {SENT}
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+      {refused === null ? null : (
+        <p data-testid="oats-board-refused" role="alert" data-tone="warning" className="m-0 text-xs text-warning-text">
+          {shown(refused)}
+        </p>
+      )}
+    </>
+  );
+}
+
+function Questions({ instance, board, claim, detail, now }: { instance: string; board: BoardData; claim: BoardClaim; detail: DetailRead; now: number }) {
+  const answering = useAnswering(instance, claim);
   const [at, setAt] = useState<string | null>(null);
   const zone = useRef<HTMLElement>(null);
   const total = board.questions.length;
@@ -209,14 +315,7 @@ function Questions({ board, detail, now }: { board: BoardData; detail: DetailRea
       <p data-testid="oats-board-question" className="m-0 min-w-0 break-words font-medium">
         {shown(asked.question)}
       </p>
-      <ol data-testid="oats-board-options" className="m-0 flex min-w-0 list-none flex-col gap-1 p-0">
-        {asked.options.map((option, number) => (
-          <li key={number} data-testid="oats-board-option" className="flex min-w-0 gap-2">
-            <span className="shrink-0 tabular-nums text-muted-foreground">{number + 1}</span>
-            <span className="min-w-0 break-words">{shown(option)}</span>
-          </li>
-        ))}
-      </ol>
+      <Options key={questionOccurrence(asked)} instance={instance} asked={asked} answering={answering} />
       {asked.hasContext ? <Context asked={asked} detail={detail} /> : null}
     </section>
   );
@@ -266,7 +365,7 @@ export function Board({ instance }: { instance: string }) {
               {BOARD.unreadable}
             </Quiet>
           ) : null}
-          <Questions board={board} detail={detail} now={now} />
+          <Questions instance={instance} board={board} claim={read.status === "ready" ? read.claim : null} detail={detail} now={now} />
           <Facts instance={instance} board={board} detail={detail} now={now} />
           {board.dropped > 0 ? <Quiet testId="oats-board-dropped">{droppedSaid(board.dropped)}</Quiet> : null}
         </>

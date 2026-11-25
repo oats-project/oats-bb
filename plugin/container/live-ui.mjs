@@ -19,7 +19,7 @@
 // script makes one bb thread per fixture thread, by title, and has the fake print status.json
 // with those threads' real ids: the same rows, joined by the ids bb gave.
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -636,24 +636,47 @@ function busyStage() {
       {
         const project = listOf(bbJson("project", "list"), "projects")[0];
         const root = (project.sources ?? []).find((each) => each.path)?.path;
-        const said = [];
-        for (const instance of failedAtStart) {
-          const title = providerTitle(instance);
-          if (existing.some((thread) => thread.title === title)) continue;
-          said.push(`${instance}: ${tell("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "codex", "--title", title, "--prompt", "hello", "--json").slice(0, 200)}`);
-        }
-        if (said.length > 0) {
-          await sleep(15_000);
-          existing = list();
-          for (const instance of failedAtStart) {
-            const thread = existing.find((candidate) => candidate.title === providerTitle(instance));
-            const types = thread === undefined ? "no thread" : tell("thread", "log", thread.id, "--json").replace(/\s+/g, " ").match(/"type": ?"[a-z./-]+"/g)?.join(" ") ?? "(no events read)";
-            console.log(`NOTE BUSY failed at its start, ${instance}: bb says ${thread?.status ?? "absent"}; events: ${String(types).slice(0, 600)}`);
+        const wanted = failedAtStart.filter((instance) => !existing.some((thread) => thread.title === providerTitle(instance)));
+        if (wanted.length > 0) {
+          // No turn runs now (the fixtures' threads are idle, the chat is had): the harness is taken away for the spawns.
+          const claude = realpathSync(execFileSync("sh", ["-c", "command -v claude"], { encoding: "utf8" }).trim());
+          const said = [];
+          renameSync(claude, `${claude}.away`);
+          try {
+            for (const instance of wanted) said.push(`${instance}: ${tell("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", providerTitle(instance), "--prompt", "hello", "--json").replace(/\s+/g, " ").slice(0, 80)}`);
+            const eventsOf = (instance) => {
+              const thread = list().find((candidate) => candidate.title === providerTitle(instance));
+              return thread === undefined ? "no thread" : `${thread.status}; ${tell("thread", "log", thread.id, "--json").replace(/\s+/g, " ").match(/"type": ?"[a-z./-]+"/g)?.map((type) => type.replace(/"type": ?/, "")).join(" ") ?? "(no events read)"}`;
+            };
+            const deadline = Date.now() + 60_000;
+            while (Date.now() < deadline && !wanted.every((instance) => eventsOf(instance).includes("system/error"))) await sleep(2000);
+            for (const instance of wanted) console.log(`NOTE BUSY failed at its start, ${instance}: bb says ${eventsOf(instance).slice(0, 500)}`);
+            const failed = wanted.filter((instance) => /system\/error/.test(eventsOf(instance)) && !/turn\/started/.test(eventsOf(instance)));
+            check(failed.length === wanted.length, `BUSY the ${wanted.length} threads of the agents that failed at their start did fail at their start in bb: an error and never a turn`, said.join(" | "));
+          } finally {
+            renameSync(`${claude}.away`, claude);
           }
-          console.log(`NOTE BUSY the spawns said: ${said.join(" | ").slice(0, 900)}`);
+          existing = list();
         }
       }
       const failedMade = Date.now();
+      // The rows the kernel says run: a thread of its own each, whose first turn is held open (bb, not the kernel, says
+      // that an agent on a thread works). (Not the busy chat's: a held turn would add a message to its conversation,
+      // and it asks: the screen says so whatever bb says.)
+      const working = onBb.filter((row) => row.running === true && row.outsideOats === undefined && row.instance !== chat.agent);
+      mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
+      writeFileSync(BUSY_HOLD_FILE, "");
+      {
+        const project = listOf(bbJson("project", "list"), "projects")[0];
+        const root = (project.sources ?? []).find((each) => each.path)?.path;
+        for (const row of working) {
+          const title = providerTitle(row.instance);
+          if (!existing.some((thread) => thread.title === title)) bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", title, "--prompt", `hello MOCK-HOLD:${BUSY_HOLD}`, "--json");
+        }
+        existing = list();
+      }
+      const heldMade = Date.now();
+      // Every other one: an idle fork of a healthy fixture thread (no turn is run, no harness started).
       for (const row of onBb) {
         const title = providerTitle(row.instance);
         if (!existing.some((thread) => thread.title === title)) bb("thread", "fork", source.id, "--title", title);
@@ -672,23 +695,12 @@ function busyStage() {
         away.push(thread.id);
       }
       const forked = Date.now();
-      // The rows the kernel says run: a turn held open on each, in batches (a harness starts for each one told).
-      // (Not the busy chat's: a held turn would add a message to its conversation, and it asks: the screen says so whatever bb says.)
-      const working = onBb.filter((row) => row.running === true && row.outsideOats === undefined && row.instance !== chat.agent);
-      mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
-      writeFileSync(BUSY_HOLD_FILE, "");
-      const BATCH = 7;
-      const took = [];
-      for (let from = 0; from < working.length; from += BATCH) {
-        const batch = working.slice(from, from + BATCH).map((row) => byInstance.get(row.instance).id);
-        const told = Date.now();
-        for (const id of batch) bb("thread", "tell", id, `carry on MOCK-HOLD:${BUSY_HOLD}`);
+      // The held turns are WAITED for: bb shows each of those threads active.
+      {
         const deadline = Date.now() + 180_000;
-        let active = 0;
-        while (Date.now() < deadline && (active = batch.filter((id) => statusNow(id) === "active").length) < batch.length) await sleep(2000);
-        took.push(`${active} of ${batch.length} active after ${Math.round((Date.now() - told) / 1000)} s`);
+        while (Date.now() < deadline && working.some((row) => statusNow(byInstance.get(row.instance).id) !== "active")) await sleep(2000);
       }
-      console.log(`NOTE BUSY the held turns, by batch: ${took.join("; ")}`);
+      const held = Date.now();
       const all = Object.fromEntries(working.map((row) => [row.instance, statusNow(byInstance.get(row.instance).id)]));
       const idle = working.filter((row) => all[row.instance] !== "active");
       check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${working.length} busy agents that work`, idle.map((row) => `${row.instance}: ${all[row.instance]}`).join(" | "));
@@ -707,7 +719,7 @@ function busyStage() {
       });
       const total = rowsOf(status).length;
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === total, 60);
-      console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; ${failedAtStart.length} threads failed at their start in ${Math.round((failedMade - chatted) / 1000)} s; the other bb threads made as idle forks in ${Math.round((forked - failedMade) / 1000)} s; ${working.length} turns held open in ${Math.round((Date.now() - forked) / 1000)} s; ${Math.round((Date.now() - started) / 1000)} s in all`);
+      console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; ${failedAtStart.length} threads failed at their start in ${Math.round((failedMade - chatted) / 1000)} s; ${working.length} threads spawned with a held turn in ${Math.round((heldMade - failedMade) / 1000)} s; the other bb threads made as idle forks in ${Math.round((forked - heldMade) / 1000)} s; the held turns all active after ${Math.round((held - forked) / 1000)} more s; ${Math.round((Date.now() - started) / 1000)} s in all`);
     },
     leave: async () => {
       // The held turns are answered, and every thread this stage made is archived: no later stage sees one.

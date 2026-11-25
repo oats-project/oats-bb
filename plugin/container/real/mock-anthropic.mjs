@@ -16,8 +16,8 @@
 // The request that brings the tool's result back has that result as its last message, and is
 // answered with the one line of text.
 // A long answer (the busy workspace's chat: paragraphs, a list, a code block): where the file
-// <directory>/say.json is, `{ "<a person's message>": "<the answer>" }`, and the last message of
-// the conversation is a person's and holds one of its messages, the answer is that text instead of
+// <directory>/say.json is, `{ "<a person's message>": "<the answer>" }`, and what the
+// person said since the model last spoke holds one of its messages, the answer is that text instead of
 // the one line. The file is read at each request: whoever needs it writes it, and removes it.
 // Every request is one line of <directory>/requests.jsonl.
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
@@ -111,7 +111,9 @@ createServer((request, response) => {
     record({ event: question === null ? "answered" : "asked-a-question" });
 
     const id = `msg_mock${n}`;
-    const text = (tools.length === 0 ? null : sayTo(last)) ?? `MOCK-REPLY ${n}`;
+    // What the person said since the model last spoke (a harness may add a message of its own after the person's).
+    const since = messages.slice(messages.findLastIndex((message) => message.role === "assistant") + 1).filter((message) => message.role === "user").map((message) => textOf(message.content)).join("\n");
+    const text = (tools.length === 0 ? null : sayTo(since)) ?? `MOCK-REPLY ${n}`;
     const usage = { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
     const call = { type: "tool_use", id: `toolu_mock${n}`, name: ASK_TOOL };
     if (!asked.stream) {

@@ -9,6 +9,7 @@
 import { useSyncExternalStore } from "react";
 import type { KeyboardEvent } from "react";
 import type { AgentState } from "../../model/types";
+import { StateMark } from "../ui";
 import { STATE } from "../ui/words";
 
 /**
@@ -62,16 +63,6 @@ export function forgetOpened(): void {
  * pattern book's form for an off control, out of the tab order, and its name says that the agents
  * are shown, not an act. It is live again the moment another row is on screen.
  */
-/** The chevron's colour where a closed parent hides a row that carries a mark: that mark's own (the lead's T1: the mark is ON the chevron, never after the parent's state word, which says only the parent). */
-const INSIDE: Record<AgentState, string> = {
-  "needs-you": "text-warning-text",
-  outside: "text-warning-text",
-  error: "text-destructive-text",
-  unreachable: "text-destructive-text",
-  working: "text-success-foreground",
-  idle: "",
-  stopped: "",
-};
 
 export function FoldToggle({
   instance,
@@ -119,14 +110,19 @@ export function FoldToggle({
       {/* Two marks, never one turned: closed points RIGHT, open points DOWN (the off one is drawn as open). No rotation
           and no transition (a turned glyph was caught mid-turn, pointing left, and sat askew at a phone's width); one
           box of one size at every width, the mark centred in it. */}
+      {/* CLOSED over a hidden row that needs a person or warns (needs you; outside; failed; unreachable; a warning
+          reason): THAT ROW's OWN MARK, the disc the rows use, in its tone, stands IN THE CHEVRON's PLACE (the lead's
+          reader, P23: a small triangle in another colour is found by colour alone; a disc where every other parent has
+          a triangle is found without it). The button's name and title say it in words, as before. Over rows that only
+          work, idle or are stopped, and while open, the chevron is plain: no colour. */}
       <span
         aria-hidden="true"
         data-testid="oats-row-toggle-mark"
         data-open={open ? "true" : "false"}
         {...(hides === null ? {} : { "data-inside": hides, ...(insideTone === "warning" ? { "data-tone": "warning" } : {}) })}
-        className={["inline-flex size-4 items-center justify-center text-xs leading-none", ...(hides === null ? [] : ["font-bold", insideTone === "warning" ? "text-warning-text" : INSIDE[hides]])].filter((part) => part !== "").join(" ")}
+        className="inline-flex size-4 items-center justify-center text-xs leading-none"
       >
-        {open ? CHEVRON_OPEN : CHEVRON_CLOSED}
+        {hides === null ? open ? CHEVRON_OPEN : CHEVRON_CLOSED : <StateMark state={hides} tone={insideTone ?? undefined} hidden />}
       </span>
     </button>
   );

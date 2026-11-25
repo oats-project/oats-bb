@@ -64,7 +64,10 @@ describe("the rows drawn for a tree and the parents a person opened", () => {
 
 describe("the mark of a closed parent: the most urgent row its subtree hides, after its own state", () => {
   test.each<[string, Partial<Record<string, AgentState>>, string[], string[]]>([
-    ["every hidden row is quiet (working, idle, stopped, unreachable): no mark", { dev: "idle", reviewer: "stopped", helper: "unreachable" }, [], ["lead+", "solo", "boss+"]],
+    ["every hidden row is quiet (working, idle, stopped): no mark", { dev: "idle", reviewer: "stopped" }, [], ["lead+", "solo", "boss+"]],
+    // (The lead's reader, P23: an UNREACHABLE row behind a fold is one a person must find: it is marked. Its rank in the roster's ORDER stays with working, idle and stopped.)
+    ["a hidden row is unreachable: marked", { dev: "idle", reviewer: "stopped", helper: "unreachable" }, [], ["lead+!unreachable", "solo", "boss+"]],
+    ["a row that needs a person, or one of rank 1, comes before an unreachable one", { dev: "unreachable", helper: "error" }, [], ["lead+!error", "solo", "boss+"]],
     ["a hidden child needs a person", { helper: "needs-you" }, [], ["lead+!needs-you", "solo", "boss+"]],
     ["a hidden GRANDchild needs a person: the root says so, and so does its closed parent once the root is open", { reviewer: "needs-you" }, [], ["lead+!needs-you", "solo", "boss+"]],
     ["(the same, the root open)", { reviewer: "needs-you" }, ["lead"], ["lead-", "dev+!needs-you", "helper", "solo", "boss+"]],

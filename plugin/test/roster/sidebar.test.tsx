@@ -208,14 +208,18 @@ test("a closed parent whose subtree holds a row that needs a person carries that
   const chevron = () => toggles(slot)[0]!;
   const mark = () => chevron().querySelector<HTMLElement>('[data-testid="oats-row-toggle-mark"]')!;
   expect([mark().getAttribute("data-inside"), chevron().getAttribute("aria-label"), chevron().getAttribute("title")]).toEqual(["needs-you", "Show Redesign ui lead's agents: Needs input", "Show Redesign ui lead's agents: Needs input"]);
-  expect(mark().className).toContain("text-warning-text");
+  // IN THE CHEVRON's PLACE: that row's own mark, the disc the rows use (the lead's reader, P23: findable without colour:
+  // a disc where every other parent has a triangle). No triangle, and no colour on the toggle itself.
+  const disc = () => mark().querySelector("[data-mark]");
+  expect([disc()!.getAttribute("data-state"), disc()!.getAttribute("aria-hidden"), mark().textContent]).toEqual(["needs-you", "true", "!"]);
+  expect(mark().className).not.toMatch(/text-(warning|destructive|success)/);
   // The parent's line says only the parent: no mark after its state's word.
   expect(within(lead).queryByTestId("oats-row-inside")).toBeNull();
   expect(within(lead).getByTestId("oats-row-facts").querySelectorAll("[data-mark]")).toHaveLength(0);
   expect(within(lead).getByTestId("oats-row-facts").textContent).toBe("Working · oats-product-expert");
   // Opened: the row itself is in sight with its own mark, and the chevron carries none.
   fireEvent.click(chevron());
-  expect([mark().getAttribute("data-inside"), chevron().getAttribute("aria-label"), chevron().getAttribute("title"), mark().className.includes("text-warning-text")]).toEqual([null, "Hide Redesign ui lead's agents", null, false]);
+  expect([mark().getAttribute("data-inside"), chevron().getAttribute("aria-label"), chevron().getAttribute("title"), disc(), mark().textContent]).toEqual([null, "Hide Redesign ui lead's agents", null, null, "▾"]);
   expect(rowOn(slot, "thr_mockups")!.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("needs-you");
   cleanup();
   resetApp();

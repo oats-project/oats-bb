@@ -582,7 +582,13 @@ export function createCore(bb: BbPluginApi) {
             : `oats status is read again after the pause: asked for while a read was in flight, which ${lastStartedAtOnce ? "was itself read at once" : lastAnsweredInMs === null ? "gave no answer to count (it failed, or the settings changed under it)" : `answered in ${lastAnsweredInMs} ms, over ${FOLLOW_UP_WITHIN_MS} ms`}`,
         );
       }
-      if (!atOnce) await sleep(Math.max(0, lastEnd + Math.max(MIN_INTERVAL_MS, lastAnsweredInMs ?? 0) - Date.now()), lifetime.signal);
+      if (!atOnce) {
+        // The pause is counted from the last read's end by the clock, and is NEVER longer than the pause itself: after
+        // the machine's clock is set back, `lastEnd` lies ahead of it, and what was a pause of a second became a sleep
+        // of the whole step (an hour set back: an hour with no read).
+        const pause = Math.max(MIN_INTERVAL_MS, lastAnsweredInMs ?? 0);
+        await sleep(Math.min(pause, Math.max(0, lastEnd + pause - Date.now())), lifetime.signal);
+      }
       queued = null;
       lastStartedAtOnce = atOnce;
       const mine = read();
@@ -731,7 +737,9 @@ export function createCore(bb: BbPluginApi) {
   /** The snapshot for a client: the cached one, read again behind it when nobody refreshed it for a while. */
   async function clientSnapshot(): Promise<Snapshot> {
     clientSeenAt = Date.now();
-    if (cached && Date.now() - lastStart > POLL_MS) rereadSoon();
+    // (A last read that started "after now" is one from before the clock was set back: as stale as an old one.)
+    const since = Date.now() - lastStart;
+    if (cached && (since > POLL_MS || since < 0)) rereadSoon();
     return current();
   }
   /** Retry: the pages' answers are dropped and OATS is read again now. */

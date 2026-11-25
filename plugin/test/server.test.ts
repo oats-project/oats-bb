@@ -644,6 +644,31 @@ describe("the event path", () => {
     }
   }, 90_000);
 
+  // The clock is set back while NO read is in flight. The pause before a read was counted from the last read's end,
+  // which then lies ahead of the clock: the next read slept the whole step (an hour set back: an hour with no read).
+  // The pause is never longer than the pause; and a last read that started "after now" is as stale as an old one, so
+  // a client's snapshot asks for its poll's read at once.
+  // (No elapsed time is asserted: with either flaw no read is made while this test looks, and its loop ends without one.)
+  it("the clock is set back while no read is in flight: a client's snapshot still asks for the poll's read, and it is made within the pause", async () => {
+    const real = Date.now.bind(Date);
+    const status = async () => (await fake.calls()).filter((call) => call.verb === "status").length;
+    await rpc<Shown>("snapshot");
+    await new Promise((resolve) => setTimeout(resolve, 300)); // nothing is in flight
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => real() - 600_000); // ten minutes back
+    try {
+      const before = await status();
+      await rpc<Shown>("snapshot"); // the last read started "after now": the poll's read is asked for at once
+      let polled = false;
+      for (let tries = 0; tries < 400 && !polled; tries += 1) {
+        polled = (await status()) > before;
+        if (!polled) await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect(polled).toBe(true);
+    } finally {
+      clock.mockRestore();
+    }
+  }, 30_000);
+
   // The roster's `at` and an act's `endedAt` are whole milliseconds of this server's clock. A status read that STARTS in
   // the very millisecond the act ended is the read after the act, and the window reads a tie as "before" (`<=`), with no
   // later read owed: "Reading…" to its bound. The server stamps both from ONE strictly increasing stamp: the later

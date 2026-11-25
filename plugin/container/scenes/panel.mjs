@@ -39,11 +39,12 @@
 // a filled core slot. Readiness that is not ready is a recording
 // (test/fixtures/panel/readiness-home-not-ready.json).
 import { execFileSync } from "node:child_process";
-import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { testId, textOf, visible } from "../browser.mjs";
+import { atomicWrite } from "../files.mjs";
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "panel", "status-board.json");
 const FIXTURES = dirname(FIXTURE);
@@ -114,8 +115,7 @@ function setVerb(verb, behaviour) {
   else verbs[verb] = behaviour;
   // Written beside and moved into place: the fake reads this file at every `oats` it stands for, and
   // must never read half of it (a read that began during a plain write failed with no answer).
-  writeFileSync(`${FAKE_CONFIG}.next`, JSON.stringify({ ...config, verbs }));
-  renameSync(`${FAKE_CONFIG}.next`, FAKE_CONFIG);
+  atomicWrite(FAKE_CONFIG, JSON.stringify({ ...config, verbs }));
 }
 const setStatus = (behaviour) => setVerb("status", behaviour);
 /** A kernel refusal, as the kernel prints one. */

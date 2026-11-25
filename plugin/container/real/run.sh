@@ -103,6 +103,8 @@ run bash container/real/setup.sh
 if [ "$REAL_PI" = 1 ]; then
   run node container/real/pi/scenario.mjs
   run sh container/no-toolchain-fetch.sh
+  # Nor did pi fetch fd or ripgrep by itself in the run (../no-pi-tools-fetch.sh).
+  run sh container/no-pi-tools-fetch.sh
   exit
 fi
 run node container/real/scenario.mjs

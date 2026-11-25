@@ -22,6 +22,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, showSidebar, testId, textOf, visible } from "../browser.mjs";
 import { sameImages } from "../images.mjs";
+import { atomicWrite, completeLines } from "../files.mjs";
 import { Fixtures, sampleStatus } from "./fixtures.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -206,7 +207,7 @@ const taskOf = (name, text) => `${text}\nMOCK-HOLD:${name}\n`;
 /** The mock's log: one line per model request, with the holds its conversation names. */
 const modelRequests = () => {
   const file = join(REAL, "mock", "requests.jsonl");
-  return existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+  return existsSync(file) ? completeLines(file).map((line) => JSON.parse(line)) : []; // (the mock appends while this reads)
 };
 
 // ---- the plugin's RPC, and what the kernel printed for it
@@ -753,7 +754,8 @@ async function followedAtOnce(asInstance) {
   if (pair.after === null) note(`pacing: "never two reads at once in a row" is NOT SHOWN in this run: no read followed the pair in any try (the third change did not land in the second read): ${tries.join(" | ")}`);
   else check(pair.after >= PAUSE_MS, `pacing: never two reads at once in a row: the read after the pair started ${pair.after} ms after the pair's second read ended (the pause: ${PAUSE_MS} ms at least)`, tries.join(" | "));
 }
-const wrapper = (settings) => writeFileSync(WRAPPER_CONFIG, JSON.stringify({ ...JSON.parse(readFileSync(WRAPPER_CONFIG, "utf8")), delayMs: 0, delays: {}, ...settings }));
+// (Written whole and renamed into place: every wrapper the plugin starts reads it, at any moment.)
+const wrapper = (settings) => atomicWrite(WRAPPER_CONFIG, JSON.stringify({ ...JSON.parse(readFileSync(WRAPPER_CONFIG, "utf8")), delayMs: 0, delays: {}, ...settings }));
 
 say(`== the real run: bb ${bb("--version").trim()}, oats ${JSON.parse(oats("version", "--json").stdout).version}, ${existsSync(join(REAL, "refs.json")) ? readFileSync(join(REAL, "refs.json"), "utf8").trim() : "refs not recorded"}`);
 // A bb that was never opened shows its first-run guide in place of the app (live-ui.mjs).

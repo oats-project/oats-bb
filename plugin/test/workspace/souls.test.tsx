@@ -67,6 +67,14 @@ test("the New agent form says, in words and with no control, that the agent runs
   expect(line.compareDocumentPosition(slot.getByTestId("oats-spawn-form")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
+test("on a deployment with no bb session provider the soul page's form says neither \"full mode\" nor \"in bb\": its spawn names no mode, and is not a bb thread", async () => {
+  const slot = await souls("oats-developer", { spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, backends: ["tmux"], kernelHarnesses: [] }) });
+  await slot.findByTestId("oats-spawn-form");
+  await waitFor(() => expect(slot.queryByTestId("oats-spawn-mode")).toBeNull());
+  expect(slot.getByTestId("oats-spawn-submit").textContent).toBe("Spawn");
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/full mode|in bb/);
+});
+
 test("Preview shows what oats spawn --preview would do, and spawns nothing", async () => {
   const slot = await souls("oats-developer", {
     spawnPreview: () => ({

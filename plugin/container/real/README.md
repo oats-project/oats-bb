@@ -177,7 +177,7 @@ thread's own row says its agent's state at every width).
   in a directory. Its commits have fixed dates, so the same trees give the same commit ids.
 - **The deployment** (`oats onboard`): `settings.oats.bb` holds `trust: container` and the bb
   version, and there is **no launch configuration**: nothing on the host chooses bb's full mode.
-  The provider launches in full mode only, and the plugin asks for it on every spawn (`--yolo`),
+  The provider launches in full mode only, and the plugin asks for it on every spawn of a bb thread (`--yolo`),
   so the run shows that the plugin's Spawn needs no default of the host: its preview's decision
   and its spawn's answer have `yolo: true` and name no launch configuration. The agents the
   scenario makes on the command line (part B's children) are spawned with `--yolo` too. Start and
@@ -236,7 +236,7 @@ can launch a pi agent on bb. In plain words, on the machine that runs bb:
    `launch: { harness: pi, model: <provider>/<id> }`. A soul whose `launch:` names a Claude model
    and is spawned with the harness pi gets NO model from the kernel (the preview's
    `launch.effective.model` is `null`), and bb's pi then starts on its own default.
-6. Every spawn from the plugin already asks for bb's full mode (`--yolo`), which a pi launch
+6. Every spawn of a bb thread from the plugin already asks for bb's full mode (`--yolo`), which a pi launch
    needs.
 
 The provider's README ("pi") has the detail and the reasons; `oats bb doctor` in the deployment and

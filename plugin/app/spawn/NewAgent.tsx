@@ -162,6 +162,9 @@ function SpawnForm({ soul, onBb }: { soul: Soul; onBb: boolean }) {
 export function NewAgent({ soul }: { soul: Soul }) {
   // The line and "in bb" are true of a bb thread alone. On a deployment with no bb session provider this spawn names
   // no backend and no mode (the kernel decides): nothing says "full mode" or "in bb" there.
+  // KNOWN, and left (this short form goes away with the soul page's rebuild): until the harness read answers, the
+  // provider is taken to be there, so on such a deployment the line and "in bb" stand for that moment and then go.
+  // The other order would leave a bb thread's Spawn, for that moment, with nothing saying "no sandbox".
   const onBb = useHarnesses().provider;
   return (
     <>

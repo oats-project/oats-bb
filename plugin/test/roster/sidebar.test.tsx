@@ -291,9 +291,13 @@ test("a hidden row that runs outside OATS is counted by its own name only: besid
   const app = await loadApp();
   const slot = renderSlot<PluginThreadListProps, Contract>(app.threadLists[0]!, { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" }, { rpc: handlers({ snapshot: () => fixtureSnapshot(agents) }), sidebarThreads: { ...threads, threads: threads.threads.filter((thread) => thread.id !== "thr_harvest") }, sdk });
   await slot.findByTestId("oats-tree");
-  await waitFor(() => expect(toggles(slot)[0]!.getAttribute("aria-label")).toMatch(/^Show Redesign ui lead's agents: 1 (running outside OATS|deleted in bb)$/));
+  // Wait on the state asserted: the sibling WARNS only once bb has answered that its thread is gone. Open the parent,
+  // see the sibling's row say so, close it again; only then is the closed parent's name the one under test.
+  fireEvent.click(toggles(slot)[0]!);
+  await slot.findByText(/deleted in bb/);
+  fireEvent.click(toggles(slot)[0]!);
   // Whichever of the two stands first in the roster's order is the one the chevron speaks for: its count is ONE.
-  expect(toggles(slot)[0]!.getAttribute("aria-label")).not.toMatch(/: 2 /);
+  await waitFor(() => expect(toggles(slot)[0]!.getAttribute("aria-label")).toMatch(/^Show Redesign ui lead's agents: 1 (running outside OATS|deleted in bb)$/));
 });
 
 test("a hidden row that is GONE (the kernel no longer knows it) is neither counted nor toned by its closed parent: its state in this roster is from before it went", async () => {

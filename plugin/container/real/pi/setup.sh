@@ -33,23 +33,25 @@ fi
 OATS_PI_INTEGRITY=${OATS_PI_INTEGRITY:-}
 
 echo "== pi $PI_VERSION"
-# The install is given five minutes and tried again: a fetch from the registry was seen to stall for
-# an hour with nothing moving, and a run that waits on it says nothing until its job's limit.
-# The registry's tarball is fetched once, what npm says of it is kept (pi.json), its integrity is the
-# one asked for, and THAT FILE is what is installed (its dependencies come from the registry).
-for attempt in 1 2 3; do
-  [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] && break
-  if (cd "$REAL" && timeout 300 npm pack "@earendil-works/pi-coding-agent@$PI_VERSION" --json > "$OUT/pi.json"); then
-    PI_TARBALL=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[0].filename' "$OUT/pi.json")
-    PI_TARBALL_INTEGRITY=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[0].integrity' "$OUT/pi.json")
-    echo "pi tarball: @earendil-works/pi-coding-agent@$PI_VERSION, integrity $PI_TARBALL_INTEGRITY"
-    # A tarball that is not the one expected is not tried again: it fails the setup, loudly.
-    [ -z "$PI_INTEGRITY" ] || [ "$PI_TARBALL_INTEGRITY" = "$PI_INTEGRITY" ] || { echo "pi setup: the tarball of @earendil-works/pi-coding-agent@$PI_VERSION is not the one expected (PI_INTEGRITY $PI_INTEGRITY)" >&2; exit 1; }
-    timeout 300 npm install -g --no-audit --no-fund "$REAL/$PI_TARBALL" || echo "pi setup: the install of pi did not finish (attempt $attempt of 3)" >&2
-  else
-    echo "pi setup: the tarball of pi could not be fetched (attempt $attempt of 3)" >&2
-  fi
-done
+# pi comes from its committed lock (../../locks/pi, ../../locked-install.sh): its own tarball AND
+# every package under it, each at the version and with the integrity the lock names. Nothing is
+# resolved at run time: pi's tarball was pinned before, its tree was not, and a dependency npm did
+# not serve yet (published two minutes before) failed the check on main.
+PI_LOCK=$HERE/../../locks/pi/package-lock.json
+# What the lock says of pi's own tarball: kept (pi.json), and held against the version and the
+# integrity this run asks for. A lock that is not for them fails the setup, loudly, before anything
+# is installed: the lock is written again with `plugin/container/relock.sh pi` (../../locks/README.md).
+node -e '
+  const lock = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  const { version, resolved, integrity } = lock.packages["node_modules/@earendil-works/pi-coding-agent"];
+  console.log(JSON.stringify({ id: `@earendil-works/pi-coding-agent@${version}`, version, resolved, integrity, packages: Object.keys(lock.packages).length - 1 }));
+' "$PI_LOCK" > "$OUT/pi.json"
+PI_LOCKED_VERSION=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).version' "$OUT/pi.json")
+PI_LOCKED_INTEGRITY=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).integrity' "$OUT/pi.json")
+echo "pi tarball: @earendil-works/pi-coding-agent@$PI_LOCKED_VERSION, integrity $PI_LOCKED_INTEGRITY, and $(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).packages - 1' "$OUT/pi.json") packages under it, all from the lock"
+[ "$PI_LOCKED_VERSION" = "$PI_VERSION" ] || { echo "pi setup: the lock is for pi $PI_LOCKED_VERSION, and this run asks for $PI_VERSION (PI_VERSION): write the lock again, plugin/container/relock.sh pi" >&2; exit 1; }
+[ -z "$PI_INTEGRITY" ] || [ "$PI_LOCKED_INTEGRITY" = "$PI_INTEGRITY" ] || { echo "pi setup: the tarball of @earendil-works/pi-coding-agent@$PI_VERSION is not the one expected (PI_INTEGRITY $PI_INTEGRITY)" >&2; exit 1; }
+[ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] || sh "$HERE/../../locked-install.sh" pi
 [ "$(pi --version 2>/dev/null)" = "$PI_VERSION" ] || { echo "pi setup: pi $PI_VERSION could not be installed" >&2; exit 1; }
 
 echo "== the OATS bridge for pi, @awebai/oats-pi@$OATS_PI_VERSION, in bb's pi configuration ($PI_AGENT_DIR)"

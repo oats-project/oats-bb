@@ -210,7 +210,7 @@ export type Foldable<T> = { agent: Pick<Agent, "instance">; state: AgentState; c
  * "warning" where the hidden row is one the caller says warns (`insideOf`). `pinned`: it is open
  * because it is above the row on screen, whatever the person left: it cannot be closed now.
  */
-export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null; /** the hidden row `inside` is the state of: the caller names the chevron with that row's own words */ insideNode: T | null; /** how many hidden rows need a person: the toggle's name says the count */ insideAsks: number };
+export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null; /** the hidden row `inside` is the state of: the caller names the chevron with that row's own words */ insideNode: T | null; /** how many hidden rows ask */ insideAsks: number; /** the hidden rows of that row's kind: the toggle's name counts them */ insideKin: readonly T[] };
 
 /** The instances above one in the tree (its parent, its parent's parent, …), or none where it is a root or not in the tree. */
 export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance: string): Set<string> {
@@ -236,37 +236,37 @@ export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance
  * home lists under "Needs you"), one a person must look at with nobody asked (it failed; or it
  * WARNS: `warns`, the caller's word for a row whose own mark is drawn in the warning tone, which
  * the model cannot tell: a thread archived in bb while it ran), and one that cannot be reached.
- * Several inside, WHEREVER EACH STANDS: one that asks first, then one that runs outside OATS,
- * then one that failed or warns, then an unreachable one; among equals the first in the tree's
- * order. → that row's own state (and the row), "warning" as the tone where it warns and nobody
- * asks, and `asks`: how many hidden rows need a person. `{ state: null }` where every hidden row is
+ * Several inside, WHEREVER EACH STANDS: one that asks first, then one that failed or cannot be
+ * reached, then one that runs outside OATS or warns; among equals the first in the tree's
+ * order. → that row's own state (and the row), "warning" as the tone for a row of the third kind,
+ * and `asks`: how many hidden rows ASK (their state is needs-you). `{ state: null }` where every hidden row is
  * quiet and none warns. The parent's own state is never part of it: its own word and mark stay
  * its own. (The roster's ORDER, `RANK`, is another thing and is not touched by this.)
  */
-export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null; /** how many hidden rows need a person (they ask, or they run outside OATS: the home lists both under "Needs you") */ asks: number } {
+export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null; /** how many hidden rows ask (their state is needs-you): the model's own fact (the toggle's name counts `kin`, which is these rows when one that asks wins) */ asks: number; /** every hidden row of that row's KIND (those that ask; or those that failed or cannot be reached; or those that run outside OATS or warn), in the tree's order: the caller counts them in the toggle's name */ kin: T[] } {
   // The best so far, in a list of at most one (a local a closure assigns is not narrowed after it).
   const best: { state: AgentState; tone: "warning" | null; rank: number; node: T }[] = [];
   let asks = 0;
+  const kinds: Record<number, T[]> = {};
   const walk = (nodes: readonly T[]) => {
     for (const each of nodes) {
       const warned = warns(each);
-      // A row a person must find behind a closed parent: one that needs a person (rank 0), one of rank 1 (outside,
-      // failed, or one that warns), and an UNREACHABLE one (the reader's P23: its rank in the ORDER stays 2, with
-      // working, idle and stopped; behind a fold it is marked, after every row of rank 0 or 1).
-      // Among them a row that needs a PERSON comes first (one that asks, then one that runs outside OATS: the closed
-      // parent draws that row's own mark beside its chevron, and counts them); then one a person must look at with
-      // nobody asked (failed, or one that warns: the chevron takes the tone); then an unreachable one.
-      const rank = Math.min(RANK[each.state], warned ? 1 : 2);
-      const needs = each.state === "needs-you" || each.state === "outside";
+      // (An UNREACHABLE row's rank in the roster's ORDER stays 2, with working, idle and stopped; behind a fold a
+      // person must find it: there it is the failed row's equal.)
+      // WHICH hidden row the closed parent speaks for, wherever each stands: one that ASKS first (its disc beside the
+      // chevron, and the count); then one that FAILED or cannot be REACHED (the chevron in the failure's tone: a failed
+      // row is never hidden behind a milder one); then one that runs outside OATS, or WARNS (the warning tone).
+      const needs = each.state === "needs-you";
       if (needs) asks += 1;
-      const weight = each.state === "needs-you" ? 0 : each.state === "outside" ? 0.5 : rank < 2 ? 1 : each.state === "unreachable" ? 1.5 : 2;
-      if (weight < 2 && (best[0] === undefined || weight < best[0].rank)) best[0] = { state: each.state, tone: warned && !needs ? "warning" : null, rank: weight, node: each };
+      const weight = needs ? 0 : each.state === "error" || each.state === "unreachable" ? 1 : each.state === "outside" || warned ? 1.5 : 2;
+      if (weight < 2) (kinds[weight] ??= []).push(each);
+      if (weight < 2 && (best[0] === undefined || weight < best[0].rank)) best[0] = { state: each.state, tone: weight === 1.5 ? "warning" : null, rank: weight, node: each };
       walk(each.children);
     }
   };
   walk(node.children);
   const found = best[0];
-  return found === undefined ? { state: null, tone: null, node: null, asks } : { state: found.state, tone: found.tone, node: found.node, asks };
+  return found === undefined ? { state: null, tone: null, node: null, asks, kin: [] } : { state: found.state, tone: found.tone, node: found.node, asks, kin: kinds[found.rank] ?? [] };
 }
 
 /**
@@ -287,8 +287,8 @@ export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: Rea
       const parent = node.children.length > 0;
       const pinned = parent && above.has(node.agent.instance);
       const open = parent && (pinned || opened.has(node.agent.instance));
-      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null, node: null, asks: 0 };
-      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone, insideNode: inside.node, insideAsks: inside.asks });
+      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null, node: null, asks: 0, kin: [] };
+      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone, insideNode: inside.node, insideAsks: inside.asks, insideKin: inside.kin });
       if (open) walk(node.children);
     }
   };

@@ -968,6 +968,12 @@ ride on the roster's row (`hasBoard`, `boardAsks`: `true` or absent), from the k
 a card or a command needs no read of its own. The agent's own events between two status reads do
 not carry them: a row learns them at the next status read, seconds later.
 
+**With the other tabs.** The row is Board, Instance, Soul, Mail, each drawn only where the agent
+has it. The panel's memory of the tab it was left on stands under the board's one rule: a panel
+whose board asks opens on Board until a tab is chosen on it, also when the memory was left on
+Mail for another agent (Mail is never opened by memory); one whose board holds facts alone opens
+where the memory leads (`app/panel/Panel.tsx`, `tabOf` then `boardTabOf`).
+
 **The command.** bb takes a plugin's commands once, when it starts, with fixed titles: so the board
 has ONE, **Board**, with no shortcut and nothing per question. It is listed only on the thread of
 an agent that has a board (not on a plugin's page, and so not at the phone's width, where bb has

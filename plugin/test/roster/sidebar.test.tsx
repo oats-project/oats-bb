@@ -208,11 +208,14 @@ test("a closed parent whose subtree holds a row that needs a person carries that
   expect(lead.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("working");
   const chevron = () => toggles(slot)[0]!;
   const mark = () => chevron().querySelector<HTMLElement>('[data-testid="oats-row-toggle-mark"]')!;
-  expect([mark().getAttribute("data-inside"), chevron().getAttribute("aria-label"), chevron().getAttribute("title")]).toEqual(["needs-you", "Show Redesign ui lead's agents: Needs input", "Show Redesign ui lead's agents: Needs input"]);
-  // IN THE CHEVRON's PLACE: that row's own mark, the disc the rows use (the lead's reader, P23: findable without colour:
-  // a disc where every other parent has a triangle). No triangle, and no colour on the toggle itself.
-  const disc = () => mark().querySelector("[data-mark]");
-  expect([disc()!.getAttribute("data-state"), disc()!.getAttribute("aria-hidden"), mark().textContent]).toEqual(["needs-you", "true", "!"]);
+  expect([mark().getAttribute("data-inside"), chevron().getAttribute("aria-label"), chevron().getAttribute("title")]).toEqual(["needs-you", "Show Redesign ui lead's agents: 1 needs you", "Show Redesign ui lead's agents: 1 needs you"]);
+  // THE CHEVRON NEVER LEAVES (the lead's ruling after its reader's second look): it is what says the row opens. The
+  // hidden row's own mark, the needs-you disc, stands BESIDE it, after it, INSIDE THE SAME BUTTON (pressing either
+  // opens the row), before the parent's own dot: found without colour. The chevron itself has no colour here.
+  const disc = () => chevron().querySelector("[data-mark]");
+  expect(mark().textContent).toBe("▸");
+  expect([disc()!.getAttribute("data-state"), disc()!.textContent, disc()!.getAttribute("aria-hidden")]).toEqual(["needs-you", "!", "true"]);
+  expect(Array.from(chevron().children).map((child) => child.getAttribute("data-testid"))).toEqual(["oats-row-toggle-mark", "oats-row-toggle-inside"]); // the chevron, then the mark
   expect(mark().className).not.toMatch(/text-(warning|destructive|success)/);
   // The parent's line says only the parent: no mark after its state's word.
   expect(within(lead).queryByTestId("oats-row-inside")).toBeNull();
@@ -228,6 +231,36 @@ test("a closed parent whose subtree holds a row that needs a person carries that
   const quiet = await sidebar();
   await quiet.slot.findByTestId("oats-tree");
   expect([toggles(quiet.slot)[0]!.querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside"), toggles(quiet.slot)[0]!.getAttribute("aria-label")]).toEqual([null, "Show Redesign ui lead's agents"]);
+});
+
+// The lead's ruling, the other cases. A hidden row that FAILED or CANNOT BE REACHED, with nobody asked: NO second dot
+// (two dots side by side read as one more state of the parent, told apart by colour alone): the chevron itself takes
+// the tone, and the name says the row's state. A hidden row that runs OUTSIDE OATS needs a person (the home lists it
+// under "Needs you"): its own mark beside the chevron, counted. Two that ask: "2 need you". Pressing the disc opens the row.
+test.each([
+  ["failed", { runtimeState: "shell" }, { inside: "error", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: failed" }],
+  ["unreachable", { running: null, runtimeState: "unreachable" }, { inside: "unreachable", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: unreachable" }],
+] as const)("a closed parent over a hidden child that %s, nobody asked: the chevron takes the tone, no second dot", async (_what, child, want) => {
+  const agents = fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, ...child } : agent));
+  const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) });
+  await slot.findByTestId("oats-tree");
+  const chevron = toggles(slot)[0]!;
+  const mark = chevron.querySelector<HTMLElement>('[data-testid="oats-row-toggle-mark"]')!;
+  await waitFor(() => expect(mark.getAttribute("data-inside")).toBe(want.inside));
+  expect([mark.textContent, chevron.querySelectorAll("[data-mark]").length, chevron.getAttribute("aria-label"), chevron.getAttribute("title")]).toEqual(["▸", want.dots, want.name, want.name]);
+  expect(mark.className).toMatch(want.tone);
+});
+
+test("a closed parent over TWO hidden children that ask says \"2 need you\" in its name, with one disc beside its chevron; pressing the DISC opens the row", async () => {
+  const claim = { reason: "attention" as const, message: "Which one?", since: "2026-11-19T12:00:00.000Z" };
+  const agents = fixtureAgents().map((agent) => (agent.parent === "redesign-ui-lead" ? { ...agent, waiting: claim } : agent));
+  const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) });
+  await slot.findByTestId("oats-tree");
+  const chevron = () => toggles(slot)[0]!;
+  await waitFor(() => expect(chevron().getAttribute("aria-label")).toBe("Show Redesign ui lead's agents: 2 need you"));
+  expect(chevron().querySelectorAll("[data-mark]")).toHaveLength(1);
+  fireEvent.click(chevron().querySelector("[data-mark]")!); // the disc is part of the one button
+  expect([chevron().getAttribute("aria-expanded"), chevron().getAttribute("aria-label"), chevron().querySelectorAll("[data-mark]").length]).toEqual(["true", "Hide Redesign ui lead's agents", 0]);
 });
 
 // The mark a closed parent carries is computed from the roster on screen at every draw: nothing of it is kept from an

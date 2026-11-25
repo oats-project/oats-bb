@@ -202,7 +202,7 @@ export type Foldable<T> = { agent: Pick<Agent, "instance">; state: AgentState; c
  * "warning" where the hidden row is one the caller says warns (`insideOf`). `pinned`: it is open
  * because it is above the row on screen, whatever the person left: it cannot be closed now.
  */
-export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null };
+export type TreeRow<T> = { node: T; parent: boolean; open: boolean; pinned: boolean; inside: AgentState | null; insideTone: "warning" | null; /** the hidden row `inside` is the state of: the caller names the chevron with that row's own words */ insideNode: T | null };
 
 /** The instances above one in the tree (its parent, its parent's parent, …), or none where it is a root or not in the tree. */
 export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance: string): Set<string> {
@@ -232,20 +232,20 @@ export function ancestorsOf<T extends Foldable<T>>(roots: readonly T[], instance
  * tone where it is a row that warns; `{ state: null }` where every hidden row is quiet and none
  * warns. The parent's own state is never part of it: its own word and mark stay its own.
  */
-export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null } {
+export function insideOf<T extends Foldable<T>>(node: T, warns: (node: T) => boolean = () => false): { state: AgentState | null; tone: "warning" | null; /** that row */ node: T | null } {
   // The best so far, in a list of at most one (a local a closure assigns is not narrowed after it).
-  const best: { state: AgentState; tone: "warning" | null; rank: number }[] = [];
+  const best: { state: AgentState; tone: "warning" | null; rank: number; node: T }[] = [];
   const walk = (nodes: readonly T[]) => {
     for (const each of nodes) {
       const warned = warns(each);
       const rank = Math.min(RANK[each.state], warned ? 1 : 2);
-      if (rank < 2 && (best[0] === undefined || rank < best[0].rank)) best[0] = { state: each.state, tone: warned ? "warning" : null, rank };
+      if (rank < 2 && (best[0] === undefined || rank < best[0].rank)) best[0] = { state: each.state, tone: warned ? "warning" : null, rank, node: each };
       walk(each.children);
     }
   };
   walk(node.children);
   const found = best[0];
-  return found === undefined ? { state: null, tone: null } : { state: found.state, tone: found.tone };
+  return found === undefined ? { state: null, tone: null, node: null } : { state: found.state, tone: found.tone, node: found.node };
 }
 
 /**
@@ -266,8 +266,8 @@ export function treeRows<T extends Foldable<T>>(roots: readonly T[], opened: Rea
       const parent = node.children.length > 0;
       const pinned = parent && above.has(node.agent.instance);
       const open = parent && (pinned || opened.has(node.agent.instance));
-      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null };
-      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone });
+      const inside = parent && !open ? insideOf(node, warns) : { state: null, tone: null, node: null };
+      out.push({ node, parent, open, pinned, inside: inside.state, insideTone: inside.tone, insideNode: inside.node });
       if (open) walk(node.children);
     }
   };

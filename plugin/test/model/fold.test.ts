@@ -80,9 +80,11 @@ describe("the mark of a closed parent: the most urgent row its subtree hides, af
   });
 
   test("insideOf, alone: nothing for a leaf and for quiet children; a rank 0 or 1 state otherwise", () => {
-    expect(insideOf(row("a", "needs-you"))).toEqual({ state: null, tone: null });
-    expect(insideOf(row("a", "working", [row("b", "idle"), row("c", "stopped")]))).toEqual({ state: null, tone: null });
-    expect(insideOf(row("a", "working", [row("b", "idle", [row("c", "error")])]))).toEqual({ state: "error", tone: null });
+    expect(insideOf(row("a", "needs-you"))).toEqual({ state: null, tone: null, node: null });
+    expect(insideOf(row("a", "working", [row("b", "idle"), row("c", "stopped")]))).toEqual({ state: null, tone: null, node: null });
+    const failed = row("c", "error");
+    // (With the state: the row it is the state of, so that the caller can name the chevron with that row's own words.)
+    expect(insideOf(row("a", "working", [row("b", "idle", [failed])]))).toEqual({ state: "error", tone: null, node: failed });
   });
 
   // ONE principle: a closed parent carries a mark for any row inside it that itself carries one. A row whose own mark

@@ -81,6 +81,7 @@ export function FoldToggle({
   depth,
   inside = null,
   insideTone = null,
+  insideSays = null,
 }: {
   instance: string;
   /** the agent's name as words */ name: string;
@@ -91,12 +92,17 @@ export function FoldToggle({
   inside?: AgentState | null;
   /** "warning": that row's own mark is drawn in the warning tone. */
   insideTone?: "warning" | null;
+  /** That row's own words, as the row draws them ("Stopped · may still run"): the chevron's name over a row that WARNS. */
+  insideSays?: string | null;
 }) {
   // Only a CLOSED parent hides rows: open, each row carries its own mark.
   const hides = open ? null : inside;
   const says = pinned ? `${name}'s agents shown` : `${open ? "Hide" : "Show"} ${name}'s agents`;
-  // Named for a screen reader and a pointer with the state's own name ("Needs input"): a colour alone says nothing.
-  const label = hides === null ? says : `${says}: ${STATE[hides].name}`;
+  // Named for a screen reader and a pointer: a colour alone says nothing. Over a row that asks: the state's own name
+  // ("Needs input"). Over a row that WARNS, the tone is a colour too, and the state's name says nothing of the warning:
+  // the name says what that row itself says, its state's word and its reason ("Stopped · may still run"), so a screen
+  // reader hears what a sighted person reads once the row is shown (ruled 25 Nov 2026; no word of its own).
+  const label = hides === null ? says : `${says}: ${insideTone === "warning" && insideSays !== null && insideSays !== "" ? insideSays : STATE[hides].name}`;
   return (
     <button
       type="button"

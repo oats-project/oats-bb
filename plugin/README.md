@@ -140,7 +140,9 @@ stored. A closed parent's children are not in the page, so nothing of them takes
 closed parent's line says only the parent (its own state, mark and word). The mark of any row its
 subtree hides that itself carries one is ON ITS CHEVRON (the lead's T1: after the state's word it
 read as the parent's own): the chevron takes that mark's colour, and is named with the state's
-name for a screen reader and a pointer ("Show <Name>'s agents: Needs input"): a row that needs a
+name for a screen reader and a pointer ("Show <Name>'s agents: Needs input"; over a row that
+WARNS the name says what that row itself says, its state's word and its reason, as the row draws
+them: "Show <Name>'s agents: Stopped · archived in bb": the warning's tone is a colour): a row that needs a
 person, one a person must look at (it runs outside OATS, or failed), and one whose own mark is in
 the warning tone, in that tone (the outside feature's `rowWarns`: its thread archived in bb while it
 ran, its session lost with its thread archived, its thread deleted in bb; such an agent has no bb

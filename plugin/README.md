@@ -1212,9 +1212,11 @@ oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<c
   | `automationTest` (one that runs its source) | the test is ok, and its source's poll is ok or not named | `ok` |
   | `automationTest` (one that runs its source) | the test, or the poll, says not ok | `INCOMPLETE` |
 
-  (Stricter than the window in two rows, on purpose: a run that was skipped, stopped or ended, and
-  a retire whose home is gone but whose child did not stop, read "done" in the window and
-  `INCOMPLETE` here: the log says whether what was ASKED happened.)
+  (Stricter than the window in one row, on purpose: a run that was skipped, stopped or ended
+  reads "done" in the window and `INCOMPLETE` here: the log says whether what was ASKED happened.
+  The retire row "a child did not stop" is an answer OATS 0.70.5 does not give: it refuses the
+  whole retire then, `E_CHILDREN_RUNNING`, which the line carries as the code; the row holds for a
+  kernel that answers such a receipt, and the window words it the same way: retired, not done.)
 - A CODE: one that starts `E_` is the kernel's refusal (never its sentence). Any other is the
   plugin's own: `INVALID_INPUT`, `OATS_NOT_FOUND`: no `oats` ran (the host entry refused what was
   asked; the binary is not there). Every other (`OATS_TIMEOUT`, `OATS_ABORTED`, `OATS_FAILED`,

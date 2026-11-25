@@ -180,7 +180,7 @@ describe("an act has one way to the kernel", () => {
 });
 
 describe("why an act was held", () => {
-  it("every refusal of the plugin's own in the server names a word of the list, but the three that no act's guard can reach; and no word of the list is one nothing uses", async () => {
+  it("every refusal of the plugin's own in the server names a word of the list, but the five that no act's guard can reach; and no word of the list is one nothing uses", async () => {
     const files = [...(await readdir(SERVER, { recursive: true })).filter((name) => name.endsWith(".ts")), "../server.ts"];
     const calls: { file: string; line: string; reason: string | null }[] = [];
     for (const file of files) {
@@ -191,10 +191,12 @@ describe("why an act was held", () => {
       }
     }
     expect(calls.length).toBeGreaterThan(10);
-    // The refusals of READS (no act's guard reaches them): an agent a read names (core.ts `agentOf`, `rowOf`), a soul's readiness (panel.ts).
+    // The refusals of READS (no act's guard reaches them): an agent a read names (core.ts `agentOf`, `rowOf`), a soul's
+    // readiness (panel.ts), and the viewer's command of an agent with no terminal to show (terminal.ts: `terminalCommand`
+    // reads the command bb's own Terminal tab then runs; the plugin runs nothing, so it is no act of the log's).
     const reads = calls.filter((call) => call.reason === null);
-    expect(reads.map((call) => call.file).sort()).toEqual(["core.ts", "core.ts", "panel.ts"]);
-    expect(reads.every((call) => /is not an agent of this OATS deployment's|OATS names no soul for/.test(call.line))).toBe(true);
+    expect(reads.map((call) => call.file).sort()).toEqual(["core.ts", "core.ts", "panel.ts", "terminal.ts", "terminal.ts"]);
+    expect(reads.every((call) => /is not an agent of this OATS deployment's|OATS names no soul for|does not run on tmux: it has no terminal|is not running: there is no session to show/.test(call.line))).toBe(true);
     // Every other names a word of the list.
     expect(calls.filter((call) => call.reason !== null && !(HOLD_REASONS as readonly string[]).includes(call.reason!))).toEqual([]);
     // A refusal of the plugin's own is BUILT in two places alone, both in core.ts (`refusal`, `invalid`), and `invalid`

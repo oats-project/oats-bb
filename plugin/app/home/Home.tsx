@@ -20,7 +20,6 @@ import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
-import { useAnnounceEmptyHome, useSidebarBeside } from "../roster/beside";
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
 import { READING as READING_WORD, ReadingLine, readingNow, useActed } from "../roster/reading";
@@ -716,17 +715,10 @@ function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; 
   );
 }
 
-/** While the home says "No agents yet." in view, the sidebar beside it does not (app/roster/beside.ts). Draws nothing. */
-function SaysEmpty({ seen }: { seen: boolean }) {
-  useAnnounceEmptyHome(seen);
-  return null;
-}
-
 function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; visible: boolean; agents: boolean; onBack: () => void; /** whether this place says the roster's notice: not a tab that is hidden (bb keeps it mounted), nor one beside a thread whose own line says it: the notice stands once on a screen, where a person looks (the lead's T3) */ says?: boolean }) {
   const now = useNow();
   const navigate = useBbNavigate();
   const pages = usePagesShown();
-  const sidebarBeside = useSidebarBeside();
   // Read once the home is seen (once more by itself when that failed and the roster reads), and again when the person asks: the installed CLI changes with an install, not with what the agents do.
   const { cli, checking, failure: checkFailure, check } = useCli(visible, oats.phase === "ready");
   const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} onCheck={check} />;
@@ -743,15 +735,13 @@ function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; 
   const held = oats.stale !== null;
   // The agents whose session was lost (not the ones a person stopped), in the roster's order.
   const lost = made.all.filter((entry) => isLost(entry, oats));
-  // New agent is on a home with no sidebar shown beside it, first on the page (the Desktop's Home has none: its act is the
+  // New agent is on every home, first on the page (the Desktop's Home has none: its act is the
   // sidebar's, which bb keeps in a drawer at a phone's width). Offered where it has somewhere to
   // open (the sidebar's rule); off behind the CLI card and while the roster shown is the last one
   // read. Why is said by the notice under it, on the same screen (the CLI card, the roster's
   // notice), never beside the button. On the home of a workspace with no agent it is the one act.
-  // ONCE on a screen (the reader's P13): where the sidebar is BESIDE this pane its "New agent" is the one, and the home
-  // draws none; where the sidebar is a drawer, or is not known to be there, the home keeps its own (app/roster/beside.ts).
   const off = incompatible || held;
-  const head = sidebarBeside ? null : (
+  const head = (
     <div data-testid="oats-home-head" className="flex min-w-0 flex-wrap items-center justify-end gap-2">
       {hasNewAgent(pages.has("souls")) ? (
         <Button variant={made.all.length === 0 ? "primary" : "default"} data-testid="oats-home-new-agent" disabled={off} onClick={() => void openNewAgent(navigate as BbNavigate, pages.has("souls"))}>
@@ -780,7 +770,6 @@ function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; 
         {stale}
         {notice}
         <Empty>{FIRST_RUN}</Empty>
-        <SaysEmpty seen={visible} />
         <Tiles visible={visible} />
       </>
     );

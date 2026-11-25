@@ -1167,40 +1167,6 @@ test("behind a result the home's card of a stopped agent that asks says \"Readin
   expect(within(card).getByTestId("oats-needs-stopped").textContent).not.toContain(said!);
 });
 
-// The reader's P13: "New agent" and "No agents yet." stood twice where the sidebar is beside the home. Each once: the
-// sidebar's New agent where it is BESIDE the home; the home's own where the sidebar is a drawer or is not known to be
-// there (a positive fact only: a screen with two is better than a screen with none). "No agents yet." is the home's
-// while it says it in view: it tells the sidebar (test/roster/sidebar.test.tsx has the sidebar's side).
-test("New agent once on a screen: the home draws its own while no sidebar is known to be beside it, and none while one is; held as before where it is drawn", async () => {
-  const { announce, besideNow } = await import("../../app/roster/beside");
-  const slot = await homePage();
-  await slot.findByTestId("oats-home-needs");
-  expect(besideNow().sidebarBeside).toBe(false); // a window with the home alone: not known
-  expect((slot.getByTestId("oats-home-new-agent") as HTMLButtonElement).disabled).toBe(false);
-  let leave = () => {};
-  act(() => void (leave = announce("sidebar-beside", true))); // the sidebar mounts, and bb says it is not compact
-  expect(slot.queryByTestId("oats-home-new-agent")).toBeNull();
-  expect(slot.queryByTestId("oats-home-head")).toBeNull(); // no empty row is left where it stood
-  act(() => leave()); // the sidebar turns into a drawer, or leaves
-  expect(slot.getByTestId("oats-home-new-agent")).not.toBeNull();
-});
-
-test("\"No agents yet.\" once on a screen: the home of an empty workspace says it and tells the sidebar so while it is mounted; beside a sidebar it draws no New agent of its own", async () => {
-  const { announce, besideNow } = await import("../../app/roster/beside");
-  expect(besideNow().homeSaysEmpty).toBe(false);
-  const empty = await homePage({ rpc: handlers({}, []), sidebarThreads: calm(), settings: { pages: "home" } });
-  expect((await empty.findByTestId("oats-empty")).textContent).toBe("No agents yet.");
-  await waitFor(() => expect(besideNow().homeSaysEmpty).toBe(true));
-  expect(empty.getByTestId("oats-home-new-agent")).not.toBeNull(); // no sidebar known: the home's own, as before
-  let leave = () => {};
-  act(() => void (leave = announce("sidebar-beside", true)));
-  expect(empty.queryByTestId("oats-home-new-agent")).toBeNull(); // the sidebar's is the one (and the primary: its test)
-  expect(empty.getByTestId("oats-empty").textContent).toBe("No agents yet."); // never an empty pane
-  act(() => leave());
-  empty.unmount();
-  expect(besideNow().homeSaysEmpty).toBe(false); // gone with the home: the sidebar says it again
-});
-
 /** The one count line of the home, on Home › Agents ("2 running · 4 need you · …"), for a roster. */
 async function agentsLine(agents: Agent[]): Promise<string> {
   const app = await loadApp();

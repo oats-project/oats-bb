@@ -290,8 +290,7 @@ async function showsSidebar(page, viewport) {
  * with no roster (not read, no agents) has nothing to open. → how many it pressed.
  */
 export async function openParents(page) {
-  // (A sidebar with no agents says so, or, beside a home that says it, draws its New agent alone: either is "no tree".)
-  await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-tree")}, ${testId("oats-no-agents")}, ${testId("oats-sidebar")} ${testId("oats-new-agent")}`)}) !== null`, 5);
+  await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-tree")}, ${testId("oats-no-agents")}`)}) !== null`, 5);
   const toggle = `${testId("oats-sidebar")} ${testId("oats-row-toggle")}`;
   let pressed = 0;
   for (; pressed < 200; pressed += 1) {

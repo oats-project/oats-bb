@@ -771,6 +771,91 @@ names, checked against `oats souls` before its process starts.
 Another feature opens the panel on one of its tabs with
 `showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).
 
+## An agent's mail
+
+The tab **Mail** of an agent's panel (the OATS tab of its thread; on a phone the agent's page)
+shows the mail that agent RECEIVED, newest first: who each message is from, its subject, its age.
+A press on a row shows the message in the list's place, as plain text under its sender's alias,
+with Back. It is read-only: nothing is sent, answered, deleted or marked read, and the view has no
+act but reading again.
+
+**The read.** One command, the one the OATS Desktop's mail sheet runs
+(awebai/oats `packages/desktop/docs/desktop-mail-sheet.md`):
+
+```
+oats operation run messaging:mail --home <the home the kernel named> --arg limit=50 [--arg cursor=<the last answer's>] --json
+```
+
+The agent's messaging layer answers it (`oats.aweb`, `mailApi: 1`). It runs only `aw version`,
+`aw whoami`, `aw mail threads` and `aw mail show`, and says `acknowledges: false`; the plugin
+refuses WHOLE an answer that does not say so, and shows nothing of it. The argv is built in
+`kernel/mail.ts` and pinned by a test; the app sends an instance's name and a cursor, never a
+home, a flag or a limit. The read may take long (one `aw` call per identity of the agent, over the
+network; the messaging layer's own budget is 150 s), so it has a time limit of its own, 170 s.
+
+**When it reads.** When the view is shown, on **Refresh**, and on **Older** (the page after the
+last one, while the messaging layer says there is one): never on the roster's poll, never when
+OATS changes, never on a timer. What was read is kept for the window: a view shown again shows it
+at once and reads again behind it. "Read <age>." stands beside Refresh once what is shown is older
+than a minute.
+
+**Where the tab stands, and when.** The tab is drawn only for an agent whose roster row gives a
+messaging id (the panel's `messagingId`): an agent with no messaging layer has no mail to read,
+and what cannot be done is not offered. (Where the row and the read disagree, the tab says "No
+messaging.") And Mail is the one tab the panel does NOT remember from one agent to the next:
+showing an agent's mail reads it, and that takes a press on that agent's own tab. Left on Mail,
+another agent's panel opens on Instance (`app/panel/Panel.tsx`, `tabOf`).
+
+**Mail is other people's text.** Every word of a message is untrusted. The adapter turns it into
+display lines on the machine, before it leaves it (`kernel/mail.ts`, with `model/text.ts`): the
+sender's alias, the subject and a team's label each as one display line; the body LINE BY LINE, so
+that a line with a control character or one shaped like a credential reads "[withheld]" and the
+others show. The app draws those lines as text: never markup, never a link. Only received mail,
+and only what is drawn, leaves the machine: no identity, no address, no message id, nothing of the
+mail the agent sent. Nothing of a message is ever logged, and no fixture is taken from a real
+workspace (`test/fixtures/mail/README.md`).
+
+**What is said of a message.** "Unverified sender" (the messaging layer says unverified, or does
+not know) and "Signature failed", in the warning tone, on the row and under the message's subject:
+they are safety facts. "(no subject)" for a message with neither a subject nor a thread title.
+"Shortened." under a message that was cut: by the messaging layer, which cuts a body at 16 KiB and
+says so, or by the adapter (below).
+
+**Two named differences from the Desktop's decoder** (`packages/client/mail-contract.mjs`, read at
+awebai/oats 7355f353; the decoder in `kernel/mail.ts` is otherwise its rules, one for one):
+
+1. A body over the contract's 16 KiB does not make the page unreadable: the adapter cuts it at
+   16 KiB, at a character's boundary, and marks the message shortened. It also carries at most
+   2000 lines of a body. `oats.aweb` cuts such a body itself, so this acts only on an answer that
+   breaks the bound.
+2. An identity that carries an error may have an empty `alias` and `identity`. `oats.aweb` 1.48.0
+   answers both as `""` for an identity it could not read (`identity-missing`,
+   `identity-unreadable`: recorded in `test/fixtures/mail/mail-identity-missing.json`), and the
+   Desktop's decoder wants them non-empty: read by its rule, the answer that says one team's mail
+   can't be read would be unreadable whole.
+
+**Why mail cannot be read.** ONE line, then Retry, and under Details the kernel's code with its
+own sentence:
+
+| The refusal | The line |
+|---|---|
+| `E_OPERATION_UNKNOWN`: the agent's copy of its messaging layer has no mail operation | Its messaging is too old for mail. |
+| `E_OPERATION_UNAVAILABLE`: the agent has no messaging layer | No messaging. |
+| `E_AW_TOO_OLD`: the machine's `aw` is older than the read needs | aw is too old to read mail. |
+| `E_MAIL_UNREADABLE`: no identity of the agent could be read | Its mail can't be read. |
+| `E_MAIL_TOO_LARGE`: the answer cannot fit its bound even with no message | Too much mail to read. |
+| `OATS_TIMEOUT`: the read ran past its limit | Reading took too long. |
+| an answer outside the contract (`OATS_BAD_ANSWER`), and any other | Mail can't be read. |
+
+When one team's mail cannot be read and another's can, the mail that was read shows, and one line
+at the list's end names the team: "<team>: can't be read", or "<team>: <N> conversations can't be
+read". The messaging layer's word for why is not drawn.
+
+**Proof.** `test/mail/` (the adapter on the recorded answers; the server; the view), the live
+scenes `container/scenes/mail.mjs`, and a real run of its own, `container/real/mail/`, which is run
+BY HAND and is in neither `ci.sh all` nor CI: it needs aweb's local stack, five containers
+(`container/real/mail/README.md`).
+
 ## The New agent form
 
 **New agent** (at the roster's foot in the sidebar, and in the heading of the home) opens the form: a page of its own,
@@ -1010,7 +1095,7 @@ runs, and `record/` there makes the recording again (its README says what was ar
 
 The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
 `spawn` (the New agent form), `workspace` (the four pages), `lifecycle` (stop, start, restart,
-retire), `automations`, `panel` (the instance panel) and `outside` (what is said when something
+retire), `automations`, `panel` (the instance panel), `mail` (an agent's incoming mail, read-only: one view, mounted by the panel, with no slot of its own) and `outside` (what is said when something
 happened to an agent outside OATS; no slot, no read and no `oats` verb of its own). Each has one module, or one directory, in
 every layer, and the entry of a layer only composes them:
 

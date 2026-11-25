@@ -61,7 +61,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   /** A harness a caller names must be one the provider declares: nothing else reaches the argv. */
   async function chosen(harness: string | undefined): Promise<string | undefined> {
     if (harness === undefined) return undefined;
-    if (!(await declared()).includes(harness)) throw invalid(`"${harness}" is not a harness the bb session provider declares`);
+    if (!(await declared()).includes(harness)) throw invalid(`"${harness}" is not a harness the bb session provider declares`, "harness-not-declared");
     return harness;
   }
   async function begin(verb: "start" | "restart", { instance, harness, model, resume }: { instance: string; harness?: string | undefined; model?: string | undefined; resume?: true | undefined }, asker: Asker) {
@@ -71,10 +71,10 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     // A resume is for a home on tmux alone (on bb `--resume` is another act: a notice into the same thread), and
     // takes no harness and no model. Whether its session is still LOST is the kernel's to say, under its own
     // claim (E_RESUME_NOT_LOST): this never turns a resume into a plain start, nor the reverse.
-    if (resume === true && (agent.backend !== "tmux" || harness !== undefined || model !== undefined)) throw invalid(`a resume is the start of a tmux home with no harness and no model ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`);
+    if (resume === true && (agent.backend !== "tmux" || harness !== undefined || model !== undefined)) throw invalid(`a resume is the start of a tmux home with no harness and no model ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`, "resume-not-tmux");
     // The harness list and the models the plugin knows are the bb session provider's: no other home is started with
     // a choice of them. It starts with the launch its home recorded.
-    if (agent.backend !== "bb" && (harness !== undefined || model !== undefined)) throw invalid(`a harness or a model is chosen for a home on bb alone ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`);
+    if (agent.backend !== "bb" && (harness !== undefined || model !== undefined)) throw invalid(`a harness or a model is chosen for a home on bb alone ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`, "choice-not-bb");
     return { agent, choice: given({ harness: await chosen(harness), model, resume }) };
     };
     let backend: string | null = null;

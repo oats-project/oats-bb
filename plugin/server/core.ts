@@ -10,7 +10,7 @@ import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
 import { withEvents, type EventsSaid } from "../model/events.js";
 import type { Agent } from "../model/types.js";
-import { actLine, callerOf, isAct, outcomeOf, type Act, type ActVerb, type Asker, type Subject } from "./act-log.js";
+import { actLine, callerOf, isAct, outcomeOf, type Act, type ActVerb, type Asker, type HoldReason, type Subject } from "./act-log.js";
 
 /** What the kernel printed for one instance: its own row, and its agent group's row without the instances. */
 export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly agent: Readonly<Record<string, unknown>> };
@@ -114,7 +114,15 @@ export function refusal(error: KernelError): experimental_PluginRpcRefusal {
   refusedWith.set(refused, error.code);
   return refused;
 }
-export const invalid = (message: string) => new experimental_PluginRpcRefusal({ code: "invalid", message });
+/** The word an act's guard gives for its refusal, for the act log's `why` (server/act-log.ts HOLD_REASONS): the message is the window's, never the log's. */
+const heldFor = new WeakMap<object, HoldReason>();
+export const holdReasonOf = (error: unknown): HoldReason | undefined => (typeof error === "object" && error !== null ? heldFor.get(error) : undefined);
+/** A refusal of the plugin's own. `reason`: where it is the refusal of an ACT's guard, the word the act log writes for it. */
+export const invalid = (message: string, reason?: HoldReason) => {
+  const refused = new experimental_PluginRpcRefusal({ code: "invalid", message });
+  if (reason !== undefined) heldFor.set(refused, reason);
+  return refused;
+};
 
 /** A host verb that runs `oats` in the deployment: every one but the two that find and watch it. */
 export type Verb = Exclude<keyof typeof hostContract, "discover" | "watch">;
@@ -644,7 +652,7 @@ export function createCore(bb: BbPluginApi) {
     const now = await current();
     if (!now.ok) throw refusal({ code: now.code, message: now.message });
     const found = now.agents.find((agent) => agent.instance === instance);
-    if (!found) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`);
+    if (!found) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`, "agent-not-in-roster");
     return found;
   }
 
@@ -721,12 +729,12 @@ export function createCore(bb: BbPluginApi) {
       extra = await guards();
     } catch (error) {
       const code = codeOf(error);
-      // The plugin's own words for its own guard; for a refusal that carries the kernel's code (the roster could not
-      // be read; a read the act rests on was refused) the code says it, and the kernel's sentence stays out. A guard
-      // that FAILED (no refusal: a fault of the plugin's own) is `error`, not a judgement on what was asked, and its
-      // `why` is the fault's NAME alone: its message is any text.
+      // WHY, as one word of the closed list (server/act-log.ts HOLD_REASONS), never a message: the word the guard
+      // gave its refusal; `read-refused` for a refusal that carries a kernel's code (the roster could not be read; a
+      // read the act rests on was refused: the code says which); `fault` for a guard that FAILED with no refusal (a
+      // fault of the plugin's own: `error`, not a judgement on what was asked); `refused` where a refusal names none.
       const refused = error instanceof experimental_PluginRpcRefusal;
-      const why = code !== undefined ? "refused before the act was asked" : refused ? String(error.message) : String((error as Error)?.name ?? "fault");
+      const why: HoldReason = code !== undefined ? "read-refused" : refused ? (holdReasonOf(error) ?? "refused") : "fault";
       say("warn", () => actLine(method, "held", about(), who(null), { held: code ?? (refused ? "invalid" : "error"), why }));
       throw error;
     }
@@ -747,7 +755,7 @@ export function createCore(bb: BbPluginApi) {
     } catch (error) {
       // Not sent: the machine or the deployment was not found, or the call was cancelled before it left (its caller
       // was gone already; the plugin was ending): the kernel was not asked: a hold, with that refusal's code.
-      if (host === null) say("warn", () => actLine(method, "held", about(), who(null), { held: codeOf(error) ?? "FAILED", why: signal.aborted ? "the call was cancelled before it was sent" : "the machine that runs oats was not reached" }));
+      if (host === null) say("warn", () => actLine(method, "held", about(), who(null), { held: codeOf(error) ?? "FAILED", why: signal.aborted ? "cancelled-before-sent" : "machine-not-reached" }));
       else say("warn", () => actLine(method, "ended", about(), who(host), { result: codeOf(error) ?? "FAILED", ms: Date.now() - from }));
       throw error;
     } finally {

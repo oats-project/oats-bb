@@ -1070,13 +1070,31 @@ oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<c
   the children the same way and the retired agent with them, counted as done only once its home is
   gone. `made`: the instance a spawn made or a schedule's run launched. `code`: the kernel's code
   on a run that did not launch. `ms`: how long the kernel took, from the moment the act was sent.
-- `HELD:<code>`: the kernel was NOT asked. The plugin's guard refused: `invalid` (what was asked
-  names nothing the roster or the provider holds: an agent that is not in the roster now, a harness
-  nothing declares, a row that is gone), the code of the read the act rests on (OATS could not be
-  read), `error` (the guard itself failed: `why` is then the fault's name alone); or the act could
-  not be sent: the machine was not reached, or the call was cancelled before it left (its code). `why` says which, in the plugin's own words, as one word. A button that is OFF in the window (while the
-  roster is stale, or "Reading…") asks the server nothing: there is no line for a press that could
-  not be made.
+- `HELD:<code>`: the kernel was NOT asked. `<code>` is `invalid` (the plugin's guard refused what
+  was asked), a kernel CODE (a read the act rests on was refused), `error` (the guard itself
+  failed), or the code of an act that could not be sent. `why` is ONE word of a closed list, never
+  a message (a refusal's message quotes what a caller sent and may hold a path: it is the window's,
+  not the log's):
+
+  | `why` | the hold |
+  |---|---|
+  | `agent-not-in-roster` | the agent, or a spawn's relative, is not one the roster names now |
+  | `harness-not-declared` | a harness the bb session provider does not declare |
+  | `resume-not-tmux` | a resume asked of a home that is not on tmux, or with a harness or a model |
+  | `choice-not-bb` | a harness or a model chosen for a home that is not on bb |
+  | `soul-not-listed` | a spawn's soul that `oats souls` does not list |
+  | `spawn-input` | what a spawn names (its model) that is refused before any process |
+  | `key-reused` | a spawn's key that belongs to another spawn |
+  | `row-gone` | an automation's row that the list does not hold |
+  | `no-source` | a test asked to run a source the trigger has none of |
+  | `read-refused` | a read the act rests on was refused (the roster, a row's list, the provider, a spawn's decision): `HELD:<its code>` says which |
+  | `machine-not-reached` | the act could not be sent: no machine, no deployment |
+  | `cancelled-before-sent` | the act's call was cancelled before it left (its caller was gone; the plugin was ending) |
+  | `fault` | the guard itself failed, with no refusal |
+  | `refused` | a refusal of the plugin's that names no word |
+
+  A button that is OFF in the window (while the roster is stale, or "Reading…") asks the server
+  nothing: there is no line for a press that could not be made.
 - `asked` and `ok` are written at bb's level `info`; `INCOMPLETE`, `DEFERRED`, a refusal and a hold
   at `warn`. A line that cannot be written never changes an act: the act goes on, and the fault is
   told to the server process's error stream.
@@ -1089,7 +1107,7 @@ level, written before the act goes on; it holds the plugin's other lines too, an
 read what bb did to an agent: `grep 'oats act' plugins/oats/logs/plugin.log | grep 'instance=<name> '`.
 
 What never goes in: a spawn's opening instruction, a description's text, a message, a path, the
-kernel's sentence, a secret. Every value is one word: whatever is not a letter, a digit or one of
+kernel's sentence, the plugin's own refusal's message, a secret. Every value is one word: whatever is not a letter, a digit or one of
 `._:/@-` becomes `_`, cut at 120 characters.
 
 No act can go round it: `core.act` (`server/core.ts`) is the only way a verb that changes something

@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { hostContract } from "../../contract/index.js";
 import plugin from "../../server.js";
-import { ACTS, ACTS_BY_ARGUMENT, actLine, callerOf, isAct, NOT_ACTS, outcomeOf, word } from "../../server/act-log.js";
-import { createCore, HOST_TIMEOUT, type Core } from "../../server/core.js";
+import { ACTS, ACTS_BY_ARGUMENT, actLine, callerOf, HOLD_REASONS, isAct, NOT_ACTS, outcomeOf, word } from "../../server/act-log.js";
+import { createCore, HOST_TIMEOUT, invalid, refusal, type Core } from "../../server/core.js";
 import { startBackend, type Backend } from "../support/backend.js";
 
 const SERVER = join(fileURLToPath(new URL("../..", import.meta.url)), "server");
@@ -44,12 +44,36 @@ describe("the act log's line", () => {
     expect(actLine("stopApply", "ended", { instance: "redesign-ui-lead" }, who, { result: "ok", ms: 1234.4, homes: "3/3" })).toBe("oats act stopApply ended instance=redesign-ui-lead caller=client host=host_falcon at=2026-11-25T12:00:00.000Z n=7 result=ok ms=1234 homes=3/3");
     expect(actLine("spawn", "ended", { soul: "oats-developer", name: null }, who, { result: "ok", ms: 9, made: "oats-developer-3" })).toBe("oats act spawn ended soul=oats-developer name=- caller=client host=host_falcon at=2026-11-25T12:00:00.000Z n=7 result=ok ms=9 made=oats-developer-3");
     expect(actLine("start", "ended", { instance: "a" }, who, { result: "E_RESUME_NOT_LOST", ms: 3 })).toBe("oats act start ended instance=a caller=client host=host_falcon at=2026-11-25T12:00:00.000Z n=7 result=E_RESUME_NOT_LOST ms=3");
-    expect(actLine("start", "held", { instance: "a" }, { ...who, host: null }, { held: "invalid", why: '"pi" is not a harness the bb session provider declares' })).toBe(
-      "oats act start held instance=a caller=client host=- at=2026-11-25T12:00:00.000Z n=7 result=HELD:invalid why=_pi_is_not_a_harness_the_bb_session_provider_declares",
+    expect(actLine("start", "held", { instance: "a" }, { ...who, host: null }, { held: "invalid", why: "harness-not-declared" })).toBe(
+      "oats act start held instance=a caller=client host=- at=2026-11-25T12:00:00.000Z n=7 result=HELD:invalid why=harness-not-declared",
     );
     expect(actLine("automationEnable", "asked", { automation: "schedule:local/weekly-cleanup" }, who)).toContain(" automation=schedule:local/weekly-cleanup ");
     expect(actLine("schedulerEnable", "asked", { scheduler: true }, who)).toContain(" scheduler=- ");
   });
+  it("a hold's `why` is ONE word of the closed list, never a message: a refusal whose message holds a path, a quote and a caller's text writes its guard's word, or `refused`", async () => {
+    const MESSAGE = '"../../etc/passwd" is not a session backend of /home/someone/work (asked: "rm -rf /")';
+    // The line itself writes nothing that is not in the list, whatever it is handed.
+    for (const why of [MESSAGE, "/home/someone", "", "Error", "agent not in roster"]) expect(actLine("start", "held", { instance: "a" }, who, { held: "invalid", why: why as never })).toMatch(/ result=HELD:invalid why=refused$/);
+    for (const why of HOLD_REASONS) expect(actLine("start", "held", { instance: "a" }, who, { held: "invalid", why })).toMatch(new RegExp(` why=${why}$`));
+    expect(HOLD_REASONS.every((reason) => /^[a-z]+(-[a-z]+)*$/.test(reason))).toBe(true);
+    // Through `core.act`: the guard's refusal with that message and a word; the same with no word; a fault with that message.
+    let core: Core | undefined;
+    const { acts } = await logged({}, (bb) => {
+      core = createCore(bb);
+    });
+    const held = async (thrown: unknown) => {
+      await refused(core!.act("stopApply", { instance: "a" }, undefined, HOST_TIMEOUT.act, () => Promise.reject(thrown)));
+      const line = acts().at(-1)!.line;
+      expect(line).not.toMatch(/passwd|someone|rm_|session_backend/);
+      return line.replace(/^.* n=\d+ /, "");
+    };
+    expect(await held(invalid(MESSAGE, "harness-not-declared"))).toBe("result=HELD:invalid why=harness-not-declared");
+    expect(await held(invalid(MESSAGE))).toBe("result=HELD:invalid why=refused");
+    expect(await held(new TypeError(MESSAGE))).toBe("result=HELD:error why=fault");
+    expect(await held(MESSAGE)).toBe("result=HELD:error why=fault"); // a thrown string
+    expect(await held(refusal({ code: "E_WORKSPACE_UNREADABLE", message: MESSAGE }))).toBe("result=HELD:E_WORKSPACE_UNREADABLE why=read-refused");
+  }, 40_000);
+
   it("a name the prototype holds is no act, and throws nothing", () => {
     for (const verb of ["__proto__", "constructor", "toString", "hasOwnProperty"]) expect(isAct(verb, { runSource: true })).toBe(false);
   });
@@ -58,7 +82,7 @@ describe("the act log's line", () => {
     const lines = [
       actLine("stopApply", "asked", { instance: HOSTILE }, who),
       actLine("spawn", "ended", { soul: HOSTILE, name: HOSTILE }, who, { result: "ok", ms: 1, made: HOSTILE }),
-      actLine("scheduleRun", "held", { automation: `schedule:${HOSTILE}` }, who, { held: HOSTILE, why: HOSTILE }),
+      actLine("scheduleRun", "held", { automation: `schedule:${HOSTILE}` }, who, { held: HOSTILE, why: HOSTILE as never }),
       actLine("start", "ended", { instance: "a" }, { caller: callerOf({ experimental_caller: { kind: "plugin", pluginId: HOSTILE } }), host: HOSTILE, at: who.at, n: 7 }, { result: HOSTILE, ms: 1, homes: HOSTILE } as never),
     ];
     for (const line of lines) {
@@ -137,6 +161,31 @@ describe("an act has one way to the kernel", () => {
     const named = [...core.matchAll(/host\.call\(\s*([^,]+),/g)].map((match) => match[1]!.trim());
     expect(named.filter((verb) => verb !== "method").every((verb) => /^"[A-Za-z]+"$/.test(verb) && !isAct(verb.slice(1, -1)))).toBe(true);
     expect(core.match(/\bask\(/g)).toHaveLength(2); // `call` and `act` (its declaration is `ask<…>(`)
+  });
+});
+
+describe("why an act was held", () => {
+  it("every refusal of the plugin's own in the server names a word of the list, but the three that no act's guard can reach; and no word of the list is one nothing uses", async () => {
+    const files = [...(await readdir(SERVER, { recursive: true })).filter((name) => name.endsWith(".ts")), "../server.ts"];
+    const calls: { file: string; line: string; reason: string | null }[] = [];
+    for (const file of files) {
+      const source = await readFile(join(SERVER, file), "utf8");
+      for (const line of source.split("\n")) {
+        if (!/\binvalid\(/.test(line) || /^\s*(\*|\/\/)/.test(line) || /export const invalid|^import /.test(line)) continue;
+        calls.push({ file, line: line.trim(), reason: line.match(/, "([a-z-]+)"\);\s*$/)?.[1] ?? null });
+      }
+    }
+    expect(calls.length).toBeGreaterThan(10);
+    // The refusals of READS (no act's guard reaches them): an agent a read names (core.ts `agentOf`, `rowOf`), a soul's readiness (panel.ts).
+    const reads = calls.filter((call) => call.reason === null);
+    expect(reads.map((call) => call.file).sort()).toEqual(["core.ts", "core.ts", "panel.ts"]);
+    expect(reads.every((call) => /is not an agent of this OATS deployment's|OATS names no soul for/.test(call.line))).toBe(true);
+    // Every other names a word of the list.
+    expect(calls.filter((call) => call.reason !== null && !(HOLD_REASONS as readonly string[]).includes(call.reason!))).toEqual([]);
+    // And every word is used: by a guard, or (the last five) by `core.act` itself.
+    const core = await readFile(join(SERVER, "core.ts"), "utf8");
+    const used = new Set([...calls.map((call) => call.reason), ...["read-refused", "machine-not-reached", "cancelled-before-sent", "fault", "refused"].filter((word) => core.includes(`"${word}"`))]);
+    expect(HOLD_REASONS.filter((reason) => !used.has(reason))).toEqual([]);
   });
 });
 
@@ -250,7 +299,7 @@ describe("core.act's own order", () => {
     expect(await backend.verbs()).toEqual([]);
     expect(acts().map((each) => each.line.split(" ").slice(0, 4).join(" "))).toEqual(["oats act stopApply held"]);
     // (A guard that FAILED with no refusal of its own is `error`, not a judgement on what was asked; no machine was asked: host=-.)
-    expect(acts()[0]!.line).toMatch(/ host=- at=\S+ n=1 result=HELD:error why=Error$/); // the fault's name, never its message
+    expect(acts()[0]!.line).toMatch(/ host=- at=\S+ n=1 result=HELD:error why=fault$/); // neither the fault's name nor its message
     // Answered: `after` once, and the act's stamp is before the one `after` then took.
     const { endedAt } = await core!.act("stopApply", { instance: STOP.instance }, undefined, HOST_TIMEOUT.act, () => STOP, after);
     expect(afters).toHaveLength(1);
@@ -374,8 +423,8 @@ describe("what the log holds of an act, through the whole backend", () => {
     await refused(backend.rpc("retireApply", { instance: "not-in-the-snapshot", revision: STOP.revision, key: "retire-1" }));
     const held = acts();
     expect(held.map((each) => each.level)).toEqual(["warn", "warn", "warn"]);
-    expect(held[0]!.line).toMatch(/^oats act stopApply held instance=not-in-the-snapshot caller=client host=\S+ at=\S+ n=\d+ result=HELD:invalid why=_not-in-the-snapshot_is_not_an_agent_of_this_OATS_deployment_s_current_snapshot$/);
-    expect(held[1]!.line).toMatch(/^oats act start held instance=weekly-digest-helper caller=client host=\S+ at=\S+ n=\d+ result=HELD:invalid why=_no-such-harness_is_not_a_harness_the_bb_session_provider_declares$/);
+    expect(held[0]!.line).toMatch(/^oats act stopApply held instance=not-in-the-snapshot caller=client host=\S+ at=\S+ n=\d+ result=HELD:invalid why=agent-not-in-roster$/);
+    expect(held[1]!.line).toMatch(/^oats act start held instance=weekly-digest-helper caller=client host=\S+ at=\S+ n=\d+ result=HELD:invalid why=harness-not-declared$/);
     expect(held[2]!.line).toMatch(/^oats act retireApply held instance=not-in-the-snapshot /);
     expect((await backend.verbs()).filter((verb) => /--apply|^instance start|^instance restart/.test(verb))).toEqual([]);
   }, 40_000);
@@ -385,7 +434,7 @@ describe("what the log holds of an act, through the whole backend", () => {
     const { backend, acts } = await logged({ verbs: { status: { stdout: JSON.stringify(refusal), exit: 1 } } });
     await refused(backend.rpc("stopApply", STOP));
     // (host=-: after a failed read the server holds no machine: core.ts `target`.)
-    expect(acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N"))).toEqual(["oats act stopApply held instance=redesign-ui-lead caller=client host=- at=AT n=N result=HELD:E_WORKSPACE_UNREADABLE why=refused_before_the_act_was_asked"]);
+    expect(acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N"))).toEqual(["oats act stopApply held instance=redesign-ui-lead caller=client host=- at=AT n=N result=HELD:E_WORKSPACE_UNREADABLE why=read-refused"]);
   }, 40_000);
 
   it("a spawn names the soul and the name asked, then the instance made; the opening instruction is in no line", async () => {
@@ -409,7 +458,7 @@ describe("what the log holds of an act, through the whole backend", () => {
     await backend.rpc("automationTest", { kind: "trigger", id: "oats-real/proposal-review" });
     await backend.rpc("automationTest", { kind: "trigger", id: "oats-real/harvest-review", runSource: true });
     await refused(backend.rpc("automationTest", { kind: "trigger", id: "oats-real/proposal-review", runSource: true }));
-    const said = acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N").replace(/ms=\d+/, "ms=N").replace(/ why=\S+$/, " why=W"));
+    const said = acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N").replace(/ms=\d+/, "ms=N"));
     expect(said).toEqual([
       "oats act automationEnable asked automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT n=N",
       "oats act automationEnable ended automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT n=N result=ok ms=N",
@@ -417,10 +466,10 @@ describe("what the log holds of an act, through the whole backend", () => {
       "oats act automationDescribe ended automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT n=N result=ok ms=N",
       "oats act schedulerEnable asked scheduler=- caller=client host=host_falcon at=AT n=N",
       "oats act schedulerEnable ended scheduler=- caller=client host=host_falcon at=AT n=N result=ok ms=N",
-      "oats act scheduleRun held automation=schedule:no-such-row caller=client host=- at=AT n=N result=HELD:invalid why=W", // (a hold: no machine was asked)
+      "oats act scheduleRun held automation=schedule:no-such-row caller=client host=- at=AT n=N result=HELD:invalid why=row-gone", // (a hold: no machine was asked)
       "oats act automationTest asked automation=trigger:oats-real/harvest-review caller=client host=host_falcon at=AT n=N",
       "oats act automationTest ended automation=trigger:oats-real/harvest-review caller=client host=host_falcon at=AT n=N result=ok ms=N",
-      "oats act automationTest held automation=trigger:oats-real/proposal-review caller=client host=- at=AT n=N result=HELD:invalid why=W",
+      "oats act automationTest held automation=trigger:oats-real/proposal-review caller=client host=- at=AT n=N result=HELD:invalid why=no-source",
     ]);
     expect(lines.filter((each) => each.line.includes("DESCRIPTION-TEXT"))).toEqual([]);
   }, 40_000);
@@ -468,7 +517,7 @@ describe("what the log holds of an act, through the whole backend", () => {
   it("an act that could not be SENT (the machine in the settings is none of bb's) is a hold with that code: the kernel was not asked", async () => {
     const { backend, acts } = await logged({ settings: { host: "no-such-machine" } });
     await refused(backend.rpc("schedulerEnable"));
-    expect(acts().map((each) => [each.level, each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N")])).toEqual([["warn", "oats act schedulerEnable held scheduler=- caller=client host=- at=AT n=N result=HELD:HOST_NOT_FOUND why=the_machine_that_runs_oats_was_not_reached"]]);
+    expect(acts().map((each) => [each.level, each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N")])).toEqual([["warn", "oats act schedulerEnable held scheduler=- caller=client host=- at=AT n=N result=HELD:HOST_NOT_FOUND why=machine-not-reached"]]);
     expect(await backend.verbs()).toEqual([]);
   }, 40_000);
 
@@ -493,7 +542,7 @@ describe("what the log holds of an act, through the whole backend", () => {
     gone.abort(new Error("the caller went away"));
     const automations = (await import("../../server/automations.js")).handlers(core!);
     await refused(Promise.resolve(automations.automationTest({ kind: "trigger", id: "oats-real/harvest-review", runSource: true }, { experimental_caller: { kind: "client" }, experimental_signal: gone.signal } as never)));
-    expect(acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N"))).toEqual(["oats act automationTest held automation=trigger:oats-real/harvest-review caller=client host=- at=AT n=N result=HELD:HOST_UNREACHABLE why=the_call_was_cancelled_before_it_was_sent"]);
+    expect(acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N"))).toEqual(["oats act automationTest held automation=trigger:oats-real/harvest-review caller=client host=- at=AT n=N result=HELD:HOST_UNREACHABLE why=cancelled-before-sent"]);
     expect((await backend.verbs()).filter((verb) => verb.startsWith("trigger test"))).toEqual([]);
   }, 40_000);
 
@@ -549,24 +598,24 @@ describe("what the log holds of an act, through the whole backend", () => {
 // a caller that is already gone it is SENT all the same (an act is not ended by its caller going away), but the test
 // that runs its source, which is ended with its caller; (c) once the kernel was asked, the roster is read again.
 describe("every act's handler", () => {
-  type Row = { verb: string; at: RegExp; call: (h: Handlers, context: never) => Promise<unknown>; refused: ((h: Handlers, context: never) => Promise<unknown>) | null; endedWithCaller?: true; rereads: boolean };
+  type Row = { verb: string; at: RegExp; call: (h: Handlers, context: never) => Promise<unknown>; refused: ((h: Handlers, context: never) => Promise<unknown>) | null; why?: string; endedWithCaller?: true; rereads: boolean };
   type Handlers = { lifecycle: ReturnType<typeof import("../../server/lifecycle.js").handlers>; spawn: ReturnType<typeof import("../../server/spawn.js").handlers>; automations: ReturnType<typeof import("../../server/automations.js").handlers> };
   const STOP = { instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" };
   const SPAWN = { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix it.", harness: "pi", key: "spawn-1f0c9a7e", revision: "0123456789abcdef01234567" };
   const NOBODY = "not-in-the-snapshot";
   const rows: Row[] = [
-    { verb: "start", at: /^session start/, call: (h, c) => Promise.resolve(h.lifecycle.start({ instance: "weekly-digest-helper" }, c)), refused: (h, c) => Promise.resolve(h.lifecycle.start({ instance: NOBODY }, c)), rereads: true },
-    { verb: "restart", at: /^session restart/, call: (h, c) => Promise.resolve(h.lifecycle.restart({ instance: "redesign-ui-lead" }, c)), refused: (h, c) => Promise.resolve(h.lifecycle.restart({ instance: NOBODY }, c)), rereads: true },
-    { verb: "stopApply", at: /^instance stop --apply$/, call: (h, c) => Promise.resolve(h.lifecycle.stopApply(STOP, c)), refused: (h, c) => Promise.resolve(h.lifecycle.stopApply({ ...STOP, instance: NOBODY }, c)), rereads: true },
-    { verb: "retireApply", at: /^retire$/, call: (h, c) => Promise.resolve(h.lifecycle.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" }, c)), refused: (h, c) => Promise.resolve(h.lifecycle.retireApply({ instance: NOBODY, revision: "ef5028f1e6cb517560247307", key: "retire-000000000000" }, c)), rereads: true },
-    { verb: "spawn", at: /^spawn$/, call: (h, c) => Promise.resolve(h.spawn.spawn(SPAWN, c)), refused: (h, c) => Promise.resolve(h.spawn.spawn({ ...SPAWN, soul: "no-such-soul" }, c)), rereads: true },
-    { verb: "automationEnable", at: /^schedule (enable|disable)$/, call: (h, c) => Promise.resolve(h.automations.automationEnable({ kind: "schedule", id: "local/weekly-cleanup", enabled: true }, c)), refused: (h, c) => Promise.resolve(h.automations.automationEnable({ kind: "schedule", id: "no-such-row", enabled: true }, c)), rereads: true },
-    { verb: "scheduleRun", at: /^schedule run$/, call: (h, c) => Promise.resolve(h.automations.scheduleRun({ id: "local/daily-review" }, c)), refused: (h, c) => Promise.resolve(h.automations.scheduleRun({ id: "no-such-row" }, c)), rereads: true },
-    { verb: "automationDescribe", at: /^schedule update$/, call: (h, c) => Promise.resolve(h.automations.automationDescribe({ kind: "schedule", id: "local/status-check", description: "Checks the status." }, c)), refused: (h, c) => Promise.resolve(h.automations.automationDescribe({ kind: "schedule", id: "no-such-row", description: "x" }, c)), rereads: true },
-    { verb: "scheduleRemove", at: /^schedule remove$/, call: (h, c) => Promise.resolve(h.automations.scheduleRemove({ id: "local/weekly-cleanup" }, c)), refused: (h, c) => Promise.resolve(h.automations.scheduleRemove({ id: "no-such-row" }, c)), rereads: true },
-    { verb: "scheduleReconcile", at: /^schedule reconcile$/, call: (h, c) => Promise.resolve(h.automations.scheduleReconcile({ id: "local/status-check" }, c)), refused: (h, c) => Promise.resolve(h.automations.scheduleReconcile({ id: "no-such-row" }, c)), rereads: true },
+    { verb: "start", why: "agent-not-in-roster", at: /^session start/, call: (h, c) => Promise.resolve(h.lifecycle.start({ instance: "weekly-digest-helper" }, c)), refused: (h, c) => Promise.resolve(h.lifecycle.start({ instance: NOBODY }, c)), rereads: true },
+    { verb: "restart", why: "agent-not-in-roster", at: /^session restart/, call: (h, c) => Promise.resolve(h.lifecycle.restart({ instance: "redesign-ui-lead" }, c)), refused: (h, c) => Promise.resolve(h.lifecycle.restart({ instance: NOBODY }, c)), rereads: true },
+    { verb: "stopApply", why: "agent-not-in-roster", at: /^instance stop --apply$/, call: (h, c) => Promise.resolve(h.lifecycle.stopApply(STOP, c)), refused: (h, c) => Promise.resolve(h.lifecycle.stopApply({ ...STOP, instance: NOBODY }, c)), rereads: true },
+    { verb: "retireApply", why: "agent-not-in-roster", at: /^retire$/, call: (h, c) => Promise.resolve(h.lifecycle.retireApply({ instance: "weekly-digest-helper", revision: "ef5028f1e6cb517560247307", key: "retire-2b9d4e6f8a1c" }, c)), refused: (h, c) => Promise.resolve(h.lifecycle.retireApply({ instance: NOBODY, revision: "ef5028f1e6cb517560247307", key: "retire-000000000000" }, c)), rereads: true },
+    { verb: "spawn", why: "soul-not-listed", at: /^spawn$/, call: (h, c) => Promise.resolve(h.spawn.spawn(SPAWN, c)), refused: (h, c) => Promise.resolve(h.spawn.spawn({ ...SPAWN, soul: "no-such-soul" }, c)), rereads: true },
+    { verb: "automationEnable", why: "row-gone", at: /^schedule (enable|disable)$/, call: (h, c) => Promise.resolve(h.automations.automationEnable({ kind: "schedule", id: "local/weekly-cleanup", enabled: true }, c)), refused: (h, c) => Promise.resolve(h.automations.automationEnable({ kind: "schedule", id: "no-such-row", enabled: true }, c)), rereads: true },
+    { verb: "scheduleRun", why: "row-gone", at: /^schedule run$/, call: (h, c) => Promise.resolve(h.automations.scheduleRun({ id: "local/daily-review" }, c)), refused: (h, c) => Promise.resolve(h.automations.scheduleRun({ id: "no-such-row" }, c)), rereads: true },
+    { verb: "automationDescribe", why: "row-gone", at: /^schedule update$/, call: (h, c) => Promise.resolve(h.automations.automationDescribe({ kind: "schedule", id: "local/status-check", description: "Checks the status." }, c)), refused: (h, c) => Promise.resolve(h.automations.automationDescribe({ kind: "schedule", id: "no-such-row", description: "x" }, c)), rereads: true },
+    { verb: "scheduleRemove", why: "row-gone", at: /^schedule remove$/, call: (h, c) => Promise.resolve(h.automations.scheduleRemove({ id: "local/weekly-cleanup" }, c)), refused: (h, c) => Promise.resolve(h.automations.scheduleRemove({ id: "no-such-row" }, c)), rereads: true },
+    { verb: "scheduleReconcile", why: "row-gone", at: /^schedule reconcile$/, call: (h, c) => Promise.resolve(h.automations.scheduleReconcile({ id: "local/status-check" }, c)), refused: (h, c) => Promise.resolve(h.automations.scheduleReconcile({ id: "no-such-row" }, c)), rereads: true },
     { verb: "schedulerEnable", at: /^schedule host install$/, call: (h, c) => Promise.resolve(h.automations.schedulerEnable(null as never, c)), refused: null, rereads: true },
-    { verb: "automationTest", at: /^trigger test --run-source$/, call: (h, c) => Promise.resolve(h.automations.automationTest({ kind: "trigger", id: "oats-real/harvest-review", runSource: true }, c)), refused: (h, c) => Promise.resolve(h.automations.automationTest({ kind: "trigger", id: "no-such-row", runSource: true }, c)), endedWithCaller: true, rereads: false },
+    { verb: "automationTest", why: "row-gone", at: /^trigger test --run-source$/, call: (h, c) => Promise.resolve(h.automations.automationTest({ kind: "trigger", id: "oats-real/harvest-review", runSource: true }, c)), refused: (h, c) => Promise.resolve(h.automations.automationTest({ kind: "trigger", id: "no-such-row", runSource: true }, c)), endedWithCaller: true, rereads: false },
   ];
   it("the table names every act, once", () => {
     expect(rows.map((row) => row.verb).sort()).toEqual([...ACTS, ...Object.keys(ACTS_BY_ARGUMENT)].sort());
@@ -591,6 +640,25 @@ describe("every act's handler", () => {
   };
   const actsAsked = async (backend: Backend, row: Row) => (await backend.verbs()).filter((verb) => row.at.test(verb));
 
+  it("each other guard holds with its own word: a harness nothing declares, a resume that is no tmux home's, a choice for a home that is not on bb, a model that is none, a relative the roster does not name, a key that is another spawn's, a test with no source to run", async () => {
+    const { acts, handlers, core } = await started();
+    const why = async (asked: Promise<unknown>) => {
+      await refused(asked);
+      return acts().at(-1)!.line.match(/ held .* why=(\S+)$/)?.[1];
+    };
+    const p = <T,>(value: T) => Promise.resolve(value);
+    expect(await why(p(handlers.lifecycle.start({ instance: "weekly-digest-helper", harness: "no-such-harness" }, here)))).toBe("harness-not-declared");
+    expect(await why(p(handlers.lifecycle.start({ instance: "weekly-digest-helper", resume: true }, here)))).toBe("resume-not-tmux");
+    expect(await why(p(handlers.lifecycle.start({ instance: "kernel-fix-developer", harness: "pi" }, here)))).toBe("choice-not-bb");
+    expect(await why(p(handlers.spawn.spawn({ ...SPAWN, harness: "no-such-harness" }, here)))).toBe("harness-not-declared");
+    expect(await why(p(handlers.spawn.spawn({ ...SPAWN, model: "-not-a-model" }, here)))).toBe("spawn-input");
+    expect(await why(p(handlers.spawn.spawn({ ...SPAWN, relation: { kind: "child", to: NOBODY } } as never, here)))).toBe("agent-not-in-roster");
+    await handlers.spawn.spawn(SPAWN, here);
+    expect(await why(p(handlers.spawn.spawn({ ...SPAWN, task: "Another task under the same key." }, here)))).toBe("key-reused");
+    expect(await why(p(handlers.automations.automationTest({ kind: "trigger", id: "oats-real/proposal-review", runSource: true }, here)))).toBe("no-source");
+    await core.reread().catch(() => undefined);
+  }, 60_000);
+
   for (const row of rows) {
     it(`${row.verb}: its guard's refusal is ONE hold and asks the kernel no act${row.refused === null ? " (it has no guard: nothing to hold)" : ""}`, async () => {
       if (row.refused === null) return;
@@ -598,6 +666,7 @@ describe("every act's handler", () => {
       await refused(row.refused(handlers, here));
       expect(acts().map((each) => each.line.split(" ").slice(2, 4).join(" "))).toEqual([`${row.verb} held`]);
       expect(acts()[0]!.level).toBe("warn");
+      expect(acts()[0]!.line.match(/ why=(\S+)$/)?.[1]).toBe(row.why); // its guard's own word
       expect(await actsAsked(backend, row)).toEqual([]);
       await core.reread().catch(() => undefined);
     }, 40_000);

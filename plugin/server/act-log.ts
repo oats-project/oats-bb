@@ -34,13 +34,13 @@
 // retired agent with them (counted as done only once its home is gone). `made`: the instance a
 // spawn made, or a schedule's run launched. `code`: the kernel's code on a run that did not launch.
 // `ms`: from the moment the act was sent.
-// `HELD:<code>`: the kernel was NOT asked: the plugin's own guard refused (the roster could not be
-// read: its code; `invalid`: what was asked names nothing the roster or the provider holds; `error`:
-// the guard itself failed: `why` is then the fault's name, never its message), or the machine was
-// not reached (its code); `why` says which, in the plugin's own words.
+// `HELD:<code>`: the kernel was NOT asked: the plugin's own guard refused (`invalid`: what was asked
+// names nothing the roster or the provider holds; a kernel CODE: a read the act rests on was
+// refused; `error`: the guard itself failed), or the act could not be sent (its code). `why` is ONE
+// word of a closed list (`HOLD_REASONS`, below), never a message.
 //
 // WHAT NEVER GOES IN: a spawn's opening instruction, a description's text, a message, a path, the
-// kernel's sentence, a secret. Every value is one word: whatever is not a letter, a digit or one of
+// kernel's sentence, the plugin's own refusal's message, a secret. Every value is one word: whatever is not a letter, a digit or one of
 // `._:/@-` becomes `_`, and it is cut at 120 characters.
 import { hostContract } from "../contract/index.js";
 
@@ -66,6 +66,31 @@ export const ACTS_BY_ARGUMENT = { automationTest: (input: unknown): boolean => (
 export type ActVerb = Act | keyof typeof ACTS_BY_ARGUMENT;
 /** Whether asking `verb` with this input is an act. */
 export const isAct = (verb: string, input?: unknown): boolean => (ACTS as readonly string[]).includes(verb) || (Object.hasOwn(ACTS_BY_ARGUMENT, verb) && ACTS_BY_ARGUMENT[verb as keyof typeof ACTS_BY_ARGUMENT](input));
+
+/**
+ * WHY an act was held: ONE word of this closed list, never a message: a refusal's message quotes what a caller sent
+ * (a name, a harness) and may hold a path, and the line's rule is that neither reaches the log. A guard of an act
+ * names its word where it refuses (`invalid(message, reason)` in server/core.ts: the message is the window's, the
+ * word the log's); the last five are the act's own (server/core.ts `act`). A new guard adds its word here and to the
+ * README's list; a word no guard uses is taken out (test/server/act-log.test.ts holds both).
+ */
+export const HOLD_REASONS = [
+  "agent-not-in-roster", // the agent, or a spawn's relative, is not one the roster names now
+  "harness-not-declared", // a harness the bb session provider does not declare
+  "resume-not-tmux", // a resume asked of a home that is not on tmux, or with a harness or a model
+  "choice-not-bb", // a harness or a model chosen for a home that is not on bb
+  "soul-not-listed", // a spawn's soul that `oats souls` does not list
+  "spawn-input", // what a spawn names (its model) that is refused before any process
+  "key-reused", // a spawn's key that belongs to another spawn
+  "row-gone", // an automation's row that the list does not hold
+  "no-source", // a test asked to run a source the trigger has none of
+  "read-refused", // a read the act rests on was refused (the roster, a row's list, the provider, a spawn's decision): `result=HELD:<its code>` says which
+  "machine-not-reached", // the act could not be sent: no machine, no deployment
+  "cancelled-before-sent", // the act's call was cancelled before it left
+  "fault", // the guard itself failed, with no refusal
+  "refused", // a refusal of the plugin's that names no word
+] as const;
+export type HoldReason = (typeof HOLD_REASONS)[number];
 
 /** Who an act is about. */
 export type Subject = { instance: string } | { soul: string; name: string | null } | { automation: string } | { scheduler: true };
@@ -155,10 +180,11 @@ export function outcomeOf(verb: ActVerb, value: unknown): { result: "ok" | "INCO
 
 export type Ending = { result: string; ms: number; homes?: string; made?: string; code?: string };
 /** The line of one moment of an act. */
-export function actLine(verb: ActVerb, phase: "asked" | "ended" | "held", subject: Subject, who: { caller: string; host: string | null; at: string; n: number }, more: Ending | { held: string; why: string } | null = null): string {
+export function actLine(verb: ActVerb, phase: "asked" | "ended" | "held", subject: Subject, who: { caller: string; host: string | null; at: string; n: number }, more: Ending | { held: string; why: HoldReason } | null = null): string {
   const head = `oats act ${verb} ${phase} ${subjectOf(subject)} caller=${who.caller} host=${who.host === null ? "-" : word(who.host)} at=${who.at} n=${who.n}`;
   if (more === null) return head;
-  if ("held" in more) return `${head} result=HELD:${word(more.held)} why=${word(more.why)}`;
+  // (`why` is a word of the closed list: one that is not, whatever handed it, is written as the list's fallback.)
+  if ("held" in more) return `${head} result=HELD:${word(more.held)} why=${(HOLD_REASONS as readonly string[]).includes(more.why) ? more.why : "refused"}`;
   const extra = more.homes !== undefined ? ` homes=${word(more.homes)}` : "";
   const made = more.made !== undefined ? ` made=${word(more.made)}` : "";
   const code = more.code !== undefined ? ` code=${word(more.code)}` : "";

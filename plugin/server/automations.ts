@@ -87,7 +87,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     // A list that could not be read names nothing: the act is refused with why the list could not be read, never as "no such row".
     if (!answer.ok) throw refusal({ code: answer.code, message: answer.message });
     const row = answer.list.rows.find((entry) => entry.id === id || entry.id === `local/${id}`);
-    if (row === undefined) throw invalid(`"${id}" is not a ${kind} of this OATS deployment's current list`);
+    if (row === undefined) throw invalid(`"${id}" is not a ${kind} of this OATS deployment's current list`, "row-gone");
     return row;
   };
   /** After an act: the lists are read again for the next client, and so is the roster (a run launches an agent). */
@@ -132,7 +132,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         const row = await named.row();
         const source = row.on?.source ?? null;
         // Only a trigger on a capability's source has a command a test could run, and only a confirmed press runs it.
-        if (run && (kind !== "trigger" || source === null || source === PULL_REQUEST)) throw invalid(`${row.id} has no capability source for a test to run`);
+        if (run && (kind !== "trigger" || source === null || source === PULL_REQUEST)) throw invalid(`${row.id} has no capability source for a test to run`, "no-source");
         return { kind, id: row.id, source, runSource: run };
       };
       // A test changes nothing: it is ended with its caller. One that RUNS the source's command (a confirmed press) is an

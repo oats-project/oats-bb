@@ -53,14 +53,14 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
    * root, from the roster's own row of it, never from the caller.
    */
   const checked = async ({ soul, name, task, harness, model, relation }: Choices): Promise<HostChoices> => {
-    if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
+    if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`, "soul-not-listed");
     if (harness !== undefined) {
       const named = checkHarness(harness, await harnessesOf(core));
-      if (!named.ok) throw invalid(named.error.message);
+      if (!named.ok) throw invalid(named.error.message, "harness-not-declared");
     }
     if (model !== undefined) {
       const named = checkModel(model);
-      if (!named.ok) throw invalid(named.error.message);
+      if (!named.ok) throw invalid(named.error.message, "spawn-input");
     }
     let anchor: HostChoices["relation"];
     if (relation !== undefined) {
@@ -96,7 +96,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       // Kept as a digest: a task may be 100 000 characters, and a caller has no login.
       const of = await digest(JSON.stringify([choices, revision ?? null]));
       let decision = spawns.get(key);
-      if (decision && decision.of !== of) throw invalid("this key already belongs to another spawn: a new spawn needs a new key");
+      if (decision && decision.of !== of) throw invalid("this key already belongs to another spawn: a new spawn needs a new key", "key-reused");
       if (!decision) {
         // The kernel binds an idempotency key to the decision it confirms: the one the person saw
         // (`revision`, a preview's), else the decision as it is now, read first.

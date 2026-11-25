@@ -41,6 +41,7 @@ The session provider doesn't change: package `oats.bb` 0.6.0 is 0.5.1's provider
 ### Development
 
 - **The checks never read a record half-written** (#103): the harness writes its files whole and renames them into place, and reads appended logs by complete lines.
+- **The real run waits for Claude Code's state file to be whole** (#106) before reading it, since Claude Code rewrites it while agents are up. A file that stays broken fails the run, naming the file and never its contents.
 
 ## 0.5.1
 

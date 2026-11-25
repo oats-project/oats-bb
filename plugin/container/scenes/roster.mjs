@@ -1044,8 +1044,9 @@ export default [
       await page.shot(`busy-${viewport.name}-chat`, { plugin: !viewport.mobile });
       // Its start: the first message and the first long answer (a list).
       const first = chat.turns[0].agent.slice(0, 40);
-      await page.evaluate(`(() => { const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let node; while ((node = walker.nextNode())) if (node.textContent.includes(${JSON.stringify(first)})) { node.parentElement.scrollIntoView({ block: "start" }); return "1"; } return ""; })()`);
-      const top = await page.until(`(() => { const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let node; while ((node = walker.nextNode())) if (node.textContent.includes(${JSON.stringify(first)})) { const box = node.parentElement.getBoundingClientRect(); return box.top >= 0 && box.top < window.innerHeight ? "1" : ""; } return ""; })()`, 20);
+      // bb draws a long conversation from its end: its scroller is taken to the top (again, while older messages load) until the first answer is drawn.
+      const find = (text) => `(() => { const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let node; while ((node = walker.nextNode())) if (node.textContent.includes(${JSON.stringify(text)})) return node.parentElement; return null; })()`;
+      const top = await page.until(`(() => { const found = ${find(first)}; if (found) { found.scrollIntoView({ block: "start" }); const box = found.getBoundingClientRect(); return box.top >= 0 && box.top < window.innerHeight ? "1" : ""; } let up = ${find(last)}; while (up && !(up.scrollHeight > up.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(up).overflowY))) up = up.parentElement; if (up) up.scrollTop = 0; return ""; })()`, 30);
       check(top === "1", `${at} the busy chat's first answer is on the page, as the mock model said it`, "the first answer's opening words are not on the screen");
       await page.shot(`busy-${viewport.name}-chat-start`, { plugin: !viewport.mobile });
       const chip = await page.until(visible(testId("oats-open-panel")), 30);

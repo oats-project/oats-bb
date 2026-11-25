@@ -336,6 +336,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const wait = <StatusLine state={entry.status.state} markOnly={entry.status.state === "needs-you"} since={entry.status.since} detail={waitSays} />;
   /** The mark and the age alone: they stand at the end of the name's line. */
   const waitInline = entry.status.state === "needs-you" && (waitSays ?? "") === "";
+  const line = useRef<HTMLDivElement>(null);
+  const fit = useFit(line, "card", "oats-needs-where", true);
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} held={held} said={said} onSend={send} />;
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
@@ -351,21 +353,20 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
       <Card testId="oats-needs-card-body">
         <div className="flex min-w-0 items-start justify-between gap-2">
           {/* ONE line (the reader's P5: the card was five lines, name / soul / "! 5 d" / question / field): the name, then its
-              soul, the reason where there is one and where it is for an agent on tmux (they give way inside what is left:
-              `RowFacts`), then the mark and how long it waits. A wait that says more than its age (a kind of request in
-              words; a state that is not "needs you") keeps its own line, under this one. */}
-          {/* Where the line cannot hold them (a phone's width, a long name) the facts go UNDER the name, whole, with the
-              mark and the age after them: they keep a least width, so a reason is never cut to a stump and the soul and the
-              glyph are never squeezed to nothing (the polish's review: at 390 the card's only word on why there is no reply
-              was clipped mid-word). */}
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+              soul, the reason where there is one and where it is for an agent on tmux, then the mark and how long it waits.
+              A wait that says more than its age (a kind of request in words; a state that is not "needs you") keeps its
+              own line, under this one. Where that line does not fit, THE FIT (`factsFit`, below) says where the facts stand:
+              under the name, whole; and where even what they never give up does not fit there with the mark, the reason
+              wins and the mark with its age takes the next line. */}
+          <div ref={line} data-fit={fit} className={`flex min-w-0 flex-1 items-center gap-x-2 gap-y-0.5 ${fit === "beside" ? "" : "flex-wrap"}`}>
             <AgentName entry={entry} oats={oats} testId="oats-needs-name" />
-            {/* ONE unit that wraps as one: the facts, then the mark with its age, which is never left alone on a line of
-                its own. It keeps a least width (nine rem); on the card the reason is never cut nor left out, whatever its
-                tone (the soul gives way): for an agent whose thread is gone it is the card's only word on why there is no reply. */}
-            <div data-testid="oats-needs-facts" className="flex min-w-0 flex-1 basis-36 items-center gap-x-2">
-              <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" least />
-              {waitInline ? <span className="shrink-0">{wait}</span> : null}
+            <div data-testid="oats-needs-facts" className={`flex min-w-0 items-center gap-x-2 gap-y-0.5 ${fit === "beside" ? "flex-1" : "basis-full"} ${fit === "split" ? "flex-wrap" : ""}`}>
+              <AgentFacts entry={entry} oats={oats} testId="oats-needs-where" card fit={fit} />
+              {waitInline ? (
+                <span data-wait="" className="shrink-0">
+                  {wait}
+                </span>
+              ) : null}
             </div>
           </div>
           {/* One word; its accessible name says where it leads: the agent's thread, or, for an agent with none, its own page.
@@ -474,72 +475,121 @@ function reasonOf(entry: Entry, oats: Ready): { reason: string | null; tone: "wa
   return { reason, tone: said?.rowTone === "warning" ? "warning" : undefined, onTmux };
 }
 
+// ---- THE FIT OF A FACTS LINE (a card's and a row's): ONE design, ONE measure (ruled 25 Nov 2026, after the polish's
+// third review round; a fixed width for the card had cut a reason mid-word at every width under 1280).
+// 1. THE HELD PART is what a facts line never gives up: the soul's least (1.5 em); the reason where it is held (on a
+//    CARD: every reason; on a ROW: a reason that warns); the glyph; their separators; on a card, the mark with its age
+//    after them.
+// 2. The facts stand BESIDE the name when they fit its line with the name and the gap; otherwise UNDER the name, at the
+//    line's whole width. Measured from the element's own boxes after every draw and on every change of its width or of
+//    its words' width; before layout: beside.
+// 3. What "fit beside" counts: on a CARD the WHOLE facts line, the soul unshortened (a card's soul is never cut where a
+//    second line would hold it whole); on a ROW the held part (P20: a row's soul gives way first, down to its least,
+//    before the row takes a second line; a row that holds nothing never takes one).
+// 4. UNDER the name, where even the held part does not fit the line: THE REASON WINS. It is never cut. On a card the
+//    mark with its age then takes the next line: the ONE case where it stands alone ("split").
+// 5. Where a row's facts have no room at all they and their gap are not drawn beside the name ("none": they stay for a
+//    screen reader), so no name is pushed onto two lines for nothing.
+// 6. At 1280 a card and a row are one line.
+// (Not this: a name wider than its own line.)
+
+/** Where a facts line stands: beside its name; under it; under it with the mark and its age on the next line (a card); not drawn (a row with no room). */
+export type Fit = "beside" | "under" | "split" | "none";
+
 /**
- * Whether a row's facts need a line of their own. Pure. `line`: the width the name and the facts share; `name`: the
- * name's width; `gap`: the gap between the two; `held`: the width of what the facts never give up (a reason that
- * warns, the glyph, their separators, and the soul's least). They need their own line when that does not fit beside
- * the name.
+ * THE FIT. Pure. Widths in px: `line`: what the name and the facts share; `name`; `gap`: between two parts of that
+ * line; `whole`: the facts with the soul unshortened; `held`: what the facts never give up (rule 1, without the mark);
+ * `least`: the soul's least alone; `wait`: a card's mark with its age where it stands on this line (0: none);
+ * `holds`: a row holds a reason that warns or the glyph.
  */
-export function factsNeedOwnLine({ line, name, gap, held }: { line: number; name: number; gap: number; held: number }): boolean {
-  return name + gap + held > line;
+export function factsFit({ kind, line, name, gap, whole, held, least, wait, holds }: { kind: "card" | "row"; line: number; name: number; gap: number; whole: number; held: number; least: number; wait: number; holds: boolean }): Fit {
+  // (Half a pixel of grace: boxes are fractions, and a part that fits by its own measure must not go under by a rounding.)
+  const fits = (needed: number) => needed <= line + 0.5;
+  if (kind === "card") {
+    const tail = wait > 0 ? gap + wait : 0;
+    if (fits(name + gap + whole + tail)) return "beside";
+    return fits(held + tail) ? "under" : "split";
+  }
+  if (holds) return fits(name + gap + held) ? "beside" : "under";
+  return fits(name + gap + least) ? "beside" : "none";
 }
 
-/** The soul's least width on a row's line, in the line's own em (app/ui/row-facts.tsx: `min-w-[1.5em]`). */
+/** The soul's least width on a facts line, in the line's own em (app/ui/row-facts.tsx: `min-w-[1.5em]`). */
 const SOUL_LEAST_EM = 1.5;
 
 /**
- * For a row whose facts hold something that must stay whole (`holds`: a reason that warns, or the glyph): whether
- * they stand under the name. Measured from the row's own boxes, whichever way it is drawn now (the name's width; the
- * widths of the facts' parts that never shrink), so it does not flap; looked at again when the row's width changes.
- * With no layout (nothing drawn: a test's DOM) it is false.
+ * THE MEASURE, one for a card and a row. `line`: the element the name (its first child) and the facts share. It reads
+ * the element's own boxes, whichever way it is drawn now (the name's width; each part of the facts at its full width;
+ * the mark with its age), so the answer does not depend on the answer before and does not flap. Looked at again after
+ * every draw, when the line's or the name's width changes, and when a font arrives. With no layout (nothing drawn: a
+ * test's DOM), "beside".
  */
-function useOwnLine(line: { current: HTMLElement | null }, holds: boolean): boolean {
-  const [own, setOwn] = useState(false);
+function useFit(line: { current: HTMLElement | null }, kind: "card" | "row", factsId: string, card: boolean): Fit {
+  const [fit, setFit] = useState<Fit>("beside");
   const measure = () => {
     const element = line.current;
     const name = element?.firstElementChild as HTMLElement | null | undefined;
-    const facts = element?.querySelector<HTMLElement>('[data-testid="oats-home-agent-where"]');
-    if (!holds || !element || !name || !facts || element.clientWidth === 0) {
-      setOwn(false);
+    const facts = element?.querySelector<HTMLElement>(`[data-testid="${factsId}"]`);
+    const width = element?.getBoundingClientRect().width ?? 0;
+    if (!element || !name || !facts || width === 0) {
+      setFit("beside");
       return;
     }
     const em = parseFloat(getComputedStyle(facts).fontSize) || 12;
-    // What the facts never give up: the soul's least; a reason that WARNS, whole; the glyph; and the separators of
-    // those. A plain reason gives way before any of it (it shortens, then leaves the row): it is not counted.
-    const plain = facts.querySelector('[data-phrase="reason"]:not([data-tone="warning"])') !== null;
+    const least = SOUL_LEAST_EM * em;
+    const full = (part: HTMLElement) => Math.max(part.scrollWidth, part.getBoundingClientRect().width);
+    // A reason is held on a card whatever its tone, on a row only where it warns (a plain one shortens, then leaves,
+    // before anything else gives way: a row that draws one does not count it. No row of the home holds one today: a
+    // guard, for a row that one day does).
+    const plain = !card && facts.querySelector('[data-phrase="reason"]:not([data-tone="warning"])') !== null;
+    let whole = 0;
     let held = 0;
+    let holds = false;
     for (const part of Array.from(facts.children) as HTMLElement[]) {
       const phrase = part.getAttribute("data-phrase");
+      const size = full(part);
+      whole += size;
       if (plain && (phrase === "reason" || part.getAttribute("data-sep") === "reason")) continue;
-      held += phrase === "soul" ? SOUL_LEAST_EM * em : Math.max(part.scrollWidth, part.getBoundingClientRect().width);
+      held += phrase === "soul" ? least : size;
+      if (phrase === "where" || (phrase === "reason" && part.getAttribute("data-tone") === "warning")) holds = true;
     }
+    const mark = card ? element.querySelector<HTMLElement>("[data-wait]") : null;
     const gap = parseFloat(getComputedStyle(element).columnGap) || 0;
-    setOwn(factsNeedOwnLine({ line: element.clientWidth, name: name.getBoundingClientRect().width, gap, held }));
+    setFit(factsFit({ kind, line: width, name: name.getBoundingClientRect().width, gap, whole, held, least, wait: mark === null ? 0 : mark.getBoundingClientRect().width, holds }));
   };
-  // After every draw (the words may have changed), and when the row's width changes.
+  // After every draw (the words may have changed) …
   useLayoutEffect(measure);
+  // … and when the line's or the name's width changes with no draw (a resize; a font that arrives).
   useLayoutEffect(() => {
     const element = line.current;
-    if (element === null || !holds || typeof ResizeObserver === "undefined") return undefined;
-    const sized = new ResizeObserver(measure);
-    sized.observe(element);
-    return () => sized.disconnect();
-    // (`measure` reads the row's boxes at the time it runs: the observer is made once per row that holds something.)
-  }, [holds]);
-  return own;
+    if (element === null) return undefined;
+    const sized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    sized?.observe(element);
+    if (element.firstElementChild !== null) sized?.observe(element.firstElementChild);
+    const fonts = typeof document === "undefined" ? undefined : document.fonts;
+    fonts?.addEventListener?.("loadingdone", measure);
+    return () => {
+      sized?.disconnect();
+      fonts?.removeEventListener?.("loadingdone", measure);
+    };
+    // (`measure` reads the boxes at the time it runs: the observer is made once.)
+  }, []);
+  return fit;
 }
 
-function AgentFacts({ entry, oats, testId, least = false, under = false }: { entry: Entry; oats: Ready; testId: string; /** on a card: the reason is held on the line whatever its tone (the soul gives way), and the line stands in a unit with a least width that wraps under the name where the name's line cannot hold it; in a list's row it takes what is left and never wraps (P20) */ least?: boolean; /** in a list's row whose facts stand under the name (`useOwnLine`): the whole line's width */ under?: boolean }) {
+function AgentFacts({ entry, oats, testId, card = false, fit }: { entry: Entry; oats: Ready; testId: string; /** on a card every reason is held (the soul gives way): for an agent whose thread is gone it is the card's only word on why there is no reply */ card?: boolean; /** where THE FIT puts the line */ fit: Fit }) {
   const { reason, tone, onTmux } = reasonOf(entry, oats);
   // A lost session is said in the state's place on a row ("Lost": app/outside `rowWords`), so its line has no reason to hold; its title keeps it.
   const words = rowWords(entry.status.word, entry.status.state, reason);
   const soul = shown(oats.soulOf(entry.agent));
-  // The line measures what fits, so it needs a width that is not its own words': beside a name it takes the rest of
-  // the ROW's width, whatever is left (`flex-1 basis-0`: with a base of its own it wrapped under a long name at a
-  // phone's width). It always stands in a ROW, beside a name (a list's row, a card's first line): in a COLUMN a
-  // flex base is a HEIGHT (a base of ten rem once made every card's line ten rem tall: an empty gap of about 150 px
-  // under the soul; the specialist's finding on the image set of 24 Nov 2026).
-  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} reasonKept={least} className={under ? "min-w-0 basis-full" : "min-w-0 flex-1 basis-0"} />;
+  // The line measures what fits inside it, so it needs a width that is not its own words': beside a name it takes what
+  // the name leaves, from nothing (`flex-1 basis-0`); under a name the line's whole width; on a card whose mark has its
+  // own line, that width too. It always stands in a ROW (a list's row, a card's first line, or the line under it): in a
+  // COLUMN a flex base is a HEIGHT (a base of ten rem once made every card's line ten rem tall: an empty gap of about
+  // 150 px under the soul; the specialist's finding on the image set of 24 Nov 2026). "none": no room at all beside the
+  // name: not drawn, kept for a screen reader.
+  const where = fit === "none" ? "sr-only" : fit === "beside" || (card && fit === "under") ? "min-w-0 flex-1 basis-0" : "min-w-0 basis-full";
+  return <RowFacts testId={testId} soul={soul} reason={words.reason} reasonTone={tone} where={onTmux ? TMUX : undefined} said={{ reason: words.title.reason }} reasonKept={card} className={where} />;
 }
 
 /**
@@ -549,19 +599,17 @@ function AgentFacts({ entry, oats, testId, least = false, under = false }: { ent
  * draw none between theirs.
  */
 function AgentRow({ entry, oats, testId, stateToo = false }: { entry: Entry; oats: Ready; testId: string; stateToo?: boolean }) {
-  const { tone, onTmux } = reasonOf(entry, oats);
   const line = useRef<HTMLSpanElement>(null);
-  const own = useOwnLine(line, tone === "warning" || onTmux);
+  const fit = useFit(line, "row", "oats-home-agent-where", false);
   return (
     <li data-testid={testId} data-instance={entry.agent.instance} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
       {/* ONE line at every width (the reader's P20: at 390 a long name sent its soul to a second line, its neighbours' stayed):
-          the name is whole, the facts take what is left and give way inside it (the reason, then the soul: `RowFacts`).
-          ONE THING may cost a second line (ruled 25 Nov 2026): a reason that WARNS, or the tmux glyph, that cannot stand
-          whole beside the name: such a row's facts go under the name (`data-facts="under"`). Never a clipped warning,
-          never a cut glyph, never a name cut for them; every plain row stays one line. */}
-      <span ref={line} data-facts={own ? "under" : "beside"} className={`flex min-w-0 flex-1 items-baseline gap-x-2 ${own ? "flex-wrap" : ""}`}>
+          the name is whole, the facts take what is left and give way inside it (`RowFacts`). ONE thing may cost a second
+          line: a reason that WARNS, or the tmux glyph, that cannot stand whole beside the name (THE FIT, above:
+          `data-fit="under"`). Never a clipped warning, never a cut glyph, never a name cut for them. */}
+      <span ref={line} data-fit={fit} className={`flex min-w-0 flex-1 items-baseline gap-x-2 ${fit === "under" ? "flex-wrap" : ""}`}>
         <AgentName entry={entry} oats={oats} testId="oats-home-agent" />
-        <AgentFacts entry={entry} oats={oats} testId="oats-home-agent-where" under={own} />
+        <AgentFacts entry={entry} oats={oats} testId="oats-home-agent-where" fit={fit} />
       </span>
       {stateToo ? (
         <span className="shrink-0 text-sm">

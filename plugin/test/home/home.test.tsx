@@ -91,21 +91,16 @@ test("a card says who (the name as words, its soul on its line, and no machine),
   expect(cardFacts.parentElement!.parentElement!.contains(within(release).getByTestId("oats-needs-name"))).toBe(true); // the name's own line
   expect(cardFacts.className.split(/\s+/).filter((name) => /^(h-|min-h-)/.test(name))).toEqual([]);
   expect(workerFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-0"]));
-  // On a card the line keeps a LEAST width and the name's line may wrap: where it cannot hold them (a phone's width, a
-  // long name) the facts go under the name whole, never squeezed to nothing nor a reason cut mid-word (the polish's
-  // review; the live scene measures their width at 390). A list's row never wraps (P20): its facts start from nothing.
-  // On a card the reason is held whatever its tone (app/ui/row-facts.tsx `reasonKept`): never cut, never left out.
-  expect(cardFacts.querySelector('[data-phrase="soul"]')!.className.split(/\s+/)).toEqual(expect.arrayContaining(["shrink", "truncate"]));
-  // The facts and the mark with its age are ONE unit that wraps as one (the mark is never alone on a line): the unit
-  // keeps the least width, and stands in the name's line, which may wrap.
+  // WHERE the facts stand is THE FIT's (app/home/Home.tsx `factsFit`, one measure for a card and a row; its own tests
+  // below). With no layout (this DOM) it is "beside": the card's name, then ONE unit (the facts, then the mark with its
+  // age), on one line that does not wrap; a row's name and facts on one line that does not wrap.
   const unit = cardFacts.parentElement!;
   expect(unit.getAttribute("data-testid")).toBe("oats-needs-facts");
-  expect(unit.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-36"]));
-  expect(unit.className.split(/\s+/)).not.toContain("flex-wrap");
+  expect(cardFacts.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "basis-0"]));
   expect(unit.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
-  expect(unit.parentElement!.className.split(/\s+/)).toContain("flex-wrap");
+  expect([unit.parentElement!.getAttribute("data-fit"), unit.parentElement!.className.split(/\s+/).includes("flex-wrap")]).toEqual(["beside", false]);
   expect(unit.parentElement!.contains(within(release).getByTestId("oats-needs-name"))).toBe(true);
-  expect(workerFacts.parentElement!.className.split(/\s+/)).not.toContain("flex-wrap");
+  expect([workerFacts.parentElement!.getAttribute("data-fit"), workerFacts.parentElement!.className.split(/\s+/).includes("flex-wrap")]).toEqual(["beside", false]);
   // The mark and the age stand at the end of that line (P5), not on a line of their own.
   expect(cardFacts.parentElement!.parentElement!.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
   expect(release.textContent).not.toMatch(/falcon/);
@@ -1176,55 +1171,143 @@ test("behind a result the home's card of a stopped agent that asks says \"Readin
   expect(within(card).getByTestId("oats-needs-stopped").textContent).not.toContain(said!);
 });
 
-// P20, as ruled after the polish's second round: a row of the home's lists is ONE line at every width, and ONE thing may
-// cost it a second line: a reason that WARNS, or the tmux glyph, that cannot stand whole beside the name. The fit is
-// measured from the row's own boxes; jsdom has no layout, so the measure is the pure function's and the widths are given.
-test("whether a row's facts need a line of their own: only when what they never give up does not fit beside the name", async () => {
-  const { factsNeedOwnLine } = await import("../../app/home/Home");
-  // 356: a row at a phone's width; a name, the gap, then the held part (the soul's least, a reason that warns, the glyph).
-  expect(factsNeedOwnLine({ line: 356, name: 150, gap: 8, held: 120 })).toBe(false);
-  expect(factsNeedOwnLine({ line: 356, name: 228, gap: 8, held: 120 })).toBe(false); // exactly
-  expect(factsNeedOwnLine({ line: 356, name: 229, gap: 8, held: 120 })).toBe(true);
-  expect(factsNeedOwnLine({ line: 900, name: 229, gap: 8, held: 120 })).toBe(false); // the same row in a wide window
-  expect(factsNeedOwnLine({ line: 356, name: 330, gap: 8, held: 18 })).toBe(false); // a plain row holds only its soul's least: it stays one line
+// THE FIT OF A FACTS LINE (app/home/Home.tsx, the block of that name; ruled 25 Nov 2026): one design and one measure
+// for a card and a row. The measure reads the element's own boxes; jsdom has no layout, so the pure function is tested
+// with the widths the third review round MEASURED in a browser (its report, reviews/polish-r3-report.md of the
+// text-cut developer), and the drawing with boxes that are given.
+test("THE FIT, pure: a card's facts stand beside the name only when the WHOLE line fits (the soul unshortened, the mark with its age after it); else under the name; and where even what they never give up does not fit there with the mark, the reason wins and the mark takes the next line", async () => {
+  const { factsFit } = await import("../../app/home/Home");
+  const card = (of: { line: number; name: number; whole: number; held: number; wait: number }) => factsFit({ kind: "card", gap: 8, least: 21, holds: false, ...of });
+  // 1280: everything on one line.
+  expect(card({ line: 829, name: 150, whole: 199, held: 119, wait: 44 })).toBe("beside");
+  // Round 3's first case at 390: "Flaky test" (70.1), oats-developer · deleted in bb (whole 101 + 11.9 + 86.2 = 199.1; held 21 + 11.9 + 86.2 = 119.1), "59 min" (70): line 259.7.
+  // Beside it needs 70.1 + 8 + 199.1 + 8 + 70 = 355.2: UNDER (it was drawn beside, the reason cut by 11.6 px).
+  expect(card({ line: 259.7, name: 70.1, whole: 199.1, held: 119.1, wait: 70 })).toBe("under");
+  // A soul of 24 letters on its thread, name of 6 (51.6), "59 min": whole 171: beside needs 308.6 of 259.7: under, where it is whole (171 + 8 + 70 = 249).
+  expect(card({ line: 259.7, name: 51.6, whole: 171, held: 21, wait: 70 })).toBe("under");
+  // A short card that fits whole: beside (name 51.6, soul 101, "5 d" 44: 212.6).
+  expect(card({ line: 259.7, name: 51.6, whole: 101, held: 21, wait: 44 })).toBe("beside");
+  // A tab of 300: "thread not shown in bb" with "59 min": held 148.1 + 8 + 70 = 226.1 of 182.8: the reason wins: SPLIT.
+  expect(card({ line: 182.8, name: 70, whole: 228, held: 148.1, wait: 70 })).toBe("split");
+  // … and with "5 d" there too (203.8 of 182.8); at 340 with "59 min" (226.1 of 222.8).
+  expect(card({ line: 182.8, name: 70, whole: 228, held: 151.8, wait: 44 })).toBe("split");
+  expect(card({ line: 222.8, name: 70, whole: 228, held: 148.1, wait: 70 })).toBe("split");
+  // No mark on this line (a wait that says words has its own): only the facts count.
+  expect(card({ line: 259.7, name: 70.1, whole: 181.6, held: 119.1, wait: 0 })).toBe("beside");
+  // Half a pixel of grace, no more: a rounding does not send a line under.
+  expect(card({ line: 190.27, name: 62.24, whole: 120, held: 120, wait: 0 })).toBe("beside");
+  expect(card({ line: 190.27, name: 63.3, whole: 120, held: 120, wait: 0 })).toBe("under");
 });
 
-test("a row with nothing to hold (a plain reason, no glyph) never takes a second line; one that holds a warning reason or the glyph takes it only when the measure says so", async () => {
-  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "kernel-fix-developer" ? { ...agent, running: true, runtimeState: "running" } : agent));
-  const slot = await homePage({ rpc: handlers({}, agents) });
-  const rows = await slot.findAllByTestId("oats-working-row");
-  // With no layout every row is one line: the facts beside the name, never wrapping.
-  expect(rows.length).toBeGreaterThan(0);
-  for (const row of rows) {
-    const line = row.querySelector("[data-facts]")!;
-    expect([line.getAttribute("data-facts"), line.className.split(/\s+/).includes("flex-wrap")]).toEqual(["beside", false]);
-  }
-  // A row on tmux (the glyph is held): given boxes in which the name leaves no room for the glyph, its facts go under the name, whole.
-  const tmux = rows.find((row) => row.querySelector('[data-phrase="where"]') !== null)!;
-  expect(tmux).toBeDefined();
-  const line = tmux.querySelector<HTMLElement>("[data-facts]")!;
+test("THE FIT, pure: a row's soul gives way first; a row goes under the name only where it holds a reason that warns or the glyph and the held part does not fit; a row that holds nothing never takes a second line, and with no room at all its facts are not drawn", async () => {
+  const { factsFit } = await import("../../app/home/Home");
+  const row = (of: { line: number; name: number; whole: number; held: number; holds: boolean }) => factsFit({ kind: "row", gap: 8, least: 18, wait: 0, ...of });
+  // A plain row: one line while the soul's least fits; the soul is cut inside it, the row never wraps.
+  expect(row({ line: 356, name: 150, whole: 120, held: 18, holds: false })).toBe("beside");
+  expect(row({ line: 356, name: 320, whole: 120, held: 18, holds: false })).toBe("beside"); // 320 + 8 + 18 = 346
+  expect(row({ line: 356, name: 335, whole: 120, held: 18, holds: false })).toBe("none"); // no room at all: not drawn, no gap: the name keeps its line
+  // A row that holds a warning reason (or the glyph): beside while the held part fits, else under, whole.
+  expect(row({ line: 356, name: 150, whole: 200, held: 120, holds: true })).toBe("beside");
+  expect(row({ line: 356, name: 228, whole: 200, held: 120, holds: true })).toBe("beside"); // exactly
+  expect(row({ line: 356, name: 229, whole: 200, held: 120, holds: true })).toBe("under");
+  expect(row({ line: 900, name: 229, whole: 200, held: 120, holds: true })).toBe("beside"); // the same row in a wide window
+});
+
+/** A new roster's token for each draw a test asks for (the row and the card measure after every draw). */
+let drawn = 0;
+/** Boxes for THE FIT's drawing, in a DOM with none: the line's width, the name's, and each part of the facts'. */
+function boxes(line: HTMLElement, of: { line: number; name: number; part: (part: HTMLElement) => number }) {
   const name = line.firstElementChild as HTMLElement;
-  const width = (of: Element) => (of === name ? 340 : 20);
+  const width = (element: HTMLElement) => (element === line ? of.line : element === name ? of.name : of.part(element));
   const box = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     const w = width(this);
     return { x: 0, y: 0, left: 0, top: 0, right: w, bottom: 16, width: w, height: 16, toJSON: () => ({}) };
   });
-  const client = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
-    return this === line ? 356 : 0;
+  const scroll = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
+    return width(this);
   });
+  return () => {
+    box.mockRestore();
+    scroll.mockRestore();
+  };
+}
+const partWidth = (widths: Record<string, number>) => (part: HTMLElement) => (part.hasAttribute("data-wait") ? (widths.wait ?? 0) : (widths[part.getAttribute("data-phrase") ?? `sep`] ?? 0));
+
+test("THE FIT, drawn, a ROW: a row on tmux whose name leaves no room for the glyph has its facts under the name, whole; a plain row beside it stays one line, and one with no room at all draws no facts beside its name", async () => {
+  const agents = fixtureAgents().map((agent): Agent => (agent.instance === "kernel-fix-developer" ? { ...agent, running: true, runtimeState: "running" } : agent));
+  const slot = await homePage({ rpc: handlers({}, agents) });
+  const rows = await slot.findAllByTestId("oats-working-row");
+  for (const row of rows) expect(row.querySelector("[data-fit]")!.getAttribute("data-fit")).toBe("beside"); // no layout: one line
+  const tmux = rows.find((row) => row.querySelector('[data-phrase="where"]') !== null)!;
+  const plain = rows.find((row) => row !== tmux && row.querySelector('[data-phrase="where"]') === null && row.querySelector('[data-tone="warning"]') === null)!;
+  const again = () => act(async () => slot.behavior.emitRealtime("oats/changed", { at: `2026-11-23T18:17:${String((drawn += 1) + 20).padStart(2, "0")}.000Z` }));
+  // The name takes 340 of 356: the glyph (16) with its separator (12) and the soul's least do not fit beside it.
+  let undo = boxes(tmux.querySelector<HTMLElement>("[data-fit]")!, { line: 356, name: 340, part: partWidth({ soul: 100, where: 16, sep: 12 }) });
   try {
-    act(() => void window.dispatchEvent(new Event("resize")));
-    // (No ResizeObserver in this DOM: the row measures after each draw; a new roster draws it again.)
-    await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:26.000Z" }));
-    await waitFor(() => expect(line.getAttribute("data-facts")).toBe("under"));
+    await again();
+    const line = tmux.querySelector<HTMLElement>("[data-fit]")!;
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("under"));
     expect(line.className.split(/\s+/)).toContain("flex-wrap");
     expect(within(tmux).getByTestId("oats-home-agent-where").className.split(/\s+/)).toContain("basis-full");
-    // A plain row beside it, in the same boxes, stays one line.
-    const plain = rows.find((row) => row !== tmux && row.querySelector('[data-phrase="where"]') === null && row.querySelector('[data-tone="warning"]') === null)!;
-    expect(plain.querySelector("[data-facts]")!.getAttribute("data-facts")).toBe("beside");
   } finally {
-    box.mockRestore();
-    client.mockRestore();
+    undo();
+  }
+  // A plain row in the same boxes: no room for its soul's least: not drawn beside the name (kept for a screen reader), and the row does not wrap.
+  undo = boxes(plain.querySelector<HTMLElement>("[data-fit]")!, { line: 356, name: 345, part: partWidth({ soul: 100 }) });
+  try {
+    await again();
+    const line = plain.querySelector<HTMLElement>("[data-fit]")!;
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("none"));
+    expect(line.className.split(/\s+/)).not.toContain("flex-wrap");
+    expect(within(plain).getByTestId("oats-home-agent-where").className.split(/\s+/)).toContain("sr-only");
+  } finally {
+    undo();
+  }
+});
+
+test("THE FIT, drawn, a CARD: where the whole line does not fit beside the name the unit stands under it; where even the held part does not fit there with the mark, the facts keep the line and the mark with its age takes the next", async () => {
+  // (A card with a reason: the agent's thread was deleted in bb.)
+  const sdk = { threads: { list: async () => [], interactions: { list: async () => [] } } } as never as RenderSlotOptions<Contract>["sdk"];
+  const slot = await homePage({ sidebarThreads: { status: "ready", threads: fixtureThreads().filter((thread) => thread.id !== "thr_release") }, sdk });
+  const card = await cardOf(slot, "release-070-maintainer");
+  await waitFor(() => expect(within(card).getByTestId("oats-needs-where").querySelector('[data-phrase="reason"]')).not.toBeNull());
+  const line = card.querySelector<HTMLElement>("[data-fit]")!;
+  const unit = within(card).getByTestId("oats-needs-facts");
+  const facts = within(card).getByTestId("oats-needs-where");
+  expect(line.getAttribute("data-fit")).toBe("beside");
+  const again = () => act(async () => slot.behavior.emitRealtime("oats/changed", { at: `2026-11-23T18:18:${String((drawn += 1) + 10).padStart(2, "0")}.000Z` }));
+  const parts = partWidth({ soul: 101, reason: 86, sep: 12, wait: 44 });
+  // 390: name 150 + 8 + (101 + 12 + 86 = 199) + 8 + 44 = 409 of 260: under; there 21 + 12 + 86 + 8 + 44 = 171 fits: the mark stays after the facts.
+  let undo = boxes(line, { line: 260, name: 150, part: parts });
+  try {
+    await again();
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("under"));
+    expect(line.className.split(/\s+/)).toContain("flex-wrap");
+    expect(unit.className.split(/\s+/)).toEqual(expect.arrayContaining(["basis-full"]));
+    expect(unit.className.split(/\s+/)).not.toContain("flex-wrap");
+    expect(facts.className.split(/\s+/)).toEqual(expect.arrayContaining(["flex-1", "basis-0"]));
+  } finally {
+    undo();
+  }
+  // A line of 150: even 171 does not fit: the reason wins: the facts take the line, the mark with its age the next.
+  undo = boxes(line, { line: 150, name: 150, part: parts });
+  try {
+    await again();
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("split"));
+    expect(unit.className.split(/\s+/)).toEqual(expect.arrayContaining(["basis-full", "flex-wrap"]));
+    expect(facts.className.split(/\s+/)).toContain("basis-full");
+    expect(facts.querySelector('[data-phrase="reason"]')!.className.split(/\s+/)).toContain("shrink-0"); // never cut
+  } finally {
+    undo();
+  }
+  // Wide again: one line.
+  undo = boxes(line, { line: 829, name: 150, part: parts });
+  try {
+    await again();
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("beside"));
+    expect(line.className.split(/\s+/)).not.toContain("flex-wrap");
+  } finally {
+    undo();
   }
 });
 

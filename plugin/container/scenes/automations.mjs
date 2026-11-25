@@ -385,8 +385,8 @@ const scenes = [
       await open(page, `/schedules/${BUSY.ids.long}`, RUN);
       await page.evaluate(click(`${RUN} ${testId("oats-run-row")}`));
       const thread = threads.get("thr_release").id;
-      const there = await page.until(`(() => location.pathname.startsWith("/threads/") ? location.pathname : "")()`, 15);
-      check(typeof there === "string" && there.includes(thread), `${at} the row of a run whose agent has a bb thread opens that thread: its chat`, `${there} (${thread})`);
+      const there = await page.until(`(() => (location.pathname + location.search).includes(${JSON.stringify(thread)}) ? location.pathname : "")()`, 15);
+      check(typeof there === "string", `${at} the row of a run whose agent has a bb thread opens that thread: its chat`, `${await page.evaluate("location.pathname + location.search")} (${thread})`);
 
       // The Runs tab on hundreds: fifty, then Older; filtered by automation and by result.
       await open(page, "/runs", RUN);

@@ -207,6 +207,8 @@ describe("why an act was held", () => {
         if (/^\s*(\*|\/\/)/.test(line)) continue;
         if (/new experimental_PluginRpcRefusal\(/.test(line)) built.push(file);
         if (/(=|:|,|\()\s*invalid\b(?!\()/.test(line) && !/^import /.test(line) && !/export const invalid/.test(line)) aliased.push(`${file}: ${line.trim()}`);
+        // (Nor is it renamed where it is imported or taken out of an object.)
+        if (/\binvalid\s+as\b|\binvalid\s*:\s*[A-Za-z_]/.test(line)) aliased.push(`${file}: ${line.trim()}`);
       }
     }
     expect(built).toEqual(["core.ts", "core.ts"]);

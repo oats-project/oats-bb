@@ -1110,7 +1110,7 @@ read what bb did to an agent: `grep 'oats act' plugins/oats/logs/plugin.log | gr
 What never goes in: a spawn's opening instruction, a description's text, a message, a path, the
 kernel's sentence, the plugin's own refusal's message, a secret. Every value is one word: whatever is not a letter, a digit or one of
 `._:/@-` becomes `_`, cut at 120 characters; and a CODE (a result, a hold's code, a run's code) is
-letters, digits and `_` alone, whatever a kernel prints as its code.
+letters, digits and `_` alone (`-` for an empty one), whatever a kernel prints as its code.
 
 No act can go round it: `core.act` (`server/core.ts`) is the only way a verb that changes something
 reaches the kernel (`core.call` refuses one, in its types and when it runs), and every verb of the

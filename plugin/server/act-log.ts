@@ -98,7 +98,7 @@ export type Subject = { instance: string } | { soul: string; name: string | null
 /** What bb says of who asked (the second argument of every handler). */
 export type Asker = { readonly experimental_caller?: { readonly kind: "client" } | { readonly kind: "plugin"; readonly pluginId: string } | undefined };
 
-/** A CODE on a line (a result, a hold's code, a run's code): letters, digits and `_` alone: whatever a kernel prints as its code, no path and no sentence comes through it. */
+/** A CODE on a line (a result, a hold's code, a run's code): letters, digits and `_` alone (`-` for an empty one): whatever a kernel prints as its code, no path and no sentence comes through it. */
 export const codeWord = (value: string): string => value.replace(/[^A-Za-z0-9_]+/g, "_").slice(0, 80) || "-";
 /** One word of a line: nothing that could end the value, break the line or carry a sentence whole. */
 export const word = (value: string): string => value.replace(/[^A-Za-z0-9._:/@-]+/g, "_").slice(0, 120) || "-";

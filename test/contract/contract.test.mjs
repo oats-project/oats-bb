@@ -175,11 +175,17 @@ async function stopExtraBb(dir) {
  *  printed, what it answered and every bb process.
  *  `out`: the file bb-app's output goes to; `prefix`: what runs before bb-app in the shell (env -u …); `env`: variables
  *  for its server (docker exec -e); `args`: its address and port flags; `ports`: the ports those flags name;
- *  `answered`: the read whose answer a time-out quotes. */
+ *  `answered`: the read whose answer a time-out quotes.
+ *  The ports are below Linux's ephemeral range (32768-60999): a port in it can be taken, as a listener, by any process of
+ *  the container that listens on port 0, the first bb's workers among them (CI, 2026-11-25, run 45519214063: the exposed
+ *  bb's server failed with EADDRINUSE on 0.0.0.0:48886, twice, with no other bb of the test on it). Where bb-app exits,
+ *  what listens on its ports is printed, from /proc/net/tcp*. */
 async function startExtraBb({ dir, out, prefix = "", env = {}, args, ports, up, what, answered, timeoutMs = 180_000 }) {
   const command = `cd ~ && echo started > ${out} && ${prefix ? `${prefix} ` : ""}bb-app --data-dir ~/${dir} ${args} --no-in-app-updates >> ${out} 2>&1; echo "bb-app exited with status $?" >> ${out}`;
   const exited = async () => (await sh(`cat ${out} 2>/dev/null || true`)).includes("bb-app exited with status");
-  const printed = async () => `bb-app printed: ${await said(`tail -c 1500 ${out} 2>&1 || true`)}. Its logs: ${await said(`{ tail -n 30 ~/${dir}/logs/* 2>/dev/null || echo none; } | tail -c 3000`)}`;
+  // A listener on one of its ports, by the kernel's own table (state 0A is LISTEN): this image has no ss or netstat.
+  const holders = () => said(ports.map((port) => `grep -ih ':${port.toString(16).padStart(4, "0")} [0-9A-F:]* 0A ' /proc/net/tcp /proc/net/tcp6 2>/dev/null | sed 's/^/:${port} /'`).join("; ") + "; true");
+  const printed = async () => `bb-app printed: ${await said(`tail -c 1500 ${out} 2>&1 || true`)}. Listening on its ports: ${(await holders()).trim() || "nothing"}. Its logs: ${await said(`{ tail -n 30 ~/${dir}/logs/* 2>/dev/null || echo none; } | tail -c 3000`)}`;
   // Whether anything still answers on one of its ports: a server or daemon of that bb left alive.
   const open = async () => (await sh(ports.map((port) => `curl -s -o /dev/null -m 1 http://127.0.0.1:${port}/ && echo open`).join("; ") + "; true")).includes("open");
   for (let attempt = 1; ; attempt += 1) {
@@ -1073,12 +1079,12 @@ test("T9 a live thread whose project root is gone is reported by readiness as or
 
 test("launch runs the provider's readiness first: a bb whose Claude is not signed in refuses with E_BACKEND_NOT_READY, bb's word in it", async () => {
   // A second bb server with no credential for Claude at all (no mock key in its environment).
-  const signedOut = { ...SETTINGS, server: "http://127.0.0.1:58886", daemon: "http://127.0.0.1:58887" };
+  const signedOut = { ...SETTINGS, server: "http://127.0.0.1:28886", daemon: "http://127.0.0.1:28887" };
   try {
   await startExtraBb({ dir: "bbdata-signed-out", out: "bb-app-signed-out.out", prefix: "env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL",
-    args: "--server-bind-host 127.0.0.1 --server-port 58886 --host-daemon-port 58887", ports: [58886, 58887], what: "the signed-out bb's daemon to connect",
-    up: async () => (await sh("curl -s -m 2 http://127.0.0.1:58887/status || true")).includes('"connected":true'),
-    answered: "curl -s -m 2 http://127.0.0.1:58887/status || echo nothing" });
+    args: "--server-bind-host 127.0.0.1 --server-port 28886 --host-daemon-port 28887", ports: [28886, 28887], what: "the signed-out bb's daemon to connect",
+    up: async () => (await sh("curl -s -m 2 http://127.0.0.1:28887/status || true")).includes('"connected":true'),
+    answered: "curl -s -m 2 http://127.0.0.1:28887/status || echo nothing" });
 
   const result = (await check(signedOut)).result;
   assert.deepEqual(result.problems.map((p) => p.code), ["E_BACKEND_NOT_READY"]);
@@ -1090,8 +1096,8 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "E_BACKEND_NOT_READY");
   assert.match(answer.error.message, /unauthenticated/);
-  assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:58886 bb thread list --json")), [], "nothing was started");
-  assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:58886 bb project list --json")), [], "nothing was created");
+  assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:28886 bb thread list --json")), [], "nothing was started");
+  assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:28886 bb project list --json")), [], "nothing was created");
   assert.equal((await sh(`test -e ${home}/.claude/settings.local.json && echo yes || echo no`)).trim(), "no");
   } finally {
     // A stop that fails says so, and never replaces the error the test body threw.
@@ -1107,11 +1113,11 @@ test("launch runs the provider's readiness first: a bb whose Claude is not signe
 // bb's server refuses it. `settings.oats.bb.hostDaemonPort` tells every bb call the
 // second bb's own daemon port.
 test("a second bb on other ports: with server and hostDaemonPort a launch makes its project and thread in that bb alone; without hostDaemonPort bb refuses it (host not found) and nothing is made in either", async () => {
-  const FIRST = "http://127.0.0.1:38886", SECOND = "http://127.0.0.1:39011";
+  const FIRST = "http://127.0.0.1:38886", SECOND = "http://127.0.0.1:29011";
   // The second bb as a deployment names it: its server, and its daemon's port (the daemon's address follows the port).
-  const second = { ...SETTINGS, server: SECOND, hostDaemonPort: 39012, dataDir: "/home/node/bbdata-second" };
+  const second = { ...SETTINGS, server: SECOND, hostDaemonPort: 29012, dataDir: "/home/node/bbdata-second" };
   // The same bb named as before the key: its server and its daemon's address, and no port for bb's CLI.
-  const withoutPort = { ...SETTINGS, server: SECOND, daemon: "http://127.0.0.1:39012", dataDir: "/home/node/bbdata-second" };
+  const withoutPort = { ...SETTINGS, server: SECOND, daemon: "http://127.0.0.1:29012", dataDir: "/home/node/bbdata-second" };
   const of = async (server) => {
     const [projects, threads] = [JSON.parse(await sh(`BB_SERVER_URL=${server} bb project list --json`)), JSON.parse(await sh(`BB_SERVER_URL=${server} bb thread list --include-hidden --include-archived --json`))];
     return { roots: projects.flatMap((project) => project.sources.map((source) => source.path)), projects: projects.length, threads: threads.map((thread) => thread.id) };
@@ -1119,12 +1125,12 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
   let made = null;
   try {
     await startExtraBb({ dir: "bbdata-second", out: "bb-app-second.out", env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:9999", ANTHROPIC_API_KEY: "dummy-not-a-real-key" },
-      args: "--server-bind-host 127.0.0.1 --server-port 39011 --host-daemon-port 39012", ports: [39011, 39012], what: "the second bb's daemon to connect",
-      up: async () => (await sh("curl -s -m 2 http://127.0.0.1:39012/status || true")).includes('"connected":true'),
-      answered: "curl -s -m 2 http://127.0.0.1:39012/status || echo nothing" });
+      args: "--server-bind-host 127.0.0.1 --server-port 29011 --host-daemon-port 29012", ports: [29011, 29012], what: "the second bb's daemon to connect",
+      up: async () => (await sh("curl -s -m 2 http://127.0.0.1:29012/status || true")).includes('"connected":true'),
+      answered: "curl -s -m 2 http://127.0.0.1:29012/status || echo nothing" });
     await waitFor("the second bb to be ready", async () => (await check(second)).result?.status === "ready", { timeoutMs: 120_000, everyMs: 1_000 });
     // bb's own facts, which the key rests on: the second bb's daemon serves the second server, and the first bb's is on the default port.
-    assert.match(await sh("curl -s -m 2 http://127.0.0.1:39012/status"), /"serverUrl":"http:\/\/127\.0\.0\.1:39011"/);
+    assert.match(await sh("curl -s -m 2 http://127.0.0.1:29012/status"), /"serverUrl":"http:\/\/127\.0\.0\.1:29011"/);
     assert.match(await sh("curl -s -m 2 http://127.0.0.1:38887/status"), /"serverUrl":"http:\/\/127\.0\.0\.1:38886"/);
     const before = { first: await of(FIRST), second: await of(SECOND) };
     assert.deepEqual(before.second, { roots: [], projects: 0, threads: [] }, "the second bb starts empty");
@@ -1132,7 +1138,7 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
     // Without the port: readiness passes (it asks the daemon's address) and warns of exactly this; the launch is refused by bb.
     const warned = (await check(withoutPort)).result;
     assert.equal(warned.status, "ready", JSON.stringify(warned));
-    assert.ok(warned.warnings.some((warning) => warning.code === "session-provider-host-daemon-port" && /hostDaemonPort: 39012/.test(warning.message)), JSON.stringify(warned.warnings));
+    assert.ok(warned.warnings.some((warning) => warning.code === "session-provider-host-daemon-port" && /hostDaemonPort: 29012/.test(warning.message)), JSON.stringify(warned.warnings));
     const refusedHome = await makeHome("second-without-port");
     const refused = await provider("launch", launchInput(refusedHome, "second-without-port"), withoutPort);
     assert.equal(refused.ok, false, JSON.stringify(refused));
@@ -1147,7 +1153,7 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
     // caller that exported the second bb's port as a workaround is refused the same way),
     // and it does not replace the setting either (below, with the FIRST bb's port exported).
     const exported = async (port, settings, input) => JSON.parse(await sh(`BB_HOST_DAEMON_PORT=${port} OATS_CAPABILITY=oats.bb OATS_BACKEND=bb OATS_SETTINGS='${JSON.stringify(settings)}' node ${PROVIDER} session launch`, { input: JSON.stringify({ schemaVersion: 1, wire: "1.3", phase: "session", capability: "oats.bb", provider: "bb", verb: "launch", input }) }));
-    const workaround = await exported(39012, withoutPort, launchInput(refusedHome, "second-without-port"));
+    const workaround = await exported(29012, withoutPort, launchInput(refusedHome, "second-without-port"));
     assert.equal(workaround.ok, false, JSON.stringify(workaround));
     assert.match(workaround.error.message, /Host not found/);
     assert.deepEqual({ first: await of(FIRST), second: await of(SECOND) }, before);
@@ -1155,13 +1161,13 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
     // The other bb's daemon port for this server: readiness refuses it, naming the daemon, the server and the key.
     const crossed = (await check({ ...second, hostDaemonPort: 38887 })).result;
     assert.deepEqual(crossed.problems.map((problem) => problem.code), ["E_BACKEND_NOT_READY"], JSON.stringify(crossed));
-    assert.match(crossed.problems[0].message, /the host daemon at http:\/\/127\.0\.0\.1:38887 serves http:\/\/127\.0\.0\.1:38886, not settings\.oats\.bb\.server http:\/\/127\.0\.0\.1:39011: .*settings\.oats\.bb\.hostDaemonPort/);
+    assert.match(crossed.problems[0].message, /the host daemon at http:\/\/127\.0\.0\.1:38887 serves http:\/\/127\.0\.0\.1:38886, not settings\.oats\.bb\.server http:\/\/127\.0\.0\.1:29011: .*settings\.oats\.bb\.hostDaemonPort/);
     // bb's facts the stronger check rests on: each daemon says which host it is, and each server lists that host and not the other's.
     const hostOf = async (port) => JSON.parse(await sh(`curl -s -m 2 http://127.0.0.1:${port}/status`)).hostId;
     const hostsOf = async (server) => JSON.parse(await sh(`BB_SERVER_URL=${server} bb host list --json`)).map((host) => [host.id, host.status]);
-    assert.deepEqual(await hostsOf(SECOND), [[await hostOf(39012), "connected"]]);
+    assert.deepEqual(await hostsOf(SECOND), [[await hostOf(29012), "connected"]]);
     assert.deepEqual(await hostsOf(FIRST), [[await hostOf(38887), "connected"]]);
-    assert.notEqual(await hostOf(39012), await hostOf(38887));
+    assert.notEqual(await hostOf(29012), await hostOf(38887));
 
     // With the port: the launch makes the home's project and its thread in the second bb, and nothing in the first.
     // (The first bb's port is in the provider's environment: the setting wins.)
@@ -1217,22 +1223,22 @@ test("a second bb on other ports: with server and hostDaemonPort a launch makes 
 });
 
 test("T7 a bb bound to 0.0.0.0: E_BACKEND_EXPOSED at readiness and at launch", async () => {
-  const exposed = { ...SETTINGS, server: "http://127.0.0.1:48886", daemon: "http://127.0.0.1:48887" };
+  const exposed = { ...SETTINGS, server: "http://127.0.0.1:27886", daemon: "http://127.0.0.1:27887" };
   await startExtraBb({ dir: "bbdata-exposed", out: "bb-app-exposed.out", env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:9999", ANTHROPIC_API_KEY: "dummy-not-a-real-key" },
-    args: "--server-bind-host 0.0.0.0 --server-port 48886 --host-daemon-port 48887", ports: [48886, 48887], what: "the exposed bb to answer", timeoutMs: 240_000,
-    up: async () => (await sh("curl -s -m 2 http://127.0.0.1:48886/health || true")).includes('"ok":true'),
-    answered: "curl -s -m 2 http://127.0.0.1:48886/health || echo nothing" });
+    args: "--server-bind-host 0.0.0.0 --server-port 27886 --host-daemon-port 27887", ports: [27886, 27887], what: "the exposed bb to answer", timeoutMs: 240_000,
+    up: async () => (await sh("curl -s -m 2 http://127.0.0.1:27886/health || true")).includes('"ok":true'),
+    answered: "curl -s -m 2 http://127.0.0.1:27886/health || echo nothing" });
 
   const result = (await check(exposed)).result;
   assert.ok(result.problems.some((p) => p.code === "E_BACKEND_EXPOSED"), JSON.stringify(result));
-  assert.match(result.problems.find((p) => p.code === "E_BACKEND_EXPOSED").message, /:48886/);
+  assert.match(result.problems.find((p) => p.code === "E_BACKEND_EXPOSED").message, /:27886/);
   assert.equal(result.status, "needs-configuration");
 
   const home = await makeHome("t7");
   const answer = await provider("launch", launchInput(home, "t7"), exposed);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "E_BACKEND_EXPOSED");
-  assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:48886 bb thread list --json")), [], "no thread was started on the exposed server");
+  assert.deepEqual(JSON.parse(await sh("BB_SERVER_URL=http://127.0.0.1:27886 bb thread list --json")), [], "no thread was started on the exposed server");
   // The first server, on loopback, still reads ready.
   assert.equal((await check()).result.status, "ready");
 });

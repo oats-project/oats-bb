@@ -681,6 +681,30 @@ test("the row of the plugin's page that is shown is the selected one (D-037), an
   await waitFor(() => expect(current()).toEqual([]));
 });
 
+// The Workspace page's four tabs are four routes that mark ONE row. Where the next tab is drawn before the last one
+// is taken away, the row stays the selected one: only the LAST page that marks it clears it (app/workspace/pages.ts `drawn`).
+test("two tabs of the Workspace page drawn at once mark the one row: taking the first away leaves it selected; taking the last away clears it", async () => {
+  const { slot } = await sidebar();
+  await slot.findByTestId("oats-workspace-line");
+  const current = () => slot.getByTestId("oats-page-link-workspace").getAttribute("aria-current") === "page";
+  const { shownPage } = await import("../../app/workspace/pages");
+  const tab = (path: string) => renderSlot<object, Contract>({ component: shownPage(path, () => null, "workspace") } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads() });
+  const teams = tab("teams");
+  await waitFor(() => expect(current()).toBe(true));
+  const machines = tab("machines"); // the next tab's page, drawn while the last one still is
+  await waitFor(() => expect(current()).toBe(true));
+  teams.unmount(); // the last tab's page goes after the next one came
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(current()).toBe(true);
+  machines.unmount();
+  await waitFor(() => expect(current()).toBe(false));
+  // And again from nothing: the count went back to none, so one page alone marks and clears the row as before.
+  const souls = tab("souls");
+  await waitFor(() => expect(current()).toBe(true));
+  souls.unmount();
+  await waitFor(() => expect(current()).toBe(false));
+});
+
 // ONE tree for every backend (model/view.ts `rows`; its table is test/model/tree.test.ts): an agent
 // with no bb thread is drawn under its parent, indented by its depth, whatever the parent's backend;
 // and a row on a bb thread is drawn under a parent that has none.

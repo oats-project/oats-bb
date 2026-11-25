@@ -497,7 +497,7 @@ export default [
         check(was.here && was.reading === false && was.state !== "stopped" && was.acts.some((off) => off === false), `${at} while the stop still runs, the child ${child}'s thread says its state of now, with an act on`, JSON.stringify(was));
         // As the pilot's provider stops the three homes. And from now OATS takes its time to answer a status read, as a
         // real roster does after an act: the result is on screen before the window holds a roster read after the stop.
-        pilotStopArchives({ slowRead: 9000 });
+        pilotStopArchives({ slowRead: 6000 });
         const told = await page.until(`[...document.querySelectorAll("[data-sonner-toast]")].some((each) => each.innerText.includes("3 sessions stopped."))`, 40);
         check(Boolean(told), `${at} the stop's result is told: "3 sessions stopped."`);
         // BETWEEN the result and the read, on the child's thread, with nothing pressed: "Reading…" in its state's
@@ -518,7 +518,11 @@ export default [
           `${at} between the result and the read the ROWS of the three say "Reading…" in their facts' place (or, read again by then, "Stopped"): none says the state of before the stop, and none warns`,
           JSON.stringify(rowsBetween),
         );
-        // (No image: this scene HOLDS the status read for nine seconds to have a "between" to read; a real one is a
+        // The moment's image (the roster developer's, for the second look's index): the child's thread says "Reading…"
+        // and the rows say it. A HELD moment: this scene holds the status read for six seconds to have a "between" to
+        // read (under the ten seconds "Reading…" stands at most, with room for the server's own wait before its read).
+        await page.shot(`lifecycle-${viewport.name}-stop-child-reading`);
+        // (This scene HOLDS the status read to have a "between" to read; a real one is a
         // second or two. The images of a stop's result are `stop-done` and `stop-left-toast`, taken once the roster is read.)
         // The other two, each opened from its row: "Reading…" with its acts off too. ("Reading…" stands for ten seconds
         // at most, app/roster/reading.tsx BOUND_MS, and the places are opened one after the other: one that is opened

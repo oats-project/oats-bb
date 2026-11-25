@@ -1416,3 +1416,13 @@ test("an agent with no bb thread says Reading… on its row too; and the home's 
   expect(within(await row()).queryByTestId("oats-home-agent-where")).toBeNull();
 });
 
+test("a row that waits on a person is not bold while it says Reading…: the claim is of the roster from before the act", async () => {
+  const { slot } = await sidebar();
+  await openParents(slot);
+  const name = () => within(rowOn(slot, "thr_release")!).getByTestId("oats-row-name").className.split(/\s+/);
+  expect(name()).toContain("font-semibold");
+  act(() => noteActed(["release-070-maintainer"], AT));
+  expect(name()).not.toContain("font-semibold");
+  expect(drawn(rowOn(slot, "thr_release")!).reading).toBe("Reading…");
+});
+

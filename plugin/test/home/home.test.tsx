@@ -2,6 +2,7 @@
 // A10: the OATS home (navPanel `home`, and the fixed thread tab) and its badge.
 import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
+import { noteActed } from "../../app/roster/reading";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { ComponentType } from "react";
@@ -1271,6 +1272,11 @@ test("THE FIT, drawn, a ROW: a row on tmux whose name leaves no room for the gly
     await waitFor(() => expect(line.getAttribute("data-fit")).toBe("under"));
     expect(line.className.split(/\s+/)).toContain("flex-wrap");
     expect(within(tmux).getByTestId("oats-home-agent-where").className.split(/\s+/)).toContain("basis-full");
+    // Behind a result that row says "Reading…" beside its name: one line again (no facts to stand under it), in the same boxes.
+    act(() => noteActed(["kernel-fix-developer"], "2099-01-01T00:00:00.000Z"));
+    await waitFor(() => expect(line.getAttribute("data-fit")).toBe("beside"));
+    expect(line.className.split(/\s+/)).not.toContain("flex-wrap");
+    expect(within(tmux).getByTestId("oats-home-agent-reading").textContent).toBe("Reading…");
   } finally {
     undo();
   }

@@ -739,7 +739,7 @@ function busyStage() {
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === total, 60);
       console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; the bb threads with no turn made as idle forks in ${Math.round((forkedAt - chatted) / 1000)} s; ${failedAtStart.length} threads failed at their start in ${Math.round((failedMade - forkedAt) / 1000)} s; ${working.length} threads spawned with a held turn in ${Math.round((heldMade - failedMade) / 1000)} s and all active after ${Math.round((heldAt - heldMade) / 1000)} more s; ${Math.round((Date.now() - started) / 1000)} s in all`);
     },
-    leave: async () => {
+    leave: async ({ threads }) => {
       // The held turns are answered, and every thread this stage made is archived: no later stage sees one.
       rmSync(BUSY_HOLD_FILE, { force: true });
       for (const host of limited.splice(0)) tell("concurrency-limit", "host", host, "auto");
@@ -756,8 +756,8 @@ function busyStage() {
       // And the fixtures' own threads are back, for the stages after this one.
       const kept = away.splice(0).filter((id) => tell("thread", "unarchive", id).startsWith("(bb thread unarchive failed"));
       check(kept.length === 0, "BUSY the fixtures' own threads are put back when the stage leaves", kept.join(" | "));
-      // And the fake oats answers the fixtures again: the next stage starts from their roster, read.
-      fake();
+      // And the fake oats answers the fixtures again, on this run's threads: the next stage starts from their roster, read.
+      fake({ status: { stdout: statusWithRealIds(threads) } });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === 8 && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper"), 60);
     },
   };

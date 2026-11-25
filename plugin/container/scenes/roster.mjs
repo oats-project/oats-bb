@@ -1018,7 +1018,11 @@ export default [
         // Every row bb walks, ours and bb's other threads, in the order drawn; and what stands between them.
         const drawn = JSON.parse(await page.evaluate(`JSON.stringify((() => { const all = [...document.querySelectorAll("[data-sidebar-thread-shortcut-target], ${testId("oats-agent-row-threadless").replaceAll('"', "'")}")]; return { threads: all.filter((row) => row.hasAttribute("data-sidebar-thread-shortcut-target")).map((row) => ({ id: row.getAttribute("data-sidebar-thread-id"), href: row.getAttribute("href") })), threadless: all.filter((row) => !row.hasAttribute("data-sidebar-thread-shortcut-target")).length, hidden: 60 - ${rowsOf}.length }; })())`));
         const onThread = `(location.pathname.match(/\\/threads\\/([^/]+)/) ?? [])[1] ?? ""`;
+        // A press is made once bb's thread page is whole (its composer is drawn: bb takes its keys then), and what it
+        // did is read from where the page went.
+        const composer = `[...document.querySelectorAll("textarea, [contenteditable='true']")].some((e) => e.getClientRects().length > 0)`;
         const walk = async (key, from) => {
+          if (from !== "") await page.until(`${onThread} === ${JSON.stringify(from)} && ${composer} ? "1" : ""`, 30);
           await page.press(key);
           return page.until(`(() => { const now = ${onThread}; return now !== "" && now !== ${JSON.stringify(from)} ? now : ""; })()`, 20);
         };

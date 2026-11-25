@@ -63,18 +63,6 @@ export function forgetOpened(): void {
  * pattern book's form for an off control, out of the tab order, and its name says that the agents
  * are shown, not an act. It is live again the moment another row is on screen.
  */
-
-/** The chevron's tone over a hidden row that failed or cannot be reached, with nobody asked (a row that warns: the warning tone). */
-const TONE: Record<AgentState, string> = {
-  "needs-you": "",
-  outside: "",
-  error: "text-destructive-text",
-  unreachable: "text-destructive-text",
-  working: "",
-  idle: "",
-  stopped: "",
-};
-
 export function FoldToggle({
   instance,
   name,
@@ -116,8 +104,8 @@ export function FoldToggle({
   //   "Stopped · may still run");
   // - opened, the marks leave: the rows show their own.
   const asks = hides === "needs-you" || hides === "outside";
-  const tone = hides === null || asks ? "" : insideTone === "warning" ? "text-warning-text" : TONE[hides];
-  const inWords = hides === null ? "" : asks ? `${Math.max(1, insideAsks)} ${insideAsks > 1 ? "need" : "needs"} you` : insideTone === "warning" && insideSays !== null && insideSays !== "" ? insideSays : STATE[hides].name;
+  const tone = hides === null || asks ? "" : insideTone === "warning" ? "text-warning-text" : hides === "error" || hides === "unreachable" ? "text-destructive-text" : "";
+  const inWords = hides === null ? "" : asks ? `${insideAsks} ${insideAsks > 1 ? "need" : "needs"} you` : insideTone === "warning" && insideSays !== null && insideSays !== "" ? insideSays : STATE[hides].name;
   const label = hides === null ? says : `${says}: ${inWords}`;
   return (
     <button
@@ -134,20 +122,23 @@ export function FoldToggle({
     >
       {/* Two marks, never one turned: closed points RIGHT, open points DOWN (the off one is drawn as open). No rotation
           and no transition (a turned glyph was caught mid-turn, pointing left, and sat askew at a phone's width). Its
-          box is one size at every width, the mark centred in it; beside a hidden row's mark it is narrower, so that the
-          two stand in the gutter's one column, before the parent's own dot. */}
+          box is one size at every width, the mark centred in it. BESIDE A HIDDEN ROW's MARK the gutter's 24 px hold
+          both: the chevron at the gutter's start in a box as wide as its glyph (8 px), the mark right after it (12 px),
+          and the 4 px that are left stand between that mark and the parent's own dot: the mark belongs to the chevron,
+          not to the parent's mark (flush against it, it read as the parent asking). So the chevron of such a row
+          stands a few pixels left of a plain parent's. */}
       <span
         aria-hidden="true"
         data-testid="oats-row-toggle-mark"
         data-open={open ? "true" : "false"}
         {...(hides === null ? {} : { "data-inside": hides, ...(insideTone === "warning" ? { "data-tone": "warning" } : {}) })}
-        className={["inline-flex items-center justify-center text-xs leading-none", asks ? "h-4 w-3" : "size-4", tone === "" ? "" : `font-bold ${tone}`].filter((part) => part !== "").join(" ")}
+        className={["inline-flex items-center justify-center text-xs leading-none", asks ? "h-4 w-2" : "size-4", tone === "" ? "" : `font-bold ${tone}`].filter((part) => part !== "").join(" ")}
       >
         {open ? CHEVRON_OPEN : CHEVRON_CLOSED}
       </span>
-      {asks && hides !== null ? (
+      {asks ? (
         <span aria-hidden="true" data-testid="oats-row-toggle-inside" className="inline-flex w-3 items-center justify-center">
-          <StateMark state={hides} hidden />
+          <StateMark state={hides as AgentState} hidden />
         </span>
       ) : null}
     </button>

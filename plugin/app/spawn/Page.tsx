@@ -635,7 +635,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const updating = asking && chosen !== undefined && !held && (settled !== null || refusal !== null);
 
   // (A spawn that is in flight, pressed here before the person left and came back: the button says so itself.)
-  const spawnWord = phase === "spawning" || hold === "flight" ? W.SPAWNING : phase === "created" ? W.CREATED : phase === "unknown" ? W.CHECK_RESULT : phase === "incomplete" ? W.INCOMPLETE : W.SPAWN;
+  const spawnWord = phase === "spawning" || hold === "flight" ? W.SPAWNING : phase === "created" ? W.CREATED : phase === "unknown" ? W.CHECK_RESULT : W.SPAWN;
   const harnessFailed = harnesses.status === "failed";
   return (
     <Page testId="oats-new-agent-page">
@@ -690,7 +690,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 <Field
                   label={W.HARNESS_LABEL}
                   hint={harnessFailed || notReady === null ? null : notReady.sentence}
-                  error={harnessFailed ? W.HARNESSES_FAILED : null}
+                  // (Not while the roster cannot be read: its notice holds the form and says why; the form adds no red sentence of its own under it.)
+                  error={harnessFailed && !held ? W.HARNESSES_FAILED : null}
                   errorTitle={harnessFailed ? (refusalCode(harnesses.error) ?? undefined) : undefined}
                 >
                   <Choice
@@ -735,11 +736,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                 testId="oats-spawn-model"
                 field="model"
                 value={modelPick}
-                placeholder={MODEL_DEFAULT}
+                // Required of the person: there is no default, so the field does not say "Default" over a mark that says
+                // "Required": it says what it wants ("Choose a model…"), and its list holds no entry that sends none.
+                placeholder={modelHeld.held === MODEL_HELD.required ? W.CHOOSE_MODEL : MODEL_DEFAULT}
                 filterLabel={W.FILTER}
                 options={[
-                  // (Required of the person: the first entry promises nothing, "Default" alone.)
-                  { id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null && modelHeld.held !== MODEL_HELD.required ? resolved.model : undefined) },
+                  ...(modelHeld.held === MODEL_HELD.required ? [] : [{ id: "", label: unsetModel !== null ? `${MODEL_DEFAULT} · ${bbDefaultModel(unsetModel)}` : W.modelDefaultLabel(MODEL_DEFAULT, model === "" && resolved !== null ? resolved.model : undefined) }]),
                   // The ids that serve a bare model more than once are the ones offered: one of them is what to pick.
                   ...suggestions.models.filter((option) => modelHeld.held !== MODEL_HELD.ambiguous || modelHeld.offers.includes(option.id)).map((option) => ({ id: option.id, label: shown(option.label) })),
                   // A model picked before the harness changed stays what is sent, and is said.
@@ -855,7 +857,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               </Button>
               {/* A thread that failed at its start: the result has its title, Details, Open and Close, and nothing
                   that is off. The submit is not drawn there (a control that cannot be used and tells nothing new). */}
-              {unstarted !== null ? null : (
+              {/* Nor where the kernel made the instance and its start is not complete: the result's title says it, and a
+                  held button beside Close would be a status drawn as a control. */}
+              {unstarted !== null || phase === "incomplete" ? null : (
                 <Button
                   variant="primary"
                   data-testid="oats-spawn-submit"

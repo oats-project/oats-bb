@@ -9,6 +9,8 @@ export const TITLE = "New agent";
 
 export const SOUL_LABEL = "Soul";
 export const CHOOSE_SOUL = "Choose a soul…";
+/** The Model field where a model is required and nothing is its default: what it wants, as the Soul field says it. */
+export const CHOOSE_MODEL = "Choose a model…";
 export const READING_SOULS = "Reading the souls…";
 export const READING_HARNESSES = "Reading the harnesses…";
 /** A long list's filter: its placeholder and its name. The field it is in says what it filters. */
@@ -98,4 +100,3 @@ export const SPAWN_UNCONFIRMED_TITLE = "The spawn was refused, and could not be 
 /** The title of what a press came to, by what is known of the instance (model/spawn.ts `SpawnOutcome`). */
 export const FAILURE_TITLE = { refused: SPAWN_FAILED_TITLE, unconfirmed: SPAWN_UNCONFIRMED_TITLE, created: SPAWN_INCOMPLETE_TITLE, unknown: SPAWN_UNKNOWN_TITLE } as const;
 /** The button once an instance exists whose start did not finish (the Desktop's). */
-export const INCOMPLETE = "Spawn incomplete";

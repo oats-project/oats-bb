@@ -226,6 +226,9 @@ const evidence = new Fixtures({ out: join(OUT, "answers"), substitutions: [] });
 const SOUL = "oats-developer";
 const NAME = "pi-form-developer";
 const MODEL = "mock/echo";
+/** A bare model id that two of pi's providers serve (setup.sh), and the ids bb lists for it. */
+const TWIN = "twin";
+const TWINS = ["mock/twin", "mock2/twin"];
 const TASK = "Say hello from pi, then wait.";
 const HOME = join(DEPLOY, "agents", SOUL, "instances", NAME);
 const kernel = JSON.parse(oats("version", "--json").stdout).version;
@@ -292,6 +295,28 @@ try {
     check(await page.evaluate(choose("oats-spawn-soul", SOUL)), `${at}: the soul ${SOUL} is chosen`, await page.evaluate(textOf(testId("oats-spawn-form"))));
     // The harness, from the list the provider declares; the model, from bb's own list for its pi provider.
     check(await page.evaluate(choose("oats-spawn-harness", "pi")), `${at}: the harness pi is chosen from the provider's list`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+    // THE HOLD "Pick provider", on bb's REAL list for pi: the bare id `twin` is the model of two providers (setup.sh:
+    // mock/twin, mock2/twin). Typed, it is held: the Model field's mark, once; Spawn off and described by it; and the
+    // field then offers exactly the ids that serve it, the ones the provider's own refusal would name.
+    const customFirst = await page.until(choose("oats-spawn-model", "__custom__"), 30);
+    check(Boolean(customFirst), `${at}: Custom… is picked in the model's list`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+    await page.until(`document.querySelector(${q("oats-spawn-model-id")}) !== null`, 10);
+    await page.evaluate(fill(testId("oats-spawn-model-id"), TWIN));
+    const HOLD = `(() => { const field = document.querySelector(${q("oats-spawn-model")}); const mark = field?.closest('[data-testid="oats-field"]')?.querySelector('[role="alert"]'); const submit = document.querySelector(${q("oats-spawn-submit")}); const by = submit?.getAttribute("aria-describedby"); return JSON.stringify({ mark: mark?.innerText.trim() ?? null, off: submit?.disabled ?? null, described: by ? (document.getElementById(by)?.innerText.trim() ?? null) : null, beside: document.querySelector(${q("oats-disabled-reason")})?.innerText.trim() ?? null }); })()`;
+    const heldTwin = await page.until(`(() => { const read = ${HOLD}; return JSON.parse(read).mark === "Pick provider" ? read : ""; })()`, 60);
+    check(heldTwin === JSON.stringify({ mark: "Pick provider", off: true, described: "Pick provider", beside: null }), `${at}: the bare id ${TWIN}, which two of pi's providers serve, is HELD: "Pick provider" on the Model field, once; Spawn is off and described by that mark`, heldTwin ?? (await page.evaluate(HOLD)));
+    // The hold as a person meets it: the mark under the Model field, Spawn off.
+    await page.evaluate(`document.querySelector(${q("oats-spawn-model")}).scrollIntoView({ block: "center" })`);
+    await shot("pick-provider");
+    // Its list, open: the ids that serve it, whole, and no other model of bb's list.
+    await page.evaluate(`document.querySelector(${q("oats-spawn-model")}).click()`);
+    const offers = await page.until(`(() => { const ids = [...document.querySelectorAll(${q("oats-spawn-model-option")})].map((option) => option.getAttribute("data-value")); return ids.length > 0 ? JSON.stringify(ids) : ""; })()`, 10);
+    check(offers === JSON.stringify(["", ...TWINS, "__custom__"]), `${at}: and the field offers exactly the ids that serve it (${TWINS.join(", ")}), with Default and Custom…: no other model of bb's list`, String(offers));
+    await shot("pick-provider-list");
+    // One of them picked: the mark goes, and Spawn is armed once its preview is read.
+    check(await page.evaluate(choose("oats-spawn-model", TWINS[1])), `${at}: ${TWINS[1]} is picked from them`, await page.evaluate(textOf(testId("oats-spawn-form"))));
+    const armed = await page.until(`(() => { const read = ${HOLD}; const now = JSON.parse(read); return now.mark === null && now.off === false ? read : ""; })()`, 60);
+    check(Boolean(armed), `${at}: picked whole, it is not held: no mark, and Spawn is armed`, armed ?? (await page.evaluate(HOLD)));
     const offered = await page.until(choose("oats-spawn-model", MODEL), 30);
     check(Boolean(offered), `${at}: the model ${MODEL} is chosen from the models bb lists for its pi provider`, await page.evaluate(textOf(testId("oats-spawn-form"))));
     await page.evaluate(fill(testId("oats-spawn-task"), TASK));
@@ -318,6 +343,11 @@ try {
     await page.evaluate(`document.querySelector(${q("oats-spawn-submit")}).click()`);
     opened = await page.until(`/\\/threads\\/thr_/.test(location.pathname) ? location.pathname : ""`, 180);
     check(Boolean(opened), `${at}: Spawn created the agent and opened its thread`, opened ?? (await page.evaluate(textOf(testId("oats-new-agent-page")))));
+    // WHAT A SUCCESSFUL SPAWN SHOWS NEXT: the new agent's own thread, open, with bb's notice over it that says it was created.
+    const CREATED = "Created Pi form developer."; // (app/spawn/words.ts createdNotice: the agent's name as words)
+    const next = await page.until(`document.body.innerText.includes(${JSON.stringify(CREATED)}) && ${visible(testId("oats-identity-row"))} ? ${JSON.stringify(CREATED)} : ""`, 30);
+    check(next === CREATED, `${at}: and what a person sees next is that thread, with the notice "${CREATED}"`, next ?? (await page.evaluate("document.body.innerText.slice(0, 400)")));
+    await shot("created");
   });
   const applied = recorded(["spawn", SOUL], ["--idempotency-key", NAME]);
   if (applied === undefined) throw new Error("the form's spawn made no oats call: nothing to go on with");

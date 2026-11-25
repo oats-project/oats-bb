@@ -10,7 +10,7 @@ import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
 import { withEvents, type EventsSaid } from "../model/events.js";
 import type { Agent } from "../model/types.js";
-import { actLine, callerOf, isAct, type Act, type ActVerb, type Asker, type Subject } from "./act-log.js";
+import { actLine, callerOf, isAct, outcomeOf, type Act, type ActVerb, type Asker, type Subject } from "./act-log.js";
 
 /** What the kernel printed for one instance: its own row, and its agent group's row without the instances. */
 export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly agent: Readonly<Record<string, unknown>> };
@@ -155,6 +155,8 @@ export function createCore(bb: BbPluginApi) {
   });
   const host = bb.hosts.experimental_client({ contract: hostContract, experimental_signals: hostSignals });
   const lifetime = new AbortController();
+  /** How many acts this server has carried: an act's number, on each of its lines (server/act-log.ts). */
+  let acts = 0;
 
   let target: Target | null = null;
   /** Counts the settings changes, so that a discovery that read the old settings is not kept. */
@@ -649,7 +651,11 @@ export function createCore(bb: BbPluginApi) {
   // ---- calls to the host entry ----
 
   /** Runs one verb on the machine; a kernel refusal, a failed `oats` and an unreachable machine are RPC refusals. */
-  async function ask<Method extends Verb>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal): Promise<Value<Method>> {
+  /**
+   * Asks the host for one verb. `sent` is told the machine's id at the moment the verb is SENT to it (once the
+   * machine and the deployment are found): an act logs its "asked" line there, with the machine it was sent to.
+   */
+  async function ask<Method extends Verb>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal, sent?: (hostId: string) => void): Promise<Value<Method>> {
     let where: Awaited<ReturnType<typeof base>>;
     let answer: Answer<unknown> | null = null;
     try {
@@ -657,6 +663,7 @@ export function createCore(bb: BbPluginApi) {
       where = await base(signal);
       if (!("ok" in where)) {
         const input = { ...where.input, ...extra } as z.input<(typeof hostContract)[Method]["input"]>;
+        sent?.(where.target.hostId);
         answer = (await host.call(method, input, { hostId: where.target.hostId, signal, timeoutMs })) as Answer<unknown>;
       }
     } catch (error) {
@@ -687,10 +694,14 @@ export function createCore(bb: BbPluginApi) {
    * where the act says otherwise (`signal`: a test that runs a command is ended with its caller, as it was).
    * → the kernel's answer, and `endedAt`: the server's stamp at the instant the command returned (`actEnded`), taken
    * BEFORE `after` runs (the read an act asks for as it ends: its roster must be stamped after the act's end).
-   * `after` runs once the kernel was asked, whether it answered or refused; never for a hold.
+   * `after` runs once the guards passed, whether the kernel answered, refused or was not reached (as each act's own
+   * `finally` had it); never where a guard refused.
    */
-  async function act<Method extends ActVerb>(method: Method, subject: Subject, asker: Asker | undefined, timeoutMs: number, guards: () => Promise<Extra<Method>> | Extra<Method>, after?: () => void, signal: AbortSignal = lifetime.signal): Promise<{ value: Value<Method>; endedAt: string }> {
-    const who = () => ({ caller: callerOf(asker), host: target?.hostId ?? null, at: new Date().toISOString() });
+  async function act<Method extends ActVerb>(method: Method, subject: Subject | (() => Subject), asker: Asker | undefined, timeoutMs: number, guards: () => Promise<Extra<Method>> | Extra<Method>, after?: () => void, signal: AbortSignal = lifetime.signal): Promise<{ value: Value<Method>; endedAt: string }> {
+    const n = (acts += 1);
+    // The subject is read at each line: an act whose guard finds the row's own id names it by that from then on.
+    const about = () => (typeof subject === "function" ? subject() : subject);
+    const who = (host: string | null) => ({ caller: callerOf(asker), host, at: new Date().toISOString(), n });
     const codeOf = (error: unknown): string | undefined => (typeof error === "object" && error !== null ? refusedWith.get(error) : undefined);
     let extra: Extra<Method>;
     try {
@@ -698,28 +709,29 @@ export function createCore(bb: BbPluginApi) {
     } catch (error) {
       const code = codeOf(error);
       // The plugin's own words for its own guard; for a refusal that carries the kernel's code (the roster could not
-      // be read; a read the act rests on was refused) the code says it, and the kernel's sentence stays out.
-      bb.log.warn(actLine(method, "held", subject, who(), { held: code ?? "invalid", why: code === undefined ? String((error as Error)?.message ?? error) : "refused before the act was asked" }));
+      // be read; a read the act rests on was refused) the code says it, and the kernel's sentence stays out. A guard
+      // that FAILED (no refusal: a fault of the plugin's own) is `error`, not a judgement on what was asked.
+      const held = code ?? (error instanceof experimental_PluginRpcRefusal ? "invalid" : "error");
+      bb.log.warn(actLine(method, "held", about(), who(null), { held, why: code === undefined ? String((error as Error)?.message ?? error) : "refused before the act was asked" }));
       throw error;
     }
-    bb.log.info(actLine(method, "asked", subject, who()));
+    // The machine the act is SENT to: named on "asked" and, the same, on "ended" (never the machine the server
+    // happens to hold when the act ends: a status read that failed meanwhile, or a changed setting, moves that).
+    let host: string | null = null;
     const from = Date.now();
     try {
-      const value = await ask(method, extra, timeoutMs, signal);
+      const value = await ask(method, extra, timeoutMs, signal, (hostId) => {
+        host = hostId;
+        bb.log.info(actLine(method, "asked", about(), who(host)));
+      });
       const endedAt = actEnded();
-      const results = (value as { results?: unknown }).results;
-      const made = method === "spawn" ? (value as { instance?: unknown }).instance : undefined;
-      bb.log.info(
-        actLine(method, "ended", subject, who(), {
-          result: "ok",
-          ms: Date.now() - from,
-          ...(Array.isArray(results) ? { homes: `${results.filter((row) => (row as { ok?: unknown })?.ok === true).length}/${results.length}` } : {}),
-          ...(typeof made === "string" ? { made } : {}),
-        }),
-      );
+      const said = outcomeOf(method, value);
+      bb.log[said.result === "ok" ? "info" : "warn"](actLine(method, "ended", about(), who(host), { ...said, ms: Date.now() - from }));
       return { value, endedAt };
     } catch (error) {
-      bb.log.warn(actLine(method, "ended", subject, who(), { result: codeOf(error) ?? "FAILED", ms: Date.now() - from }));
+      // Not sent: the machine or the deployment was not found: the kernel was not asked: a hold, with that read's code.
+      if (host === null) bb.log.warn(actLine(method, "held", about(), who(null), { held: codeOf(error) ?? "FAILED", why: "the machine that runs oats was not reached" }));
+      else bb.log.warn(actLine(method, "ended", about(), who(host), { result: codeOf(error) ?? "FAILED", ms: Date.now() - from }));
       throw error;
     } finally {
       after?.();

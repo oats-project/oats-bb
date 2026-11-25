@@ -5,18 +5,26 @@
 //
 // THE LINE, a contract for whoever reads the log (README.md, "The act log"): one act, one line,
 // `key=value` separated by one space, in this order:
-//   oats act <verb> asked <subject> caller=<c> host=<h> at=<iso>
-//   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
-//   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> result=<CODE> ms=<n>
-//   oats act <verb> held  <subject> caller=<c> host=<h> at=<iso> result=HELD:<code> why=<words>
+//   oats act <verb> asked <subject> caller=<c> host=<h> at=<iso> n=<k>
+//   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
+//   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> homes=<ok>/<all>
+//   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=<CODE> ms=<n>
+//   oats act <verb> held  <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<words>
 // <subject>: `instance=<name>`; for a spawn `soul=<soul> name=<name asked, or ->`; for an automation
 // `automation=<kind>:<id>`; for the scheduler `scheduler=-`.
 // <c>: what bb says of who asked: `client` (a window of bb) or `plugin:<id>` (another plugin). bb
-// has no person to name: it is one person's.  <h>: bb's id of the machine `oats` ran on.
-// `result`: `ok`; or the kernel's CODE for a refusal (never its sentence); or `FAILED` for an act
-// that ended with no code. `HELD:<code>`: the plugin's own guard refused before the kernel was asked
-// (the roster could not be read: its code; `invalid`: what was asked names nothing the roster or the
-// provider holds), and `why` says which guard, in the plugin's own words.
+// has no person to name: it is one person's.  <h>: bb's id of the machine the kernel was asked on:
+// the SAME on an act's "asked" and "ended" (the one it was sent to); `-` on a hold (no machine was asked).
+// <k>: the act's number in this run of the plugin's server: the lines of ONE act carry the same, so
+// two acts on one agent at once can be told apart.
+// `result`: `ok`; `INCOMPLETE`: the kernel answered, and its receipt says not everything was done (a
+// stop that left a session running; a retire with something left); the kernel's CODE for a refusal
+// (never its sentence); `FAILED` for an act that ended with no code. `homes`: of a stop, the homes
+// its receipt says it stopped, of those it names; of a retire, the same with the retired agent
+// counted. `HELD:<code>`: the kernel was NOT asked: the plugin's own guard refused (the roster could
+// not be read: its code; `invalid`: what was asked names nothing the roster or the provider holds;
+// `error`: the guard itself failed), or the machine was not reached (its code); `why` says which, in
+// the plugin's own words.
 //
 // WHAT NEVER GOES IN: a spawn's opening instruction, a description's text, a message, a path, the
 // kernel's sentence, a secret. Every value is one word: whatever is not a letter, a digit or one of
@@ -61,13 +69,35 @@ export const callerOf = (asker: Asker | undefined): string => {
   return caller === undefined ? "unknown" : caller.kind === "plugin" ? `plugin:${word(caller.pluginId)}` : "client";
 };
 
-export type Ending = { result: "ok"; ms: number; homes?: string; made?: string } | { result: string; ms: number };
+/**
+ * What the kernel's ANSWER to an act says, for its "ended" line: whether everything was done, the homes it took, the
+ * instance a spawn made. A stop's receipt names each home and whether it stopped (`results`, and its own `ok`); a
+ * retire's names the children it stopped (`children`) and what it left undone (`incomplete`): the retired agent is
+ * counted with them. An answer that says something was NOT done is `INCOMPLETE`, never `ok`: "I pressed Stop and
+ * nothing happened" must not read as a success.
+ */
+export function outcomeOf(verb: ActVerb, value: unknown): { result: "ok" | "INCOMPLETE"; homes?: string; made?: string } {
+  const answer = (typeof value === "object" && value !== null ? value : {}) as { ok?: unknown; results?: unknown; children?: unknown; incomplete?: unknown; instance?: unknown };
+  const stopped = (rows: unknown[]) => rows.filter((row) => (row as { ok?: unknown } | null)?.ok === true).length;
+  if (verb === "stopApply" && Array.isArray(answer.results)) {
+    const ok = stopped(answer.results);
+    return { result: answer.ok === false || ok < answer.results.length ? "INCOMPLETE" : "ok", homes: `${ok}/${answer.results.length}` };
+  }
+  if (verb === "retireApply" && Array.isArray(answer.children)) {
+    const ok = stopped(answer.children);
+    const left = Array.isArray(answer.incomplete) && answer.incomplete.length > 0;
+    return { result: left || ok < answer.children.length ? "INCOMPLETE" : "ok", homes: `${ok + 1}/${answer.children.length + 1}` };
+  }
+  return { result: "ok", ...(verb === "spawn" && typeof answer.instance === "string" ? { made: answer.instance } : {}) };
+}
+
+export type Ending = { result: string; ms: number; homes?: string; made?: string };
 /** The line of one moment of an act. */
-export function actLine(verb: ActVerb, phase: "asked" | "ended" | "held", subject: Subject, who: { caller: string; host: string | null; at: string }, more: Ending | { held: string; why: string } | null = null): string {
-  const head = `oats act ${verb} ${phase} ${subjectOf(subject)} caller=${who.caller} host=${who.host === null ? "-" : word(who.host)} at=${who.at}`;
+export function actLine(verb: ActVerb, phase: "asked" | "ended" | "held", subject: Subject, who: { caller: string; host: string | null; at: string; n: number }, more: Ending | { held: string; why: string } | null = null): string {
+  const head = `oats act ${verb} ${phase} ${subjectOf(subject)} caller=${who.caller} host=${who.host === null ? "-" : word(who.host)} at=${who.at} n=${who.n}`;
   if (more === null) return head;
   if ("held" in more) return `${head} result=HELD:${word(more.held)} why=${word(more.why)}`;
-  const extra = "homes" in more && more.homes !== undefined ? ` homes=${word(more.homes)}` : "";
-  const made = "made" in more && more.made !== undefined ? ` made=${word(more.made)}` : "";
-  return `${head} result=${more.result === "ok" ? "ok" : word(more.result)} ms=${Math.max(0, Math.round(more.ms))}${extra}${made}`;
+  const extra = more.homes !== undefined ? ` homes=${word(more.homes)}` : "";
+  const made = more.made !== undefined ? ` made=${word(more.made)}` : "";
+  return `${head} result=${word(more.result)} ms=${Math.max(0, Math.round(more.ms))}${extra}${made}`;
 }

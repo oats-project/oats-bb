@@ -98,20 +98,38 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   };
   // An act (`core.act`: logged; not ended by its caller going away, only by the plugin's own end): its guard is the
   // row it names, read now; once the kernel was asked, the lists are read again (`changed`).
+  /**
+   * Who an act on a row is about, in the log: the id the caller gave until the guard has found the row, then the ROW's
+   * own id (the kernel is asked with that one: `x` is found as `local/x`), so one row is logged under one name.
+   */
+  const naming = (kind: AutomationKind, id: string) => {
+    let found = id;
+    return {
+      subject: () => ({ automation: `${kind}:${found}` }),
+      row: async () => {
+        const row = await rowOf(kind, id);
+        found = row.id;
+        return row;
+      },
+    };
+  };
 
   return {
     automations: () => lists(),
 
     async automationEnable({ kind, id, enabled }, context) {
-      return (await core.act("automationEnable", { automation: `${kind}:${id}` }, context, HOST_TIMEOUT.act, async () => ({ kind, id: (await rowOf(kind, id)).id, enabled }), changed)).value;
+      const named = naming(kind, id);
+      return (await core.act("automationEnable", named.subject, context, HOST_TIMEOUT.act, async () => ({ kind, id: (await named.row()).id, enabled }), changed)).value;
     },
     async scheduleRun({ id }, context) {
-      return (await core.act("scheduleRun", { automation: `schedule:${id}` }, context, HOST_TIMEOUT.long, async () => ({ id: (await rowOf("schedule", id)).id }), changed)).value;
+      const named = naming("schedule", id);
+      return (await core.act("scheduleRun", named.subject, context, HOST_TIMEOUT.long, async () => ({ id: (await named.row()).id }), changed)).value;
     },
     async automationTest({ kind, id, runSource }, context) {
       // What a test is asked with, read now: the row it names, and its source.
+      const named = naming(kind, id);
       const guards = async (run: boolean) => {
-        const row = await rowOf(kind, id);
+        const row = await named.row();
         const source = row.on?.source ?? null;
         // Only a trigger on a capability's source has a command a test could run, and only a confirmed press runs it.
         if (run && (kind !== "trigger" || source === null || source === PULL_REQUEST)) throw invalid(`${row.id} has no capability source for a test to run`);
@@ -120,17 +138,20 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       // A test changes nothing: it is ended with its caller. One that RUNS the source's command (a confirmed press) is an
       // act all the same: it is logged, with its hold where the guard refuses (server/act-log.ts ACTS_BY_ARGUMENT), and
       // `core.call` would refuse it.
-      if (runSource === true) return (await core.act("automationTest", { automation: `${kind}:${id}` }, context, HOST_TIMEOUT.preview, () => guards(true), undefined, context.experimental_signal)).value;
+      if (runSource === true) return (await core.act("automationTest", named.subject, context, HOST_TIMEOUT.preview, () => guards(true), undefined, context.experimental_signal)).value;
       return core.call("automationTest", await guards(false), HOST_TIMEOUT.preview, context.experimental_signal);
     },
     async automationDescribe({ kind, id, description }, context) {
-      return (await core.act("automationDescribe", { automation: `${kind}:${id}` }, context, HOST_TIMEOUT.act, async () => ({ kind, id: (await rowOf(kind, id)).id, description }), changed)).value;
+      const named = naming(kind, id);
+      return (await core.act("automationDescribe", named.subject, context, HOST_TIMEOUT.act, async () => ({ kind, id: (await named.row()).id, description }), changed)).value;
     },
     async scheduleRemove({ id }, context) {
-      return (await core.act("scheduleRemove", { automation: `schedule:${id}` }, context, HOST_TIMEOUT.act, async () => ({ id: (await rowOf("schedule", id)).id }), changed)).value;
+      const named = naming("schedule", id);
+      return (await core.act("scheduleRemove", named.subject, context, HOST_TIMEOUT.act, async () => ({ id: (await named.row()).id }), changed)).value;
     },
     async scheduleReconcile({ id }, context) {
-      return (await core.act("scheduleReconcile", { automation: `schedule:${id}` }, context, HOST_TIMEOUT.act, async () => ({ id: (await rowOf("schedule", id)).id }), changed)).value;
+      const named = naming("schedule", id);
+      return (await core.act("scheduleReconcile", named.subject, context, HOST_TIMEOUT.act, async () => ({ id: (await named.row()).id }), changed)).value;
     },
     schedulerEnable: async (_input, context) => (await core.act("schedulerEnable", { scheduler: true }, context, HOST_TIMEOUT.act, () => ({}), changed)).value,
 

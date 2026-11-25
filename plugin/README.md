@@ -1011,29 +1011,44 @@ The line is a contract: one act, one line, `key=value` separated by one space, i
 (`server/act-log.ts`):
 
 ```
-oats act <verb> asked <subject> caller=<c> host=<h> at=<iso>
-oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
-oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> result=<CODE> ms=<n>
-oats act <verb> held <subject> caller=<c> host=<h> at=<iso> result=HELD:<code> why=<words>
+oats act <verb> asked <subject> caller=<c> host=<h> at=<iso> n=<k>
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> homes=<ok>/<all>
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=<CODE> ms=<n>
+oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<words>
 ```
 
 - `<subject>`: `instance=<name>`; for a spawn `soul=<soul> name=<the name asked, or ->`; for an
-  automation `automation=<kind>:<id>`; for the scheduler `scheduler=-`.
+  automation `automation=<kind>:<id>` (the row's own id once it was found: the one the kernel is
+  asked with); for the scheduler `scheduler=-`.
 - `caller`: what bb says of who asked: `client` (a window of bb) or `plugin:<id>` (another plugin).
   **bb has no person to name**: a bb is one person's, and it gives a plugin no user.
-- `host`: bb's id of the machine `oats` ran on (`-` where the server holds none: after a read of
-  OATS that failed).
+- `host`: bb's id of the machine the act was SENT to: the same on an act's two lines, whatever the
+  server reads meanwhile. `-` on a hold: no machine was asked.
 - `at`: the plugin server's clock, UTC.
-- `result`: `ok`; the kernel's CODE for a refusal (never its sentence); `FAILED` for an act that
-  ended with no code. `homes`: of a stop or a retire, how many homes its receipt says it took, of
-  how many it names. `made`: the instance a spawn made. `ms`: how long the kernel took.
-- `HELD:<code>`: the plugin refused before the kernel was asked: `invalid` (what was asked names
-  nothing the roster or the provider holds: an agent that is not in the roster now, a harness
-  nothing declares, a row that is gone), or the code of the read the act rests on (OATS could not
-  be read). `why` says which guard, in the plugin's own words, as one word. A button that is OFF in
-  the window (while the roster is stale, or "Reading…") asks the server nothing: there is no line
-  for a press that could not be made.
-- `asked` and `ok` are written at bb's level `info`; a refusal and a hold at `warn`.
+- `n`: the act's number in this run of the plugin's server: the lines of one act carry the same
+  number, so two acts on one agent at the same time are told apart.
+- `result`: `ok`; `INCOMPLETE`: the kernel answered and its receipt says not everything was done (a
+  stop that left a session running; a retire that left something undone): "I pressed Stop and
+  nothing happened" never reads as `ok`; the kernel's CODE for a refusal (never its sentence);
+  `FAILED` for an act that ended with no code. `homes`: of a stop, the homes its receipt says it
+  stopped, of those it names; of a retire, the same with the retired agent counted. `made`: the
+  instance a spawn made. `ms`: how long the kernel took.
+- `HELD:<code>`: the kernel was NOT asked. The plugin's guard refused: `invalid` (what was asked
+  names nothing the roster or the provider holds: an agent that is not in the roster now, a harness
+  nothing declares, a row that is gone), the code of the read the act rests on (OATS could not be
+  read), `error` (the guard itself failed); or the machine was not reached (its code). `why` says
+  which, in the plugin's own words, as one word. A button that is OFF in the window (while the
+  roster is stale, or "Reading…") asks the server nothing: there is no line for a press that could
+  not be made.
+- `asked` and `ok` are written at bb's level `info`; `INCOMPLETE`, a refusal and a hold at `warn`.
+
+WHERE the lines are: bb writes what a plugin logs in two places under its data directory:
+`plugins/oats/logs/plugin.log` (the plugin's own file: JSON lines `{"ts","level","message"}`, every
+level, written before the act goes on; it holds the plugin's other lines too, and bb rotates it at
+5 MB keeping one older file), and bb's server log `logs/server.N.log` (the same message after
+`[plugin:oats] `, at bb's own log level: `info` and above by default, written a moment later). To
+read what bb did to an agent: `grep 'oats act' plugins/oats/logs/plugin.log | grep 'instance=<name> '`.
 
 What never goes in: a spawn's opening instruction, a description's text, a message, a path, the
 kernel's sentence, a secret. Every value is one word: whatever is not a letter, a digit or one of

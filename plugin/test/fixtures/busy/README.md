@@ -7,7 +7,7 @@ images. No feature shapes busy data of its own.
 |---|---|
 | agents | 60, four levels deep (six efforts: a lead, three developers, a helper under each, a reviewer under the first helper; twelve agents alone); 52 on bb threads, 8 on tmux |
 | asking (needs you) | 11, one of them a lead whose own developer asks too; four of their questions are four lines long |
-| failed, lost, outside OATS | 3 failed; 7 whose session was lost (3 on bb, 4 on tmux); 2 running outside OATS |
+| failed, lost, outside OATS | 3 failed at their start; 7 whose session was lost (3 on bb, 4 on tmux); 2 running outside OATS |
 | souls | 24, most with long names |
 | automations | 37 (25 schedules, 12 triggers); 5 failing; 4 schedules hold 50 runs each |
 | teams, machines | 7 and 5 |
@@ -22,7 +22,7 @@ times and relations are varied, and a count that follows the rows. Nothing else.
 
 | file | the answer it multiplies | what alone is varied in a row |
 |---|---|---|
-| `status.json` | `../roster/status.json` (its rows that ask, work, are idle, stopped, on tmux), `../outside/status-outside.json` (running outside OATS), `../panel/status-board.json` (the agent with a board), `../outside/status-archived-while-running.json` (a session lost on bb), `../lifecycle/tmux-row-lost.json` (a session lost on tmux) | the instance's name wherever the row writes it (`instance`, `home`, the identity's alias, the tmux window); its soul (`agent`, the soul's directory in `home`); its bb thread's id (a slot, `thr_busy_NN`, which the live stage fills with the run's own thread); `parentInstance`; a claim's `since` and `message`. On the busy chat's agent `board` is the recorded board multiplied: each fact a recorded fact (its `key`, `label`, `value`, `at` varied), each question the recorded question (its `id`, `question`, `since` varied), and its claim says the oldest question, as the kernel's does |
+| `status.json` | `../roster/status.json` (its rows that ask, work, are idle, stopped, on tmux), `../outside/status-outside.json` (running outside OATS), `../outside/status-failed-at-start.json` (failed at its start), `../panel/status-board.json` (the agent with a board), `../outside/status-archived-while-running.json` (a session lost on bb), `../lifecycle/tmux-row-lost.json` (a session lost on tmux) | the instance's name wherever the row writes it (`instance`, `home`, the identity's alias, the tmux window); its soul (`agent`, the soul's directory in `home`); its bb thread's id (a slot, `thr_busy_NN`, which the live stage fills with the run's own thread); `parentInstance`; a claim's `since` and `message`. On the busy chat's agent `board` is the recorded board multiplied: each fact a recorded fact (its `key`, `label`, `value`, `at` varied), each question the recorded question (its `id`, `question`, `since` varied), and its claim says the oldest question, as the kernel's does |
 | `souls.json` | `../workspace/souls.json` | the soul's name wherever the row writes it; `description` |
 | `schedule-list.json` | `../automations/schedule-list.json` | the schedule's name wherever the row writes it; the minute of `cron`; `description`; on four of them `recentRuns` is the recorded run fifty times, each with its own `runId`, `scheduledFor` and `startedAt`, and `history.stored` follows |
 | `trigger-list.json` | `../automations/trigger-list.json` | the trigger's name wherever the row writes it; `description` |
@@ -34,10 +34,12 @@ trigger count in the schedule list; the history's count) and, in `status.json`, 
 the kernel that recorded `status-board.json` (it lists `provider-outside-oats` and `instance-board`,
 without which the outside rows and the board would say nothing).
 
-**The one shaped kind: a failed agent.** No kernel answer of a failed agent is recorded (the
-plugin's README, "its session ended in a shell … (no recording)"). The three failed rows are the
-recorded idle row with the two keys of that line of the README's table set: `running: false`,
-`runtimeState: "shell"`. `test/busy/busy.test.ts` names them and allows it for them alone.
+**No row is shaped.** A failed agent is the kernel's recorded row of a home whose bb thread
+failed at its start (`../outside/status-failed-at-start.json`, the pi run's). That row is a lost
+session's: what says "Failed at its start" is bb's own record of the thread (an error and never a
+turn). So the live stage makes those three agents' threads fail at their start for real
+(`threads.json` names them); a thread that could not be made to fail reads as a lost session, and
+the stage says so.
 
 **The one made-up text: the busy chat's conversation** (`chat.json`). A conversation is no answer
 of the kernel's, so none is recorded: the generator holds its ten turns, and the live stage has the

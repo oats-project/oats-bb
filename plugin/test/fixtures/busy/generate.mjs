@@ -133,9 +133,10 @@ export function build() {
     work: [byName.get("redesign-ui-lead"), byName.get("desktop-mockups-developer")],
     idle: [byName.get("harvest-knowledge-helper")],
     stopped: [byName.get("weekly-digest-helper")],
-    // FAILED has no recorded row (README: "its session ended in a shell … (no recording)"): the recorded idle row, with the
-    // two session keys of that line of the README's table set. The ONE kind here that is shaped; README.md says so.
-    failed: [byName.get("harvest-knowledge-helper")],
+    // FAILED AT ITS START: the kernel's recorded row of a home whose bb thread failed at its start (the pi run's; the
+    // outside fixtures' README). It is a lost session's row: what says "failed" is bb's own record of the thread (an
+    // error and never a turn), which the live stage makes for real (threads.json names these agents).
+    failed: [rowsOf(recorded("outside/status-failed-at-start.json"))[0]],
     outside: [outside],
     lost: [lostBb],
     tmux: [byName.get("kernel-fix-developer")],
@@ -180,7 +181,6 @@ export function build() {
     if (typeof thread === "string") swaps.push([thread, `thr_busy_${String(n + 1).padStart(2, "0")}`]);
     const set = [[["agent"], soul], [["parentInstance"], parent]];
     if (kind === "ask") set.push([["waitingOnYou", "since"], iso(n * 37)], [["waitingOnYou", "message"], n % 2 === 0 ? QUESTION : `${model.row.waitingOnYou.message} (${instance.replace(/-/g, " ")})`]);
-    if (kind === "failed") set.push([["running"], false], [["runtimeState"], "shell"]);
     if (kind === "board") {
       // A FULL BOARD: the recorded facts and the recorded question, multiplied: twelve facts, nine open questions (one
       // of four lines). The claim follows the board, as the kernel's does: it says the oldest question.
@@ -201,7 +201,7 @@ export function build() {
       set.push([["board"], { ...copy(board), facts, questions }], [["waitingOnYou", "since"], questions[0].since], [["waitingOnYou", "message"], questions[0].question]);
     }
     const row = vary(model.row, swaps, set);
-    made.agents.push({ ...row, kind, shaped: kind === "failed" ? ["running", "runtimeState"] : [] });
+    made.agents.push({ ...row, kind });
     if (!groups.has(soul)) groups.set(soul, { ...copy(status.agents[0]), name: soul, instances: [] });
     groups.get(soul).instances.push(row.row);
   });
@@ -271,7 +271,7 @@ export function build() {
   });
   const servers = { ...copy(serversDoc), servers: made.servers.map((each) => each.row) };
 
-  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
+  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -630,6 +630,31 @@ function busyStage() {
         existing = list();
       }
       const chatted = Date.now();
+      // FAILED AT ITS START: the set's row of such an agent is a lost session's; what says "failed" is bb's own record
+      // of the thread (an error and never a turn). So its thread is made to fail at its start: a model the harness
+      // cannot start with. What bb then holds of each is said.
+      const { failedAtStart } = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/threads.json"), "utf8"));
+      {
+        const project = listOf(bbJson("project", "list"), "projects")[0];
+        const root = (project.sources ?? []).find((each) => each.path)?.path;
+        const said = [];
+        for (const instance of failedAtStart) {
+          const title = providerTitle(instance);
+          if (existing.some((thread) => thread.title === title)) continue;
+          said.push(`${instance}: ${tell("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--model", "no-such-model-20261122", "--title", title, "--prompt", "hello", "--json").slice(0, 200)}`);
+        }
+        if (said.length > 0) {
+          await sleep(15_000);
+          existing = list();
+          for (const instance of failedAtStart) {
+            const thread = existing.find((candidate) => candidate.title === providerTitle(instance));
+            const types = thread === undefined ? "no thread" : tell("thread", "log", thread.id, "--json").replace(/\s+/g, " ").match(/"type": ?"[a-z./-]+"/g)?.join(" ") ?? "(no events read)";
+            console.log(`NOTE BUSY failed at its start, ${instance}: bb says ${thread?.status ?? "absent"}; events: ${String(types).slice(0, 600)}`);
+          }
+          console.log(`NOTE BUSY the spawns said: ${said.join(" | ").slice(0, 900)}`);
+        }
+      }
+      const failedMade = Date.now();
       for (const row of onBb) {
         const title = providerTitle(row.instance);
         if (!existing.some((thread) => thread.title === title)) bb("thread", "fork", source.id, "--title", title);
@@ -664,7 +689,7 @@ function busyStage() {
       const idle = working.filter((row) => statusOf(byInstance.get(row.instance).id, all) !== "active");
       check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${working.length} busy agents that work`, idle.map((row) => `${row.instance}: ${statusOf(byInstance.get(row.instance).id, all)}`).join(" | "));
       // An agent whose session was lost on bb: its thread is archived, as the recorded row's was.
-      for (const row of onBb.filter((each) => each.sessionEnd === "lost")) bb("thread", "archive", byInstance.get(row.instance).id);
+      for (const row of onBb.filter((each) => each.sessionEnd === "lost" && !failedAtStart.includes(each.instance))) bb("thread", "archive", byInstance.get(row.instance).id);
       // The set, with this run's thread in each slot.
       let text = JSON.stringify(status);
       for (const row of onBb) text = text.split(row.session.threadId).join(byInstance.get(row.instance).id);
@@ -678,7 +703,7 @@ function busyStage() {
       });
       const total = rowsOf(status).length;
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === total, 60);
-      console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; ${made.length - 1} bb threads made as idle forks in ${Math.round((forked - chatted) / 1000)} s; ${working.length} turns held open in ${Math.round((Date.now() - forked) / 1000)} s; ${Math.round((Date.now() - started) / 1000)} s in all`);
+      console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; ${failedAtStart.length} threads failed at their start in ${Math.round((failedMade - chatted) / 1000)} s; the other bb threads made as idle forks in ${Math.round((forked - failedMade) / 1000)} s; ${working.length} turns held open in ${Math.round((Date.now() - forked) / 1000)} s; ${Math.round((Date.now() - started) / 1000)} s in all`);
     },
     leave: async () => {
       // The held turns are answered, and every thread this stage made is archived: no later stage sees one.

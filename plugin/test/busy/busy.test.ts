@@ -35,9 +35,9 @@ describe("the busy set", () => {
     expect(rows).toBeGreaterThan(350); // 60 agents, 24 souls, 37 automations, 200 runs, 7 teams, 5 machines, 12 facts, 9 questions
   });
 
-  it("what is varied is a name, an id, a time, a relation or a text, and nothing else; the ONE shaped kind is said", () => {
+  it("what is varied is a name, an id, a time, a relation or a text, and nothing else: no row is shaped", () => {
     const ALLOWED: Record<string, string[]> = {
-      agents: ["agent", "parentInstance", "waitingOnYou.since", "waitingOnYou.message", "running", "runtimeState", "board"],
+      agents: ["agent", "parentInstance", "waitingOnYou.since", "waitingOnYou.message", "board"],
       facts: ["key", "label", "value", "at"],
       questions: ["id", "question", "since"],
       souls: ["description"],
@@ -48,10 +48,10 @@ describe("the busy set", () => {
       runs: ["scheduledFor", "startedAt"],
     };
     for (const [list, rows] of Object.entries(made)) for (const each of rows) expect([list, each.was.map(([path]) => path.join(".")).filter((path) => !ALLOWED[list]!.includes(path))]).toEqual([list, []]);
-    // The session's keys are set on the FAILED rows alone (no kernel answer of a failed agent is recorded: README.md).
-    const shaped = made.agents.filter((each) => each.was.some(([path]) => path[0] === "running" || path[0] === "runtimeState"));
-    expect(shaped.map((each) => each.kind)).toEqual(["failed", "failed", "failed"]);
-    expect(shaped.every((each) => each.row.running === false && each.row.runtimeState === "shell")).toBe(true);
+    // No row is shaped: a failed agent is the kernel's recorded row of one that failed at its start (a lost session's row).
+    const failed = made.agents.filter((each) => each.kind === "failed");
+    expect(failed.map((each) => [each.from.instance, each.row.running, each.row.runtimeState, each.row.sessionEnd, each.row.backend])).toEqual(Array.from({ length: 3 }, () => ["pi-unstarted-developer", false, "stopped", "lost", "bb"]));
+    expect((files["threads.json"] as { failedAtStart: string[] }).failedAtStart).toEqual(failed.map((each) => each.row.instance));
     // A swap is a name or an id: never a word of two letters, never empty, and every one took.
     for (const rows of Object.values(made)) for (const each of rows) for (const [from, to] of each.swaps) expect([from.length > 3, to.length > 3, JSON.stringify(each.row).includes(to)]).toEqual([true, true, true]);
   });
@@ -79,8 +79,7 @@ describe("the busy set", () => {
     expect(new Set(chat.turns.map((turn) => turn.you)).size).toBe(chat.turns.length); // the mock model finds an answer by its message
     expect(chat.turns.filter((turn) => chat.turns.some((other) => other !== turn && other.you.includes(turn.you)))).toEqual([]);
     expect([chat.turns.some((turn) => turn.agent.includes("```")), chat.turns.some((turn) => /^- /m.test(turn.agent)), chat.turns.some((turn) => /^1\. /m.test(turn.agent)), chat.turns.filter((turn) => turn.agent.split("\n\n").length >= 3).length >= 5]).toEqual([true, true, true, true]);
-    expect(agents.filter((agent) => agent.runtimeState === "shell").length).toBeGreaterThanOrEqual(3);
-    expect(agents.filter((agent) => agent.sessionEnd === "lost").length).toBeGreaterThanOrEqual(5);
+    expect(agents.filter((agent) => agent.sessionEnd === "lost").length).toBeGreaterThanOrEqual(10); // seven lost, and three that failed at their start (a lost session's row)
     expect(agents.filter((agent) => agent.outsideOats !== undefined).length).toBeGreaterThanOrEqual(2);
     expect(agents.filter((agent) => agent.backend === "bb").length).toBeGreaterThanOrEqual(50); // a workspace whose agents are mostly on bb threads
     expect(agents.filter((agent) => agent.instance.length >= 60).length).toBeGreaterThanOrEqual(6);

@@ -17,6 +17,7 @@
 // window is at a shell), the page says "Stopped", and Terminal is gone from it.
 import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 
 const NAME = "seen-tmux-developer";
@@ -33,9 +34,27 @@ export default async (run) => {
   const row = () => rowOf(NAME);
   const clients = () => sh("tmux", ["-L", "oats", "list-clients", "-F", "#{client_session}"]).stdout.split("\n").filter(Boolean);
   const pane = () => sh("tmux", ["-L", "oats", "capture-pane", "-p", "-t", `${SESSION}:${NAME}`]).stdout;
-  /** bb's terminals on the machine, by its own CLI: their ids. */
-  const terminals = () => [...new Set(sh("bb", ["terminal", "list"]).stdout.match(/term_[a-z0-9]+/g) ?? [])];
-  const closeAll = () => terminals().forEach((id) => sh("bb", ["terminal", "close", id, "--force"]));
+  /**
+   * bb's terminals on this machine that have not ended, by its own CLI: their ids. (`bb terminal
+   * list` lists exactly one scope: the machine's; `bb terminal close` takes an id and no flag.)
+   * A list bb refuses is said, never read as "none": a helper that is blind fails where it is blind.
+   */
+  const terminals = () => {
+    const listed = sh("bb", ["terminal", "list", "--machine", hostname(), "--json"]);
+    let rows = null;
+    try {
+      const parsed = JSON.parse(listed.stdout);
+      rows = Array.isArray(parsed) ? parsed : (parsed.sessions ?? parsed.terminals ?? null);
+    } catch {
+      rows = null;
+    }
+    if (listed.exit !== 0 || !Array.isArray(rows)) {
+      check(false, "bb terminal list --machine <this machine> --json answers the machine's terminals", `exit ${listed.exit}: ${(listed.stdout || listed.stderr).slice(0, 300)}`);
+      return [];
+    }
+    return rows.filter((row) => row.status !== "exited").map((row) => row.id);
+  };
+  const closeAll = () => terminals().forEach((id) => sh("bb", ["terminal", "close", id]));
 
   step(`C on-tmux: one agent on the tmux backend (${NAME}), for its terminal`);
   if (sh("tmux", ["-L", "oats", "has-session", "-t", SESSION]).exit !== 0) {
@@ -75,6 +94,8 @@ export default async (run) => {
     const attached = await until(`the kernel's viewer to be attached (${at})`, () => (clients().some((name) => name.startsWith("oatsview-")) ? clients() : undefined), 20);
     check(Boolean(shown) && (await page.evaluate(tabs)) >= 1, `${at} a press shows bb's terminal, in a tab titled "${CALLED}"; the page says nothing`, `${await page.evaluate(`document.querySelector('[data-testid="oats-terminal"]')?.innerText`)} | terminals in view: ${await page.evaluate(xterm)}`);
     check(Array.isArray(attached) && attached.length === 1 && attached[0].startsWith("oatsview-"), `${at} tmux holds ONE client, the kernel's viewer (a session of its own, linked to the agent's window)`, JSON.stringify(clients()));
+    const first = terminals();
+    check(first.length === 1, `${at} and bb holds ONE terminal on this machine: the one the press created`, JSON.stringify(first));
     await shot("terminal");
     // The keys: a line typed in the tab is typed to the agent.
     const token = `seen${"abcdefghij"[Date.now() % 10]}${"klmnopqrst"[Math.floor(Date.now() / 10) % 10]}`; // letters alone: each is one key
@@ -87,7 +108,8 @@ export default async (run) => {
     await page.evaluate(`document.querySelector(${JSON.stringify(BUTTON)}).click()`);
     await page.until(`document.querySelector(${JSON.stringify(BUTTON)}).disabled === false`, 30);
     await sleep(1500);
-    check(clients().length === 1 && terminals().length === 1, `${at} pressed again: the same terminal, still one client and one terminal of bb's`, `clients ${JSON.stringify(clients())}, terminals ${JSON.stringify(terminals())}`);
+    const second = terminals();
+    check(clients().length === 1 && second.length === 1 && second[0] === first[0], `${at} pressed again: the same terminal (found by its title and its home), still one client and one terminal of bb's`, `clients ${JSON.stringify(clients())}, terminals ${JSON.stringify(second)} (first ${JSON.stringify(first)})`);
     // Closing the terminal leaves the agent running, in its window.
     closeAll();
     await until(`no client attached (${at})`, () => (clients().length === 0 ? true : undefined), 20);

@@ -25,7 +25,7 @@ export type Opened =
   | { kind: "opened"; terminalId: string; reused: boolean }
   /** the command ended before it could be shown: bb's own word of how */
   | { kind: "ended"; status: number | null }
-  /** the command runs and bb showed no tab: closed again */
+  /** the command runs and bb showed no tab: closed again, where this call created it */
   | { kind: "declined" };
 
 /** The size a terminal is created at: it lasts only until its tab is shown (bb then sizes it to the tab). */
@@ -39,11 +39,13 @@ const RUNS = new Set(["running", "starting"]);
 const ENDED = "exited";
 
 /**
- * NO terminal is left attached on no tab: whatever goes wrong after a terminal was created here
+ * NO terminal is left attached on no tab: whatever goes wrong after a terminal was created HERE
  * (bb shows no tab, the command has ended, or a call of bb's THROWS: `experimental_openTerminal`
  * gone from a later bb, a network failure), that terminal is closed again before this answers or
  * rethrows. A viewer left behind is a tmux client nobody sees on the agent's window, whose size
  * it constrains, and the next press would find it by its title and fail on it again.
+ * A terminal that was FOUND is never closed from here: it may be on its tab, in this window or
+ * in another of bb's, and a press that could not show it here must not end it there.
  */
 export async function openTerminal(io: TerminalIo, command: Command, title: string): Promise<Opened> {
   const scope = { kind: "host_path" as const, hostId: command.hostId };
@@ -52,7 +54,9 @@ export async function openTerminal(io: TerminalIo, command: Command, title: stri
   // machine may carry it.
   const held = (await io.list({ scope })).sessions.find((session) => session.title === title && session.initialCwd === command.cwd && RUNS.has(session.status));
   const terminalId = held?.id ?? (await io.create({ scope: { ...scope, cwd: command.cwd }, cols: COLS, rows: ROWS, title, start: { mode: "argv", argv: [...command.argv] } })).id;
+  /** Closes the terminal THIS call created; one that was found again is left as it is. */
   const close = async () => {
+    if (held !== undefined) return;
     try {
       await io.close({ terminalId, mode: "force" });
     } catch {
@@ -74,8 +78,7 @@ export async function openTerminal(io: TerminalIo, command: Command, title: stri
     }
     return { kind: "opened", terminalId, reused: held !== undefined };
   } catch (cause) {
-    // Only what THIS call created: a terminal found again may be on its tab.
-    if (held === undefined) await close();
+    await close();
     throw cause;
   }
 }

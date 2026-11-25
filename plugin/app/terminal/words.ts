@@ -6,5 +6,10 @@ export const TERMINAL = "Terminal";
 export const DID_NOT_OPEN = "Terminal did not open.";
 /** Under Details: the command ended before it could be shown. `status` is the exit status bb gives; null where it gives none. */
 export const endedSaid = (status: number | null): string => (status === null ? "The command ended at once." : `The command ended at once, with status ${status}.`);
-/** Under Details: the command runs, and bb showed no tab for it (the plugin has closed it again). */
+/** Under Details: the command runs, and bb showed no tab for it (the terminal made for it is closed again). */
 export const DECLINED_SAID = "bb did not show it.";
+/**
+ * The command as a line a person can read and run: each word as a shell takes it (a home with a
+ * space, the detach key `C-\`, are quoted), as bb itself runs the argv.
+ */
+export const commandSaid = (argv: readonly string[]): string => argv.map((word) => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`)).join(" ");

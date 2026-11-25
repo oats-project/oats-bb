@@ -108,13 +108,19 @@ describe("opening the terminal", () => {
     };
     await expect(openTerminal(cut.io, COMMAND, TITLE)).rejects.toThrow("network");
     expect(cut.calls.at(-1)).toBe("close term_new force");
-    // A terminal that was FOUND again is not closed on a throw: it may be on its tab.
-    const held = bb({ sessions: [{ id: "term_held", title: TITLE, status: "running", initialCwd: HOME }] });
-    held.io.get = async () => {
+  });
+
+  test("a terminal that was FOUND again is never closed by a press: not on a throw, not when bb shows no tab here (it may be on its tab in another window)", async () => {
+    const found = () => bb({ sessions: [{ id: "term_held", title: TITLE, status: "running", initialCwd: HOME }], shown: false });
+    const thrown = found();
+    thrown.io.get = async () => {
       throw new Error("network");
     };
-    await expect(openTerminal(held.io, COMMAND, TITLE)).rejects.toThrow("network");
-    expect(held.calls.filter((call) => call.startsWith("close"))).toEqual([]);
+    await expect(openTerminal(thrown.io, COMMAND, TITLE)).rejects.toThrow("network");
+    expect(thrown.calls.filter((call) => call.startsWith("close"))).toEqual([]);
+    const declined = found();
+    expect(await openTerminal(declined.io, COMMAND, TITLE)).toEqual({ kind: "declined" });
+    expect(declined.calls.filter((call) => call.startsWith("close"))).toEqual([]);
   });
 
   test("bb refuses to close: what is being answered stands (the outcome, or the failure), and the refusal is not thrown over it", async () => {

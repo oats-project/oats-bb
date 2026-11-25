@@ -7,6 +7,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import { InstancePanel } from "../../app/panel/Panel";
 import { SETTLE_MS } from "../../app/terminal/open";
+import { commandSaid } from "../../app/terminal/words";
 import type { Agent } from "../../model/types";
 import { handlers, loadApp, resetApp } from "../helpers/render";
 import type { Contract } from "../helpers/render";
@@ -20,6 +21,7 @@ afterEach(() => {
 
 const CHILD = "panel-worktree-helper";
 const TITLE = "Panel worktree helper";
+const COMMAND_SAID = commandSaid(commandFor(CHILD).argv);
 
 type Session = { id: string; title: string | null; status: string; exitCode?: number | null; initialCwd?: string | null };
 /** bb's terminals for the page: what exists, what a created one is when it is asked, and what bb answers to the open. */
@@ -132,7 +134,9 @@ test("the command ended at once: ONE line in the warning tone, and a fold that s
   const details = within(failed).getByTestId("oats-terminal-details");
   expect(details.querySelector("summary")!.textContent).toMatch(/Details$/);
   expect((details as HTMLDetailsElement).open).toBe(false);
-  expect(Array.from(details.querySelectorAll("p")).map((line) => line.textContent)).toEqual([commandFor(CHILD).argv.join(" "), "The command ended at once, with status 127."]);
+  // The command as a shell takes it: the detach key is one quoted word.
+  expect(Array.from(details.querySelectorAll("p")).map((line) => line.textContent)).toEqual([COMMAND_SAID, "The command ended at once, with status 127."]);
+  expect(COMMAND_SAID).toContain(" --detach-key 'C-\\' --no-status-line");
   // The button is there to press again, and the attach command to copy is still under it.
   expect(button(slot)!.disabled).toBe(false);
   expect(within(slot.getByTestId("oats-panel-attach")).getByTestId("oats-command")).toBeTruthy();
@@ -143,7 +147,7 @@ test("bb showed no tab: the same one line, the fold says so, and the terminal is
   const slot = await page({}, options);
   await press(slot);
   expect(within(slot.getByTestId("oats-terminal-failed")).getByTestId("oats-terminal-said").textContent).toBe("Terminal did not open.");
-  expect(Array.from(slot.getByTestId("oats-terminal-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual([commandFor(CHILD).argv.join(" "), "bb did not show it."]);
+  expect(Array.from(slot.getByTestId("oats-terminal-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual([COMMAND_SAID, "bb did not show it."]);
   expect(calls.at(-1)).toBe("close term_new force");
 });
 
@@ -206,4 +210,24 @@ test("behind \"Reading…\" the button is off with the page's other acts, with n
   fireEvent.click(slot.getByTestId("oats-terminal-open"));
   await act(async () => {});
   expect(calls).toEqual([]);
+});
+
+test("the page left while the server is asked: nothing is created for a page that is no longer there", async () => {
+  const { calls, options } = bb();
+  let answer: (value: ReturnType<typeof commandFor>) => void = () => undefined;
+  const slot = await page({}, options, { terminalCommand: () => new Promise<ReturnType<typeof commandFor>>((resolve) => (answer = resolve)) });
+  fireEvent.click(slot.getByTestId("oats-terminal-open"));
+  await act(async () => {});
+  slot.unmount();
+  await act(async () => {
+    answer(commandFor(CHILD));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(calls).toEqual([]);
+  expect(slot.inspection.navigateCalls.filter((call) => call.method === "experimental_openTerminal")).toEqual([]);
+});
+
+test("the command under Details is a line a shell takes: a home with a space is one quoted word", () => {
+  expect(commandSaid(["/usr/local/bin/oats", "session", "attach", "--home", "/srv/my deploy/agents/x", "--detach-key", "C-\\"])).toBe("/usr/local/bin/oats session attach --home '/srv/my deploy/agents/x' --detach-key 'C-\\'");
+  expect(commandSaid(["/o", "it's"])).toBe("/o 'it'\\''s'");
 });

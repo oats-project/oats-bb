@@ -9,7 +9,7 @@ import { Button } from "../ui";
 import { Disclosure } from "../ui/patterns";
 import { agentName } from "../ui/words";
 import { openTerminal, type Opened, type TerminalIo } from "./open";
-import { DECLINED_SAID, DID_NOT_OPEN, endedSaid, TERMINAL } from "./words";
+import { commandSaid, DECLINED_SAID, DID_NOT_OPEN, endedSaid, TERMINAL } from "./words";
 
 type Failed = { command: string | null; said: string };
 
@@ -46,7 +46,12 @@ export function TerminalButton({ instance, held }: { instance: string; held: boo
     let outcome: Opened | { kind: "failed"; message: string };
     try {
       const answered = await rpc.call("terminalCommand", { instance });
-      command = answered.argv.join(" ");
+      // The page left meanwhile: nothing is created for a page that is no longer there.
+      if (!alive.current) {
+        going.current = false;
+        return;
+      }
+      command = commandSaid(answered.argv);
       const io: TerminalIo = {
         list: (args) => sdk.terminals.list(args),
         create: (args) => sdk.terminals.create(args),

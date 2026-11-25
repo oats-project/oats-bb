@@ -792,8 +792,10 @@ its session: what a person sees and types there is the agent's own screen (`app/
   fold that says which it was: the command ended at once (the terminal is asked how it stands
   right after the open: `terminals.get`; bb's own answer to the open is no witness of a dead
   terminal), bb showed no tab, or the server's or bb's own refusal. Whatever went wrong after
-  a terminal was created, it is closed again (`terminals.close`) before the page says so: no
-  viewer stays attached on no tab, where it would hold the agent's window to its size unseen.
+  a press CREATED a terminal, that terminal is closed again (`terminals.close`) before the page
+  says so: no viewer stays attached on no tab, where it would hold the agent's window to its
+  size unseen. A terminal that was found again is never closed by a press: it may be on its tab
+  in another window of bb's.
 - **Only from the page.** bb shows a terminal for a plugin page; a click in the sidebar or the
   app overlay is declined (the terminal probe of 21 Nov 2026). The row of an agent on tmux has
   no menu (it has no bb thread): a click on it opens this page.
@@ -805,8 +807,10 @@ its session: what a person sees and types there is the agent's own screen (`app/
 - **Not offered** for an agent that does not run (no session to show) and for one on a bb thread
   (the kernel has no terminal for it: `E_SESSION_NO_TERMINAL`). The roster this plugin reads
   names the agents of the machine that holds the deployment alone: none of another server of
-  OATS, so there is none to refuse. The command to copy stays under the button, for a person's
-  own terminal.
+  OATS, so there is none to refuse. THE RULE, for the day a roster names such agents: no
+  Terminal button and no typing for an agent on another machine; it needs a field that says so
+  (`Agent.server` is bb's server of a thread, not that). The command to copy stays under the
+  button, for a person's own terminal.
 - **Scrolling back:** the OATS tmux server has `mouse off`, so the wheel in bb's tab sends
   arrow keys to the agent; the viewer's own keys scroll (Shift+PageUp, or Ctrl+B then `[`).
 

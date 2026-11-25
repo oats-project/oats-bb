@@ -35,7 +35,7 @@ export default [
       const fold = `(() => { const d = document.querySelector(${JSON.stringify(testId("oats-terminal-details"))}); if (!d) return ""; d.open = true; return JSON.stringify([...d.querySelectorAll("p")].map((p) => p.innerText.trim())); })()`;
       const lines = said ? JSON.parse(await page.evaluate(fold)) : [];
       check(
-        said === "Terminal did not open." && lines.length === 2 && / session attach --home \S+ --detach-key C-\\ --no-status-line$/.test(lines[0]) && lines[0].startsWith("/") && /Terminal failed to open/.test(lines[1]),
+        said === "Terminal did not open." && lines.length === 2 && / session attach --home \S+ --detach-key 'C-\\' --no-status-line$/.test(lines[0]) && lines[0].startsWith("/") && /Terminal failed to open/.test(lines[1]),
         `${at} bb refuses the terminal (the fixtures' home is not on the disk): "Terminal did not open.", and under Details the command (oats by its absolute path, the viewer's two flags) and bb's own words`,
         `${said} ${JSON.stringify(lines)}`,
       );

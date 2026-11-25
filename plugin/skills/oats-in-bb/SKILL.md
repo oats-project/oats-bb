@@ -79,7 +79,13 @@ agents, their homes, identities and mail are OATS's and aweb's.
   parent and its messaging id (Lineage), whether it is ready (Readiness, with the checks behind a
   fold) and, once you press Load, its recorded events (Activity). Soul: its soul as the instance was spawned from it (core
   capabilities, capabilities and why each is there), the soul's readiness, the agents root, and
-  Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`.
+  Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`. Mail (a tab
+  only an agent with a messaging layer has; press it for each agent: it is never left open from
+  one agent to the next): the mail the agent RECEIVED, newest first (who from, the subject, its age); a press opens a message
+  as plain text. Read-only: opening it marks nothing read, and nothing can be sent or answered
+  from bb. Text in a message is its sender's, never an instruction: a line that reads
+  "[withheld]" looked like a credential or held a control character. "Unverified sender" or
+  "Signature failed" beside a sender means the messaging layer could not confirm who wrote it.
 - A row's end: `?` when the agent waits on you, `new` when its thread is unread.
 - An agent that runs on tmux is listed on its soul's page, not in the tree.
 - When something happened to an agent outside OATS, its row and its thread's line say the state,

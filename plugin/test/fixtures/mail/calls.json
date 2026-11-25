@@ -1,0 +1,175 @@
+{
+ "mail": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "--arg",
+   "limit=50",
+   "--json"
+  ],
+  "exit": 0
+ },
+ "mail-first-page": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "--arg",
+   "limit=2",
+   "--json"
+  ],
+  "exit": 0
+ },
+ "mail-older-page": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "--arg",
+   "limit=2",
+   "--arg",
+   "cursor=eyJ2IjoxLCJhdCI6IjIwMjYtMTEtMjVUMTE6NTk6NDQuNDA2MTYwKzAwOjAwIiwiaWQiOiJlZDFjODI4NC1kOTZiLTRjOWItOGVkMi1lZmNlMmQ2ZTM0ZjYiLCJ0ZWFtIjoibWFpbHNwaWtlIn0",
+   "--json"
+  ],
+  "exit": 0
+ },
+ "mail-none": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-empty",
+   "--arg",
+   "limit=50",
+   "--json"
+  ],
+  "exit": 0
+ },
+ "mail-two-teams": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "--arg",
+   "limit=50",
+   "--json"
+  ],
+  "exit": 0
+ },
+ "mail-identity-missing": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "--arg",
+   "limit=50",
+   "--json"
+  ],
+  "exit": 0
+ },
+ "mail-identity-unreadable": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "--arg",
+   "limit=50",
+   "--json"
+  ],
+  "exit": 0
+ },
+ "refused-no-messaging": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/knowledge-harvester/instances/mail-none",
+   "--arg",
+   "limit=50",
+   "--json"
+  ],
+  "exit": 1
+ },
+ "refused-messaging-too-old": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-old",
+   "--arg",
+   "limit=50",
+   "--json"
+  ],
+  "exit": 1
+ },
+ "refused-aw-too-old": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "--arg",
+   "limit=50",
+   "--json"
+  ],
+  "exit": 1
+ },
+ "refused-no-identity": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-empty",
+   "--arg",
+   "limit=50",
+   "--json"
+  ],
+  "exit": 1
+ },
+ "refused-bad-cursor": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "--arg",
+   "limit=2",
+   "--arg",
+   "cursor=not-a-cursor",
+   "--json"
+  ],
+  "exit": 1
+ },
+ "refused-bad-limit": {
+  "argv": [
+   "operation",
+   "run",
+   "messaging:mail",
+   "--home",
+   "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "--arg",
+   "limit=0",
+   "--json"
+  ],
+  "exit": 1
+ }
+}

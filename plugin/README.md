@@ -682,7 +682,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Instance** | the instance's name as words, with the two letters of that name in a tile beside it (the name's own initials, never its soul's), its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message alone (with none, "approval" for a tool approval). How long it waits is the status line's to say, once ("Needs you · 5 d"); since when, by the clock, is no second line of the page and no tooltip: the Activity's "Waiting claim" row holds the claim's instant. **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the card's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: on the page's face the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; under its fold (**Details**, closed) the owning human and the messaging ID, with its Copy: asked for, not read on every page. |
+| **Instance** | the instance's name as words, with the two letters of that name in a tile beside it (the name's own initials, never its soul's), its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message alone (with none, "approval" for a tool approval). How long it waits is the status line's to say, once ("Needs you · 5 d"); since when, by the clock, is no second line of the page and no tooltip: the Activity's "Waiting claim" row holds the claim's instant. **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the card's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: **Terminal**, which opens bb's own Terminal tab on its session ("A tmux agent's terminal", below), and under it "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`, for a person's own terminal), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: on the page's face the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; under its fold (**Details**, closed) the owning human and the messaging ID, with its Copy: asked for, not read on every page. |
 | **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's: its fold says what was observed, the soul and the agents root). No fold stands alone at the tab's foot. The soul's description is two lines at most here, whole on the soul's page. |
 
 The Instance tab ends with two more sections. **Readiness** (`oats readiness`): one line
@@ -771,6 +771,160 @@ while bb's own connection is down. A soul's readiness is asked by the key the ro
 names, checked against `oats souls` before its process starts.
 Another feature opens the panel on one of its tabs with
 `showPanelTab(tab)` and the page with `openAgentPage(navigate, instance)` (`app/panel/index.ts`).
+
+### A tmux agent's terminal
+
+An agent on tmux has no bb thread, and its screen is a terminal's. On its own page, while the
+kernel says that it runs, **Terminal** opens bb's own Terminal tab beside the page, attached to
+its session: what a person sees and types there is the agent's own screen (`app/terminal/`).
+
+- **What runs in the tab** is the kernel's own viewer of one instance, `oats session attach
+  --home <its home>` (`kernel/terminal.ts`): a temporary tmux session linked to the agent's window
+  alone. Closing the tab leaves the agent running. It is NOT read-only: keys typed there are
+  typed to the agent. The plugin runs nothing of it: the server answers the command
+  (`terminalCommand`), and bb's terminal runs it. For that reason the server treats an open as
+  an ACT, as Stop and Start are: while OATS cannot be read it is refused with why, also for an
+  agent of the last roster that is still shown (the page's button is off then).
+- **By absolute path.** bb's terminal runs a command with the login shell's PATH, not the one
+  the plugin's host entry has: `oats` by name ended there with status 127. The machine that
+  holds the deployment answers where its `oats` is: the setting, else the first `oats` on its
+  PATH. `--detach-key` (Ctrl+\ leaves the viewer, and bb closes the tab) and `--no-status-line`
+  are passed only where `oats version --json` lists `session-attach-detach-key` and
+  `session-attach-no-status-line`.
+- **One tab per agent.** The tab is titled with the agent's name; a press while a terminal of
+  that title, in the agent's home, still runs on that machine shows it again (also after a
+  reload), never a second viewer. The title alone is no identity (two names can read the same
+  as words): the home is.
+- **When the tab does not come up** the page says ONE line, "Terminal did not open.", with a
+  fold that says which it was: the command ended at once (the terminal is asked how it stands
+  right after the open: `terminals.get`; bb's own answer to the open is no witness of a dead
+  terminal), bb showed no tab, or the server's or bb's own refusal. Whatever went wrong after
+  a press CREATED a terminal, that terminal is closed again (`terminals.close`) before the page
+  says so: no viewer stays attached on no tab, where it would hold the agent's window to its
+  size unseen. Where bb refuses that close, the fold says so last ("bb did not close it."): a
+  person then knows a terminal is still there. A terminal that was found again is never closed
+  by a press: it may be on its tab in another window of bb's.
+- **Only from the page.** bb shows a terminal for a plugin page; a click in the sidebar or the
+  app overlay is declined (the terminal probe of 21 Nov 2026). The row of an agent on tmux has
+  no menu (it has no bb thread): a click on it opens this page.
+- **When the agent stops while its tab is open** the tab stays and shows the window as it is:
+  after a stop with OATS, a shell in the agent's home (the kernel's stop leaves the window at a
+  shell); after a Start, the agent again. It is what the kernel's viewer shows in a person's own
+  terminal. A session that is LOST (its window gone) ends the viewer, and bb closes the tab.
+  The page's state line says what happened, and the button is gone with the state.
+- **Not offered** for an agent that does not run (no session to show) and for one on a bb thread
+  (the kernel has no terminal for it: `E_SESSION_NO_TERMINAL`). The roster this plugin reads
+  names the agents of the machine that holds the deployment alone: none of another server of
+  OATS, so there is none to refuse. THE RULE, for the day a roster names such agents: no
+  Terminal button and no typing for an agent on another machine; it needs a field that says so
+  (`Agent.server` is bb's server of a thread, not that). The command to copy stays under the
+  button, for a person's own terminal.
+- **Scrolling back:** the OATS tmux server has `mouse off`, so the wheel in bb's tab sends
+  arrow keys to the agent; the viewer's own keys scroll (Shift+PageUp, or Ctrl+B then `[`).
+
+## An agent's mail
+
+The tab **Mail** of an agent's panel (the OATS tab of its thread; on a phone the agent's page)
+shows the mail that agent RECEIVED, newest first: who each message is from, its subject, its age.
+A press on a row shows the message in the list's place, as plain text under its sender's alias,
+with Back. It is read-only: nothing is sent, answered, deleted or marked read, and the view has no
+act but reading again.
+
+**The read.** One command, the one the OATS Desktop's mail sheet runs
+(awebai/oats `packages/desktop/docs/desktop-mail-sheet.md`):
+
+```
+oats operation run messaging:mail --home <the home the kernel named> --arg limit=50 [--arg cursor=<the last answer's>] --json
+```
+
+The agent's messaging layer answers it (`oats.aweb`, `mailApi: 1`). It runs only `aw version`,
+`aw whoami`, `aw mail threads` and `aw mail show`, and says `acknowledges: false`; the plugin
+refuses WHOLE an answer that does not say so, and shows nothing of it. The argv is built in
+`kernel/mail.ts` and pinned by a test; the app sends an instance's name and a cursor, never a
+home, a flag or a limit. The read may take long (one `aw` call per identity of the agent, over the
+network; the messaging layer's own budget is 150 s), so it has a time limit of its own, 170 s,
+and its host verb is the one read of the plugin that bb does NOT retry: bb cancels a retryable
+host call at half its limit and sends it again, which would kill a read of a hundred seconds
+twice and answer nothing (`contract/mail.ts`). A read that runs out of time says "Reading took
+too long."; one that is lost says "Mail can't be read."; each has Retry.
+
+**When it reads.** When the view is shown, on **Refresh**, and on **Older** (the page after the
+last one, while the messaging layer says there is one). A page is the messaging layer's 50 newest
+messages of BOTH directions, of which the received ones are shown: where a page adds none (an
+agent that wrote much and was not answered), the next older page is read at once, up to three
+pages a press, so that a press shows mail or says there is none; after three such pages no line
+claims there is no mail, and Older reads on. Otherwise it reads at no other time: never on the roster's poll, never when
+OATS changes, never on a timer. What was read is kept for the window: a view shown again shows it
+at once and reads again behind it; shown while a read of that agent's first page is still on its
+way, it takes that read's answer and starts no second one. "Read <age>." stands beside Refresh once what is shown is older
+than a minute.
+
+**Where the tab stands, and when.** The tab is drawn only for an agent whose roster row gives a
+messaging id (the panel's `messagingId`): an agent with no messaging layer has no mail to read,
+and what cannot be done is not offered. (Where the row and the read disagree, the tab says "No
+messaging.") And Mail is the one tab the panel does NOT remember from one agent to the next:
+showing an agent's mail reads it, and that takes a press on that agent's own tab. Left on Mail,
+another agent's panel opens on Instance (`app/panel/Panel.tsx`, `tabOf`).
+
+**Mail is other people's text.** Every word of a message is untrusted. The adapter turns it into
+display lines on the machine, before it leaves it (`kernel/mail.ts`, with `model/text.ts`): the
+sender's alias, the subject and a team's label each as one display line; the body LINE BY LINE, so
+that a line with a control character or one shaped like a credential reads "[withheld]" and the
+others show. The app draws those lines as text: never markup, never a link. Only received mail,
+and only what is drawn, leaves the machine, with one opaque key a message (when it was sent, and
+a hash of its team and id, made on the machine: the app only compares it): no identity, no
+address, no message id, nothing of the
+mail the agent sent, and not the messaging layer's word for why a team's mail could not be read.
+Nor does what the process printed travel in a refusal: where `oats` ends with an answer that is
+no JSON (ended part-way), the plugin's other reads quote its first lines; for this read that
+output is mail, so the refusal says only how the process ended (`withoutOutput`). And two of the
+kernel's own refusals quote what the messaging layer's process printed (`E_OPERATION_RESULT`,
+`E_OPERATION_FAILED`): each is answered as its code with a sentence of the plugin's. Nothing of a message is ever logged, and no fixture is taken from a real
+workspace (`test/fixtures/mail/README.md`).
+
+**What is said of a message.** "Unverified sender" (the messaging layer says unverified, or does
+not know) and "Signature failed", in the warning tone, on the row and under the message's subject:
+they are safety facts. "(no subject)" for a message with neither a subject nor a thread title.
+"Shortened." under a message that was cut: by the messaging layer, which cuts a body at 16 KiB and
+says so, or by the adapter: a line longer than the display filter's one line (2048 characters) is
+drawn cut there, a body of more than 2000 lines is cut there, and a body over the bound is cut
+(below).
+
+**Two named differences from the Desktop's decoder** (`packages/client/mail-contract.mjs`, read at
+awebai/oats 7355f353; the decoder in `kernel/mail.ts` is otherwise its rules, one for one):
+
+1. A body over the contract's 16 KiB does not make the page unreadable: the adapter cuts it at
+   16 KiB, at a character's boundary, and marks the message shortened. It also carries at most
+   2000 lines of a body. `oats.aweb` cuts such a body itself, so this acts only on an answer that
+   breaks the bound.
+2. An identity that carries an error may have an empty `alias` and `identity`. `oats.aweb` 1.48.0
+   answers both as `""` for an identity it could not read (`identity-missing`,
+   `identity-unreadable`: recorded in `test/fixtures/mail/mail-identity-missing.json`), and the
+   Desktop's decoder wants them non-empty: read by its rule, the answer that says one team's mail
+   can't be read would be unreadable whole. The rule here is the one decided for the contract on
+   oats-project/oats#2138; once the Desktop's decoder takes it, this is no difference any more.
+
+**Why mail cannot be read.** ONE line, then Retry, and under Details the kernel's code with its
+own sentence (the plugin's sentence for the two codes that quote the process, above):
+
+| The refusal | The line |
+|---|---|
+| `E_OPERATION_UNKNOWN`: the agent's copy of its messaging layer has no mail operation | Its messaging is too old for mail. |
+| `E_OPERATION_UNAVAILABLE`: the agent has no messaging layer | No messaging. |
+| `E_AW_TOO_OLD`: the machine's `aw` is older than the read needs | aw is too old to read mail. |
+| `E_MAIL_UNREADABLE`: no identity of the agent could be read | Its mail can't be read. |
+| `E_MAIL_TOO_LARGE`: the answer cannot fit its bound even with no message | Too much mail to read. |
+| `OATS_TIMEOUT`: the read ran past its limit | Reading took too long. |
+| an answer outside the contract (`OATS_BAD_ANSWER`), and any other | Mail can't be read. |
+
+When one team's mail cannot be read and another's can, the mail that was read shows, and one line
+at the list's end names the team: "<team>: can't be read", or "<team>: <N> conversations can't be
+read". The messaging layer's word for why is not drawn.
+
+**Proof.** `test/mail/` (the adapter on the recorded answers; the server; the view), the live
+scenes `container/scenes/mail.mjs`, and a real run of its own, `container/real/mail/`, which is run
+BY HAND and is in neither `ci.sh all` nor CI: it needs aweb's local stack, five containers
+(`container/real/mail/README.md`).
 
 ## The New agent form
 
@@ -1066,7 +1220,7 @@ runs, and `record/` there makes the recording again (its README says what was ar
 
 The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
 `spawn` (the New agent form), `workspace` (the four pages), `lifecycle` (stop, start, restart,
-retire), `automations`, `panel` (the instance panel) and `outside` (what is said when something
+retire), `automations`, `panel` (the instance panel), `terminal` (a tmux agent's terminal in bb's own Terminal tab; no slot: its button is on the panel's page), `mail` (an agent's incoming mail, read-only: one view, mounted by the panel, with no slot of its own) and `outside` (what is said when something
 happened to an agent outside OATS; no slot, no read and no `oats` verb of its own). Each has one module, or one directory, in
 every layer, and the entry of a layer only composes them:
 
@@ -1361,7 +1515,10 @@ watched reads), `experimental_useAppPanel` (`openTab`), `experimental_useTabVisi
 `experimental_usePluginId`,
 `experimental_ThreadActionsContextMenu`, `experimental_ThreadStatusGlyph`,
 `experimental_resolveThreadStatus`, `useBbNavigate().experimental_openFilePreview` (Automations'
-Open file: a file of the machine that holds the deployment, in bb's own preview).
+Open file: a file of the machine that holds the deployment, in bb's own preview),
+`useBbNavigate().experimental_openTerminal` (a tmux agent's Terminal: if bb removes it the tab
+is never shown, the terminal made for it is closed again, and the page says "Terminal did not
+open."; the command to copy stays).
 
 App tests: `renderSlot`'s `experimental_panel`, and its `inspection.experimental_panelCalls`.
 

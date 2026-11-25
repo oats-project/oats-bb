@@ -1064,14 +1064,14 @@ export default [
       // The home crops what needs the person (its first eight) and offers the rest: both are shown.
       const drawn = await page.until(`${cards} >= 8 ? String(${cards}) : ""`, 60);
       check(Number(drawn) >= 8, `${at} the busy home draws the first cards of what needs the person`, drawn ?? (await page.evaluate(`String(${cards})`)));
-      note("the home", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: Math.round((document.scrollingElement?.scrollHeight ?? 0) / window.innerHeight * 10) / 10, cardsOnFirstScreen: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})].filter((card) => card.getBoundingClientRect().bottom <= window.innerHeight).length })`));
+      note("the home", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: (() => { let up = document.querySelector('[data-testid="oats-home-needs"]'); while (up && !(up.scrollHeight > up.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(up).overflowY))) up = up.parentElement; return up ? Math.round((up.scrollHeight / up.clientHeight) * 10) / 10 : 1; })(), cardsOnFirstScreen: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})].filter((card) => card.getBoundingClientRect().bottom <= window.innerHeight).length })`));
       await page.shot(`busy-${viewport.name}-home`);
       const more = `document.querySelector(${JSON.stringify(`${testId("oats-home")} ${testId("oats-home-needs-all")}, ${testId("oats-home-needs-all")}`)})`;
       if (await page.evaluate(`Boolean(${more})`)) {
         await page.evaluate(`${more}.click()`);
         const all = await page.until(`${cards} >= 11 ? String(${cards}) : ""`, 30);
         check(Number(all) >= 11, `${at} with the rest shown the busy home draws a card for each agent that asks (eleven) and each that runs outside OATS`, all ?? (await page.evaluate(`String(${cards})`)));
-        note("the home with every card", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: Math.round((document.scrollingElement?.scrollHeight ?? 0) / window.innerHeight * 10) / 10 })`));
+        note("the home with every card", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: (() => { let up = document.querySelector('[data-testid="oats-home-needs"]'); while (up && !(up.scrollHeight > up.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(up).overflowY))) up = up.parentElement; return up ? Math.round((up.scrollHeight / up.clientHeight) * 10) / 10 : 1; })() })`));
         // The cards the press added, from the first of them.
         await page.evaluate(`(() => { const all = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})]; all[Math.min(8, all.length - 1)]?.scrollIntoView({ block: "start" }); return "1"; })()`);
         await page.shot(`busy-${viewport.name}-home-all-cards`);

@@ -1,11 +1,14 @@
 // A tmux agent's terminal: the live scene (container/live-ui.mjs says what a scene is).
 //
-// The live checks have a fake `oats` and no tmux: there is no session to attach to. So this holds
-// what a person sees where the tab does NOT come up, in the real bb: the button on the page of the
-// agent on tmux that runs, a press, bb's own terminal running the command the server answered
-// (the fake's absolute path, `session attach --home …`, which the fake does not know and ends at
-// once), and the page's ONE line with its fold. That the tab comes up attached, takes keys and is
-// one per agent is the real run's (container/real/parts/on-tmux.mjs), on a real kernel and tmux.
+// The live checks have a fake `oats`, no tmux, and homes that are not on the disk (the fixtures'
+// `/abs/deployment/…`): there is no session to attach to, and bb itself refuses a terminal in a
+// directory that is not there. So this holds what a person sees where the tab does NOT come up, in
+// the real bb: the button on the page of the agent on tmux that runs, a press, the command the
+// server answered (the fake by its absolute path, with the flags its version lists), bb's
+// refusal, and the page's ONE line with its fold, which says the command and bb's own words. That
+// the tab comes up attached, takes keys and is one per agent is the real run's
+// (container/real/parts/on-tmux.mjs), on a real kernel and tmux; that a command which ends at
+// once is said with its status is the unit tests' (test/terminal).
 import { testId } from "../browser.mjs";
 
 const TMUX = "kernel-fix-developer"; // the fixtures' agent on tmux, which runs
@@ -13,7 +16,7 @@ const TMUX = "kernel-fix-developer"; // the fixtures' agent on tmux, which runs
 export default [
   {
     stage: "fixtures",
-    name: "a tmux agent's page has Terminal over its attach command; where the command ends at once the page says one line, and its fold says which",
+    name: "a tmux agent's page has Terminal over its attach command; where the tab does not come up the page says one line, and its fold says which",
     run: async ({ page, at, viewport, check }) => {
       await page.goto(`/plugins/oats/agent/${TMUX}`);
       const open = testId("oats-terminal-open");
@@ -32,8 +35,8 @@ export default [
       const fold = `(() => { const d = document.querySelector(${JSON.stringify(testId("oats-terminal-details"))}); if (!d) return ""; d.open = true; return JSON.stringify([...d.querySelectorAll("p")].map((p) => p.innerText.trim())); })()`;
       const lines = said ? JSON.parse(await page.evaluate(fold)) : [];
       check(
-        said === "Terminal did not open." && lines.length === 2 && / session attach --home \S+/.test(lines[0]) && lines[0].startsWith("/") && /^The command ended at once(, with status \d+)?\.$/.test(lines[1]),
-        `${at} the command ended at once: "Terminal did not open.", and under Details the command (by its absolute path) and how it ended; the button can be pressed again`,
+        said === "Terminal did not open." && lines.length === 2 && / session attach --home \S+ --detach-key C-\\ --no-status-line$/.test(lines[0]) && lines[0].startsWith("/") && /Terminal failed to open/.test(lines[1]),
+        `${at} bb refuses the terminal (the fixtures' home is not on the disk): "Terminal did not open.", and under Details the command (oats by its absolute path, the viewer's two flags) and bb's own words`,
         `${said} ${JSON.stringify(lines)}`,
       );
       check((await page.evaluate(`document.querySelector(${JSON.stringify(open)}).disabled`)) === false && (await page.evaluate(`document.querySelectorAll(".xterm").length`)) === 0, `${at} no terminal is left in view, and Terminal is on again`, "");

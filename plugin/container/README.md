@@ -196,9 +196,9 @@ open, a confirmation before its act, in progress, done, refused and with another
   roster and says "deleted in bb".
   With A13's rows, all six states are drawn, each with its word.
 - **A13**, a tmux agent's terminal (`scenes/terminal.mjs`, on the fixtures): the page of the tmux agent
-  that runs has Terminal over its attach command; pressed, bb's own terminal runs the command the
-  server answered (the fake `oats` by its absolute path, which does not know `session attach` and
-  ends at once), and the page says "Terminal did not open." with its fold. The live checks have no
+  that runs has Terminal over its attach command; pressed, bb is asked for a terminal on the command the
+  server answered (the fake `oats` by its absolute path) and refuses it (the fixtures' home is not on
+  the disk), and the page says "Terminal did not open." with its fold: the command, and bb's own words. The live checks have no
   tmux: that the tab comes up attached, takes keys and is one per agent is the real run's
   (`real/parts/on-tmux.mjs`).
 - **OUTA**, **OUT**, **OUTH**, **OUTQ** (`scenes/outside.mjs`, in the order they run; stages of its own) every row of the table of

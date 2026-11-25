@@ -18,6 +18,10 @@ The artefacts are in `plugin/container/real/mail/out/` (ignored by git): the che
 (`mail-real-<width>-list.png`, `-message.png`) and what each setup step printed. No account, no
 login, nothing spent: the stack is local, and no agent is launched.
 
+**Its run for the change that added it** (2026-11-25, on this checkout at the merge of main
+aeebfce5, the versions of the table below): all 14 checks passed, from a fresh stack; unread was 2
+before and 2 after; the five containers were removed at its end.
+
 ## What it checks (`check.mjs`)
 
 1. The tab **Mail** of the agent's page lists the mail the agent RECEIVED, newest first; the

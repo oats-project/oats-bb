@@ -33,6 +33,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Always a fresh stack: one left by a KEEP=1 run holds that run's namespace and team, and
+# `aw id create` then refuses the namespace (its database is on tmpfs: `down -v` forgets it).
+docker compose -f "$HERE/compose.yml" down -v > /dev/null 2>&1 || true
 docker compose -f "$HERE/compose.yml" up -d --build --wait
 docker build -q -t "$IMAGE" "$PLUGIN/container" > /dev/null
 # The client: the plugin's own test image, with the plugin's limits, in awid's network namespace.

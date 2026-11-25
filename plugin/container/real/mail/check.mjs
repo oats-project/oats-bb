@@ -31,6 +31,8 @@ const inMail = (id) => `${testId("oats-mail")} ${testId(id)}`;
 const click = (selector, index = 0) => `document.querySelectorAll(${JSON.stringify(selector)})[${index}].click()`;
 const subjects = `JSON.stringify(${texts(inMail("oats-mail-subject"))})`;
 
+// A bb that was never opened shows its first-run guide in place of the app (../../live-ui.mjs): mark it as done.
+execFileSync("bb", ["settings", "general", "onboardingCompletedAt", new Date().toISOString()], { stdio: "ignore" });
 const before = unread();
 console.log(`     unread before: ${before}`);
 const browser = await launchBrowser({ chromium: process.env.CHROMIUM ?? "chromium", out: OUT, base: BASE });

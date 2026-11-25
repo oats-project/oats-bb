@@ -59,6 +59,19 @@ test("Right on the strip goes to the next tab's route, and the next tab's page t
   expect(document.activeElement).not.toBe(plain.getByTestId("oats-tab-machines"));
 });
 
+// The strip, and the tab's search field under it, are ONE head that stays at the page's top while the rows scroll
+// under it: a list of thirty never takes the controls off the screen.
+test("the strip and the search field are the page's head, which stays at the top; the rows are under it", async () => {
+  const many = Array.from({ length: 30 }, (_, index) => ({ ...CAPABILITIES[1]!, id: `cap.${index + 1}` }));
+  const slot = await page("capabilities", { capabilities: () => ({ capabilities: many }) });
+  await slot.findAllByTestId("oats-capability-row");
+  const head = slot.getByTestId("oats-workspace-head");
+  expect(head.className).toMatch(/\bsticky\b.*\btop-0\b/);
+  expect([head.contains(slot.getByTestId("oats-tabs")), head.contains(slot.getByTestId("oats-search")), head.contains(slot.getAllByTestId("oats-capability-row")[0]!)]).toEqual([true, true, false]);
+  // The selected tab is brought into view in a strip that scrolls sideways inside itself.
+  expect(slot.getByTestId("oats-tabs").className).toContain("overflow-x-auto");
+});
+
 const tabsOf = (slot: Awaited<ReturnType<typeof page>>) => Array.from(slot.container.querySelectorAll('[role="tab"]')).map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]);
 
 test("a tab's page draws the strip over it: the four tabs in the Desktop's order, Souls and Capabilities with their count, the open one selected; a press goes to that tab's route", async () => {
@@ -120,6 +133,13 @@ test("Capabilities: the three core places and the capabilities of each, by their
   await two.findAllByTestId("oats-capability-row");
   expect(Array.from(two.getByTestId("oats-capabilities-core").querySelectorAll("dd")).map((value) => value.textContent)).toEqual(["okf", "none", "jira, linear"]);
   two.unmount();
+  resetApp();
+  // A place with more than three capabilities names three, then "+N": the rows under it are the whole list.
+  const six = ["a", "b", "c", "d", "e"].map((name, index) => ({ ...CAPABILITIES[0]!, id: `oats.${name}`, layer: "tasks", souls: 9 - index }));
+  const busy = await page("capabilities", { capabilities: () => ({ capabilities: [...CAPABILITIES, ...six] }) });
+  await busy.findAllByTestId("oats-capability-row");
+  expect(Array.from(busy.getByTestId("oats-capabilities-core").querySelectorAll("dd")).map((value) => value.textContent)).toEqual(["okf", "none", "a, b, c +2"]);
+  busy.unmount();
   resetApp();
   // A kernel that says nothing of core places: no Core part, and no "core" tag.
   const older = await page("capabilities", { capabilities: () => ({ capabilities: CAPABILITIES.map(({ layer: _layer, ...rest }) => rest) }) });
@@ -208,7 +228,7 @@ const TEAMS = {
 /** The souls as `oats souls` answers them, each with the teams the kernel RESOLVED for it (its default first). */
 const joiner = (name: string, teams: string[] | undefined, first = teams?.[0]) => ({ name, agent: name, description: "", origin: "", capabilities: [], spawnable: true, problem: null, ...(teams === undefined ? {} : { teams: teams.map((label) => ({ label, isDefault: label === first })) }) });
 const JOIN = { souls: () => ({ souls: [joiner("code-reviewer", ["oats"]), joiner("oats-developer", ["oats", "docs"]), joiner("oats-expert", ["oats"])] }) };
-const teamRows = (slot: Awaited<ReturnType<typeof page>>) => slot.getAllByTestId("oats-team-row").map((row) => [Array.from(row.firstElementChild!.children).map((part) => part.textContent), row.querySelector(":scope > p")?.textContent ?? null, Array.from(row.querySelectorAll("details p")).map((line) => line.textContent)]);
+const teamRows = (slot: Awaited<ReturnType<typeof page>>) => slot.getAllByTestId("oats-team-row").map((row) => [Array.from(row.firstElementChild!.children).map((part) => part.textContent), row.querySelector('[data-testid="oats-team-does"]')?.textContent ?? null, Array.from(row.querySelectorAll("details p")).map((line) => line.textContent)]);
 
 test("Teams: each team's label, \"Default team\", how many of this deployment's agents are on it, and what it is for; its address, who may join and where it is declared are under its Details", async () => {
   const slot = await page("teams", { teams: () => TEAMS, ...JOIN });
@@ -222,6 +242,9 @@ test("Teams: each team's label, \"Default team\", how many of this deployment's 
   );
   for (const details of Array.from(slot.container.querySelectorAll<HTMLDetailsElement>('[data-testid="oats-team-details"]'))) expect(details.open).toBe(false);
   expect(slot.getByTestId("oats-teams-page").textContent).not.toContain("not mapped");
+  // What a team is for is ONE line in the list (cut at a word by the page; whole in its title).
+  const does = slot.getByTestId("oats-team-does");
+  expect([does.className.includes("truncate"), does.getAttribute("title")]).toEqual([true, "The OATS framework team"]);
   // One list, with no heading: every team is the workspace's.
   expect(slot.queryByTestId("oats-teams-shared")).toBeNull();
   // Which teams each soul may join: one fold, closed.

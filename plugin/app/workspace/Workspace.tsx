@@ -29,7 +29,7 @@ onWindowReset(() => {
 /** The kernel's code for a team that has no id on the messaging provider yet (`oats teams`' problems). */
 export const TEAM_UNMAPPED = "team-unmapped";
 
-export function Frame({ tab, testId, found, children }: { tab: WorkspaceTab; /** the tab's own test id (`oats-souls-page`, …) */ testId: string; /** how many rows the tab shows now, where a search narrows it: its count then reads "N of M" */ found?: number; children: ReactNode }) {
+export function Frame({ tab, testId, found, head, children }: { tab: WorkspaceTab; /** the tab's own test id (`oats-souls-page`, …) */ testId: string; /** how many rows the tab shows now, where a search narrows it: its count then reads "N of M" */ found?: number; /** what stays with the strip at the page's top while the rows scroll under it: the tab's search field */ head?: ReactNode; children: ReactNode }) {
   const navigate = useBbNavigate();
   const pages = usePagesShown();
   // The counts are the tabs' own reads (one read per method for the whole window: the tab that is open shares it).
@@ -50,12 +50,18 @@ export function Frame({ tab, testId, found, children }: { tab: WorkspaceTab; /**
     };
   });
   useEffect(() => {
+    const selected = document.getElementById(`${PANEL}-tab-${tab}`);
+    // The strip scrolls sideways inside itself where its tabs do not fit (long counts at a phone's width): the selected tab is brought into view.
+    selected?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     if (!stripHeldFocus) return;
     stripHeldFocus = false;
-    document.getElementById(`${PANEL}-tab-${tab}`)?.focus();
+    selected?.focus();
   }, [tab]);
   return (
     <Page testId={testId}>
+      {/* The strip, and the tab's search under it, stay at the page's top: the rows scroll under them (a long list
+          never takes the controls off the screen). The head covers the page's own padding above it. */}
+      <div data-testid="oats-workspace-head" className="sticky top-0 z-10 -mx-4 -mt-4 flex min-w-0 flex-col gap-3 bg-background px-4 pt-4 pb-1 empty:hidden">
       {/* One tab alone is no strip: the page is that tab. */}
       {tabs.length > 1 ? (
         <Tabs
@@ -70,6 +76,8 @@ export function Frame({ tab, testId, found, children }: { tab: WorkspaceTab; /**
           panelId={PANEL}
         />
       ) : null}
+      {head ?? null}
+      </div>
       <div id={PANEL} role={tabs.length > 1 ? "tabpanel" : undefined} aria-labelledby={tabs.length > 1 ? `${PANEL}-tab-${tab}` : undefined} className="flex min-w-0 flex-col gap-3">
         {children}
       </div>

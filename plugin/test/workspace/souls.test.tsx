@@ -323,6 +323,26 @@ test("a soul's capabilities are rows, by their short names (the whole id the row
   expect(within(none.getByTestId("oats-soul-capabilities")).getByText("No capabilities.").tagName).toBe("P");
 });
 
+// The worst case (a soul of fifteen capabilities with agents): what runs is what a person comes for.
+test("a soul's AGENTS stand before its capabilities; of more than eight capabilities the page lists eight, then \"Show all 15\", which lists them all", async () => {
+  const ids = Array.from({ length: 15 }, (_, index) => `oats.cap-${String(index + 1).padStart(2, "0")}`);
+  const busy = soul("oats-developer", { capabilities: ids, teams: [{ label: "oats", isDefault: true }] });
+  const slot = await souls("oats-developer", { souls: () => ({ souls: [busy] }) });
+  const detail = await slot.findByTestId("oats-soul-detail");
+  await waitFor(() => expect(slot.getAllByTestId("oats-soul-agent").length).toBeGreaterThan(0));
+  const agents = slot.getByTestId("oats-soul-agents");
+  const capabilities = slot.getByTestId("oats-soul-capabilities");
+  expect(agents.compareDocumentPosition(capabilities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(capabilities).getByRole("heading").textContent).toBe("Capabilities15"); // the count is the whole number
+  expect(slot.getAllByTestId("oats-soul-capability")).toHaveLength(8);
+  const all = slot.getByTestId("oats-soul-capabilities-all");
+  expect(all.textContent).toBe("Show all 15");
+  fireEvent.click(all);
+  expect(slot.getAllByTestId("oats-soul-capability")).toHaveLength(15);
+  expect(slot.queryByTestId("oats-soul-capabilities-all")).toBeNull();
+  expect(detail.textContent).toContain("cap-15");
+});
+
 test("a soul the kernel could not resolve (it cannot be spawned): nothing is said of its capabilities, never \"none\"; its file is under Details", async () => {
   const broken = soul("oats.okf/knowledge-maintainer", { agent: "knowledge-maintainer", spawnable: false, problem: "E_TEAM_UNKNOWN: team \"reviewers\" is not declared", unresolved: true as const, file: "souls/knowledge-maintainer/soul.yaml" });
   const slot = await souls("oats.okf/knowledge-maintainer", { souls: () => ({ souls: [broken] }) });

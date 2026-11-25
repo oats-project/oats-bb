@@ -66,7 +66,7 @@ function grouped(souls: readonly Soul[]): { label: string | null; souls: Soul[] 
   return groups;
 }
 
-function SoulList({ souls, oats, query, onQuery }: { souls: readonly Soul[]; oats: Oats; query: string; onQuery: (query: string) => void }) {
+function SoulList({ souls, oats, query }: { souls: readonly Soul[]; oats: Oats; query: string }) {
   const navigate = useBbNavigate();
   if (souls.length === 0) return <Note>No souls.</Note>;
   const found = foundSouls(souls, query);
@@ -76,7 +76,6 @@ function SoulList({ souls, oats, query, onQuery }: { souls: readonly Soul[]; oat
   const oneGroup = grouped(souls).length === 1 && souls[0]?.source?.kind !== "package";
   return (
     <>
-      {souls.length >= FILTER_FROM ? <SearchField label="Search souls" placeholder="Search souls" value={query} onChange={onQuery} /> : null}
       {found.length === 0 ? <Note>Nothing matches.</Note> : null}
       {groups.map((group) => (
         <section key={group.label ?? ""} data-testid="oats-soul-group" className="flex min-w-0 flex-col gap-1">
@@ -114,6 +113,9 @@ function SoulList({ souls, oats, query, onQuery }: { souls: readonly Soul[]; oat
 }
 
 // ---- a soul's page ----
+
+/** How many of a soul's capabilities its page lists before "Show all N". */
+const CAPABILITIES_SHOWN = 8;
 
 /** One agent of the soul, as the roster says it: its state as a dot AND its word, the reason after it, where it runs; the row opens it. */
 function SoulAgent({ agent, oats }: { agent: Agent; oats: Ready }) {
@@ -191,6 +193,7 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
   const layers = new Map([...known].map(([id, capability]) => [id, capability.layer ?? null]));
   const capabilities = [...soul.capabilities].sort((a, b) => (known.get(b)?.souls ?? 0) - (known.get(a)?.souls ?? 0) || a.localeCompare(b));
   const mine = oats.phase === "ready" ? agentsOf(soul, oats) : null;
+  const [all, setAll] = useState(false);
   // (The harness by the name the New agent form gives it; the model as the kernel has it.)
   const launch = [soul.harness ? harnessLabel(soul.harness) : null, soul.model].filter((part): part is string => typeof part === "string" && part !== "").map((part) => shown(part)).join(" · ");
   const teams = (soul.teams ?? []).map((team) => shown(team.label)).join(", ");
@@ -217,29 +220,7 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
         <Fact label="Harness · model">{launch}</Fact>
         <Fact label="Teams">{teams}</Fact>
       </Facts>
-      {/* A soul the kernel could not resolve (one that cannot be spawned): what it is composed of is not known, so nothing is said of it, never "none". */}
-      {soul.unresolved === true ? null : (
-      <section data-testid="oats-soul-capabilities" className="flex min-w-0 flex-col gap-1">
-        <Heading n={capabilities.length}>Capabilities</Heading>
-        {capabilities.length === 0 ? (
-          <Note>No capabilities.</Note>
-        ) : (
-          <ul className="flex min-w-0 flex-col">
-            {capabilities.map((id) => {
-              const why = soul.why?.[id];
-              return (
-                <li key={id} data-testid="oats-soul-capability" title={shown(id)} className="flex min-w-0 flex-wrap items-baseline gap-x-2 px-2 py-1">
-                  <span className="min-w-0 break-words font-semibold">{shown(capabilityName(id))}</span>
-                  {layers.get(id) ? <span className="text-xs text-muted-foreground">core</span> : null}
-                  {/* Why the soul has it, in the kernel's own word ("workspace", "soul"). */}
-                  {why === undefined ? null : <span className="text-xs text-muted-foreground">{shown(why)}</span>}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-      )}
+      {/* Its agents first: what runs is what a person comes for (a soul of fifteen capabilities would put them two screens down). */}
       <section data-testid="oats-soul-agents" className="flex min-w-0 flex-col gap-1">
         <Heading {...(mine === null ? {} : { n: mine.length })}>Agents</Heading>
         {/* The agents are the roster's, as last read while OATS cannot be read: the page's notice says so. */}
@@ -255,6 +236,35 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
           </ul>
         )}
       </section>
+      {/* A soul the kernel could not resolve (one that cannot be spawned): what it is composed of is not known, so nothing is said of it, never "none". */}
+      {soul.unresolved === true ? null : (
+      <section data-testid="oats-soul-capabilities" className="flex min-w-0 flex-col gap-1">
+        <Heading n={capabilities.length}>Capabilities</Heading>
+        {capabilities.length === 0 ? (
+          <Note>No capabilities.</Note>
+        ) : (
+          <ul className="flex min-w-0 flex-col">
+            {(all ? capabilities : capabilities.slice(0, CAPABILITIES_SHOWN)).map((id) => {
+              const why = soul.why?.[id];
+              return (
+                <li key={id} data-testid="oats-soul-capability" title={shown(id)} className="flex min-w-0 flex-wrap items-baseline gap-x-2 px-2 py-1">
+                  <span className="min-w-0 break-words font-semibold">{shown(capabilityName(id))}</span>
+                  {layers.get(id) ? <span className="text-xs text-muted-foreground">core</span> : null}
+                  {/* Why the soul has it, in the kernel's own word ("workspace", "soul"). */}
+                  {why === undefined ? null : <span className="text-xs text-muted-foreground">{shown(why)}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {/* A long list has a bound, and a way to the rest. */}
+        {!all && capabilities.length > CAPABILITIES_SHOWN ? (
+          <Button data-testid="oats-soul-capabilities-all" className="self-start" onClick={() => setAll(true)}>
+            {`Show all ${capabilities.length}`}
+          </Button>
+        ) : null}
+      </section>
+      )}
       {under.length === 0 ? null : (
         <Disclosure summary="Details" testId="oats-soul-details">
           {under.map((text, index) => (
@@ -277,9 +287,14 @@ export function SoulsPage({ subPath }: PluginNavPanelProps) {
   // The list: the Souls tab of the Workspace page.
   if (picked === null) {
     return (
-      <Frame tab="souls" testId="oats-souls-page" {...(souls.data === undefined || query.trim() === "" ? {} : { found: foundSouls(souls.data.souls, query).length })}>
+      <Frame
+        tab="souls"
+        testId="oats-souls-page"
+        {...(souls.data === undefined || query.trim() === "" ? {} : { found: foundSouls(souls.data.souls, query).length })}
+        head={souls.data !== undefined && souls.data.souls.length >= FILTER_FROM ? <SearchField label="Search souls" placeholder="Search souls" value={query} onChange={setQuery} /> : null}
+      >
         <Before oats={oats} read={souls} />
-        {souls.data === undefined ? null : <SoulList souls={souls.data.souls} oats={oats} query={query} onQuery={setQuery} />}
+        {souls.data === undefined ? null : <SoulList souls={souls.data.souls} oats={oats} query={query} />}
       </Frame>
     );
   }

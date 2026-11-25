@@ -1077,7 +1077,9 @@ paragraphs came over: the tabs carry the counts; "About capabilities" is the one
 explains); a description is **one line** in a list, cut at a word with "…" (`OneLine`,
 `app/workspace/Workspace.tsx`: the words that fit are measured), whole in the line's title and on
 the thing's own page; a list of twelve or more has a search field; an empty list is two words
-("No souls."), and while a search narrows a list its tab says "3 of 22"; Left and Right on the
+("No souls."), and while a search narrows a list its tab says "3 of 22"; the strip and the search
+field are the page's HEAD, which stays at its top while the rows scroll under it, and the strip
+scrolls sideways inside itself where its tabs do not fit (the selected tab is brought into view); Left and Right on the
 strip go from tab to tab (each tab's page takes the focus on its own tab, so the keys go on);
 while a tab is read it says "Reading…"; a read that failed is a notice in a
 person's words with Retry, the kernel's or the host's message under its Details; what a tab draws
@@ -1091,7 +1093,8 @@ a capability's and a team's own page, and three more reads follow in their own c
   (a dot and "2 running"; nothing where none does), how many capabilities it has ("5 capabilities";
   not said of a soul the kernel could not resolve), "Can't spawn" where a spawn would be refused.
 - **A soul's page** (`/plugins/oats/souls/<key>`) opens over the list, at every width, with
-  "← Souls": its key; **New agent** (off, with "Can't spawn here", for a soul that cannot be
+  "← Souls" (its AGENTS stand before its capabilities: what runs is what a person comes for; of
+  more than eight capabilities eight are listed, then "Show all 15"): its key; **New agent** (off, with "Can't spawn here", for a soul that cannot be
   spawned); its group's word ("workspace", "oats.okf 6.2.0"); what it does, whole; **Harness ·
   model** (the harness by the New agent form's name for it) and **Teams** (the default first); its
   **Capabilities** as rows by their short names, in the Capabilities tab's order (the one most
@@ -1105,7 +1108,8 @@ a capability's and a team's own page, and three more reads follow in their own c
   agent is held wherever the roster is not the one just read. A soul the kernel could not resolve has no Capabilities section:
   the kernel answers no list for it, which is "not known", never "none".
 - **Capabilities.** **Core**: Knowledge, Messaging, Tasks, each with every capability of that
-  place or "none" (no Core part where the kernel's answer says nothing of places). A capability
+  place (at most three names, then "+N": the rows under it are the whole list) or "none" (no Core
+  part where the kernel's answer says nothing of places). A capability
   is named WITHOUT OATS's own prefix ("aweb" for `oats.aweb`; its whole id is the row's title), and
   the list is in the order of how many souls have each, most first ("9 souls" at the row's end). Then each capability: its id, "core" and "repo only" where they hold, "by <source>",
   one line of what it does.
@@ -1113,7 +1117,7 @@ a capability's and a team's own page, and three more reads follow in their own c
   what it is for; under its Details its address on the messaging provider, who may join (and whose
   default it is, where it is not the deployment's: both from each soul's teams as the kernel
   resolved them, `oats souls`; the workspace's rules for it are the kernel's to read), where it
-  is declared. A team with no address yet says "No address yet"; where it is the default team it
+  is declared. What a team is for is one line in the list, cut at a word. A team with no address yet says "No address yet"; where it is the default team it
   is a notice first, since nothing can be spawned until it has one, and the Teams tab has a mark
   (both decided on the kernel's code for it, `team-unmapped`; the notice waits while the roster's
   own notice stands: one notice on a screen). The workspace's teams and this

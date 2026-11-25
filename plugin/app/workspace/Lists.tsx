@@ -57,7 +57,10 @@ const ABOUT = {
 /** The capabilities a search leaves: by a capability's id and what it does. */
 const foundCapabilities = (capabilities: readonly Capability[], query: string): Capability[] => capabilities.filter((capability) => matches(query, capability.id, capability.description));
 
-function CapabilityList({ capabilities, query, onQuery }: { capabilities: readonly Capability[]; query: string; onQuery: (query: string) => void }) {
+/** How many capabilities a core place names before "+N": the rows under it are the whole list. */
+const CORE_NAMES = 3;
+
+function CapabilityList({ capabilities, query }: { capabilities: readonly Capability[]; query: string }) {
   if (capabilities.length === 0) return <Note>No capabilities.</Note>;
   // The one most souls have first.
   const found = bySouls(foundCapabilities(capabilities, query));
@@ -67,14 +70,14 @@ function CapabilityList({ capabilities, query, onQuery }: { capabilities: readon
   const fills = (layer: string) => bySouls(capabilities.filter((capability) => capability.layer === layer)).map((capability) => capabilityName(capability.id));
   return (
     <>
-      {capabilities.length >= FILTER_FROM ? <SearchField label="Search capabilities" placeholder="Search capabilities" value={query} onChange={onQuery} /> : null}
       {told && query === "" ? (
         <section data-testid="oats-capabilities-core" className="flex min-w-0 flex-col gap-1">
           <Heading>Core</Heading>
           <Facts>
             {CORE.map(([layer, label]) => (
               <Fact key={layer} label={label}>
-                {shown(fills(layer).join(", ") || "none")}
+                {shown(fills(layer).slice(0, CORE_NAMES).join(", ") || "none")}
+                {fills(layer).length > CORE_NAMES ? <span className="text-muted-foreground">{` +${fills(layer).length - CORE_NAMES}`}</span> : null}
               </Fact>
             ))}
           </Facts>
@@ -126,10 +129,15 @@ export function CapabilitiesPage() {
   const read = useRead("capabilities");
   const [query, setQuery] = useState("");
   return (
-    <Frame tab="capabilities" testId="oats-capabilities-page" {...(read.data === undefined || query.trim() === "" ? {} : { found: foundCapabilities(read.data.capabilities, query).length })}>
+    <Frame
+      tab="capabilities"
+      testId="oats-capabilities-page"
+      {...(read.data === undefined || query.trim() === "" ? {} : { found: foundCapabilities(read.data.capabilities, query).length })}
+      head={read.data !== undefined && read.data.capabilities.length >= FILTER_FROM ? <SearchField label="Search capabilities" placeholder="Search capabilities" value={query} onChange={setQuery} /> : null}
+    >
       {/* (Nothing of this tab is the roster's: it says nothing of the roster.) */}
       <Before oats={oats} read={read} roster={false} />
-      {read.data === undefined ? null : <CapabilityList capabilities={read.data.capabilities} query={query} onQuery={setQuery} />}
+      {read.data === undefined ? null : <CapabilityList capabilities={read.data.capabilities} query={query} />}
     </Frame>
   );
 }
@@ -175,7 +183,8 @@ function TeamRow({ team, souls, agents }: { team: Team; souls: readonly Soul[] |
         {/* A team with no address on the messaging provider yet: nobody can be counted under it. */}
         {team.team === null ? <span className="shrink-0 text-xs text-warning-text">No address yet</span> : agents === null || agents === 0 ? null : <span className={TAG}>{count(agents, "agent")}</span>}
       </div>
-      {team.description ? <p className="break-words text-xs text-muted-foreground">{shown(team.description)}</p> : null}
+      {/* What it is for, on ONE line; whole in the line's title (and, later, on the team's own page). */}
+      {team.description ? <OneLine testId="oats-team-does" text={team.description} /> : null}
       {under.length === 0 ? null : (
         <Disclosure summary="Details" testId="oats-team-details">
           {under.map(([label, value]) => (

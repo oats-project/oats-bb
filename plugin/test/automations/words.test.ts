@@ -4,84 +4,50 @@ import { displayLine } from "../../app/ui/text";
 import type { AutomationRow } from "../../contract/automations";
 import { automationRowOf } from "../../kernel/automations";
 import {
-  actsAs,
   capabilitySource,
   causeWords,
   cronInWords,
-  filterRows,
-  groupRows,
   harnessName,
-  hostLogin,
   hostUnnamed,
-  hostUnnamedDetail,
-  lastNext,
-  lastRunFailed,
   listBanners,
   onSummary,
   ownerParts,
   dueWords,
   pastTime,
   placementText,
-  reconcileCommand,
   relativeTime,
   ruleWords,
   runState,
-  schedulerLine,
-  snapshotLine,
-  soulOriginText,
   sourceLabel,
   sourceParams,
   summaryLine,
   taskParts,
-  templateProvenance,
   HERE,
   hereOf,
-  schedulerOff,
-  notRunHere,
   hostNameHow,
-  emptyHow,
   switchTitle,
+  schedulerOffLine,
+  earlierNotKept,
+  failing,
+  failingFirst,
+  filterList,
+  LIST_FILTERS,
+  oneList,
+  rowLine,
+  runLine,
+  runWhen,
+  searchRows,
+  statusFor,
+  whenWords,
+  whoWords,
 } from "../../app/automations/words";
+import { allRuns, pageRuns } from "../../model/automation-runs";
+import { busy } from "./busy";
+import { STATUSES } from "./handlers";
 import { rowOf, schedules, triggers } from "./fixtures";
 
 const NOW = Date.parse("2026-11-21T12:00:00.000Z");
 const row = (raw: Record<string, unknown>, kind: "schedule" | "trigger" = "schedule"): AutomationRow => automationRowOf({ id: "x", ...raw }, kind)!;
-
-describe("the groups, the filter and the search", () => {
-  it("rows are grouped by where they run, in page order, and an empty group is left out", () => {
-    const groups = groupRows(schedules().rows);
-    expect(groups.map((group) => [group.title, group.rows.map((entry) => entry.name)])).toEqual([
-      ["Runs on this computer", ["daily-review", "hourly-check", "notes-checkpoint", "status-check", expect.stringMatching(/^wake-/), "weekly-cleanup", "nightly-digest"]],
-      ["Needs attention here", ["legacy-herdr", "reconcile", "release-check"]],
-      ["Runs elsewhere", ["weekly-report"]],
-    ]);
-    expect(groupRows(schedules("schedule-list-empty.json").rows)).toEqual([]);
-    expect(groupRows(schedules().rows.filter((entry) => entry.group === "elsewhere")).map((group) => group.id)).toEqual(["elsewhere"]);
-  });
-
-  it("All, Workspace and Local filter by where the definition lives", () => {
-    const rows = schedules().rows;
-    expect(filterRows(rows, { origin: "all" })).toHaveLength(rows.length);
-    expect(filterRows(rows, { origin: "workspace" }).map((entry) => entry.name)).toEqual(["nightly-digest", "reconcile", "release-check", "weekly-report"]);
-    expect(filterRows(rows, { origin: "local" }).every((entry) => entry.origin.kind === "local")).toBe(true);
-  });
-
-  it("the search reads the id, the soul, the task or message, the summary, the host and the account", () => {
-    const rows = schedules().rows;
-    const found = (query: string, origin: "all" | "workspace" | "local" = "all") => filterRows(rows, { query, origin }).map((entry) => entry.name);
-    expect(found("NIGHTLY")).toEqual(["nightly-digest"]);
-    expect(found("knowledge-harvester")).toEqual(["nightly-digest"]);
-    expect(found("release branch")).toEqual(["release-check"]);
-    // A wake's own message is searched; the wake a spawn attaches to its agents is not.
-    expect(found("anything new")).toEqual([expect.stringMatching(/^wake-/)]);
-    expect(found("billing ledger")).toEqual(["reconcile"]);
-    expect(found("report-server")).toEqual(["weekly-report"]);
-    expect(found("acme-billing-bot")).toEqual(["reconcile"]);
-    expect(found("  ")).toHaveLength(rows.length);
-    expect(found("no such thing")).toEqual([]);
-    expect(found("review", "workspace")).toEqual([]);
-  });
-});
 
 describe("a row's summary", () => {
   it("the authored one; else the first line of what it sends, marked derived; else none", () => {
@@ -98,13 +64,6 @@ describe("a row's summary", () => {
 });
 
 describe("a soul and where it comes from", () => {
-  it("says the origin in words", () => {
-    expect(soulOriginText(rowOf(schedules(), "local/daily-review").soul!.origin)).toEqual({ short: "oats-real", long: "A soul in the member oats-real" });
-    expect(soulOriginText({ kind: "package", package: "oats.okf", version: "5.0.0", member: null, repoKey: null, source: null, candidates: null })).toEqual({ short: "package oats.okf", long: "A soul of the locked package oats.okf 5.0.0" });
-    expect(soulOriginText({ kind: "external", package: null, version: null, member: null, repoKey: null, source: "github.com/x/y", candidates: null })).toEqual({ short: "external", long: "An external soul from github.com/x/y" });
-    expect(soulOriginText({ kind: "ambiguous", package: null, version: null, member: null, repoKey: null, source: null, candidates: 3 })).toEqual({ short: "ambiguous name", long: "3 souls answer to this name; a spawn needs the qualified name" });
-    expect(soulOriginText(null)).toEqual({ short: "not found here", long: "This name does not resolve in this workspace (or there is no snapshot yet)" });
-  });
 
   it("names a harness as the product does", () => {
     expect([harnessName("claude"), harnessName("pi"), harnessName(" Codex "), harnessName("opencode")]).toEqual(["Claude", "Pi", "Codex", "opencode"]);
@@ -209,14 +168,11 @@ describe("where it runs", () => {
     // bb's name is free text: it is drawn as a display line.
     expect(hereOf("fal\u202Econ\nx").on).toBe(displayLine("fal\u202Econ\nx"));
     const list = schedules();
-    expect(groupRows(list.rows, true, falcon).map((group) => group.title)).toEqual(["Runs on falcon", "Needs attention here", "Runs elsewhere"]);
-    expect(groupRows(list.rows, false, falcon)[0]!.title).toBe("Set to run on falcon");
     expect(placementText(rowOf(list, "local/daily-review"), list.host, true, falcon)).toEqual({ label: "falcon", tone: "ok", detail: "Local: runs on falcon as its own gh login" });
     expect(placementText(rowOf(list, "oats-real/nightly-digest"), list.host, true, falcon)).toEqual({ label: "falcon", tone: "ok", detail: "falcon's host name is bb-box" });
     expect(placementText(rowOf(list, "local/daily-review"), list.host, false, falcon).detail).toBe("The scheduler is not running on falcon");
-    expect([schedulerOff(falcon).title, hostUnnamed(falcon).title, notRunHere(falcon)]).toEqual(["The scheduler is not running on falcon", "falcon has no host name in OATS", "Does not run on falcon"]);
+    expect([schedulerOffLine(falcon), hostUnnamed(falcon).title]).toEqual(["The scheduler is off on falcon", "falcon has no host name in OATS"]);
     expect(hostNameHow(falcon)).toBe("In the deployment's oats-local.yaml on falcon, set host: name: to the name it goes by in the workspace, then press Refresh.");
-    expect(emptyHow("schedule", falcon)).toContain("or add a local one on falcon with oats schedule add.");
     expect(switchTitle(rowOf(list, "local/daily-review"), falcon)).toBe("On here: click to turn it off on falcon");
   });
   it("each placement in words, with its tone and the kernel's detail", () => {
@@ -241,30 +197,9 @@ describe("where it runs", () => {
     expect(placementText(row({ ...workspace, runsHere: true }), host)).toEqual({ label: "This computer", tone: "ok", detail: null });
   });
 
-  it("who it acts as, and who this computer's gh is", () => {
-    const list = schedules();
-    expect(ownerParts("github.com/ana")).toEqual({ host: "github.com", login: "ana" });
-    expect(ownerParts("ana")).toBeNull();
-    expect(actsAs(rowOf(list, "local/daily-review"))).toBe("local");
-    expect(actsAs(rowOf(list, "oats-real/reconcile"))).toBe("as @acme-billing-bot");
-    expect(hostLogin(list.host, "github.com/acme-billing-bot")).toBe("github.com/ana");
-    expect(hostLogin({ name: "h", ghUser: { "github.com": null } }, "github.com/ana")).toBe("not logged in");
-    expect(hostLogin(list.host, "ghe.example/ana")).toBeNull();
-    expect(hostLogin(list.host, null)).toBeNull();
-  });
 });
 
 describe("the host scheduler and the list's notices", () => {
-  it("on, with when it last checked and how many it runs at once; or off", () => {
-    expect(schedulerLine({ installed: true, active: true, registered: true, lastTick: new Date(NOW - 2 * 60e3).toISOString(), maxConcurrent: 5 }, NOW)).toBe("Scheduler on · checked 2 min ago · up to 5 at once");
-    expect(schedulerLine({ installed: true, active: true, registered: null, lastTick: null, maxConcurrent: null }, NOW)).toBe("Scheduler on");
-    for (const off of [
-      { installed: false, active: true, registered: true },
-      { installed: true, active: false, registered: true },
-      { installed: true, active: true, registered: false },
-    ]) expect(schedulerLine({ ...off, lastTick: null, maxConcurrent: 5 }, NOW)).toBe("Scheduler off");
-    expect(schedulerLine(schedules().scheduler!, Date.parse(schedules().scheduler!.lastTick!) + 60e3)).toBe("Scheduler on · checked 1 min ago · up to 5 at once");
-  });
 
   it("the banner for a scheduler that is off shows only when something here would run", () => {
     expect(listBanners(schedules("schedule-list-scheduler-off.json"))).toEqual({ hostUnnamed: false, schedulerOff: true });
@@ -275,73 +210,9 @@ describe("the host scheduler and the list's notices", () => {
   it("the banner for a host with no name shows when the workspace has rows it cannot place", () => {
     expect(listBanners(schedules("schedule-list-host-unnamed.json")).hostUnnamed).toBe(true);
     expect(listBanners(triggers("trigger-list-host-unnamed.json")).hostUnnamed).toBe(true);
-    expect([hostUnnamed().title, hostUnnamedDetail("schedule")]).toEqual(["This computer has no host name in OATS", "It runs none of the workspace's schedules. Name it in this deployment's local settings to take on the ones assigned to it."]);
-    expect(hostUnnamedDetail("trigger")).toContain("none of the workspace's triggers");
+    expect(hostUnnamed().title).toBe("This computer has no host name in OATS");
   });
 
-  it("the line under the list: the last sync, what it could not read, or that none happened yet", () => {
-    const list = schedules();
-    expect(snapshotLine(list, Date.parse(list.snapshot!.takenAt!) + 3 * 60e3)).toBe("Workspace schedules as of the last sync (3 min ago) · Only members you can read in Git contribute.");
-    expect(snapshotLine({ ...list, snapshot: { takenAt: null, problems: 2 } }, NOW)).toBe("Workspace schedules as of the last sync · 2 discovery problems · Only members you can read in Git contribute.");
-    expect(snapshotLine({ ...triggers(), snapshot: { takenAt: null, problems: 1 } }, NOW)).toContain("Workspace triggers as of the last sync · 1 discovery problem ·");
-    expect(snapshotLine(schedules("schedule-list-empty.json"), NOW)).toBe("Workspace items appear after the next sync · Only members you can read in Git contribute.");
-  });
-});
-
-describe("last and next", () => {
-  it("a schedule: when it is next due, and its last run with the outcome in words", () => {
-    const list = schedules();
-    const cell = (id: string) => {
-      const entry = rowOf(list, id);
-      return lastNext(entry, Date.parse(entry.lastRun?.startedAt ?? entry.createdAt!) + 2 * 3600e3);
-    };
-    expect(cell("local/daily-review")).toMatchObject({ next: expect.stringMatching(/^Next in \d+ (h|d)$/), last: "Last 2 h ago", lastOutcome: expect.stringMatching(/^agent (launched|active)$/), lastTone: null });
-    expect(cell("local/hourly-check")).toMatchObject({ last: "Last 2 h ago", lastOutcome: "launch failed", lastTone: "bad" });
-    expect(cell("local/status-check")).toMatchObject({ last: "Last 2 h ago", lastOutcome: "launch state unknown", lastTone: "warn" });
-    expect(cell("local/weekly-cleanup")).toMatchObject({ next: "Off here", last: "Not run yet", lastTitle: null });
-    expect(cell("oats-real/nightly-digest")).toMatchObject({ last: "Not run yet" });
-    // Another computer runs it: runs are recorded there.
-    expect(cell("oats-real/weekly-report")).toBeNull();
-    expect(cell("oats-real/reconcile")).toBeNull();
-  });
-
-  it("a trigger: its next poll, and its last fire named by what fired", () => {
-    const list = triggers();
-    const cell = (id: string) => {
-      const entry = rowOf(list, id);
-      return lastNext(entry, Date.parse(entry.lastRun?.at ?? entry.createdAt ?? "2026-11-21T00:00:00Z") + 5 * 60e3);
-    };
-    expect(cell("oats-real/proposal-review")).toMatchObject({ last: "Last 5 min ago", lastOutcome: "#41", lastTone: null });
-    expect(cell("oats-real/harvest-review")).toMatchObject({ last: "Last 5 min ago", lastOutcome: "harvest/a" });
-    expect(cell("local/old-prs")).toMatchObject({ next: "Off here", last: "Not run yet" });
-    expect(cell("oats-real/docs-review")).toBeNull();
-    expect(lastNext(row({ runsHere: true }, "trigger"), NOW)).toMatchObject({ next: "Polls at the next tick", last: "Not run yet" });
-    expect(lastNext(row({ runsHere: true }), NOW)).toMatchObject({ next: "Next not reported" });
-    // What is so: a time that has passed was due, and under a scheduler that is off nothing is next.
-    expect(lastNext(row({ runsHere: true, nextDue: new Date(NOW - 9 * 3600e3).toISOString() }), NOW)).toMatchObject({ next: "Was due 9 h ago" });
-    expect(lastNext(row({ runsHere: true, nextDue: new Date(NOW + 9 * 3600e3).toISOString() }), NOW)).toMatchObject({ next: "Next in 9 h" });
-    expect(lastNext(row({ runsHere: true, nextDue: new Date(NOW + 9 * 3600e3).toISOString() }), NOW, false)).toMatchObject({ next: "Scheduler off" });
-    // The whole time is the title only where the text is that time: never behind "Scheduler off" or "Off here".
-    const ahead = { runsHere: true, nextDue: new Date(NOW + 9 * 3600e3).toISOString() };
-    expect(lastNext(row(ahead), NOW)!.nextTitle).toBe(new Date(NOW + 9 * 3600e3).toLocaleString());
-    expect(lastNext(row(ahead), NOW, false)).toMatchObject({ next: "Scheduler off", nextTitle: "Scheduler off" });
-    expect(lastNext(row({ ...ahead, enabledHere: false, origin: { kind: "local" }, enabled: false }), NOW)).toMatchObject({ next: "Off here", nextTitle: "Off here" });
-    // One rule for a due time, wherever it is said: ahead it is next, at or after its time it was due.
-    const due = (ms: number) => dueWords(new Date(NOW + ms).toISOString(), NOW);
-    expect([due(9 * 3600e3), due(-3 * 60e3), due(0), dueWords(null, NOW)]).toMatchObject([{ word: "Next", label: "in 9 h" }, { word: "Was due", label: "3 min ago" }, { word: "Was due" }, null]);
-    // A row that does not run on the machine (it needs attention there) still shows the run it had there, and says it does not run in place of a next one.
-    const ran = row({ runsHere: false, group: "attention", reason: "owner-mismatch", origin: { kind: "workspace" }, nextDue: new Date(NOW + 3600e3).toISOString(), lastRun: { startedAt: new Date(NOW - 86400e3).toISOString(), outcome: "agent-launched" } });
-    expect(ran.group).not.toBe("here");
-    expect(lastNext(ran, NOW, true, hereOf("falcon"))).toMatchObject({ next: "Does not run on falcon", last: "Last 1 d ago" });
-    expect(lastNext(row({ runsHere: false, reason: "assigned-elsewhere", origin: { kind: "workspace" } }), NOW)).toBeNull();
-    // A run that has happened is never said to lie ahead, whatever the browser's clock says; nor is the scheduler's last tick.
-    expect(lastNext(row({ runsHere: true, lastRun: { startedAt: new Date(NOW + 30e3).toISOString(), outcome: "agent-launched" } }), NOW)).toMatchObject({ last: "Last less than a minute ago" });
-    expect(schedulerLine({ installed: true, active: true, registered: true, lastTick: new Date(NOW + 30e3).toISOString(), maxConcurrent: 5 }, NOW)).toBe("Scheduler on · checked less than a minute ago · up to 5 at once");
-    expect(lastNext(row({ runsHere: true, enabledHere: false, nextDue: new Date(NOW + 9 * 3600e3).toISOString() }), NOW, false)).toMatchObject({ next: "Off here" });
-    expect(lastNext(row({ runsHere: true, lastRun: { startedAt: new Date(NOW - 60e3).toISOString(), outcome: "newly-named" } }), NOW)).toMatchObject({ last: "Last 1 min ago", lastOutcome: "newly-named", lastTone: null });
-    // A subject that is withheld is not dressed as a pull request's number.
-    expect(lastNext(row({ runsHere: true, on: { source: "github.pull_request" }, lastRun: { at: new Date(NOW - 60e3).toISOString(), subject: "token=abcdef0123456789" } }, "trigger"), NOW)).toMatchObject({ last: "Last 1 min ago", lastOutcome: "[withheld]" });
-  });
 });
 
 describe("a schedule's run state", () => {
@@ -352,9 +223,6 @@ describe("a schedule's run state", () => {
       unknown: { since: entry.attempt!.startedAt, scheduledFor: entry.attempt!.scheduledFor, holdsSlot: false, exited: true, exitStatus: 0, exitSignal: null, error: "command answered no valid envelope; its side effects are unconfirmed" },
       pendingWake: null,
     });
-    expect(reconcileCommand(entry)).toBe("oats schedule reconcile local/status-check --dir /abs/deployment");
-    expect(reconcileCommand(entry, { clear: true })).toBe("oats schedule reconcile local/status-check --clear --dir /abs/deployment");
-    expect(reconcileCommand(row({ scope: "/home/it's here/dep" }))).toBe("oats schedule reconcile x --dir '/home/it'\\''s here/dep'");
   });
 
   it("running is a held lock with nothing unresolved; a wake that waits is said; nothing to say is null", () => {
@@ -367,23 +235,142 @@ describe("a schedule's run state", () => {
   });
 });
 
-describe("where it comes from", () => {
-  it("a package template's provenance", () => {
-    expect(templateProvenance(row({ template: { package: "oats.okf", template: "proposal-review", version: "v0.4.0", commit: "abc1234def" } }, "trigger").template)).toBe("oats.okf:proposal-review v0.4.0 @abc1234");
-    expect(templateProvenance(row({ template: { from: "oats.okf:proposal-review" } }, "trigger").template)).toBe("oats.okf:proposal-review");
-    expect(templateProvenance(null)).toBeNull();
+describe("the row's small line", () => {
+  const lineOf = (id: string, kind: "schedule" | "trigger" = "schedule", running = true) => {
+    const entry = rowOf(kind === "schedule" ? schedules() : triggers(), id);
+    return rowLine(entry, statusFor(entry, STATUSES().statuses), Date.parse(schedules().scheduler!.lastTick!) + 2 * 3600e3, running).map((part) => part.text);
+  };
+
+  it("who it starts: the soul, the agent a wake wakes, Command, the operation by its name", () => {
+    const list = schedules();
+    expect(whoWords(rowOf(list, "local/daily-review"))).toBe("oats-developer");
+    expect(whoWords(rowOf(list, "local/wake-oats-developer-review-202611212017"))).toBe("oats-developer-review-202611212017");
+    expect(whoWords(rowOf(list, "local/status-check"))).toBe("Command");
+    expect(whoWords(rowOf(list, "local/notes-checkpoint"))).toBe("knowledge:checkpoint");
+    expect(whoWords(row({ kind: "wake" }))).toBeNull();
+  });
+
+  it("when: a cadence in words, else the cron itself; a trigger's event with its repository, or its capability and source", () => {
+    expect(whenWords(rowOf(schedules(), "local/hourly-check"))).toBe("Every hour");
+    expect(whenWords(row({ cron: "7 3 1 * *" }))).toBe("7 3 1 * *");
+    expect(whenWords(rowOf(triggers(), "local/pr-triage"))).toBe("On a pull request, acme/app");
+    expect(whenWords(rowOf(triggers(), "local/graph-watch"))).toBe("On acme.graph: harvest-branches");
+  });
+
+  it("a next run only for a schedule that runs on the machine, on, while the scheduler is on", () => {
+    expect(lineOf("oats-real/nightly-digest")).toEqual(["knowledge-harvester", "Daily at 07:00", "Next in 8 h"]);
+    expect(lineOf("oats-real/nightly-digest", "schedule", false)).toEqual(["knowledge-harvester", "Daily at 07:00"]);
+    expect(lineOf("local/weekly-cleanup")).toEqual(["oats-product-expert", "Fridays at 18:00"]);
+    expect(lineOf("oats-real/weekly-report")).toEqual(["oats-product-expert", "Mondays at 09:00", "Runs on report-server"]);
+  });
+
+  it("a reason this plugin does not know is said as that the row does not run here", () => {
+    const odd = { ...rowOf(schedules(), "oats-real/weekly-report"), reason: "other" as const, reasonCode: "quarantined" };
+    expect(rowLine(odd, null, NOW, true).at(-1)).toEqual({ text: "Doesn't run here", tone: "bad" });
+    expect(failing(odd, null)).toBe(true);
   });
 });
 
-describe("the failed-run mark", () => {
-  it("a schedule whose last run is launch failed or invalid marks; nothing else does", () => {
-    const list = schedules();
-    expect(list.rows.filter(lastRunFailed).map((entry) => entry.name)).toEqual(["hourly-check", "legacy-herdr"]);
-    expect(schedules("schedule-list-scheduler-off.json").rows.filter(lastRunFailed)).toEqual([]);
-    expect(triggers().rows.filter(lastRunFailed)).toEqual([]);
-    // `unknown` is a launch whose state is not known, not a failed one; a trigger's last run carries no outcome.
-    expect(lastRunFailed(rowOf(list, "local/status-check"))).toBe(false);
-    expect(lastRunFailed(row({ lastRun: { outcome: "launch-failed" } }, "trigger"))).toBe(false);
-    expect(lastRunFailed(row({ lastRun: null }))).toBe(false);
+describe("what is failing: one rule for the row's red, the filter's count and the sidebar's dot", () => {
+  const statuses = STATUSES().statuses;
+  const all = oneList(schedules().rows, triggers().rows);
+  const bad = (rows: typeof all) => rows.filter((entry) => failing(entry, statusFor(entry, statuses))).map((entry) => entry.id);
+
+  it("on the recording: a refused launch, an invalid definition, a wrong account, no trust, a failed source check; an unknown state is not one", () => {
+    expect(bad(all)).toEqual(["local/hourly-check", "local/legacy-herdr", "oats-real/reconcile", "oats-real/release-check", "oats-real/harvest-closed"]);
+  });
+
+  it("a row is failing exactly when its line holds a red part", () => {
+    for (const entry of all) {
+      const status = statusFor(entry, statuses);
+      expect([entry.id, rowLine(entry, status, NOW, true).some((part) => part.tone === "bad")]).toEqual([entry.id, failing(entry, status)]);
+    }
+  });
+
+  it("the filter: every row, one kind, or what is failing; and what is failing leads the list, the rest in its order", () => {
+    expect(LIST_FILTERS.map((option) => [option.label, filterList(all, option.id, statuses).length])).toEqual([["All", 18], ["Schedules", 11], ["Triggers", 7], ["Failing", 5]]);
+    expect(filterList(all, "failing", statuses).map((entry) => entry.id)).toEqual(bad(all));
+    const first = failingFirst(all, statuses).map((entry) => entry.id);
+    expect(first.slice(0, 5)).toEqual(bad(all));
+    expect(first.slice(5)).toEqual(all.map((entry) => entry.id).filter((id) => !bad(all).includes(id)));
+  });
+
+  it("THE BUSY SET (37 automations, five failing, names of sixty characters): the rows drawn red, the filter's count and the dot's verdict agree", () => {
+    const set = busy();
+    const rows = oneList(set.schedules.rows, set.triggers.rows);
+    expect(rows).toHaveLength(37);
+    expect(rows.every((entry) => entry.name.length === 60)).toBe(true);
+    expect(new Set(rows.map((entry) => `${entry.kind}:${entry.id}`)).size).toBe(37);
+    const red = rows.filter((entry) => rowLine(entry, statusFor(entry, set.statuses), NOW, true).some((part) => part.tone === "bad"));
+    const counted = filterList(rows, "failing", set.statuses);
+    const dot = rows.some((entry) => failing(entry, statusFor(entry, set.statuses)));
+    expect([red.length, counted.length, dot]).toEqual([5, 5, true]);
+    expect(counted.map((entry) => entry.id)).toEqual(red.map((entry) => entry.id));
+    expect(failingFirst(rows, set.statuses).slice(0, 5).map((entry) => entry.id)).toEqual(red.map((entry) => entry.id));
+    // With none failing, none of the three says so.
+    const calm = rows.filter((entry) => !red.includes(entry));
+    expect([filterList(calm, "failing", set.statuses).length, calm.some((entry) => failing(entry, statusFor(entry, set.statuses)))]).toEqual([0, false]);
+    // Some automations of it keep fifty runs, and the Runs tab's list is of hundreds.
+    expect(set.schedules.rows.filter((entry) => entry.recentRuns.length === 50).length).toBeGreaterThan(2);
+    expect(allRuns(set.schedules.rows, set.triggers.rows, set.statuses).entries.length).toBeGreaterThan(200);
+  });
+
+  it("the search reads the name, the id, who it starts, when, what it sends and the summary", () => {
+    const found = (query: string) => searchRows(all, query).map((entry) => entry.name);
+    expect(found("NIGHTLY")).toEqual(["nightly-digest"]);
+    expect(found("knowledge-harvester")).toEqual(["nightly-digest"]);
+    expect(found("every hour")).toEqual(["hourly-check"]);
+    expect(found("acme/app")).toEqual(["pr-triage"]);
+    expect(found("  ")).toHaveLength(18);
+    expect(found("no such thing")).toEqual([]);
+  });
+});
+
+describe("a run's row", () => {
+  const lines = (id: string, kind: "schedule" | "trigger" = "schedule") => {
+    const entry = rowOf(kind === "schedule" ? schedules() : triggers(), id);
+    const status = STATUSES().statuses.find((candidate) => candidate.id === id)?.status ?? null;
+    return pageRuns(entry, status).map(runLine);
+  };
+
+  it("a schedule's run: its mark, its outcome in a person's word, its agent, and the kernel's own words where it has some", () => {
+    expect(lines("local/daily-review")).toEqual([{ mark: "done", at: "2026-11-21T20:17:32.946Z", what: null, word: "Agent launched", notes: [], agent: "oats-developer-review-202611212017", error: null }]);
+    const [failed] = lines("local/hourly-check");
+    expect([failed!.mark, failed!.word, failed!.agent, failed!.error!.code]).toEqual(["failed", "Launch failed", null, "E_BACKEND_SANDBOXED_MODE"]);
+    const [unknown] = lines("local/status-check");
+    expect([unknown!.mark, unknown!.word]).toEqual(["unknown", "Launch state unknown"]);
+  });
+
+  it("an outcome this plugin has no word for is the kernel's own; a wake held by a claim is Held", () => {
+    const run = rowOf(schedules(), "local/daily-review").recentRuns[0]!;
+    const owner = { kind: "schedule" as const, id: "x", name: "x" };
+    expect(runLine({ of: "run", owner, at: null, run: { ...run, outcome: "blocked" } }).word).toBe("blocked");
+    expect(runLine({ of: "run", owner, at: null, run: { ...run, outcome: null } }).word).toBe("Attempt recorded");
+    expect(runLine({ of: "run", owner, at: null, run: { ...run, outcome: "skipped", reason: "waiting-on-you" } })).toMatchObject({ mark: "waiting", word: "Held" });
+    expect(runLine({ of: "run", owner, at: null, run: { ...run, outcome: "stopped" } })).toMatchObject({ mark: "unknown", word: "Agent stopped" });
+    expect(runLine({ of: "run", owner, at: null, run: { ...run, outcome: "delivered" } })).toMatchObject({ mark: "done", word: "Wake message delivered" });
+  });
+
+  it("a trigger: what waits, then what fired, each by its event", () => {
+    expect(lines("local/pr-triage", "trigger").map((line) => [line.mark, line.what, line.word, line.agent])).toEqual([
+      ["waiting", "#42 opened", "Waiting", null],
+      ["waiting", "#43 opened", "Waiting", null],
+      ["waiting", "#45 opened", "Waiting", null],
+      ["done", "#41 opened", "Agent launched", "oats-developer-triage-41"],
+    ]);
+  });
+
+  it("a run's time is a date and a time, with its year only when it is not this one; no time is no label", () => {
+    const at = "2026-11-21T20:17:32.946Z";
+    const when = runWhen(at, Date.parse("2026-11-25T12:00:00.000Z"))!;
+    expect(when.label).toBe(new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+    expect(when.title).toBe(new Date(at).toLocaleString());
+    expect(runWhen(at, Date.parse("2027-01-02T12:00:00.000Z"))!.label).toContain("2026");
+    expect(runWhen(null, NOW)).toBeNull();
+    expect(runWhen("not a time", NOW)).toBeNull();
+  });
+
+  it("what is not kept is said with the count only where the kernel gives one", () => {
+    expect([earlierNotKept(null), earlierNotKept(3), earlierNotKept(1)]).toEqual(["Earlier runs are not kept", "3 earlier runs are not kept", "1 earlier run is not kept"]);
   });
 });

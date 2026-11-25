@@ -68,6 +68,12 @@ export type ViewProps = {
   /** Above the list: what an act just did (a result). */
   result?: ReactNode;
   agentLink?: AgentLink;
+  /**
+   * The page's first thing, over the tabs and over a row's page: the place of the call to the OATS
+   * agent (a composer bar every OATS page mounts). It is its own block of the page's column, so the
+   * list's head stands where it stands with or without it.
+   */
+  above?: ReactNode;
 } & Pick<DetailProps, "onOpenFile" | "canOpenCapability" | "onOpenCapability">;
 
 const PANEL = "oats-automations-panel";
@@ -75,7 +81,7 @@ const PANEL = "oats-automations-panel";
 export const STALE_MS = 30_000;
 const FRAME = "mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 text-sm text-foreground";
 
-export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, canOpenCapability, onOpenCapability, agentLink }: ViewProps) {
+export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, canOpenCapability, onOpenCapability, agentLink, above }: ViewProps) {
   // The filter and the search are the list's own, kept while a row's page or the other tab is shown.
   const [filter, setFilter] = useState<ListFilter>("all");
   const [query, setQuery] = useState("");
@@ -113,6 +119,9 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
   const readAts = KINDS.map((kind) => reads[kind].readAt).filter((at): at is string => at !== null);
   const oldest = readAts.length === 0 ? null : readAts.reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b));
   const failed = KINDS.filter((kind) => reads[kind].error !== null);
+  // One fault that failed both reads (the server did not answer, OATS itself refused) is said once, of the automations; a list that failed alone by its own name.
+  const both = failed.length === 2 && reads.schedule.error?.code === reads.trigger.error?.code && reads.schedule.error?.message === reads.trigger.error?.message;
+  const said: { kind: AutomationKind; title: string; noun: string }[] = both ? [{ kind: "schedule", title: "Automations", noun: "automations" }] : failed.map((kind) => ({ kind, title: TITLES[kind], noun: TITLES[kind].toLowerCase() }));
   const total = (schedules?.rows.length ?? 0) + (triggers?.rows.length ?? 0);
   const runs = allRuns(schedules?.rows ?? [], triggers?.rows ?? [], statuses ?? []);
   const host = schedules ?? triggers;
@@ -126,17 +135,17 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
       {failed.length === 0 ? (
         any && oldest !== null && (refreshing || now - Date.parse(oldest) > STALE_MS) ? <Stale age={readAge(oldest, now)} refreshing={refreshing} /> : null
       ) : (
-        failed.map((kind) => {
+        said.map(({ kind, title, noun }) => {
           const read = reads[kind];
-          const title = TITLES[kind];
+          const kept = both ? any : read.list !== undefined;
           return (
-            <div key={kind} data-testid="oats-automations-failed" data-kind={kind}>
+            <div key={kind} data-testid="oats-automations-failed" data-kind={both ? "both" : kind}>
               <Notice
                 tone="error"
                 title={`${title} could not be read`}
                 code={read.error?.code}
                 details={read.error?.message}
-                {...(read.list !== undefined && read.readAt !== null ? { age: readAge(read.readAt, now) } : {})}
+                {...(kept && read.readAt !== null ? { age: readAge(read.readAt, now) } : {})}
                 actions={
                   <Button data-testid="oats-automations-retry" disabled={refreshing} onClick={onRefresh}>
                     Retry
@@ -144,9 +153,9 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
                 }
               >
                 {/* A person's words; what OATS or the plugin's server said is one press away, under Details. */}
-                <p>{read.list === undefined ? `Nothing can be shown of this deployment's ${title.toLowerCase()} until they are read.` : `What is below is the last list that was read.`}</p>
+                <p>{kept ? `What is below is the last list that was read.` : `Nothing can be shown of this deployment's ${noun} until they are read.`}</p>
                 {/* The rows are still shown, and the page has acts: they are held, and that is said here. */}
-                {read.list !== undefined && held !== undefined && held !== null ? <p data-testid="oats-automations-held">{held}</p> : null}
+                {kept && held !== undefined && held !== null ? <p data-testid="oats-automations-held">{held}</p> : null}
                 {refreshing ? (
                   <p role="status" data-testid="oats-automations-rereading">
                     Refreshing…
@@ -164,6 +173,7 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
   return (
     <div data-testid="oats-automations-page" className={fixed ? "flex h-full min-h-0 flex-col" : "h-full min-h-0 overflow-y-auto"}>
       <div data-testid="oats-automations" data-tab={tab} className={`@container ${FRAME} ${fixed ? "min-h-0 flex-1" : ""}`}>
+        {above === undefined || above === null ? null : <div data-testid="oats-automations-above">{above}</div>}
         {onRowPage ? null : (
           <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
             <Tabs

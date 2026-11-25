@@ -8,7 +8,6 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { NO_AUTOMATIONS } from "../../contract/automations";
 import type { AutomationKind, TriggerStatus } from "../../contract/automations";
 import { openAgentPage } from "../home/agent-tab";
-import { useOats } from "../oats";
 import { attempt, errorMessage, useRead } from "../store";
 import type { Contract, Result } from "../store";
 import { HELD_REASON, isUnreadable, Unreadable } from "../roster/unreadable";
@@ -193,8 +192,9 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const onOpenCapability = useCallback(() => navigate.toPluginPanel("capabilities"), [navigate]);
   const onOpen = useCallback((next: Open | null) => navigate.toPluginPanel(PATH, { subPath: subPathOf(tab, next) }), [tab, navigate]);
   // A run's agent opens its thread, or its own page where it has none; one the roster no longer lists opens nothing.
-  const oats = useOats();
-  const listed = oats.phase === "ready" ? oats.agents : null;
+  // The roster as the window has it (the sidebar's own read, shared): the one just read, or the last one kept while OATS cannot be read.
+  const snapshot = useRead("snapshot").data;
+  const listed = snapshot === undefined ? undefined : snapshot.ok ? snapshot.agents : snapshot.last?.agents;
   const byInstance = useMemo(() => new Map((listed ?? []).map((agent) => [agent.instance, agent])), [listed]);
   const agentLink = useCallback(
     (instance: string) => {

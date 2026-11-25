@@ -781,7 +781,7 @@ test("a page's tile carries the mark its feature gives it: Automations while a r
   try {
     const slot = await plainTab();
     const tile = await slot.findByTestId("oats-tile-automations");
-    expect(within(tile).getByLabelText("Automations, a run failed")).toBeTruthy();
+    expect(within(tile).getByLabelText("Automations, a failure")).toBeTruthy();
     expect(tile.textContent).toBe("Automations"); // no count of its own
   } finally {
     remove();

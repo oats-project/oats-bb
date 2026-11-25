@@ -558,7 +558,7 @@ export function useActs({ rpc, refresh, summaries, open, held, onOpen, onOpenFil
 
   const switchOf = (row: AutomationRow): ReactNode =>
     row.group === "elsewhere" ? null : (
-      <Switch label={here.name} name={`${row.id} enabled on ${here.on}`} title={held[row.kind] ?? switchTitle(row, here)} checked={row.enabledHere} disabled={off(row)} onChange={() => void toggle(row)} />
+      <Switch bare label={here.name} name={`${row.id} enabled on ${here.on}`} title={held[row.kind] ?? switchTitle(row, here)} checked={row.enabledHere} disabled={off(row)} onChange={() => void toggle(row)} />
     );
 
   const rowParts: Acts["rowParts"] = (row, now, host) => {

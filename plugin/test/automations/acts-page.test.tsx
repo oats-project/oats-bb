@@ -105,7 +105,9 @@ describe("on and off on this computer (D-272)", () => {
   it("the switch says what a press does, and turns the row off through the kernel; the lists are read again", async () => {
     const slot = await page("", { automationEnable: ({ kind, id }) => ({ row: rowOf(kind === "schedule" ? schedules() : triggers(), id) }) });
     const toggle = within(await row(slot, "local/daily-review")).getByRole("switch");
-    expect([toggle.getAttribute("aria-checked"), toggle.textContent, toggle.title]).toEqual(["true", "This computerOn", "On here: click to turn it off on this computer"]);
+    expect([toggle.getAttribute("aria-checked"), toggle.textContent, toggle.title]).toEqual(["true", "", "On here: click to turn it off on this computer"]);
+    // The switch alone, as bb's own rows draw one: its name says what it is, its state whether it is on.
+    expect(toggle.getAttribute("aria-label")).toBe("local/daily-review enabled on this computer");
     fireEvent.click(toggle);
     await waitFor(() => expect(calls(slot, "automationEnable")).toEqual([{ kind: "schedule", id: "local/daily-review", enabled: false }]));
     await waitFor(() => expect(calls(slot, "automations").length).toBeGreaterThan(1));

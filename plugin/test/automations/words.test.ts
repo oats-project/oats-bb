@@ -29,7 +29,10 @@ import {
   schedulerOffLine,
   earlierNotKept,
   failing,
-  failingFirst,
+  inOrder,
+  attention,
+  runsOnWords,
+  ownerWords,
   filterList,
   LIST_FILTERS,
   oneList,
@@ -236,9 +239,10 @@ describe("a schedule's run state", () => {
 });
 
 describe("the row's small line", () => {
-  const lineOf = (id: string, kind: "schedule" | "trigger" = "schedule", running = true) => {
+  const AT = Date.parse(schedules().scheduler!.lastTick!) + 2 * 3600e3;
+  const lineOf = (id: string, kind: "schedule" | "trigger" = "schedule", options: Parameters<typeof rowLine>[3] = {}) => {
     const entry = rowOf(kind === "schedule" ? schedules() : triggers(), id);
-    return rowLine(entry, statusFor(entry, STATUSES().statuses), Date.parse(schedules().scheduler!.lastTick!) + 2 * 3600e3, running).map((part) => part.text);
+    return rowLine(entry, statusFor(entry, STATUSES().statuses), AT, options).map((part) => `${part.lead ?? ""}${part.text}`);
   };
 
   it("who it starts: the soul, the agent a wake wakes, Command, the operation by its name", () => {
@@ -257,16 +261,41 @@ describe("the row's small line", () => {
     expect(whenWords(rowOf(triggers(), "local/graph-watch"))).toBe("On acme.graph: harvest-branches");
   });
 
-  it("a next run only for a schedule that runs on the machine, on, while the scheduler is on", () => {
-    expect(lineOf("oats-real/nightly-digest")).toEqual(["knowledge-harvester", "Daily at 07:00", "Next in 8 h"]);
-    expect(lineOf("oats-real/nightly-digest", "schedule", false)).toEqual(["knowledge-harvester", "Daily at 07:00"]);
-    expect(lineOf("local/weekly-cleanup")).toEqual(["oats-product-expert", "Fridays at 18:00"]);
-    expect(lineOf("oats-real/weekly-report")).toEqual(["oats-product-expert", "Mondays at 09:00", "Runs on report-server"]);
+  it("the machine it runs on: the one that holds the deployment, by bb's name for it, or the other host the kernel names", () => {
+    expect(runsOnWords(rowOf(schedules(), "local/daily-review"))).toBe("Runs on this computer");
+    expect(runsOnWords(rowOf(schedules(), "local/daily-review"), hereOf("falcon"))).toBe("Runs on falcon");
+    expect(runsOnWords(rowOf(schedules(), "oats-real/weekly-report"), hereOf("falcon"))).toBe("Runs on report-server");
+    // A machine with no host name runs none of the workspace's: nowhere to name.
+    expect(runsOnWords(rowOf(schedules("schedule-list-host-unnamed.json"), "oats-real/nightly-digest"))).toBeNull();
+  });
+
+  it("the owner only where the kernel gives one: the account a workspace automation acts as; a local one has none", () => {
+    expect(ownerWords(rowOf(schedules(), "oats-real/nightly-digest"))).toBe("@ana");
+    expect(ownerWords(rowOf(schedules(), "local/daily-review"))).toBeNull();
+    expect(ownerWords(row({ owner: "someone" }))).toBe("someone");
+  });
+
+  it("when · runs on · owner · the last run with what came of it; the list says no next run, an automation's own page does", () => {
+    expect(lineOf("oats-real/nightly-digest")).toEqual(["Daily at 07:00", "Runs on this computer", "@ana"]);
+    expect(lineOf("oats-real/nightly-digest", "schedule", { next: { running: true } })).toEqual(["Daily at 07:00", "Runs on this computer", "@ana", "Next in 8 h"]);
+    expect(lineOf("oats-real/nightly-digest", "schedule", { next: { running: false } })).toEqual(["Daily at 07:00", "Runs on this computer", "@ana"]);
+    expect(lineOf("local/weekly-cleanup", "schedule", { next: { running: true } })).toEqual(["Fridays at 18:00", "Runs on this computer"]);
+    expect(lineOf("local/daily-review")).toEqual(["Weekdays at 09:00", "Runs on this computer", "Last 2 h ago, Agent active"]);
+    expect(lineOf("local/hourly-check")).toEqual(["Every hour", "Runs on this computer", "Last 2 h ago, Launch failed"]);
+    expect(lineOf("oats-real/weekly-report")).toEqual(["Mondays at 09:00", "Runs on report-server", "@acme-bot"]);
+    expect(lineOf("local/pr-triage", "trigger")).toEqual(["On a pull request, acme/app", "Runs on this computer", "Last 2 h ago, #41"]);
+  });
+
+  it("a row that cannot run on the machine is not said to run on it: why not is said, in red; one whose agent asks ends in Needs you", () => {
+    expect(lineOf("oats-real/reconcile")).toEqual(["Every 30 minutes", "@acme-billing-bot", "Wrong account"]);
+    expect(lineOf("local/legacy-herdr")).toEqual(["Daily at 06:00", "Invalid"]);
+    const entry = rowOf(schedules(), "local/daily-review");
+    expect(rowLine(entry, null, AT, { asks: true }).at(-1)).toEqual({ text: "Needs you", tone: "ask" });
   });
 
   it("a reason this plugin does not know is said as that the row does not run here", () => {
-    const odd = { ...rowOf(schedules(), "oats-real/weekly-report"), reason: "other" as const, reasonCode: "quarantined" };
-    expect(rowLine(odd, null, NOW, true).at(-1)).toEqual({ text: "Doesn't run here", tone: "bad" });
+    const odd = { ...rowOf(schedules(), "oats-real/weekly-report"), group: "attention" as const, reason: "other" as const, reasonCode: "quarantined" };
+    expect(rowLine(odd, null, NOW).at(-1)).toEqual({ text: "Doesn't run here", tone: "bad" });
     expect(failing(odd, null)).toBe(true);
   });
 });
@@ -283,14 +312,22 @@ describe("what is failing: one rule for the row's red, the filter's count and th
   it("a row is failing exactly when its line holds a red part", () => {
     for (const entry of all) {
       const status = statusFor(entry, statuses);
-      expect([entry.id, rowLine(entry, status, NOW, true).some((part) => part.tone === "bad")]).toEqual([entry.id, failing(entry, status)]);
+      expect([entry.id, rowLine(entry, status, NOW).some((part) => part.tone === "bad")]).toEqual([entry.id, failing(entry, status)]);
     }
   });
 
+  it("what needs a person comes before what is failing, and is counted by its own filter; one that does both is in both", () => {
+    const asking = (entry: AutomationRow) => (entry.id === "local/daily-review" || entry.id === "local/hourly-check" ? "an-agent" : null);
+    expect(inOrder(all, statuses, asking).slice(0, 3).map((entry) => entry.id)).toEqual(["local/daily-review", "local/hourly-check", "local/legacy-herdr"]);
+    expect(filterList(all, "needs", statuses, asking).map((entry) => entry.id)).toEqual(["local/daily-review", "local/hourly-check"]);
+    expect(filterList(all, "failing", statuses, asking)).toHaveLength(5);
+    expect([attention(rowOf(schedules(), "local/hourly-check"), null, asking), attention(rowOf(schedules(), "local/hourly-check"), null, undefined), attention(rowOf(schedules(), "local/notes-checkpoint"), null, asking)]).toEqual(["needs", "failing", null]);
+  });
+
   it("the filter: every row, one kind, or what is failing; and what is failing leads the list, the rest in its order", () => {
-    expect(LIST_FILTERS.map((option) => [option.label, filterList(all, option.id, statuses).length])).toEqual([["All", 18], ["Schedules", 11], ["Triggers", 7], ["Failing", 5]]);
+    expect(LIST_FILTERS.map((option) => [option.label, filterList(all, option.id, statuses).length])).toEqual([["All", 18], ["Schedules", 11], ["Triggers", 7], ["Needs you", 0], ["Failing", 5]]);
     expect(filterList(all, "failing", statuses).map((entry) => entry.id)).toEqual(bad(all));
-    const first = failingFirst(all, statuses).map((entry) => entry.id);
+    const first = inOrder(all, statuses).map((entry) => entry.id);
     expect(first.slice(0, 5)).toEqual(bad(all));
     expect(first.slice(5)).toEqual(all.map((entry) => entry.id).filter((id) => !bad(all).includes(id)));
   });
@@ -301,12 +338,12 @@ describe("what is failing: one rule for the row's red, the filter's count and th
     expect(rows).toHaveLength(37);
     expect(rows.every((entry) => entry.name.length === 60)).toBe(true);
     expect(new Set(rows.map((entry) => `${entry.kind}:${entry.id}`)).size).toBe(37);
-    const red = rows.filter((entry) => rowLine(entry, statusFor(entry, set.statuses), NOW, true).some((part) => part.tone === "bad"));
+    const red = rows.filter((entry) => rowLine(entry, statusFor(entry, set.statuses), NOW).some((part) => part.tone === "bad"));
     const counted = filterList(rows, "failing", set.statuses);
     const dot = rows.some((entry) => failing(entry, statusFor(entry, set.statuses)));
     expect([red.length, counted.length, dot]).toEqual([5, 5, true]);
     expect(counted.map((entry) => entry.id)).toEqual(red.map((entry) => entry.id));
-    expect(failingFirst(rows, set.statuses).slice(0, 5).map((entry) => entry.id)).toEqual(red.map((entry) => entry.id));
+    expect(inOrder(rows, set.statuses).slice(0, 5).map((entry) => entry.id)).toEqual(red.map((entry) => entry.id));
     // With none failing, none of the three says so.
     const calm = rows.filter((entry) => !red.includes(entry));
     expect([filterList(calm, "failing", set.statuses).length, calm.some((entry) => failing(entry, statusFor(entry, set.statuses)))]).toEqual([0, false]);

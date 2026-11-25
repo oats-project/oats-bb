@@ -363,7 +363,9 @@ export function switchTitle(row: AutomationRow, here: Here = HERE): string {
 /** A one-click test of a trigger that turned out to watch a capability's source: nothing ran. */
 export const NOTHING_RAN = "Nothing ran. Testing this trigger runs a capability's source command and needs your confirmation.";
 /** A test that found nothing against the row: it would run here; while the host scheduler is off, only once it is on. */
-export const testReady = (running: boolean): string => (running ? "Ready: it would run here." : "Ready once the scheduler is on.");
+export const testReady = (running: boolean): string => (running ? "Test passed. It would start." : "Test passed. It would start once the scheduler is on.");
+/** A test that found something against the row: it started nothing either; what it found follows, one line each. */
+export const TEST_FAILED = "Test failed.";
 export const TEST_TIMED_OUT = "The test did not answer in time. Nothing was recorded.";
 /** What leads a test the kernel refused: a person's words first, the kernel's message after them. */
 export const TEST_REFUSED = "The test did not run.";
@@ -388,9 +390,11 @@ export function refusalParts(text: string): { code: string | null; message: stri
   return code === null ? { code: null, message: text } : { code, message: text.slice(code.length + 2) };
 }
 
-// ---- the list's row and the head of an automation's page: one small line ----
-// In bb's manner (its own Automations page): the name, and under it who it starts · when · the
-// next run or the last fire, with what is wrong last, in red. No sentence.
+// ---- the list's row and the head of an automation's page ----
+// In bb's manner (its own Automations page): the name; one short sentence of what it does, where
+// someone wrote one; and one small line: when · the machine it runs on · its owner, where the
+// kernel gives one · its last run (when, and what came of it), with what is wrong in red and
+// "Needs you" where an agent it made asks. No sentence of the page's own.
 
 /** The last part of a home's path: the agent a wake wakes, by the name of its home. */
 const agentOf = (home: string | null): string | null => (home === null ? null : (displayLine(home.replace(/\/+$/, "").split("/").pop()) ?? null));
@@ -413,15 +417,27 @@ export function whenWords(row: AutomationRow): string | null {
   return row.on?.source === PULL_REQUEST ? ["On a pull request", displayLine(on.repo)].filter(Boolean).join(", ") : `On ${displayLine(row.on?.source) ?? "an event"}`;
 }
 
-export type LinePart = { text: string; title?: string; tone?: "bad" | "warn" };
+/** The machine an automation runs on: the one that holds the deployment (by bb's name for it), or the other host the kernel names. Null where it runs nowhere that can be named (a machine with no host name). */
+export function runsOnWords(row: AutomationRow, here: Here = HERE): string | null {
+  if (row.group === "elsewhere") return row.reason === "assigned-elsewhere" && row.runsOn !== null ? `Runs on ${displayLine(row.runsOn) ?? ""}`.trim() : null;
+  return `Runs on ${here.on}`;
+}
+
+/** An automation's owner, where the kernel gives one: the account a workspace automation acts as ("@ana"). A local one has none, and none is drawn. */
+export function ownerWords(row: AutomationRow): string | null {
+  const owner = ownerParts(row.owner);
+  return owner !== null ? `@${displayLine(owner.login) ?? ""}` : displayLine(row.owner);
+}
+
+/** One part of the small line. `lead` is said plainly before a text that carries a tone ("Last 1 h ago, " before a red "Launch failed"). */
+export type LinePart = { text: string; lead?: string; title?: string; tone?: "bad" | "warn" | "ask" };
 /** A trigger's state, as much as the row's line reads of it: its last fire, its last poll and its failed spawns. */
 export type LineStatus = { fired: readonly { at: string | null; label: string | null }[]; lastPoll: { ok: boolean } | null; lastError: { at: string | null } | null; failures: readonly { at: string | null; resolved: unknown }[] | null };
 
-/** Where a row that does not run on the machine does, or why not: another host's name, plain; an account, a trust or a definition that stops it, as a failure. */
-function placePart(row: AutomationRow): LinePart | null {
+/** Why a row cannot run on the machine, as a failure: its account, its trust, its definition. Null where nothing stops it. */
+function stoppedPart(row: AutomationRow): LinePart | null {
   if (row.unreadable !== null) return { text: "Unreadable", tone: "bad" };
   if (row.invalid !== null && !(row.kind === "trigger" && row.invalid.at !== null)) return { text: "Invalid", tone: "bad" };
-  if (row.reason === "assigned-elsewhere") return row.runsOn === null ? null : { text: `Runs on ${displayLine(row.runsOn) ?? ""}`.trim() };
   if (row.reason === "owner-mismatch") return { text: "Wrong account", tone: "bad" };
   if (row.reason === "untrusted") return { text: "Not trusted", tone: "bad" };
   if (row.reason === "other") return { text: "Doesn't run here", tone: "bad" };
@@ -433,19 +449,11 @@ const time = (iso: string | null): number => {
   return Number.isFinite(at) ? at : -Infinity;
 };
 /**
- * What failed last, for the line's end: a schedule's last run that did not launch (or whose state
- * nobody knows), a trigger's failed last poll, or its failed spawn that no later spawn followed
- * (with a failure history: the newest failure, unless resolved; without: the last error, unless a
- * fire is newer). Null where nothing did.
+ * What failed last on a trigger: its failed last poll, or its failed spawn that no later spawn
+ * followed (with a failure history: the newest failure, unless resolved; without: the last error,
+ * unless a fire is newer). A schedule's failure is its last run's outcome, said with the run.
  */
-export function failurePart(row: AutomationRow, status: LineStatus | null): LinePart | null {
-  if (row.kind === "schedule") {
-    const outcome = row.lastRun?.outcome ?? null;
-    if (outcome === "launch-failed") return { text: "Launch failed", tone: "bad" };
-    if (outcome === "invalid") return { text: "Invalid", tone: "bad" };
-    if (outcome === "unknown") return { text: "Launch state unknown", tone: "warn" };
-    return null;
-  }
+function triggerFailure(row: AutomationRow, status: LineStatus | null): LinePart | null {
   // A capability source's check that failed at a poll: the definition stands, its source no longer answers to it.
   if (row.invalid !== null && row.invalid.at !== null) return { text: "Poll failed", tone: "bad" };
   if (status === null) return null;
@@ -458,53 +466,84 @@ export function failurePart(row: AutomationRow, status: LineStatus | null): Line
   return status.lastError !== null && time(status.lastError.at) > fired ? { text: "Launch failed", tone: "bad" } : null;
 }
 
+/** A schedule's last run: when, then what came of it in a person's word, red where it did not launch and a warning where nobody knows. Null where it never ran. */
+function lastRunPart(row: AutomationRow, now: number): LinePart | null {
+  const run = row.lastRun ?? row.recentRuns[0] ?? null;
+  if (run === null) return null;
+  const at = pastTime(run.startedAt ?? run.scheduledFor ?? run.at, now);
+  const tone = runTone(run);
+  const word = (run.outcome !== null ? RUN_WORDS[run.outcome] : undefined) ?? displayLine(run.outcome) ?? "Attempt recorded";
+  return { lead: at === null ? "Last: " : `Last ${at.label}, `, text: word, ...(at === null ? {} : { title: at.title }), ...(tone === "failed" ? { tone: "bad" as const } : tone === "unknown" ? { tone: "warn" as const } : {}) };
+}
+/** A trigger's last fire: when, and what fired. Null where it never fired. */
+function lastFirePart(row: AutomationRow, status: LineStatus | null, now: number): LinePart | null {
+  const last = status?.fired[0] ?? (row.lastRun === null ? null : { at: row.lastRun.at, label: eventLabel(row.lastRun, row.on?.source ?? null) });
+  const at = last === null || last === undefined ? null : pastTime(last.at, now);
+  return at === null ? null : { text: [`Last ${at.label}`, last?.label ?? null].filter(Boolean).join(", "), title: at.title };
+}
+
+/** What is wrong, for the line's end and for the one rule of what is failing: why the row cannot run, else a schedule's failed last run or a trigger's failed poll or spawn. */
+function wrongPart(row: AutomationRow, status: LineStatus | null, now = 0): LinePart | null {
+  const stopped = stoppedPart(row);
+  if (stopped !== null) return stopped;
+  if (row.kind === "trigger") return triggerFailure(row, status);
+  const last = lastRunPart(row, now);
+  return last !== null && last.tone === "bad" ? last : null;
+}
+
 /**
- * The row's small line, part by part (drawn with "·" between): who · when · the next run (a
- * schedule that runs on the machine, on, while the scheduler is on) or the last fire (a trigger) ·
- * where it runs instead, or why not here · what failed. A part with nothing to say is left out.
+ * Whether an automation is FAILING: its small line holds a red part. One half of the one rule of
+ * the row's mark, of the filter and its counts, and of the sidebar's dots (the other half:
+ * `attention`). A run whose state nobody knows is a warning, not a failure.
  */
-export function rowLine(row: AutomationRow, status: LineStatus | null, now: number, running: boolean): LinePart[] {
+export const failing = (row: AutomationRow, status: LineStatus | null): boolean => wrongPart(row, status) !== null;
+
+/** What an automation asks of a person: an agent it made ASKS ("needs"), else something of it failed ("failing"), else nothing. Needs-you comes first. */
+export type Attention = "needs" | "failing" | null;
+/** The agent of an automation that asks, by its instance; null where none does. The page answers it from the roster. */
+export type Asking = (row: AutomationRow) => string | null;
+export const attention = (row: AutomationRow, status: LineStatus | null, asking: Asking | undefined): Attention => (asking?.(row) != null ? "needs" : failing(row, status) ? "failing" : null);
+
+/**
+ * The small line, part by part (drawn with "·" between): when · the machine it runs on · its
+ * owner · its last run or fire · what is wrong · "Needs you". A part with nothing to say is left
+ * out. `next`: with the next run after the owner (an automation's own page says it; the list does not).
+ */
+export function rowLine(row: AutomationRow, status: LineStatus | null, now: number, { here = HERE, asks = false, next = null }: { here?: Here; asks?: boolean; /** whether the host scheduler is on: only the page that says the next run gives it */ next?: { running: boolean } | null } = {}): LinePart[] {
   const parts: LinePart[] = [];
   const add = (text: string | null, more: Omit<LinePart, "text"> = {}) => {
     if (text !== null && text !== "") parts.push({ text, ...more });
   };
-  add(whoWords(row));
+  const stopped = stoppedPart(row);
   add(whenWords(row));
-  const place = placePart(row);
-  const here = row.runsHere && row.enabledHere && place === null;
-  if (row.kind === "schedule") {
-    const due = here && running ? dueWords(row.nextDue, now) : null;
+  // A row that cannot run on the machine is not said to run on it: why not is said, in red.
+  if (stopped === null) add(runsOnWords(row, here));
+  add(ownerWords(row));
+  if (next !== null && row.kind === "schedule" && stopped === null && row.runsHere && row.enabledHere && next.running) {
+    const due = dueWords(row.nextDue, now);
     if (due !== null) add(`${due.word} ${due.label}`, { title: due.title });
-  } else {
-    const last = status?.fired[0] ?? (row.lastRun === null ? null : { at: row.lastRun.at, label: eventLabel(row.lastRun, row.on?.source ?? null) });
-    const at = last === null || last === undefined ? null : pastTime(last.at, now);
-    if (at !== null) add([`Fired ${at.label}`, last?.label ?? null].filter(Boolean).join(", "), { title: at.title });
   }
-  if (place !== null && place.tone !== "bad") parts.push(place);
-  const wrong = wrongPart(row, status);
-  if (wrong !== null) parts.push(wrong);
+  if (stopped !== null) parts.push(stopped);
+  else if (row.kind === "schedule") {
+    const last = lastRunPart(row, now);
+    if (last !== null) parts.push(last);
+  } else {
+    const last = lastFirePart(row, status, now);
+    if (last !== null) parts.push(last);
+    const failure = triggerFailure(row, status);
+    if (failure !== null) parts.push(failure);
+  }
+  if (asks) parts.push({ text: "Needs you", tone: "ask" });
   return parts;
 }
 
-/** What the line ends with where something is wrong: why the row cannot run, else what failed last (a row whose definition is the fault has said so already). */
-function wrongPart(row: AutomationRow, status: LineStatus | null): LinePart | null {
-  const place = placePart(row);
-  return place !== null && place.tone === "bad" ? place : failurePart(row, status);
-}
-
-/**
- * Whether an automation is FAILING: its small line ends in red. The one predicate of the row's
- * red mark, of the filter "Failing" and its count, and of the sidebar's dot, so that a red row
- * and no dot never stand together. (A run whose state nobody knows is a warning, not a failure.)
- */
-export const failing = (row: AutomationRow, status: LineStatus | null): boolean => wrongPart(row, status)?.tone === "bad";
-
-/** The list's one filter: every row, one kind, or what is failing (which cuts across the kinds). */
-export type ListFilter = "all" | "schedule" | "trigger" | "failing";
+/** The list's one filter: every row, one kind, what needs a person, or what is failing (the last two cut across the kinds). */
+export type ListFilter = "all" | "schedule" | "trigger" | "needs" | "failing";
 export const LIST_FILTERS: readonly { id: ListFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "schedule", label: "Schedules" },
   { id: "trigger", label: "Triggers" },
+  { id: "needs", label: "Needs you" },
   { id: "failing", label: "Failing" },
 ];
 
@@ -512,7 +551,7 @@ export const LIST_FILTERS: readonly { id: ListFilter; label: string }[] = [
 export function searchRows(rows: readonly AutomationRow[], query: string): AutomationRow[] {
   const needle = query.trim().toLowerCase();
   if (needle === "") return [...rows];
-  return rows.filter((row) => [row.name, row.id, whoWords(row), whenWords(row), row.task, row.message, row.description].some((value) => typeof value === "string" && value.toLowerCase().includes(needle)));
+  return rows.filter((row) => [row.name, row.id, whoWords(row), whenWords(row), row.task, row.message, row.description, row.runsOn, row.owner].some((value) => typeof value === "string" && value.toLowerCase().includes(needle)));
 }
 /** From this many rows the list has a search field (bb's own page has one always; a short list needs none). */
 export const SEARCH_FROM = 12;
@@ -524,14 +563,15 @@ export function oneList(schedules: readonly AutomationRow[], triggers: readonly 
 /** A trigger's state among every trigger's, by its id; null for a schedule, and for a trigger whose state was not read. */
 export const statusFor = (row: AutomationRow, statuses: readonly { id: string; status: LineStatus }[] | null): LineStatus | null =>
   row.kind === "trigger" ? (statuses?.find((entry) => entry.id === row.id)?.status ?? null) : null;
-/** The list as drawn: what is failing first, then the rest, each in `oneList`'s order. */
-export function failingFirst<Row extends AutomationRow>(rows: readonly Row[], statuses: readonly { id: string; status: LineStatus }[] | null): Row[] {
-  const bad = (row: Row) => failing(row, statusFor(row, statuses));
-  return [...rows.filter(bad), ...rows.filter((row) => !bad(row))];
+type Statuses = readonly { id: string; status: LineStatus }[] | null;
+/** The list as drawn: what needs a person first, then what is failing, then the rest, each in `oneList`'s order. */
+export function inOrder<Row extends AutomationRow>(rows: readonly Row[], statuses: Statuses, asking?: Asking): Row[] {
+  const of = (row: Row) => attention(row, statusFor(row, statuses), asking);
+  return [...rows.filter((row) => of(row) === "needs"), ...rows.filter((row) => of(row) === "failing"), ...rows.filter((row) => of(row) === null)];
 }
-/** The rows a filter keeps. */
-export const filterList = <Row extends AutomationRow>(rows: readonly Row[], filter: ListFilter, statuses: readonly { id: string; status: LineStatus }[] | null): Row[] =>
-  rows.filter((row) => filter === "all" || (filter === "failing" ? failing(row, statusFor(row, statuses)) : row.kind === filter));
+/** The rows a filter keeps. "Failing" keeps every failing one, one that also needs a person among them. */
+export const filterList = <Row extends AutomationRow>(rows: readonly Row[], filter: ListFilter, statuses: Statuses, asking?: Asking): Row[] =>
+  rows.filter((row) => filter === "all" || (filter === "needs" ? asking?.(row) != null : filter === "failing" ? failing(row, statusFor(row, statuses)) : row.kind === filter));
 
 /** The one-line notices above the list. An unnamed machine's says where the key is under its Details. */
 export const schedulerOffLine = (here: Here = HERE): string => `The scheduler is off on ${here.on}`;

@@ -18,8 +18,8 @@ async function page(subPath = "", over: Partial<Handlers> = {}) {
   const panel = app.navPanels.find((candidate) => candidate.id === "automations")!;
   return renderSlot<{ subPath: string }, Contract>(panel, { subPath }, { rpc: handlers(over), sidebarThreads: sidebarThreads() });
 }
-/** What the page asked of the server for its own content: every call but the window's roster (`snapshot`), which names the agents a run's row links to. */
-const calls = (slot: Awaited<ReturnType<typeof page>>) => slot.inspection.rpcCalls.map((call) => call.method).filter((method) => method !== "snapshot");
+/** What the page asked of the server for its own content: every call but the window's roster (`snapshot`, and `souls` for the souls' names), which says of the agents a run made whether each is still there, asks or is stopped. */
+const calls = (slot: Awaited<ReturnType<typeof page>>) => slot.inspection.rpcCalls.map((call) => call.method).filter((method) => method !== "snapshot" && method !== "souls");
 
 describe("the page's registration and its route", () => {
   it("is a page of the plugin at /plugins/oats/automations, out of bb's own navigation", async () => {

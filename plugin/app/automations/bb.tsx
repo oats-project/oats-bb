@@ -143,12 +143,16 @@ export function RowSwitch({ name, title, checked, onChange, disabled = false }: 
 export const DETAIL = "mx-auto flex w-full max-w-3xl flex-col gap-6";
 export const SECTION = "flex min-w-0 flex-col gap-3";
 export const SECTION_HEAD = "flex min-h-6 items-center text-sm font-medium text-foreground";
-export const BOX = "overflow-hidden rounded-md border border-border bg-background";
-export const BOX_FOOT = "flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground";
-/** bb's Runs table: its box, a run's row, and the block a failed run opens to. */
-export const RUNS_BOX = `${BOX} divide-y divide-border`;
+/** What an automation does, as plain text between bb's separators: no box around it, and none filled (bb's own is a bordered box with a filled foot: WORDS.md). Its foot: the soul, the harness, the model. */
+export const PLAIN = "flex min-w-0 flex-col gap-2";
+export const PLAIN_FOOT = "flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground";
+/** A section that follows another: bb's separator over it. */
+export const SEPARATED = "border-t border-border pt-5";
+/** bb's Runs table, without its box: rows between bb's separators. */
+export const RUNS_BOX = "divide-y divide-border border-y border-border";
 export const RUN_ROW = "flex w-full min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5 px-2 py-1.5 text-left";
-export const RUN_ERROR = "mx-2 mb-2 flex min-w-0 flex-col gap-1 whitespace-pre-wrap break-words rounded-md bg-muted px-3 py-2 font-mono text-xs leading-relaxed text-foreground";
+/** A failed run's own words: bb's type for them, but plain text on the page's ground, where bb's own is a filled box (WORDS.md). */
+export const RUN_ERROR = "mb-2 ml-[2.125rem] mr-2 flex min-w-0 flex-col gap-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground";
 
 /** A filter of a few choices, in bb's pills' look and small enough that four with their counts stand on a phone's line: a radio group (the arrows move the choice). */
 export function FilterPills<Id extends string>({ label, options, value, onChange }: { label: string; options: readonly { id: Id; label: string; count?: number }[]; value: Id; onChange: (id: Id) => void }) {

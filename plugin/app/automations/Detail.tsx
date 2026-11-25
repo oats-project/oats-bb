@@ -14,8 +14,8 @@ import { readAge } from "../ui/words";
 import { Button, Card, Disclosure, Empty, LINK, Loading, Menu, Notice } from "../ui";
 import type { MenuItem } from "../ui";
 import { RunningContext, useHere } from "./here";
-import { BOX, BOX_FOOT, DETAIL, ICON_BUTTON, ICONS, SECTION, SECTION_HEAD } from "./bb";
-import { iconOf, SmallLine } from "./List";
+import { DETAIL, ICON_BUTTON, ICONS, PLAIN, PLAIN_FOOT, SECTION, SECTION_HEAD, SEPARATED } from "./bb";
+import { Answer, iconOf, Sentence, SmallLine } from "./List";
 import { FactList, Quote } from "./parts";
 import type { QuoteLine } from "./parts";
 import { Runs } from "./Runs";
@@ -25,7 +25,7 @@ import {
   causeWords,
   cronInWords,
   EVENTS_SHOWN,
-  failing,
+  attention,
   harnessName,
   LEAD_INS,
   onSummary,
@@ -166,12 +166,13 @@ function Does({ row }: { row: AutomationRow }) {
     );
   };
   return (
-    <section data-testid="oats-automation-sends" aria-label={doesTitle(row)} className={SECTION}>
+    <section data-testid="oats-automation-sends" aria-label={doesTitle(row)} className={`${SECTION} ${SEPARATED}`}>
       <h3 className={SECTION_HEAD}>{doesTitle(row)}</h3>
-      <div className={BOX}>
-        <div className="min-w-0 px-3 py-3">{body()}</div>
+      {/* Plain text on the page's ground, between bb's separators: no box around it. */}
+      <div className={PLAIN}>
+        <div className="min-w-0">{body()}</div>
         {foot.length === 0 ? null : (
-          <p data-testid="oats-automation-foot" className={BOX_FOOT}>
+          <p data-testid="oats-automation-foot" className={PLAIN_FOOT}>
             {foot.map((part, at) => (
               <span key={at} className="min-w-0 break-words">
                 {part}
@@ -359,11 +360,14 @@ export type DetailProps = {
   menu?: readonly MenuItem[];
   /** What an act put on the page (a test's confirmation and its answer). */
   answers?: ReactNode;
-  /** How a run's agent opens, while the roster lists it. */
+  /** A run's agent, as the roster has it now. */
   agentLink?: AgentLink;
+  /** The agent of this automation that asks, where one does: "Answer" opens its chat. */
+  asks?: string | null;
+  onAnswer?: (instance: string) => void;
 };
 
-export function Detail({ row, host, now, running = true, status, statusFailure = null, onBack, onOpenFile, file = null, canOpenCapability, onOpenCapability, identityAction, menu, answers, agentLink }: DetailProps) {
+export function Detail({ row, host, now, running = true, status, statusFailure = null, onBack, onOpenFile, file = null, canOpenCapability, onOpenCapability, identityAction, menu, answers, agentLink, asks = null, onAnswer }: DetailProps) {
   const page = useRef<HTMLDivElement>(null);
   // Opening the page puts the focus on its name (the breadcrumb is bb's own, in bb's header): what a screen reader says first, and from where Escape leads back.
   useEffect(() => {
@@ -373,8 +377,11 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
   // A capability source's check that failed at a poll: the state's own, else the row's.
   const sourceCheck: AutomationProblem | null = source === null ? null : status?.invalid?.at ? status.invalid : row.invalid;
   const check = row.unreadable === null ? sourceCheck : null;
-  const parts = rowLine(row, status, now, running);
-  const bad = failing(row, status);
+  const here = useHere();
+  // The page's own line says the next run too; the list's does not.
+  const parts = rowLine(row, status, now, { here, asks: asks !== null, next: { running } });
+  const state = attention(row, status, () => asks);
+  const bad = state === "failing";
   // The line says who, when and what is next; what is wrong stands under it, in red, by itself.
   const plain = parts.filter((part) => part.tone !== "bad");
   const wrong = parts.filter((part) => part.tone === "bad");
@@ -402,6 +409,7 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
               {shown(row.name)}
             </h2>
             <div className="flex shrink-0 items-center gap-1">
+              {asks === null || onAnswer === undefined ? null : <Answer name={row.name} onAnswer={() => onAnswer(asks)} className="mr-1" />}
               {identityAction}
               {menu === undefined || menu.length === 0 ? null : (
                 <div data-testid="oats-automation-detail-menu">
@@ -414,7 +422,8 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
               )}
             </div>
           </div>
-          <div className="flex min-w-0 flex-col gap-1.5 pl-6">
+          <div className="flex min-w-0 flex-col gap-1 pl-6">
+            <Sentence row={row} whole />
             <SmallLine parts={plain} />
             {wrong.map((part, at) => (
               <p key={at} data-testid="oats-automation-wrong" className="flex min-w-0 items-start gap-1.5 text-xs text-destructive-text">
@@ -424,11 +433,6 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
                 <span className="min-w-0 break-words">{shown(part.text)}</span>
               </p>
             ))}
-            {row.description === null ? null : (
-              <p data-testid="oats-automation-summary" className="min-w-0 break-words text-sm text-foreground">
-                {shown(row.description)}
-              </p>
-            )}
           </div>
         </div>
         {/* What an act just put on the page (a confirmation, a test's answer): right under the head, at every width. */}
@@ -437,7 +441,7 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
         </div>
         <Problem row={row} check={check} now={now} />
         <Does row={row} />
-        <section data-testid="oats-automation-history" aria-label="Runs" className={SECTION}>
+        <section data-testid="oats-automation-history" aria-label="Runs" className={`${SECTION} ${SEPARATED}`}>
           <h3 className={SECTION_HEAD}>Runs</h3>
           {statusFailure == null ? null : (
             // The state could not be read (again): said in words, the kernel's message and its code after, over what was read before.

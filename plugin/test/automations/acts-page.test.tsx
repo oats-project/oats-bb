@@ -265,7 +265,7 @@ describe("Test (D-281, D-282)", () => {
     vi.setSystemTime(Date.parse(value(parseTest(answer("schedule-test.json"), "schedule", null)).nextDue!) - 2 * 3600e3);
     const slot = await page("schedules/local/daily-review", { automationTest: tested("schedule-test.json", "schedule", null) });
     await pageAct(slot, "Test");
-    expect(await card(slot)).toBe("Test resultReady: it would run here.Next due in 2 h");
+    expect(await card(slot)).toBe("Test resultTest passed. It would start.Next due in 2 h");
     expect(calls(slot, "automationTest")).toEqual([{ kind: "schedule", id: "local/daily-review" }]);
   });
 
@@ -273,7 +273,7 @@ describe("Test (D-281, D-282)", () => {
     const off = () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
     const slot = await page("schedules/local/daily-review", { automations: off, automationTest: tested("schedule-test.json", "schedule", null) });
     await pageAct(slot, "Test");
-    expect(await card(slot)).toBe("Test resultReady once the scheduler is on.");
+    expect(await card(slot)).toBe("Test resultTest passed. It would start once the scheduler is on.");
     // The card alone, both ways: the kernel's test knows nothing of the timer, the page does.
     const test = value(parseTest(answer("schedule-test.json"), "schedule", null));
     const drawn = (running: boolean) => {
@@ -286,7 +286,7 @@ describe("Test (D-281, D-282)", () => {
       view.unmount();
       return text;
     };
-    expect([drawn(true), drawn(false)]).toEqual(["Test resultReady: it would run here.Next due in 2 h", "Test resultReady once the scheduler is on."]);
+    expect([drawn(true), drawn(false)]).toEqual(["Test resultTest passed. It would start.Next due in 2 h", "Test resultTest passed. It would start once the scheduler is on."]);
   });
 
   it("a due time ahead is next; one that has passed was due, and is never called next", () => {
@@ -299,9 +299,9 @@ describe("Test (D-281, D-282)", () => {
       view.unmount();
       return text;
     };
-    expect(drawn(due - 2 * 3600e3)).toBe("Test resultReady: it would run here.Next due in 2 h");
-    expect(drawn(due + 3 * 60e3)).toBe("Test resultReady: it would run here.Was due 3 min ago");
-    expect(drawn(due)).toMatch(/^Test resultReady: it would run here\.Was due /);
+    expect(drawn(due - 2 * 3600e3)).toBe("Test resultTest passed. It would start.Next due in 2 h");
+    expect(drawn(due + 3 * 60e3)).toBe("Test resultTest passed. It would start.Was due 3 min ago");
+    expect(drawn(due)).toMatch(/^Test resultTest passed\. It would start\.Was due /);
     expect(drawn(due + 2 * 86400e3)).not.toContain("Next");
   });
 
@@ -315,13 +315,13 @@ describe("Test (D-281, D-282)", () => {
   it("one placed elsewhere is not ready here, and says why", async () => {
     const slot = await page("schedules/oats-real/weekly-report", { automationTest: tested("schedule-test-elsewhere.json", "schedule", null) });
     await pageAct(slot, "Test");
-    expect(await card(slot)).toMatch(/^Test resultNot ready on this computer\.oats-real\/weekly-report does not run on this host \(assigned-elsewhere: runs on report-server; this host is bb-box\)/);
+    expect(await card(slot)).toMatch(/^Test resultTest failed\.oats-real\/weekly-report does not run on this host \(assigned-elsewhere: runs on report-server; this host is bb-box\)/);
   });
 
   it("a pull-request trigger: who gh acts as and what would fire now, with each agent's name and what is held, and why", async () => {
     const slot = await page("triggers/oats-real/proposal-review", { automationTest: tested("trigger-test.json", "trigger", "github.pull_request") });
     await pageAct(slot, "Test");
-    expect(await card(slot)).toBe("Test resultReady: it would run here.gh acts as anaWould fire now:#41 → oats-developer-review-pr-41#42 → oats-developer-review-pr-42#43 → oats-developer-review-pr-43 (held: concurrency.max 2 reached (2 live))");
+    expect(await card(slot)).toBe("Test resultTest passed. It would start.gh acts as anaWould fire now:#41 → oats-developer-review-pr-41#42 → oats-developer-review-pr-42#43 → oats-developer-review-pr-43 (held: concurrency.max 2 reached (2 live))");
     expect(calls(slot, "automationTest")).toEqual([{ kind: "trigger", id: "oats-real/proposal-review" }]);
   });
 
@@ -553,7 +553,7 @@ describe("an act says it is on its way, and its answer comes to the person", () 
     await waitFor(() => expect(slot.getByTestId("oats-automation-detail").textContent).toContain("Testing daily-review…"));
     expect(slot.inspection.navigateCalls).toEqual([]);
     test.release();
-    expect((await slot.findByTestId("oats-automation-test")).textContent).toMatch(/^Test resultReady: it would run here\./);
+    expect((await slot.findByTestId("oats-automation-test")).textContent).toMatch(/^Test resultTest passed\. It would start\./);
     await waitFor(() => expect(focused()).toBe("oats-automation-test-arrived"));
   });
 

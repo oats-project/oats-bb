@@ -18,7 +18,7 @@ import type { RowActs } from "./List";
 import { RunsTab } from "./Runs";
 import type { AgentLink } from "./Runs";
 import { schedulerOn, TITLES } from "./words";
-import type { ListFilter } from "./words";
+import type { Asking, ListFilter } from "./words";
 
 export const KINDS: readonly AutomationKind[] = ["schedule", "trigger"];
 /** The page's two tabs. */
@@ -69,6 +69,9 @@ export type ViewProps = {
   /** Above the list: what an act just did (a result). */
   result?: ReactNode;
   agentLink?: AgentLink;
+  /** The agent of an automation that asks, by its instance (the page answers it from the roster), and how its chat opens. */
+  asking?: Asking;
+  onAnswer?: (instance: string) => void;
 } & Pick<DetailProps, "onOpenFile" | "canOpenCapability" | "onOpenCapability">;
 
 const PANEL = "oats-automations-panel";
@@ -78,7 +81,7 @@ export const STALE_MS = 30_000;
 // bb's own page's frame (its width and its paddings), with that room under it.
 const FRAME = "mx-auto box-border flex w-full max-w-5xl flex-col gap-4 px-4 pb-16 pt-3 text-sm text-foreground md:px-5 md:pt-4";
 
-export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, canOpenCapability, onOpenCapability, agentLink }: ViewProps) {
+export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, canOpenCapability, onOpenCapability, agentLink, asking, onAnswer }: ViewProps) {
   // The filter and the search are the list's own, kept while a row's page or the other tab is shown.
   const [filter, setFilter] = useState<ListFilter>("all");
   const [query, setQuery] = useState("");
@@ -222,6 +225,8 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
                   canOpenCapability={canOpenCapability}
                   onOpenCapability={onOpenCapability}
                   agentLink={agentLink}
+                  asks={asking?.(row) ?? null}
+                  onAnswer={onAnswer}
                   {...rowParts?.(row)}
                 />
               ) : tab === "runs" ? (
@@ -239,6 +244,8 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
                   onOpen={(opened) => onOpen({ kind: opened.kind, id: opened.id })}
                   schedulerAction={schedulerAction}
                   acts={rowActs}
+                  asking={asking}
+                  onAnswer={onAnswer}
                 />
               )}
             </>

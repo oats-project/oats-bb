@@ -40,6 +40,7 @@ import {
   summaryFailed,
   TEST_REFUSED,
   testReady,
+  TEST_FAILED,
   TEST_TIMED_OUT,
   HERE,
   TEST_UNREAD,
@@ -183,7 +184,7 @@ export function TestCard({ tested, now }: { tested: Tested; now: number }) {
   if (ran === null) {
     return (
       <Card title="Test result" testId="oats-automation-test">
-        <p className={test.ok ? LINE : warn}>{test.ok ? testReady(running) : `Not ready on ${here.on}.`}</p>
+        <p className={test.ok ? LINE : warn}>{test.ok ? testReady(running) : TEST_FAILED}</p>
         {test.problems.map((problem, at) => (
           <p key={`p${at}`} className={warn}>
             {shown(problem)}

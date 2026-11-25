@@ -29,11 +29,15 @@ const CALM_TRIGGERS = ["local/pr-triage", "oats-real/proposal-review", "local/gr
 export const LONG_TASK = Array.from({ length: 12 }, (_, at) => `${at + 1}. Read the support inbox of the enterprise accounts since the last run. For each new message find the account, its plan and its open incidents; sort it as a bug, a billing question, an access request or a how-to; draft a first reply in the customer's language and tone, never promising a date.`).join("\n");
 
 /**
+ * `agents`: instances of the scene's roster (one that asks, one that is stopped, one that runs):
+ * each becomes the agent of the newest run of one calm schedule, in turn from the first (the long
+ * one), so that a run's row has an agent the roster names. A relation, as the rule allows: the
+ * run is the recorded one.
  * → `{ schedules, triggers, status, ids }`: the three answers as text (envelopes, as the kernel
  * prints them), and the ids of what the scenes look at: the five failing rows in the list's order,
- * and a schedule that keeps fifty runs and has a long instruction.
+ * a schedule that keeps fifty runs and has a long instruction, and the schedules given an agent.
  */
-export function busy(fixtures) {
+export function busy(fixtures, { agents = [] } = {}) {
   const read = (name) => JSON.parse(readFileSync(join(fixtures, "automations", name), "utf8"));
   const schedules = read("schedule-list.json");
   const triggers = read("trigger-list.json");
@@ -63,6 +67,14 @@ export function busy(fixtures) {
   // The first calm schedule (a spawn with a run): the one whose page the scenes open. Its instruction is a long one.
   const long = scheduleRows[FAILING_SCHEDULES.length];
   long.task = LONG_TASK;
+  const made = agents.map((instance, n) => {
+    const row = scheduleRows[FAILING_SCHEDULES.length + n * CALM_SCHEDULES.length];
+    // The newest runs of this one, each the next agent's: the first given is the newest run's.
+    row.recentRuns = row.recentRuns.map((run, at) => (at === 0 ? { ...run, session: { ...run.session, instance } } : run));
+    if (n === 0) row.recentRuns = row.recentRuns.map((run, at) => (at > 0 && at < agents.length ? { ...run, session: { ...run.session, instance: agents[at] } } : run));
+    row.lastRun = row.recentRuns[0];
+    return idOf(row);
+  });
   const triggerRows = [];
   const statusRows = [];
   const trigger = (id) => {
@@ -78,6 +90,6 @@ export function busy(fixtures) {
     schedules: text(schedules, "schedules", scheduleRows),
     triggers: text(triggers, "triggers", triggerRows),
     status: text(status, "triggers", statusRows),
-    ids: { failing: [...scheduleRows.slice(0, 4), triggerRows[0]].map(idOf), long: idOf(long), names: [...scheduleRows, ...triggerRows].map((row) => row.name) },
+    ids: { failing: [...scheduleRows.slice(0, 4), triggerRows[0]].map(idOf), long: idOf(long), made, names: [...scheduleRows, ...triggerRows].map((row) => row.name) },
   };
 }

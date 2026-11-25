@@ -1,7 +1,8 @@
 // The Runs table, in the manner of bb's own: one row per run: a mark (with its word: never a glyph
-// or a colour alone), when, what happened in a person's word, and the agent the run made, as a
-// link to it while the roster lists it. A run with the kernel's own words on it (a failure's code
-// and message) opens to them. A long history is bounded: the first rows, then "Older"; and where
+// or a colour alone), when, what came of it in a person's word, and the agent the run made:
+// nothing else. The WHOLE row opens that agent's chat while the roster lists it (then it has a
+// chevron); an agent that asks has "Answer", a stopped one "Start…" in its menu. A run with the
+// kernel's own words on it (a failure's code and message) opens to them, as plain text. A long history is bounded: the first rows, then "Older"; and where
 // the automation keeps less than it ran, the table says so under itself.
 // It is one table for both places: an automation's own page, and the page's Runs tab (every
 // automation's runs, newest first, each led by its automation's name; filtered by automation and
@@ -9,14 +10,15 @@
 import { useState } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { RunEntry, RunOwner } from "../../model/automation-runs";
-import { LINK, TARGET } from "../ui";
-import { BUTTON_OUTLINE, FilterPills, RUN_ERROR, RUN_ROW, RUNS_BOX } from "./bb";
+import { Menu, StateMark, TARGET } from "../ui";
+import { BUTTON_OUTLINE, Chevron, FilterPills, ICON_BUTTON, ICONS, RUN_ERROR, RUN_ROW, RUNS_BOX } from "./bb";
 import { shown } from "../ui/text";
 import { earlierNotKept, NO_RUNS, OLDER, runFailed, runLine, runWhen, RUNS_SHOWN } from "./words";
 import type { RunLine, RunMark } from "./words";
 
 /** The marks, by bb's own names for their icons (each seen to resolve on bb-app 0.50.1 by the live check), their accessible names and their tones. */
-export const MARKS: Record<RunMark, { icon: string; name: string; tone: string }> = {
+export const MARKS: Record<RunMark | "asks", { icon: string; name: string; tone: string }> = {
+  asks: { icon: "CircleAlert", name: "Needs you", tone: "text-warning-text" },
   done: { icon: "CircleCheck", name: "Done", tone: "text-muted-foreground" },
   failed: { icon: "CircleX", name: "Failed", tone: "text-destructive-text" },
   unknown: { icon: "CircleHelp", name: "Not known", tone: "text-warning-text" },
@@ -24,53 +26,72 @@ export const MARKS: Record<RunMark, { icon: string; name: string; tone: string }
   waiting: { icon: "Clock", name: "Waiting", tone: "text-muted-foreground" },
 };
 
-/** How an agent's name opens the agent: null where the roster no longer lists it, and its name is then plain text. */
-export type AgentLink = (instance: string) => (() => void) | null;
+/**
+ * The agent a run made, as the roster has it NOW: how its chat opens (bb's thread; its own page
+ * for an agent with none), whether it asks, and, where it is stopped, how it is started (the
+ * lifecycle's own dialog). Null where the roster no longer lists it: its row then opens nothing.
+ */
+export type RunAgent = { open: () => void; asks: boolean; start: (() => void) | null };
+export type AgentLink = (instance: string) => RunAgent | null;
 
 const keyOf = (entry: RunEntry, at: number): string =>
   `${entry.owner.kind}:${entry.owner.id}:${entry.of}:${entry.of === "run" ? (entry.run.runId ?? at) : entry.of === "fired" ? (entry.fired.key ?? at) : entry.of === "failure" ? `${entry.failure.key ?? ""}#${entry.failure.attempt ?? at}` : at}:${entry.at ?? ""}`;
 
-function Agent({ name, agentLink }: { name: string; agentLink?: AgentLink }) {
-  const open = agentLink?.(name) ?? null;
-  // An agent the roster no longer lists: its name, plain, and no word after it.
-  if (open === null)
-    return (
-      <span data-testid="oats-run-agent" data-listed="false" className="min-w-0 break-words text-xs text-muted-foreground">
-        {shown(name)}
-      </span>
-    );
-  return (
-    <button type="button" data-testid="oats-run-agent" data-listed="true" className={`${LINK} min-w-0 break-words rounded text-left text-xs text-foreground`} onClick={open}>
-      {shown(name)}
-    </button>
-  );
-}
-
 function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, open, onToggle }: { entry: RunEntry; line: RunLine; now: number; withOwner: boolean; onOpenOwner?: (owner: RunOwner) => void; agentLink?: AgentLink; open: boolean; onToggle: () => void }) {
-  const mark = MARKS[line.mark];
   const when = runWhen(line.at, now);
   const said = line.error !== null && (line.error.code !== null || line.error.message !== null) ? line.error : null;
+  const agent = line.agent === null ? null : (agentLink?.(line.agent) ?? null);
+  // An agent that asks is the first thing its run says.
+  const mark = MARKS[agent?.asks ? "asks" : line.mark];
+  const word = agent?.asks ? "Needs you" : [line.what, line.word].filter(Boolean).map((text) => shown(text as string)).join(" · ");
+  const tone = agent?.asks || line.mark === "unknown" ? "text-warning-text" : line.mark === "failed" ? "text-destructive-text" : "text-muted-foreground";
+  // What is drawn over the row's own button lets a press through to it; a control of its own (the automation's name, Answer, the menu) takes its press.
+  const THROUGH = "pointer-events-none relative";
   return (
-    <div role="listitem" data-testid="oats-run" data-of={entry.of} data-mark={line.mark}>
-      {/* bb's run row: the mark, the time, then what takes the room (the automation, the agent), and the outcome's word at the row's end. At a phone's width what takes the room goes under. */}
-      <div className={RUN_ROW}>
-        <span role="img" aria-label={mark.name} className={`inline-flex shrink-0 ${mark.tone}`}>
-          <Icon name={mark.icon} className="size-4" />
+    <div role="listitem" data-testid="oats-run" data-of={entry.of} data-mark={agent?.asks ? "asks" : line.mark}>
+      {/* The row: the mark, when, (in the Runs tab: its automation), what came of it, the agent. Nothing else. */}
+      <div className={`${RUN_ROW} ${TARGET} relative`}>
+        {/* The WHOLE row is the way into the chat of the agent the run made: one button under the row's content. A run whose agent is gone, or that made none, has none, and no chevron. */}
+        {agent === null ? null : <button type="button" data-testid="oats-run-row" aria-label={`Open ${shown(line.agent ?? "")}`} className="absolute inset-0 cursor-pointer rounded-sm hover:bg-accent" onClick={agent.open} />}
+        <span role="img" aria-label={mark.name} className={`${THROUGH} inline-flex shrink-0 ${mark.tone}`}>
+          {agent?.asks ? <StateMark state="needs-you" hidden /> : <Icon name={mark.icon} className="size-4" />}
         </span>
-        <time dateTime={line.at ?? undefined} title={when?.title} className="min-w-[16ch] shrink-0 whitespace-nowrap text-sm tabular-nums text-foreground">
+        <time dateTime={line.at ?? undefined} title={when?.title} className={`${THROUGH} min-w-[16ch] shrink-0 whitespace-nowrap text-sm tabular-nums text-foreground`}>
           {when?.label ?? "—"}
         </time>
-        <span className="order-last flex min-w-0 basis-full flex-col gap-0.5 pl-[1.625rem] @2xl:order-none @2xl:flex-1 @2xl:basis-0 @2xl:pl-0">
-          {withOwner ? (
-            <button type="button" data-testid="oats-run-owner" className="min-w-0 break-words rounded-sm text-left text-sm text-foreground hover:underline" onClick={() => onOpenOwner?.(entry.owner)}>
-              {shown(entry.owner.name)}
-            </button>
-          ) : null}
-          {line.agent === null ? null : <Agent name={line.agent} agentLink={agentLink} />}
+        {withOwner ? (
+          <button type="button" data-testid="oats-run-owner" className="relative order-last min-w-0 basis-full break-words rounded-sm pl-[1.625rem] text-left text-sm text-foreground hover:underline @2xl:order-none @2xl:flex-1 @2xl:basis-0 @2xl:pl-0" onClick={() => onOpenOwner?.(entry.owner)}>
+            {shown(entry.owner.name)}
+          </button>
+        ) : null}
+        {/* At a phone's width what came of it takes the line's room, so that the row's controls stay on the run's own line and the agent goes under. */}
+        <span data-testid="oats-run-said" className={`${THROUGH} min-w-0 flex-1 break-words text-xs @2xl:flex-none ${tone}`}>
+          {word}
         </span>
-        <span data-testid="oats-run-said" className={`ml-auto min-w-0 break-words text-right text-xs ${line.mark === "failed" ? "text-destructive-text" : line.mark === "unknown" ? "text-warning-text" : "text-muted-foreground"}`}>
-          {[line.what, line.word, ...line.notes].filter(Boolean).map((text) => shown(text as string)).join(" · ")}
-        </span>
+        {line.agent === null ? null : (
+          <span data-testid="oats-run-agent" data-listed={agent !== null} className={`${THROUGH} order-last min-w-0 basis-full break-words pl-[1.625rem] text-xs text-muted-foreground @2xl:order-none @2xl:basis-auto @2xl:pl-0 @2xl:text-right ${withOwner ? "" : "@2xl:ml-auto"}`}>
+            {shown(line.agent)}
+          </span>
+        )}
+        {agent?.asks ? (
+          <button type="button" data-testid="oats-run-answer" aria-label={`Answer ${shown(line.agent ?? "")}`} className={`${BUTTON_OUTLINE} relative ${line.agent === null ? "ml-auto" : ""}`} onClick={agent.open}>
+            Answer
+          </button>
+        ) : null}
+        {agent !== null && agent.start !== null ? (
+          <div data-testid="oats-run-menu" className="relative">
+            <Menu label={`Actions for ${shown(line.agent ?? "")}`} items={[{ id: "start", label: "Start…", onSelect: agent.start }]}>
+              <span className={ICON_BUTTON}>
+                <Icon name={ICONS.menu} className="size-4" />
+              </span>
+            </Menu>
+          </div>
+        ) : null}
+        {agent === null ? null : (
+          <span aria-hidden="true" data-testid="oats-run-chevron" className={`${THROUGH} flex shrink-0 items-center text-muted-foreground`}>
+            <Chevron />
+          </span>
+        )}
       </div>
       {said === null ? null : (
         <>
@@ -83,8 +104,9 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, open, onTogg
             </button>
           </div>
           {open ? (
-            // The kernel's own words, as text, in bb's block for a run's error: its code, then its message.
+            // The kernel's own words, as plain text on the page's ground (no filled box): what it was about, its code, then its message.
             <div data-testid="oats-run-error" className={RUN_ERROR}>
+              {line.notes.length === 0 ? null : <span>{line.notes.map((note) => shown(note)).join(" · ")}</span>}
               {said.code === null ? null : <span>{shown(said.code)}</span>}
               {said.message === null ? null : <span>{shown(said.message)}</span>}
             </div>

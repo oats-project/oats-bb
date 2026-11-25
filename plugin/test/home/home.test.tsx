@@ -606,6 +606,9 @@ test("Home › Agents: every agent OATS has, in the sidebar's order, each with i
   // every agent, the stopped ones, the ones whose thread is gone and the ones on tmux among them
   expect(rows.map((row) => row.dataset.instance).sort()).toEqual(agents.map((agent) => agent.instance).sort());
   for (const row of rows) expect(within(row).getByTestId("oats-state").textContent).not.toBe("");
+  // The word is the one function's, by backend (the lead's ruling T4): an agent on tmux that runs reads "Running", one on a bb thread with a turn running "Working".
+  const stateOf = (instance: string) => within(rows.find((row) => row.dataset.instance === instance)!).getByTestId("oats-state").textContent;
+  expect([stateOf("kernel-fix-developer"), stateOf("desktop-mockups-developer")]).toEqual(["Running", "Working"]);
   const tmux = rows.find((row) => row.dataset.instance === "night-watch-helper")!;
   expect(rows.indexOf(tmux)).toBeLessThan(rows.length - 1); // in the sidebar's one order: it waits, so it is among the first, not in a block after the tree
   expect(within(tmux).getByTestId("oats-home-agent").textContent).toBe("Night watch helper");

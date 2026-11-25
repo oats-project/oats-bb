@@ -128,3 +128,22 @@ test("Teams while OATS cannot be read after it was: the notice with the age, and
   expect(notice.textContent).toContain("Read 40 min ago.");
   expect((await slot.findAllByTestId("oats-team-row")).some((row) => /\d+ agents?/.test(row.textContent ?? ""))).toBe(true);
 });
+
+// The ONE rule of every "New agent" (the lead's ruling T10 on its reader's report, 24 Nov 2026): the sidebar's and the
+// home's are held by it, so a button that is off in one place is never live in another.
+test("New agent is held while the roster is the last one read and behind an oats the plugin does not work with; not while the CLI is not read", async () => {
+  const { newAgentHeld } = await import("../../app/workspace/pages");
+  const held = (stale: boolean, state?: string) => newAgentHeld(stale, state === undefined ? undefined : { state });
+  // the roster as read: by where the installed oats stands
+  expect(["tested", "newer", "older", "unknown", "newer-api"].map((state) => [state, held(false, state)])).toEqual([
+    ["tested", false],
+    ["newer", false], // newer than what was tested, with the JSON the plugin reads: it says so, and works
+    ["older", true],
+    ["unknown", true],
+    ["newer-api", true],
+  ]);
+  // not read yet, or its read failed: nothing is known against it
+  expect(held(false)).toBe(false);
+  // the roster kept as last read holds it whatever the CLI
+  expect([undefined, "tested", "newer", "older"].map((state) => held(true, state))).toEqual([true, true, true, true]);
+});

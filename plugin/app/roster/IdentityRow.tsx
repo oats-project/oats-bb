@@ -18,6 +18,7 @@ import { lineActs, lineParts, outsideOf, OutsideThreadRow, OutsideWarning } from
 import { useOats } from "../oats";
 import type { Contract } from "../store";
 import { Button } from "../ui";
+import { agentName, instanceDisplayName } from "../ui/words";
 import { useNow } from "./now";
 import { AgentStatusLine } from "./AgentStatusLine";
 import { useReading } from "./reading";
@@ -148,8 +149,19 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
     </Button>
   );
 
+  // WHOSE line this is. bb's title over it is the agent's name as words at every start (the provider gives it), and a
+  // person can move it off that name (bb's own Rename, Regenerate title; a title bb wrote from a first message): then
+  // the acts below would sit under a name that is not the agent's. So the line says the agent's NAME first whenever
+  // bb's title is not exactly it, as the archived thread's row does (app/outside), and never otherwise: no name twice.
+  const named = node.thread.displayTitle === instanceDisplayName(agent.instance);
+
   return (
     <div data-testid="oats-identity-row" className={FRAME}>
+      {named ? null : (
+        <span data-testid="oats-thread-agent" className="min-w-0 break-words font-semibold">
+          {agentName(agent.instance)}
+        </span>
+      )}
       {/* The one status line of an agent (the panel's header is to draw the same). The age of a roster kept as
           last read is said by the one-line notice under it, so the line itself says no "as of". What happened to
           the agent outside OATS (app/outside) takes the line's words where it has a reason for them. */}

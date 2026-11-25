@@ -86,6 +86,6 @@ test("the table of every row, from the one function", () => {
     ["tmux · stopped with OATS (recorded)", "stopped", "Stopped", "—", "refuses (stopped)", "—"],
     ["tmux · session lost (recorded)", "lost", "Stopped", "session lost", "refuses (stopped)", "—"],
     ["tmux · its window gone, no word", "stopped", "Stopped", "—", "refuses (stopped)", "—"],
-    ["tmux · runs (recorded)", "runs", "Working", "—", "—", "—"],
+    ["tmux · runs (recorded)", "runs", "Running", "—", "—", "—"],
   ]);
 });

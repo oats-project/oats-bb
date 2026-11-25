@@ -274,7 +274,7 @@ export function OutsideThreadRow({ threadId, oats, outside }: Pick<ExperimentalT
         {agentName(agent.instance)}
       </span>
       {/* Behind a lifecycle result that says the agent changed, until the roster is read again: "Reading…", never the old state. */}
-      {reading ? <ReadingLine action={buttons} /> : <StatusLine state={status.state} since={parts.since} detail={parts.detail} tone={parts.tone} markTone={parts.markTone} action={buttons} />}
+      {reading ? <ReadingLine action={buttons} /> : <StatusLine state={status.state} word={status.word} since={parts.since} detail={parts.detail} tone={parts.tone} markTone={parts.markTone} action={buttons} />}
       <OutsideWarning said={said} instance={agent.instance} held={held} />
       {oats.stale === null ? null : <Unreadable compact failure={oats.stale} machine={oats.deployment.machine} at={oats.stale.at} now={now} onRetry={oats.retry} />}
     </div>

@@ -326,7 +326,7 @@ test("by instance name, for an agent with no thread in bb: the same panel, its s
   expect(text(await slot.findByTestId("oats-panel-session-line"))).toBe("tmux session");
   expect(text(slot.getByTestId("oats-panel-session-id"))).toBe("oats-agents"); // the session's own name, under Paths
   expect(slot.getByTestId("oats-panel-session-id").closest("details")).toBe(slot.getByTestId("oats-panel-paths"));
-  expect(stateOf(slot)).toBe("Working");
+  expect(stateOf(slot)).toBe("Running"); // on tmux: the kernel says that it runs, and nothing of a turn
   expect(text(slot.getByTestId("oats-panel-name"))).toBe("Panel worktree helper");
   // How to reach its session: one word ("Runs in" over it already says tmux), and the command to copy. The
   // home's card of such an agent has no command: this page, where its Open leads, is where it is.

@@ -109,7 +109,7 @@ test("an agent with no bb thread stays in the roster: one that runs in tmux, and
   expect(rows.map((row) => [row.getAttribute("data-instance"), within(row).getByTestId("oats-row-facts").textContent])).toEqual([
     // Where its thread is (archived in bb, or deleted) is bb's own answer, which the outside feature asks and says (test/outside/places.test.tsx); bb says nothing here.
     // (In the kernel's order, as every row of their rank: the one on tmux is listed before the stopped one.)
-    ["kernel-fix-developer", "Working · oats-developer · tmux"],
+    ["kernel-fix-developer", "Running · oats-developer · tmux"], // on tmux: "Running" (the kernel says that it runs, nothing of a turn)
     ["weekly-digest-helper", "Stopped · oats-expert"],
   ]);
   expect(rows[0]!.textContent).toContain("Kernel fix developer");
@@ -684,7 +684,7 @@ test("a parent with no bb thread is a parent like any other: Left on its row clo
   // As the page loads it is closed: its child is not in the page, and its line says its own word, then the child's mark.
   expect([toggle().getAttribute("aria-expanded"), row("tmux-child")]).toEqual(["false", undefined]);
   expect(inside()).toBe("needs-you");
-  expect(within(row("kernel-fix-developer")!).getByTestId("oats-row-facts").getAttribute("title")).toBe("Working · oats-developer · tmux"); // its own words, whole
+  expect(within(row("kernel-fix-developer")!).getByTestId("oats-row-facts").getAttribute("title")).toBe("Running · oats-developer · tmux"); // its own words, whole
   expect(row("kernel-fix-developer")!.querySelector("[data-mark]")!.getAttribute("data-state")).toBe("working"); // its own mark stays its own
   // Right on its row opens it: the child's row is there, and the parent carries no mark of it any more.
   fireEvent.keyDown(row("kernel-fix-developer")!, { key: "ArrowRight" });
@@ -730,6 +730,126 @@ async function besidePage(agents: ReturnType<typeof nested>, onPage: string | nu
   return { slot, threadless, toggles };
 }
 
+// ---- "New agent" is held by ONE rule, here and on the home (the lead's ruling T10 on its reader's report, 24 Nov 2026) ----
+type Installed = { version: string | null; desktopApi: number | null; state: "older" | "tested" | "newer" | "unknown" | "newer-api" };
+const INSTALLED: Record<Installed["state"], Installed> = {
+  tested: { version: "0.70.5", desktopApi: 1, state: "tested" },
+  newer: { version: "0.71.0", desktopApi: 1, state: "newer" },
+  older: { version: "0.69.4", desktopApi: 1, state: "older" },
+  unknown: { version: null, desktopApi: null, state: "unknown" },
+  "newer-api": { version: "0.72.0", desktopApi: 2, state: "newer-api" },
+};
+const asked = (slot: Awaited<ReturnType<typeof sidebar>>["slot"]) => slot.inspection.rpcCalls.filter((call) => call.method === "homeCli").length;
+
+test("the sidebar's New agent is off behind an oats the plugin does not work with, as the home's is: it reads where the installed oats stands itself, once, when it is first seen", async () => {
+  const on: Record<string, boolean> = {};
+  for (const state of ["tested", "newer", "older", "unknown", "newer-api"] as const) {
+    const { slot, navigated } = await sidebar({ homeCli: () => INSTALLED[state] } as Partial<Handlers>);
+    await slot.findByTestId("oats-tree");
+    await waitFor(() => expect(asked(slot)).toBe(1)); // the sidebar asked: no home was ever opened in this window
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20))); // and its answer has landed: what follows is read of the answer, not of "not read yet"
+    const button = () => slot.getByTestId("oats-new-agent") as HTMLButtonElement;
+    const held = state === "older" || state === "unknown" || state === "newer-api";
+    await waitFor(() => expect(button().disabled).toBe(held));
+    on[state] = !button().disabled;
+    // Off, it opens nothing; nothing stands beside it or in a title (the home's card says why).
+    expect([button().title, button().getAttribute("aria-describedby"), button().textContent]).toEqual(["", null, "New agent"]);
+    fireEvent.click(button());
+    expect([slot.inspection.navigateCalls.length, navigated()]).toEqual(held ? [0, 0] : [1, 1]);
+    expect(asked(slot)).toBe(1); // read once: the roster's events and its reads ask nothing more
+    resetApp();
+  }
+  expect(on).toEqual({ tested: true, newer: true, older: false, unknown: false, "newer-api": false });
+});
+
+test("while where the installed oats stands is not read, and when its read fails, the sidebar's New agent is on: nothing is known against it", async () => {
+  // Not answered yet.
+  let answer: (installed: Installed) => void = () => undefined;
+  const waiting = await sidebar({ homeCli: () => new Promise<Installed>((resolve) => (answer = resolve)) } as Partial<Handlers>);
+  await waiting.slot.findByTestId("oats-tree");
+  await waitFor(() => expect(asked(waiting.slot)).toBe(1));
+  const button = () => waiting.slot.getByTestId("oats-new-agent") as HTMLButtonElement;
+  expect(button().disabled).toBe(false);
+  // The answer is against it: off from then on.
+  await act(async () => answer(INSTALLED.older));
+  await waitFor(() => expect(button().disabled).toBe(true));
+  resetApp();
+  // The read fails (twice: the second try once the roster is read): on, and asked no third time.
+  const failing = await sidebar({
+    homeCli: () => {
+      throw new Error("oats did not answer");
+    },
+  } as Partial<Handlers>);
+  await failing.slot.findByTestId("oats-tree");
+  await waitFor(() => expect(asked(failing.slot)).toBe(2));
+  expect((failing.slot.getByTestId("oats-new-agent") as HTMLButtonElement).disabled).toBe(false);
+});
+
+test("the answer is one for the window: the home's Check again, after an install, turns the sidebar's New agent on with the home's, and both are off before it", async () => {
+  let installed = INSTALLED.older;
+  const app = await loadApp();
+  const List = app.threadLists[0]!.component;
+  const Home = app.navPanels.find((candidate) => candidate.id === "home")!.component as (props: { subPath: string }) => ReactNode;
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    {
+      component: (props: PluginThreadListProps) => (
+        <>
+          <List {...props} />
+          <Home subPath="" />
+        </>
+      ),
+    } as never,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    { rpc: handlers({ homeCli: () => installed } as Partial<Handlers>), sidebarThreads: sidebarThreads() },
+  );
+  const both = () => [slot.getByTestId("oats-new-agent"), slot.getByTestId("oats-home-new-agent")].map((button) => (button as HTMLButtonElement).disabled);
+  await slot.findByTestId("oats-home-cli");
+  await waitFor(() => expect(both()).toEqual([true, true]));
+  installed = INSTALLED.tested;
+  fireEvent.click(slot.getByTestId("oats-home-cli-retry"));
+  await waitFor(() => expect(both()).toEqual([false, false]));
+  expect(slot.queryByTestId("oats-home-cli")).toBeNull();
+});
+
+test("the answer is the window's, a failure is the asker's: the home's own read failing after the sidebar's answered says no \"Check failed\" (nobody pressed); a Check again that fails does", async () => {
+  let calls = 0;
+  const app = await loadApp();
+  const List = app.threadLists[0]!.component;
+  const Home = app.navPanels.find((candidate) => candidate.id === "home")!.component as (props: { subPath: string }) => ReactNode;
+  const slot = renderSlot<PluginThreadListProps, Contract>(
+    {
+      component: (props: PluginThreadListProps) => (
+        <>
+          <List {...props} />
+          <Home subPath="" />
+        </>
+      ),
+    } as never,
+    { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" },
+    {
+      rpc: handlers({
+        // The first read (the sidebar's) answers; every read after it fails.
+        homeCli: () => {
+          calls += 1;
+          if (calls === 1) return INSTALLED.older;
+          throw new Error("oats did not answer");
+        },
+      } as Partial<Handlers>),
+      sidebarThreads: sidebarThreads(),
+    },
+  );
+  // The card is there by the window's answer; the home's own reads (its first, and its one more try) have failed.
+  await slot.findByTestId("oats-home-cli");
+  await waitFor(() => expect(calls).toBeGreaterThanOrEqual(2));
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+  expect(slot.queryByTestId("oats-home-cli-check-failed")).toBeNull();
+  expect([slot.getByTestId("oats-new-agent"), slot.getByTestId("oats-home-new-agent")].map((button) => (button as HTMLButtonElement).disabled)).toEqual([true, true]);
+  // A person asks: that check fails, and the card says so; what was read before stays.
+  fireEvent.click(slot.getByTestId("oats-home-cli-retry"));
+  expect((await slot.findByTestId("oats-home-cli-check-failed")).textContent).toContain("oats did not answer");
+  expect(slot.getByTestId("oats-home-cli")).toBeTruthy();
+});
+
 test("the page of an agent with no bb thread is on screen: the parents of its row are open as the page loads, by chevrons that are off; nothing below it is opened", async () => {
   // The plugin's own page of that agent, as bb mounts it: it says whose it is (app/panel AgentPage, app/roster/open-agent.ts).
   const { slot, threadless, toggles } = await besidePage(nested(), "tmux-grandchild");
@@ -741,6 +861,40 @@ test("the page of an agent with no bb thread is on screen: the parents of its ro
     ["tmux-grandchild", "false", false], // what is BELOW the row on screen stays as the person left it: closed
   ]);
   expect(slot.queryAllByTestId("oats-agent-row").some((row) => row.getAttribute("data-sidebar-thread-id") === "thr_digest")).toBe(false);
+});
+
+// The lead's ruling P1 on its reader's report (24 Nov 2026): a thread's row is marked while its thread is open; an agent's
+// own page marked no row, so a person on it could not tell which row it was. The same mark, with or without a thread.
+/** The rows of the tree that are marked as the one on screen: each by its kind and its agent (or its thread). */
+const marked = (slot: Awaited<ReturnType<typeof besidePage>>["slot"]) =>
+  Array.from(slot.getByTestId("oats-tree").querySelectorAll('[aria-current="page"]')).map((row) => [row.getAttribute("data-testid"), row.getAttribute("data-instance") ?? row.getAttribute("data-sidebar-thread-id"), row.className.split(/\s+/).includes("bg-accent")]);
+
+test("the row of the agent whose page is on screen is marked, as the open thread's row is: an agent with no bb thread, and one on a thread; one row, and none with nothing on screen", async () => {
+  // An agent with no bb thread (on tmux, a child's child): its row, and only it.
+  const tmux = await besidePage(nested(), "tmux-grandchild");
+  await waitFor(() => expect(marked(tmux.slot)).toEqual([["oats-agent-row-threadless", "tmux-grandchild", true]]));
+  resetApp();
+  // An agent on a bb thread whose own PAGE is on screen (no thread is open): its thread's row.
+  const onThread = await besidePage(nested(), "desktop-mockups-developer");
+  await waitFor(() => expect(marked(onThread.slot)).toEqual([["oats-agent-row", "thr_mockups", true]]));
+  resetApp();
+  // Nothing on screen: no row is marked.
+  const none = await besidePage(nested(), null);
+  expect(marked(none.slot)).toEqual([]);
+  resetApp();
+  // A thread is open while a page of another agent is still mounted: the thread's row alone, as bb says.
+  const both = await besidePage(nested(), "tmux-grandchild", "thr_mockups");
+  await both.slot.findByTestId("oats-panel");
+  expect(marked(both.slot)).toEqual([["oats-agent-row", "thr_mockups", true]]);
+  resetApp();
+  // Two rows of one name (a workspace may hold it twice), each on its own thread: the open THREAD's row alone, never both by the name.
+  const twin = fixtureAgents().find((agent) => agent.instance === "desktop-mockups-developer")!;
+  const twice = await besidePage([...nested(), { ...twin, threadId: "thr_plain", parent: null }], null, "thr_mockups");
+  expect(marked(twice.slot)).toEqual([["oats-agent-row", "thr_mockups", true]]);
+  resetApp();
+  // The same two rows with that name's PAGE on screen and no thread open: one row still, the first of the name.
+  const paged = await besidePage([...nested(), { ...twin, threadId: "thr_plain", parent: null }], "desktop-mockups-developer");
+  await waitFor(() => expect(marked(paged.slot)).toEqual([["oats-agent-row", "thr_mockups", true]]));
 });
 
 test("with no agent's page on screen nothing is held open; and an open THREAD is the row on screen, whatever page last said its agent", async () => {
@@ -771,16 +925,16 @@ test("the ARCHIVED thread of an agent is on screen: its row has no thread of bb'
     );
     await slot.findByTestId("oats-tree");
     const toggle = slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "redesign-ui-lead")!;
-    return { expanded: toggle.getAttribute("aria-expanded"), off: (toggle as HTMLButtonElement).disabled, child: slot.queryAllByTestId("oats-agent-row-threadless").some((row) => row.getAttribute("data-instance") === "harvest-knowledge-helper") };
+    return { expanded: toggle.getAttribute("aria-expanded"), off: (toggle as HTMLButtonElement).disabled, child: slot.queryAllByTestId("oats-agent-row-threadless").some((row) => row.getAttribute("data-instance") === "harvest-knowledge-helper"), marked: marked(slot).filter(([kind]) => kind !== "oats-other-row") };
   };
   // Nothing on screen: the parent is closed, and the row is not in the page.
-  expect(await draw(null)).toEqual({ expanded: "false", off: false, child: false });
+  expect(await draw(null)).toEqual({ expanded: "false", off: false, child: false, marked: [] });
   resetApp();
-  // Its archived thread on screen: the parent is open, held by it, and the row is drawn.
-  expect(await draw("thr_harvest")).toEqual({ expanded: "true", off: true, child: true });
+  // Its archived thread on screen: the parent is open, held by it, and the row is drawn, MARKED as the one on screen.
+  expect(await draw("thr_harvest")).toEqual({ expanded: "true", off: true, child: true, marked: [["oats-agent-row-threadless", "harvest-knowledge-helper", true]] });
   resetApp();
   // A thread that no agent names: nobody is on screen.
-  expect(await draw("thr_plain")).toEqual({ expanded: "false", off: false, child: false });
+  expect(await draw("thr_plain")).toEqual({ expanded: "false", off: false, child: false, marked: [] });
 });
 
 test("two pages in turn: the one that is drawn is the one on screen, and a page that leaves takes away only its own word", async () => {

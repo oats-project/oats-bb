@@ -185,3 +185,14 @@ export function openNewAgent(navigate: BbNavigate, soulsShown: boolean, target?:
 }
 /** Whether "New agent" has somewhere to open. */
 export const hasNewAgent = (soulsShown: boolean): boolean => newAgent !== null || soulsShown;
+/**
+ * Whether "New agent" is HELD: in its place, off. The ONE rule of every "New agent" there is (the
+ * sidebar's, the home's; the lead's ruling T10 on its reader's report, 24 Nov 2026): a button that
+ * is off in one place is never live in another. Held while the roster shown is the last one read
+ * (`stale`, with the OATS acts), and behind an installed `oats` the plugin does not work with
+ * (`cli`, the answer of the one verb `homeCli`: older, a newer API, or a version it cannot tell):
+ * a spawn through it is not offered. NOT held while the CLI is not read yet, or its read failed
+ * (`cli` undefined): nothing is known against it, and a button that went off at every window's
+ * load would blink. Why it is held is said by a notice on the same screen, never beside the button.
+ */
+export const newAgentHeld = (stale: boolean, cli: { state: string } | undefined): boolean => stale || (cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api"));

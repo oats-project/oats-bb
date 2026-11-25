@@ -28,6 +28,15 @@ import { fileURLToPath } from "node:url";
 import { fill, gapsIn, loose, MAX_GAP, testId, textOf, texts, textsNamed, showSidebar, tight } from "../browser.mjs";
 import { FAILS, fits, printing, refresh, setVerb, settled } from "./panel.mjs";
 
+/**
+ * The sidebar's New agent (the roster's foot), where the sidebar is drawn beside the page: "on", "off", or "absent".
+ * With `want`, an expression for `page.until`: that word once the button says it, "" until then.
+ */
+const sideNewAgent = (want) => {
+  const read = `(() => { const button = document.querySelector('[data-testid="oats-new-agent"]'); return button === null ? "absent" : button.disabled ? "off" : "on"; })()`;
+  return want === undefined ? read : `(${read} === ${JSON.stringify(want)} ? ${JSON.stringify(want)} : "")`;
+};
+
 /** The oldest OATS the plugin works with, as kernel/compat.ts holds it: the card's "Required" says it. */
 const FLOOR = /OATS_FLOOR = "([^"]+)"/.exec(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "kernel", "compat.ts"), "utf8"))[1];
 /** The recorded `oats version --json`, for a scene that changes what is installed. */
@@ -385,6 +394,8 @@ export default [
         const behind = await page.evaluate(`(() => { const head = document.querySelector(${JSON.stringify(within("oats-home-head"))}); const button = head?.querySelector('[data-testid="oats-home-new-agent"]'); return JSON.stringify({ text: (head?.innerText ?? "").replace(/\\s+/g, " ").trim(), off: button?.disabled ?? null, why: button?.title ?? null }); })()`);
         check(behind === JSON.stringify({ text: "New agent", off: true, why: "" }), `${at} behind the card New agent is off, with no reason beside it or in a title: the card says why`, behind);
         check((await page.evaluate(`document.querySelector(${JSON.stringify(within("oats-home-needs"))}) !== null`)) === true, `${at} and the roster is still drawn under it`, await page.evaluate(textOf(PAGE)));
+        // The sidebar's New agent is held by the same rule (one rule for every New agent): where the sidebar is drawn beside the home, it is off too.
+        if (!viewport.mobile) check((await page.until(sideNewAgent("off"), 20)) === "off", `${at} behind the card the SIDEBAR's New agent is off too: no New agent is live where another is off`, await page.evaluate(sideNewAgent()));
         await sound(page, viewport, check, at, "the CLI card");
         await page.shot(`home-${viewport.name}-cli-older`);
 
@@ -393,6 +404,7 @@ export default [
         check(await open(page, within("oats-home-cli")), `${at} an oats that speaks a newer desktop API draws the card`, await page.evaluate(textOf(PAGE)));
         const newerApi = await page.until(`(() => { const text = ${cardText}; return text.startsWith("newer-api") ? text : ""; })()`, 15);
         check(Boolean(newerApi) && newerApi === "newer-api | This plugin is older than the installed oats CLI Update the OATS plugin. Detected 0.74.0 Check again", `${at} the card names the plugin as the older one, says what to do in four words, and offers no npm command`, newerApi ?? (await page.evaluate(cardText)));
+        if (!viewport.mobile) check((await page.until(sideNewAgent("off"), 20)) === "off", `${at} behind the newer-API card the SIDEBAR's New agent is off too`, await page.evaluate(sideNewAgent()));
         await sound(page, viewport, check, at, "the newer-API card");
         await page.shot(`home-${viewport.name}-cli-newer-api`);
 
@@ -406,6 +418,7 @@ export default [
         check(await open(page, within("oats-home-needs")), `${at} with an oats of a later minor the home draws`, await page.evaluate(textOf(PAGE)));
         const later = await page.until(`(() => { const button = document.querySelector(${JSON.stringify(within("oats-home-new-agent"))}); return document.querySelector(${JSON.stringify(within("oats-home-cli"))}) === null && button && !button.disabled ? JSON.stringify({ line: document.querySelector(${JSON.stringify(within("oats-home-cli-line"))}) !== null, said: /tested with|0\\.71\\.2|Check again/.test(document.querySelector(${JSON.stringify(PAGE)}).innerText) }) : ""; })()`, 20);
         check(later === JSON.stringify({ line: false, said: false }), `${at} an oats of a later minor: no line and no card, nothing said of it, and New agent is on`, later ?? (await page.evaluate(textOf(PAGE))));
+        if (!viewport.mobile) check((await page.until(sideNewAgent("on"), 20)) === "on", `${at} and the SIDEBAR's New agent is on with it`, await page.evaluate(sideNewAgent()));
 
         // After the install the person asks again, on the page: the notice goes without a reload.
         installed({ version: "0.69.4" });
@@ -453,7 +466,7 @@ export default [
       };
       const first = await drawer("first");
       const rows = Object.fromEntries(JSON.parse(first || (await page.evaluate(roster)) || "[]"));
-      check(Object.keys(rows).length === 8 && rows[idle.id] === "Idle · knowledge-harvester" && rows[stopped.id] === "Stopped · oats-expert" && rows[TMUX] === "Working · oats-developer · tmux", `${at} the drawer holds every agent of the roster, each with its state: an idle one, a stopped one and the one on tmux among the eight`, JSON.stringify(rows));
+      check(Object.keys(rows).length === 8 && rows[idle.id] === "Idle · knowledge-harvester" && rows[stopped.id] === "Stopped · oats-expert" && rows[TMUX] === "Running · oats-developer · tmux", `${at} the drawer holds every agent of the roster, each with its state: an idle one, a stopped one and the one on tmux among the eight`, JSON.stringify(rows));
       await page.shot(`home-${viewport.name}-drawer`);
       // An idle agent's row opens its thread.
       await page.evaluate(`document.querySelector(${JSON.stringify(`${SIDE} ${testId("oats-agent-row")}[data-sidebar-thread-id="${idle.id}"]`)}).click()`);

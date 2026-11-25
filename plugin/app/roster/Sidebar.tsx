@@ -24,8 +24,9 @@ import { outsideOf, rowParts, rowWarns, rowWords } from "../outside";
 import type { Said } from "../outside";
 import { Button, Loading, Mark, plainClick, StateMark, TARGET, TMUX } from "../ui";
 import { openAgentPage } from "../home/agent-tab";
+import { useCli } from "../home/cli";
 import { agentStatus, rowState } from "./status";
-import { hasNewAgent, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
+import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
@@ -91,6 +92,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const pagesNow = usePagesShown();
   const links = pageLinks().filter((page) => pagesNow.has(page.path));
   const newAgentShown = hasNewAgent(pagesNow.has("souls"));
+  // Where the installed `oats` stands, read once the sidebar is seen: "New agent" here is held by the rule that holds the home's.
+  const { cli } = useCli(newAgentShown, oats.phase === "ready");
   const drafts = useSidebarThreadDraftIds();
   const rowStatuses = useSidebarThreadRowStatuses();
   const opened = useOpened();
@@ -110,8 +113,10 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
    * Every thread row: bb's anchor contract, inside bb's own thread menu. `before`: a control of the
    * row's own that is not part of the link (a parent's chevron), drawn over the row's gutter and
    * before the link in the tab order; `onKeyDown`: the row's own keys (a parent's Right and Left).
+   * `onPage`: the agent's own page is what is on screen (no thread is): the row is marked as the
+   * open thread's row is.
    */
-  const threadRow = (thread: PluginSidebarThread, className: string, testId: string, children: ReactNode, before: ReactNode = null, onKeyDown?: (event: KeyboardEvent) => void) => (
+  const threadRow = (thread: PluginSidebarThread, className: string, testId: string, children: ReactNode, before: ReactNode = null, onKeyDown?: (event: KeyboardEvent) => void, onPage = false) => (
     <li key={thread.id} className="relative">
       {before}
       <ThreadActionsContextMenu thread={target(thread)}>
@@ -120,8 +125,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           data-testid={testId}
           data-sidebar-thread-shortcut-target=""
           data-sidebar-thread-id={thread.id}
-          aria-current={thread.id === activeThreadId ? "page" : undefined}
-          className={`${ROW} ${className} ${thread.id === activeThreadId ? "bg-accent" : ""}`}
+          aria-current={thread.id === activeThreadId || onPage ? "page" : undefined}
+          className={`${ROW} ${className} ${thread.id === activeThreadId || onPage ? "bg-accent" : ""}`}
           onClick={(event) => openThread(event, thread.id)}
           onKeyDown={onKeyDown}
         >
@@ -191,6 +196,7 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           </>,
           toggle,
           keys,
+          onScreen(node.agent),
         ),
       ];
     });
@@ -230,7 +236,9 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           data-instance={agent.instance}
           data-opens={said?.archived === true && agent.threadId !== null ? "thread" : "page"}
           title={shown(agent.instance)}
-          className={`${ROW} w-full ${(guttered ? GUTTERED : INDENT)[depth]} text-left`}
+          // The row of what is on screen is marked, as bb marks the open thread's: this agent's own page, or its archived thread.
+          aria-current={onScreen(agent) ? "page" : undefined}
+          className={`${ROW} w-full ${(guttered ? GUTTERED : INDENT)[depth]} text-left ${onScreen(agent) ? "bg-accent" : ""}`}
           onKeyDown={onKeyDown}
           onClick={() => {
             // Its archived conversation, where bb keeps one: the thread's own row there says what happened, with the acts.
@@ -293,7 +301,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // Every agent that waits, the ones with no bb thread included (`view.needing`: the home's badge and list count the same).
   // Every agent OATS has is a row.
   const shownAgents = flatten(view.roots).length + view.detached.length + view.elsewhere.length;
-  // The row that is open on screen, by its agent: its parents are open whatever the person left.
+  // The row that is open on screen, by its agent: it is MARKED (the lead's ruling P1: with or without a thread, at every
+  // width), and its parents are open whatever the person left.
   // A thread that is open, by bb's word: the row that is drawn on it; else the row with no thread whose agent NAMES it (its
   // thread is archived in bb: the row itself leads there, and must not be closed away by its parent once a person is on
   // it). The row on the thread first: two agents may name one thread. With no thread open: the agent whose own page is on
@@ -301,6 +310,13 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const drawnRows = flatten(view.rows);
   const onThread = activeThreadId === null ? undefined : (drawnRows.find((row) => row.thread?.id === activeThreadId) ?? drawnRows.find((row) => row.thread === null && row.agent.threadId === activeThreadId));
   const selected = activeThreadId === null ? openAgent : (onThread?.agent.instance ?? null);
+  // Whether a row is THE one on screen, for its mark: ONE row, never a second row of the same name. With a thread open,
+  // the row found for it; with none, the row of the agent whose own page is on screen: the page is asked for by NAME,
+  // and of two rows of one name it shows the one on a bb thread, else the first of the name (app/panel/Panel.tsx):
+  // the mark is on the row of the agent the page shows.
+  const paged = activeThreadId !== null || openAgent === null ? undefined : (oats.nodeByInstance.get(openAgent)?.agent ?? oats.agents.find((candidate) => candidate.instance === openAgent));
+  const onPage = paged === undefined ? undefined : (drawnRows.find((row) => row.agent === paged) ?? drawnRows.find((row) => row.agent.instance === openAgent));
+  const onScreen = (agent: Agent): boolean => (activeThreadId === null ? onPage?.agent === agent : onThread?.agent === agent);
   const guttered = view.rows.some((row) => row.children.length > 0);
   // A row whose own mark is drawn in the warning tone (the outside feature's `rowWarns`: a process may run with no thread a
   // person can see, or its thread was deleted in bb): a closed parent carries it too. Asked with the row's own state, which is the one its line draws.
@@ -336,11 +352,13 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
           plugin's entry says how many (the lead's ruling L6 on the text audit, 23 Nov 2026). */}
       {newAgentShown ? (
         <div className="px-2 py-1">
-          {/* On the last roster read "New agent" is held with the OATS acts: in its place, off. Why is
-              said by the notice over the roster (or the page's, beside it), never beside the button. */}
+          {/* "New agent" is held by the ONE rule of every New agent (`newAgentHeld`): on the last roster read,
+              with the OATS acts, and behind an `oats` the plugin does not work with, as the home's is. In its
+              place, off. Why is said by the notice over the roster (or the page's, beside it) and by the
+              home's card, never beside the button. */}
           <Button
             data-testid="oats-new-agent"
-            disabled={oats.stale !== null}
+            disabled={newAgentHeld(oats.stale !== null, cli)}
             onClick={() => {
               if (openNewAgent(navigate, pagesNow.has("souls"))) onNavigate();
             }}

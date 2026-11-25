@@ -53,7 +53,8 @@ const EXPECTED = {
   // the window at a shell), and offers Start… alone. "lost": the row's TITLE (`row`: what it says
   // whole) is "Stopped · <soul> · session lost · tmux", and what it DRAWS in the state's place
   // (`drawn`) is "Lost": the kernel's own word, with no reason after it (the text cut's L17).
-  running: { acts: ["Stop…", "Restart…", "Retire…"], words: ["Working", "Idle"], row: `Working · ${SOUL} · tmux`, drawn: ["Working", "Idle"] },
+  // An agent on tmux that runs reads "Running", never "Working": the kernel says that it runs, and nothing of a turn.
+  running: { acts: ["Stop…", "Restart…", "Retire…"], words: ["Running"], row: `Running · ${SOUL} · tmux`, drawn: ["Running"] },
   stopped: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · tmux`, drawn: ["Stopped"] },
   lost: { acts: ["Start…", "Retire…"], words: ["Stopped"], row: `Stopped · ${SOUL} · session lost · tmux`, drawn: ["Lost"] },
 };

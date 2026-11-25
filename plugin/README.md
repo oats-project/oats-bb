@@ -106,7 +106,10 @@ drawn. The kernel's row names the parent; nothing of bb's is asked. The tree's r
 for all: a cycle is cut at one link, deeper than two steps is drawn at two, and every level is in
 the one order above. Such a row stays what it is: it opens the agent's own page, not a thread; and
 while that page is on screen its parents are open (the page says whose it is:
-`app/roster/open-agent.ts`). A second row of a name the kernel should never list twice is a root of
+`app/roster/open-agent.ts`). The row of what is on screen is MARKED, as bb marks the open
+thread's row: the row of the agent whose own page is open, with or without a thread, and the
+thread-less row whose archived thread is open; with a thread open it is the one row found for
+that thread, never a second row of the same name. A second row of a name the kernel should never list twice is a root of
 its own. `view().roots` is still the tree of the agents on a bb thread alone, for those who read
 threads. The home's list of every agent walks the same tree (`app/home/board.ts`): a thread-less
 agent comes after its parent's rows there.
@@ -250,6 +253,16 @@ header, under the agent's state: on the thread's OATS tab and on the agent's own
 (`app/panel/Panel.tsx`). The outside feature draws it on the archived thread's own row of an agent
 the roster draws on no thread ([Outside OATS](#outside-oats)).
 
+**Whose line it is.** The thread's line carries acts and, as a rule, no name: bb's title over it is
+the agent's name as words, which the provider gives the thread at every start. A person can move
+that title off the name (bb's own Rename and Regenerate title, which the plugin does not take
+away; a title bb wrote from a first message), and the acts would then sit under a name that is
+not the agent's. So the line starts with the agent's NAME whenever bb's title is not exactly it
+(`app/roster/IdentityRow.tsx`; the same name line the archived thread's row carries), and never
+when it is: no name twice. "The name as the provider writes it" is the plugin's
+`instanceDisplayName` and the provider's `threadTitle`: two copies of one rule, held equal by
+`test/roster/title.contract.test.ts`.
+
 **Behind a result** (`app/roster/reading.tsx`). A result that says an agent started, restarted,
 stopped or was retired is true of the agent before the roster the window holds is read again. Until
 it is, the places that say that agent's state (its page, its panel, its thread's line, its
@@ -288,7 +301,11 @@ bb's Delete ends it. The plugin cannot hide those acts. It says what happened, o
 row, on the thread's own line and on the agent's own page, with the one act that mends it.
 
 **The state's word comes first, and it is one of the set**: Needs you, Working, Idle, Stopped,
-Failed, Unreachable, and one more, **Running outside OATS**. After it comes the REASON: two or
+Failed, Unreachable, and one more, **Running outside OATS**. An agent on tmux that runs reads
+**Running** in "Working"'s place, in every place that says its state (`app/roster/status.ts`
+`stateWord`, the one place): the kernel knows that a tmux session runs and nothing of a turn, so
+"Working" would say more than anyone knows. Its state is the same (its mark, its order, its acts,
+its count). After it comes the REASON: two or
 three words, on the thread's line and on the sidebar's row (a row is never three lines). A row's line is STATE · SOUL ·
 REASON · glyph (`app/ui/row-facts.tsx`): when it is short of room the reason shortens with "…", then
 leaves the row (it stays whole in the line's title, on the thread's line and on the agent's page),
@@ -470,6 +487,8 @@ provider's own tests hold its side). A dash is a field the row does not carry, o
 | its thread failed at its start in bb (it never ran: "A thread that failed at its start", below) | false | stopped | lost | - | in "error", failed at its start | Failed | `outside/status-failed-at-start.json` |
 | the kernel cannot reach its session | - | unreachable | - | - | any | Unreachable | (no recording) |
 
+**One read behind** (`model/view.ts` `state`, the outside feature's `messageResumes`). An agent that does not run and that nobody stopped can carry on by a message in its own listed bb thread; which rows those are is the outside feature's one answer (`model/rest.ts` `messageResumes`: a lost session and a home with no harness loaded are among them). From the moment a person sends it bb runs a turn, and the kernel's row says the old thing until OATS is read again. Where bb says such a thread works, bb's word stands: **Working**, never "Stopped · session lost" over bb's own turn. Not after an operator's stop (there the kernel's report, "Running outside OATS", or the warning says it), not on tmux, not where bb lists no thread, and not for a row that answer says no to: it reads as it does on a thread at rest.
+
 What comes after the state's word (the reason, the tone, the acts) is the table at the head of
 this section; this one holds only what the two functions must agree on. One row is the plugin's
 own reading: "its thread failed at its start in bb" has the kernel's four fields of "its session
@@ -551,6 +570,16 @@ with no reload. A check whose answer is the same leaves the card as it is and ca
 again; one that fails says so on the card ("Check failed: …")
 and keeps what was read before. The version is read by a call of the home's own (`app/home/cli.ts`),
 not by a kept query, so that the home knows when a check ends.
+
+**One rule for every New agent** (`newAgentHeld`, `app/workspace/pages.ts`). The sidebar's New
+agent and the home's are held by the same rule, so one is never live where the other is off: off
+while the roster shown is the last one read, and off behind an `oats` the plugin does not work
+with (older, a newer API, a version it cannot tell). The sidebar is on screen before any home is,
+so it reads where the installed `oats` stands itself, the same way, when it is first seen; the
+answer is one for the window, and the home's Check again moves the sidebar's button with the
+home's. While that is not read yet, or its read failed, New agent is on: nothing is known against
+it. The sidebar says nothing beside its button: the home's card, and the notice over the roster,
+say why.
 
 It is one RPC, `homeCli`, which answers picked fields (`version`, `desktopApi`, `state`) from the
 `oats version --json` the server reads once for every feature: no process of its own. An `oats`

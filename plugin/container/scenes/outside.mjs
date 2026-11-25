@@ -332,7 +332,7 @@ export default [
       check(same(rows.ranker, { facts: "Stopped · research-expert · Archived in bb while running: it may still run.", state: "stopped", tone: "warning", lines: 1 }) && /^Stopped\b.*\bmay still run$/.test(rankerDrawn) && !/archived in bb/i.test(rankerDrawn), `${at} a session lost, its thread archived in bb: its row draws "Stopped", then "may still run" in the reason's place, with its mark in the warning tone, on one line; its title says the whole ("Archived in bb while running: it may still run.")`, `${JSON.stringify(rows.ranker)} drawn: ${rankerDrawn}`);
       check(same(rows.flaky, { facts: "Stopped · oats-developer · deleted in bb", state: "stopped", tone: "warning", lines: 1 }), `${at} a session lost, its thread deleted in bb: "Stopped" with its mark in the warning tone, then "deleted in bb"`, JSON.stringify(rows.flaky));
       // Every row's state word is one of the set: "Archived in bb" and "Deleted in bb" are reasons after a state, never states.
-      const SET = ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"];
+      const SET = ["Needs you", "Working", "Running", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS"]; // "Running": an agent on tmux that runs
       check(rows.words.length === 8 && rows.words.every((word) => SET.includes(word)), `${at} every row's state word is one of the set (${SET.join(", ")})`, JSON.stringify(rows.words));
       check(rows.failed?.facts === "Failed · oats-desktop-developer" && rows.unreachable?.facts === "Unreachable · oats-product-expert" && rows.open?.facts === "Stopped · oats-maintainer", `${at} failed, unreachable and stopped on an open thread: the roster's own words, the state and the soul, no reason`, JSON.stringify([rows.failed, rows.unreachable, rows.open]));
       check(!/its bb thread is gone/.test(rows.tree), `${at} no row says "its bb thread is gone"`, rows.tree);
@@ -535,7 +535,7 @@ export default [
           { facts: "Stopped · oats-maintainer · session lost", state: "stopped", tone: null, lines: 1 },
           { facts: "Idle · oats-desktop-developer · not loaded", state: "idle", tone: null, lines: 1 },
           { facts: "Stopped · oats-developer · session lost · tmux", state: "stopped", tone: null, lines: 1 },
-        ]) && rows.words.every((word) => ["Needs you", "Working", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS", "Lost"].includes(word)) && rows.words.filter((word) => word === "Lost").length === 2,
+        ]) && rows.words.every((word) => ["Needs you", "Working", "Running", "Idle", "Stopped", "Failed", "Unreachable", "Running outside OATS", "Lost"].includes(word)) && rows.words.filter((word) => word === "Lost").length === 2,
         `${at} the rows (each with its soul after these words): "Stopped" with no reason (an operator's stop), "Stopped · session lost" (on bb) beside "Stopped · session lost · tmux" (on tmux, "tmux" its glyph's name: one reason word, plain), "Idle · not loaded": no two say the same, the one that is not stopped does not say Stopped, each on one line, and every word drawn in the state's place is one of the set, with "Lost" (a row's own word for a lost session, whose title keeps "Stopped · … · session lost") on exactly the two lost rows`,
         JSON.stringify(rows),
       );

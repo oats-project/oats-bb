@@ -200,7 +200,7 @@ function Pages({ oats, agent, node, thread, tab, failure }: { oats: Roster; agen
             <ReadingLine />
           ) : (
             <>
-              <StatusLine state={status.state} since={line.since} tone={line.tone} markTone={line.markTone} detail={status.state === "needs-you" && claimOf(agent) !== null ? line.reason : line.detail} />
+              <StatusLine state={status.state} word={status.word} since={line.since} tone={line.tone} markTone={line.markTone} detail={status.state === "needs-you" && claimOf(agent) !== null ? line.reason : line.detail} />
               <KernelSays text={status.kernel} bb={status.bb} />
               {/* The kernel's report that it runs outside OATS: its Details, under the state it explains (app/outside). */}
               <OutsideAgentDetails agent={agent} roster={oats} />

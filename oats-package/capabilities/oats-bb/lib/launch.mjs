@@ -77,7 +77,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   if (notOffered !== null) throw fail(notOffered.code, notOffered.message);
   // A pi thread is given four variables at most and no more (lib/project-env.mjs); Claude's
   // whole launch env goes into its settings file.
-  const launchEnv = pi ? piLaunchEnv(input.env, input.pathPrepend, env.PATH, home) : withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
+  const launchEnv = pi ? piLaunchEnv(input.env, input.pathPrepend, env.PATH, home, warn) : withPathPrepend(readLaunchEnv(input.env), input.pathPrepend, env.PATH);
   const unset = pi ? [] : readUnset(input.unset, launchEnv);
   // bb starts `pi` by the PATH the launch gives the thread: one with no pi on it would
   // answer a thread that ends at once.

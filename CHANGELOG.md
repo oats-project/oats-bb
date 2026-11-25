@@ -12,7 +12,8 @@
   identity is in `<home>/.aweb-identity`, received mail and could not send ("current
   directory is not initialized for aw"). A pi launch now carries a fourth name,
   `AWEB_IDENTITY_HOME`, where a capability's entry names with it a path that is the home
-  or inside it, not marked secret; any other value of it is left out as before. The rule
+  or inside it, not marked secret; any other value of it is left out as before, and the
+  launch now says so on its standard error (never the value). The rule
   stays a list of names (now four), since nothing marks a launch env name as holding no
   secret: no other entry of a capability or a launch configuration is carried. The home's
   bb project env therefore holds one more name, written whole at each pi launch and

@@ -532,7 +532,11 @@ below). Everything above holds for it, except what follows. Checked against bb-a
     for a local seat, `<home>/.aweb-identity` for a seat with a global identity through
     a session grant). It is carried by that one name, not marked secret, and only as a
     path that is the home or inside it, written plainly (absolute, no `.` or `..` step):
-    a path of the home is no credential. Any other value of it is left out. Without it
+    a path of the home is no credential. Where the home is reached through a link and
+    the two are written differently, their real paths decide. Any other value of it is
+    left out, and the launch says so once on its standard error, without the value
+    ("AWEB_IDENTITY_HOME is not carried to this pi thread: …"): the agent would
+    otherwise receive mail, fail to send, and nothing would say why. Without it
     a grant seat on pi received its mail and could not send: `aw` finds an identity in
     `.aw` of the directory it runs in, so a local seat's `aw` works from the home either
     way, and a grant seat's identity is not there ("current directory is not initialized

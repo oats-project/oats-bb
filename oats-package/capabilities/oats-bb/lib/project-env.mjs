@@ -25,7 +25,7 @@
 // `claude` by a project PATH) and leaves any other name. No record of it is kept in
 // the home. One project is one home: a project with a second root would hand the env to
 // whatever runs there, and a pi launch refuses it.
-import { accessSync, closeSync, constants, openSync, readSync, statSync } from "node:fs";
+import { accessSync, closeSync, constants, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { delimiter, isAbsolute, join, resolve, sep } from "node:path";
 import { bbClient } from "./bb.mjs";
 import { ProviderError, fail, isObject, someOf } from "./errors.mjs";
@@ -40,17 +40,22 @@ const KERNEL_NAMES = new Set(["OATS_INSTANCE", "OATS_INSTANCE_HOME"]);
 const IDENTITY_HOME = "AWEB_IDENTITY_HOME";
 /** The only names a pi launch ever writes into a bb project's env. */
 export const PI_ENV_NAMES = Object.freeze(["OATS_INSTANCE", "OATS_INSTANCE_HOME", "PATH", IDENTITY_HOME]);
-const PI_ENV_LIST = "OATS_INSTANCE, OATS_INSTANCE_HOME, PATH and AWEB_IDENTITY_HOME";
+const PI_ENV_LIST = `${PI_ENV_NAMES.slice(0, -1).join(", ")} and ${PI_ENV_NAMES[PI_ENV_NAMES.length - 1]}`;
 
-/** Whether `value` is a directory path of the home, as written: an absolute path with no
- *  `.` or `..` step and no doubled or trailing slash, that is the home or inside it. Read as
- *  text: nothing is looked at on disk, and a link is not followed (the variable is handed on
- *  as it is, and what it then names is the home's own). */
+/** Whether `path` is `root` or inside it, as text. */
+const within = (path, root) => path === root || path.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
+
+/** Whether `value` is a directory path of the home: an absolute path written plainly (no
+ *  `.` or `..` step, no doubled or trailing slash) that is the home or inside it, as text
+ *  or, where the two are written differently (a home reached through a link), by the real
+ *  paths of both, as the launch tells its own home (threads.mjs samePath). A path that
+ *  does not exist is judged as text alone. The variable is handed on as it was written. */
 function pathInHome(value, home) {
   if (typeof value !== "string" || typeof home !== "string" || !isAbsolute(home) || /[\0\n\r]/.test(value)) return false;
   if (!isAbsolute(value) || resolve(value) !== value) return false;
-  const root = resolve(home);
-  return value === root || value.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
+  if (within(value, resolve(home))) return true;
+  // Not the home's by its text: by where the two really are, where both can be read.
+  try { return within(realpathSync(value), realpathSync(home)); } catch { return false; }
 }
 
 /** The env a pi launch carries, from the launch input's `env` and `pathPrepend`: at most
@@ -59,7 +64,9 @@ function pathInHome(value, home) {
  *  PATH the provider itself was called with. Never a value out of a launch's env, a PATH
  *  entry included. AWEB_IDENTITY_HOME is carried where a capability's entry names a
  *  directory of `home` with it (pathInHome), not marked secret; any other value of it is
- *  left out, as before it was carried at all.
+ *  left out, as before it was carried at all, and `note` is told so (never the value): a
+ *  seat whose identity is not in the home's `.aw` then receives mail and cannot send, and
+ *  nothing else would say why.
  *
  *  Every other entry is not carried. What becomes of it depends on who asked:
  *  - the kernel's and a capability's (oats.aweb's AWEB_DELIVERY and AWID_REGISTRY_URL come
@@ -69,7 +76,7 @@ function pathInHome(value, home) {
  *    know: refused by name (E_BACKEND_LAUNCH_ENV). A person asked for it and it cannot
  *    reach pi; left out, it would look like a setting that works.
  *  The value is never part of a message. */
-export function piLaunchEnv(env, pathPrepend, ambientPath, home = null) {
+export function piLaunchEnv(env, pathPrepend, ambientPath, home = null, note = () => {}) {
   if (env !== undefined && env !== null && !Array.isArray(env)) throw fail("E_BACKEND_LAUNCH_ENV", "the launch env must be a list of {name, value, source}");
   const out = {};
   const seen = new Set();
@@ -95,7 +102,10 @@ export function piLaunchEnv(env, pathPrepend, ambientPath, home = null) {
     }
     // OATS's own additions: left out, whatever they hold (a secret mark included: it is
     // then simply not written anywhere).
-    if (ownSource) continue;
+    if (ownSource) {
+      if (entry.name === IDENTITY_HOME) note(`${IDENTITY_HOME} is not carried to this pi thread: it is carried only where a capability names with it, not marked secret, a path that is the home or inside it, written plainly. The agent's aw will look for its identity in the directory it runs in (the home's .aw); a seat whose identity is elsewhere, as a grant seat's is, will receive its mail and not be able to send`);
+      continue;
+    }
     throw fail("E_BACKEND_LAUNCH_ENV", `the launch sets ${entry.name}${from}, and the bb backend carries nothing of a launch's environment to a pi thread but OATS_INSTANCE, OATS_INSTANCE_HOME, PATH and a capability's AWEB_IDENTITY_HOME: bb would keep it in its database, where a credential must never land. Remove it from the launch; what pi needs of this host belongs in the bb server's own environment`);
   }
   return withPathPrepend(out, pathPrepend, ambientPath);

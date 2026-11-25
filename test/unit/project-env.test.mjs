@@ -2,11 +2,11 @@
 // (contract r23, A12(2); AWEB_IDENTITY_HOME: oats-bb#87). Written whole at every pi launch, removed at retire and when the
 // home leaves bb.
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { piPathRefusal } from "../../oats-package/capabilities/oats-bb/lib/project-env.mjs";
-import { PATH_WITHOUT_BWRAP, UNREACHABLE, VERSION, call, fakeBackend, fakeBbIn, piModelRow, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
+import { PATH_WITHOUT_BWRAP, UNREACHABLE, VERSION, call, callSeen, fakeBackend, fakeBbIn, piModelRow, projectRow, runBin, scratch, threadRow } from "../fixtures/harness.mjs";
 
 // bb-app 0.50.1's answer to every `bb machine env` command: the names, never a value.
 const envList = (names) => ({ builtInGit: { status: "not logged in" }, variables: names.map((name) => ({ name, value: null, secret: true, note: null })), inheritedVariables: [] });
@@ -38,7 +38,9 @@ async function setup(t, script = {}) {
   // `path`: the PATH oats (and so the provider) runs with, for the tests of what a pi
   // thread's PATH is composed of. It always needs a node: the fake bb is a node script.
   const run = (extra, { path } = {}) => call("launch", input(extra), { settings: backend.settings(), bb, ...(path ? { env: { PATH: path } } : {}) });
-  return { dir, home, backend, bb, run, withPi, withoutPi };
+  /** The same launch, with what the command wrote beside its answer. → { doc, stderr }. */
+  const seen = (extra) => callSeen("launch", input(extra), { settings: backend.settings(), bb });
+  return { dir, home, backend, bb, run, seen, withPi, withoutPi };
 }
 
 test("a pi launch writes its env into the home's bb project, each value on stdin, before the spawn", async (t) => {
@@ -120,6 +122,8 @@ test("only OATS_INSTANCE, OATS_INSTANCE_HOME, PATH and a capability's AWEB_IDENT
 // pi thread and could not send: the variable that says where it is was left out.
 const IDENTITY = (value, extra = {}) => entry("AWEB_IDENTITY_HOME", value, { source: "capability", capability: "oats.aweb", ...extra });
 const identitySets = (bb) => envCalls(bb).filter(([call]) => call.startsWith("set AWEB_IDENTITY_HOME ")).map(([, stdin]) => stdin);
+// What a launch says, beside its answer, of an identity home it does not carry: never the value.
+const NOT_CARRIED = "oats bb: warning: AWEB_IDENTITY_HOME is not carried to this pi thread: it is carried only where a capability names with it, not marked secret, a path that is the home or inside it, written plainly. The agent's aw will look for its identity in the directory it runs in (the home's .aw); a seat whose identity is elsewhere, as a grant seat's is, will receive its mail and not be able to send\n";
 
 for (const [name, where] of [
   ["a grant seat's identity home", (home) => join(home, ".aweb-identity")],
@@ -128,9 +132,10 @@ for (const [name, where] of [
   ["the home itself", (home) => home],
 ]) {
   test(`AWEB_IDENTITY_HOME reaches a pi thread where a capability names a directory of the home with it (${name}): on stdin, with the kernel's two, before the spawn`, async (t) => {
-    const { home, bb, run } = await setup(t);
-    const answer = await run({ env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home), IDENTITY(where(home))] });
+    const { home, bb, seen } = await setup(t);
+    const { doc: answer, stderr } = await seen({ env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home), IDENTITY(where(home))] });
     assert.equal(answer.ok, true, JSON.stringify(answer));
+    assert.equal(stderr, "", "nothing to say: it is carried");
     assert.deepEqual(envCalls(bb), [
       ["list --project proj_a --json", ""],
       ["set OATS_INSTANCE --project proj_a --json", "dev-a"],
@@ -160,15 +165,46 @@ for (const [name, value, extra] of [
   ["a value marked secret", (home) => join(home, ".aw"), { secret: true }],
   ["the kernel as its source", (home) => join(home, ".aw"), { source: "kernel", capability: undefined }],
 ]) {
-  test(`AWEB_IDENTITY_HOME is left out, as before it was carried, where it is not a capability's plain path inside the home (${name}): the launch goes on, and it reaches bb in no form`, async (t) => {
-    const { home, bb, run } = await setup(t);
-    const answer = await run({ env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home), IDENTITY(value(home), extra)] });
+  test(`AWEB_IDENTITY_HOME is left out, as before it was carried, where it is not a capability's plain path inside the home (${name}): the launch goes on and says so beside its answer, and it reaches bb in no form`, async (t) => {
+    const { home, bb, seen } = await setup(t);
+    const { doc: answer, stderr } = await seen({ env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home), IDENTITY(value(home), extra)] });
     assert.equal(answer.ok, true, JSON.stringify(answer));
+    // Said once, on the command's standard error (a launch result has no place for a warning), and never with the value:
+    // a grant seat would otherwise receive its mail, not be able to send, and nothing would say why.
+    assert.equal(stderr, NOT_CARRIED);
     assert.deepEqual(identitySets(bb), []);
     assert.deepEqual(envCalls(bb).map(([call]) => call), ["list --project proj_a --json", "set OATS_INSTANCE --project proj_a --json", "set OATS_INSTANCE_HOME --project proj_a --json"]);
     for (const c of bb.calls()) assert.ok(!c.argv.includes("AWEB_IDENTITY_HOME") && !JSON.stringify(c).includes("s3cret-value"), JSON.stringify(c.argv));
   });
 }
+
+test("a home reached through a link: an identity home written by the other name of the home is still the home's, by where the two really are; one that is really elsewhere is not", async (t) => {
+  const { dir, home, bb, seen } = await setup(t);
+  mkdirSync(join(home, ".aweb-identity"));
+  const link = join(dir, "home-by-another-name");
+  symlinkSync(home, link);
+  // The launch names the home by its real path, and the capability by the link (or the other way round, below).
+  const byLink = await seen({ env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", home), IDENTITY(join(link, ".aweb-identity"))] });
+  assert.equal(byLink.doc.ok, true, JSON.stringify(byLink.doc));
+  assert.equal(byLink.stderr, "");
+  assert.deepEqual(identitySets(bb), [join(link, ".aweb-identity")], "handed on as it was written");
+  const other = await setup(t);
+  mkdirSync(join(other.home, ".aweb-identity"));
+  const otherLink = join(other.dir, "home-by-another-name");
+  symlinkSync(other.home, otherLink);
+  const homeByLink = await other.seen({ home: otherLink, promptFile: join(otherLink, "TASK.md"), env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", otherLink), IDENTITY(join(other.home, ".aweb-identity"))] });
+  assert.equal(homeByLink.doc.ok, true, JSON.stringify(homeByLink.doc));
+  assert.equal(homeByLink.stderr, "");
+  assert.deepEqual(identitySets(other.bb), [join(other.home, ".aweb-identity")]);
+  // A link beside the home that leads out of it: really elsewhere, and left out; so is a path inside the home by its text that does not exist, judged as text (it is carried).
+  const outside = await setup(t);
+  mkdirSync(join(outside.dir, "elsewhere"));
+  symlinkSync(join(outside.dir, "elsewhere"), join(outside.dir, "looks-like-it"));
+  const led = await outside.seen({ env: [entry("OATS_INSTANCE", "dev-a"), entry("OATS_INSTANCE_HOME", outside.home), IDENTITY(join(outside.dir, "looks-like-it"))] });
+  assert.equal(led.doc.ok, true);
+  assert.equal(led.stderr, NOT_CARRIED);
+  assert.deepEqual(identitySets(outside.bb), []);
+});
 
 test("a home whose path is written with a trailing slash: its identity home is still a directory of it", async (t) => {
   const { home, bb, run } = await setup(t);

@@ -319,11 +319,13 @@ the real bb and pi by `test/contract/pi.test.mjs`.
   value of an env entry), and `AWEB_IDENTITY_HOME`, where an entry of source
   `capability`, not marked secret, names with it a path that is the launch's `home` or
   inside it, written plainly (absolute, no `.` or `..` step, no doubled or trailing
-  slash): where the agent's messaging identity is (oats-bb#87). They go into the env of the home's bb project (`bb machine env
+  slash), by its text or, where both exist, by the real paths of the two: where the
+  agent's messaging identity is (oats-bb#87). They go into the env of the home's bb project (`bb machine env
   set <NAME> --project <id>`, the value on stdin, never an argument), which bb keeps in
   its database. Every other entry is not carried: one of source `kernel` or `capability`
   is left out, a secret mark on it included, and so is an `AWEB_IDENTITY_HOME` that is
-  not such a path; one of a launch configuration (its literal,
+  not such a path, of which the launch warns on its standard error (the name, never the
+  value); one of a launch configuration (its literal,
   `launch-config`, or its secret reference), or of a source the provider does not know,
   refuses the launch by name (`E_BACKEND_LAUNCH_ENV`). A
   `PATH` with no executable `pi` on it, or with pi and not the program pi's script asks

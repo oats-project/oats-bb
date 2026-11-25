@@ -54,10 +54,31 @@ describe("the harnesses the bb session provider declares", () => {
   });
 
   // A deployment that does not have the bb session provider at all: the kernel knows no capability `oats.bb`.
-  const ABSENT = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace' } });
+  // RECORDED: the real kernel's answer on the real run's second deployment (test/fixtures/spawn/README.md).
+  const ABSENT = readFileSync(join(process.cwd(), "test/fixtures/spawn/capabilities-show-bb-absent.json"), "utf8");
   it("a deployment with NO bb session provider is an answer, not a failed read: no harness, and `provider: false`", async () => {
     backend = await startBackend({ verbs: { "capabilities show": { stdout: ABSENT } } });
     expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", provider: false });
+  });
+
+  it("the same code for a provider the workspace DOES hold is a failed read, told by what the refusal names, not by its sentence: the form's read and the dialogs' are refused alike", async () => {
+    // SHAPED, from the kernel's source (OATS 0.70.5 lib/capability-show.mjs `capabilitySource`): the two other things
+    // it answers E_CAPABILITY_UNKNOWN for, with the `details` it gives each. The sentences are reworded here on
+    // purpose: nothing reads them.
+    const others = [
+      { message: "(a package that is not in the lock yet)", details: { name: "oats.bb", package: "oats.bb" } },
+      { message: "(a member with no such capability)", details: { name: "oats.bb", member: "github.com/oats-project/oats-bb" } },
+    ];
+    for (const error of others) {
+      backend = await startBackend({ verbs: { "capabilities show": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", ...error } }), exit: 1 } } });
+      await expect(backend.rpc("spawnHarnesses"), error.message).rejects.toThrow(`E_CAPABILITY_UNKNOWN: ${error.message}`);
+      await expect(backend.rpc("startCheck", { instance: "kernel-fix-developer" }), error.message).rejects.toThrow(`E_CAPABILITY_UNKNOWN: ${error.message}`);
+      await backend.dispose();
+    }
+    // And the true case with its sentence reworded is still the answer: the code and the structure decide.
+    backend = await startBackend({ verbs: { "capabilities show": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message: "(reworded)", details: { name: "oats.bb" } } }), exit: 1 } } });
+    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", provider: false });
+    expect(await backend.rpc("startCheck", { instance: "kernel-fix-developer" })).toMatchObject({ harnesses: [] });
   });
 
   it("there a preview and a spawn name NO backend, no mode and no harness: the kernel decides, as `oats spawn <soul>` does; a harness named is refused before any process", async () => {

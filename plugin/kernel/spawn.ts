@@ -7,7 +7,7 @@ import { formFacts, type FormFacts } from "../model/spawn.js";
 import type { SpawnSummary } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
-import { codes, err, ok, type Result } from "./result.js";
+import { codes, err, ok, type KernelError, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 import { withTaskFile } from "./task-file.js";
 
@@ -245,18 +245,32 @@ export function checkModel(model: string): Result<string> {
   return model !== "" && model.length <= 256 && !model.startsWith("-") && !/[\0\n\r]/.test(model) ? ok(model) : err(codes.invalidInput, "a model is one line of up to 256 characters that does not start with a dash");
 }
 
+/**
+ * Whether a refusal of `oats capabilities show oats.bb` says that the deployment has NO bb session provider: the
+ * kernel's code `E_CAPABILITY_UNKNOWN` with nothing named that the capability is in. The kernel answers that code for
+ * three things (OATS 0.70.5 `lib/capability-show.mjs`), told apart by the STRUCTURE of its `details`, never by its
+ * sentence:
+ * - the workspace's catalog holds no such capability: `details: { name }` alone (recorded:
+ *   `test/fixtures/spawn/capabilities-show-bb-absent.json`): ABSENT;
+ * - the catalog holds it, in a package that is not in the lock yet (`details.package`: a workspace one `oats sync`
+ *   behind): the provider is there, the read failed;
+ * - the catalog holds it, in a member that has no such capability (`details.member`): likewise.
+ * The ONE predicate, for the New agent form and for the dialogs (server/lifecycle.ts reads the same answer).
+ */
+export const providerAbsent = (error: KernelError): boolean => error.code === "E_CAPABILITY_UNKNOWN" && error.within === undefined;
+
 /** Spawn's commands. */
 export const verbs = (oats: Runner) => ({
   /** The harnesses the bb session provider declares, for the New agent form and the Start and Restart dialogs. */
   /**
-   * `absent`: the deployment does not have the bb session provider at all (the kernel knows no capability `oats.bb`:
-   * `E_CAPABILITY_UNKNOWN`). That is an answer, not a failed read: there is then no harness to choose and no bb
-   * thread to spawn on. Any other failure of the read is a failure.
+   * `absent`: the deployment does not have the bb session provider at all (`providerAbsent`). That is an answer, not
+   * a failed read: there is then no harness to choose and no bb thread to spawn on. Any other failure of the read is
+   * a failure, with the kernel's sentence.
    */
   spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null; absent: boolean }>> => {
     const read = await oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal);
     if (read.ok) return ok({ ...read.value, absent: false });
-    return read.error.code === "E_CAPABILITY_UNKNOWN" ? ok({ harnesses: [], version: null, absent: true }) : read;
+    return providerAbsent(read.error) ? ok({ harnesses: [], version: null, absent: true }) : read;
   },
 
   /**

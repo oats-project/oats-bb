@@ -203,6 +203,10 @@ while its Terminal tab has the focus.
   dialog's primary button (Start, Restart), never on a field. The Harness field of Start and Restart is the plugin's own choice (the New
   agent form's `Choice`: a button that opens a list), never the browser's select; Escape in its
   open list closes the list alone.
+  Its list is the bb session provider's. On a deployment that does not hold that provider (its
+  agents all run on tmux; the kernel says E_CAPABILITY_UNKNOWN) the dialogs open all the same, with
+  no harness and no model to choose, and a tmux agent is started, resumed and restarted
+  (`server/lifecycle.ts`). Any other failure of that read stays a refusal.
 - **Stop** and **Retire** read the kernel's plan. In view: the consequence line, and the facts that are a reason not to confirm, set
   apart, only when true. For a stop that is ONE fact, said from bb's word on its thread and never from the plan's
   `midTask` (reported activity: true for every session that runs, an idle one too): "<Name> ·

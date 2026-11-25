@@ -1,7 +1,7 @@
 # The lifecycle's recorded answers
 
 `../README.md` says where each file of this directory comes from and how the recording is made
-(`container/real/`). Two more, recorded by the lifecycle's own part of the real run
+(`container/real/`). Two, recorded by the lifecycle's own part of the real run
 (`container/real/parts/lifecycle.mjs`), where the acts go through their dialogs in the browser:
 
 - `stop-plan-no-recursive.json`: `oats instance stop dialogs-1-helper --plan --no-recursive --json`,
@@ -11,7 +11,13 @@
   under its plan's revision, as the Retire dialog asks it with "Also delete the worktree" on
   (`retention.worktree: "removed"`, `worktreeRemoved: true`).
 
-Recorded on 2026-11-22 with the versions `../README.md` names, the same one substitution (the
+- `capabilities-show-no-provider.json`: what `oats capabilities show oats.bb --json` answers in a
+  workspace whose catalog has NO `oats.bb` (a deployment whose agents all run on tmux): exit 1 and,
+  on stdout, `ok: false` with `E_CAPABILITY_UNKNOWN`. RECORDED on 2026-11-25 with OATS 0.70.5, in
+  such a workspace, with no edit (it names no path). The Start and Restart dialogs' first read
+  must not fail on it, and on it alone (`test/lifecycle/server.test.ts`).
+
+The two above were recorded on 2026-11-22 with the versions `../README.md` names, the same one substitution (the
 paths), and no other edit. Neither is a default answer of the fake (`verbs.json`): a test names
 the file for the verb it asks.
 

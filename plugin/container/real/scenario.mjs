@@ -617,7 +617,7 @@ async function missingShots(scene, { instance, soul }) {
     const page = await viewPage(browser, view, at);
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
-      const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return /Retire…/.test(t) ? t : ""; })()`, 30);
+      const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return /Retire…/.test(t) && /deleted in bb/.test(t) ? t : ""; /* what bb did to its thread is bb's answer by id, which comes after the roster's */ })()`, 30);
       check(Boolean(line) && /deleted in bb/.test(line) && !/thread missing/.test(line) && /Start…/.test(line) && /Retire…/.test(line), `${at}: the soul's page says of ${instance} what its row says, "deleted in bb", with Start… and Retire… (each opens its dialog)`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);

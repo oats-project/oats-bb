@@ -30,7 +30,16 @@ export type HarnessOption = { id: string; label: string };
  * declared): the field is then not drawn and no `--harness` is passed. `hostId` is the machine
  * bb's model list is asked of.
  */
-export type Harnesses = { status: "loading" | "ready" | "failed"; options: HarnessOption[]; choice: boolean; hostId: string | null; error: string | null; retry(): void };
+export type Harnesses = {
+  status: "loading" | "ready" | "failed";
+  options: HarnessOption[];
+  choice: boolean;
+  hostId: string | null;
+  error: string | null;
+  /** false: the deployment has no bb session provider: a spawn there is not a bb thread (nothing of bb's is offered for it: no harness, no model list). */
+  provider: boolean;
+  retry(): void;
+};
 /** The first entry of the harness field: selected at the start, and nothing is passed while it is. */
 export const SOUL_DEFAULT = "The soul's default";
 /** The first entry of a Start or Restart's harness field. */
@@ -47,6 +56,7 @@ export function useHarnesses(): Harnesses {
     options: ids.map((id) => ({ id, label: harnessLabel(id) })),
     choice: ids.length > 1,
     hostId: read.data?.hostId ?? null,
+    provider: read.data?.provider !== false,
     error: read.status === "error" ? read.error : null,
     retry: read.retry,
   };

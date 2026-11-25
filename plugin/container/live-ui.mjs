@@ -582,6 +582,7 @@ const BUSY_SAY_FILE = join(homedir(), "mock", "say.json");
 function busyStage() {
   const made = []; // the threads this stage made: { instance, id }
   const away = []; // the fixtures' own threads it archived for its length
+  const limited = []; // the host whose concurrency limit it raised
   const set = () => JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/status.json"), "utf8"));
   const rowsOf = (status) => status.agents.flatMap((group) => group.instances);
   return {
@@ -591,6 +592,8 @@ function busyStage() {
     tellsAThread: true,
     enter: async ({ threads }) => {
       const started = Date.now();
+      // bb's own request for a star (after five prompts; the chat alone is ten) is no part of any image.
+      tell("plugin", "disable", "bb--github-star");
       const status = set();
       const onBb = rowsOf(status).filter((row) => row.backend === "bb" && typeof row.session?.threadId === "string");
       const source = threads.get("thr_harvest"); // an idle fixture thread: its one turn was answered
@@ -644,26 +647,6 @@ function busyStage() {
       }
       existing = list();
       const forkedAt = Date.now();
-      mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
-      writeFileSync(BUSY_HOLD_FILE, "");
-      {
-        const project = listOf(bbJson("project", "list"), "projects")[0];
-        const root = (project.sources ?? []).find((each) => each.path)?.path;
-        for (const row of working) {
-          const title = providerTitle(row.instance);
-          if (!existing.some((thread) => thread.title === title)) bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", title, "--prompt", `hello MOCK-HOLD:${BUSY_HOLD}`, "--json");
-        }
-        existing = list();
-      }
-      const heldMade = Date.now();
-      // The held turns are WAITED for: bb shows each of those threads active. (Before the failed starts: nothing is left
-      // to start once the harness is taken away.)
-      const heldIds = new Map(working.map((row) => [row.instance, existing.find((thread) => thread.title === providerTitle(row.instance))?.id]));
-      {
-        const deadline = Date.now() + 180_000;
-        while (Date.now() < deadline && working.some((row) => statusNow(heldIds.get(row.instance)) !== "active")) await sleep(2000);
-      }
-      const heldAt = Date.now();
       // FAILED AT ITS START: the set's row of such an agent is a lost session's; what says "failed" is bb's own record
       // of the thread (an error and never a turn). So its thread is made to fail at its start: a model the harness
       // cannot start with (TRIED HERE: a provider whose harness is not installed). What bb then holds of each is said.
@@ -672,7 +655,7 @@ function busyStage() {
         const root = (project.sources ?? []).find((each) => each.path)?.path;
         const wanted = failedAtStart.filter((instance) => !existing.some((thread) => thread.title === providerTitle(instance)));
         if (wanted.length > 0) {
-          // Nothing is left to start (the chat is had, the held turns run): the harness is taken away for the spawns.
+          // Nothing waits to start (the chat is had, no turn is held yet): the harness is taken away for the spawns.
           // The model is NAMED: with none, bb asks the harness for its default and refuses the spawn (HTTP 503) when
           // it cannot (seen in this stage's fifth look).
           const claude = realpathSync(execFileSync("sh", ["-c", "command -v claude"], { encoding: "utf8" }).trim());
@@ -696,6 +679,33 @@ function busyStage() {
         }
       }
       const failedMade = Date.now();
+      // bb holds a new turn in line once as many threads run as the host has processors (its own "concurrency limit":
+      // two in this container), and everything spawned after waits behind it: the limit is raised for the stage's
+      // length to what the busy set's working agents need, and put back to bb's own when the stage leaves.
+      const machines = bbJson("machine", "list");
+      const host = (Array.isArray(machines) ? machines : (machines.machines ?? machines.hosts ?? machines.items ?? []))[0]?.id;
+      if (typeof host !== "string") throw new Error("live-ui: bb lists no machine to raise the concurrency limit of");
+      bb("concurrency-limit", "host", host, String(working.length + 4));
+      limited.push(host);
+      mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
+      writeFileSync(BUSY_HOLD_FILE, "");
+      {
+        const project = listOf(bbJson("project", "list"), "projects")[0];
+        const root = (project.sources ?? []).find((each) => each.path)?.path;
+        for (const row of working) {
+          const title = providerTitle(row.instance);
+          if (!existing.some((thread) => thread.title === title)) bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", title, "--prompt", `hello MOCK-HOLD:${BUSY_HOLD}`, "--json");
+        }
+        existing = list();
+      }
+      const heldMade = Date.now();
+      // The held turns are WAITED for: bb shows each of those threads active.
+      const heldIds = new Map(working.map((row) => [row.instance, existing.find((thread) => thread.title === providerTitle(row.instance))?.id]));
+      {
+        const deadline = Date.now() + 180_000;
+        while (Date.now() < deadline && working.some((row) => statusNow(heldIds.get(row.instance)) !== "active")) await sleep(2000);
+      }
+      const heldAt = Date.now();
       existing = list();
       const byInstance = new Map();
       for (const row of onBb) {
@@ -727,11 +737,12 @@ function busyStage() {
       });
       const total = rowsOf(status).length;
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === total, 60);
-      console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; the bb threads with no turn made as idle forks in ${Math.round((forkedAt - chatted) / 1000)} s; ${working.length} threads spawned with a held turn in ${Math.round((heldMade - forkedAt) / 1000)} s and all active after ${Math.round((heldAt - heldMade) / 1000)} more s; ${failedAtStart.length} threads failed at their start in ${Math.round((failedMade - heldAt) / 1000)} s; ${Math.round((Date.now() - started) / 1000)} s in all`);
+      console.log(`NOTE BUSY the stage's start: the busy chat's ${chat.turns.length} turns in ${Math.round((chatted - started) / 1000)} s; the bb threads with no turn made as idle forks in ${Math.round((forkedAt - chatted) / 1000)} s; ${failedAtStart.length} threads failed at their start in ${Math.round((failedMade - forkedAt) / 1000)} s; ${working.length} threads spawned with a held turn in ${Math.round((heldMade - failedMade) / 1000)} s and all active after ${Math.round((heldAt - heldMade) / 1000)} more s; ${Math.round((Date.now() - started) / 1000)} s in all`);
     },
     leave: async () => {
       // The held turns are answered, and every thread this stage made is archived: no later stage sees one.
       rmSync(BUSY_HOLD_FILE, { force: true });
+      for (const host of limited.splice(0)) tell("concurrency-limit", "host", host, "auto");
       const ids = made.splice(0).map((thread) => thread.id);
       const deadline = Date.now() + 120_000;
       const list = () => listOf(bbJson("thread", "list"), "threads");
@@ -745,6 +756,9 @@ function busyStage() {
       // And the fixtures' own threads are back, for the stages after this one.
       const kept = away.splice(0).filter((id) => tell("thread", "unarchive", id).startsWith("(bb thread unarchive failed"));
       check(kept.length === 0, "BUSY the fixtures' own threads are put back when the stage leaves", kept.join(" | "));
+      // And the fake oats answers the fixtures again: the next stage starts from their roster, read.
+      fake();
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === 8 && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper"), 60);
     },
   };
 }

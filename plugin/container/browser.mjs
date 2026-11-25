@@ -130,6 +130,10 @@ export async function launchBrowser({ chromium = "chromium", out, base }) {
         await cdp("Input.dispatchKeyEvent", { type, ...event });
         await cdp("Input.dispatchKeyEvent", { type: "keyUp", ...event });
       },
+      /** Turns the mouse wheel over a point of the page, as a person scrolls what is under the pointer (`deltaY` < 0: up). */
+      wheel: async (x, y, deltaY) => {
+        await cdp("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY });
+      },
       /**
        * Holds bb's modifiers down ("Control+Shift"), as a person does to see bb's key hints, until
        * the function it returns is called (the keys are let go, last first).
@@ -140,6 +144,7 @@ export async function launchBrowser({ chromium = "chromium", out, base }) {
         for (const name of names) {
           held |= MODIFIERS[name].bit;
           await cdp("Input.dispatchKeyEvent", { type: "rawKeyDown", key: name, code: MODIFIERS[name].code, windowsVirtualKeyCode: MODIFIERS[name].vk, modifiers: held });
+          await new Promise((resolve) => setTimeout(resolve, 1200)); // a person's hand: one key, then the next (bb shows its hints for a key that is HELD)
         }
         return async () => {
           for (const name of [...names].reverse()) {

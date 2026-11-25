@@ -1091,9 +1091,14 @@ export default [
       await page.shot(`busy-${viewport.name}-chat`, { plugin: !viewport.mobile });
       // Its start: the first message and the first long answer (a list).
       const first = chat.turns[0].agent.slice(0, 40);
-      // bb draws a long conversation from its end: its scroller is taken to the top (again, while older messages load) until the first answer is drawn.
+      // bb draws a long conversation from its end: the wheel is turned up over it, as a person does, until its first answer is drawn.
       const find = (text) => `(() => { const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let node; while ((node = walker.nextNode())) if (node.textContent.includes(${JSON.stringify(text)})) return node.parentElement; return null; })()`;
-      const top = await page.until(`(() => { const found = ${find(first)}; if (found) { found.scrollIntoView({ block: "start" }); const box = found.getBoundingClientRect(); return box.top >= 0 && box.top < window.innerHeight ? "1" : ""; } let up = ${find(last)}; while (up && !(up.scrollHeight > up.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(up).overflowY))) up = up.parentElement; if (up) up.scrollTop = 0; return ""; })()`, 30);
+      const over = JSON.parse(await page.evaluate(`JSON.stringify((() => { const box = ${find(last)}?.getBoundingClientRect(); return box ? { x: Math.round(box.left + 20), y: Math.round(Math.min(box.top + 10, window.innerHeight * 0.5)) } : { x: Math.round(window.innerWidth * 0.6), y: Math.round(window.innerHeight * 0.5) }; })())`));
+      let top = "";
+      for (let turn = 0; turn < 60 && top !== "1"; turn += 1) {
+        await page.wheel(over.x, over.y, -1500);
+        top = (await page.until(`(() => { const found = ${find(first)}; if (!found) return ""; found.scrollIntoView({ block: "start" }); const box = found.getBoundingClientRect(); return box.top >= 0 && box.top < window.innerHeight ? "1" : ""; })()`, 1)) ?? "";
+      }
       check(top === "1", `${at} the busy chat's first answer is on the page, as the mock model said it`, "the first answer's opening words are not on the screen");
       await page.shot(`busy-${viewport.name}-chat-start`, { plugin: !viewport.mobile });
       const chip = await page.until(visible(testId("oats-open-panel")), 30);

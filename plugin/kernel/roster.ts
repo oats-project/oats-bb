@@ -118,7 +118,6 @@ function outsideOf(source: z.output<typeof row>, features: readonly string[]): {
   return report === null ? {} : { outsideOats: report };
 }
 
-/** The roster's instances, in the kernel's order. */
 /** What a row says of its agent's board, only where this kernel lists the feature: that it has one (a fact or an open question), and that it asks. */
 function boardOf(board: unknown, features: readonly string[]): { hasBoard?: true; boardAsks?: true } {
   const read = features.includes(BOARD_FEATURE) ? boardData(board) : null;
@@ -126,6 +125,7 @@ function boardOf(board: unknown, features: readonly string[]): { hasBoard?: true
   return read.questions.length > 0 ? { hasBoard: true, boardAsks: true } : { hasBoard: true };
 }
 
+/** The roster's instances, in the kernel's order. */
 export function parseStatus(document: unknown): Result<Status> {
   const parsed = shaped(roster, document, "oats status");
   if (!parsed.ok) return parsed;

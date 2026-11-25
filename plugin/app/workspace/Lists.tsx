@@ -104,7 +104,7 @@ function Servers({ machines }: { machines: readonly Result<"machines">["machines
           <li key={machine.id} data-testid="oats-machine-row" className={ROW}>
             <span className="min-w-0 break-words font-semibold">{shown(machine.id)}</span>
             {machine.route === null ? null : <p className="break-all text-xs text-muted-foreground">{shown(machine.route)}</p>}
-            {machine.note === null ? null : <p className="break-words text-xs">{shown(machine.note)}</p>}
+            {machine.folder === null ? null : <p className="break-words text-xs">{shown(machine.folder)}</p>}
           </li>
         ))}
       </ul>

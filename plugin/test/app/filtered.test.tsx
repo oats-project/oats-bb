@@ -70,14 +70,14 @@ test("the home: what bb says an agent asks (its title, its choices) and an agent
   expect(slot.getAllByTestId("oats-reply-text").map((box) => (box as HTMLTextAreaElement).placeholder)).toContain(`Write to Flaky${GONE}ci developer…`);
 });
 
-test("the machines page: a server's id, its route and its note are each one filtered line", async () => {
+test("the machines page: a server's id, its route and its folder are each one filtered line", async () => {
   const machines = [
-    { id: "falcon", route: null, isThisMachine: true, note: null },
-    { id: `dev${BIDI}box`, route: "ssh://joan:pw@devbox.invalid", isThisMachine: false, note: "workspace /srv/oats\n2 saved instance routes" },
+    { id: "falcon", route: null, isThisMachine: true, label: null, folder: null },
+    { id: `dev${BIDI}box`, route: "ssh://joan:pw@devbox.invalid", isThisMachine: false, label: null, folder: "/srv/oats\nmore" },
   ];
   const slot = await page("machines", "", handlers({ machines: () => ({ machines }) }));
   const row = await slot.findByTestId("oats-machine-row");
-  expect(Array.from(row.children).map((part) => part.textContent)).toEqual([`dev${GONE}box`, "[withheld]", "workspace /srv/oats 2 saved instance routes"]);
+  expect(Array.from(row.children).map((part) => part.textContent)).toEqual([`dev${GONE}box`, "[withheld]", "/srv/oats more"]);
 });
 
 test("the thread's row: an agent's question with a character that is no text is drawn with U+FFFD; its soul and its alias are not drawn there", async () => {

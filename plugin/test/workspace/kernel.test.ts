@@ -67,14 +67,41 @@ describe("the pages' verbs", () => {
     expect(core?.origin).toMatch(/^package oats\.framework v/);
     expect(core?.souls).toBe(souls.value.souls.filter((soul) => soul.capabilities.includes("oats.core")).length);
     expect(core?.souls).toBeGreaterThan(1);
-    expect(Object.keys(rows[0]!).sort()).toEqual(["description", "id", "origin", "souls"]);
+    expect(Object.keys(rows[0]!).sort()).toEqual(["description", "id", "layer", "origin", "repoOnly", "souls", "source", "version"]);
+    // Who made it, the core place it fills, and whether it is kept to its own repository: the kernel's own fields.
+    const row = (id: string) => { const { source, version, layer, repoOnly } = rows.find((each) => each.id === id)!; return { source, version, layer, repoOnly }; };
+    expect(row("oats.aweb")).toEqual({ source: { kind: "package", label: "oats.aweb" }, version: "1.43.0", layer: "messaging", repoOnly: false });
+    expect(row("oats.okf")).toMatchObject({ layer: "knowledge" });
+    // A capability of the workspace's own repository is "workspace"'s; a private one is kept to its repository.
+    expect(row("oats.build")).toEqual({ source: { kind: "member", label: "workspace" }, version: "4.0.2", layer: null, repoOnly: false });
+    expect(row("oats.desktop-ui")).toMatchObject({ repoOnly: true });
+  });
+
+  it("souls: beside the page's own fields, where each is defined, what its agents start with, its teams (the default first) and why it has each capability", async () => {
+    const answer = await oats.souls();
+    expect(answer.ok).toBe(true);
+    if (!answer.ok) return;
+    const soul = (name: string) => answer.value.souls.find((each) => each.name === name)!;
+    expect(soul("code-reviewer")).toMatchObject({ shortName: "code-reviewer", source: { kind: "member", label: "workspace" }, harness: "pi", model: "gpt-6-astra", teams: [{ label: "oats", isDefault: true }] });
+    expect(soul("code-reviewer").why).toMatchObject({ "oats.aweb": "workspace", "oats.code-review": "soul" });
+    // A package soul: its group is the package with its version, its own name is the name without the package.
+    expect(soul("oats.okf/knowledge-harvester")).toMatchObject({ shortName: "knowledge-harvester", source: { kind: "package", label: "oats.okf 6.2.0" } });
   });
 
   it("teams: label, id and default; an unmapped team has no id", async () => {
     const answer = await oats.teams();
     expect(answer).toEqual({
       ok: true,
-      value: { teams: [{ label: "oats", team: "default:oats.aweb.ai", isDefault: true }, { label: "docs", team: null, isDefault: false }] },
+      value: {
+        teams: [
+          { label: "oats", team: "default:oats.aweb.ai", isDefault: true, description: "The OATS framework team", local: false, at: "github.com/awebai/oats:oats-workspace.yaml#/teams/oats" },
+          { label: "docs", team: null, isDefault: false, description: null, local: false, at: "github.com/awebai/oats:oats-workspace.yaml#/teams/docs" },
+        ],
+        // Who may join what ("*": every soul), whether this computer may declare teams, and what the kernel says is not right, in its words.
+        mayJoin: [{ soul: "*", teams: ["oats"] }],
+        localTeams: true,
+        problems: [{ label: "docs", isDefault: false, message: "shared team docs has no provider id yet", fix: "its owner runs `oats aweb setup`, then commits the id" }],
+      },
     });
   });
 
@@ -84,8 +111,9 @@ describe("the pages' verbs", () => {
       ok: true,
       value: {
         machines: [
-          { id: "devbox-oats", route: "devbox.invalid", isThisMachine: false, note: "devbox · workspace /srv/oats · 0 saved instance routes" },
-          { id: "build", route: "build.invalid", isThisMachine: false, note: "workspace /home/ci/oats · 0 saved instance routes" },
+          // Its name where the registry has one beside its id, and the workspace's folder there.
+          { id: "devbox-oats", route: "devbox.invalid", isThisMachine: false, label: "devbox", folder: "/srv/oats" },
+          { id: "build", route: "build.invalid", isThisMachine: false, label: null, folder: "/home/ci/oats" },
         ],
       },
     });

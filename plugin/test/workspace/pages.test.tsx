@@ -110,14 +110,14 @@ test("Machines: this machine with its agents in bb and elsewhere, then what the 
   const slot = await page("machines", {
     machines: () => ({
       machines: [
-        { id: "falcon", route: null, isThisMachine: true, note: null },
-        { id: "kestrel", route: "ssh://kestrel.tailnet", isThisMachine: false, note: "last checked 2026-11-18: reachable, oats 0.69.20" },
+        { id: "falcon", route: null, isThisMachine: true, label: null, folder: null },
+        { id: "kestrel", route: "ssh://kestrel.tailnet", isThisMachine: false, label: null, folder: "/srv/oats" },
       ],
     }),
   });
   const rows = await slot.findAllByTestId("oats-machine-row");
   // this machine has its own block: the list below holds the other servers only
-  expect(rows.map((row) => row.textContent)).toEqual(["kestrelssh://kestrel.tailnetlast checked 2026-11-18: reachable, oats 0.69.20"]);
+  expect(rows.map((row) => row.textContent)).toEqual(["kestrelssh://kestrel.tailnet/srv/oats"]);
   expect(slot.getByText("Servers OATS knows").parentElement!.textContent).toBe("Servers OATS knows1");
   await slot.findByText("7 agents in bb · 1 agent elsewhere");
   expect(slot.getByTestId("oats-this-machine").textContent).toContain("falcon");

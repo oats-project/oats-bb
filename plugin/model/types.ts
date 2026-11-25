@@ -162,7 +162,26 @@ export type Soul = {
   spawnable: boolean;
   /** "<code>: <message>", the kernel's, when the soul cannot be spawned */
   problem: string | null;
+  // What `oats souls` says beside (each absent where the kernel's answer has none):
+  /** the soul's own name, without its package ("knowledge-harvester" of `oats.okf/knowledge-harvester`) */
+  shortName?: string;
+  /** where it is defined: the group it is listed under */
+  source?: Source;
+  /** what its agents start with on this deployment */
+  harness?: string | null;
+  model?: string | null;
+  /** the teams its agents may join here, the default first */
+  teams?: { label: string; isDefault: boolean }[];
+  /** why it has each capability, by the capability's name: the kernel's word ("workspace", "soul", …) */
+  why?: Record<string, string>;
 };
+
+/**
+ * Where a soul or a capability comes from, as a group's heading and a row's "by": `label` is
+ * "workspace" for the workspace's own repository, a member repository's name, or a package with
+ * its version ("oats.okf 6.2.0").
+ */
+export type Source = { kind: string; label: string };
 
 /** One capability of `oats capabilities`. */
 export type Capability = {
@@ -171,6 +190,12 @@ export type Capability = {
   origin: string;
   /** how many of this deployment's souls compose it */
   souls: number;
+  source?: Source;
+  version?: string | null;
+  /** the core place it fills ("knowledge", "messaging", "tasks"); null for an additional one */
+  layer?: string | null;
+  /** kept to its own repository's souls (the kernel's `private`) */
+  repoOnly?: boolean;
 };
 
 /** One team of `oats teams`. */
@@ -179,7 +204,17 @@ export type Team = {
   /** the provider's team id; null for a shared team that is not mapped yet */
   team: string | null;
   isDefault: boolean;
+  description?: string | null;
+  /** declared on this computer alone (oats-local.yaml), not by the workspace */
+  local?: boolean;
+  /** the file and place that declares it, as the kernel names it */
+  at?: string | null;
 };
+
+/** What `oats teams` says of a team that is not right, in the kernel's words. */
+export type TeamProblem = { label: string | null; isDefault: boolean; message: string; fix: string | null };
+/** Which teams a soul may join ("*": every soul with no entry of its own). */
+export type MayJoin = { soul: string; teams: string[] };
 
 /** This machine, or one registered server of `oats server list`. */
 export type Machine = {
@@ -187,8 +222,10 @@ export type Machine = {
   /** the ssh alias the kernel recorded; null for this machine */
   route: string | null;
   isThisMachine: boolean;
-  /** what the kernel last recorded about it */
-  note: string | null;
+  /** its name, where the registry has one beside its id */
+  label: string | null;
+  /** the workspace's folder on it */
+  folder: string | null;
 };
 
 /** What `oats spawn --preview` would do, as the form draws it. */

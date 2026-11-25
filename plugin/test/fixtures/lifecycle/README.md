@@ -5,7 +5,7 @@
 (`container/real/parts/lifecycle.mjs`), where the acts go through their dialogs in the browser:
 
 - `stop-plan-no-recursive.json`: `oats instance stop dialogs-1-helper --plan --no-recursive --json`,
-  the plan the Stop dialog reads when "Include child instances" is turned off, for an agent with
+  the plan the Stop dialog reads when its choice of the children ("Also stop <names>") is turned off, for an agent with
   one child (`dialogs-1-child`, under `skipped` with `reason: "recursive=false"`).
 - `retire-apply-discard.json`: the receipt of `oats retire dialogs-2-helper --discard-worktree`
   under its plan's revision, as the Retire dialog asks it with "Also delete the worktree" on

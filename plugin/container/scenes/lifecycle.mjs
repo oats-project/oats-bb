@@ -7,6 +7,7 @@
 // and the start and restart answers of weekly-digest-helper, an agent on a worktree with a child;
 // the refusals of gone.json. So each act is asked on the agent its recording is of. A scene sets
 // which recorded answer a verb gives, and how late (so that an act in progress can be looked at).
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -47,7 +48,11 @@ const startedOn = (name, thread) => {
   return JSON.stringify(answer);
 };
 /** The fake answers the roster with the run's thread ids, and what the scene asks of a verb (the rest is each feature's recorded default). */
-const answers = (verbs = {}, status = tools.statusWithRealIds(tools.threads, changes)) => tools.fake({ status: { stdout: status }, "capabilities show": { stdout: PILOT_PROVIDER }, ...verbs });
+let verbsNow = {};
+const answers = (verbs = {}, status = tools.statusWithRealIds(tools.threads, changes)) => {
+  verbsNow = verbs;
+  return tools.fake({ status: { stdout: status }, "capabilities show": { stdout: PILOT_PROVIDER }, ...verbs });
+};
 /**
  * The bb session provider these scenes run on: the recorded `oats capabilities show oats.bb` with
  * the version of the release that archives a thread at stop (oats-bb 0.4.0, the pilot's), in place
@@ -59,6 +64,43 @@ const PILOT_PROVIDER = (() => {
   answer.result.version = "0.4.0";
   return JSON.stringify(answer);
 })();
+/**
+ * The PILOT's provider archives a home's thread at its stop, and the Stop dialog's RESULT says what
+ * bb shows of the thread after the stop. The fake kernel stops nothing in bb: so, on these stages
+ * (the pilot's provider by its version), a scene that confirms a stop archives the agent's thread
+ * in bb itself while the fake's apply is on its way, as that provider would, and makes the fake's
+ * roster say what a kernel says of a home an operator stopped (sessionEnd "stopped": without it
+ * the agent would read as one whose thread bb archived under it while it ran, and the plugin would
+ * say so: "<Name> may still run."). Both are put back once the result is read (the stage holds the
+ * thread live and the agent running for the scenes that follow). What is not yet put back is kept,
+ * so that a scene that fails leaves bb and the fake as its stage holds them.
+ * (The product's other case, a provider that says 0.4.0 and a thread bb did not archive, keeps its
+ * warning, and its unit test: test/lifecycle/actions.test.tsx, "a stop's result says of the agent's thread what bb shows after the stop".)
+ */
+const bb = (...args) => execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const archivedByStop = new Map();
+let changesBeforeStop = null;
+const LEAD_INSTANCE = "redesign-ui-lead";
+const pilotStopArchives = (thread, instance) => {
+  // bb's list changes first, then the roster says the stop: the order a person's window sees them in.
+  bb("thread", "archive", thread.id);
+  archivedByStop.set(thread.id, instance);
+  if (changesBeforeStop === null) changesBeforeStop = changes;
+  changes = { ...changes, [instance]: { running: false, runtimeState: "stopped", sessionEnd: "stopped" } };
+  tools.fake({ status: { stdout: tools.statusWithRealIds(tools.threads, changes) }, "capabilities show": { stdout: PILOT_PROVIDER }, ...verbsNow });
+};
+const putBack = async () => {
+  if (archivedByStop.size === 0) return;
+  const instances = [...archivedByStop.values()];
+  for (const id of [...archivedByStop.keys()]) {
+    bb("thread", "unarchive", id);
+    archivedByStop.delete(id);
+  }
+  changes = changesBeforeStop ?? changes;
+  changesBeforeStop = null;
+  answers(verbsNow);
+  await tools.untilSnapshot((snapshot) => snapshot.ok === true && instances.every((instance) => snapshot.agents.some((agent) => agent.instance === instance && agent.running !== false)));
+};
 /** The plugin's server keeps the provider's answer for 30 s (server/core.ts PAGE_TTL_MS): the first of these stages waits that out ONCE, so that no dialog is drawn on an earlier stage's answer. */
 let providerSettled = false;
 const stage = (label, states) => ({
@@ -96,6 +138,8 @@ export const dialog = async (page) =>
 /** What is under a fold of the dialog (its Details): whether it is open, and its words. A closed fold's words are not in the dialog's `body` (innerText reads what is drawn). */
 export const folded = (id) => `(() => { const fold = document.querySelector(${JSON.stringify(testId(id))}); return JSON.stringify(fold === null ? null : { open: fold.open, summary: fold.querySelector("summary")?.innerText.trim() ?? null, text: fold.textContent.replace(/\\s+/g, " ").trim() }); })()`;
 /** The dialog's lines before the act, in view: its one consequence line, and at most one more. */
+/** Open the Start or Restart dialog's Harness choice, read what it offers and what is chosen, and close it again with Escape. */
+export const HARNESS_CHOICE = `(async () => { const field = document.querySelector('[data-testid="oats-start-harness"]'); if (!field) return JSON.stringify({ harness: [], chosen: null, tag: null }); const tag = field.tagName; const chosen = field.getAttribute("data-value"); field.click(); let options = []; for (let i = 0; i < 40 && options.length === 0; i += 1) { await new Promise((done) => requestAnimationFrame(done)); options = [...document.querySelectorAll('[data-testid="oats-start-harness-option"]')]; } const harness = options.map((option) => option.querySelector("span")?.innerText.trim() ?? ""); document.querySelector('[data-testid="oats-start-harness-options"]')?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); return JSON.stringify({ harness, chosen, tag }); })()`;
 export const saysNow = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-confirm-says")} li`)})].map((line) => line.innerText.trim()))`;
 /** No section heading of the four the cut removed, and one fold at most, in the dialog. */
 export const plainNow = `(() => { const dialog = document.querySelector(${JSON.stringify(confirm)}); return JSON.stringify({ headings: [...dialog.querySelectorAll("h3")].map((each) => each.innerText.trim()).filter((text) => /^(what will happen|what is kept|before you confirm|current state)$/i.test(text)), folds: dialog.querySelectorAll("details").length }); })()`;
@@ -144,6 +188,8 @@ const whole = (key) => `(() => {
   const frame = body.getBoundingClientRect();
   const inBody = (node) => { const box = node.getBoundingClientRect(); return box.height > 0 && box.top >= frame.top - 1 && box.bottom <= frame.bottom + 1; };
   const onScreen = (node) => { const box = node.getBoundingClientRect(); return box.height > 0 && box.top >= 0 && box.bottom <= innerHeight; };
+  // And nothing lies over it: what is at its own centre is the button itself (bb's menu, closing, once covered them).
+  const uncovered = (node) => { const box = node.getBoundingClientRect(); const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2); return at !== null && (at === node || node.contains(at)); };
   // What matters now: what the scene names; else, while the act runs, the line that says so; once it has an answer, the result; before, the notice or the first sentence of the plan.
   const phase = document.querySelector(${JSON.stringify(testId("oats-confirm"))})?.getAttribute("data-phase");
   const first = body.querySelector(${JSON.stringify(key)} ?? (phase === "running" ? ${JSON.stringify(testId("oats-confirm-running"))} : phase === "done" || phase === "failed" ? ${JSON.stringify(`${testId("oats-result")} h3`)} : ${JSON.stringify(`${testId("oats-notice")}, li, ${testId("oats-loading")}`)}));
@@ -151,7 +197,7 @@ const whole = (key) => `(() => {
   const says = [${JSON.stringify(testId("oats-modal-above"))}, ${JSON.stringify(testId("oats-modal-below"))}].map((id) => document.querySelector(id)?.innerText ?? null);
   const above = body.scrollTop > 1;
   const below = body.scrollHeight - body.clientHeight - body.scrollTop > 1;
-  return JSON.stringify({ ok: first !== null && inBody(first) && buttons.length > 0 && buttons.every(onScreen) && (!above || says[0] !== null) && (!below || says[1] !== null), first: first?.innerText.slice(0, 60) ?? null, above, below, says });
+  return JSON.stringify({ ok: first !== null && inBody(first) && buttons.length > 0 && buttons.every(onScreen) && buttons.every(uncovered) && (!above || says[0] !== null) && (!below || says[1] !== null), first: first?.innerText.slice(0, 60) ?? null, above, below, says, covered: buttons.filter((button) => !uncovered(button)).map((button) => button.innerText.trim()) });
 })()`;
 /** The image of a dialog's state, taken once the dialog is whole on screen (WHOLE) and its controls are high enough. */
 async function dialogShot({ page, at, viewport, check }, verb, name, key = null) {
@@ -198,17 +244,17 @@ export default [
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
         check(
-          before.title === "Stop Redesign ui lead?" && before.about === "redesign-ui-lead" && before.body.includes("Include child instances") && !/nothing is forced|Stops \d+ sessions|transcript|Observed|To talk to it again|Nothing is deleted/.test(before.body),
-          `${at} Stop opens its dialog and stops nothing: titled with the act and the agent of the kernel's plan, with the choice of its children, and none of the sentences the cut removed`,
+          before.title === "Stop Redesign ui lead?" && before.about === "redesign-ui-lead" && before.body.includes("Also stop Desktop mockups developer, Harvest knowledge helper On") && before.body.split("Also stop Desktop mockups developer").length === 2 && !/child instances|Also stops:|nothing is forced|Stops \d+ sessions|transcript|Observed|To talk to it again|Nothing is deleted/.test(before.body),
+          `${at} Stop opens its dialog and stops nothing: titled with the act and the agent of the kernel's plan, with the choice of its children, which names them, once (no line says again who is stopped; the box of who is mid-turn is another fact; "agents", never "instances"), and none of the sentences the cut removed`,
           JSON.stringify(before),
         );
         const stopSays = await page.evaluate(saysNow);
-        check(stopSays === JSON.stringify(["Archives its thread.", "Also stops: Desktop mockups developer, Harvest knowledge helper."]), `${at} in view, under no heading: its ONE consequence line, "Archives its thread." (the pilot's provider), then who else it stops, second and last`, stopSays);
+        check(stopSays === JSON.stringify(["Archives its thread."]), `${at} in view, under no heading: its ONE consequence line, "Archives its thread." (the pilot's provider), and no other line`, stopSays);
         const stopPlain = await page.evaluate(plainNow);
         check(stopPlain === JSON.stringify({ headings: [], folds: 1 }), `${at} the dialog has none of the four section headings, and ONE fold`, stopPlain);
         const stopFold = JSON.parse(await page.evaluate(folded("oats-plan-details")));
         check(stopFold !== null && stopFold.open === false && /Details$/.test(stopFold.summary) && stopFold.text.includes("Nothing is deleted.") && stopFold.text.includes("Redesign ui lead") && stopFold.text.includes("Session running"), `${at} under Details, closed: that nothing is deleted, and each session's state`, JSON.stringify(stopFold));
-        check(before.body.includes("Redesign ui lead · uncommitted work") && !before.body.includes("in the middle of a task") && !before.body.includes("Check again"), `${at} it says who has uncommitted work, one line per agent: the facts that are a reason not to confirm, set apart; Check again is not on the dialog's face`, before.body);
+        check(!before.body.includes("uncommitted work") && !before.body.includes("in the middle of a task") && !before.body.includes("Check again"), `${at} it says nothing of uncommitted work (a stop deletes nothing: the box says only what the act affects, a turn in progress); Check again is not on the dialog's face`, before.body);
         check(before.act === "Stop" && before.off === false && before.focus === "oats-confirm-cancel", `${at} the button is named for the act; the focus STARTS on Cancel`, JSON.stringify(before));
         await shot("before");
         const order = await walk(page, 4);
@@ -218,6 +264,8 @@ export default [
         await page.until(phaseIs("running"), 10);
         const running = await dialog(page);
         check(running.phase === "running" && running.body.includes("Stopping…") && running.off === true, `${at} while it runs the dialog says so, and the act cannot be asked again`, JSON.stringify(running));
+        // As the pilot's provider stops the home: its thread is archived in bb (the fake's apply is still on its way).
+        pilotStopArchives(lead, LEAD_INSTANCE);
         const leave = JSON.parse(await page.evaluate(`JSON.stringify({ line: ${textOf(testId("oats-confirm-leave-line"))}, close: ${textOf(testId("oats-confirm-leave"))}, off: document.querySelector(${JSON.stringify(testId("oats-confirm-leave"))})?.disabled ?? null })`));
         check(leave.line === "" && leave.close === "Close" && leave.off === false, `${at} while it runs the dialog can be left: Close is on (not Cancel), and no line says so`, JSON.stringify(leave));
         await shot("running");
@@ -225,13 +273,14 @@ export default [
         const done = await dialog(page);
         const stopResult = await page.evaluate(textOf(`${confirm} ${testId("oats-result")}`));
         check(done.body.includes("3 sessions stopped.") && !/: Stopped|already stopped|Archives its thread/.test(done.body) && done.focus === "oats-confirm-close", `${at} the result is said in the dialog by its title, with no row for a session that stopped and no plan over it, and the focus is on Close`, JSON.stringify(done));
-        // What it says of the thread is what bb SHOWS of it after the stop (the fake stops no thread: bb holds it live): the warning, as the result's one line.
-        check(stopResult === "3 sessions stopped. A message in its thread starts it outside OATS.", `${at} the result's one line more: bb still holds the thread live, so a message there would start it outside OATS`, stopResult);
+        // What it says of the thread is what bb SHOWS of it after the stop: the pilot's provider archived it, as the
+        // dialog said it would ("Archives its thread."): the result is its title alone, with no warning of a message.
+        check(stopResult === "3 sessions stopped.", `${at} the result is the title ALONE: bb shows the thread archived, as the dialog said before the act; nothing warns of a message in it`, stopResult);
         await shot("done");
         await page.evaluate(click("oats-confirm-close"));
         check(Boolean(await page.until(closed, 10)), `${at} Close closes the dialog`);
-        const back = await page.evaluate(`document.activeElement?.getAttribute("data-sidebar-thread-id") ?? ${FOCUSED}`);
-        check(viewport.mobile || back === lead.id, `${at} the focus returns to the row the menu was opened on`, back);
+        // The stage holds the thread live for what follows: it is put back (its row is waited for where it is next asked for).
+        await putBack();
 
         // The plan changed under the confirmation (recorded: the apply of a plan read before a child stopped by
         // itself is refused E_PLAN_STALE, and its answer carries the plan as it is now: the fake answers that
@@ -267,7 +316,11 @@ export default [
         check(refused.focus === "oats-confirm-close" && after.length === 4 && after[0] === "oats-act-review" && after[1].endsWith("Details") && after[2] === "oats-confirm-close" && after[3] === "oats-act-review", `${at} the focus is on Close, and Tab walks Review again, Details, Close and round again`, JSON.stringify({ focus: refused.focus, after }));
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
+        // (This dialog was opened from the row's menu, and the row is still the one it was opened on.)
+        const back = await page.evaluate(`document.activeElement?.getAttribute("data-sidebar-thread-id") ?? ${FOCUSED}`);
+        check(viewport.mobile || back === lead.id, `${at} the focus returns to the row the menu was opened on`, back);
       } finally {
+        await putBack();
         answers();
         await page.clock(null);
       }
@@ -290,8 +343,10 @@ export default [
         answers({ "instance stop --plan": { file: "lifecycle/stop-plan.json", sleepMs: 5000 } });
         await open();
         await page.until(phaseIs("reading"), 10);
+        // The dialog is there only once bb's own menu has left the screen: it never lies under the menu's closing frames.
+        check(await page.evaluate(`[...document.querySelectorAll('[role="menuitem"]')].every((entry) => { const box = entry.getBoundingClientRect(); return !(box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < innerHeight); })`), `${at} the dialog opens after bb's menu has left the screen (at this width bb keeps a closed sheet in the page, below the window)`);
         const reading = await dialog(page);
-        check(reading.phase === "reading" && reading.title === "Stop an agent" && reading.body.includes("Checking…") && reading.off === true, `${at} while the plan is read the dialog says that it checks, names no agent in its title yet, and cannot be confirmed`, JSON.stringify(reading));
+        check(reading.phase === "reading" && reading.title === "Stop Redesign ui lead?" && reading.body.includes("Checking…") && reading.off === true, `${at} while the plan is read the dialog says that it checks, names the agent that was asked for in its title, and cannot be confirmed`, JSON.stringify(reading));
         await shot("reading");
         await page.until(phaseIs("ready"), 30);
         await page.evaluate(click("oats-confirm-cancel"));
@@ -340,10 +395,13 @@ export default [
         await page.until(phaseIs("running"), 10);
         await page.evaluate(click("oats-confirm-leave"));
         check(Boolean(await page.until(closed, 10)), `${at} Close leaves the dialog while the stop runs`);
+        // As the pilot's provider stops the home: its thread is archived in bb (the fake's apply is still on its way).
+        pilotStopArchives(lead, LEAD_INSTANCE);
         const told = await page.until(`(() => { const toast = [...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("3 sessions stopped.")); return toast ? toast.innerText.replace(/\\s+/g, " ").trim() : null; })()`, 30);
-        check(Boolean(told), `${at} the result of a stop whose dialog was left is told through bb's toaster`, String(told));
+        check(Boolean(told) && !/starts it outside OATS/.test(String(told)), `${at} the result of a stop whose dialog was left is told through bb's toaster: that it stopped, and nothing of a message in its thread (bb shows it archived)`, String(told));
         await page.until(toastSettled("3 sessions stopped."), 10);
         await page.shot(`lifecycle-${viewport.name}-stop-left-toast`);
+        await putBack();
         await page.evaluate(`[...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("3 sessions stopped."))?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
 
         // A refusal that arrives after the dialog was left: a toast cannot hold it (no Details, no Review again).
@@ -372,8 +430,48 @@ export default [
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
       } finally {
+        await putBack();
         answers();
         await page.clock(null);
+      }
+    },
+  },
+  {
+    stage: "lifecycle",
+    name: "A thread that a person archives in bb under an agent that runs: the notice, at once, with Stop…",
+    run: async ({ page, at, viewport, threads, check }) => {
+      const lead = threads.get(LEAD);
+      const notice = `[...document.querySelectorAll("[data-sonner-toast]")].find((each) => each.innerText.includes("Redesign ui lead may still run."))`;
+      const row = `document.querySelector('[data-sidebar-thread-id="${lead.id}"]')`;
+      let archived = false;
+      try {
+        await page.goto("/");
+        check(Boolean(await page.until(`${row} !== null`, 30)), `${at} Redesign ui lead, which runs, is drawn on its thread, and nothing has been said of it`);
+        const before = await page.evaluate(`${notice} === undefined`);
+        // bb's own Archive, as a person presses it in the thread's menu: bb stops nothing OATS knows of, and the roster still says that the agent runs.
+        bb("thread", "archive", lead.id);
+        archived = true;
+        const said = await page.until(`(() => { const toast = ${notice}; return toast ? JSON.stringify({ text: toast.innerText.replace(/\\s+/g, " ").trim(), buttons: [...toast.querySelectorAll("button")].map((button) => button.innerText.trim()).filter((text) => text !== "") }) : null; })()`, 60);
+        const toast = said ? JSON.parse(said) : { text: "", buttons: [] };
+        check(before === true && toast.text.startsWith("Redesign ui lead may still run.") && same(toast.buttons, ["Stop…"]), `${at} bb archived the thread of an agent that runs: at once a notification says "Redesign ui lead may still run.", with ONE button, Stop…`, JSON.stringify({ before, toast }));
+        await page.until(toastSettled("Redesign ui lead may still run."), 10);
+        await page.shot(`lifecycle-${viewport.name}-archived-while-running`);
+        const count = await page.evaluate(`[...document.querySelectorAll("[data-sonner-toast]")].filter((each) => each.innerText.includes("may still run.")).length`);
+        check(count === 1, `${at} it is said once`, String(count));
+        await page.evaluate(`[...${notice}.querySelectorAll("button")].find((button) => button.innerText.trim() === "Stop…").click()`);
+        await page.until(phaseIs("ready"), 30);
+        const stop = await dialog(page);
+        check(stop.title === "Stop Redesign ui lead?" && stop.about === "redesign-ui-lead" && stop.act === "Stop" && stop.off === false, `${at} Stop… opens the Stop dialog for that agent: the kernel's plan, to be confirmed (nothing was stopped by the press)`, JSON.stringify(stop));
+        await page.evaluate(click("oats-confirm-cancel"));
+        await page.until(closed, 10);
+        // (That it is said once per agent and thread, whatever is read after, is the rule's unit test: test/lifecycle/left.test.ts.)
+        await page.evaluate(`${notice}?.querySelector('button[aria-label="Dismiss notification"]')?.click()`);
+      } finally {
+        if (archived) bb("thread", "unarchive", lead.id);
+        answers();
+        await tools.untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === LEAD_INSTANCE && agent.running !== false));
+        await page.goto("/");
+        await page.until(`${row} !== null`, 30);
       }
     },
   },
@@ -433,7 +531,7 @@ export default [
         await shot("running");
         await page.until(phaseIs("done"), 20);
         const done = await dialog(page);
-        check(done.body.includes("Weekly digest helper retired.") && done.body.includes("1 child instance stopped and kept.") && !/Home folder deleted|Session stopped/.test(done.body) && done.body.includes("Worktree kept, at:") && done.body.includes("Recovery copy saved at") && done.body.includes("Conversation archived in bb.") && done.focus === "oats-confirm-close", `${at} the result is the facts a person needs later: the children, where the worktree and the recovery copy are, the thread; no step that only says what was asked`, JSON.stringify(done));
+        check(done.body.includes("Weekly digest helper retired.") && done.body.includes("1 child agent stopped and kept.") && !/Home folder deleted|Session stopped|, at:|\/abs\//.test(done.body) && done.body.includes("Worktree kept.") && done.body.includes("Recovery copy saved.") && done.body.includes("Conversation archived in bb.") && done.focus === "oats-confirm-close", `${at} the result is the facts a person needs later: the children, where the worktree and the recovery copy are, the thread; no step that only says what was asked`, JSON.stringify(done));
         // Behind the result the retired agent is gone from the roster, and its thread offers no Start (the real run shows the same).
         const behind = await page.until(`document.querySelector(${JSON.stringify(testId("oats-status-act"))}) === null && document.querySelector('${testId("oats-agent-row")}[data-sidebar-thread-id="${helper.id}"]') === null`, 20);
         check(Boolean(behind), `${at} behind the result the agent is in no row, and its thread offers no Start`);
@@ -447,7 +545,7 @@ export default [
         check(await open(), `${at} Retire is asked again from the thread's menu`);
         await page.until(phaseIs("failed"), 30);
         const left = await dialog(page);
-        check(left.title === "Retire an agent" && left.body.includes("Weekly digest helper is not in OATS any more") && left.body.includes("Nothing was changed.") && left.act === "" && !left.body.includes("Review again"), `${at} a plan refused for an agent the kernel does not know: the dialog names no agent in its title, says it is not in OATS any more, and offers nothing to confirm or to try again`, JSON.stringify(left));
+        check(left.title === "Retire Weekly digest helper" && left.body.includes("Weekly digest helper is not in OATS any more") && left.body.includes("Nothing was changed.") && left.act === "" && !left.body.includes("Review again"), `${at} a plan refused for an agent the kernel does not know: the dialog keeps the asked agent's name in its title, says it is not in OATS any more, and offers nothing to confirm or to try again`, JSON.stringify(left));
         await shot("gone");
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
@@ -459,11 +557,11 @@ export default [
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("failed"), 20);
         const partial = await dialog(page);
-        check(partial.body.includes("Retirement didn't finish") && partial.body.includes("Home folder kept, at:") && !partial.body.includes("Cleanup didn't finish.") && partial.body.includes("Its home was kept: a message in its thread would start it outside OATS.") && partial.body.includes("Check what was kept before trying again.") && partial.body.includes("Review again") && !partial.body.includes("RETIRE_INCOMPLETE"), `${at} a retire whose cleanup did not finish says what is kept and to check it, and offers Review again; the code is not on its face`, JSON.stringify(partial));
-        const warned = JSON.parse(await page.evaluate(`(() => { const warning = document.querySelector(${JSON.stringify(`${testId("oats-act-warning")} ${testId("oats-notice")}`)}); const result = document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)}); return JSON.stringify({ tone: warning?.getAttribute("data-tone") ?? null, first: Boolean(warning && result && (warning.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING)), details: warning?.querySelector("details")?.open ?? null }); })()`));
+        check(partial.body.includes("Retirement didn't finish") && partial.body.includes("Home folder kept.") && !/, at:|\/abs\//.test(partial.body) && !partial.body.includes("Cleanup didn't finish.") && partial.body.includes("Its home was kept: a message in its thread would start it outside OATS.") && partial.body.includes("Check what was kept before trying again.") && partial.body.includes("Review again") && !partial.body.includes("RETIRE_INCOMPLETE"), `${at} a retire whose cleanup did not finish says what is kept and to check it, and offers Review again; the code is not on its face`, JSON.stringify(partial));
+        const warned = JSON.parse(await page.evaluate(`(() => { const result = document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-result")}`)}); const warning = result?.querySelector(${JSON.stringify(testId("oats-result-warning"))}); const headline = result?.querySelector("h3"); return JSON.stringify({ tone: warning?.getAttribute("data-tone") ?? null, headline: headline?.innerText ?? null, first: Boolean(warning && headline && (headline.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING) && headline.getBoundingClientRect().bottom <= warning.getBoundingClientRect().top), box: document.querySelector(${JSON.stringify(`${confirm} ${testId("oats-notice")}`)}) !== null }); })()`));
         const keptFold = JSON.parse(await page.evaluate(folded("oats-act-details")));
-        check(warned.tone === "warning" && warned.first && warned.details === null && keptFold !== null && keptFold.open === false && keptFold.text.includes("No status row, no hooks OATS runs for it, no stop by OATS.") && keptFold.text.includes("RETIRE_INCOMPLETE"), `${at} that the home was kept is a warning of its own, before the facts; the rest (the release lane's words, the kernel's lines, the code) is one press away, under the result's ONE Details`, JSON.stringify({ warned, keptFold }));
-        await shot("incomplete", `${testId("oats-act-warning")} h3`); // the warning is what this image is of
+        check(warned.tone === "warning" && warned.headline === "Retirement didn't finish" && warned.first && warned.box === false && keptFold !== null && keptFold.open === false && keptFold.text.includes("No status row, no hooks OATS runs for it, no stop by OATS.") && keptFold.text.includes("Home folder kept, at:") && keptFold.text.includes("RETIRE_INCOMPLETE"), `${at} the headline first; then that the home was kept, the result's first line, in the warning tone (no box above the headline); the rest (the release lane's words, where the home is, the kernel's lines, the code) is one press away, under the result's ONE Details`, JSON.stringify({ warned, keptFold }));
+        await shot("incomplete", testId("oats-result-warning")); // the warning is what this image is of
         await page.evaluate(click("oats-confirm-close"));
         await page.until(closed, 10);
       } finally {
@@ -492,9 +590,19 @@ export default [
         const startSaid = await page.evaluate(saysNow);
         const startPlain = await page.evaluate(plainNow);
         check(startSaid === JSON.stringify(["Starts a new conversation."]) && startPlain === JSON.stringify({ headings: [], folds: 1 }), `${at} in view, under no heading: its ONE consequence line; and ONE fold`, `${startSaid} ${startPlain}`);
-        const fields = JSON.parse(await page.evaluate(`JSON.stringify({ harness: [...document.querySelector(${JSON.stringify(testId("oats-start-harness"))}).options].map((option) => option.text), chosen: document.querySelector(${JSON.stringify(testId("oats-start-harness"))}).value, model: document.querySelector(${JSON.stringify(testId("oats-start-model"))}).value })`));
-        check(fields.chosen === "" && fields.harness[0].startsWith("Keep the recorded harness") && same(fields.harness.slice(1), ["Claude Code", "pi"]) && fields.model === "", `${at} the harness starts on "Keep the recorded harness", with the ones the provider declares after it; the model is blank`, JSON.stringify(fields));
-        check(before.act === "Start" && before.off === false && before.focus === "oats-start-harness", `${at} the focus starts on the form's first field`, JSON.stringify(before));
+        // The Harness field is the plugin's own choice (a button that opens a list), never the browser's select: it is
+        // opened, read as a person reads it, and closed with Escape (which closes the list alone, not the dialog).
+        const fields = { ...JSON.parse(await page.evaluate(HARNESS_CHOICE)), model: await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-start-model"))}).value`) };
+        check(fields.tag === "BUTTON" && fields.chosen === "" && fields.harness[0].startsWith("Keep the recorded harness") && same(fields.harness.slice(1), ["Claude Code", "pi"]) && fields.model === "", `${at} the harness starts on "Keep the recorded harness", with the ones the provider declares after it, in the plugin's own choice; the model is blank`, JSON.stringify(fields));
+        check(await page.evaluate(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-harness-options"))}) === null`), `${at} Escape in the open list closes the list, and the dialog stays`);
+        // Its list, open: what a person chooses from, in the look of the plugin's fields.
+        await page.evaluate(click("oats-start-harness"));
+        const listed = await page.until(`document.querySelectorAll(${JSON.stringify(testId("oats-start-harness-option"))}).length === 3 && (() => { const box = document.querySelector(${JSON.stringify(testId("oats-start-harness-options"))}).getBoundingClientRect(); return box.height > 0 && box.top >= 0 && box.bottom <= innerHeight; })()`, 10);
+        check(Boolean(listed), `${at} the open list of harnesses is whole in view, inside the dialog`);
+        await page.shot(`lifecycle-${viewport.name}-start-harness-open`);
+        await page.press("Escape");
+        check(Boolean(await page.until(`${phaseIs("ready")} && document.querySelector(${JSON.stringify(testId("oats-start-harness-options"))}) === null`, 10)), `${at} Escape closes the list again, and the dialog stays`);
+        check(before.act === "Start" && before.off === false && before.focus === "oats-confirm-act", `${at} the focus starts on the dialog's primary button, Start: not on a field`, JSON.stringify(before));
         const startFold = JSON.parse(await page.evaluate(folded("oats-start-details")));
         check(startFold !== null && startFold.open === false && startFold.text.includes("Runs in bb's full mode: no sandbox.") && startFold.text.includes("Machine") && startFold.text.includes("Home"), `${at} under Details, closed: that the agent runs in bb's full mode, with no sandbox, its machine and its home`, JSON.stringify(startFold));
         await shot("before");
@@ -756,11 +864,11 @@ export default [
         check(await pick(page, "Restart (OATS)"), `${at} Restart (OATS) is pressed in the thread's menu`);
         await page.until(phaseIs("ready"), 30);
         const before = await dialog(page);
-        check(before.title === "Restart Weekly digest helper" && (await page.evaluate(saysNow)) === JSON.stringify(["Stops what it is doing now."]) && !/full mode|stays readable|Save any in-progress/.test(before.body) && /Starts a new conversation\..*Runs in bb's full mode: no sandbox\./.test(JSON.parse(await page.evaluate(folded("oats-start-details"))).text) && before.act === "Restart" && before.off === false, `${at} Restart opens its dialog and restarts nothing: its ONE line says that it stops what the agent does now; that it starts a new conversation, and bb's full mode, are under Details`, JSON.stringify(before));
-        check(before.focus === "oats-start-harness", `${at} the focus STARTS on the form's first field`, before.focus);
+        check(before.title === "Restart Weekly digest helper" && (await page.evaluate(saysNow)) === JSON.stringify(["Starts a new conversation."]) && !/full mode|stays readable|Save any in-progress|Stops what it is doing/.test(before.body) && (({ text }) => /Runs in bb's full mode: no sandbox\./.test(text) && !/Starts a new conversation/.test(text))(JSON.parse(await page.evaluate(folded("oats-start-details")))) && before.act === "Restart" && before.off === false, `${at} Restart opens its dialog and restarts nothing: its line says that it starts a new conversation (of an agent that is idle nothing is said to be stopped); bb's full mode is under Details`, JSON.stringify(before));
+        check(before.focus === "oats-confirm-act", `${at} the focus STARTS on the dialog's primary button, Restart (nothing is being done that it would cut): not on a field`, before.focus);
         await shot("before");
         const order = await walk(page, 5);
-        check(order.length === 5 && same(order.slice(0, 3), ["oats-start-model", "oats-confirm-cancel", "oats-confirm-act"]) && order[3].endsWith("Details") && order[4] === "oats-start-harness", `${at} Tab walks the model, Cancel, Restart, Details and round again (no Refresh status: it is for a Restart that is off)`, JSON.stringify(order));
+        check(order.length === 5 && order[0].endsWith("Details") && same(order.slice(1), ["oats-start-harness", "oats-start-model", "oats-confirm-cancel", "oats-confirm-act"]), `${at} Tab walks Details, the harness, the model, Cancel, Restart and round again (no Refresh status: it is for a Restart that is off)`, JSON.stringify(order));
         await page.evaluate(click("oats-confirm-act"));
         await page.until(phaseIs("running"), 10);
         check((await dialog(page)).body.includes("Restarting…"), `${at} while it restarts the dialog says so`);
@@ -839,8 +947,8 @@ export default [
           ),
         );
         check(
-          said.first && said.title === "To continue its conversation, message it instead." && said.open === "Open Weekly digest helper" && said.next.trim() === "Stops what it is doing now.",
-          `${at} the dialog says FIRST to message it instead to continue its conversation, with Open Weekly digest helper, and then its one line, that a restart stops what it is doing now`,
+          said.first && said.title === "To continue its conversation, message it instead." && said.open === "Open Weekly digest helper" && said.next.trim() === "Starts a new conversation.",
+          `${at} the dialog says FIRST to message it instead to continue its conversation, with Open Weekly digest helper, and then its one line, that a restart starts a new conversation (the agent does not run: nothing is said to be stopped)`,
           JSON.stringify(said),
         );
         const before = await dialog(page);

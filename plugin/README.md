@@ -160,18 +160,28 @@ while its Terminal tab has the focus.
   **Details** (Joan's direction of 23 Nov 2026, by the text audit ruled on it): Stop "Archives its
   thread."; Retire "This cannot be undone."; Start "Starts a new conversation." (an agent on tmux
   whose session was lost: "Tries to continue its last conversation; else starts fresh."); Restart
-  "Stops what it is doing now.". Where others are stopped too, "Also stops: <names>." is the
-  second and last line.
-- **Stop** and **Retire** read the kernel's plan, for the agent the PLAN names (never the row that
-  was pressed). In view: the consequence line, and the facts that are a reason not to confirm, set
-  apart, only when true. For a stop those are said from facts, never from the plan's `midTask`
-  (reported activity: true for every session that runs, an idle one too): "<Name> has uncommitted
-  work." (the plan's own observation of its work tree) and, for an agent on bb, "<Name> is
-  mid-turn." (bb's word on its thread); an agent whose session runs with neither gets no line.
+  "Starts a new conversation." too (a restart never resumes, on bb or on tmux), and before it,
+  only where bb says the agent works on a turn now, "Stops what it is doing now.". Where a Retire stops others too, "Also stops: <names>." is the
+  second and last line; a Stop names its children once, in its choice (below).
+- **Every dialog's title names the agent that was asked for**, in every state: while its plan is
+  read, where it cannot be read, where the agent is gone, and over the result ("Stop Redesign ui
+  lead?", a question until the dialog has settled). What the dialog SHOWS is the kernel's: a plan
+  or a check the kernel answers for another agent, or for none, is refused ("This is not the plan
+  for this agent.") and never drawn under that name.
+- **Where the focus starts.** On Cancel in a Stop, a Retire, and a RESTART of an agent that works on
+  a turn now (it cuts the turn; its button keeps the plain look: nothing is deleted); else on the
+  dialog's primary button (Start, Restart), never on a field. The Harness field of Start and Restart is the plugin's own choice (the New
+  agent form's `Choice`: a button that opens a list), never the browser's select; Escape in its
+  open list closes the list alone.
+- **Stop** and **Retire** read the kernel's plan. In view: the consequence line, and the facts that are a reason not to confirm, set
+  apart, only when true. For a stop that is ONE fact, said from bb's word on its thread and never from the plan's
+  `midTask` (reported activity: true for every session that runs, an idle one too): "<Name> ·
+  mid-turn", what the stop cuts; an agent that is not in a turn gets no line. Uncommitted work is
+  not said of a stop (nothing is deleted); a retire says it, at its tick.
   Under Details: what is kept and deleted ("Nothing is deleted."; "Deletes its home.", "Keeps its
   worktree, moved aside, on branch <b>."), who is left out, and the state of each session and of
-  its uncommitted work. Stop has the switch **Include child instances** (on: the kernel's default;
-  off reads the plan again for the agent alone). Retire has **Also delete the worktree** for an
+  its uncommitted work. Stop has the switch **Also stop <names>**, which names the agent's children, once (on: the
+  kernel's default; off reads the plan again for the agent alone, and still names them). Retire has **Also delete the worktree** for an
   agent with a worktree of its own: while it is on, what would be lost is said at the tick, under its
   label ("Deletes 2 uncommitted changes too (a copy is saved)."), once; without it the worktree is
   kept, moved aside. Both dialogs open with the focus on Cancel. Stop's line is what the stop
@@ -190,8 +200,9 @@ while its Terminal tab has the focus.
   the dialog says why and offers its thread and **Refresh status**.
 - **While the act runs** the dialog says so in a word ("Stopping…"), with Close in Cancel's
   place. **Its result** is said in the same dialog: its title ("3 sessions stopped."), the facts a
-  person needs later ("Worktree kept, at:" and
-  the path on its own line); a start opens the agent's new thread behind it. When the dialog is
+  person needs later ("Worktree kept."; where it is, the path on a line of its own, is under the
+  result's Details, never on its face); a warning (a home that was kept) is the result's first
+  line, under its headline, in the warning tone; a start opens the agent's new thread behind it. When the dialog is
   gone by then (the person closed it, or opened another act's), the result reaches them through
   bb's toaster. A stop, a start or a restart that is done is told whole, with **Open <agent>**,
   and leaves by itself. Anything else (a refusal, a result that is not confirmed, a retire,
@@ -209,6 +220,17 @@ while its Terminal tab has the focus.
   on a stop or a retire plan and nowhere else) says that the agent is not in OATS any more.
 - **On a roster that is the last one read** (OATS cannot be read) the acts stay where they are,
   off; the notice on the same screen says "Acts are off.", with Retry.
+- **A thread that a person archives or deletes in bb while its agent runs** is told at once,
+  through bb's toaster, and stays: "<Name> may still run.", with **Stop…**, which opens the Stop
+  dialog (bb took the thread away and stopped nothing OATS knows of). Never a false alarm
+  (`app/lifecycle/left.ts`): only of an agent the window saw running on a thread bb listed; only
+  once bb has answered that the same thread is archived or gone; never for an act through OATS,
+  which archives the thread itself (OATS is asked again once, and a roster read after that
+  decides, on what the row says: told where it says the agent runs or that its session was lost;
+  dropped where it says an operator stopped it, where the agent is gone or on a new thread; and
+  where it says neither, a retire or a restart on its way, the look waits for a later roster);
+  never while an act of ours is in flight or its dialog is open; once per agent and thread in
+  an app window.
 
 bb's own composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts
 on its own when one of them is used: an agent whose thread was archived or deleted in bb stays in
@@ -294,7 +316,7 @@ never states.
 | still says it runs (not stopped, failed or unreachable, and not `running: false`) | archived | "<its state> · Archived in bb while running: it may still run.", in the warning tone, on the archived thread's own row: a person archived the conversation of an agent whose process goes on | "<its state> · archived in bb" (for example "Idle · archived in bb"), its mark in the warning tone | Stop, Retire |
 | stopped, or its session lost | deleted | "Stopped · deleted in bb" on the state's line of the agent's own page's header (it has no thread): the reason in the warning tone, on the line as on the row, never alone under the tabs | "Stopped · deleted in bb", its mark in the warning tone | Start…, Retire… |
 | recorded stopped, with the kernel's `outsideOats` | any | "Running outside OATS · recorded stopped", in the warning tone, with **Stop…** and **Start…** as the line's own acts (Stop… alone for an agent that is not on bb); under the line no box and no title: one fold, **Details**, with what happened in a person's words ("Someone sent it a message in bb. Stop it, or start it from OATS so that OATS tracks it again."), then the kernel's own code and sentence. The same drawing on the home's card; on the instance panel the acts are the header's. | "Running outside OATS" | Stop…, Start… |
-| failed (its session ended) | open | "Failed · session ended". No warning: status sees a message that starts it. | "Failed" | Restart |
+| failed (its session ended) | open | "Failed · session ended". No warning: status sees a message that starts it. | "Failed" | Start (the kernel's row says it does not run; Restart where its harness still runs or that is not known: the lifecycle's ONE act for a failed agent, `failedAct`) |
 | unreachable | any | "Unreachable" (the kernel's own message under Details); nothing about a message | "Unreachable" | Retry |
 
 What it reads, and nothing else (nothing is derived from words): the agent's status row, as the

@@ -3,27 +3,34 @@
 // feature places (`AgentActs`), and the overlay that draws their dialogs. Every way in opens the
 // act's dialog: nothing runs on one press.
 import { useEffect, useState } from "react";
+import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { PluginAppBuilder, PluginCommandRegistration, PluginCommandShortcut, PluginThreadAction, PluginThreadActionItemInput } from "@get-bb/plugin-sdk/app";
 import type { Agent, AgentState, BbThread, Node } from "../../model/types";
 import { rest } from "../../model/rest";
 import { recordedStopped, state } from "../../model/view";
 import { useOats } from "../oats";
 import { onWindowReset } from "../store";
+import type { Contract } from "../store";
 import { READING, readingNow, useActed, useReading } from "../roster/reading";
 import { failureWords } from "../roster/unreadable";
 import type { Oats } from "../oats";
 import { Button } from "../ui";
-import { ActsOverlay, openAct } from "./acts";
+import { ActsOverlay, openAct, useActsBusy } from "./acts";
+import { lookForLeft } from "./left";
 import { notify } from "../ui";
 import { agentName, STATE } from "../ui/words";
-import { cannotAct, NO_TARGET } from "./words";
+import { cannotAct, failedAct, MAY_STILL_RUN_ACT, mayStillRun, NO_TARGET } from "./words";
 import type { Verb } from "./words";
 
 export { askPlan, asked, openAct, run } from "./acts";
 export type { Verb } from "./words";
 
 /** Checked at runtime on bb-app 0.50.1 (app.tsx says why). */
-const ICON = { stop: "Square", start: "Play", restart: "RotateCcw", retire: "Trash2", oats: "Bot" } as const;
+// (bb draws a name it does not know as its default mark: "FolderMinus" was read in bb-app 0.50.1's own bundle, among
+// the names its icon component maps, and seen drawn in the menu at 1280 and 390. Retire is NOT a bin: bb's own Delete, two rows below it in
+// the same menu, is the red bin, and a person who means Retire must not find two of them. Its mark is the folder
+// with a minus: a retire deletes the agent's home. The entry keeps its destructive tone.)
+const ICON = { stop: "Square", start: "Play", restart: "RotateCcw", retire: "FolderMinus", oats: "Bot" } as const;
 
 /**
  * The kernel says that no harness is loaded for it (`running: false` beside a session that is
@@ -77,16 +84,58 @@ export const ACTS: readonly {
     // false`, beside a session that is there: "Idle · not loaded"): its row says that it does not
     // run, so Start opens, and the dialog says that it begins a new conversation.
     // (`recordedStopped`: the kernel calls it stopped beside any word where the row says how its session ended.)
-    when: (state, agent) => state === "error" || state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped" || atRest(agent),
+    // A FAILED agent has ONE act (`failedAct`): Start where the kernel's row says it does not run.
+    when: (state, agent, thread) => (state === "error" ? failedAct(agent, thread) === "start" : state === "stopped" || recordedStopped(agent) || agent.runtimeState === "stopped" || atRest(agent)),
   },
   { verb: "restart", button: "Restart…", menu: "Restart (OATS)", command: "OATS: Restart agent…", key: "r", icon: ICON.restart, destructive: false, 
     // Not for a stopped agent, nor one that runs outside OATS; nor one that NEVER RAN (bb says its
     // thread failed at its start): nothing runs, and Start offers the harness and the model.
-    when: (state, agent, thread) => state !== "stopped" && state !== "outside" && rest(agent, thread) !== "never-started",
+    // And of a FAILED agent, only one whose harness still runs, or of which that is not known (`failedAct`).
+    when: (state, agent, thread) => state !== "stopped" && state !== "outside" && rest(agent, thread) !== "never-started" && (state !== "error" || failedAct(agent, thread) === "restart"),
   },
   { verb: "retire", button: "Retire…", menu: "Retire (OATS)", command: "OATS: Retire agent…", key: "d", icon: ICON.retire, destructive: true, when: () => true },
 ];
 const shortcut = (key: string): PluginCommandShortcut => ({ key, alt: true, shift: true });
+
+/** How long bb's menu may take to leave the screen before the dialog opens all the same: a press is never lost. */
+const MENU_GONE_WITHIN_MS = 1500;
+const MENU_LOOK_MS = 16;
+/**
+ * Whether bb's own menu is still ON SCREEN: an entry of it is drawn inside the window. bb takes a
+ * menu out of the page when it has faded (at a desk's width); a sheet (at a phone's width) stays in
+ * the page, closed, slid out below the window: so what is asked is where its entries ARE.
+ */
+function menuOnScreen(): boolean {
+  for (const entry of Array.from(document.querySelectorAll('[role="menuitem"]'))) {
+    const box = entry.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < window.innerHeight && box.right > 0 && box.left < window.innerWidth) return true;
+  }
+  return false;
+}
+/**
+ * Open a dialog that was asked for from bb's own menu AFTER that menu has left the screen. bb
+ * closes its menu (a sheet, at a phone's width) with an animation, after the entry's `run`: a
+ * dialog opened at once is drawn UNDER its last frames, its buttons covered. With no menu on
+ * screen (a press of a page's button, a key) this opens at once.
+ */
+export function afterMenu(open: () => void): void {
+  if (typeof document === "undefined" || !menuOnScreen()) return open();
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(limit);
+    open();
+  };
+  // Looked at about once a frame: a sheet that slides out changes nothing in the page that could be listened for.
+  const look = () => {
+    if (done) return;
+    if (menuOnScreen()) setTimeout(look, MENU_LOOK_MS);
+    else finish();
+  };
+  setTimeout(look, MENU_LOOK_MS);
+  const limit = setTimeout(finish, MENU_GONE_WITHIN_MS);
+}
 
 /**
  * The acts that apply to an agent now, and why they are held when they are (the roster is the last
@@ -163,7 +212,27 @@ onWindowReset(() => {
   roster = null;
 });
 function Overlay() {
-  roster = useOats();
+  const oats = useOats();
+  roster = oats;
+  // A thread that bb archived or deleted under an agent that ran: told at once, and it stays (a warning,
+  // not a failure), with the way to stop the agent through OATS. Looked for at each draw: the rule is left.ts's.
+  const busy = useActsBusy();
+  const rpc = useRpc<Contract>();
+  useEffect(() => {
+    lookForLeft(oats, {
+      busy,
+      // The server reads OATS again and answers with that read's stamp; then the window reads what the server holds.
+      ask: () =>
+        rpc.call("refresh", null).then(
+          ({ at }) => {
+            oats.retry();
+            return at;
+          },
+          () => null,
+        ),
+      tell: (instance) => notify({ tone: "unknown", title: mayStillRun(instance), open: { label: MAY_STILL_RUN_ACT, run: () => openAct("stop", instance) } }),
+    });
+  });
   return <ActsOverlay />;
 }
 const nodeIn = (threadId: string | null): Node | undefined => (roster?.phase === "ready" && threadId !== null ? roster.nodeByThread.get(threadId) : undefined);
@@ -258,7 +327,8 @@ export function register(app: PluginAppBuilder): void {
         if (oats.stale !== null) return { label: act.menu, icon: act.icon, variant, disabled: true, run: () => undefined };
         // And behind a result that says this agent changed: every act of it is off until the roster is read again (the row over them says "Reading…").
         if (readingNow(oats, node.agent.instance)) return { label: act.menu, icon: act.icon, variant, disabled: true, run: () => undefined };
-        return { label: act.menu, icon: act.icon, variant, run: () => openAct(act.verb, node.agent.instance) };
+        // From bb's own menu: the dialog opens once that menu is gone (it closes with an animation, over the dialog).
+        return { label: act.menu, icon: act.icon, variant, run: () => afterMenu(() => openAct(act.verb, node.agent.instance)) };
       },
     });
   });

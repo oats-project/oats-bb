@@ -68,6 +68,7 @@ const LOST_NEVER = /Nobody stopped|without OATS stopping|Start tries/;
 /** The dialogs' ONE consequence line each, and the results' words (app/lifecycle/words.ts START, RESUME; the text cut). */
 const SAYS = {
   start: "Starts a new conversation.",
+  /** Said before a Restart only of an agent bb says works on a turn now: never of one on tmux (nobody knows), whose Restart says `start`. */
   restart: "Stops what it is doing now.",
   resume: "Tries to continue its last conversation; else starts fresh.",
   /** Not said before the press any more: it is said when it happens (`waiting`). */
@@ -301,7 +302,7 @@ export default async (run) => {
       if (first) resumeWhileRunning();
       let since = Date.now();
       const before = row().startedAt;
-      let result = await through("restart", "restart", `Restart ${CALLED}`, [SAYS.restart], [SAYS.start, SAYS.resume]);
+      let result = await through("restart", "restart", `Restart ${CALLED}`, [SAYS.start], [SAYS.restart, SAYS.resume]);
       let call = asked("restart", since);
       if (first) fixtures.keep("lifecycle/tmux-restart.json", call.stdout);
       check(result.tone === "done" && result.title === SAYS.restarted, `${at} the result says it restarted: "${SAYS.restarted}"`, JSON.stringify(result));

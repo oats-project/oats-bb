@@ -105,7 +105,7 @@ test("an agent that needs you: how long it has waited and its question, on its o
   }
 });
 
-test("a stopped agent says Stopped and offers Start, which opens the Start dialog and starts nothing by itself; one whose session ended offers Restart; one the kernel cannot reach says Unreachable, with what OATS says under Details, and Retry", async () => {
+test("a stopped agent says Stopped and offers Start, which opens the Start dialog and starts nothing by itself; one whose session ended offers Start too (nothing runs); one the kernel cannot reach says Unreachable, with what OATS says under Details, and Retry", async () => {
   const stopped = await render("thr_digest", fixtureAgents());
   // The warning of a stopped agent's live composer, in the warning tone, with Start beside it.
   expect((await stopped.findByTestId("oats-status-line")).textContent).toBe("Stopped· A message here starts it outside OATS.Start…Instance panel");
@@ -123,7 +123,7 @@ test("a stopped agent says Stopped and offers Start, which opens the Start dialo
         : agent,
   );
   const failed = await render("thr_harvest", states);
-  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· session endedRestart…Instance panel"); // the reason after the state; Restart is the button beside it
+  expect((await failed.findByTestId("oats-status-line")).textContent).toBe("Failed· session endedStart…Instance panel"); // the reason after the state; Start is the button beside it (the kernel's row says it does not run: the lifecycle's one act for it)
   failed.unmount();
   const unreachable = await render("thr_mockups", states);
   // The state's word says it, with no sentence that repeats it; what the kernel said is one press away, under Details, never the line's words.

@@ -222,7 +222,7 @@ export default [
       const leadLine = await statusOf(page, "working");
       check(leadLine !== null && leadLine.act === "Stop…", `${at} a working agent's line offers Stop…`, JSON.stringify(leadLine));
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-status-line")} ${testId("oats-status-act")}`)}).click()`);
-      // The dialog is titled with the agent the kernel's plan names, once the plan is read ("Stop an agent" until then).
+      // The dialog is titled with the agent that was asked for, from its opening; the plan is read under it.
       const asked = await page.until(`(() => { const m = document.querySelector(${JSON.stringify(testId("oats-modal"))}); const t = m?.querySelector("h2")?.innerText.trim() ?? ""; return /^Stop .+\\?$/.test(t) ? t : ""; })()`, 20);
       check(asked === "Stop Redesign ui lead?", `${at} Stop on the thread's line opens the stop confirmation of that agent, by its one name, once the plan is read`, asked ?? (await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-modal"))})?.innerText.slice(0, 300) ?? "no dialog"`)));
       await page.shot(`a13-${viewport.name}-thread-stop-asked`, { targets: true });
@@ -489,7 +489,7 @@ export default [
       const failed = threads.get("thr_harvest");
       await page.goto(`/projects/${failed.projectId}/threads/${failed.id}`);
       const ended = await statusOf(page, "error");
-      check(ended !== null && ended.line === "Failed · session ended" && ended.act === "Restart…", `${at} the thread of an agent whose session fell back to a shell says "Failed", the reason in two words, with Restart`, ended === null ? await rowText(page) : JSON.stringify(ended));
+      check(ended !== null && ended.line === "Failed · session ended" && ended.act === "Start…", `${at} the thread of an agent whose session fell back to a shell says "Failed", the reason in two words, with Start (nothing runs)`, ended === null ? await rowText(page) : JSON.stringify(ended));
       await page.shot(`a16-${viewport.name}-thread-failed`, { targets: true });
 
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);

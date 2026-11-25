@@ -8,6 +8,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { Mail } from "../../app/mail";
+import { PAGES_A_PRESS } from "../../app/mail/read";
 import { refusalLine } from "../../app/mail/words";
 import type { MailPage } from "../../kernel/mail";
 import { handlers, resetApp } from "../helpers/render";
@@ -88,10 +89,11 @@ test("while the first read is on its way: Reading…, and nothing else", async (
   expect(slot.queryByTestId("oats-loading")).toBeNull();
 });
 
-test("a sender that is not verified, and a signature that failed, are said on the row and on the message, in the warning tone (a recorded answer with ONE field changed: `sender`, as the adapter reads `verification`)", async () => {
-  const page = recordedMail();
-  (page.messages[0] as MailPage["messages"][number]).sender = "unverified";
-  (page.messages[1] as MailPage["messages"][number]).sender = "failed";
+test("a sender that is not verified, and a signature that failed, are said on the row and on the message, in the warning tone (a recorded answer with ONE field changed: two messages' `verification`)", async () => {
+  const page = recordedMail("mail.json", (recorded) => {
+    (recorded.messages[0] as Record<string, unknown>).verification = "unverified";
+    (recorded.messages[1] as Record<string, unknown>).verification = "failed";
+  });
   const slot = mail({ mail: () => page });
   const list = await slot.findByTestId("oats-mail-list");
   const said = within(list).getAllByTestId("oats-mail-sender");
@@ -103,9 +105,8 @@ test("a sender that is not verified, and a signature that failed, are said on th
   expect(text(within(await slot.findByTestId("oats-mail-message")).getByTestId("oats-mail-sender"))).toBe("Signature failed");
 });
 
-test("a message with no subject reads (no subject) (a recorded answer with ONE field changed: `subject`)", async () => {
-  const page = recordedMail();
-  (page.messages[0] as MailPage["messages"][number]).subject = null;
+test("a message with no subject reads (no subject) (a recorded answer with ONE field changed, and its thread's title with it: `subject`)", async () => {
+  const page = recordedMail("mail.json", (recorded) => Object.assign(recorded.messages[0] as Record<string, unknown>, { subject: "", threadTitle: "" }));
   const slot = mail({ mail: () => page });
   expect(text((await slot.findAllByTestId("oats-mail-subject"))[0] as HTMLElement)).toBe("(no subject)");
 });
@@ -189,10 +190,9 @@ test("Older: only while there is an older page; it reads the page after the curs
   expect(slot.queryByTestId("oats-mail-older")).toBeNull();
 });
 
-test("Older: the teams that could not be read are those of the page just read (a recorded older page with ONE field changed: a team's `conversations`)", async () => {
+test("Older: the teams that could not be read are those of the page just read (a recorded older page with ONE field changed: its identity's `error`, with the conversations it names)", async () => {
   const first = recordedMail("mail-first-page.json");
-  const older = recordedMail("mail-older-page.json");
-  older.unread = [{ team: "mailspike", conversations: 3 }];
+  const older = recordedMail("mail-older-page.json", (recorded) => Object.assign(recorded.identities[0] as Record<string, unknown>, { error: "conversation-unreadable", unreadableConversations: ["c-1", "c-2", "c-3"] }));
   const slot = mail({ mail: ({ older: cursor }) => (cursor === null ? first : older) });
   await slot.findByTestId("oats-mail-list");
   expect(slot.queryByTestId("oats-mail-unread")).toBeNull();
@@ -249,6 +249,57 @@ test("an answer that arrives for an agent no longer shown is dropped", async () 
   await act(async () => slow.resolve(recordedMail()));
   expect(slot.queryByTestId("oats-mail-list")).toBeNull();
   expect(text(slot.getByTestId("oats-mail-empty"))).toBe("No mail.");
+});
+
+// ---- a page with no received mail
+
+/** A recorded first page (two messages, and the cursor of an older one) with ONE field changed: every message's `direction` is "sent". */
+const sentOnly = () => recordedMail("mail-first-page.json", (recorded) => void recorded.messages.forEach((message) => void (message.direction = "sent")));
+
+test("a page that holds only mail the agent sent, with an older page: the older page is read at once, in the same press, and its received mail shows", async () => {
+  const first = sentOnly();
+  expect(first.messages).toEqual([]);
+  expect(first.older).not.toBeNull();
+  const slot = mail({ mail: ({ older }) => (older === null ? first : recordedMail("mail-older-page.json")) });
+  const list = await slot.findByTestId("oats-mail-list");
+  expect(rows(list).map((row) => text(row))).toEqual(["mail-writer15 min agoParser ready for a first read"]);
+  expect(reads(slot)).toEqual([{ instance: AGENT, older: null }, { instance: AGENT, older: first.older }]);
+  expect(slot.queryByTestId("oats-mail-empty")).toBeNull();
+});
+
+test("pages of sent mail only, one after another: ONE press reads three pages and stops; no empty list is drawn and nothing says there is no mail; Older reads on", async () => {
+  const slot = mail({ mail: () => sentOnly() });
+  await slot.findByTestId("oats-mail-older");
+  expect(reads(slot)).toHaveLength(PAGES_A_PRESS);
+  expect(PAGES_A_PRESS).toBe(3);
+  expect(slot.queryByTestId("oats-mail-list")).toBeNull();
+  expect(slot.queryByTestId("oats-mail-empty")).toBeNull();
+  expect(text(slot.getByTestId("oats-mail-older"))).toBe("Older");
+  fireEvent.click(slot.getByTestId("oats-mail-older"));
+  await waitFor(() => expect(reads(slot)).toHaveLength(2 * PAGES_A_PRESS));
+});
+
+test("sent mail only and no older page: No mail.", async () => {
+  const slot = mail({ mail: () => recordedMail("mail-older-page.json", (recorded) => void recorded.messages.forEach((message) => void (message.direction = "sent"))) });
+  expect(text(await slot.findByTestId("oats-mail-empty"))).toBe("No mail.");
+  expect(reads(slot)).toHaveLength(1);
+});
+
+test("a page that followed cannot be read: the line with Retry, which asks for that page again", async () => {
+  const first = sentOnly();
+  let olderAsked = 0;
+  const slot = mail({
+    mail: ({ older }) => {
+      if (older === null) return first;
+      if (++olderAsked === 1) throw new Error("E_AW_TOO_OLD: messaging:mail: aw 1.36.33 cannot list mail threads");
+      return recordedMail("mail-older-page.json");
+    },
+  });
+  const notice = await slot.findByTestId("oats-notice");
+  expect(text(notice.querySelector("h3"))).toBe("aw is too old to read mail.");
+  fireEvent.click(within(notice).getByTestId("oats-mail-retry"));
+  expect(rows(await slot.findByTestId("oats-mail-list"))).toHaveLength(1);
+  expect(reads(slot).at(-1)).toEqual({ instance: AGENT, older: first.older });
 });
 
 // ---- why mail cannot be read
@@ -344,15 +395,14 @@ test("one team's mail cannot be read (recorded): ONE line at the list's end, in 
   expect(text(slot.container)).not.toContain("identity-missing");
 });
 
-test("some of a team's conversations cannot be read: how many, never which (a recorded answer with ONE field changed: the team's `conversations`)", async () => {
-  const page = recordedMail("mail-identity-missing.json");
-  (page.unread[0] as MailPage["unread"][number]).conversations = 2;
+test("some of a team's conversations cannot be read: how many, never which (a recorded answer with ONE field changed: the team's `error`, with the conversations it names)", async () => {
+  const some = (ids: string[]) => recordedMail("mail-identity-missing.json", (recorded) => Object.assign(recorded.identities[1] as Record<string, unknown>, { alias: "mail-reader", identity: "did:key:placeholder-2", error: "conversation-unreadable", unreadableConversations: ids }));
+  const page = some(["c-1", "c-2"]);
   const slot = mail({ mail: () => page });
   await slot.findByTestId("oats-mail-list");
   expect(slot.getAllByTestId("oats-mail-unread").map(text)).toEqual(["wider: 2 conversations can't be read"]);
-  (page.unread[0] as MailPage["unread"][number]).conversations = 1;
   slot.unmount();
-  const one = mail({ mail: () => page });
+  const one = mail({ mail: () => some(["c-1"]) });
   await waitFor(() => expect(one.getAllByTestId("oats-mail-unread").map(text)).toEqual(["wider: 1 conversation can't be read"]));
 });
 

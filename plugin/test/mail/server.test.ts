@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { hostContract, rpcContract } from "../../contract/index.js";
-import type { MailPage } from "../../kernel/mail.js";
+import { MAIL_TIMEOUT_MS, type MailPage } from "../../kernel/mail.js";
+import { MAIL_HOST_TIMEOUT_MS } from "../../server/mail.js";
 import { startBackend, type Backend } from "../support/backend.js";
 
 let backend: Backend | undefined;
@@ -36,13 +37,19 @@ describe("mail", () => {
     expect(argv.slice(-3)).toEqual(["--arg", `cursor=${cursor}`, "--json"]);
   });
 
-  it("answers what the app draws and nothing else of a message: no identity, no address, no id, no sent mail", async () => {
+  it("answers what the app draws and nothing else of a message but an opaque key: no identity, no address, no message or conversation id, no team's label in the key, no sent mail", async () => {
     backend = await startBackend({ verbs: mail("mail-two-teams.json") });
     const page = await backend.rpc<MailPage>("mail", { instance: AGENT, older: null });
-    expect(Object.keys(page).sort()).toEqual(["at", "messages", "older", "unread"]);
+    expect(Object.keys(page).sort()).toEqual(["messages", "older", "unread"]);
     for (const message of page.messages) expect(Object.keys(message).sort()).toEqual(["at", "from", "key", "lines", "sender", "shortened", "subject"]);
     const sent = JSON.stringify(page);
     for (const kept of ["did:key", "mailspike.test/", "conversationId", "Re: first read", "Thanks."]) expect(sent).not.toContain(kept);
+    // The recorded ids of every message and conversation, and the teams' labels: none is in what is answered (a key is a time and a hash).
+    const recorded = (JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures/mail/mail-two-teams.json"), "utf8")) as { result: { result: { mail: { messages: { id: string; conversationId: string; team: string }[] } } } }).result.result.mail.messages;
+    expect(recorded).toHaveLength(5);
+    for (const message of recorded) for (const kept of [message.id, message.conversationId]) expect(sent).not.toContain(kept);
+    for (const message of page.messages) expect(message.key).toMatch(/^\d{4}-\d{2}-\d{2}T[^#]+#[0-9a-f]{16}$/);
+    expect(new Set(page.messages.map((message) => message.key)).size).toBe(page.messages.length);
   });
 
   it("takes an instance and a cursor, and nothing else: no home, no flag, no limit of a caller's", async () => {
@@ -81,9 +88,16 @@ describe("mail", () => {
 });
 
 describe("the mail's verbs: one read each way, and no act", () => {
-  it("the app's contract and the host's each gain `mail`, and the host's is a retryable read", () => {
+  it("the app's contract and the host's each gain `mail`", () => {
     expect(Object.keys(rpcContract).filter((verb) => /mail/i.test(verb))).toEqual(["mail"]);
     expect(Object.keys(hostContract).filter((verb) => /mail/i.test(verb))).toEqual(["mail"]);
-    expect(hostContract.mail.experimental_retryable).toBe(true);
+  });
+
+  it("a slow read ends by the process's own limit, as OATS_TIMEOUT: the host verb is not one bb retries (bb cancels a retryable call at half its limit), and the host call's limit is the longer", () => {
+    expect("experimental_retryable" in hostContract.mail).toBe(false);
+    expect(MAIL_HOST_TIMEOUT_MS).toBeGreaterThan(MAIL_TIMEOUT_MS);
+    // Past the messaging layer's own 150 s budget, and under bb's cap for a host call.
+    expect(MAIL_TIMEOUT_MS).toBeGreaterThan(150_000);
+    expect(MAIL_HOST_TIMEOUT_MS).toBeLessThanOrEqual(30 * 60_000);
   });
 });

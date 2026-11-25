@@ -15,8 +15,14 @@ export const rpc = defineRpcContract({
 
 /**
  * server -> host: `oats operation run messaging:mail`, of the home the kernel's status named for
- * the instance (never a caller's). A read: retryable, and it acknowledges nothing.
+ * the instance (never a caller's). A read, and it acknowledges nothing.
+ *
+ * NOT `experimental_retryable`, alone among the plugin's reads. bb cancels a retryable host call
+ * at HALF its transport timeout and sends it once more with what is left (server/core.ts
+ * `HOST_TIMEOUT`). This read may rightly take minutes (one `aw` call per identity; the messaging
+ * layer's own budget is 150 s): retried, a read of a hundred seconds would be killed, started
+ * again, and killed again, and never answer. A read that is lost says so, and a person presses Retry.
  */
 export const host = defineRpcContract({
-  mail: { experimental_retryable: true, input: z.object({ ...hostBase, home: z.string().min(1), older: cursor.nullable() }).strict(), output: answer(mailPage) },
+  mail: { input: z.object({ ...hostBase, home: z.string().min(1), older: cursor.nullable() }).strict(), output: answer(mailPage) },
 });

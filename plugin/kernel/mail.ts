@@ -24,7 +24,8 @@
 // whole. Here an identity WITH an error may have them empty (the plugin draws neither); one
 // without an error may not.
 //
-// What leaves this module is what the plugin draws, and nothing else of a message: RECEIVED mail
+// What leaves this module is what the plugin draws, and nothing else of a message but a key the
+// app only compares (a hash of the message's team and id, made here: neither crosses): RECEIVED mail
 // only, each text through the display filter (model/text.ts) on the machine, before it leaves it:
 // a sender's alias, a subject and a team as one display line each, a body LINE BY LINE (a line that
 // looks like a credential reads "[withheld]"; the others show). Mail is other people's text: no
@@ -48,6 +49,8 @@ export const MAIL_BODY_LINES = 2000;
  * How long one read may run. The provider stops starting `aw` calls after 150 s and answers what it
  * has, inside the kernel's own 240 s bound for an operation: the plugin waits a little past the
  * provider's budget, so that a slow read is the provider's answer and not a stopped process.
+ * For this limit to be the one that ends a slow read, the host verb is NOT one bb retries
+ * (contract/mail.ts says why) and the host call's own limit is longer (server/mail.ts).
  */
 export const MAIL_TIMEOUT_MS = 170_000;
 
@@ -111,9 +114,30 @@ const message = (value: unknown): boolean =>
 /** A message's identity across pages: its team and its id (ids are the provider's, per identity). */
 const messageKey = (row: Row): string => JSON.stringify([row.team, row.id]);
 
+/** FNV-1a over a text's UTF-16 units, 32 bits, from a given offset basis: eight hexadecimal digits. */
+function fnv(text: string, basis: number): string {
+  let hash = basis;
+  for (let at = 0; at < text.length; at++) {
+    hash ^= text.charCodeAt(at);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+/**
+ * The key the app is given for a message: when it was sent, and 64 bits of hash of its team and
+ * id, made on the machine. It is only ever compared (a list's key, the message a person opened,
+ * a message already held from another page), so the provider's id and the team's label need not
+ * cross, and do not. Pure and with no Node import: the contract's schemas are bundled into the
+ * app with this module.
+ */
+const shownKey = (row: Row): string => {
+  const raw = messageKey(row);
+  return `${row.createdAt as string}#${fnv(raw, 0x811c9dc5)}${fnv(raw, 0x01234567)}`;
+};
+
 /** One message the agent received, as the plugin draws it. */
 export const mailMessage = z.object({
-  /** the message's identity across pages: its team and its id; opaque, only ever compared */
+  /** the message's identity across pages, opaque and only ever compared: when it was sent and a hash of its team and id */
   key: z.string(),
   /** the sender's alias, one display line */
   from: z.string(),
@@ -136,8 +160,6 @@ export const mailUnread = z.object({
   conversations: z.number().int().nullable(),
 });
 export const mailPage = z.object({
-  /** when the provider read it */
-  at: z.string(),
   /** the mail the agent RECEIVED on this page, newest first */
   messages: z.array(mailMessage),
   unread: z.array(mailUnread),
@@ -224,7 +246,7 @@ export function parseMail(document: unknown): Result<MailPage> {
       const { lines, cut } = bodyLines(body.text);
       const verification = row.verification as string;
       return {
-        key: messageKey(row),
+        key: shownKey(row),
         from: shown((row.from as Row).alias),
         subject: displayLine(row.subject) ?? displayLine(row.threadTitle),
         at: row.createdAt as string,
@@ -238,7 +260,7 @@ export function parseMail(document: unknown): Result<MailPage> {
     .filter((row) => row.error !== null)
     // The provider's word for why (`error`) is not drawn, so it does not leave the machine.
     .map((row): MailUnread => ({ team: shown(row.team), conversations: Array.isArray(row[UNREADABLE]) && row[UNREADABLE].length > 0 ? row[UNREADABLE].length : null }));
-  return ok({ at: mail.observedAt, messages, unread, older: mail.hasMore && cursorUsable(mail.nextCursor) ? mail.nextCursor : null });
+  return ok({ messages, unread, older: mail.hasMore && cursorUsable(mail.nextCursor) ? mail.nextCursor : null });
 }
 
 export const verbs = (oats: Runner) => ({

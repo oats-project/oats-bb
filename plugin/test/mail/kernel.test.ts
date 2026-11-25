@@ -87,6 +87,9 @@ describe("the recorded mail", () => {
     expect(page.unread).toEqual([]);
     expect(page.older).toBeNull();
     expect(new Set(page.messages.map((message) => message.key)).size).toBe(3);
+    // A key is when the message was sent and a hash: the same for the same message in another answer, and it holds neither its id nor its team.
+    expect(read("mail-two-teams.json").messages.map((message) => message.key)).toEqual(expect.arrayContaining(page.messages.map((message) => message.key)));
+    for (const message of page.messages) expect(message.key).toBe(`${message.at}#${message.key.slice(-16)}`);
   });
 
   it("a body keeps its lines, and its blank lines", () => {

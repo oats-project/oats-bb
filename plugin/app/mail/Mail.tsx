@@ -19,20 +19,16 @@ import { MAIL, codeOf, refusalLine, senderWord, unreadLine } from "./words";
 
 const WARN = "text-warning-text";
 
-/** The age of a message, and what is known of its sender where that is a safety fact. */
-function Under({ message, now }: { message: MailMessage; now: number }) {
+/** What is known of a message's sender, where it is a safety fact, after a point: nothing for a verified sender. */
+function Sender({ message }: { message: MailMessage }) {
   const word = senderWord(message.sender);
+  if (word === null) return null;
   return (
     <>
-      {age(message.at, now) ?? ""}
-      {word === null ? null : (
-        <>
-          {" · "}
-          <span data-testid="oats-mail-sender" className={WARN}>
-            {word}
-          </span>
-        </>
-      )}
+      {" · "}
+      <span data-testid="oats-mail-sender" className={WARN}>
+        {word}
+      </span>
     </>
   );
 }
@@ -42,21 +38,13 @@ function Row({ message, now, onOpen, focus }: { message: MailMessage; now: numbe
   useEffect(() => {
     if (focus) button.current?.focus();
   }, [focus]);
-  const word = senderWord(message.sender);
   return (
     <li className="min-w-0 border-t border-border first:border-t-0">
       <button ref={button} type="button" data-testid="oats-mail-row" onClick={onOpen} className={`${TARGET} flex w-full min-w-0 flex-col items-stretch gap-0.5 px-1 py-2 text-left hover:bg-accent`}>
         <span className="flex min-w-0 items-baseline justify-between gap-2 text-xs text-muted-foreground">
           <span className="min-w-0 break-words">
             {message.from}
-            {word === null ? null : (
-              <>
-                {" · "}
-                <span data-testid="oats-mail-sender" className={WARN}>
-                  {word}
-                </span>
-              </>
-            )}
+            <Sender message={message} />
           </span>
           <span className="shrink-0">{age(message.at, now) ?? ""}</span>
         </span>
@@ -82,7 +70,8 @@ function Message({ message, now, onBack }: { message: MailMessage; now: number; 
       <header className="flex min-w-0 flex-col gap-0.5">
         <h3 className="break-words text-sm font-semibold text-foreground">{message.subject ?? MAIL.noSubject}</h3>
         <p className="text-xs text-muted-foreground">
-          <Under message={message} now={now} />
+          {age(message.at, now) ?? ""}
+          <Sender message={message} />
         </p>
       </header>
       <div data-testid="oats-mail-body" className="flex min-w-0 flex-col text-sm text-foreground">
@@ -160,10 +149,14 @@ export function Mail({ instance }: { instance: string }) {
           </Button>
         </div>
       )}
-      {held.messages.length === 0 && held.older === null ? (
-        <p data-testid="oats-mail-empty" className="py-2 text-sm text-muted-foreground">
-          {MAIL.empty}
-        </p>
+      {held.messages.length === 0 ? (
+        // No received mail in what was read. With no older page: "No mail.". With one (the pages read
+        // held only mail the agent sent): no line claims there is none, and "Older" reads on.
+        held.older !== null ? null : (
+          <p data-testid="oats-mail-empty" className="py-2 text-sm text-muted-foreground">
+            {MAIL.empty}
+          </p>
+        )
       ) : (
         <ul aria-label={MAIL.list} data-testid="oats-mail-list" className="flex min-w-0 flex-col">
           {held.messages.map((message) => (

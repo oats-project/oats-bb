@@ -4,7 +4,11 @@ import type { rpc } from "../contract/mail.js";
 import { MAIL_TIMEOUT_MS } from "../kernel/mail.js";
 import type { Core } from "./core.js";
 
-/** The host call's limit: a little past the process's own (kernel/mail.ts), so that the process's answer is the one that arrives. */
+/**
+ * The host call's limit: a little past the process's own (kernel/mail.ts), so that the process's
+ * answer, or its typed OATS_TIMEOUT, is what arrives. That holds because the host verb is not one
+ * bb retries (contract/mail.ts): bb would else cancel the call at half this limit.
+ */
 export const MAIL_HOST_TIMEOUT_MS = MAIL_TIMEOUT_MS + 10_000;
 
 export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<typeof rpc> => ({

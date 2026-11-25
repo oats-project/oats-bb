@@ -1,5 +1,6 @@
 // The read of one agent's mail: when the view is shown, on Refresh and on Older, and at no other
-// time: never on the roster's poll, never on `oats/changed`, never on a timer. Each read is one
+// time: never on the roster's poll, never on `oats/changed`, never on a timer. One press reads one
+// page, and up to PAGES_A_PRESS where a page holds no received mail. Each read is one
 // `aw` call per identity of the agent, over the network, and it marks nothing read.
 //
 // What was read is kept for the app window, by instance: a view shown again shows it at once, and
@@ -45,6 +46,14 @@ onWindowReset(() => {
   flying.clear();
 });
 
+/**
+ * The most pages ONE press reads. A page is the messaging layer's 50 newest messages of both
+ * directions, and only the received ones are shown: where a page adds none (an agent that wrote
+ * much and was not answered), the next older page is read at once, so that a press shows mail or
+ * says there is none; after this many pages it stops, and "Older" is there for the rest.
+ */
+export const PAGES_A_PRESS = 3;
+
 const merged = (held: Held, page: MailPage): Held => {
   const known = new Set(held.messages.map((message) => message.key));
   return { ...held, messages: [...held.messages, ...page.messages.filter((message) => !known.has(message.key))], unread: page.unread, older: page.older };
@@ -73,13 +82,31 @@ export function useMail(instance: string): MailRead {
           mine.then(landed, landed);
         }
       }
-      void asked.then(
-        (page) => {
+      /** The pages after the first of this press, while a page added no received mail and an older one is there. */
+      const followed = async (first: MailPage): Promise<{ next: Held; failed: unknown }> => {
+        const before = kept.get(instance);
+        let next: Held = of === "older" && before !== undefined ? merged(before, first) : { messages: first.messages, unread: first.unread, older: first.older, readAt: Date.now() };
+        let added = next.messages.length - (of === "older" && before !== undefined ? before.messages.length : 0);
+        for (let pages = 1; added === 0 && next.older !== null && pages < PAGES_A_PRESS; pages++) {
+          const from = next.older;
+          let page: MailPage;
+          try {
+            page = await attempt(() => rpc.call("mail", { instance, older: from }));
+          } catch (cause) {
+            return { next, failed: cause };
+          }
+          const size = next.messages.length;
+          next = merged(next, page);
+          added = next.messages.length - size;
+        }
+        return { next, failed: undefined };
+      };
+      void asked.then(followed).then(
+        ({ next, failed }) => {
           if (serial.current !== mine) return;
-          const before = kept.get(instance);
-          const next: Held = of === "older" && before !== undefined ? merged(before, page) : { messages: page.messages, unread: page.unread, older: page.older, readAt: Date.now() };
           kept.set(instance, next);
-          setState({ instance, held: next, fetching: null, error: null });
+          // A page that followed could not be read: what was read is kept, and Retry asks for the page after it.
+          setState({ instance, held: next, fetching: null, error: failed === undefined ? null : { text: errorMessage(failed), of: "older" } });
         },
         (cause: unknown) => {
           if (serial.current !== mine) return;

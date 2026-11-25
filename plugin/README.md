@@ -791,10 +791,18 @@ The agent's messaging layer answers it (`oats.aweb`, `mailApi: 1`). It runs only
 refuses WHOLE an answer that does not say so, and shows nothing of it. The argv is built in
 `kernel/mail.ts` and pinned by a test; the app sends an instance's name and a cursor, never a
 home, a flag or a limit. The read may take long (one `aw` call per identity of the agent, over the
-network; the messaging layer's own budget is 150 s), so it has a time limit of its own, 170 s.
+network; the messaging layer's own budget is 150 s), so it has a time limit of its own, 170 s,
+and its host verb is the one read of the plugin that bb does NOT retry: bb cancels a retryable
+host call at half its limit and sends it again, which would kill a read of a hundred seconds
+twice and answer nothing (`contract/mail.ts`). A read that runs out of time says "Reading took
+too long."; one that is lost says "Mail can't be read."; each has Retry.
 
 **When it reads.** When the view is shown, on **Refresh**, and on **Older** (the page after the
-last one, while the messaging layer says there is one): never on the roster's poll, never when
+last one, while the messaging layer says there is one). A page is the messaging layer's 50 newest
+messages of BOTH directions, of which the received ones are shown: where a page adds none (an
+agent that wrote much and was not answered), the next older page is read at once, up to three
+pages a press, so that a press shows mail or says there is none; after three such pages no line
+claims there is no mail, and Older reads on. Otherwise it reads at no other time: never on the roster's poll, never when
 OATS changes, never on a timer. What was read is kept for the window: a view shown again shows it
 at once and reads again behind it; shown while a read of that agent's first page is still on its
 way, it takes that read's answer and starts no second one. "Read <age>." stands beside Refresh once what is shown is older
@@ -812,7 +820,9 @@ display lines on the machine, before it leaves it (`kernel/mail.ts`, with `model
 sender's alias, the subject and a team's label each as one display line; the body LINE BY LINE, so
 that a line with a control character or one shaped like a credential reads "[withheld]" and the
 others show. The app draws those lines as text: never markup, never a link. Only received mail,
-and only what is drawn, leaves the machine: no identity, no address, no message id, nothing of the
+and only what is drawn, leaves the machine, with one opaque key a message (when it was sent, and
+a hash of its team and id, made on the machine: the app only compares it): no identity, no
+address, no message id, nothing of the
 mail the agent sent, and not the messaging layer's word for why a team's mail could not be read. Nothing of a message is ever logged, and no fixture is taken from a real
 workspace (`test/fixtures/mail/README.md`).
 

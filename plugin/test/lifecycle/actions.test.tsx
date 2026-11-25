@@ -1196,6 +1196,34 @@ test("the Start gate is the Desktop's: running is already running; what is not k
   expect(await gated({ running: true, runtimeState: "unreachable" }, "restart")).toBe(UNKNOWN);
 });
 
+// SHAPED: the recorded retire receipt with its one child's row changed to `ok: false` (OATS 0.70.5 refuses the whole
+// retire then and answers no such receipt: test/fixtures/lifecycle/README.md, "A retire's child that did not stop").
+test("a retire whose child did not stop (the recorded receipt, that child's row ok: false) is not told as done: \"… retired.\" in the not-confirmed tone, the child named as a stop names a session that did not stop, and its code", async () => {
+  const { actedAt } = await import("../../app/roster/reading");
+  const END = "2026-11-19T12:30:03.000Z"; // the act's command returned, on the server's clock
+  const recorded = retireReceiptOf();
+  const receipt = { ...recorded, endedAt: END, children: recorded.children.map((child) => ({ ...child, ok: false, alreadyIdle: false, code: "E_SESSION_STOP_FAILED", stillRunning: [4242], detail: null })) };
+  const { slot, pick } = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => receipt });
+  await pick("retire");
+  await ready(slot);
+  fireEvent.click(button(slot, "oats-confirm-act"));
+  await phase(slot, "done");
+  const result = slot.getByTestId("oats-result");
+  expect(result.querySelector("h3")!.textContent).toBe("Weekly digest helper retired.");
+  // Not the done tone: the result is drawn as one that is not confirmed, and its first line, the child, in the warning tone.
+  expect(result.getAttribute("data-tone")).toBe("unknown");
+  const first = result.querySelector("p")!;
+  expect([first.getAttribute("data-tone"), first.textContent]).toEqual(["warning", "Digest links helper: Didn't stop"]);
+  expect(result.textContent).not.toContain("stopped and kept");
+  // The Stop result's code is one press away, with what still runs. No "Review again": the agent of that plan is retired.
+  const more = slot.getByTestId("oats-act-details");
+  expect(more.textContent).toContain("E_SESSION_STOP_FAILED");
+  expect(more.textContent).toContain("digest-links-helper: still running: 4242");
+  expect(slot.getByTestId("oats-confirm").textContent).not.toContain("Review again");
+  // The agent WAS retired: its row reads again ("Reading…" until the roster is one read after the act). The child that did not stop is not said to have changed.
+  expect([actedAt("weekly-digest-helper"), actedAt("digest-links-helper")]).toEqual([END, null]);
+});
+
 // ---- from the third review round
 
 test("a retire that kept the home of an agent on bb warns first, in the warning tone, that a message in its thread would start it outside OATS; the release lane's words are one press away, under the result's one Details", async () => {
@@ -2661,10 +2689,11 @@ test("a Stop that did not stop them all: the sessions that DID stop are marked (
   expect(partial.results.map((row) => [row.ok, actedAt(row.instance)])).toEqual(partial.results.map((row) => [row.ok, row.ok ? ENDED : null]));
 });
 
-// "Check again" asks for the receipt of an act the kernel already did: a REPLAYED receipt. The act is not new, and the
-// server's stamp on a replay is when the replay returned, not when the act ended: it marks nobody (ruled from the fourth
-// review round: each press held the agents ten seconds for nothing).
-test("a REPLAYED receipt marks nobody: neither a stop's sessions nor a retire's agent and children", async () => {
+// "Check again" asks for the receipt of an act the kernel already did: a REPLAYED receipt. It marks as any other
+// (ruled after the fourth review round's last read, the earlier ruling reversed): pressed in the second or two between
+// the act's end and its own read's publish the window's roster is still the one from before; and now that the server
+// publishes the read a replay asks for, the mark costs a second of "Reading…", not the bound.
+test("a REPLAYED receipt marks as any other: a stop's sessions, a retire's agent and children, with the replay's stamp", async () => {
   const { actedAt } = await import("../../app/roster/reading");
   const stop = await menu("thr_redesign", { stopPlan: () => stopPlanOf(), stopApply: () => ({ ...stopReceiptOf(), replayed: true, endedAt: ENDED }) });
   await stop.pick("stop");
@@ -2672,7 +2701,13 @@ test("a REPLAYED receipt marks nobody: neither a stop's sessions nor a retire's 
   fireEvent.click(button(stop.slot, "oats-confirm-act"));
   await waitFor(() => expect(stop.slot.getByTestId("oats-confirm").getAttribute("data-phase")).not.toBe("running"));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"].map(actedAt)).toEqual([null, null, null]);
+  await waitFor(() => expect(["redesign-ui-lead", "desktop-mockups-developer", "harvest-knowledge-helper"].map(actedAt)).toEqual([ENDED, ENDED, ENDED]));
+  // And the agent's ROW says so (the rows say "Reading…" since the second look; they read the same marks): the sidebar
+  // of the same window, its roster from before the replay's end, draws the word in the facts' place of the lead's row.
+  const list = renderSlot<never, Contract>((await loadApp()).threadLists[0]! as never, { activeThreadId: null, activeProjectId: null, isCompactViewport: false, onNavigate: () => undefined, searchQuery: "" } as never, { rpc: handlers({}), sidebarThreads: sidebarThreads(), sdk: modelsSdk() as never });
+  await list.findByTestId("oats-tree");
+  await waitFor(() => expect(list.getAllByTestId("oats-row-reading").map((word) => word.textContent)).toContain("Reading…"));
+  expect(list.getAllByTestId("oats-row-reading")[0]!.closest("a")!.textContent).toContain("Redesign ui lead");
   resetApp();
   const stoppedChild = { instance: "digest-links-helper", ok: true, alreadyIdle: false, code: null, stillRunning: null, detail: null };
   const retire = await menu("thr_digest", { retirePlan: () => retirePlanOf(), retireApply: () => ({ ...retireReceiptOf(), replayed: true, children: [stoppedChild], endedAt: ENDED }) });
@@ -2681,7 +2716,7 @@ test("a REPLAYED receipt marks nobody: neither a stop's sessions nor a retire's 
   fireEvent.click(button(retire.slot, "oats-confirm-act"));
   await waitFor(() => expect(retire.slot.getByTestId("oats-confirm").getAttribute("data-phase")).not.toBe("running"));
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect([actedAt("weekly-digest-helper"), actedAt("digest-links-helper")]).toEqual([null, null]);
+  await waitFor(() => expect([actedAt("weekly-digest-helper"), actedAt("digest-links-helper")]).toEqual([ENDED, ENDED]));
 });
 
 test("a Start, a Restart and a Retire that are done mark their agent with the act's end (mid-act roster: before; one read after it: read); a Retire marks the children it stopped too; a refused apply marks nothing", async () => {

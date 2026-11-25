@@ -1,6 +1,6 @@
 // Installs the fake `oats` (container/fake-oats.mjs) in a temporary directory, with the behaviour a
 // test asks for, and reads back the calls it logged.
-import { chmod, copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,7 +41,12 @@ export async function installFakeOats(verbs: Record<string, Behaviour> = {}): Pr
   const config = join(root, "fake-oats.json");
   await copyFile(SCRIPT, bin);
   await chmod(bin, 0o755);
-  const behave = (next: Record<string, Behaviour>) => writeFile(config, JSON.stringify({ fixtures: FIXTURES, log, verbs: next }));
+  // Written whole beside its place and renamed into it: the fake reads this file at every `oats` it
+  // stands for, and a poll may start one while a test changes it (container/files.mjs: the same rule).
+  const behave = async (next: Record<string, Behaviour>) => {
+    await writeFile(`${config}.writing`, JSON.stringify({ fixtures: FIXTURES, log, verbs: next }));
+    await rename(`${config}.writing`, config);
+  };
   await behave(verbs);
   await writeFile(join(root, "oats-local.yaml"), "# a deployment, for the tests\n");
   return {
@@ -57,7 +62,9 @@ export async function installFakeOats(verbs: Record<string, Behaviour> = {}): Pr
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
         throw error;
       }
+      // The complete lines: the fake appends while this reads, and a last line with no newline yet is a call still being logged.
       return text
+        .slice(0, text.lastIndexOf("\n") + 1)
         .split("\n")
         .filter((line) => line !== "")
         .map((line) => JSON.parse(line) as Call);

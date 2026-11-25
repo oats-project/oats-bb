@@ -40,9 +40,11 @@ export function completeLines(file) {
  * A whole JSON file that a process which is NOT ours writes (Claude Code's own state, which it
  * rewrites while the run's agents are up): we cannot make that writer write it whole, so the read
  * WAITS for a whole file. It is parsed; where it does not parse it is read again, every 100 ms,
- * for `seconds` at most; then the read FAILS, with the file's length and its END (a file half
- * written is broken at its end). A file that stays broken is not skipped and not taken for an
- * empty one.
+ * for `seconds` at most; then the read FAILS, with the file's name, its length and what the
+ * parser said (which gives the place), and NOTHING of its content: this is another program's
+ * state, and the message goes into a log. (The parser quotes the text it stopped at in one of its
+ * messages, "Unexpected token …": that one is cut to its first two words.) A file that stays
+ * broken is not skipped and not taken for an empty one.
  */
 export function wholeJson(file, seconds = 5) {
   const end = Date.now() + seconds * 1000;
@@ -52,7 +54,7 @@ export function wholeJson(file, seconds = 5) {
     try {
       return JSON.parse(text);
     } catch (error) {
-      if (Date.now() >= end) throw new Error(`${file} did not parse in ${seconds} s (another process writes it): ${error.message}. It held ${text.length} characters, ending: ${JSON.stringify(text.slice(-200))}`);
+      if (Date.now() >= end) throw new Error(`${file} did not parse in ${seconds} s (another process writes it): ${/is not valid JSON$/.test(error.message) ? "Unexpected token" : error.message}. It held ${text.length} characters.`);
     }
     Atomics.wait(pause, 0, 0, 100); // a pause that needs no promise: the callers read as they go
   }

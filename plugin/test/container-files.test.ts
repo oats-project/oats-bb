@@ -80,18 +80,28 @@ test("a file found half written is read again until it is whole", () => {
   expect(JSON.parse(out) as unknown).toEqual({ value: { theme: "dark" }, waited: true });
 });
 
-test("a file that stays broken fails the read, with its length and its end: it is not skipped, and not taken for an empty one", async () => {
+test("a file that stays broken fails the read, with its name, its length and the parser's word: it is not skipped, and not taken for an empty one", async () => {
   const { wholeJson } = await files();
   const file = join(dir, "state.json");
   writeFileSync(file, '{"theme":"da');
   const started = Date.now();
-  expect(() => wholeJson(file, 0.3)).toThrow(/did not parse in 0\.3 s .*It held 12 characters, ending: "\{\\"theme\\":\\"da"/);
+  expect(() => wholeJson(file, 0.3)).toThrow(/state\.json did not parse in 0\.3 s \(another process writes it\): Unterminated string in JSON at position 12 .*It held 12 characters\.$/);
   expect(Date.now() - started, "it waited its time out first").toBeGreaterThanOrEqual(300);
 });
 
-test("a long file that stays broken is said by its end, where a half-written file stops, in 200 characters", async () => {
+test("the failure says nothing of what the file held: it is another program's state, and the message goes into a log", async () => {
   const { wholeJson } = await files();
   const file = join(dir, "state.json");
-  writeFileSync(file, `{"head":"${"x".repeat(5000)}","tail":"cut he`);
-  expect(() => wholeJson(file, 0)).toThrow(/It held 5025 characters, ending: "x{184}\\",\\"tail\\":\\"cut he"$/);
+  // Each a way the parser can stop; the fourth is the one where the parser itself quotes the text.
+  for (const held of ['{"key":"SECRETWORD', '{"key":"SECRETWORD"}}', '{"key":"SECRETWORD" x', '{"key": SECRETWORD}', "SECRETWORD"]) {
+    writeFileSync(file, held);
+    let said = "";
+    try {
+      wholeJson(file, 0);
+    } catch (error) {
+      said = (error as Error).message;
+    }
+    expect(said, held).toContain(`It held ${held.length} characters.`);
+    expect(said, held).not.toMatch(/SECRET|key/);
+  }
 });

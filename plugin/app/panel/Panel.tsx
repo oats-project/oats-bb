@@ -3,6 +3,7 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { BOARD, Board } from "../board";
 import { OutsideAgent, OutsideAgentDetails, pageActs, pageParts, words as outsideWords } from "../outside";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
@@ -41,8 +42,10 @@ const NO_NODES: ReadonlyMap<string, Node> = new Map();
 type RosterFailure = { code: string; message: string; machine: string | null; line: string; /** when the roster kept was read; null where none ever was */ at: string | null; retry(): void };
 
 /** The panel's tabs. */
-export type TabId = "instance" | "soul";
+export type TabId = "board" | "instance" | "soul";
 const TABS: readonly TabItem<TabId>[] = [
+  // The agent's questions and facts, FIRST: a view of its own (app/board) that takes the agent's name and nothing of the panel's.
+  { id: "board", label: BOARD.tab },
   { id: "instance", label: "Instance" },
   { id: "soul", label: "Soul" },
 ];
@@ -235,7 +238,7 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
         <Tabs label="Instance context" tabs={TABS} value={tab} onChange={showPanelTab} panelId={PANEL_ID} />
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-        {tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} unread={failure !== null} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} />}
+        {tab === "board" ? <Board instance={agent.instance} /> : tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} unread={failure !== null} /> : <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} />}
       </div>
     </>
   );

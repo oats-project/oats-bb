@@ -61,8 +61,11 @@ describe("the harnesses the bb session provider declares", () => {
   });
 
   it("there a preview and a spawn name NO backend, no mode and no harness: the kernel decides, as `oats spawn <soul>` does; a harness named is refused before any process", async () => {
-    backend = await startBackend({ verbs: { "capabilities show": { stdout: ABSENT } } });
-    await backend.rpc("spawnPlan", { soul: "oats-developer", task: "" });
+    // (The kernel's own preview there, recorded by the real run: on tmux, with NO mode decided.)
+    backend = await startBackend({ verbs: { "capabilities show": { stdout: ABSENT }, "spawn --preview": { stdout: readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8") } } });
+    const plan = (await backend.rpc("spawnPlan", { soul: "oats-developer", task: "" })) as { facts: { facts: { label: string; parts: { text: string }[] }[] } };
+    // The column follows what was asked: it says where the kernel put it, and nothing of an access nobody asked for.
+    expect(plan.facts.facts.filter((fact) => ["Session", "Runs in", "Access"].includes(fact.label)).map((fact) => [fact.label, fact.parts[0]!.text])).toEqual([["Runs in", "tmux session"]]);
     await backend.rpc("spawn", { soul: "oats-developer", task: "", key: "spawn-0a1b2c3d" });
     const calls = (await backend.fake.calls()).filter((call) => call.verb === "spawn --preview" || call.verb === "spawn");
     expect(calls.length).toBeGreaterThanOrEqual(2);

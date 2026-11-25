@@ -131,6 +131,9 @@ export default async (run) => {
       check(Boolean(read), `${at}: the kernel's preview is read for the values on screen, and Spawn is armed by a soul and a name alone`, JSON.stringify(drawn));
       check(drawn.harnessField === false && drawn.retry === false && drawn.alert === false && !/Harnesses could not be read|bb is not set up|bb’s default|not installed in bb/.test(drawn.text), `${at}: nothing of bb's is offered and nothing is said to have failed: no Harness field, no Retry, no red sentence`, JSON.stringify({ harnessField: drawn.harnessField, retry: drawn.retry, alert: drawn.alert }));
       check(JSON.stringify(drawn.runsIn) === JSON.stringify(["tmux session"]) && drawn.text.split("tmux session").length === 2 && !/bb thread/.test(drawn.text), `${at}: the column says where it will run, once, in view: "Runs in / tmux session" (from the preview's own backend); never "bb thread"`, JSON.stringify({ runsIn: drawn.runsIn, harness: drawn.harness, access: drawn.access }));
+      // The mode: the plugin asked for none and the kernel decided none (`yolo: null`, checked below on the recorded
+      // preview): the column says nothing of the access, never bb's "no sandbox".
+      check(drawn.access === null && !/no sandbox/.test(drawn.text), `${at}: the column does not say "no sandbox": no mode was asked and the kernel decided none`, JSON.stringify({ access: drawn.access }));
       show("what will be created", { name: drawn.name, harness: drawn.harness, runsIn: drawn.runsIn, access: drawn.access });
       await page.evaluate(`document.querySelector(${q("oats-spawn-submit")}).scrollIntoView({ block: "center" })`);
       await shot("preview");
@@ -153,6 +156,7 @@ export default async (run) => {
       check(call !== undefined && ["--backend", "--yolo", "--harness", "--model"].every((flag) => !call.argv.includes(flag)), `the form's ${what} named NO backend, no mode, no harness and no model: the kernel decided`, JSON.stringify(call?.argv ?? "no such call"));
     }
     const previewed = preview === undefined ? null : JSON.parse(preview.stdout);
+    check(previewed?.ok === true && (previewed.result.decision?.effective?.yolo ?? null) === null, "the kernel's preview decided NO mode (`decision.effective.yolo: null`): what the column's silence on the access rests on", JSON.stringify(previewed?.ok ? { yolo: previewed.result.decision?.effective?.yolo ?? null } : previewed));
     check(previewed?.ok === true && previewed.result.backend === "tmux", 'the kernel\'s preview says where it decided to run it: `backend: "tmux"`', JSON.stringify(previewed?.ok ? { backend: previewed.result.backend, backendStatus: previewed.result.backendStatus, harness: previewed.result.harness, model: previewed.result.model, yolo: previewed.result.decision?.effective?.yolo } : previewed));
     if (preview !== undefined) fixtures.keep("spawn/spawn-preview-no-provider.json", preview.stdout);
     const spawned = applied === undefined ? null : JSON.parse(applied.stdout);

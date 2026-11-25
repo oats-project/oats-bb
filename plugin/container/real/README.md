@@ -94,7 +94,7 @@ together.
 | `run.sh` | on the host | starts the container, copies in the plugin, the provider's tree and, for an unreleased kernel, the kernel's tree (this checkout's `oats-package/` as committed at `HEAD`; uncommitted changes there stop the run), runs the two scripts below, copies the artefacts back to `real/out/` |
 | `setup.sh` | in the container | the installs and the services, in this order (below) |
 | `bb-logs.sh` | in the container, by `run.sh` (and `../ci.sh`) when the run failed | copies bb's own logs, cut short, and its crash reports beside the artefacts (`bb-logs/`), and says what bb's log directory holds |
-| `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment |
+| `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment; and a second workspace and deployment with NO bb session provider (`$REAL/plain/deploy`: oats.core alone), for `parts/plain.mjs` |
 | `bb-plugin-command.sh` | by `setup.sh` and `scenario.mjs` | runs a command one of bb's plugins adds to its CLI (`bb concurrency-limit status`), waiting up to 60 s for bb to have it; `bb-plugin-command.test.sh` is its test, run by `container/unit.sh` |
 | `mock-anthropic.mjs` | in the container | the mock model |
 | `oats-record.mjs` | as the plugin's `oats` | the recording wrapper |

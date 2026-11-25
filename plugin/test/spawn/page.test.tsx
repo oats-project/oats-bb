@@ -613,13 +613,14 @@ test("a name the kernel refuses at the preview is said under the name, in a pers
 });
 
 test("a deployment with NO bb session provider: no harness to choose and no red sentence (nothing failed); the preview says where it will run, once; a soul alone arms Spawn, which names no harness; the new agent's own page opens", async () => {
-  // What the kernel decides there, as its preview says it: the soul's own harness, on tmux, in the harness's own mode.
-  const onTmux = { ...recorded, harness: "claude", model: "claude-opus-5-5", backend: "tmux", warnings: [], decision: { ...(recorded.decision as Record<string, unknown>), effective: { yolo: false } } };
+  // What the kernel decides there, as its own preview said it in the real run's second deployment (recorded): the
+  // soul's own harness, on tmux, and NO mode (`yolo: null`).
+  const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
   let listed = 0;
   const slot = await ready(
     {
       spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false }),
-      spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null }), revision: REVISION }),
+      spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }),
       spawn: () => ({ instance: "oats-developer-3", threadId: null }),
     },
     { models: () => ((listed += 1), { modelLoadError: null, models: [] }) },
@@ -635,6 +636,9 @@ test("a deployment with NO bb session provider: no harness to choose and no red 
   expect(rows(slot).inView).toContainEqual(["Runs in", "tmux session"]);
   expect(slot.getByTestId("oats-spawn-form").textContent!.split("tmux session")).toHaveLength(2);
   expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/bb thread/);
+  // No mode was asked and the kernel decided none: nothing says "no sandbox", which is bb's and does not hold here.
+  expect(rows(slot).inView.map(([label]) => label)).not.toContain("Access");
+  expect(slot.getByTestId("oats-new-agent-page").textContent).not.toMatch(/no sandbox/);
   // A soul alone arms Spawn; the preview and the spawn name no harness.
   expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]);
   expect(calls(slot, "spawnPlan").every((call) => call.harness === undefined)).toBe(true);

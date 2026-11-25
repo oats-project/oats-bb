@@ -290,9 +290,13 @@ const first = [
       // Its soul stands under its acts by its name alone: no "instance of".
       const soulLine = await page.evaluate(`(document.querySelector(${JSON.stringify(inPanel("oats-panel-soul-link"))})?.parentElement?.innerText ?? "").replace(/\\s+/g, " ").trim()`);
       check(soulLine === "oats-expert", `${at} the header names the soul alone, as the way to the Soul tab`, soulLine);
-      // What it asks stands first on the page, under no heading: its message, then since when (the clock time left the header for here).
+      // What it asks stands first on the page, under no heading: its message alone. How long it has waited is said once, in the header.
       const asks = await page.evaluate(`(() => { const block = document.querySelector(${JSON.stringify(inPanel("oats-panel-waiting"))}); return block ? JSON.stringify({ text: block.innerText.replace(/\\s+/g, " ").trim(), headings: block.querySelectorAll("h1, h2, h3").length, head: block.querySelector(${JSON.stringify(testId("oats-panel-waiting-head"))}) !== null, first: block.parentElement.firstElementChild === block }) : ""; })()`);
-      check(/^\{"text":"since (\w{3} \d+, |\d{4}-\d\d-\d\d )?\d\d:\d\d Which base branch\?","headings":0,"head":false,"first":true\}$/.test(asks), `${at} what the agent asks is first on the page, under no heading: since when, then its message; no sentence for the reason`, asks);
+      check(asks === '{"text":"Which base branch?","headings":0,"head":false,"first":true}', `${at} what the agent asks is first on the page, under no heading: its message alone; no sentence for the reason, and no second age under the header's`, asks);
+      const tip = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-state"))})?.getAttribute("title")`);
+      check(tip === null, `${at} and the clock time is in no tooltip of the header (a phone has no hover): the activity's row holds the claim's instant`, String(tip));
+      const asked = await page.evaluate(`(document.querySelector(${JSON.stringify(testId("oats-panel"))})?.innerText ?? "").split("Which base branch?").length - 1`);
+      check(asked === 1, `${at} the question is said once in the pane`, String(asked));
       const work = await page.evaluate(textOf(inPanel("oats-panel-work-sentence")));
       check(work === "worktree · agents/panel-worktree-helper", `${at} Work: the mode as a fact, with its branch`, work);
       const session = await page.evaluate(textOf(inPanel("oats-panel-session"))); // (the heading is drawn in capitals: innerText reads what is drawn)
@@ -345,8 +349,9 @@ const first = [
         const read = await page.evaluate(textOf(inPanel("oats-panel-soul-description")));
         check(read === "OATS expert: answers questions about OATS.", `${at} the Soul tab: the soul's description`, read);
       }
-      const details = await reads(page, inPanel("oats-panel-details"), ["Details", "/agents"]);
-      check(details.includes("Details") && /agents root/i.test(details) && details.includes("/agents"), `${at} Details: the agents root, with its Copy`, details);
+      // No lone "Details" at the tab's foot: the agents root is said under what it explains (Readiness's fold, "Soul: <key> · <agents root>": the unit tests read it).
+      const lone = await page.evaluate(`JSON.stringify({ details: document.querySelector(${JSON.stringify(inPanel("oats-panel-details"))}) !== null, said: /agents root/i.test(document.querySelector(${JSON.stringify(inPanel("oats-panel-page-soul"))})?.innerText ?? "") })`);
+      check(lone === '{"details":false,"said":false}', `${at} the Soul tab has no fold of its own for the agents root at its foot`, lone);
       const offered = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-open-soul"))})?.disabled ?? null`);
       check(offered === false, `${at} Open soul page is offered`, `the button's disabled: ${offered} (null: no such button)`);
       await settled(page, viewport);
@@ -896,13 +901,20 @@ const more = [
         check(/^Started (just now|\d+ (min|h|d) ago|\d{4}-\d\d-\d\d)$/.test(started), `${at} since when it runs is a labelled fact of its session: Started …`, started);
       }
       check(!(await page.evaluate(visible(inPanel("oats-panel-waiting")))), `${at} an agent that does not wait shows no question`);
-      // The messaging ID is a fact of Lineage, last: no heading "Messaging & Teams" over one fact.
-      const lineage = await page.evaluate(factsOf("oats-panel-lineage"));
-      check(lineage.startsWith("Owning human: Ana | Sibling: Redesign ui lead | Messaging ID: oats.aweb.ai/panel-worktree-helper"), `${at} Lineage: the owning human and the sibling, by its name as words, then the messaging ID`, lineage);
+      // Lineage: on the page's face the agents it is related to; who owns it and its messaging ID are under its fold, closed.
+      const FOLD = inPanel("oats-panel-lineage-details");
+      const face = await page.evaluate(`JSON.stringify({ text: (document.querySelector(${JSON.stringify(inPanel("oats-panel-lineage"))})?.innerText ?? "").replace(/\\s+/g, " ").trim(), open: document.querySelector(${JSON.stringify(FOLD)})?.open ?? null })`);
+      check(/^\{"text":"LINEAGE Sibling Redesign ui lead ▸ ?Details","open":false\}$/.test(face), `${at} Lineage: the sibling, by its name as words, on the page's face; "Owning human" and "Messaging ID" are not on it: one fold, closed`, face);
+      await page.evaluate(click(`${FOLD} summary`));
+      const lineage = await page.until(`document.querySelector(${JSON.stringify(FOLD)})?.open === true ? ${factsOf("oats-panel-lineage-details")} : ""`, 10);
+      check(lineage === "Owning human: Ana | Messaging ID: oats.aweb.ai/panel-worktree-helper Copy", `${at} opened, the fold holds the owning human, then the messaging ID with its Copy`, String(lineage));
       const noHeading = await page.evaluate(`document.querySelector(${JSON.stringify(inPanel("oats-panel-messaging"))}) === null && !/Messaging & Teams/i.test(document.querySelector(${JSON.stringify(testId("oats-panel"))}).innerText)`);
       check(noHeading === true, `${at} under no heading of its own`, noHeading);
       const copyId = await page.evaluate(`document.querySelector(${JSON.stringify(`${inPanel("oats-panel-lineage")} button`)})?.getAttribute("aria-label")`);
       check(copyId === "Copy messaging ID", `${at} its Copy is named Copy messaging ID`, copyId);
+      // Closed again for the image: the page's face.
+      await page.evaluate(click(`${FOLD} summary`));
+      check((await page.until(`document.querySelector(${JSON.stringify(FOLD)})?.open === false`, 10)) === true, `${at} and it closes again`);
       await bring(page, check, at, "oats-panel-session");
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "instance-running");

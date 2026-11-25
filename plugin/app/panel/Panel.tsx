@@ -20,10 +20,10 @@ import { onWindowReset } from "../store";
 import { Button, Card, Chip, Code, CopyButton, Disclosure, Fact, Facts, KernelSays, LINK, Loading, Notice, Section, StatusLine, TARGET, Tabs, plainClick } from "../ui";
 import type { TabItem } from "../ui";
 import { shown } from "../ui/text";
-import { agentName, readAge, waitingClock, waitingLabel } from "../ui/words";
+import { agentName, readAge, waitingLabel } from "../ui/words";
 import { openSoul, usePageShown } from "../workspace/pages";
 import { Activity } from "./Activity";
-import { CommandText, PathLine, SoulMark } from "./parts";
+import { AgentMark, CommandText, PathLine, SoulMark } from "./parts";
 import { Readiness } from "./Readiness";
 import { useNow, usePanelEvents, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
@@ -188,11 +188,12 @@ function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster
       {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}
       <header data-testid="oats-panel-header" className="flex min-w-0 shrink-0 flex-col gap-1 px-3 pt-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <SoulMark soul={oats.soulOf(agent)} />
+          <AgentMark instance={agent.instance} />
           <h2 data-testid="oats-panel-name" title={shown(agent.instance)} className="m-0 min-w-0 break-words text-base font-semibold">
             {agentName(agent.instance)}
           </h2>
         </div>
+        {/* How long it has waited is said ONCE, here ("Needs you · 5 d"). Since when, by the clock, is the Activity's: its "Waiting claim" row, at its instant. */}
         <div data-testid="oats-panel-state" data-outside={line.kind ?? undefined}>
           {/* The shared status line. What an agent with a claim asks is said once, in Needs input; a question bb itself shows has no claim, and is said here.
               For an agent the roster draws on no thread, what happened to it outside OATS follows the state's word, as on its row ("Stopped · session lost"). */}
@@ -277,7 +278,6 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held, 
   const answerRoot = read.data?.agentsRoot ?? null;
   const claim = claimOf(agent);
   const message = claim === null || claim.message === null ? "" : shown(claim.message);
-  const since = claim === null || claim.since === null ? "" : waitingClock(claim.since, now);
   return (
     <>
       {/* What happened to it outside OATS (app/outside), first on the page and scrolling with it (the
@@ -287,13 +287,8 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held, 
       <OutsideAgent agent={agent} roster={oats} held={held} />
       {claim === null || reading ? null : (
         // What the agent asks, first on the page, under no heading: the header two lines up says
-        // "Needs you". How long it has waited is the header's; since when (the clock time) is here, first and muted.
+        // "Needs you" and how long it has waited, once (the claim's instant is the Activity's, in its "Waiting claim" row).
         <section data-testid="oats-panel-waiting" aria-label="Needs input" className="flex min-w-0 flex-col gap-2">
-          {since === "" ? null : (
-            <p data-testid="oats-panel-waiting-since" className="m-0 text-xs text-muted-foreground">
-              {`since ${since}`}
-            </p>
-          )}
           {message !== "" ? (
             <p data-testid="oats-panel-waiting-message" dir="auto" className="m-0 break-words text-foreground">
               {message}
@@ -505,12 +500,9 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
 
       {facts.human === null && facts.parent === null && facts.sibling === null && oats.children.length === 0 && facts.messagingId === null ? null : (
         <Section title="Lineage" testId="oats-panel-lineage">
+          {/* On the page's face: the agents it is related to. Who owns it and its address for the others are under a fold: asked for, not read on every page. */}
+          {facts.parent === null && facts.sibling === null && oats.children.length === 0 ? null : (
           <Facts>
-            {facts.human === null ? null : (
-              <Fact label="Owning human">
-                <span data-testid="oats-panel-human">{shown(facts.human)}</span>
-              </Fact>
-            )}
             {facts.parent === null ? null : <Fact label="Parent">{instanceLink(facts.parent, "oats-panel-parent")}</Fact>}
             {facts.sibling === null ? null : <Fact label="Sibling">{instanceLink(facts.sibling, "oats-panel-sibling")}</Fact>}
             {/* The agents it started, as the thread's row counts them ("1 child"): each by its name, a link where it has a thread. */}
@@ -523,13 +515,28 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
                 </span>
               </Fact>
             )}
-            {/* Who it is to the others: one fact, with the agents it is related to, under the one heading. */}
-            {facts.messagingId === null ? null : (
-              <Fact label="Messaging ID">
-                <PathLine path={facts.messagingId} copyName="Copy messaging ID" testId="oats-panel-messaging-id" />
-              </Fact>
-            )}
           </Facts>
+          )}
+          {facts.human === null && facts.messagingId === null ? null : (
+            // (A relative's link over it is a target as high as a finger needs, taken back from its line: at a phone's width the fold stands clear of it.)
+            <div className="pt-2 md:pt-0">
+            <Disclosure summary="Details" testId="oats-panel-lineage-details">
+              <Facts>
+                {facts.human === null ? null : (
+                  <Fact label="Owning human">
+                    <span data-testid="oats-panel-human">{shown(facts.human)}</span>
+                  </Fact>
+                )}
+                {/* Who it is to the others: one fact, under the one heading, with no heading of its own. */}
+                {facts.messagingId === null ? null : (
+                  <Fact label="Messaging ID">
+                    <PathLine path={facts.messagingId} copyName="Copy messaging ID" testId="oats-panel-messaging-id" />
+                  </Fact>
+                )}
+              </Facts>
+            </Disclosure>
+            </div>
+          )}
         </Section>
       )}
     </>
@@ -577,16 +584,8 @@ function SoulPage({ oats, agent, read, now, state: readState, unread }: { oats: 
       </header>
       {readState}
       <SoulBody read={soul} now={now} unread={unread} />
+      {/* The agents root is said where it explains something: what the readiness checks observed (the fold of Readiness: "Soul: <key> · <agents root>"). No fold of its own at the tab's foot. */}
       {key === null ? null : <Readiness instance={agent.instance} of="soul" context={answer?.agentsRoot == null ? null : { name: key, root: answer.agentsRoot }} now={now} unread={unread} />}
-      {answer === undefined || answer.agentsRoot === null ? null : (
-        <Disclosure summary="Details" testId="oats-panel-details">
-          <Facts>
-            <Fact label="Agents root">
-              <PathLine path={answer.agentsRoot} copyName="Copy agents root path" testId="oats-panel-agents-root" />
-            </Fact>
-          </Facts>
-        </Disclosure>
-      )}
     </>
   );
 }

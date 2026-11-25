@@ -1,4 +1,5 @@
 // `oats spawn <soul> --backend bb --yolo …`: the preview, and the apply bound to the previewed decision.
+// (On a deployment with no bb session provider: `oats spawn <soul> …` with no backend and no mode named: `common`.)
 // docs/desktop-cli-api.md "Spawn": the kernel takes `--idempotency-key` only with
 // `--expect-decision <revision>`, and the revision is the preview's `decision.revision`.
 import { z } from "zod";
@@ -19,8 +20,16 @@ export type SpawnRelation = { kind: (typeof RELATIONS)[number]; to: string; root
  * is numbered by the kernel; `harness` and `model` left out are resolved by the kernel; `relation`
  * left out is an independent agent.
  */
-export type SpawnInput = { soul: string; name?: string | undefined; harness?: string | undefined; model?: string | undefined; relation?: SpawnRelation | undefined };
-type Checked = { soul: string; name: string | null; harness: string | null; model: string | null; relation: SpawnRelation | null };
+export type SpawnInput = {
+  soul: string;
+  name?: string | undefined;
+  harness?: string | undefined;
+  model?: string | undefined;
+  relation?: SpawnRelation | undefined;
+  /** false: the deployment has no bb session provider (`provider` of the harness read). The spawn then names no backend: the kernel decides, as `oats spawn <soul>` does there. */
+  provider?: boolean | undefined;
+};
+type Checked = { soul: string; name: string | null; harness: string | null; model: string | null; relation: SpawnRelation | null; /** the spawn is a bb thread: the deployment has the bb session provider */ bb: boolean };
 
 /** A harness's id as a manifest declares it: never an option, never a path. */
 const HARNESS_ID = /^[a-z][a-z0-9-]{0,39}$/;
@@ -56,7 +65,9 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
     if (root !== undefined && (!root.startsWith("/") || root.includes("\0"))) return err(codes.invalidInput, "a relation's agents root must be the absolute path the kernel named");
     relation = { kind: input.relation.kind, to: to.value, ...(root === undefined ? {} : { root }) };
   }
-  return ok({ soul: soul.value, name, harness: input.harness ?? null, model, relation });
+  // No provider, no harness of its list: a harness named there is one nothing declared.
+  if (input.provider === false && input.harness !== undefined) return err(codes.invalidInput, "this deployment has no bb session provider: no harness can be named for a spawn");
+  return ok({ soul: soul.value, name, harness: input.harness ?? null, model, relation, bb: input.provider !== false });
 }
 
 /**
@@ -72,9 +83,10 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
 const common = (input: Checked, taskFile: string | null): string[] => [
   "spawn",
   input.soul,
-  "--backend",
-  "bb",
-  "--yolo",
+  // On a deployment with NO bb session provider (`oats capabilities show oats.bb`: E_CAPABILITY_UNKNOWN) neither is
+  // passed: there is no bb backend to ask for, and the kernel decides as `oats spawn <soul>` does there (the soul's
+  // own backend and mode). Its preview says which backend that is.
+  ...(input.bb ? ["--backend", "bb", "--yolo"] : []),
   ...(input.name === null ? [] : ["--name", input.name]),
   ...(taskFile === null ? [] : ["--task-file", taskFile]),
   ...(input.harness === null ? [] : ["--harness", input.harness]),
@@ -235,7 +247,16 @@ export function checkModel(model: string): Result<string> {
 /** Spawn's commands. */
 export const verbs = (oats: Runner) => ({
   /** The harnesses the bb session provider declares, for the New agent form and the Start and Restart dialogs. */
-  spawnHarnesses: (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null }>> => oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal),
+  /**
+   * `absent`: the deployment does not have the bb session provider at all (the kernel knows no capability `oats.bb`:
+   * `E_CAPABILITY_UNKNOWN`). That is an answer, not a failed read: there is then no harness to choose and no bb
+   * thread to spawn on. Any other failure of the read is a failure.
+   */
+  spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null; absent: boolean }>> => {
+    const read = await oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal);
+    if (read.ok) return ok({ ...read.value, absent: false });
+    return read.error.code === "E_CAPABILITY_UNKNOWN" ? ok({ harnesses: [], version: null, absent: true }) : read;
+  },
 
   /**
    * `knownSouls` is what `oats souls` lists; `tempDir` holds the task file for the length of the

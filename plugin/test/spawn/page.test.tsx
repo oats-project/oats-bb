@@ -612,6 +612,40 @@ test("a name the kernel refuses at the preview is said under the name, in a pers
   expect(slot.queryByTestId("oats-spawn-preview")).toBeNull(); // no refusal drawn in a column: the field says it
 });
 
+test("a deployment with NO bb session provider: no harness to choose and no red sentence (nothing failed); the preview says where it will run, once; a soul alone arms Spawn, which names no harness; the new agent's own page opens", async () => {
+  // What the kernel decides there, as its preview says it: the soul's own harness, on tmux, in the harness's own mode.
+  const onTmux = { ...recorded, harness: "claude", model: "claude-opus-5-5", backend: "tmux", warnings: [], decision: { ...(recorded.decision as Record<string, unknown>), effective: { yolo: false } } };
+  let listed = 0;
+  const slot = await ready(
+    {
+      spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false }),
+      spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null }), revision: REVISION }),
+      spawn: () => ({ instance: "oats-developer-3", threadId: null }),
+    },
+    { models: () => ((listed += 1), { modelLoadError: null, models: [] }) },
+  );
+  // Nothing of bb's is offered: no Harness field, no list of bb's models asked; and nothing is said to have failed.
+  expect(slot.queryByTestId("oats-spawn-harness")).toBeNull();
+  expect(slot.queryByTestId("oats-spawn-harness-retry")).toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").querySelector('[role="alert"]')).toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Harnesses could not be read|bb’s default|not installed in bb/);
+  expect(options(slot, "oats-spawn-model").map(([label]) => label)).toEqual(["Default · claude-opus-5-5", "Custom…"]);
+  expect(listed).toBe(0);
+  // Where it will run, once, in view, in the Session card's words; never "bb thread".
+  expect(rows(slot).inView).toContainEqual(["Runs in", "tmux session"]);
+  expect(slot.getByTestId("oats-spawn-form").textContent!.split("tmux session")).toHaveLength(2);
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/bb thread/);
+  // A soul alone arms Spawn; the preview and the spawn name no harness.
+  expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]);
+  expect(calls(slot, "spawnPlan").every((call) => call.harness === undefined)).toBe(true);
+  fireEvent.click(submit(slot));
+  await waitFor(() => expect(calls(slot, "spawn")).toHaveLength(1));
+  expect(calls(slot, "spawn")[0]).toEqual({ soul: "oats-developer", task: "", revision: REVISION, key: expect.stringMatching(/^[0-9a-f]{32}$/) });
+  // Created, with no bb thread to open: the agent's own page.
+  await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: "oats-developer-3" } }]));
+  expect(notified().at(-1)).toMatchObject({ tone: "done", title: "Created Oats developer 3." });
+});
+
 test("Spawn applies the decision the preview showed, once: the form says Created, stays held, and opens the new agent's thread", async () => {
   const slot = await ready(previews({ spawn: () => ({ instance: "ranker-v4-probe", threadId: "thr_new" }) }));
   set(slot, "oats-spawn-task", "Try depth 7.");

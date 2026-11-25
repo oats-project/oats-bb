@@ -1,6 +1,7 @@
 // The sidebar's thread list (experimental_threadList): the workspace's name, the roster (every agent
 // OATS has, as a tree whose parents open), under it New agent, the plugin's pages under "Workspace",
 // then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
+import { useAnnounceSidebar, useHomeHolds, useHomeSaysEmpty } from "./beside";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
@@ -77,7 +78,11 @@ function PageRow({ page, open, onOpen }: { page: PageLink; open: boolean; onOpen
   );
 }
 
-export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
+export function Sidebar({ activeThreadId, onNavigate, isCompactViewport }: PluginThreadListProps) {
+  // The home beside this sidebar draws no "New agent" of its own, and this sidebar no "No agents yet." while the home says it (app/roster/beside.ts: P13).
+  useAnnounceSidebar(isCompactViewport);
+  const homeSaysEmpty = useHomeSaysEmpty();
+  const homeHolds = useHomeHolds();
   const oats = useOats();
   const now = useNow();
   const outside = outsideOf(oats);
@@ -331,7 +336,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         <span className="font-semibold text-foreground">{shown(deployment.workspace)}</span>
       </p>
       {shownAgents === 0 ? (
-        <p data-testid="oats-no-agents" className="px-2 py-1 text-xs text-muted-foreground">No agents yet.</p>
+        // Once on a screen: the home's pane says it while it is in view (P13), this line beside every other pane.
+        homeSaysEmpty ? null : <p data-testid="oats-no-agents" className="px-2 py-1 text-xs text-muted-foreground">No agents yet.</p>
       ) : (
         <ul data-testid="oats-tree" className="flex flex-col">
           {/* ONE tree and ONE order for every row, whatever its backend (model/view.ts): a row with its children under it;
@@ -347,9 +353,13 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         <div className="px-2 py-1">
           {/* On the last roster read "New agent" is held with the OATS acts: in its place, off. Why is
               said by the notice over the roster (or the page's, beside it), never beside the button. */}
+          {/* Beside the home of a workspace with no agent it is the screen's one act, as the home's own was: the primary button. */}
           <Button
+            variant={shownAgents === 0 && !isCompactViewport ? "primary" : "default"}
             data-testid="oats-new-agent"
-            disabled={oats.stale !== null}
+            {...(shownAgents === 0 && !isCompactViewport ? { "data-primary": "" } : {})}
+            // (Also off while the home on this screen holds it behind its CLI card, which says why: the one button of the screen obeys the one rule.)
+            disabled={oats.stale !== null || homeHolds}
             onClick={() => {
               if (openNewAgent(navigate, pagesNow.has("souls"))) onNavigate();
             }}

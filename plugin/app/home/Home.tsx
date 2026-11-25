@@ -20,6 +20,7 @@ import { firstLine, useOats } from "../oats";
 import type { Oats } from "../oats";
 import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
+import { useAnnounceEmptyHome, useAnnounceHomeHolds, useSidebarBeside } from "../roster/beside";
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
 import { READING as READING_WORD, ReadingLine, readingNow, useActed } from "../roster/reading";
@@ -711,15 +712,24 @@ function CliNotice({ cli, checking, failure, onCheck }: { cli: Cli | undefined; 
   );
 }
 
+/** While the home says "No agents yet." in view, the sidebar beside it does not (app/roster/beside.ts). Draws nothing. */
+function SaysEmpty({ seen }: { seen: boolean }) {
+  useAnnounceEmptyHome(seen);
+  return null;
+}
+
 function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; visible: boolean; agents: boolean; onBack: () => void; /** whether this place says the roster's notice: not a tab that is hidden (bb keeps it mounted), nor one beside a thread whose own line says it: the notice stands once on a screen, where a person looks (the lead's T3) */ says?: boolean }) {
   const now = useNow();
   const navigate = useBbNavigate();
   const pages = usePagesShown();
+  const sidebarBeside = useSidebarBeside();
   // Read once the home is seen (once more by itself when that failed and the roster reads), and again when the person asks: the installed CLI changes with an install, not with what the agents do.
   const { cli, checking, failure: checkFailure, check } = useCli(visible, oats.phase === "ready");
   const notice = <CliNotice cli={cli} checking={checking} failure={checkFailure} onCheck={check} />;
   // Behind the card New agent is off: a spawn through a CLI the plugin does not work with is not offered.
   const incompatible = cli !== undefined && (cli.state === "older" || cli.state === "unknown" || cli.state === "newer-api");
+  // (Said to the sidebar too, whose New agent is the screen's one where it is beside this pane: app/roster/beside.ts.)
+  useAnnounceHomeHolds(visible && incompatible && oats.phase === "ready");
   // The same words as the sidebar's, from the same components: what is read, what cannot be, and
   // (the roster kept as last read) how old what is shown is. The page has no heading of its own:
   // bb's bar over it names it.
@@ -736,8 +746,10 @@ function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; 
   // open (the sidebar's rule); off behind the CLI card and while the roster shown is the last one
   // read. Why is said by the notice under it, on the same screen (the CLI card, the roster's
   // notice), never beside the button. On the home of a workspace with no agent it is the one act.
+  // ONCE on a screen (the reader's P13): where the sidebar is BESIDE this pane its "New agent" is the one, and the home
+  // draws none; where the sidebar is a drawer, or is not known to be there, the home keeps its own (app/roster/beside.ts).
   const off = incompatible || held;
-  const head = (
+  const head = sidebarBeside ? null : (
     <div data-testid="oats-home-head" className="flex min-w-0 flex-wrap items-center justify-end gap-2">
       {hasNewAgent(pages.has("souls")) ? (
         <Button variant={made.all.length === 0 ? "primary" : "default"} data-testid="oats-home-new-agent" disabled={off} onClick={() => void openNewAgent(navigate as BbNavigate, pages.has("souls"))}>
@@ -766,6 +778,7 @@ function Sections({ oats, visible, agents, onBack, says = true }: { oats: Oats; 
         {stale}
         {notice}
         <Empty>{FIRST_RUN}</Empty>
+        <SaysEmpty seen={visible} />
         <Tiles visible={visible} />
       </>
     );

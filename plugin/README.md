@@ -48,6 +48,16 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 | `host` | `""` | The bb machine (its name or id) that holds the homes. Empty: the server's only machine. |
 | `pages` | `"home"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home alone: the other pages are built and tested, and left out until they are finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. The home's own route answers under every value. |
 
+"NEW AGENT" AND "NO AGENTS YET." STAND ONCE ON A SCREEN TOO (the reader's P13; `app/roster/beside.ts`).
+Where the sidebar is BESIDE the home (a wide window) its New agent is the one, and the home draws
+none; where bb keeps the sidebar in a drawer (a phone's width), or the home does not know of a
+sidebar, the home keeps its own: it acts only on a positive fact (a sidebar mounted, which bb says
+is not compact), since a screen with two is better than a screen with none. "No agents yet." is
+the home's while it says it in view, and the sidebar's beside every other pane. On an empty
+workspace the screen's one New agent is the primary button. It is held by one rule whichever is
+drawn: off while the roster is the last one read, and off behind the home's card of an oats CLI
+the plugin does not work with (the home says so to the sidebar).
+
 When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
 is missing in a person's words (its title), Retry, and Open settings where a setting mends it;
 what to do in a sentence, the code and the plugin's or the kernel's own message are under its
@@ -516,7 +526,7 @@ the OATS Desktop's Home: what needs you first, then what you have.
 | **Unread** | idle agents whose thread holds something you have not read; not drawn with none |
 | **Home › Agents** | `/plugins/oats/home/agents`, reached by that address alone (nothing on the home, the page or the tab, leads to it: the home has no tile for the agents, and the sidebar lists every one), headed **Agents N**: **every** agent OATS has in the sidebar's order, the stopped ones, the failed ones, the ones the kernel cannot reach, the ones on tmux and the ones whose bb thread is gone among them, each with its state in words and, beside its name on one line, its soul, the reason where it has no thread (what became of it: "deleted in bb", "archived in bb", …; "session lost"), and for one on tmux bb's terminal glyph named "tmux" (the row's one order; the reason gives way first); over them the home's one count line, "3 running · 3 need you · 1 idle · 1 stopped" (the word of the list's heading for those that work): every agent counted once, by the state every place says for it (`app/roster/status.ts`), so the numbers are the sidebar's (working and need you are always said; another state only when it has agents); and **‹ Home** (Esc does the same). Its machine and who started it are on an agent's own page |
 | **New agent** | first on every home (the page, Home › Agents, and the tab), where New agent has somewhere to open; off behind the CLI card and while the roster shown is the last one read, with no reason beside it: the card, or the roster's notice, is on the same screen (the card is drawn on Home › Agents too) |
-| an empty workspace | "No agents yet."; **New agent**, over it, is drawn as the one thing to press |
+| an empty workspace | "No agents yet."; **New agent** is drawn as the one thing to press (the primary button): the home's own, over it, where the sidebar is a drawer; the sidebar's where the sidebar is beside the home |
 
 The page has no heading of its own (bb's bar over it names it) and no summary line: its headings
 count who needs you and who works. It has no tile for the agents (the sidebar lists every one):

@@ -27,6 +27,43 @@ async function sidebar(over: Partial<Handlers> = {}, activeThreadId: string | nu
   return { slot, navigated: () => navigated };
 }
 
+// The reader's P13 (the home's side: test/home/home.test.tsx): on a screen where the home says "No agents yet." the
+// sidebar's own line yields; beside every other pane it says it. Its "New agent" is then the screen's one act: the
+// primary button where the sidebar is beside the panes (not compact), as the home's own was.
+test("an empty workspace: the sidebar says \"No agents yet.\" unless a home on the screen says it; its New agent is the primary button beside the panes, not in a drawer; and it tells the home that it is beside it only while not compact", async () => {
+  const { announce, besideNow } = await import("../../app/roster/beside");
+  const { slot } = await sidebar({ snapshot: () => fixtureSnapshot([]) });
+  expect((await slot.findByTestId("oats-no-agents")).textContent).toBe("No agents yet.");
+  expect(besideNow().sidebarBeside).toBe(true);
+  expect(slot.getByTestId("oats-new-agent").hasAttribute("data-primary")).toBe(true);
+  let leave = () => {};
+  act(() => void (leave = announce("home-says-empty", true)));
+  expect(slot.queryByTestId("oats-no-agents")).toBeNull();
+  expect(slot.getByTestId("oats-new-agent")).not.toBeNull(); // the one New agent of the screen stays
+  act(() => leave());
+  expect(slot.getByTestId("oats-no-agents")).not.toBeNull();
+  // The held rule holds for whichever New agent is drawn: while the home on the screen holds it behind its CLI card, this one is off too.
+  expect((slot.getByTestId("oats-new-agent") as HTMLButtonElement).disabled).toBe(false);
+  act(() => void (leave = announce("home-holds-new-agent", true)));
+  expect((slot.getByTestId("oats-new-agent") as HTMLButtonElement).disabled).toBe(true);
+  act(() => leave());
+  expect((slot.getByTestId("oats-new-agent") as HTMLButtonElement).disabled).toBe(false);
+  cleanup();
+  resetApp();
+  // In a drawer (bb says the viewport is compact): not beside anything, and not the primary button (the home's own is).
+  const app = await loadApp();
+  const drawer = renderSlot<PluginThreadListProps, Contract>(app.threadLists[0]!, { activeThreadId: null, activeProjectId: null, isCompactViewport: true, onNavigate: () => undefined, searchQuery: "" }, { rpc: handlers({ snapshot: () => fixtureSnapshot([]) }), sidebarThreads: sidebarThreads() });
+  await drawer.findByTestId("oats-no-agents");
+  expect(besideNow().sidebarBeside).toBe(false);
+  expect(drawer.getByTestId("oats-new-agent").hasAttribute("data-primary")).toBe(false);
+  // With agents it is never the primary button.
+  cleanup();
+  resetApp();
+  const some = await sidebar();
+  await some.slot.findByTestId("oats-tree");
+  expect(some.slot.getByTestId("oats-new-agent").hasAttribute("data-primary")).toBe(false);
+});
+
 /** The roster's own reads and asks, in order: a row another feature added to the block reads for itself. */
 const rosterCalls = (slot: Awaited<ReturnType<typeof sidebar>>["slot"]) => slot.inspection.rpcCalls.map((call) => call.method).filter((method) => method === "snapshot" || method === "refresh");
 

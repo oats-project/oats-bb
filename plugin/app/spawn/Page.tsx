@@ -708,21 +708,22 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             </Field>
             {/* In its place while the provider's list is read, so that nothing jumps when it arrives; gone only where there is nothing to choose. */}
             {backendChoice ? (
-              <Field label={RUNS_IN}>
-                <Choice
-                  testId="oats-spawn-backend"
-                  field="backend"
-                  value={place}
-                  placeholder={backendLabel(place)}
-                  filterLabel={W.FILTER}
-                  options={harnesses.backends.map((id) => ({ id, label: backendLabel(id) }))}
-                  // (A harness is one of the place's own list: chosen for another place, it is not kept.)
-                  onChange={(next) => {
-                    setBackend(next);
-                    setHarness("");
-                  }}
-                />
-              </Field>
+              // The two places as the Relationship's choice is drawn: one line, the words whole, no sentence.
+              <div data-testid="oats-spawn-backend" className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+                <span id="oats-spawn-backend-label">{RUNS_IN}</span>
+                <div className="min-w-0 max-w-full [&_[role=radio]]:whitespace-nowrap max-md:[&_[role=radio]]:px-2 [&_[role=radiogroup]]:flex-wrap">
+                  <Segmented
+                    label={RUNS_IN}
+                    options={harnesses.backends.map((id) => ({ id, label: backendLabel(id) }))}
+                    value={place}
+                    // (A harness is one of the place's own list: chosen for another place, it is not kept.)
+                    onChange={(next) => {
+                      setBackend(next);
+                      setHarness("");
+                    }}
+                  />
+                </div>
+              </div>
             ) : null}
             {harnessChoice || harnesses.status === "loading" || harnessFailed ? (
               <>

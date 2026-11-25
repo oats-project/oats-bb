@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { host } from "../../contract/roster.js";
 import { codes, createOats, Processes } from "../../kernel/index.js";
 import { parseVersion } from "../../kernel/roster.js";
 import { createCore, type Core } from "../../server/core.js";
@@ -49,6 +50,11 @@ describe("the kernel's version", () => {
 
   it("a kernel that lists no features, or names no JSON version, is read as having none", () => {
     expect(parseVersion({ version: "0.41.0", sessionViewer: { prefixScroll: false }, someApi: "2" })).toEqual({ ok: true, value: { version: "0.41.0", desktopApi: null, features: [], apis: {}, harnesses: [], sessionBackends: [] } });
+  });
+
+  it("a host entry of the build before answers without the kernel's two lists: the server reads them as none, and the version read does not fail", () => {
+    const before = { ok: true, value: { version: "0.70.5", desktopApi: 1, features: ["instance-board"], apis: { desktopApi: 1 } } };
+    expect(host.version.output.parse(before)).toEqual({ ok: true, value: { ...before.value, harnesses: [], sessionBackends: [] } });
   });
 
   it("an answer with no version is the typed error of a document the plugin cannot read", () => {

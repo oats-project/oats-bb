@@ -666,8 +666,8 @@ test("Runs in, where the deployment has the bb session provider and the kernel i
   );
   // The choice, a bb thread first and chosen; the spawn names no backend for it (the server asks for bb).
   expect(within(slot.getByTestId("oats-spawn-form")).getByText("Runs in")).toBeTruthy();
-  expect(options(slot, "oats-spawn-backend").map(([label]) => label)).toEqual(["bb thread", "tmux session"]);
-  expect(slot.getByTestId("oats-spawn-backend").textContent).toMatch(/^bb thread/);
+  const places = () => Array.from(slot.getByTestId("oats-spawn-backend").querySelectorAll('[role="radio"]')).map((radio) => [radio.textContent, radio.getAttribute("aria-checked")]);
+  expect(places()).toEqual([["bb thread", "true"], ["tmux session", "false"]]);
   expect(calls(slot, "spawnPlan").every((call) => call.backend === undefined)).toBe(true);
   expect(options(slot, "oats-spawn-harness").map(([label]) => label).slice(1)).toEqual(["Claude Code", "pi"]);
   expect(rows(slot).inView).toContainEqual(["Access", "full mode: no sandbox"]);
@@ -675,17 +675,18 @@ test("Runs in, where the deployment has the bb session provider and the kernel i
   choose(slot, "oats-spawn-harness", "pi");
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toMatchObject({ harness: "pi" }));
   const asked = listed;
-  choose(slot, "oats-spawn-backend", "tmux");
+  fireEvent.click(slot.getByRole("radio", { name: "tmux session" }));
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", backend: "tmux" }));
-  await waitFor(() => expect(slot.getByTestId("oats-spawn-backend").textContent).toMatch(/^tmux session/));
+  expect(places()).toEqual([["bb thread", "false"], ["tmux session", "true"]]);
   // The kernel's own harnesses; no list of bb's models asked for them; no model required of a harness chosen there.
   expect(options(slot, "oats-spawn-harness").map(([label]) => label).slice(1)).toEqual(["pi", "Claude Code", "codex"]);
   choose(slot, "oats-spawn-harness", "codex");
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", backend: "tmux", harness: "codex" }));
   await waitFor(() => expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]));
   expect(listed).toBe(asked);
-  // Where it runs is said ONCE, by the field: the column does not repeat it; and nothing says "no sandbox" (no mode is asked on tmux).
+  // Where it runs is said ONCE, by the choice: the column does not repeat it; and nothing says "no sandbox" (no mode is asked on tmux).
   expect(slot.getByTestId("oats-new-agent-page").textContent!.split("tmux session")).toHaveLength(2);
+  expect(slot.getByTestId("oats-new-agent-page").textContent!.split("Runs in")).toHaveLength(2);
   expect(rows(slot).inView.map(([label]) => label)).not.toContain("Runs in");
   expect(rows(slot).inView.map(([label]) => label)).not.toContain("Access");
   expect(slot.getByTestId("oats-new-agent-page").textContent).not.toMatch(/no sandbox/);

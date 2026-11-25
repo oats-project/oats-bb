@@ -1091,6 +1091,9 @@ export default [
       const last = chat.turns.at(-1).agent.slice(0, 40);
       const read = await page.until(`document.body.innerText.includes(${JSON.stringify(last)}) ? "1" : ""`, 60);
       check(read === "1", `${at} the busy chat's thread shows its conversation, to its last answer`, "the last answer is not on the page");
+      // The page was loaded anew: the roster is WAITED for (until it is read the sidebar is bb's flat list under "Reading…"
+      // and the thread has no line of the agent's: seen in a look, at the wide view in the dark theme).
+      if (!viewport.mobile) check(Boolean(await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")}`)}) !== null`, 60)), `${at} the roster is read on the busy chat's thread`);
       // (At the phone's width the contrast read finds nothing of the plugin's on a thread: the sidebar is away.)
       await page.shot(`busy-${viewport.name}-chat`, { plugin: !viewport.mobile });
       // Its start: the first message and the first long answer (a list).

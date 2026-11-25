@@ -46,7 +46,7 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 | `deployment` | `""` | The deployment directory. Empty: the plugin walks up from each bb project's root on the machine to the first directory that holds `oats-local.yaml`. |
 | `oatsBin` | `""` | An absolute path to `oats`. Empty: `oats` on the PATH of the machine's login shell. |
 | `host` | `""` | The bb machine (its name or id) that holds the homes. Empty: the server's only machine. |
-| `pages` | `"home souls capabilities teams machines"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. The last four are the TABS of ONE page, **Workspace** (one row of the sidebar, as the Desktop has it): the page is there while one of its tabs is shown, and its strip holds the tabs that are. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home and the Workspace page's four tabs; Automations is built and tested, and left out until it is finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. The home's own route answers under every value. |
+| `pages` | `"home, souls, capabilities, teams, machines"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. The last four are the TABS of ONE page, **Workspace** (one row of the sidebar, as the Desktop has it): the page is there while one of its tabs is shown, and its strip holds the tabs that are. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home and the Workspace page's four tabs; Automations is built and tested, and left out until it is finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. The home's own route answers under every value. |
 
 When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
 is missing in a person's words (its title), Retry, and Open settings where a setting mends it;
@@ -934,13 +934,17 @@ a capability's and a team's own page, and three more reads follow in their own c
   (the state as a mark and its word, the reason after it, the tmux mark; a row opens the agent's
   thread or its own page; one whose thread bb does not list has its acts on the row); and under
   the page's one **Details**, where it is defined (the repository and commit, the soul's file)
-  and why it cannot be spawned. A soul the kernel could not resolve has no Capabilities section:
+  where its harness was chosen (the New agent form's words for it, and the file) and why it cannot
+  be spawned. An agent behind a result says "Reading…" in its state's place, its acts off. New
+  agent is held wherever the roster is not the one just read. A soul the kernel could not resolve has no Capabilities section:
   the kernel answers no list for it, which is "not known", never "none".
-- **Capabilities.** **Core**: Knowledge, Messaging, Tasks, each with the capability that fills it
-  or "none". Then each capability: its id, "core" and "repo only" where they hold, "by <source>",
+- **Capabilities.** **Core**: Knowledge, Messaging, Tasks, each with every capability of that
+  place or "none" (no Core part where the kernel's answer says nothing of places). Then each capability: its id, "core" and "repo only" where they hold, "by <source>",
   one line of what it does.
 - **Teams.** Each team: its label, "Default team", how many of this deployment's agents are on it,
-  what it is for; under its Details its address on the messaging provider, who may join, where it
+  what it is for; under its Details its address on the messaging provider, who may join (and whose
+  default it is, where it is not the deployment's: both from each soul's teams as the kernel
+  resolved them, `oats souls`; the workspace's rules for it are the kernel's to read), where it
   is declared. A team with no address yet says "No address yet"; where it is the default team it
   is a notice first, since nothing can be spawned until it has one, and the Teams tab has a mark
   (both decided on the kernel's code for it, `team-unmapped`; the notice waits while the roster's
@@ -1154,7 +1158,7 @@ Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
 | what happened, once the person has moved on | `notify` | a result or a failure through bb's own toaster (`sonner`, which bb shims for plugins: a type-only devDependency at bb's version, no Toaster of the plugin's), with "Open <agent>"; a failure stays until dismissed; `notified()` is what a slot test reads |
 | a form | `Field`, `INPUT`, `DisabledReason` | the label (with "· optional"), a hint, the refusal; why a button is off |
 | tabs, a filter, a search, a switch, a row's menu, a copy | `Tabs`, `Segmented`, `SearchField`, `Switch`, `Menu`, `CopyButton` | the WAI-ARIA pattern of each, with its keys |
-| the rest | `Button`, `Card`, `Chip`, `Heading`, `Page`, `Modal`, `Mark`, `ErrorLine`, `Lines` | `Modal` takes the focus (on `data-autofocus`), keeps it, and returns it to what opened it, or where `returnFocus` says |
+| the rest | `Button`, `Card`, `Chip`, `Heading`, `Page`, `Modal`, `Mark`, `Lines` | `Modal` takes the focus (on `data-autofocus`), keeps it, and returns it to what opened it, or where `returnFocus` says |
 
 A control is 32 px high, and 44 px at bb's compact width (`TARGET`).
 
@@ -1165,7 +1169,7 @@ refusal) goes through one display filter, `app/ui/text.ts` (its functions are in
 (`packages/client/display-text.mjs`). Control characters and line breaks never reach the screen (a
 character that is not text is drawn as U+FFFD), a line is cut at 2048 characters, and a text that
 looks like a secret or a URL with credentials is drawn as `[withheld]`, whole. `shown(text)` is
-one display line; `refusalLines(text)`, which `ErrorLine` and `Lines` of `app/ui.tsx` draw, keeps a
+one display line; `refusalLines(text)`, which `Lines` of `app/ui.tsx` draws, keeps a
 refusal's code and gives each line of the kernel's message a line of its own. The filter is for
 display only: what goes back to OATS (an instance, a soul, a revision) is what the kernel gave.
 One named exception: `shownBlock(text)` draws a person's own definition text whole, in one block

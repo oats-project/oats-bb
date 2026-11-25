@@ -949,7 +949,7 @@ describe("acts", () => {
 
   it("refuses a soul that is not listed and a name that is no instance name, with no spawn process", async () => {
     expect(await refusalOf(rpc("spawn", { soul: "no-such-soul", name: "x-developer", task: "t", key: "spawn-1f0c9a7e" }))).toMatchObject({ code: "invalid" });
-    expect(await refusalOf(rpc("spawnPreview", { soul: "no-such-soul", name: "x-developer", task: "t" }))).toMatchObject({ code: "invalid" });
+    expect(await refusalOf(rpc("spawnPlan", { soul: "no-such-soul", name: "x-developer", task: "t" }))).toMatchObject({ code: "invalid" });
     for (const name of ["two words", "a/b", "Upper", "-leading"]) {
       await expect(rpc("spawn", { soul: "oats-developer", name, task: "t", key: "spawn-1f0c9a7e" })).rejects.toThrow();
     }
@@ -960,7 +960,7 @@ describe("acts", () => {
   it("shows a kernel refusal of a spawn with its code and message", async () => {
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_BAD_ARGS", message: "--backend must be tmux" } }) } });
     expect(await refusalOf(rpc("spawn", { soul: "oats-developer", name: "x-developer", task: "t", key: "spawn-1f0c9a7e" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
-    expect(await refusalOf(rpc("spawnPreview", { soul: "oats-developer", name: "x-developer", task: "t" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
+    expect(await refusalOf(rpc("spawnPlan", { soul: "oats-developer", name: "x-developer", task: "t" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
   });
 
   it("carries the kernel's marker of an unconfirmed outcome on the refusal, as its one issue; a refusal without the marker has none", async () => {

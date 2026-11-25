@@ -5,17 +5,6 @@ import { answer, hostBase, instanceName, key } from "./shared.js";
 
 const soulName = z.string().min(1).max(128);
 
-/** What `spawnPreview` answers: the kernel's preview as short lines. (NO CALLER in the app since the earlier short form on a soul's page went: the form reads `spawnPlan`.) */
-export const spawnSummary = z.object({
-  modules: z.array(z.string()),
-  teams: z.array(z.string()),
-  launch: z.string().nullable(),
-  warnings: z.array(z.string()),
-  problems: z.array(z.string()),
-});
-/** A soul, a name and a task: what `spawnPreview` is asked with (see above: no caller in the app). */
-const namedInput = z.object({ soul: soulName, name: instanceName, task: z.string().min(1).max(100_000) });
-
 /**
  * Whom the new agent is started under, or beside (`--relation <kind> --relative-to <instance>`):
  * `to` is an agent of the current roster. Left out, the agent is independent.
@@ -71,8 +60,6 @@ export type HarnessList = z.infer<typeof harnessList>;
 export const rpc = defineRpcContract({
   /** One read for the New agent form and the Start and Restart dialogs. */
   spawnHarnesses: { input: z.null(), output: harnessList },
-  /** A preview for a soul, a name and a task: the kernel's preview as short lines. No caller in the app (the earlier short form's). */
-  spawnPreview: { input: namedInput.strict(), output: z.object({ summary: spawnSummary }) },
   /**
    * The New agent form's preview, for what a person chose: what will be created, as facts (never
    * the kernel's preview whole), and the revision of the decision. A preview that is no decision a
@@ -99,14 +86,14 @@ export const host = defineRpcContract({
   /** `oats capabilities show oats.bb --json`: the harnesses the provider declares, and the provider's own version as the kernel prints it (null when it prints none that can be read). */
   spawnHarnesses: { experimental_retryable: true, input: z.object(hostBase).strict(), output: answer(z.object({ harnesses: z.array(z.string()), version: z.string().nullable() })) },
   /**
-   * `revision` is the kernel's decision revision for these choices; `summary` is for a soul's
-   * page, `facts` for the form; `problem` is why this preview is no decision a spawn could apply
-   * (the kernel's code and words), or null.
+   * `revision` is the kernel's decision revision for these choices; `facts` is what the form
+   * draws; `problem` is why this preview is no decision a spawn could apply (the kernel's code and
+   * words), or null.
    */
   spawnPreview: {
     experimental_retryable: true,
     input: hostSpawn.strict(),
-    output: answer(z.object({ summary: spawnSummary, facts: spawnFacts, revision: z.string(), problem: z.object({ code: z.string(), message: z.string() }).nullable() })),
+    output: answer(z.object({ facts: spawnFacts, revision: z.string(), problem: z.object({ code: z.string(), message: z.string() }).nullable() })),
   },
   /**
    * The kernel takes an idempotency key only with the decision it confirms: `revision` is the

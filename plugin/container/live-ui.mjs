@@ -2,7 +2,7 @@
 // The app's live checks (A13, A14, A16), run by container/live.sh inside the container once bb-app
 // runs, the plugin is installed from the checkout and the fake `oats` prints the fixtures.
 //   A13 at 1280x800 and 390x800: the sidebar with the tree, an agent's thread with its header
-//       row, the home page (its badge shows 3), and each of the four pages render.
+//       row, the home page (its badge shows 3), and each of the Workspace page's four tabs render.
 //   A14 with the fake oats removed: bb's threads are listed, the "not found" line shows, and a
 //       thread opens.
 //   A16 an agent whose thread bb does not have: its soul's page says so, and Retire opens the
@@ -76,9 +76,9 @@ const fake = (verbs = {}) =>
 
 /**
  * By hand only, never in CI: LIVE_PILOT_IMAGES=1 takes the image set of the pilot's six screens as
- * a fresh install shows them: the plugin's `pages` stays UNSET, its default (the home alone), through
- * every stage, so no image holds the "Workspace" block of the five other pages, and only the
- * scenes of the six screens' features run (`PILOT_FEATURES`). A scene is told (`pilot: true`) and
+ * a fresh install shows them: the plugin's `pages` stays UNSET, its default (the home and the
+ * Workspace page's four tabs; no Automations), through every stage, and only the scenes of the six
+ * screens' features run (`PILOT_FEATURES`). A scene is told (`pilot: true`) and
  * reaches its screen as a person does then (an agent with no bb thread from its row in the
  * sidebar, not from its soul's page). Its checks that assert a page link or a tile of another page
  * do not hold in this pass and are not counted against it: the pass is for images; the gate is
@@ -98,7 +98,7 @@ const pages = (value) => void (PILOT && value === ALL_PAGES ? bb("plugin", "conf
 /**
  * The setting `pages` as a fresh install has it: UNSET (bb's own `plugin config <id> unset <key>`),
  * not set to its default's value. A stage that shows the release's default leaves it so, and so
- * proves that an unset setting hides the five other pages, not only that "home" does.
+ * proves what an unset setting shows (the home, the Workspace page) and hides (Automations), not only what a value does.
  */
 const pagesAsInstalled = () => void bb("plugin", "config", "oats", "unset", "pages");
 

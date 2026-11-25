@@ -6,18 +6,19 @@ import { useState } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { rest } from "../../model/rest";
-import { harnessLabel } from "../../model/spawn";
+import { harnessLabel, launchFromText } from "../../model/spawn";
 import type { Agent } from "../../model/types";
 import { openAgentPage } from "../home/agent-tab";
 import { useCli } from "../home/cli";
 import { useOats } from "../oats";
 import type { Oats } from "../oats";
 import { DetachedActs, outsideOf, rowParts, rowWords } from "../outside";
+import { READING, ReadingMark, useReading } from "../roster/reading";
 import { agentStatus, rowState } from "../roster/status";
 import { useNow } from "../roster/now";
 import { useRead } from "../store";
 import type { Result } from "../store";
-import { Button, DisabledReason, Disclosure, Fact, Facts, Heading, Lines, Loading, Note, Page, plainClick, SearchField, State, TmuxMark, Toned } from "../ui";
+import { Button, DisabledReason, Disclosure, Fact, Facts, Heading, Lines, Loading, Note, Page, plainClick, SearchField, State, TARGET, TmuxMark, Toned } from "../ui";
 import { shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { newAgentHeld, openNewAgent, openSoul } from "./pages";
@@ -70,8 +71,9 @@ function SoulList({ souls, oats, query, onQuery }: { souls: readonly Soul[]; oat
   if (souls.length === 0) return <Note>No souls.</Note>;
   const found = foundSouls(souls, query);
   const groups = grouped(found);
-  // A heading only where it tells groups apart: where the souls are of one group it is left out.
-  const oneGroup = grouped(souls).length === 1;
+  // A heading only where it tells groups apart: where the souls are of one group it is left out. (One group that is
+  // a PACKAGE keeps it: under it a soul is its own name, and the heading is what names the package.)
+  const oneGroup = grouped(souls).length === 1 && souls[0]?.source?.kind !== "package";
   return (
     <>
       {souls.length >= FILTER_FROM ? <SearchField label="Search souls" placeholder="Search souls" value={query} onChange={onQuery} /> : null}
@@ -89,12 +91,12 @@ function SoulList({ souls, oats, query, onQuery }: { souls: readonly Soul[]; oat
                     <span className="flex min-w-0 items-baseline gap-2">
                       {/* Under its group's heading a soul is its own name; the key is whole in the row's title and on its page. Never cut. */}
                       <span data-testid="oats-soul-name" className="min-w-0 flex-1 break-words font-semibold">{shown(group.label === null ? soul.name : (soul.shortName ?? soul.name))}</span>
-                      {soul.spawnable ? null : <span data-testid="oats-soul-cannot" className="shrink-0 text-xs text-warning-text">Can't spawn</span>}
                       {running === 0 ? null : (
                         <span data-testid="oats-soul-running" className="shrink-0 text-xs text-muted-foreground">
                           <Toned tone="ok">{`${running} running`}</Toned>
                         </span>
                       )}
+                      {soul.spawnable ? null : <span data-testid="oats-soul-cannot" className="shrink-0 text-xs text-warning-text">Can't spawn</span>}
                     </span>
                     {/* What it does, on ONE line; whole on its page (and in this line's title). */}
                     {soul.description === "" ? null : <OneLine testId="oats-soul-does" text={soul.description} />}
@@ -115,6 +117,9 @@ function SoulList({ souls, oats, query, onQuery }: { souls: readonly Soul[]; oat
 function SoulAgent({ agent, oats }: { agent: Agent; oats: Ready }) {
   const navigate = useBbNavigate();
   const now = useNow();
+  // Behind a result (an act of ours ended and the roster is not yet one read after it): the row says "Reading…" in
+  // its state's place and its acts are off, as every place that says an agent's state (app/roster/reading.tsx).
+  const reading = useReading(agent.instance);
   const outside = outsideOf(oats);
   const node = oats.nodeByInstance.get(agent.instance);
   const thread = node === undefined || node.agent !== agent ? undefined : oats.threadById.get(node.thread.id);
@@ -133,11 +138,18 @@ function SoulAgent({ agent, oats }: { agent: Agent; oats: Ready }) {
     <>
       {/* (The name keeps room of its own: at a phone's width the state goes under it, never the name letter by letter.) */}
       <span className="min-w-[8rem] flex-1 break-words" title={shown(agent.instance)}>{agentName(agent.instance)}</span>
-      <span data-testid="oats-soul-agent-state" className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-        <State state={drawn.state} word={words.state} tone={reason.tone} />
-        {words.reason === null || words.reason === "" ? null : <span className={reason.tone === "warning" ? "text-warning-text" : ""}>{`· ${words.reason}`}</span>}
-        {agent.backend === "tmux" ? <TmuxMark /> : null}
-      </span>
+      {reading ? (
+        <span data-testid="oats-soul-agent-state" data-reading="" className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <ReadingMark />
+          {READING}
+        </span>
+      ) : (
+        <span data-testid="oats-soul-agent-state" className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <State state={drawn.state} word={words.state} tone={reason.tone} />
+          {words.reason === null || words.reason === "" ? null : <span className={reason.tone === "warning" ? "text-warning-text" : ""}>{`· ${words.reason}`}</span>}
+          {agent.backend === "tmux" ? <TmuxMark /> : null}
+        </span>
+      )}
     </>
   );
   // An agent bb has no listed thread for and that needs an act (its thread archived or deleted while OATS has it): its acts are here, as on its row elsewhere.
@@ -147,7 +159,7 @@ function SoulAgent({ agent, oats }: { agent: Agent; oats: Ready }) {
       {thread !== undefined ? (
         <a
           href={thread.href}
-          className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 hover:bg-accent"
+          className={`${TARGET} flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 hover:bg-accent`}
           onClick={(event) => {
             if (!plainClick(event)) return;
             event.preventDefault();
@@ -157,18 +169,19 @@ function SoulAgent({ agent, oats }: { agent: Agent; oats: Ready }) {
           {line}
         </a>
       ) : (
-        <button type="button" className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent" onClick={open}>
+        <button type="button" className={`${TARGET} flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent`} onClick={open}>
           {line}
         </button>
       )}
-      {detached ? <DetachedActs said={said} instance={agent.instance} held={oats.stale !== null} /> : null}
+      {detached ? <DetachedActs said={said} instance={agent.instance} held={oats.stale !== null || reading} /> : null}
     </li>
   );
 }
 
 function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
   const navigate = useBbNavigate();
-  const stale = oats.phase === "ready" && oats.stale !== null;
+  // New agent is held, like every New agent, wherever the roster is not the one just read: never read, or kept from an earlier read.
+  const stale = oats.phase !== "ready" || oats.stale !== null;
   const { cli } = useCli(true, oats.phase === "ready");
   // Which capabilities fill a core place: they stand first, tagged.
   const layers = new Map((useRead("capabilities").data?.capabilities ?? []).map((capability) => [capability.id, capability.layer ?? null]));
@@ -177,12 +190,15 @@ function SoulDetail({ soul, oats }: { soul: Soul; oats: Oats }) {
   // (The harness by the name the New agent form gives it; the model as the kernel has it.)
   const launch = [soul.harness ? harnessLabel(soul.harness) : null, soul.model].filter((part): part is string => typeof part === "string" && part !== "").map((part) => shown(part)).join(" · ");
   const teams = (soul.teams ?? []).map((team) => shown(team.label)).join(", ");
-  const under = [soul.origin === "" ? null : `from ${soul.origin}`, soul.file ? `Defined in ${soul.file}` : null, soul.problem].filter((part): part is string => part !== null && part !== "");
+  // Where the harness was chosen: the kernel's word for it as the New agent form says it, and the file that makes the choice.
+  const chosen = soul.launchFrom ? `Harness: ${launchFromText(soul.launchFrom)}${soul.launchAt ? ` (${soul.launchAt})` : ""}` : null;
+  const under = [soul.origin === "" ? null : `from ${soul.origin}`, soul.file ? `Defined in ${soul.file}` : null, chosen, soul.problem].filter((part): part is string => part !== null && part !== "");
   return (
     <article data-testid="oats-soul-detail" className="flex min-w-0 flex-col gap-4">
       <header className="flex min-w-0 flex-col gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="min-w-0 flex-1 break-words text-base font-semibold">{shown(soul.name)}</h2>
+          {/* (The key keeps room of its own: at a phone's width the button goes under it, never the key letter by letter.) */}
+          <h2 className="min-w-[min(100%,16rem)] flex-1 break-words text-base font-semibold">{shown(soul.name)}</h2>
           {/* A soul that cannot be spawned keeps the button, off, with the one reason beside it; the kernel's own words are under Details. */}
           {soul.spawnable ? null : <DisabledReason>Can't spawn here</DisabledReason>}
           <Button variant="primary" data-testid="oats-soul-new-agent" disabled={!soul.spawnable || newAgentHeld(stale, cli)} onClick={() => void openNewAgent(navigate as BbNavigate, true, { soul: soul.name })}>

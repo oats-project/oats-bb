@@ -18,7 +18,7 @@ async function page(id: string, over: Partial<Handlers> = {}) {
   return renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(over), sidebarThreads: sidebarThreads() });
 }
 
-test("the plugin registers the home and the four pages first, in that order", async () => {
+test("the plugin registers the home and the Workspace page's four tabs first, in that order", async () => {
   const app = await loadApp();
   // Another feature's page comes after these (its own test holds it).
   expect(app.navPanels.map((panel) => panel.path).slice(0, 5)).toEqual(["home", "souls", "capabilities", "teams", "machines"]);
@@ -113,6 +113,24 @@ test("Capabilities: the three core places and what fills each; then each capabil
     ["Messaging", "none"],
     ["Tasks", "none"],
   ]);
+  // Two capabilities of one place: BOTH are named (the read does not say which a soul gets: none is picked).
+  slot.unmount();
+  resetApp();
+  const two = await page("capabilities", { capabilities: () => ({ capabilities: [...CAPABILITIES, { ...CAPABILITIES[0]!, id: "oats.jira", layer: "tasks" }, { ...CAPABILITIES[0]!, id: "oats.linear", layer: "tasks" }] }) });
+  await two.findAllByTestId("oats-capability-row");
+  expect(Array.from(two.getByTestId("oats-capabilities-core").querySelectorAll("dd")).map((value) => value.textContent)).toEqual(["oats.okf", "none", "oats.jira, oats.linear"]);
+  two.unmount();
+  resetApp();
+  // A kernel that says nothing of core places: no Core part, and no "core" tag.
+  const older = await page("capabilities", { capabilities: () => ({ capabilities: CAPABILITIES.map(({ layer: _layer, ...rest }) => rest) }) });
+  await older.findAllByTestId("oats-capability-row");
+  expect(older.queryByTestId("oats-capabilities-core")).toBeNull();
+  expect(capabilityRows(older).map(([head]) => head)).toEqual([["oats.okf", "by oats.okf"], ["oats.build", "by workspace"], ["oats.desktop-ui", "repo only", "by workspace"]]);
+});
+
+test("the Capabilities tab's rows: each capability's id, its tags, who made it, and ONE line of what it does; no count of souls, no origin, no sentence", async () => {
+  const slot = await page("capabilities", { capabilities: () => ({ capabilities: CAPABILITIES }) });
+  await slot.findAllByTestId("oats-capability-row");
   expect(capabilityRows(slot)).toEqual([
     [["oats.okf", "core", "by oats.okf"], "Knowledge."],
     [["oats.build", "by workspace"], "What the team adds to building a change. A second line the list does not need."],
@@ -172,14 +190,16 @@ const TEAMS = {
     { label: "oats", team: "default:oats.aweb.ai", isDefault: true, description: "The OATS framework team", local: false, at: "github.com/awebai/oats:oats-workspace.yaml#/teams/oats" },
     { label: "docs", team: null, isDefault: false, description: null, local: false, at: "github.com/awebai/oats:oats-workspace.yaml#/teams/docs" },
   ],
-  mayJoin: [{ soul: "*", teams: ["oats"] }, { soul: "oats-developer", teams: ["oats", "docs"] }],
   localTeams: true,
   problems: [{ code: "team-unmapped", label: "docs", isDefault: false, message: "shared team docs has no provider id yet", fix: "its owner runs `oats aweb setup`, then commits the id" }],
 };
+/** The souls as `oats souls` answers them, each with the teams the kernel RESOLVED for it (its default first). */
+const joiner = (name: string, teams: string[] | undefined, first = teams?.[0]) => ({ name, agent: name, description: "", origin: "", capabilities: [], spawnable: true, problem: null, ...(teams === undefined ? {} : { teams: teams.map((label) => ({ label, isDefault: label === first })) }) });
+const JOIN = { souls: () => ({ souls: [joiner("code-reviewer", ["oats"]), joiner("oats-developer", ["oats", "docs"]), joiner("oats-expert", ["oats"])] }) };
 const teamRows = (slot: Awaited<ReturnType<typeof page>>) => slot.getAllByTestId("oats-team-row").map((row) => [Array.from(row.firstElementChild!.children).map((part) => part.textContent), row.querySelector(":scope > p")?.textContent ?? null, Array.from(row.querySelectorAll("details p")).map((line) => line.textContent)]);
 
 test("Teams: each team's label, \"Default team\", how many of this deployment's agents are on it, and what it is for; its address, who may join and where it is declared are under its Details", async () => {
-  const slot = await page("teams", { teams: () => TEAMS });
+  const slot = await page("teams", { teams: () => TEAMS, ...JOIN });
   await slot.findAllByTestId("oats-team-row");
   await waitFor(() =>
     expect(teamRows(slot)).toEqual([
@@ -194,23 +214,40 @@ test("Teams: each team's label, \"Default team\", how many of this deployment's 
   expect(slot.queryByTestId("oats-teams-shared")).toBeNull();
   // Which teams each soul may join: one fold, closed.
   const fold = slot.getByTestId("oats-teams-may-join") as HTMLDetailsElement;
-  expect([fold.open, Array.from(fold.querySelectorAll("p")).map((line) => line.textContent)]).toEqual([false, ["every soul: oats", "oats-developer: oats, docs"]]);
+  expect([fold.open, Array.from(fold.querySelectorAll("p")).map((line) => line.textContent)]).toEqual([false, ["code-reviewer: oats", "oats-developer: oats, docs", "oats-expert: oats"]]);
   // A team that is not the default and has no address stops nothing: no notice, and no mark on the Teams tab.
   expect(slot.queryByTestId("oats-notice")).toBeNull();
   expect(slot.getByTestId("oats-tab-teams").querySelector('[data-testid="oats-mark"]')).toBeNull();
 });
 
-test("who may join: a soul's own entry stands in place of the one for every soul, so a team every soul may join says who is left out", async () => {
-  const some = { ...TEAMS, mayJoin: [{ soul: "*", teams: ["oats", "docs"] }, { soul: "code-reviewer", teams: ["oats"] }, { soul: "oats-developer", teams: ["oats", "docs"] }] };
-  const slot = await page("teams", { teams: () => some });
+// Who joins a team is what the kernel RESOLVED for each soul (`oats souls`), never the plugin's reading of the
+// workspace's rules: a default team and no rule at all, a team of this computer, a default of one soul alone.
+test("who may join is each soul's teams as the kernel resolved them: every soul, every soul but a few, the souls, no soul; and whose default a team is, where it is not the deployment's", async () => {
+  const may = (slot: Awaited<ReturnType<typeof page>>) => teamRows(slot).map((row) => (row[2] as string[]).filter((line) => /^(May join|Default for)/.test(line)));
+  // docs is oats-developer's DEFAULT (and not the deployment's); every soul is on oats but one.
+  const souls = [joiner("code-reviewer", ["oats"]), joiner("oats-developer", ["docs", "oats"]), joiner("oats-expert", ["oats"]), joiner("writer", ["docs"])];
+  const slot = await page("teams", { teams: () => TEAMS, souls: () => ({ souls }) });
   await slot.findAllByTestId("oats-team-row");
-  expect(teamRows(slot).map((row) => (row[2] as string[]).find((line) => line.startsWith("May join")))).toEqual(["May join: every soul", "May join: every soul but code-reviewer"]);
-  // And a team the entry for every soul does not name: the souls whose own entry names it; none: "no soul".
+  await waitFor(() => expect(may(slot)).toEqual([["May join: every soul but writer"], ["May join: oats-developer, writer", "Default for: oats-developer, writer"]]));
   slot.unmount();
   resetApp();
-  const few = await page("teams", { teams: () => ({ ...TEAMS, mayJoin: [{ soul: "*", teams: [] }, { soul: "oats-developer", teams: ["docs"] }] }) });
-  await few.findAllByTestId("oats-team-row");
-  expect(teamRows(few).map((row) => (row[2] as string[]).find((line) => line.startsWith("May join")))).toEqual(["May join: no soul", "May join: oats-developer"]);
+  // Every soul on the default team and none on the other: said so; "Default for" is never said of the deployment's default.
+  const all = await page("teams", { teams: () => TEAMS, souls: () => ({ souls: [joiner("code-reviewer", ["oats"]), joiner("oats-expert", ["oats"])] }) });
+  await all.findAllByTestId("oats-team-row");
+  await waitFor(() => expect(may(all)).toEqual([["May join: every soul"], ["May join: no soul"]]));
+  all.unmount();
+  resetApp();
+  // A soul the kernel could not resolve (no teams answered) is left out of the claim; with no soul's teams known, nothing is claimed at all, and there is no fold.
+  const some = await page("teams", { teams: () => TEAMS, souls: () => ({ souls: [joiner("code-reviewer", ["oats"]), joiner("broken", undefined)] }) });
+  await some.findAllByTestId("oats-team-row");
+  await waitFor(() => expect(may(some)).toEqual([["May join: every soul"], ["May join: no soul"]]));
+  expect(Array.from(some.getByTestId("oats-teams-may-join").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["code-reviewer: oats"]);
+  some.unmount();
+  resetApp();
+  const none = await page("teams", { teams: () => TEAMS, souls: () => ({ souls: [joiner("broken", undefined)] }) });
+  await none.findAllByTestId("oats-team-row");
+  expect(may(none)).toEqual([[], []]);
+  expect(none.queryByTestId("oats-teams-may-join")).toBeNull();
 });
 
 test("the default team with no address is said first, as a notice: nothing can be spawned; the kernel's words and its remedy are one press away", async () => {

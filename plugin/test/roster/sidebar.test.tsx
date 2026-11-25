@@ -1063,7 +1063,7 @@ test("a stopped tmux agent says Stopped in its sidebar row and in its own panel"
 });
 
 // The plugin's setting `pages`: a release shows only the pages that are finished (its default: the
-// home alone). A page that is not shown has no link in the sidebar and no mark; the count of who
+// home and the Workspace page's four tabs). A page that is not shown has no link in the sidebar and no mark; the count of who
 // waits still opens the home; "New agent" stays, whatever pages are shown: the form is a page of its
 // own (app/spawn), not one a release leaves out.
 test("with the home alone (pages: home) the sidebar has the roster, New agent and no page link; with every page, Workspace and Automations", async () => {
@@ -1089,8 +1089,20 @@ test("with the home alone (pages: home) the sidebar has the roster, New agent an
   const all = await withPages(ALL_PAGES);
   await all.findByTestId("oats-tree");
   for (const path of ["workspace", "automations"]) expect(all.getByTestId(`oats-page-link-${path}`)).toBeTruthy();
-  expect(all.getByTestId("oats-new-agent")).toBeTruthy();
+  // Two rows under it: the heading "Workspace" is drawn.
+  expect([all.getByTestId("oats-pages-heading").textContent, all.getByTestId("oats-pages-heading").className.includes("sr-only")]).toEqual(["Workspace", false]);
   all.unmount();
+  resetApp();
+  // The release's default: the ONE row "Workspace". No visible heading over it (the word would stand twice); the list
+  // is still named for a screen reader, and keeps the place a heading's block gives it.
+  const one = await withPages("home, souls, capabilities, teams, machines");
+  await one.findByTestId("oats-tree");
+  expect(Array.from(one.getByTestId("oats-pages").querySelectorAll("button")).map((row) => row.textContent)).toEqual(["Workspace"]);
+  const heading = one.getByTestId("oats-pages-heading");
+  expect([heading.tagName, heading.textContent, heading.className]).toEqual(["H2", "Workspace", "sr-only"]);
+  expect(one.getByTestId("oats-pages").className).toContain("pt-8");
+  expect(one.getByTestId("oats-new-agent")).toBeTruthy();
+  one.unmount();
   resetApp();
   // With the home itself left out: no count either.
   const none = await withPages("souls");

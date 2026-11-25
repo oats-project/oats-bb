@@ -169,6 +169,10 @@ export type Soul = {
   shortName?: string;
   /** the soul's own file, as a path in its repository */
   file?: string;
+  /** where the choice of harness came from, in the kernel's word ("local", "local-default", "soul", "host") */
+  launchFrom?: string;
+  /** the file and place that make that choice */
+  launchAt?: string;
   /** where it is defined: the group it is listed under */
   source?: Source;
   /** what its agents start with on this deployment */
@@ -217,9 +221,6 @@ export type Team = {
 
 /** What `oats teams` says of a team that is not right, in the kernel's words. */
 export type TeamProblem = { /** the kernel's code for it ("team-unmapped": a team with no id on the messaging provider yet) */ code: string | null; label: string | null; isDefault: boolean; message: string; fix: string | null };
-/** Which teams a soul may join ("*": every soul with no entry of its own). */
-export type MayJoin = { soul: string; teams: string[] };
-
 /** This machine, or one registered server of `oats server list`. */
 export type Machine = {
   id: string;
@@ -232,12 +233,3 @@ export type Machine = {
   folder: string | null;
 };
 
-/** What `oats spawn --preview` would do, as the form draws it. */
-export type SpawnSummary = {
-  modules: string[];
-  teams: string[];
-  /** harness and model, with where the model comes from */
-  launch: string | null;
-  warnings: string[];
-  problems: string[];
-};

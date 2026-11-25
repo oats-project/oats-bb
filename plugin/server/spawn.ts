@@ -77,10 +77,6 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     async spawnHarnesses() {
       return { harnesses: await harnessesOf(core), hostId: core.target()?.hostId ?? null };
     },
-    async spawnPreview(input, context) {
-      const { summary } = await core.call("spawnPreview", await checked(input), HOST_TIMEOUT.preview, context.experimental_signal);
-      return { summary };
-    },
     async spawnPlan(input, context) {
       const { facts, revision, problem } = await core.call("spawnPreview", await checked(input), HOST_TIMEOUT.preview, context.experimental_signal);
       // No decision a spawn could apply: refused as the kernel's own refusals are, with its code.

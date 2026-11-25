@@ -42,12 +42,6 @@ describe("A5 spawn", () => {
     // What will be created, in the form's words (model/spawn.ts), for the name that was asked: never the kernel's preview whole.
     expect(preview.value.facts.identity[0]).toEqual({ label: "Name", text: "flaky-ci-2-developer" });
     expect(preview.value.facts.resolved).toEqual({ harness: "pi", model: "github-copilot/claude-fable-5.1" });
-    // And as the short lines a soul's page draws.
-    expect(preview.value.summary.launch).toBe("pi · github-copilot/claude-fable-5.1 (local-default preference)");
-    expect(preview.value.summary.teams).toEqual(["oats (default)"]);
-    expect(preview.value.summary.modules).toContain("oats.aweb 1.43.0");
-    expect(preview.value.summary.warnings).toEqual(["the bb server at http://127.0.0.1:38886 runs bb-app 0.50.1; the capability was tested up to 0.50.1"]);
-    expect(preview.value.summary.problems).toEqual([]);
     expect(preview.value.problem).toBeNull();
   });
 
@@ -212,24 +206,24 @@ describe("a preview that is no decision a spawn could apply says why, with the c
     change(document.result);
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });
     const preview = await oats.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context());
-    return preview.ok ? { problem: preview.value.problem, problems: preview.value.summary.problems } : null;
+    return preview.ok ? { problem: preview.value.problem } : null;
   };
 
   it("a launch the kernel found a problem with: the problem's own code and message", async () => {
     const preview = await answer((result) => {
       (result.launch as Record<string, unknown>).problem = { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" };
     });
-    expect(preview).toEqual({ problem: { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" }, problems: ["E_LAUNCH_EXECUTABLE: pi is not on PATH"] });
+    expect(preview).toEqual({ problem: { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" } });
   });
 
   it("checks that did not finish in the kernel's budget, and a backend that is not installed", async () => {
     const slow = await answer((result) => {
       result.preflight = { status: "timeout", budgetMs: 20000, elapsedMs: 20000 };
     });
-    expect(slow).toEqual({ problem: { code: "E_PREFLIGHT_INCOMPLETE", message: "the kernel's checks did not finish within 20 s" }, problems: ["the kernel's checks did not finish within 20 s"] });
+    expect(slow).toEqual({ problem: { code: "E_PREFLIGHT_INCOMPLETE", message: "the kernel's checks did not finish within 20 s" } });
     const missing = await answer((result) => {
       result.backendStatus = { name: "bb", installed: false, started: false };
     });
-    expect(missing).toEqual({ problem: { code: "E_BACKEND_UNAVAILABLE", message: "the bb backend is not installed on this machine" }, problems: ["the bb backend is not installed on this machine"] });
+    expect(missing).toEqual({ problem: { code: "E_BACKEND_UNAVAILABLE", message: "the bb backend is not installed on this machine" } });
   });
 });

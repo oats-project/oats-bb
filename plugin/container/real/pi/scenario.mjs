@@ -236,7 +236,7 @@ const kernel = JSON.parse(oats("version", "--json").stdout).version;
 say(`== the pi run: bb ${bb("--version").trim()}, oats ${kernel}, pi ${execFileSync("pi", ["--version"], { encoding: "utf8" }).trim()}, ${existsSync(join(REAL, "refs.json")) ? readFileSync(join(REAL, "refs.json"), "utf8").trim() : "refs not recorded"}`);
 // A bb that was never opened shows its first-run guide in place of the app (../../live-ui.mjs).
 bb("settings", "general", "onboardingCompletedAt", new Date().toISOString());
-// The pages a release shows (the plugin's setting `pages`; ../setup.sh shows them all for the main run): the pilot's own.
+// The run shows the home alone (the plugin's setting `pages`; ../setup.sh shows every page for the main run).
 bb("plugin", "config", "oats", "set", "pages", "home");
 browser = await launchBrowser({ chromium: process.env.CHROMIUM ?? "chromium", out: OUT, base: BASE });
 

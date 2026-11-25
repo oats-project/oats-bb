@@ -722,7 +722,7 @@ function PageTile({ page, n, look, visible, onOpen }: { page: PageLink; n: numbe
 
 /**
  * The workspace's tiles: the plugin's pages that this release shows, each with its count. With the
- * default (the home alone) there is none, and nothing is drawn. No tile for the agents: the
+ * default there are four, one per tab of the Workspace page; where the home alone is shown there is none, and nothing is drawn. No tile for the agents: the
  * sidebar lists every one (the lead's ruling L1 on the text audit, 23 Nov 2026). Home › Agents
  * stays, reached by its address alone.
  */

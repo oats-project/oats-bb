@@ -150,8 +150,9 @@ export function OneLine({ text, testId }: { text: string; testId: string }) {
     const element = line.current;
     if (element === null || typeof ResizeObserver === "undefined") return;
     const fit = () => {
-      const room = element.clientWidth;
-      const measure = room === 0 ? null : penOf();
+      // (`clientWidth` is rounded: one pixel less, so that a cut measured inside the rounding never passes the line's end.)
+      const room = element.clientWidth - 1;
+      const measure = room <= 0 ? null : penOf();
       if (measure === null) return setFits(null);
       measure.font = getComputedStyle(element).font;
       setFits(cutAtWord(whole, room, (words) => measure.measureText(words).width));

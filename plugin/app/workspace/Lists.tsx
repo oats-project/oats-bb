@@ -62,6 +62,8 @@ function CapabilityList({ capabilities, query, onQuery }: { capabilities: readon
   const found = foundCapabilities(capabilities, query);
   // The kernel says which place a capability fills; one that says nothing of any (an older answer) has no Core part.
   const told = capabilities.some((capability) => capability.layer !== undefined);
+  // EVERY capability of a place: the read does not say which of two a soul gets, so none is picked.
+  const fills = (layer: string) => capabilities.filter((capability) => capability.layer === layer).map((capability) => capability.id);
   return (
     <>
       {capabilities.length >= FILTER_FROM ? <SearchField label="Search capabilities" placeholder="Search capabilities" value={query} onChange={onQuery} /> : null}
@@ -71,7 +73,7 @@ function CapabilityList({ capabilities, query, onQuery }: { capabilities: readon
           <Facts>
             {CORE.map(([layer, label]) => (
               <Fact key={layer} label={label}>
-                {shown(capabilities.find((capability) => capability.layer === layer)?.id ?? "none")}
+                {shown(fills(layer).join(", ") || "none")}
               </Fact>
             ))}
           </Facts>
@@ -133,28 +135,32 @@ export function CapabilitiesPage() {
 type Teams = Result<"teams">;
 type Team = Teams["teams"][number];
 
+type Soul = Result<"souls">["souls"][number];
+
 /**
- * Who may join a team; null where the kernel says nothing of it. A soul with an entry of its own
- * goes by that entry alone (the kernel takes a soul's own entry in place of the one for every soul,
- * "*"): so "every soul" where "*" names the team and no soul's own entry leaves it out; "every soul
- * but a, b" where some do; else the souls whose own entry names it.
+ * Who joins a team, from what the kernel RESOLVED for each soul (`oats souls`: a soul's teams, its
+ * default first). The rule itself (a default, the most specific pattern, this computer's teams) is
+ * the kernel's and is not restated here. Null where no soul's teams are known (the souls are not
+ * read yet, or a kernel that does not say); a soul the kernel could not resolve is left out of the
+ * claim.
  */
-function mayJoin(team: Team, answer: Teams): string | null {
-  if (answer.mayJoin === undefined) return null;
-  const own = answer.mayJoin.filter((entry) => entry.soul !== "*");
-  const named = own.filter((entry) => entry.teams.includes(team.label)).map((entry) => entry.soul);
-  if (answer.mayJoin.some((entry) => entry.soul === "*" && entry.teams.includes(team.label))) {
-    const out = own.filter((entry) => !entry.teams.includes(team.label)).map((entry) => entry.soul);
-    return out.length === 0 ? "every soul" : `every soul but ${out.join(", ")}`;
-  }
-  return named.length === 0 ? "no soul" : named.join(", ");
+function joins(team: Team, souls: readonly Soul[] | undefined): { may: string; defaultFor: string | null } | null {
+  const known = (souls ?? []).filter((soul) => soul.teams !== undefined);
+  if (known.length === 0) return null;
+  const inIt = known.filter((soul) => soul.teams!.some((each) => each.label === team.label)).map((soul) => soul.name);
+  const out = known.filter((soul) => !inIt.includes(soul.name)).map((soul) => soul.name);
+  const may = inIt.length === 0 ? "no soul" : out.length === 0 ? "every soul" : out.length < inIt.length ? `every soul but ${out.join(", ")}` : inIt.join(", ");
+  // Whose default it is, said only of a team that is not the deployment's default.
+  const firsts = team.isDefault ? [] : known.filter((soul) => soul.teams!.some((each) => each.isDefault && each.label === team.label)).map((soul) => soul.name);
+  return { may, defaultFor: firsts.length === 0 ? null : firsts.join(", ") };
 }
 
-function TeamRow({ team, answer, agents }: { team: Team; answer: Teams; agents: number | null }) {
-  const joins = mayJoin(team, answer);
+function TeamRow({ team, souls, agents }: { team: Team; souls: readonly Soul[] | undefined; agents: number | null }) {
+  const who = joins(team, souls);
   const under: [string, string][] = [
     ...(team.team === null ? [] : [["Address", team.team] as [string, string]]),
-    ...(joins === null ? [] : [["May join", joins] as [string, string]]),
+    ...(who === null ? [] : [["May join", who.may] as [string, string]]),
+    ...(who === null || who.defaultFor === null ? [] : [["Default for", who.defaultFor] as [string, string]]),
     ...(team.at ? [["Declared in", team.at] as [string, string]] : []),
   ];
   return (
@@ -184,6 +190,9 @@ export function TeamsPage() {
   const oats = useOats();
   const answer = read.data;
   const teams = answer?.teams ?? [];
+  // Which teams each soul joins is the souls' read (the kernel's resolved answer per soul).
+  const souls = useRead("souls").data?.souls;
+  const resolved = (souls ?? []).filter((soul) => soul.teams !== undefined);
   const agentsOn = (team: Team) => (team.team === null || oats.phase !== "ready" ? null : oats.agents.filter((agent) => agent.team === team.team).length);
   // Two groups, each under its heading, only where both are there: the workspace's teams, and this computer's own.
   const shared = teams.filter((team) => team.local !== true);
@@ -191,7 +200,7 @@ export function TeamsPage() {
   const list = (rows: readonly Team[]): ReactNode => (
     <ul className="flex min-w-0 flex-col">
       {rows.map((team) => (
-        <TeamRow key={team.label} team={team} answer={answer!} agents={agentsOn(team)} />
+        <TeamRow key={team.label} team={team} souls={souls} agents={agentsOn(team)} />
       ))}
     </ul>
   );
@@ -224,11 +233,11 @@ export function TeamsPage() {
           ) : (
             list(teams)
           )}
-          {answer.mayJoin === undefined || answer.mayJoin.length === 0 ? null : (
+          {resolved.length === 0 ? null : (
             <Disclosure summary="Which teams each soul may join" testId="oats-teams-may-join">
-              {answer.mayJoin.map((entry) => (
-                <Under key={entry.soul} label={entry.soul === "*" ? "every soul" : entry.soul}>
-                  {entry.teams.length === 0 ? "none" : entry.teams.join(", ")}
+              {resolved.map((soul) => (
+                <Under key={soul.name} label={soul.name}>
+                  {soul.teams!.length === 0 ? "none" : soul.teams!.map((team) => team.label).join(", ")}
                 </Under>
               ))}
             </Disclosure>

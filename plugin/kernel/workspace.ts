@@ -1,7 +1,7 @@
 // The four read verbs behind the pages: `oats souls`, `oats capabilities`, `oats teams` and
 // `oats server list`, each read into the rows the pages draw (docs/desktop-cli-api.md).
 import { z } from "zod";
-import type { Capability, Machine, MayJoin, Soul, Source, Team, TeamProblem } from "../model/types.js";
+import type { Capability, Machine, Soul, Source, Team, TeamProblem } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { ok, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
@@ -42,6 +42,8 @@ const soulRow = z.looseObject({
   model: text,
   teams: z.array(z.looseObject({ label: z.string(), default: z.boolean().nullish() })).nullish(),
   file: z.looseObject({ path: text }).nullish(),
+  harnessFrom: text,
+  launch: z.looseObject({ at: text }).nullish(),
 });
 const soulsDocument = z.looseObject({ souls: z.array(soulRow), workspace });
 
@@ -75,6 +77,9 @@ export function parseSouls(document: unknown): Result<{ souls: Soul[] }> {
         ...(source === undefined ? {} : { source }),
         ...(row.harness === undefined ? {} : { harness: row.harness }),
         ...(row.model === undefined ? {} : { model: row.model }),
+        // Where the choice of harness came from (the kernel's word for it), and the file that makes it.
+        ...(row.harnessFrom ? { launchFrom: row.harnessFrom } : {}),
+        ...(row.launch?.at ? { launchAt: row.launch.at } : {}),
         // The default first, then the kernel's order.
         ...(row.teams == null ? {} : { teams: [...row.teams].sort((a, b) => Number(b.default === true) - Number(a.default === true)).map((team) => ({ label: team.label, isDefault: team.default === true })) }),
         ...(Object.keys(why).length === 0 ? {} : { why }),
@@ -105,7 +110,9 @@ export function parseCapabilities(document: unknown): Result<{ capabilities: Omi
         origin: row.origin ?? "",
         ...(source === undefined ? {} : { source }),
         ...(row.version === undefined ? {} : { version: row.version }),
-        ...(row.kind == null ? {} : { layer: row.layer ?? null, repoOnly: row.private === true }),
+        // Each only where the kernel's answer has the key: an answer with neither says nothing of core places or of who may use it.
+        ...(row.layer === undefined ? {} : { layer: row.layer }),
+        ...(row.private == null ? {} : { repoOnly: row.private === true }),
       };
     }),
   });
@@ -123,18 +130,19 @@ export const teamsArgv = (): string[] => ["teams", "--json"];
 
 const teamsDocument = z.looseObject({
   teams: z.array(z.looseObject({ label: z.string().min(1), team: text, default: z.boolean().nullish(), description: text, from: text, at: text })),
-  /** which teams a soul may join, by the soul's key ("*": every soul with no entry of its own) */
-  souls: z.record(z.string(), z.looseObject({ teams: z.array(z.string()).nullish() })).nullish(),
+  // (The answer's `souls` is the workspace's RULES for who joins what, by pattern, as written: `teams` a list or "any",
+  // a `default` alone. It is not read: which teams a soul joins is the kernel's to resolve, and `oats souls` answers it
+  // per soul, resolved.)
   localTeams: z.boolean().nullish(),
   problems: z.array(z.looseObject({ code: text, label: text, default: z.boolean().nullish(), message: text, fix: text })).nullish(),
 });
 
-export type TeamsAnswer = { teams: Team[]; mayJoin?: MayJoin[]; localTeams?: boolean; problems?: TeamProblem[] };
+export type TeamsAnswer = { teams: Team[]; localTeams?: boolean; problems?: TeamProblem[] };
 
 export function parseTeams(document: unknown): Result<TeamsAnswer> {
   const parsed = shaped(teamsDocument, document, "oats teams");
   if (!parsed.ok) return parsed;
-  const { souls, localTeams, problems } = parsed.value;
+  const { localTeams, problems } = parsed.value;
   return ok({
     teams: parsed.value.teams.map((row) => ({
       label: row.label,
@@ -144,7 +152,6 @@ export function parseTeams(document: unknown): Result<TeamsAnswer> {
       ...(row.from == null ? {} : { local: row.from === "local" }),
       ...(row.at === undefined ? {} : { at: row.at }),
     })),
-    ...(souls == null ? {} : { mayJoin: Object.entries(souls).map(([soul, entry]) => ({ soul, teams: entry.teams ?? [] })) }),
     ...(localTeams == null ? {} : { localTeams }),
     // A problem with no words of the kernel's says nothing a person can read: left out.
     ...(problems == null ? {} : { problems: problems.flatMap((problem) => (problem.message ? [{ code: problem.code ?? null, label: problem.label ?? null, isDefault: problem.default === true, message: problem.message, fix: problem.fix ?? null }] : [])) }),

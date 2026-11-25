@@ -19,8 +19,8 @@ bb's light theme and `plugin-live-dark` in its dark one; `plugin-real`), and the
 `LIVE_THEMES=light` (or `dark`) makes the live stage draw one theme, as each of CI's two live jobs
 does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a machine.
 `LIVE_PILOT_IMAGES=1`, by hand only and never in CI, takes the images of the pilot's six screens as a
-fresh install shows them: the plugin's `pages` stays at its default (the home alone) through every
-stage, and only those screens' scenes run. It is a pass for images: a check that asserts another
+fresh install shows them: the plugin's `pages` stays at its default (the home and the Workspace
+page's four tabs) through every stage, and only those screens' scenes run. It is a pass for images: a check that asserts another
 page's link or tile does not hold in it, and the gate is the run without it.
 In a scene, `showSidebar(page, viewport)` opens every parent of the roster's tree (the children are
 collapsed when the page loads), so a scene reads a child's row as a person who opened it;
@@ -141,9 +141,8 @@ open, a confirmation before its act, in progress, done, refused and with another
 - **A13** the sidebar with the tree, an agent's thread with its header row, the thread of an agent
   that needs you (the thread's own row says "Needs you", how long and its question; in the sidebar
   its row is the open one, with its "!"), the thread of a stopped agent ("Stopped", Start), the home (its badge
-  shows 3) and its reply box with a message typed (Send enabled), the four pages, and a soul's
-  page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
-  and their preview (Preview and Spawn enabled).
+  shows 3) and its reply box with a message typed (Send enabled), the Workspace page's four tabs,
+  and a soul's page (its facts, its capabilities, its agents, New agent).
 - **TM** a deployment that is mostly tmux agents (stage `tmux-roster`, the agents in
   `tmux-roster.mjs`): three agents on bb threads and nineteen on tmux over seven souls, five of them
   waiting, two stopped with OATS, two whose session was lost, some with a parent. The real run holds one tmux-backed agent (`real/parts/lost.mjs`), not a
@@ -232,7 +231,7 @@ text the plugin draws there reads at 4.5:1 or more against its effective backgro
 mark at 3:1 or more against what is behind it (the WCAG contrast ratio, from the computed
 colours). It covers every rendered element with text of its own inside the plugin's elements
 (`data-testid="oats-…"`: the sidebar block and tree, the thread's row, the home's
-cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
+cards and lists, the Workspace page's tabs, the New agent form with its refusal and its preview, the plan dialog,
 and the buttons that are enabled in a scene: default, primary and destructive), what a field
 shows (the typed value of an input or a textarea, the chosen option of a select, or the
 placeholder of an empty one), and the marks (a state's in each of its seven states, a toned dot, a row's mark). A failing scene

@@ -3,7 +3,6 @@
 // `--expect-decision <revision>`, and the revision is the preview's `decision.revision`.
 import { z } from "zod";
 import { formFacts, type FormFacts } from "../model/spawn.js";
-import type { SpawnSummary } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
 import { codes, err, ok, type Result } from "./result.js";
@@ -123,8 +122,6 @@ const preview = z.looseObject({
 });
 
 export type SpawnPreview = {
-  /** The preview as short lines, for a soul's page. */
-  summary: SpawnSummary;
   /** What will be created, in the form's words (model/spawn.ts), for exactly the name asked. */
   facts: FormFacts;
   revision: string;
@@ -141,41 +138,18 @@ export function parseSpawnPreview(document: unknown, name: string | null = null)
   const parsed = shaped(preview, document, "oats spawn --preview");
   if (!parsed.ok) return parsed;
   const value = parsed.value;
-  const problems: string[] = [];
   let problem: SpawnPreview["problem"] = null;
   if (value.backendStatus && value.backendStatus.installed === false) {
-    problems.push(`the ${value.backendStatus.name ?? "session"} backend is not installed on this machine`);
-    problem = { code: "E_BACKEND_UNAVAILABLE", message: problems.at(-1)! };
+    problem = { code: "E_BACKEND_UNAVAILABLE", message: `the ${value.backendStatus.name ?? "session"} backend is not installed on this machine` };
   }
   if (value.preflight?.status === "timeout") {
-    problems.push(`the kernel's checks did not finish within ${Math.round((value.preflight.budgetMs ?? 0) / 1000)} s`);
-    problem = { code: "E_PREFLIGHT_INCOMPLETE", message: problems.at(-1)! };
+    problem = { code: "E_PREFLIGHT_INCOMPLETE", message: `the kernel's checks did not finish within ${Math.round((value.preflight.budgetMs ?? 0) / 1000)} s` };
   }
   if (value.launch?.problem) {
-    problems.push([value.launch.problem.code, value.launch.problem.message].filter(Boolean).join(": "));
     problem = { code: value.launch.problem.code ?? codes.failed, message: value.launch.problem.message ?? "the kernel found a problem with this launch and did not say which" };
   }
-  const model = value.model ?? "the harness's default model";
-  const launch = value.harness
-    ? [
-        value.harness,
-        value.modelSource ? `${model} (${value.modelSource})` : model,
-        value.launchConfig ? `launch configuration ${value.launchConfig}` : null,
-      ]
-        .filter((part): part is string => part !== null)
-        .join(" · ")
-    : null;
   return ok({
     revision: value.decision.revision,
-    summary: {
-      modules: (value.modules ?? []).map((module) => (module.from?.version ? `${module.name} ${module.from.version}` : module.name)),
-      teams: (value.teams ?? []).map((team) =>
-        [team.label, team.default ? "(default)" : null, team.team ? null : "(not mapped)"].filter((part) => part !== null).join(" "),
-      ),
-      launch,
-      warnings: value.warnings ?? [],
-      problems,
-    },
     facts: formFacts(document, { name }),
     problem,
   });

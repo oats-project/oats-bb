@@ -88,7 +88,7 @@ test("the page is registered whatever pages are shown, out of bb's own navigatio
   const app = await loadApp();
   const panel = app.navPanels.find((candidate) => candidate.id === "new-agent")!;
   expect([panel.path, panel.title, panel.experimental_hideFromNavigation]).toEqual(["new-agent", "New agent", true]);
-  // Under the release's default pages (home alone) the form is still there: it is not a page a release leaves out.
+  // Where the home alone is shown (`pages: home`) the form is still there: it is not a page a deployment leaves out.
   const slot = await form("", previews(), { settings: { pages: "home" } });
   expect(await slot.findByTestId("oats-spawn-form")).toBeTruthy();
   expect(slot.queryByTestId("oats-page-not-shown")).toBeNull();

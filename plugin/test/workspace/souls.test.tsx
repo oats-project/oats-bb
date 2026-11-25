@@ -7,7 +7,7 @@ import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { setAgentPage } from "../../app/home/agent-tab";
-import { fixtureAgents, fixtureThreads } from "../helpers/fixtures";
+import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp } from "../helpers/render";
 import { asked } from "../../app/lifecycle";
 import type { Contract, Handlers } from "../helpers/render";
@@ -68,6 +68,25 @@ test("the Souls tab: the souls in groups by where they come from, each by its ow
   expect(slot.queryByTestId("oats-search")).toBeNull(); // three souls need no filter
   fireEvent.click(slot.getAllByTestId("oats-soul-row")[2]!);
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls", options: { subPath: "oats.okf/knowledge-harvester" } }]);
+});
+
+test("a row's order: the name, how many run, then \"Can't spawn\"; and souls of ONE package keep their heading, which is what names the package", async () => {
+  const slot = await souls("", listed);
+  await slot.findAllByTestId("oats-soul-row");
+  const last = slot.getAllByTestId("oats-soul-row")[2]!;
+  await waitFor(() => expect(within(last).queryByTestId("oats-soul-running")).not.toBeNull());
+  expect(Array.from(last.firstElementChild!.children).map((part) => part.getAttribute("data-testid"))).toEqual(["oats-soul-name", "oats-soul-running", "oats-soul-cannot"]);
+  slot.unmount();
+  resetApp();
+  const packaged = await souls("", { souls: () => ({ souls: [LISTED[2]!] }) });
+  await packaged.findAllByTestId("oats-soul-row");
+  expect(packaged.getAllByTestId("oats-soul-group").map((group) => group.querySelector("h2")?.textContent ?? null)).toEqual(["oats.okf 6.2.0" + "1"]);
+  packaged.unmount();
+  resetApp();
+  // Souls of the workspace alone: no heading (it would tell nothing apart).
+  const own = await souls("", { souls: () => ({ souls: LISTED.slice(0, 2) }) });
+  await own.findAllByTestId("oats-soul-row");
+  expect(own.getAllByTestId("oats-soul-group").map((group) => group.querySelector("h2"))).toEqual([null]);
 });
 
 test("souls the kernel names no source for are one list with no heading, each by its key", async () => {
@@ -166,6 +185,12 @@ test("a soul's page opens over the list with the way back: its key, what it does
   expect(Array.from(detail.querySelectorAll("header *")).map((part) => part.textContent).join(" ")).not.toContain("github.com");
   fireEvent.click(slot.getByTestId("oats-back"));
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "souls" }]);
+});
+
+test("where a soul's harness was chosen is under Details, where the kernel says: its word as the New agent form says it, and the file", async () => {
+  const slot = await souls("oats-expert", { souls: () => ({ souls: [soul("oats-expert", { harness: "pi", launchFrom: "local", launchAt: "oats-local.yaml#/souls/launch/oats-expert" })] }) });
+  await slot.findByTestId("oats-soul-detail");
+  expect(Array.from(slot.getByTestId("oats-soul-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["from member github.com/awebai/oats @ e5b6c5ac", "Harness: set for this soul on this computer (oats-local.yaml#/souls/launch/oats-expert)"]);
 });
 
 test("New agent on a soul's page opens the New agent form with that soul chosen; the earlier short form is gone", async () => {
@@ -308,6 +333,38 @@ test("while bb is still listing its threads a soul's agents are not drawn at all
 // A soul's agents are the roster's: while OATS cannot be read the page says so with the notice
 // every place shows, above the agents as last read; with no roster ever read, the notice alone.
 const last = (minutes: number) => ({ at: new Date(Date.now() - minutes * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() });
+// Behind a result (an act of ours ended and the window's roster is not yet one read after it) a soul's agent says
+// "Reading…" in its state's place and its acts are off, as every place that says an agent's state (app/roster/reading.tsx).
+test("behind a result a soul's agent says \"Reading…\" and its acts are off and press nothing; a roster read after the act's end brings both back", async () => {
+  const { noteActed, forgetActed } = await import("../../app/roster/reading");
+  const { act } = await import("@testing-library/react");
+  const threads = fixtureThreads().map((thread) => (thread.id === "thr_ci" ? { ...thread, isArchived: true } : thread));
+  const slot = await souls("oats-developer", listed, fixtureAgents(), threads);
+  await slot.findByTestId("oats-soul-detail");
+  await waitFor(() => expect(agentRows(slot)[0]).toEqual(["flaky-ci-developer", "detached", expect.stringMatching(/Needs you· may still run$/)]));
+  const row = () => slot.getAllByTestId("oats-soul-agent")[0]!;
+  const acts = () => Array.from(row().querySelectorAll<HTMLButtonElement>('[data-testid^="oats-agent-act-"], [data-testid="oats-status-act"]'));
+  expect(acts().every((button) => !button.disabled)).toBe(true);
+  try {
+    act(() => noteActed(["flaky-ci-developer"], fixtureSnapshot().at)); // an act ended; the window's roster was read before that
+    await waitFor(() => expect(within(row()).getByTestId("oats-soul-agent-state").textContent).toBe("Reading…"));
+    expect(within(row()).getByTestId("oats-soul-agent-state").querySelector("[data-state]")).toBeNull(); // no state's mark: the row says no state
+    expect(row().textContent).not.toMatch(/Needs you|may still run/);
+    expect(acts().length).toBeGreaterThan(0);
+    for (const button of acts()) {
+      expect(button.disabled).toBe(true);
+      fireEvent.click(button);
+    }
+    expect(asked()).toBeNull();
+    // The other agent of the soul is not behind a result: its row is as it was.
+    expect(agentRows(slot)[1]![2]).toMatch(/^Running/);
+  } finally {
+    act(() => forgetActed());
+  }
+  await waitFor(() => expect(within(row()).getByTestId("oats-soul-agent-state").textContent).toMatch(/Needs you/));
+  expect(acts().every((button) => !button.disabled)).toBe(true);
+});
+
 const failed = (kept: ReturnType<typeof last> | null, code = "OATS_NOT_FOUND") => () => ({ ok: false as const, at: new Date().toISOString(), code, message: "oats was not found on falcon: install OATS there", machine: "falcon", last: kept });
 
 test("a soul's page and the Souls tab while OATS cannot be read: ONE notice with the age, above what was last read; with no roster, the notice and nothing of the agents", async () => {
@@ -323,6 +380,8 @@ test("a soul's page and the Souls tab while OATS cannot be read: ONE notice with
   expect((await never.findByRole("alert")).querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
   expect(never.getByTestId("oats-soul-detail").textContent).not.toContain("Flaky ci developer");
   expect(never.getByRole("button", { name: "Retry" })).toBeTruthy();
+  // With the roster never read New agent is held, as the home and the sidebar offer none then.
+  expect((never.getByTestId("oats-soul-new-agent") as HTMLButtonElement).disabled).toBe(true);
   never.unmount();
   resetApp();
   // The list: the same one notice; the running counts are the last read's.

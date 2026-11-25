@@ -20,6 +20,8 @@ export const soul = z.object({
   unresolved: z.literal(true).optional(),
   shortName: z.string().optional(),
   file: z.string().optional(),
+  launchFrom: z.string().optional(),
+  launchAt: z.string().optional(),
   source: source.optional(),
   harness: z.string().nullable().optional(),
   model: z.string().nullable().optional(),
@@ -48,7 +50,6 @@ export const team = z.object({
 /** `oats teams` beside its rows: who may join what, whether this computer may declare teams, and what is not right. */
 const teamsAnswer = z.object({
   teams: z.array(team),
-  mayJoin: z.array(z.object({ soul: z.string(), teams: z.array(z.string()) })).optional(),
   localTeams: z.boolean().optional(),
   problems: z.array(z.object({ code: z.string().nullable(), label: z.string().nullable(), isDefault: z.boolean(), message: z.string(), fix: z.string().nullable() })).optional(),
 });

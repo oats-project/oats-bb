@@ -1,7 +1,19 @@
 // The workspace's live scenes: the Workspace page and its four tabs (Souls, Capabilities, Teams,
 // Machines), a soul's own page, and a soul's agent whose thread bb does not have. By the audit of
 // the hidden pages and its ruling (25 Nov 2026).
-import { testId, textOf, visible } from "../browser.mjs";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { fill, testId, textOf, visible } from "../browser.mjs";
+import { FAILS, refresh, setVerb } from "./panel.mjs";
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "workspace");
+/** A recorded answer of the workspace's fixtures, changed for a scene (or as it is): what the fake `oats` prints for a verb. */
+function derived(file, change = () => undefined, more = {}) {
+  const document = JSON.parse(readFileSync(join(FIXTURES, file), "utf8"));
+  change(document.result);
+  return { stdout: JSON.stringify(document), ...more };
+}
 
 const q = (id) => JSON.stringify(testId(id));
 /** The tab strip: each tab's words and whether it is the selected one. */
@@ -122,6 +134,109 @@ export default [
       check(key !== null && heading === key, `${at} a package soul's row opens its page (${key})`, await page.evaluate("location.pathname + ' | ' + document.body.innerText.slice(0, 200)"));
       await page.evaluate(`document.querySelector(${q("oats-back")}).click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/plugins/oats/souls") && ${visible(testId("oats-soul-row"))}`, 15)), `${at} "← Souls" goes back to the list`, await page.evaluate("location.pathname"));
+    },
+  },
+  {
+    stage: "fixtures",
+    name: "a tab's other states: a read that failed, a list that is read, an empty list, a search that narrows and one that finds nothing",
+    run: async ({ page, at, viewport, check }) => {
+      const face = textOf(testId("oats-souls-page"));
+      try {
+        // A read that failed: a notice in a person's words with Retry; the kernel's message is under its Details, never the page's face.
+        setVerb("souls", FAILS);
+        refresh();
+        await page.goto("/plugins/oats/souls");
+        const failed = await page.until(`(() => { const notice = document.querySelector(${q("oats-souls-page")} + ' [role="alert"]'); return notice && notice.querySelector(${q("oats-read-retry")}) ? JSON.stringify({ title: notice.querySelector("h3")?.innerText.trim(), open: notice.querySelector("details")?.open ?? null, rows: document.querySelectorAll(${q("oats-soul-row")}).length }) : ""; })()`, 30);
+        const notice = failed ? JSON.parse(failed) : null;
+        check(notice !== null && notice.title === "OATS could not be read" && notice.open === false && notice.rows === 0, `${at} Souls, its read failed: ONE notice, "OATS could not be read", with Retry; the kernel's message under Details, closed; no row`, failed ?? (await page.evaluate(face)));
+        await page.shot(`workspace-${viewport.name}-souls-failed`, { targets: true });
+        // Retry reads it again: the rows are back.
+        setVerb("souls", null);
+        // (The lists are read again with every roster read too: the notice gives way to "Reading…" for that moment, so the press waits for the button, and is not needed once the rows are back.)
+        await page.until(`(() => { if (document.querySelector(${q("oats-soul-row")})) return "rows"; const retry = document.querySelector(${q("oats-read-retry")}); if (!retry) return ""; retry.click(); return "pressed"; })()`, 20);
+        check(Boolean(await page.until(visible(testId("oats-soul-row")), 30)), `${at} Retry reads the souls again: the rows are drawn`, await page.evaluate(face));
+        // While it is read: "Reading…" in the rows' place.
+        setVerb("souls", derived("souls.json", undefined, { sleepMs: 8000 }));
+        refresh();
+        await page.goto("/plugins/oats/souls");
+        const reading = await page.until(`(() => { const t = ${face}; return /Reading…/.test(t) && document.querySelectorAll(${q("oats-soul-row")}).length === 0 ? t : ""; })()`, 20);
+        check(Boolean(reading), `${at} while the souls are read the tab says "Reading…", and draws no row`, await page.evaluate(face));
+        await page.shot(`workspace-${viewport.name}-souls-reading`, { targets: true });
+        check(Boolean(await page.until(visible(testId("oats-soul-row")), 30)), `${at} and the rows follow`, await page.evaluate(face));
+        // No soul at all: two words.
+        setVerb("souls", derived("souls.json", (result) => { result.souls = []; }));
+        refresh();
+        await page.goto("/plugins/oats/souls");
+        const none = await page.until(`(() => { const t = ${face}; return /No souls\\.$/.test(t.trim()) ? t : ""; })()`, 30);
+        check(Boolean(none), `${at} no soul at all: "No souls.", and nothing else under the strip`, await page.evaluate(face));
+        await page.shot(`workspace-${viewport.name}-souls-empty`, { targets: true });
+      } finally {
+        setVerb("souls", null);
+        refresh();
+      }
+      // A search that narrows (the recorded workspace has twelve capabilities: the field is there): the tab says how many of how many; one that finds nothing says so in two words.
+      await page.goto("/plugins/oats/capabilities");
+      await page.until(visible(testId("oats-capability-row")), 30);
+      const all = await page.evaluate(`document.querySelectorAll(${q("oats-capability-row")}).length`);
+      const tab = `(document.querySelector(${q("oats-tab-capabilities")})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
+      check(all >= 12 && (await page.evaluate(`document.querySelector(${q("oats-search")}) !== null`)), `${at} Capabilities, ${all} rows: the search field is there`, await page.evaluate(tab));
+      await page.evaluate(fill(testId("oats-search"), "oats.core"));
+      const narrowed = await page.until(`(() => { const now = ${tab}; return /^Capabilities \\d+ of ${all}$/.test(now) ? now : ""; })()`, 15);
+      const left = await page.evaluate(`document.querySelectorAll(${q("oats-capability-row")}).length`);
+      check(Boolean(narrowed) && left > 0 && left < all && narrowed === `Capabilities ${left} of ${all}`, `${at} a search narrows the list, and the tab says "${left} of ${all}"`, `${narrowed} | ${left} rows`);
+      await page.shot(`workspace-${viewport.name}-capabilities-search`, { targets: true });
+      await page.evaluate(fill(testId("oats-search"), "no capability is named so"));
+      const nothing = await page.until(`(() => { const t = ${textOf(testId("oats-capabilities-page"))}; return /Nothing matches\\./.test(t) && document.querySelectorAll(${q("oats-capability-row")}).length === 0 ? ${tab} : ""; })()`, 15);
+      check(nothing === `Capabilities 0 of ${all}`, `${at} a search that finds nothing: "Nothing matches.", no row, "0 of ${all}" in the tab`, String(nothing));
+      await page.shot(`workspace-${viewport.name}-capabilities-nothing`, { targets: true });
+    },
+  },
+  {
+    stage: "fixtures",
+    name: "the default team with no address: a notice first, and a mark on the Teams tab",
+    run: async ({ page, at, viewport, check }) => {
+      const KERNEL = "the default team oats has no provider id yet";
+      setVerb("teams", derived("teams.json", (result) => {
+        const team = result.teams.find((each) => each.default === true);
+        team.team = null;
+        result.problems = [{ code: "team-unmapped", label: team.label, default: true, message: KERNEL, fix: "its owner runs `oats aweb setup`, then commits the id" }];
+      }));
+      try {
+        refresh();
+        await page.goto("/plugins/oats/teams");
+        const read = await page.until(`(() => { const notice = document.querySelector(${q("oats-teams-page")} + " " + ${q("oats-notice")}); const row = document.querySelector(${q("oats-team-row")}); if (!notice || !row) return ""; const mark = document.querySelector(${q("oats-tab-teams")} + " " + ${q("oats-mark")}); return JSON.stringify({ title: notice.querySelector("h3")?.innerText.trim(), open: notice.querySelector("details")?.open ?? null, first: Boolean(notice.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING), row: row.innerText.replace(/\\s+/g, " ").trim(), mark: mark?.getAttribute("aria-label") ?? null, face: (document.querySelector(${q("oats-teams-page")})?.innerText ?? "").includes(${JSON.stringify(KERNEL)}) && !notice.querySelector("details")?.open }); })()`, 30);
+        const said = read ? JSON.parse(read) : null;
+        check(said !== null && said.title === "The default team oats has no address yet: nothing can be spawned until it has one." && said.open === false && said.first, `${at} Teams: the notice says it first, in a person's words; the kernel's words are under its Details, closed`, read ?? (await page.evaluate(textOf(testId("oats-teams-page")))));
+        check(said !== null && /No address yet/.test(said.row) && said.mark === "Teams: the default team has no address yet", `${at} its row says "No address yet", and the Teams tab has a mark with words`, read ?? "");
+        await page.shot(`workspace-${viewport.name}-teams-no-address`, { targets: true });
+        // The mark stands on the tab from the other tabs too.
+        await page.goto("/plugins/oats/machines");
+        check(Boolean(await page.until(`document.querySelector(${q("oats-tab-teams")} + " " + ${q("oats-mark")}) !== null && ${visible(testId("oats-machine-row"))}`, 30)), `${at} the Teams tab keeps its mark while another tab is open`);
+      } finally {
+        setVerb("teams", null);
+        refresh();
+      }
+      await page.goto("/plugins/oats/teams");
+      check(Boolean(await page.until(`${visible(testId("oats-team-row"))} && document.querySelector(${q("oats-tab-teams")} + " " + ${q("oats-mark")}) === null && document.querySelector(${q("oats-teams-page")} + " " + ${q("oats-notice")}) === null`, 30)), `${at} with the teams as recorded there is no notice and no mark`, await page.evaluate(textOf(testId("oats-teams-page"))));
+    },
+  },
+  {
+    stage: "fixtures",
+    name: "a soul that cannot be spawned, and a soul the deployment does not have",
+    run: async ({ page, at, viewport, check }) => {
+      // The recorded workspace has one the kernel could not resolve: its row says "Can't spawn"; its page keeps New agent, off, with the one reason, and says nothing of its capabilities.
+      await page.goto("/plugins/oats/souls");
+      await page.until(visible(testId("oats-soul-row")), 30);
+      const key = await page.evaluate(`(() => { const row = [...document.querySelectorAll(${q("oats-soul-row")})].find((each) => each.querySelector(${q("oats-soul-cannot")})); row?.click(); return row?.getAttribute("title") ?? null; })()`);
+      const read = key === null ? "" : await page.until(`(() => { const detail = document.querySelector(${q("oats-soul-detail")}); if (!detail || detail.querySelector("h2")?.innerText.trim() !== ${JSON.stringify(key)}) return ""; const button = detail.querySelector(${q("oats-soul-new-agent")}); return JSON.stringify({ off: button?.disabled ?? null, reason: detail.querySelector(${q("oats-disabled-reason")})?.innerText.trim() ?? null, capabilities: detail.querySelector(${q("oats-soul-capabilities")}) !== null, details: detail.querySelector(${q("oats-soul-details")})?.open ?? null }); })()`, 30);
+      const soul = read ? JSON.parse(read) : null;
+      check(soul !== null && soul.off === true && soul.reason === "Can't spawn here" && soul.capabilities === false && soul.details === false, `${at} a soul that cannot be spawned (${key}): New agent is there, off, with "Can't spawn here"; nothing is said of its capabilities; why is under Details, closed`, read || (await page.evaluate(textOf(testId("oats-souls-page")))));
+      await page.shot(`workspace-${viewport.name}-soul-cannot-spawn`, { targets: true });
+      // A soul the URL names and the deployment does not have: one line, and the way back.
+      await page.goto("/plugins/oats/souls/no-such-soul");
+      const unknown = await page.until(`(() => { const t = ${textOf(testId("oats-souls-page"))}; return /This deployment has no soul named no-such-soul\\./.test(t) && document.querySelector(${q("oats-back")}) ? t : ""; })()`, 30);
+      check(Boolean(unknown) && !/New agent/.test(unknown), `${at} a soul the deployment does not have: one line that says so, the way back, and no New agent`, await page.evaluate(textOf(testId("oats-souls-page"))));
+      await page.shot(`workspace-${viewport.name}-soul-unknown`, { targets: true });
     },
   },
   {

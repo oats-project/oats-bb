@@ -85,12 +85,31 @@ describe("the pages' verbs", () => {
     expect(soul("code-reviewer")).toMatchObject({ shortName: "code-reviewer", source: { kind: "member", label: "workspace" }, harness: "pi", model: "gpt-6-astra", teams: [{ label: "oats", isDefault: true }] });
     expect(soul("code-reviewer").why).toMatchObject({ "oats.aweb": "workspace", "oats.code-review": "soul" });
     expect(soul("code-reviewer").file).toBe("souls/code-reviewer/soul.yaml");
+    // Where its harness was chosen (the kernel's word), and the file that makes the choice.
+    expect([soul("code-reviewer").launchFrom, soul("code-reviewer").launchAt]).toEqual(["local", "oats-local.yaml#/souls/launch/code-reviewer"]);
     expect(soul("code-reviewer").unresolved).toBeUndefined();
     // A soul the kernel could not resolve (it cannot be spawned): the kernel answers no list of capabilities, which is "not known", never "none".
     const broken = answer.value.souls.find((each) => !each.spawnable)!;
     expect([broken.name, broken.capabilities, broken.unresolved, broken.teams]).toEqual(["oats.okf/knowledge-maintainer", [], true, undefined]);
     // A package soul: its group is the package with its version, its own name is the name without the package.
     expect(soul("oats.okf/knowledge-harvester")).toMatchObject({ shortName: "knowledge-harvester", source: { kind: "package", label: "oats.okf 6.2.0" } });
+  });
+
+  // The kernel prints the workspace's `souls:` rules as written: a pattern's `teams` is a list or the word "any", and an
+  // entry may hold a `default` alone (OATS 0.70.5 lib/teams.mjs). None of it may cost the teams' rows.
+  it("teams: whatever the workspace's rules for who joins what look like, the teams are read", async () => {
+    const { parseTeams } = await import("../../kernel/workspace.js");
+    const teams = [{ label: "oats", team: "default:oats.aweb.ai", default: true, from: "shared" }];
+    for (const souls of [{ "*": { teams: "any" } }, { "ws/writer": { default: "docs" } }, { "*": { teams: ["oats"] }, "oats.okf/*": { teams: "any", default: "oats" } }, null, "not an object", 7]) {
+      const answer = parseTeams({ teams, souls });
+      expect(answer).toEqual({ ok: true, value: { teams: [{ label: "oats", team: "default:oats.aweb.ai", isDefault: true, local: false }] } });
+    }
+  });
+
+  it("capabilities: an answer that names a kind and says nothing of core places (no `layer`) or of who may use one (no `private`) claims neither", async () => {
+    const { parseCapabilities } = await import("../../kernel/workspace.js");
+    const answer = parseCapabilities({ capabilities: [{ name: "oats.core", kind: "member", repoKey: "github.com/awebai/oats" }] });
+    expect(answer.ok && answer.value.capabilities.map((row) => Object.keys(row).sort())).toEqual([["description", "id", "origin", "source"]]);
   });
 
   it("teams: label, id and default; an unmapped team has no id", async () => {
@@ -102,8 +121,8 @@ describe("the pages' verbs", () => {
           { label: "oats", team: "default:oats.aweb.ai", isDefault: true, description: "The OATS framework team", local: false, at: "github.com/awebai/oats:oats-workspace.yaml#/teams/oats" },
           { label: "docs", team: null, isDefault: false, description: null, local: false, at: "github.com/awebai/oats:oats-workspace.yaml#/teams/docs" },
         ],
-        // Who may join what ("*": every soul), whether this computer may declare teams, and what the kernel says is not right, in its words.
-        mayJoin: [{ soul: "*", teams: ["oats"] }],
+        // Whether this computer may declare teams, and what the kernel says is not right, in its words. (The answer's
+        // `souls`, the workspace's rules for who joins what, is not read: `oats souls` answers each soul's teams, resolved.)
         localTeams: true,
         problems: [{ code: "team-unmapped", label: "docs", isDefault: false, message: "shared team docs has no provider id yet", fix: "its owner runs `oats aweb setup`, then commits the id" }],
       },

@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Added
+
+- **Launch choices: bb's reasoning level and service tier** (KP-14). The provider declares
+  two launch choices in its manifest (`sessionProviders.bb.launchChoices`:
+  `reasoning-level` and `service-tier`), which a kernel with the feature `launch-choices`
+  takes as `--launch-choice <name>=<value>` on `oats spawn`, `oats session start` and
+  `oats session restart`, records in the home and hands to the launch. The provider
+  passes each to `bb thread spawn` (`--reasoning-level`, `--service-tier`). A choice is
+  carried or refused, never dropped: bb itself takes any level and any tier and says
+  nothing of what became of it, so the value is held against what bb lists for the
+  launch's model before anything is started. Refused with `E_BACKEND_LAUNCH_ARG`, at the
+  launch and at the check of a planned launch: a level or a tier the model does not have
+  in bb, any tier for a model bb lists none for, the value `default`, a choice the
+  provider does not declare. For pi, a model written with pi's own `:<level>` is refused
+  with a sentence that names the model and `--launch-choice reasoning-level=<level>`: on
+  bb the level travels as the choice alone. Where bb's list cannot settle it, the launch
+  goes on with a warning (`session-provider-launch-choice-unchecked`). A launch with no
+  choice is unchanged. README, "Launch choices".
+  **This needs the OATS release that has `launch-choices`**: the manifest's new property
+  is one an older kernel does not know, and the package's floor (`compatibility.oats`)
+  rises to that release, so that an older kernel refuses the package
+  (`E_CAPABILITY_INCOMPATIBLE`). Under the old floor OATS 0.70.5 loses the whole backend:
+  every spawn on bb answers `E_BACKEND_UNKNOWN`, "capability oats.bb declares it
+  malformed: session provider "bb": unknown key "launchChoices"".
+
 ### The session provider
 
 - **A pi agent with a grant identity can send its mail** (#87). A pi thread was given

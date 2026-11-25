@@ -2,7 +2,8 @@
 import { inspect, inspectMany } from "./inspect.mjs";
 import { sendInput } from "./input.mjs";
 import { launch } from "./launch.mjs";
-import { bounded } from "./errors.mjs";
+import { ProviderError, bounded } from "./errors.mjs";
+import { readChoices } from "./choices.mjs";
 import { HARNESSES } from "./mode.mjs";
 import { FULL_MODE_ONLY, homeSandboxWarnings, plannedLaunchFindings, readinessResult } from "./readiness.mjs";
 import { readSettings } from "./settings.mjs";
@@ -16,6 +17,17 @@ const withSettings = (run) => (input, rawSettings, options) => run(input, readSe
 function plannedLaunch(input) {
   const planned = input !== null && typeof input === "object" ? input.launch : null;
   return planned !== null && typeof planned === "object" && !Array.isArray(planned) ? planned : null;
+}
+
+/** The planned launch's choices where they are ones a launch would take, else null: what a
+ *  launch refuses them for is plannedLaunchFindings' to say (lib/readiness.mjs). */
+function plannedChoices(planned) {
+  if (planned === null) return null;
+  try { const choices = readChoices(planned.choices); return Object.keys(choices).length > 0 ? choices : null; }
+  catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    return null;
+  }
 }
 
 /** The handlers of the six verbs.
@@ -37,7 +49,7 @@ export function sessionHandlers({ sandboxedModes = false, now = Date.now } = {})
     inspectMany: withSettings(inspectMany),
     input: withSettings(sendInput),
     stop: withSettings(stop),
-    // input: {home | null, soul | null, settings?, launch?: {harness, yolo, args, sandbox}}.
+    // input: {home | null, soul | null, settings?, launch?: {harness, yolo, args, sandbox, model?, choices?}}.
     // bb's own state depends on the settings alone. With the planned launch the kernel
     // hands it, the check also says what that launch would be refused for and would write.
     check: async (input, rawSettings, options) => {
@@ -47,7 +59,7 @@ export function sessionHandlers({ sandboxedModes = false, now = Date.now } = {})
       // bb runs each harness with a provider of its own: the planned launch says whose state
       // must be ready. A harness the provider does not run is the planned launch's own finding.
       const harness = planned !== null && HARNESSES.includes(planned.harness) ? planned.harness : null;
-      const { result } = await readinessResult(settings, { ...options, harness, model: planned?.model, home, now, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
+      const { result } = await readinessResult(settings, { ...options, harness, model: planned?.model, choices: plannedChoices(planned), home, now, extra: planned ? plannedLaunchFindings(planned, { sandboxedModes, settings, home }) : undefined });
       // For a home, what its own settings say of the sandbox (a report only). Where no
       // sandboxed launch is taken, the provider wrote none of it, and says nothing of it.
       if (sandboxedModes) result.warnings.push(...homeSandboxWarnings(home));

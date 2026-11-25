@@ -4,6 +4,7 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { LAUNCH_CHOICES } from "../oats-package/capabilities/oats-bb/lib/choices.mjs";
 import { WIRE } from "../oats-package/capabilities/oats-bb/lib/wire.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -22,6 +23,12 @@ const RESERVED_PROVIDERS = ["tmux", "herdr", "session-provider"];
 const PROVIDER_COMMANDS = ["launch", "inspect", "input", "stop"];
 const OPTIONAL_PROVIDER_COMMANDS = ["inspectMany", "check"];
 const HARNESSES = ["claude", "codex", "pi"];
+// A provider's launch choices (the kernel's feature `launch-choices`): at most 8, each a
+// name and a description a client shows as text.
+const CHOICE_NAME = /^[a-z][a-z0-9-]{0,39}$/;
+const MAX_CHOICES = 8;
+// One line of safe text: no control character, no bidi control, no zero-width or tag character.
+const UNSAFE_TEXT = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069\u200b\u2060\ufeff]|[\u{e0000}-\u{e007f}]/u;
 
 /** A command's script: a regular file inside the capability (no link, no way out). */
 function checkScript(capDir, command, at) {
@@ -97,7 +104,22 @@ if (isObject(pkg)) {
         if (!PROVIDER_NAME.test(name)) report(here, "a provider name is 1-40 lowercase letters, digits and dashes");
         if (RESERVED_PROVIDERS.includes(name)) report(here, `${name} is reserved by the kernel`);
         if (!isObject(provider)) { report(here, "must be a map"); continue; }
-        for (const key of Object.keys(provider)) if (!["commands", "harnesses", "description", "wire"].includes(key)) report(here, `unknown key ${key}`);
+        for (const key of Object.keys(provider)) if (!["commands", "harnesses", "description", "wire", "launchChoices"].includes(key)) report(here, `unknown key ${key}`);
+        // launchChoices: what a person may choose for a launch of this provider, by name. The
+        // kernel knows no choice's meaning: the names are the provider's, and the same in its code.
+        if (provider.launchChoices !== undefined) {
+          const choices = isObject(provider.launchChoices) ? provider.launchChoices : {};
+          if (!isObject(provider.launchChoices)) report(`${here}/launchChoices`, "must be a map");
+          if (Object.keys(choices).length > MAX_CHOICES) report(`${here}/launchChoices`, `declares more than ${MAX_CHOICES} choices`);
+          for (const [choice, declared] of Object.entries(choices)) {
+            const there = `${here}/launchChoices/${choice}`;
+            if (!CHOICE_NAME.test(choice)) report(there, "a choice name is a lowercase letter, then up to 39 lowercase letters, digits and dashes");
+            if (!isObject(declared)) { report(there, "must be a map"); continue; }
+            for (const key of Object.keys(declared)) if (key !== "description") report(there, `unknown key ${key}`);
+            if (typeof declared.description !== "string" || declared.description === "" || [...declared.description].length > 200 || UNSAFE_TEXT.test(declared.description)) report(`${there}/description`, "must be one line of at most 200 characters, with no control or bidi character");
+          }
+          if (name === "bb" && JSON.stringify(Object.keys(choices).sort()) !== JSON.stringify(Object.keys(LAUNCH_CHOICES).sort())) report(`${here}/launchChoices`, `declares ${Object.keys(choices).sort().join(", ") || "none"}, and lib/choices.mjs takes ${Object.keys(LAUNCH_CHOICES).sort().join(", ")}`);
+        } else if (name === "bb") report(`${here}/launchChoices`, `is not declared, and lib/choices.mjs takes ${Object.keys(LAUNCH_CHOICES).sort().join(", ")}`);
         // The wire the provider speaks: declared here, and the same in its code.
         if (typeof provider.wire !== "string" || !/^\d+\.\d+$/.test(provider.wire)) report(`${here}/wire`, 'must be the wire version, "<major>.<minor>"');
         else if (name === "bb" && provider.wire !== WIRE) report(`${here}/wire`, `is ${provider.wire}, and lib/wire.mjs speaks ${WIRE}`);

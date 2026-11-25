@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { sandboxDeny } from "./deny.mjs";
 import { bbClient, nothingHappened } from "./bb.mjs";
+import { choiceArgs, choicesFinding, readChoices } from "./choices.mjs";
 import { readLaunchEnv, readSandbox, readUnset, snapshotLaunchSettings, withPathPrepend, writeLaunchSettings } from "./local-settings.mjs";
 import { BB_PROVIDER, harnessRefusal, modeRefusal, permissionMode, sandboxRefusal } from "./mode.mjs";
 import { InDoubt, ProviderError, bounded, fail, isObject, someOf } from "./errors.mjs";
@@ -75,6 +76,9 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // offered), or one bb's pi does not have.
   const notOffered = modeRefusal(mode, harness, { sandboxedModes });
   if (notOffered !== null) throw fail(notOffered.code, notOffered.message);
+  // The launch's choices (a reasoning level, a service tier: lib/choices.mjs): a name the
+  // provider does not declare, or a value that is none, is refused before anything is read.
+  const choices = readChoices(input.choices);
   // A pi thread is given four variables at most and no more (lib/project-env.mjs); Claude's
   // whole launch env goes into its settings file.
   // (What piLaunchEnv has to say of an entry it leaves out is kept until the launch is past
@@ -126,6 +130,12 @@ export async function launch(input, settings, { deadline, env = process.env, spa
     if (finding?.problem) throw fail(finding.problem.code, finding.problem.message);
     if (finding?.warning) warn(finding.warning.message);
   }
+  // bb takes any reasoning level and any service tier at the spawn, and runs the thread
+  // without one its model does not have: a choice is carried or refused, never dropped, so
+  // each is held against what bb lists for the model, with nothing started (lib/choices.mjs).
+  const chosen = await choicesFinding(choices, model, harness, reader);
+  if (chosen?.problem) throw fail(chosen.problem.code, chosen.problem.message);
+  if (chosen?.warning) warn(chosen.warning.message);
   const bb = bbClient({ cli: settings.cli, hostDaemonPort: settings.hostDaemonPort, server, deadline, env, fallbackCode: "E_SESSION_START_FAILED" });
 
   // One thread per home: the home's project may hold the thread this launch replaces
@@ -246,7 +256,7 @@ export async function launch(input, settings, { deadline, env = process.env, spa
   // has none, and never replaces one (test/contract/title.test.mjs), so nothing sets it
   // again later. The project's name stays the name itself: it identifies the home.
   const args = ["--project", project.id, "--provider", BB_PROVIDER[harness], ...(model ? ["--model", model] : []),
-    "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", threadTitle(instance)];
+    "--environment", home, "--prompt-file", promptFile, "--permission-mode", mode, "--title", threadTitle(instance), ...choiceArgs(choices)];
   const askedAt = Date.now();
   const spawned = await bb.spawn(args, spawnTimeoutMs === undefined ? {} : { timeoutMs: spawnTimeoutMs });
   const thread = spawned.ok ? spawned.value : null;

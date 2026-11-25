@@ -30,7 +30,15 @@
         "claude",
         "pi"
       ],
-      "description": "One bb thread per home, in a bb project rooted at the home. No terminal: open the thread in bb."
+      "description": "One bb thread per home, in a bb project rooted at the home. No terminal: open the thread in bb.",
+      "launchChoices": {
+        "reasoning-level": {
+          "description": "How hard the model thinks: a level bb lists for the launch's model (low, medium, high, xhigh, max, or one of the model's own). Unset: the model's default in bb."
+        },
+        "service-tier": {
+          "description": "The service tier the thread runs on, where bb lists tiers for the launch's model (fast, for one). Unset: the model's default in bb. A model with no tiers takes none."
+        }
+      }
     }
   },
   "hooks": {

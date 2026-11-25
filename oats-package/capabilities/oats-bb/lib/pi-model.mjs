@@ -39,6 +39,8 @@ import { isObject } from "./errors.mjs";
 
 export const PI_MODEL_REFUSED = "E_BACKEND_LAUNCH_ARG";
 export const PI_MODEL_UNCHECKED = "session-provider-pi-model-unchecked";
+// What follows the last colon of `<model>:<level>`: a launch choice's value, as the kernel passes one.
+const LEVEL = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 // A model id bb holds back from its list (its isModelAlias, negated): dated, and not "-latest".
 const DATED = /-\d{8}$/;
 const WHY_MAX = 200;
@@ -79,6 +81,18 @@ export function piModelVerdict(model, value, { partial = null, old = null } = {}
   if (rows.some((row) => row.id === model)) return { ok: true };
   const serving = rows.filter((row) => row.bare === model);
   if (serving.length === 1) return { ok: true };
+  // pi's own way to write a thinking level, `<model>:<level>`, is not a model bb's pi
+  // resolves: bb lists and resolves the model alone, and takes the level as a choice of the
+  // launch (lib/choices.mjs). Where what stands before the last colon is a model of the
+  // list, by its full id or as the one model with that bare id, that is what was written:
+  // said by name, whatever else the list may hold back.
+  const colon = model.lastIndexOf(":");
+  if (colon > 0 && LEVEL.test(model.slice(colon + 1))) {
+    const base = model.slice(0, colon);
+    if (rows.some((row) => row.id === base) || rows.filter((row) => row.bare === base).length === 1) {
+      return { refused: `pi model ${JSON.stringify(model)} names a thinking level in the model id, which bb's pi does not take: name the model ${JSON.stringify(base)}, and choose the level with --launch-choice reasoning-level=${model.slice(colon + 1)}` };
+    }
+  }
   if (serving.length > 1) {
     if (old !== null) return { unchecked: old };
     // An id with a slash may also be the exact `<provider>/<id>` of a model the list holds

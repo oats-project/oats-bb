@@ -251,6 +251,10 @@ export function bbClient({ cli, server, hostDaemonPort = null, deadline = Infini
      *  (bb then also lists it where it holds it back otherwise: lib/pi-model.mjs). The
      *  raw answer: what it proves is the reader's to say. */
     piModels(model) { return raw(["provider", "models", "pi", "--selected-model", model, "--json"]); },
+    /** The models bb lists for one of its providers (claude-code, pi), each with the
+     *  reasoning levels and, where it has any, the service tiers it has; `model` as the one
+     *  a launch names, as for piModels. The raw answer (lib/choices.mjs reads it). */
+    models(provider, model) { return raw(["provider", "models", provider, "--selected-model", model, "--json"]); },
     /** The environment, or null when bb has none by that id. */
     async environment(id) {
       const answer = await raw(["environment", "show", id, "--json"]);

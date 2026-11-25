@@ -290,6 +290,78 @@ test("a spawn bb's server refuses: the CLI's envelope carries the server's 4xx, 
   assert.equal(gone.error.code, "thread_not_found");
 });
 
+// The launch choices (lib/choices.mjs): bb's reasoning level and service tier. What bb does
+// with them is pinned here, since the provider's check rests on it (seen at bb-app 0.50.1):
+// - `bb provider models claude-code --json` lists each model's levels, and no service tiers
+//   for the models this bb has;
+// - a thread spawned with no level starts Claude Code with bb's own (`--effort=medium`), and
+//   one spawned with a level the model has with that one (`--effort=<level>`). Nothing is
+//   remembered from one spawn of a project to the next;
+// - `bb thread spawn` takes ANY level and any tier and answers a thread, which runs its turn
+//   all the same, and nothing says what became of the choice: with a level the model does
+//   not have, and with the word `default`, Claude Code is started with NO effort at all
+//   (neither the one asked for nor bb's own); with the tier `fast` for a model bb lists no
+//   tier for, Claude Code is started in its fast mode all the same (`fastMode: true`).
+// So the provider refuses, before anything starts, a level bb would drop and a tier bb does
+// not list for the model: what a launch carries is what bb itself offers for the model.
+test("a launch choice is carried to bb's thread or refused, never dropped: a reasoning level the model has reaches its Claude; one it has not, a service tier it has none of, and `default` are refused with nothing started", async () => {
+  /** The words of the command line of each Claude that carries the thread's id. */
+  const claudeWords = async (threadId) => (await sh(`for p in /proc/[0-9]*; do if [ "$(cat $p/comm 2>/dev/null)" = claude ] && tr '\\0' '\\n' < $p/environ 2>/dev/null | grep -qx 'BB_THREAD_ID=${threadId}'; then tr '\\0' '\\n' < $p/cmdline; fi; done`)).split("\n").filter(Boolean);
+  /** Its `--effort` arguments, each once (bb may hold more than one process of a thread's Claude). */
+  const efforts = async (threadId) => [...new Set((await claudeWords(threadId)).filter((word) => word.startsWith("--effort")))];
+  // bb's own facts, which the check rests on.
+  const listedModels = await bbJson(`provider models claude-code --selected-model ${MODEL}`);
+  const listedModel = listedModels.find((row) => row.id === MODEL);
+  assert.ok(listedModel, JSON.stringify(listedModels.map((row) => row.id)));
+  const levelsOf = listedModel.supportedReasoningEfforts.map((entry) => entry.reasoningEffort);
+  assert.ok(levelsOf.includes("low") && !levelsOf.includes("bogus") && !levelsOf.includes("default"), levelsOf.join(", "));
+  assert.equal(listedModel.supportedServiceTiers, undefined, "this bb lists no service tier for the model");
+  const dropHome = await makeHome("choice-bb-drops");
+  const project = await bbJson(`project create --name choice-bb-drops --root ${dropHome}`);
+  for (const [flags, effort] of [["", ["--effort=medium"]], ["--reasoning-level low", ["--effort=low"]], ["", ["--effort=medium"]], ["--reasoning-level bogus", []], ["--reasoning-level default", []], ["--service-tier fast", ["--effort=medium"]]]) {
+    const since = (await modelRequests()).length;
+    const thread = await bbJson(`thread spawn --project ${project.id} --provider claude-code --model ${MODEL} --environment ${dropHome} --prompt-file ${dropHome}/TASK.md --permission-mode full ${flags}`);
+    started.push(thread.id);
+    await waitFor(`bb's own thread with "${flags}" to run its turn`, async () => (await modelRequests()).length > since, { timeoutMs: 120_000 });
+    await waitStatus(thread.id, "idle");
+    assert.deepEqual(await efforts(thread.id), effort, `bb's own spawn with "${flags}"`);
+    // Claude Code's fast mode: off, but for the tier bb was asked for, which it lists for no model here and applies all the same.
+    const words = await claudeWords(thread.id);
+    assert.equal(JSON.parse(words[words.indexOf("--settings") + 1]).fastMode, flags.includes("--service-tier"), words.join(" "));
+    await sh(`bb thread stop ${thread.id} --json >/dev/null`);
+  }
+
+  // Through the provider: a level the model has reaches the thread's Claude.
+  const { home, endpoint } = await launched("choice-level", { choices: { "reasoning-level": "low" } });
+  await waitStatus(endpoint.threadId, "idle");
+  assert.deepEqual(await efforts(endpoint.threadId), ["--effort=low"]);
+  const planned = (await provider("check", { home, soul: null, launch: { harness: "claude", yolo: true, args: [], model: MODEL, choices: { "reasoning-level": "low" } } })).result;
+  assert.deepEqual([planned.status, planned.problems], ["ready", []]);
+  assert.deepEqual(planned.warnings.filter((warning) => warning.code === "session-provider-launch-choice-unchecked"), []);
+  // And a launch with none starts its Claude with bb's own, as before.
+  const plain = await launched("choice-none");
+  await waitStatus(plain.endpoint.threadId, "idle");
+  assert.deepEqual(await efforts(plain.endpoint.threadId), ["--effort=medium"]);
+
+  // What bb would drop is refused, at the check of the planned launch and at the launch, and nothing is made in bb.
+  const refusedHome = await makeHome("choice-refused");
+  const count = async () => [(await bbJson("project list")).length, (await bbJson("thread list --include-hidden --include-archived")).length];
+  const before = await count();
+  for (const [choices, sentence] of [
+    [{ "reasoning-level": "bogus" }, `the model ${MODEL} has no reasoning level "bogus" in bb: it has ${levelsOf.slice(0, -1).join(", ")} and ${levelsOf[levelsOf.length - 1]}. Choose one of them (--launch-choice reasoning-level=<level>), or clear the choice (--launch-choice reasoning-level=default)`],
+    [{ "service-tier": "fast" }, `the model ${MODEL} has no service tier "fast" in bb: it has none. Clear the choice (--launch-choice service-tier=default)`],
+    [{ "reasoning-level": "default" }, 'the launch choice reasoning-level is "default", which is no value to ask bb for: it is how a recorded choice is cleared (--launch-choice reasoning-level=default), and the launch then carries none'],
+  ]) {
+    const checked = (await provider("check", { home: refusedHome, soul: null, launch: { harness: "claude", yolo: true, args: [], model: MODEL, choices } })).result;
+    assert.equal(checked.status, "needs-configuration", JSON.stringify(checked));
+    assert.deepEqual(checked.problems, [{ code: "E_BACKEND_LAUNCH_ARG", message: sentence }]);
+    const answer = await provider("launch", launchInput(refusedHome, "choice-refused", { choices }));
+    assert.deepEqual(answer.error, { code: "E_BACKEND_LAUNCH_ARG", message: sentence });
+  }
+  assert.deepEqual(await count(), before, "no project and no thread was made for a refused choice");
+  assert.equal((await sh(`test -e ${refusedHome}/.claude/settings.local.json && echo yes || echo no`)).trim(), "no");
+});
+
 test("T1 launch: the thread exists in a project rooted at the home, and a hook sees the settings.local.json env", async () => {
   const home = await makeHome("t1");
   const input = launchInput(home, "t1");

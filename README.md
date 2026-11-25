@@ -501,6 +501,77 @@ On the same word, the hook removes what a pi launch wrote into the env of the ho
 project ([pi](#pi)); it asks bb for that, and a bb that cannot be asked is a warning,
 never a failed start.
 
+## Launch choices
+
+Two things a person picks in bb's own composer can be chosen for a launch on bb: the
+**reasoning level** and the **service tier**. The provider declares them
+(`sessionProviders.bb.launchChoices` in its manifest), and OATS passes them on, on a
+kernel with the feature `launch-choices`:
+
+```sh
+oats spawn <soul> --backend bb --launch-choice reasoning-level=high
+oats session restart --home <home> --launch-choice service-tier=fast
+oats session start --home <home> --launch-choice reasoning-level=default   # clears a recorded one
+```
+
+| Choice | What it is | Passed to bb as |
+|---|---|---|
+| `reasoning-level` | How hard the model thinks: a level bb lists for the launch's model (`low`, `medium`, `high`, `xhigh`, `max`, or one of the model's own) | `bb thread spawn --reasoning-level <level>` |
+| `service-tier` | The service tier the thread runs on, where bb lists tiers for the launch's model | `bb thread spawn --service-tier <tier>` |
+
+The kernel knows neither choice's meaning. It records a spawn's choices in the home, hands
+them to every later start, and checks only that the provider declares the name. What a
+value means is this provider's, and its rule is one: **a choice is carried or refused,
+never dropped, and what is carried is what bb itself lists for the launch's model**
+(`bb provider models <provider> --json`: the model's `supportedReasoningEfforts` and,
+where it has tiers, `supportedServiceTiers`). Both harnesses.
+
+**Refused, before anything is started** (`E_BACKEND_LAUNCH_ARG`, at the launch and, where
+the kernel hands the check the planned launch's `choices` and `model`, at the check):
+
+- a reasoning level the model does not have in bb, naming the levels it has;
+- a service tier the model does not have in bb, or any tier for a model bb lists none
+  for;
+- the value `default`: it is how a recorded choice is cleared in OATS
+  (`--launch-choice <name>=default`), and is never a level or a tier to ask bb for;
+- a choice the provider does not declare, or a value that is not 1 to 40 lowercase
+  letters, digits, dashes and underscores (the value becomes an argument of bb's CLI
+  of its own, never an option, never a shell word);
+- for pi, a model written with pi's own `:<level>` (`anthropic/claude-opus-5-5:high`): on
+  bb the level travels as the `reasoning-level` choice alone, and the refusal names the
+  model without the suffix and `--launch-choice reasoning-level=<level>` ([pi](#pi), "The
+  model").
+
+Why refuse: bb takes **any** level and any tier when a thread is spawned, answers a
+thread, and says nothing of what became of the choice (seen at the pinned bb, and pinned
+by `test/contract/contract.test.mjs`). With a level its model does not have, or the word
+`default`, Claude Code is started with no effort at all: neither the one asked for, nor
+the one bb gives a thread spawned with no level (`medium`). With the tier `fast` for a
+model bb lists no tier for, Claude Code is started in its fast mode all the same.
+
+**Where bb's list cannot settle it, nothing is refused**: the launch goes on with the
+choice, and says once `could not check the launch choice <name> against bb's model list:
+<why>` (the warning `session-provider-launch-choice-unchecked` at the check; the provider
+command's standard error at the launch). That is the case when bb's list cannot be read,
+the model is not in it (or is in it more than once), the list does not say which levels
+or tiers the model has, or the launch names no model: bb then starts on a default of its
+own, whose levels are not known here.
+
+**The kernel this needs.** The manifest property is one a kernel without `launch-choices`
+does not know, so the package's floor (`compatibility.oats`) is the OATS release that has
+it: an older kernel refuses the package (`E_CAPABILITY_INCOMPATIBLE`). Without that floor,
+an older kernel loses the whole backend, which is why the floor moves with this: OATS
+0.70.5 answers every spawn on bb `E_BACKEND_UNKNOWN`, "unknown session backend "bb":
+capability oats.bb declares it malformed: session provider "bb": unknown key
+"launchChoices" (allowed: commands, harnesses, description, wire)" (seen with
+`npm run test:kernel:pi`, 2026-11-25).
+
+Nothing is chosen unless a person chooses it: a launch with no choice passes none, reads
+nothing more of bb, and starts as it did before. A launch configuration, a soul, a host
+default, a schedule's job and a trigger's spawn carry no choice. A home on tmux takes
+none (the kernel refuses it there; for pi on tmux the model's own `:<level>` sets its
+thinking, as before).
+
 ## pi
 
 A soul whose harness is pi runs on bb as a thread of bb's own pi provider (`bb thread
@@ -589,6 +660,13 @@ call) and is **refused before anything is started**, with `E_BACKEND_LAUNCH_ARG`
 |---|---|
 | a bare id no pi provider serves, or a `<provider>/<id>` pi does not have | `pi has no model "<id>" (if you just added it to pi, try again in a minute)` |
 | a bare id two or more pi providers serve | `pi model "<id>" is served by A and B: use A/<id> or B/<id> (if you just changed that in pi, try again in a minute)` |
+| a model of the list followed by pi's own `:<level>` (`<model>:high`) | `pi model "<model>:high" names a thinking level in the model id, which bb's pi does not take: name the model "<model>", and choose the level with --launch-choice reasoning-level=high` |
+
+(The third row: on tmux, pi takes a thinking level written into the model id. bb's pi
+resolves the model by its exact id, and a thread spawned with such an id ends in error;
+on bb the level is a [launch choice](#launch-choices). It is said only where what stands
+before the last colon is a model of the list, so a model whose own id holds a colon is
+not taken for one.)
 
 The rule is bb's own, and no stricter: the id is one model's `<provider>/<id>` exactly,
 or it is a bare id and exactly one model's. Nothing is matched loosely (no prefix, no
@@ -767,7 +845,8 @@ launch checks first:
 | bb's server or host daemon does not answer | `E_BACKEND_UNREACHABLE` |
 | the host daemon is not connected yet, or serves another server; with `hostDaemonPort` set, the daemon at that port is not a connected host of the server (it does not say which host it is, the server does not list it, or its hosts cannot be read); bb reports the provider of the launch's harness (claude-code, or pi) as `not_installed`, `unsupported_version`, `unauthenticated`, `expired` or `unknown`; one of bb's answers cannot be read; for a pi launch, the pi configuration bb's server runs with does not list @awebai/oats-pi | `E_BACKEND_NOT_READY` |
 | for a pi launch, that configuration lists @awebai/pi, and `AWEB_DELIVERY` is not in bb's machine env | `E_BACKEND_PI_LISTENER` |
-| for a pi launch whose model the check is handed, bb's pi has no such model, or two of its providers serve that bare id ([pi](#pi), "The model") | `E_BACKEND_LAUNCH_ARG` |
+| for a pi launch whose model the check is handed, bb's pi has no such model, or two of its providers serve that bare id, or the id carries pi's `:<level>` ([pi](#pi), "The model") | `E_BACKEND_LAUNCH_ARG` |
+| for a launch whose choices the check is handed, a reasoning level or a service tier the model does not have in bb, the value `default`, or a choice the provider does not declare ([launch choices](#launch-choices)) | `E_BACKEND_LAUNCH_ARG` |
 
 Which harness these speak for: with the launch the kernel plans, only that harness's
 facts are problems (a pi launch is not held up because bb's Claude is signed out, nor a

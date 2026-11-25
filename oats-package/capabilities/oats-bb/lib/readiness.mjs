@@ -5,6 +5,7 @@
 import { accessSync, constants, existsSync } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { bbClient } from "./bb.mjs";
+import { choicesFinding, readChoices } from "./choices.mjs";
 import { checkDataDir, sandboxDeny } from "./deny.mjs";
 import { ProviderError, bounded, isObject, someOf } from "./errors.mjs";
 import { exposedListeners } from "./exposure.mjs";
@@ -347,6 +348,15 @@ export async function readinessResult(settings, options = {}) {
     if (finding?.problem) problems.push(finding.problem);
     if (finding?.warning) warnings.push(finding.warning);
   }
+  // The choices of a planned launch (`options.choices`, as plannedLaunchFindings read
+  // them): one the model does not have in bb is a problem, as at the launch, and a list
+  // that cannot settle it a warning (lib/choices.mjs). Asked last, of a launch nothing
+  // else refuses: one more read of bb, and none where nothing is chosen.
+  if (options.harness != null && options.choices && problems.length === 0) {
+    const finding = await choicesFinding(options.choices, isModelId(options.model) ? options.model : null, options.harness, bb);
+    if (finding?.problem) problems.push(finding.problem);
+    if (finding?.warning) warnings.push(finding.warning);
+  }
   const order = ["needs-configuration", "authorization-required", "unavailable"];
   const status = problems.length === 0 ? "ready" : order.find((word) => problems.some((problem) => problem.status === word));
   // Every line is cut to what the kernel relays.
@@ -396,6 +406,13 @@ export function plannedLaunchFindings(planned, { sandboxedModes = false, setting
   const problems = [], warnings = [];
   const unsupported = harnessRefusal(planned.harness);
   if (unsupported !== null) return { problems: [{ ...unsupported, status: "needs-configuration" }], warnings };
+  // The planned launch's choices, as the launch reads them: what it refuses them for is a
+  // problem here, before bb is asked anything of them (lib/choices.mjs).
+  try { readChoices(planned.choices); }
+  catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    return { problems: [{ code: error.code, message: error.message, status: "needs-configuration" }], warnings };
+  }
   let mode, allowances;
   try {
     mode = permissionMode(planned.args, planned.yolo, planned.harness);

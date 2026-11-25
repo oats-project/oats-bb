@@ -95,11 +95,17 @@ export const matches = (query: string, ...texts: readonly (string | null | undef
  */
 export function Before({ oats, read, roster = true }: { oats: Oats; read: { status: string; data: unknown; error: string | null; retry(): void }; /** false: the tab draws nothing of the roster, and says nothing of it */ roster?: boolean }) {
   const unread = roster && (oats.phase === "failed" || (oats.phase === "ready" && oats.stale !== null));
+  // A read that failed is read again with every roster read, and on Retry. While that read is on its way the notice
+  // STAYS, with what the last read said: it does not give way to "Reading…" and come back (a notice that blinks).
+  const failed = useRef<string | null>(null);
+  if (read.status === "error") failed.current = read.error ?? "";
+  else if (read.data !== undefined) failed.current = null;
+  const error = read.status === "error" ? read.error : read.data === undefined ? failed.current : null;
   return (
     <>
       {roster ? <RosterNotice oats={oats} /> : null}
-      {read.status === "error" && !unread ? (
-        <Notice title="OATS could not be read" tone="error" details={read.error} actions={<Button data-testid="oats-read-retry" onClick={read.retry}>Retry</Button>} />
+      {error !== null && !unread ? (
+        <Notice title="OATS could not be read" tone="error" details={error} actions={<Button data-testid="oats-read-retry" onClick={read.retry}>Retry</Button>} />
       ) : read.data === undefined && read.status === "loading" ? (
         <Loading>Reading…</Loading>
       ) : null}

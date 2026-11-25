@@ -4,7 +4,7 @@
 // how many of its agents run, and "Can't spawn"; a soul's page with its facts, its capabilities and
 // why, its agents as the roster says them, and New agent, which opens the form with that soul.
 import { afterEach, expect, test } from "vitest";
-import { fireEvent, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { setAgentPage } from "../../app/home/agent-tab";
 import { fixtureAgents, fixtureSnapshot, fixtureThreads } from "../helpers/fixtures";
@@ -159,6 +159,35 @@ test("while the souls are read the tab says \"Reading…\"; a read that failed i
   failing = false;
   fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
   expect(await slot.findAllByTestId("oats-soul-row")).toHaveLength(2);
+  expect(slot.queryByRole("alert")).toBeNull();
+});
+
+// A read that failed is read again with every roster read. While that read is on its way the notice stays: it does
+// not give way to "Reading…" and come back (the live gate drew "Reading…" where the failed read's notice had been).
+test("a failed read's notice stays while the souls are read again: no \"Reading…\" in its place; the rows follow when the read answers", async () => {
+  let mode: "fail" | "hold" | "answer" = "fail";
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const slot = await souls("", {
+    souls: async () => {
+      if (mode === "fail") throw new Error("E_OATS_TIMEOUT: oats souls did not answer in 20 s");
+      if (mode === "hold") await held;
+      return handlers().souls(null);
+    },
+  });
+  await slot.findByTestId("oats-read-retry");
+  const asked = () => rpcOf(slot, "souls").length;
+  const before = asked();
+  mode = "hold";
+  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-24T12:00:00.000Z" }));
+  await waitFor(() => expect(asked()).toBeGreaterThan(before)); // the read is on its way again
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(slot.queryByTestId("oats-loading")).toBeNull();
+  expect(slot.getByRole("alert").querySelector("h3")!.textContent).toBe("OATS could not be read");
+  expect(within(slot.getByRole("alert")).getByTestId("oats-notice-details").textContent).toContain("E_OATS_TIMEOUT");
+  mode = "answer";
+  release();
+  expect((await slot.findAllByTestId("oats-soul-row")).length).toBeGreaterThan(0);
   expect(slot.queryByRole("alert")).toBeNull();
 });
 

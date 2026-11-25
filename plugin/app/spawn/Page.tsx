@@ -104,7 +104,7 @@ const MARK = { soul: "oats-spawn-soul-mark", model: "oats-spawn-model-mark", nam
  * roster's notice. An off Spawn is described by it too (aria-describedby): no word is added to the screen, and for a
  * screen reader the button is never just dimmed (the review of part 7).
  */
-const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice" } as const;
+const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice", absent: "oats-spawn-no-bb" } as const;
 /** How long Spawn waits for bb's list of models before it goes without it (the wait a thread's start is given too). */
 const MODELS_WAIT_MS = 10_000;
 type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
@@ -311,8 +311,11 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
    * Which field keeps these values from being asked of the kernel; null when they can be. No sentence says it beside
    * Spawn: the field is empty in view (its placeholder says what it wants) or carries its own mark.
    */
-  const off: "soul" | "cannot" | "name" | "model" | "relation" | null =
-    chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
+  // A deployment with no bb session provider: nothing can be spawned on bb there. The form says so once (its notice),
+  // asks the kernel for no preview (it would be refused for the bb backend), and holds its fields and Spawn.
+  const absent = harnesses.absent;
+  const off: "absent" | "soul" | "cannot" | "name" | "model" | "relation" | null =
+    absent !== null ? "absent" : chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
   const input: Input | null = useMemo(
     () =>
       off !== null
@@ -533,14 +536,14 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     if (phaseNow.current === "idle") setFailure(null);
   }, [key]);
 
-  const fieldsHeld = held || phase !== "idle";
+  const fieldsHeld = held || phase !== "idle" || absent !== null;
   /**
    * What holds Spawn while the form can be changed; null when nothing does. Only a read in flight is SAID beside the
    * button ("Reading…"). Every other hold is said once, where it is: the roster's notice while OATS cannot be read
    * ("Acts are off."), the field that is empty or marked, the column's refusal, the button's own word for a spawn
    * that is in flight. The button is described by the mark of the field that holds it, for a screen reader.
    */
-  const hold: "held" | "flight" | "soul" | "cannot" | "name" | "model" | "relation" | "refused" | "reading" | "model-mark" | null =
+  const hold: "held" | "flight" | "absent" | "soul" | "cannot" | "name" | "model" | "relation" | "refused" | "reading" | "model-mark" | null =
     phase !== "idle"
       ? null
       : held
@@ -568,6 +571,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     relation: SAYS.relative,
     refused: SAYS.column,
     held: SAYS.held,
+    absent: SAYS.absent,
     // A read in flight says "Reading…" beside the button; a spawn in flight is the button's own word.
     reading: undefined,
     flight: undefined,
@@ -647,6 +651,12 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         <div id={SAYS.held} className="empty:hidden">
           <RosterNotice oats={oats} />
         </div>
+        {/* A deployment with no bb session provider: said ONCE, in a person's words; the kernel's own code and sentence under Details. Spawn is described by it. */}
+        {absent === null || held ? null : (
+          <div id={SAYS.absent} data-testid="oats-spawn-no-bb">
+            <Notice title={W.NO_BB} details={`${absent.code}: ${absent.message}`} />
+          </div>
+        )}
         {/* While OATS cannot be read the roster's notice says so, alone: never a second one for the same cause. */}
         {souls.status === "error" && list === undefined && !held ? (
           <Notice title="The souls could not be read" tone="error" code={refusalCode(souls.error)} details={souls.error} actions={<Button onClick={souls.retry}>Retry</Button>} />

@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { noteActed } from "../../app/roster/reading";
 import { addPageLink } from "../../app/workspace/pages";
@@ -16,14 +17,14 @@ afterEach(() => {
   resetApp();
 });
 
-async function sidebar(over: Partial<Handlers> = {}, activeThreadId: string | null = null, threads = sidebarThreads()) {
+async function sidebar(over: Partial<Handlers> = {}, activeThreadId: string | null = null, threads = sidebarThreads(), more: Pick<RenderSlotOptions<Contract>, "sidebarShortcuts"> = {}) {
   const app = await loadApp();
   expect(app.threadLists.map((list) => list.id)).toEqual(["agents"]);
   let navigated = 0;
   const slot = renderSlot<PluginThreadListProps, Contract>(
     app.threadLists[0]!,
     { activeThreadId, activeProjectId: null, isCompactViewport: false, onNavigate: () => void navigated++, searchQuery: "" },
-    { rpc: handlers(over), sidebarThreads: threads },
+    { rpc: handlers(over), sidebarThreads: threads, ...more },
   );
   return { slot, navigated: () => navigated };
 }
@@ -432,6 +433,30 @@ test("a modified click is left to the anchor: nothing is navigated by the plugin
   expect(leftAlone).toEqual([true, true]);
   expect(slot.inspection.navigateCalls).toEqual([]);
   expect(navigated()).toBe(0);
+});
+
+test("while bb's modifier is held a thread row shows the jump key bb gave it, as bb's own rows do, and says it in aria-keyshortcuts; a row bb gave none, and every row the rest of the time, shows none", async () => {
+  // Held: bb gives keys to the rows it numbers (here an agent's and the thread that is no agent's).
+  const { slot } = await sidebar({}, null, sidebarThreads(), { sidebarShortcuts: { thr_release: { label: "Ctrl + Shift + 1", ariaKeyshortcuts: "Control+Shift+1" }, thr_plain: { label: "Ctrl + Shift + 5", ariaKeyshortcuts: "Control+Shift+5" } } });
+  await slot.findByTestId("oats-tree");
+  const rows = [...slot.getAllByTestId("oats-agent-row"), ...slot.getAllByTestId("oats-other-row")];
+  const keyed = rows.filter((row) => row.querySelector('[data-testid="oats-jump-key"]') !== null);
+  expect(keyed.map((row) => [row.getAttribute("data-sidebar-thread-id"), row.querySelector('[data-testid="oats-jump-key"]')!.textContent, row.getAttribute("aria-keyshortcuts")])).toEqual([
+    ["thr_release", "Ctrl + Shift + 1", "Control+Shift+1"],
+    ["thr_plain", "Ctrl + Shift + 5", "Control+Shift+5"],
+  ]);
+  // The key is bb's word beside the row's own: it is not read twice (the anchor says it), and it takes no press.
+  for (const row of keyed) expect([row.querySelector('[data-testid="oats-jump-key"]')!.getAttribute("aria-hidden"), row.querySelector('[data-testid="oats-jump-key"]')!.className.includes("pointer-events-none")]).toEqual(["true", true]);
+  expect(rows.filter((row) => !keyed.includes(row) && row.hasAttribute("aria-keyshortcuts"))).toEqual([]);
+  // A row with no thread is none of bb's: it has neither the attribute bb numbers by nor a key.
+  for (const row of slot.queryAllByTestId("oats-agent-row-threadless")) expect([row.hasAttribute("data-sidebar-thread-shortcut-target"), row.querySelector('[data-testid="oats-jump-key"]')]).toEqual([false, null]);
+});
+
+test("the rest of the time (bb's modifier is not held) no row shows a key or names one", async () => {
+  const { slot } = await sidebar();
+  await slot.findByTestId("oats-tree");
+  expect(slot.queryAllByTestId("oats-jump-key")).toEqual([]);
+  expect([...slot.getAllByTestId("oats-agent-row"), ...slot.getAllByTestId("oats-other-row")].filter((row) => row.hasAttribute("aria-keyshortcuts"))).toEqual([]);
 });
 
 test('"Other threads" lists the thread that is no OATS agent, and it opens like any other', async () => {

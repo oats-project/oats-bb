@@ -1,7 +1,7 @@
 // The sidebar's thread list (experimental_threadList): the workspace's name, the roster (every agent
 // OATS has, as a tree whose parents open), under it New agent, the plugin's pages under "Workspace",
 // then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { AnchorHTMLAttributes, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
   experimental_ThreadActionsContextMenu as ThreadActionsContextMenu,
@@ -10,6 +10,7 @@ import {
   useBbNavigate,
   useSidebarThreadDraftIds,
   useSidebarThreadRowStatuses,
+  useSidebarThreadShortcut,
 } from "@get-bb/plugin-sdk/app";
 import type {
   PluginSidebarThread,
@@ -37,6 +38,27 @@ import { ReadingFacts, ReadingMark, readingNow, useActed } from "./reading";
 import { LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
 import { useNow } from "./now";
 import { FoldToggle, foldKeys, GUTTERED, useOpened } from "./fold";
+
+/**
+ * A thread row's anchor, as bb's own rows are: it carries the two attributes bb's own keys go by
+ * (previous / next thread walk these rows in the order drawn; "Open thread 1..9" jumps to them), and
+ * WHILE bb's modifier is held it shows the jump key bb gave this row, as bb's rows do, and says it
+ * in `aria-keyshortcuts`. (bb numbers the rows that carry `data-sidebar-thread-shortcut-target`,
+ * in the order drawn: a row with no thread carries none and has no key.) The key is bb's own word.
+ */
+function ThreadAnchor({ threadId, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement> & { threadId: string; "data-testid": string }) {
+  const shortcut = useSidebarThreadShortcut(threadId);
+  return (
+    <a {...rest} data-sidebar-thread-shortcut-target="" data-sidebar-thread-id={threadId} aria-keyshortcuts={shortcut?.ariaKeyshortcuts}>
+      {children}
+      {shortcut === null ? null : (
+        <kbd data-testid="oats-jump-key" aria-hidden="true" className="pointer-events-none absolute right-1 top-1 rounded border border-border bg-background px-1 font-sans text-xs text-foreground">
+          {shortcut.label}
+        </kbd>
+      )}
+    </a>
+  );
+}
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
   return {
@@ -127,18 +149,17 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     <li key={thread.id} className="relative">
       {before}
       <ThreadActionsContextMenu thread={target(thread)}>
-        <a
+        <ThreadAnchor
+          threadId={thread.id}
           href={thread.href}
           data-testid={testId}
-          data-sidebar-thread-shortcut-target=""
-          data-sidebar-thread-id={thread.id}
           aria-current={thread.id === activeThreadId || onPage ? "page" : undefined}
           className={`${ROW} ${className} ${thread.id === activeThreadId || onPage ? "bg-accent" : ""}`}
           onClick={(event) => openThread(event, thread.id)}
           onKeyDown={onKeyDown}
         >
           {children}
-        </a>
+        </ThreadAnchor>
       </ThreadActionsContextMenu>
     </li>
   );

@@ -672,12 +672,14 @@ function busyStage() {
         const root = (project.sources ?? []).find((each) => each.path)?.path;
         const wanted = failedAtStart.filter((instance) => !existing.some((thread) => thread.title === providerTitle(instance)));
         if (wanted.length > 0) {
-          // No turn runs now (the fixtures' threads are idle, the chat is had): the harness is taken away for the spawns.
+          // Nothing is left to start (the chat is had, the held turns run): the harness is taken away for the spawns.
+          // The model is NAMED: with none, bb asks the harness for its default and refuses the spawn (HTTP 503) when
+          // it cannot (seen in this stage's fifth look).
           const claude = realpathSync(execFileSync("sh", ["-c", "command -v claude"], { encoding: "utf8" }).trim());
           const said = [];
           renameSync(claude, `${claude}.away`);
           try {
-            for (const instance of wanted) said.push(`${instance}: ${tell("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", providerTitle(instance), "--prompt", "hello", "--json").replace(/\s+/g, " ").slice(0, 80)}`);
+            for (const instance of wanted) said.push(`${instance}: ${tell("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--model", source.model ?? "claude-opus-5-5", "--title", providerTitle(instance), "--prompt", "hello", "--json").replace(/\s+/g, " ").slice(0, 80)}`);
             const eventsOf = (instance) => {
               const thread = list().find((candidate) => candidate.title === providerTitle(instance));
               return thread === undefined ? "no thread" : `${thread.status}; ${tell("thread", "log", thread.id, "--json").replace(/\s+/g, " ").match(/"type": ?"[a-z./-]+"/g)?.map((type) => type.replace(/"type": ?/, "")).join(" ") ?? "(no events read)"}`;

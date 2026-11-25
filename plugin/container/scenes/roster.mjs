@@ -1007,6 +1007,53 @@ export default [
       await page.evaluate(`(() => { const last = ${rowsOf}.at(-1); last?.scrollIntoView({ block: "end" }); const button = document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-new-agent")}`)}); button?.scrollIntoView({ block: "center" }); return "1"; })()`);
       note("the sidebar scrolled to New agent", await page.evaluate(measure));
       await page.shot(`busy-${viewport.name}-sidebar-foot`);
+      // bb's OWN KEYS on our tree, with real key presses (at the wide view: the sidebar stays on screen): previous /
+      // next thread (Ctrl+Shift+[ and ]) walk our thread rows in the order drawn, and while bb's modifiers are held
+      // each of those rows shows the jump key bb gave it. What these keys do NOT do is said as notes (bb's own
+      // rules, found by a probe; their mend is keys of the plugin's own, a piece to come).
+      if (!viewport.mobile) {
+        await page.goto("/");
+        await showSidebar(page, viewport, { fold: "asLoaded" });
+        await page.until(`${rowsOf}.length === 18 ? "1" : ""`, 60);
+        // Every row bb walks, ours and bb's other threads, in the order drawn; and what stands between them.
+        const drawn = JSON.parse(await page.evaluate(`JSON.stringify((() => { const all = [...document.querySelectorAll("[data-sidebar-thread-shortcut-target], ${testId("oats-agent-row-threadless").replaceAll('"', "'")}")]; return { threads: all.filter((row) => row.hasAttribute("data-sidebar-thread-shortcut-target")).map((row) => ({ id: row.getAttribute("data-sidebar-thread-id"), href: row.getAttribute("href") })), threadless: all.filter((row) => !row.hasAttribute("data-sidebar-thread-shortcut-target")).length, hidden: 60 - ${rowsOf}.length }; })())`));
+        const onThread = `(location.pathname.match(/\\/threads\\/([^/]+)/) ?? [])[1] ?? ""`;
+        const walk = async (key, from) => {
+          await page.press(key);
+          return page.until(`(() => { const now = ${onThread}; return now !== "" && now !== ${JSON.stringify(from)} ? now : ""; })()`, 20);
+        };
+        check(drawn.threads.length >= 8, `${at} the folded busy sidebar draws thread rows for bb's keys to walk`, String(drawn.threads.length));
+        await page.goto(drawn.threads[0].href);
+        await page.until(`${onThread} === ${JSON.stringify(drawn.threads[0].id)} ? "1" : ""`, 30);
+        const went = [];
+        let here = drawn.threads[0].id;
+        for (let step = 0; step < 6 && typeof here === "string" && here !== ""; step += 1) {
+          here = await walk("Control+Shift+]", here);
+          went.push(here);
+        }
+        check(JSON.stringify(went) === JSON.stringify(drawn.threads.slice(1, 7).map((row) => row.id)), `${at} bb's own "next thread" (Ctrl+Shift+]) walks our thread rows in the order drawn: six presses from the first row`, `went ${went.join(" > ")}; drawn ${drawn.threads.slice(1, 7).map((row) => row.id).join(" > ")}`);
+        const back = typeof here === "string" && here !== "" ? await walk("Control+Shift+[", here) : null;
+        check(back === drawn.threads[5].id, `${at} bb's own "previous thread" (Ctrl+Shift+[) goes one row back in the order drawn`, `went to ${back}; drawn ${drawn.threads[5].id}`);
+        note("bb's previous / next thread on our tree, what they do NOT do (bb's rules)", `${drawn.threadless} row(s) with no bb thread (a tmux agent, an agent whose thread is archived) are skipped: they are no thread of bb's; ${drawn.hidden} agent(s) under a folded parent are not walked, and the parent is not opened`);
+        // From a page of the plugin's (no thread is on screen) "next" starts at the first row: the place in the tree is lost.
+        await page.goto("/plugins/oats/home");
+        await page.until(`document.querySelector(${JSON.stringify(testId("oats-home-needs"))}) !== null ? "1" : ""`, 30);
+        const fromPage = await walk("Control+Shift+]", "");
+        note("bb's next thread from a page of the plugin's", `went to the ${fromPage === drawn.threads[0].id ? "FIRST row" : `row ${drawn.threads.findIndex((row) => row.id === fromPage) + 1}`} of the ${drawn.threads.length} drawn (bb has no thread on screen there, so it starts at an end; the same from a row with no thread)`);
+        // The jump keys: bb's modifiers held, every thread row bb numbers shows its key.
+        await page.goto("/");
+        await showSidebar(page, viewport, { fold: "asLoaded" });
+        const letGo = await page.hold("Control+Shift");
+        try {
+          const keys = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-jump-key")}`)})]`;
+          const shown = await page.until(`${keys}.length > 0 ? JSON.stringify(${keys}.map((key) => [key.closest("a")?.getAttribute("data-sidebar-thread-id"), key.innerText.trim()])) : ""`, 20);
+          const labels = typeof shown === "string" && shown !== "" ? JSON.parse(shown) : [];
+          check(labels.length > 0 && labels.every(([id], n) => id === drawn.threads[n].id) && labels.every(([, label], n) => label.endsWith(String(n + 1))), `${at} while bb's modifiers are held our thread rows show the jump keys bb gave them, 1 upward in the order drawn, as bb's own rows do`, JSON.stringify(labels));
+          await page.shot(`busy-${viewport.name}-jump-keys`);
+        } finally {
+          await letGo();
+        }
+      }
       // THE HOME: who asks first; then what is under the first screen.
       await page.goto("/plugins/oats/home");
       const cards = `document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)}).length`;

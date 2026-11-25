@@ -56,8 +56,8 @@ export default async (run) => {
   };
   const brief = (r) => (r === undefined ? "no row" : JSON.stringify({ backend: r.backend, running: r.running, runtimeState: r.runtimeState ?? null, sessionEnd: r.sessionEnd ?? null, tmux: r.tmux ?? null, session: r.session ?? null }));
   const paneOf = (r) => (r?.tmux ? sh("tmux", ["-S", r.tmux.socket, "capture-pane", "-p", "-t", `${r.tmux.session}:${r.tmux.window}`]).stdout : "");
-  /** The plugin's calls since `from` (the recorder writes them in order), the last whose argv begins with `words` and holds `having`. */
-  const lastOf = (from, words, having = []) => records().slice(from).filter((record) => words.every((word, index) => record.argv[index] === word) && having.every((word) => record.argv.includes(word))).at(-1);
+  /** The plugin's calls in the deployment `root` since `from` (the recorder writes each call's cwd, in order), the last whose argv begins with `words` and holds `having`. */
+  const lastOf = (root, from, words, having = []) => records().slice(from).filter((record) => record.cwd === root && words.every((word, index) => record.argv[index] === word) && having.every((word) => record.argv.includes(word))).at(-1);
   /** The plugin reads the deployment `root`: its snapshot says so. */
   const pointedAt = (root) => until(`the plugin to read ${root}`, () => { const answer = rpc("snapshot"); return answer.ok && answer.value.ok === true && answer.value.deployment.root === root ? answer.value : undefined; }, 60);
 
@@ -147,8 +147,8 @@ export default async (run) => {
     });
 
     step(`${tag} 4: what the plugin asked the kernel, and what the kernel answered (kept as fixtures)`);
-    const preview = lastOf(from, ["spawn", SOUL], ["--preview", NAME]);
-    const applied = lastOf(from, ["spawn", SOUL], ["--idempotency-key", NAME]);
+    const preview = lastOf(root, from, ["spawn", SOUL], ["--preview", NAME]);
+    const applied = lastOf(root, from, ["spawn", SOUL], ["--idempotency-key", NAME]);
     for (const [what, call] of [["preview", preview], ["spawn", applied]]) {
       check(call !== undefined && ["--backend", "--yolo", "--harness", "--model"].every((flag) => !call.argv.includes(flag)), `the form's ${what} named NO backend, no mode, no harness and no model: the kernel decided`, JSON.stringify(call?.argv ?? "no such call"));
     }
@@ -161,7 +161,7 @@ export default async (run) => {
     if (applied !== undefined) fixtures.keep(keep.spawn, applied.stdout);
     const running = await until(`${NAME} to run on tmux in oats status ${where}`, () => (row()?.running === true ? row() : undefined), 90);
     check(running?.backend === "tmux" && running.running === true, `oats status ${where}: the agent, on tmux, running`, brief(row()));
-    if (running !== undefined && keep.row !== undefined) fixtures.keep(keep.row, JSON.stringify(running));
+    if (running !== undefined) fixtures.keep(keep.row, JSON.stringify(running));
     const answered = await until(`${NAME}'s pane to hold the mock model's answer`, () => (/MOCK-REPLY/.test(pane()) ? pane() : undefined), 120);
     check(Boolean(answered), "the agent took a turn on the mock model in its tmux window", pane().replace(/\s+/g, " ").trim().slice(-300));
 
@@ -203,7 +203,6 @@ export default async (run) => {
         check(then === true, `oats status ${where} after the ${verb}: ${verb === "stop" ? "the agent does not run" : "no such agent"}`, brief(row()));
       }
     });
-    if (row() !== undefined) note(`LEFT BEHIND ${where}: ${NAME} (${brief(row())}): the container is thrown away`);
   };
 
   step("C plain 2: the plugin is pointed at the second deployment (its `deployment` setting, followed while it runs)");
@@ -223,5 +222,8 @@ export default async (run) => {
     bb("plugin", "config", "oats", "set", "deployment", DEPLOY);
     const back = await pointedAt(DEPLOY);
     check(back !== undefined, "the plugin reads the run's own deployment again", JSON.stringify(rpc("snapshot")).slice(0, 300));
+    // (Also when the part stopped half-way: what it left is said.)
+    const left = rowsIn(PLAIN).find((each) => each.instance === PLAIN_AGENT.NAME);
+    if (left !== undefined) note(`LEFT BEHIND in the second deployment: ${PLAIN_AGENT.NAME} (${brief(left)}): the container is thrown away`);
   }
 };

@@ -185,8 +185,8 @@ describe("the harnesses the bb session provider declares", () => {
       expect(parsed.success).toBe(false);
       expect(parsed.error!.issues.map((issue) => [issue.code, "keys" in issue ? issue.keys : null])).toContainEqual(["unrecognized_keys", expect.arrayContaining(["backend"])]);
     }
-    await expect(rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "tmux" })).rejects.toThrow();
-    await expect(rpc("spawn", { soul: "oats-developer", task: "", backend: "tmux", key: "spawn-00aa11bb" })).rejects.toThrow();
+    await expect(rpc("spawnPlan", { soul: "oats-developer", task: "", backend: "tmux" })).rejects.toThrow("rpc input validation failed");
+    await expect(rpc("spawn", { soul: "oats-developer", task: "", backend: "tmux", key: "spawn-00aa11bb" })).rejects.toThrow("rpc input validation failed");
     expect((await fake.calls()).filter((call) => call.verb.startsWith("spawn")).length).toBe(before);
   });
 

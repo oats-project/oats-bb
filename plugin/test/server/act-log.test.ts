@@ -198,6 +198,7 @@ describe("what an act's answer says", () => {
       ["scheduleRun", run(null), { result: "INCOMPLETE" }],
       ["scheduleReconcile", { reconciled: "unknown", remedy: "look at it" }, { result: "INCOMPLETE" }],
       ["scheduleReconcile", { reconciled: "ended", remedy: null }, { result: "ok" }],
+      ["scheduleReconcile", { reconciled: null, remedy: null }, { result: "ok" }], // none said: the window says "checked"
       ["schedulerEnable", { scheduler: on, warnings: [] }, { result: "ok" }],
       ["schedulerEnable", { scheduler: { ...on, registered: null }, warnings: [] }, { result: "ok" }],
       ["schedulerEnable", { scheduler: { ...on, active: false }, warnings: [] }, { result: "INCOMPLETE" }],
@@ -469,6 +470,43 @@ describe("what the log holds of an act, through the whole backend", () => {
     await refused(backend.rpc("schedulerEnable"));
     expect(acts().map((each) => [each.level, each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N")])).toEqual([["warn", "oats act schedulerEnable held scheduler=- caller=client host=- at=AT n=N result=HELD:HOST_NOT_FOUND why=the_machine_that_runs_oats_was_not_reached"]]);
     expect(await backend.verbs()).toEqual([]);
+  }, 40_000);
+
+  it("the read an act asks for as it ends still runs where the act could not be sent (as each act's own finally had it)", async () => {
+    let core: Core | undefined;
+    await logged({ settings: { host: "no-such-machine" } }, (bb) => {
+      core = createCore(bb);
+    });
+    let after = 0;
+    await refused(core!.act("schedulerEnable", { scheduler: true }, undefined, HOST_TIMEOUT.act, () => ({}), () => void (after += 1)));
+    expect(after).toBe(1);
+  }, 40_000);
+
+  it("an act whose call is cancelled before it is sent (its caller is gone already, the machine known) is a HOLD: never asked, never ended, and the kernel is asked nothing", async () => {
+    let core: Core | undefined;
+    const { backend, acts } = await logged({}, (bb) => {
+      core = createCore(bb);
+    });
+    await core!.reread(); // the server knows its machine
+    expect(core!.target()).not.toBeNull();
+    const gone = new AbortController();
+    gone.abort(new Error("the caller went away"));
+    const automations = (await import("../../server/automations.js")).handlers(core!);
+    await refused(Promise.resolve(automations.automationTest({ kind: "trigger", id: "oats-real/harvest-review", runSource: true }, { experimental_caller: { kind: "client" }, experimental_signal: gone.signal } as never)));
+    expect(acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N"))).toEqual(["oats act automationTest held automation=trigger:oats-real/harvest-review caller=client host=- at=AT n=N result=HELD:HOST_UNREACHABLE why=the_call_was_cancelled_before_it_was_sent"]);
+    expect((await backend.verbs()).filter((verb) => verb.startsWith("trigger test"))).toEqual([]);
+  }, 40_000);
+
+  it("a retire the kernel only accepted ends DEFERRED, at warn, the agent not counted", async () => {
+    const receipt = JSON.parse(await readFile(join(SERVER, "..", "test", "fixtures", "lifecycle", "retire-apply.json"), "utf8"));
+    const result = receipt.result ?? receipt;
+    result.deferred = true; // (the recorded receipt, as the kernel prints one it finishes in the background)
+    delete result.removedDir;
+    const { backend, acts } = await logged({ verbs: { retire: { stdout: JSON.stringify(receipt) } } });
+    const plan = await backend.rpc<{ revision: string }>("retirePlan", { instance: "weekly-digest-helper" });
+    expect(await backend.rpc("retireApply", { instance: "weekly-digest-helper", revision: plan.revision, key: "retire-2b9d4e6f8a1c" })).toMatchObject({ deferred: true });
+    const last = acts().at(-1)!;
+    expect([last.level, last.line.replace(/^.* n=\d+ /, "").replace(/ms=\d+/, "ms=N")]).toEqual(["warn", "result=DEFERRED ms=N homes=1/2"]);
   }, 40_000);
 
   it("an automation's row is logged under its own id once the guard found it: the id the kernel is asked with", async () => {

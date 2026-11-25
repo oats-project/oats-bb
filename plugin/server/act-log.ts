@@ -13,8 +13,9 @@
 //   oats act <verb> held  <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<words>
 // <subject>: `instance=<name>`; for a spawn `soul=<soul> name=<name asked, or ->`; for an automation
 // `automation=<kind>:<id>`; for the scheduler `scheduler=-`.
-// <c>: what bb says of who asked: `client` (a window of bb) or `plugin:<id>` (another plugin). bb
-// has no person to name: it is one person's.  <h>: bb's id of the machine the kernel was asked on:
+// <c>: what bb says of who asked: `plugin:<id>` (another plugin), or `client`: everything else: the
+// app's window, the `bb` CLI, an agent that calls bb, bb itself: bb tells them apart no further, and
+// has no person to name (a bb is one person's).  <h>: bb's id of the machine the kernel was asked on:
 // the SAME on an act's "asked" and "ended" (the one it was sent to); `-` on a hold (no machine was asked).
 // <k>: the act's number in this run of the plugin's server: the lines of ONE act carry the same, so
 // two acts on one agent at once can be told apart. It starts again with each run of the server; an
@@ -99,9 +100,12 @@ const RAN = new Set(["launched", "active", "running", "delivered"]);
  * - automationEnable, automationDescribe, scheduleRemove: the kernel did it: `ok`.
  * - scheduleRun: a run that launched an agent or delivered its wake: `ok` (`made`: the run's instance); no run, or any
  *   other outcome (launch failed, unknown, skipped, stopped, ended, …): INCOMPLETE, with the run's own `code`.
- * - scheduleReconcile: a run's state that is still unknown: INCOMPLETE; else `ok`.
- * - schedulerEnable: the timer is installed, active and registered for this deployment: `ok`; else INCOMPLETE.
- * - automationTest (one that runs its source): the test, or its source's poll, says not ok: INCOMPLETE; else `ok`.
+ * - scheduleReconcile: a run's state that is still unknown: INCOMPLETE; else `ok` (a state, or none said: the window
+ *   says "checked").
+ * - schedulerEnable: the timer is installed, active and not said to be unregistered for this deployment (the
+ *   window's `schedulerOn`: a kernel that does not say `registered` is not held against it): `ok`; else INCOMPLETE.
+ * - automationTest (one that runs its source): the test, or its source's poll, says not ok: INCOMPLETE; else `ok`
+ *   (a test that names no source says nothing against it).
  * A new act has no case here until it is given one: the switch is exhaustive (typecheck), and a test asks every act.
  */
 export function outcomeOf(verb: ActVerb, value: unknown): { result: "ok" | "INCOMPLETE" | "DEFERRED"; homes?: string; made?: string; code?: string } {

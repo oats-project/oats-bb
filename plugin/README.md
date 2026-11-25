@@ -1022,8 +1022,10 @@ oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<c
 - `<subject>`: `instance=<name>`; for a spawn `soul=<soul> name=<the name asked, or ->`; for an
   automation `automation=<kind>:<id>` (the row's own id once it was found: the one the kernel is
   asked with); for the scheduler `scheduler=-`.
-- `caller`: what bb says of who asked: `client` (a window of bb) or `plugin:<id>` (another plugin).
-  **bb has no person to name**: a bb is one person's, and it gives a plugin no user.
+- `caller`: what bb says of who asked: `plugin:<id>` (another plugin), or `client`: EVERYTHING
+  else: the app's window, the `bb` CLI, an agent that calls bb, bb itself. bb tells those apart no
+  further: `caller=client` does not say that a person pressed it. **bb has no person to name**: a
+  bb is one person's, and it gives a plugin no user.
 - `host`: bb's id of the machine the act was SENT to: the same on an act's two lines, whatever the
   server reads meanwhile. `-` on a hold: no machine was asked.
 - `at`: the plugin server's clock, UTC.
@@ -1049,10 +1051,10 @@ oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<c
   | `scheduleRun` | a run that launched an agent, or delivered its wake (`launched`, `active`, `running`, `delivered`) | `ok made=<the run's instance>` |
   | `scheduleRun` | no run, or any other outcome (launch failed, unknown, skipped, stopped, ended, …) | `INCOMPLETE code=<the run's code, where it has one>` |
   | `scheduleReconcile` | the run's state is still unknown | `INCOMPLETE` |
-  | `scheduleReconcile` | a state | `ok` |
-  | `schedulerEnable` | the timer is installed, active and registered for this deployment | `ok` |
-  | `schedulerEnable` | it is not (yet) | `INCOMPLETE` |
-  | `automationTest` (one that runs its source) | the test and its source's poll are ok | `ok` |
+  | `scheduleReconcile` | a state, or none said ("checked") | `ok` |
+  | `schedulerEnable` | the timer is installed, active, and not said to be unregistered for this deployment (a kernel that does not say is not held against it) | `ok` |
+  | `schedulerEnable` | it is not installed, not active, or not registered here | `INCOMPLETE` |
+  | `automationTest` (one that runs its source) | the test is ok, and its source's poll is ok or not named | `ok` |
   | `automationTest` (one that runs its source) | the test, or the poll, says not ok | `INCOMPLETE` |
 
   (Stricter than the window in two rows, on purpose: a run that was skipped, stopped or ended, and
@@ -1071,8 +1073,8 @@ oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<c
 - `HELD:<code>`: the kernel was NOT asked. The plugin's guard refused: `invalid` (what was asked
   names nothing the roster or the provider holds: an agent that is not in the roster now, a harness
   nothing declares, a row that is gone), the code of the read the act rests on (OATS could not be
-  read), `error` (the guard itself failed: `why` is then the fault's name alone); or the machine was
-  not reached (its code). `why` says which, in the plugin's own words, as one word. A button that is OFF in the window (while the
+  read), `error` (the guard itself failed: `why` is then the fault's name alone); or the act could
+  not be sent: the machine was not reached, or the call was cancelled before it left (its code). `why` says which, in the plugin's own words, as one word. A button that is OFF in the window (while the
   roster is stale, or "Reading…") asks the server nothing: there is no line for a press that could
   not be made.
 - `asked` and `ok` are written at bb's level `info`; `INCOMPLETE`, `DEFERRED`, a refusal and a hold

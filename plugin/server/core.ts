@@ -663,6 +663,9 @@ export function createCore(bb: BbPluginApi) {
       where = await base(signal);
       if (!("ok" in where)) {
         const input = { ...where.input, ...extra } as z.input<(typeof hostContract)[Method]["input"]>;
+        // A call whose signal is already aborted is not sent (the host refuses it unasked): it is refused here, before
+        // `sent`, so that an act that never left is not logged as one that did.
+        signal.throwIfAborted();
         sent?.(where.target.hostId);
         answer = (await host.call(method, input, { hostId: where.target.hostId, signal, timeoutMs })) as Answer<unknown>;
       }
@@ -705,9 +708,9 @@ export function createCore(bb: BbPluginApi) {
     const codeOf = (error: unknown): string | undefined => (typeof error === "object" && error !== null ? refusedWith.get(error) : undefined);
     // A line that cannot be written never changes an act: a logger that throws is told to the process's own error
     // stream and the act goes on (it matters more than its line).
-    const say = (level: "info" | "warn", line: () => string) => {
+    const say = (level: "info" | "warn" | (() => "info" | "warn"), line: () => string) => {
       try {
-        bb.log[level](line());
+        bb.log[typeof level === "function" ? level() : level](line());
       } catch (error) {
         console.error(`oats: the act log could not be written (${method}, n=${n}): ${String((error as Error)?.message ?? error)}`);
       }
@@ -741,8 +744,9 @@ export function createCore(bb: BbPluginApi) {
       answered = { value, endedAt: actEnded() };
       took = Date.now() - from;
     } catch (error) {
-      // Not sent: the machine or the deployment was not found: the kernel was not asked: a hold, with that read's code.
-      if (host === null) say("warn", () => actLine(method, "held", about(), who(null), { held: codeOf(error) ?? "FAILED", why: "the machine that runs oats was not reached" }));
+      // Not sent: the machine or the deployment was not found, or the call was cancelled before it left (its caller
+      // was gone already; the plugin was ending): the kernel was not asked: a hold, with that refusal's code.
+      if (host === null) say("warn", () => actLine(method, "held", about(), who(null), { held: codeOf(error) ?? "FAILED", why: signal.aborted ? "the call was cancelled before it was sent" : "the machine that runs oats was not reached" }));
       else say("warn", () => actLine(method, "ended", about(), who(host), { result: codeOf(error) ?? "FAILED", ms: Date.now() - from }));
       throw error;
     } finally {
@@ -750,12 +754,9 @@ export function createCore(bb: BbPluginApi) {
     }
     // The kernel answered: the act is done whatever becomes of its line (written outside the act's own try: reading
     // the answer for the line cannot turn a done act into a refusal). What the answer says is read once.
-    try {
-      const said = outcomeOf(method, answered.value);
-      say(said.result === "ok" ? "info" : "warn", () => actLine(method, "ended", about(), who(host), { ...said, ms: took }));
-    } catch (error) {
-      console.error(`oats: the act log could not be written (${method}, n=${n}): ${String((error as Error)?.message ?? error)}`);
-    }
+    let said: ReturnType<typeof outcomeOf> | undefined;
+    const read = () => (said ??= outcomeOf(method, answered.value));
+    say(() => (read().result === "ok" ? "info" : "warn"), () => actLine(method, "ended", about(), who(host), { ...read(), ms: took }));
     return answered;
   }
 

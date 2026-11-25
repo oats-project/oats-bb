@@ -92,7 +92,8 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
 /**
  * What the preview and the apply share. `--yolo` is bb's full mode, with no sandbox between the
  * agent and the account bb runs as: the bb session provider launches in no other mode, so the
- * plugin asks for it on every spawn and depends on no default of the host (README, "Spawn"). The
+ * plugin asks for it on every spawn of a bb thread and depends on no default of the host (README,
+ * "Spawn"); a spawn that is not a bb thread names no mode (`common`, below). The
  * kernel binds the apply to the preview's decision, so both carry the same choices, in the same
  * order. What a person did not choose is not passed: no `--name` (the kernel numbers the agent),
  * no `--task-file` for an empty instruction (the agent starts and waits), no `--harness` and no

@@ -1,5 +1,6 @@
 // A5: the spawn argv has no shell and carries `--backend bb` and `--yolo` (bb's full mode, on
-// every spawn: the preview and the apply alike); a soul not in the list, and names
+// every spawn of a bb thread: the preview and the apply alike; the other spawns' argv is
+// test/spawn/harness.test.ts's table); a soul not in the list, and names
 // with a space, a slash, an upper-case letter or a leading dash, are refused before any process
 // starts; the task file is 0600 and gone after the call, on success and on failure.
 import { existsSync } from "node:fs";

@@ -4,9 +4,11 @@ The OATS plugin for bb, in `plugin/` of the `oats-bb` repository.
 
 Your OATS agents in bb: who each one is (soul, instance, aweb alias, parent, children), which ones
 need you, and the workspace they come from (souls, capabilities, teams, machines). From bb you can
-spawn, stop, start, restart and retire an agent. An agent spawned from bb runs in **bb's full
-mode, with no sandbox** between the agent and the account bb runs as: the plugin asks for it on
-every spawn ([How it is built](#how-it-is-built), "Spawn runs in bb's full mode"). The plugin draws and asks; it owns nothing: every
+spawn, stop, start, restart and retire an agent. An agent spawned from bb AS A BB THREAD runs in
+**bb's full mode, with no sandbox** between the agent and the account bb runs as: the plugin asks
+for it on every spawn of a bb thread; an agent spawned onto tmux (the form's "Runs in: tmux
+session", or a deployment with no bb session provider) is asked no mode, and runs as its soul and
+its harness decide ([How it is built](#how-it-is-built), "A spawn on bb runs in bb's full mode"). The plugin draws and asks; it owns nothing: every
 OATS fact it shows is an answer of the `oats` CLI's `--json` verbs, every bb fact comes from bb's
 SDK, and everything it does goes through `oats`. It never reads `instance.json`, receipts, event
 files' contents or bb's database, and it never infers whether an agent runs.

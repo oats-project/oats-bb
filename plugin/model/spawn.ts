@@ -162,7 +162,7 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
  * The preview's facts as the form's column lists them: the Desktop's (`previewFacts`), and three
  * of the plugin's own, each read from the same answer (never assumed, but the access where the
  * answer is silent on it: below): the soul (the Desktop's
- * dialog names it in its title alone), that the session is a bb thread (the Desktop's Session
+ * dialog names it in its title alone), where the session is (the Desktop's Session
  * backend is a control; here the row says the place the kernel's preview names), and the access the agent runs with
  * (the plugin asks for bb's full mode on every spawn of a bb thread, and for no mode otherwise: the row says what
  * the kernel decided). The

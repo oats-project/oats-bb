@@ -152,14 +152,14 @@ failure's for the first two, the warning's for the others. Which hidden row it s
 each stands: one that asks; then one that failed or cannot be reached (a failed row is never hidden
 behind a milder one); then one that runs outside OATS or warns; among equals the tree's order. A
 row that is gone, or behind a result ("Reading…"), is a quiet one for the fold. The toggle is named
-in words for a screen reader and a pointer: how many hidden rows ask ("Show <Name>'s agents: 1
-needs you"); a failed or unreachable row's state ("…: failed"); in the warning tone what that row
-itself says ("…: Stopped · archived in bb", "…: Running outside OATS"). In the model (`insideOf`): a row that needs a
-person, one a person must look at (it runs outside OATS, or failed), and one whose own mark is in
-the warning tone, in that tone (the outside feature's `rowWarns`: its thread archived in bb while it
-ran, its session lost with its thread archived, its thread deleted in bb; such an agent has no bb
-thread, so it is inside its closed parent, and nothing else would lead a person to it). Of several,
-the most urgent. The parents of the row that is on screen (a thread; or an agent's own page) are open and are never closed over it: while a parent
+in words for a screen reader and a pointer, and since the fold hides those rows' words the name
+carries them as a COUNT of the kind the chevron speaks for: "Show <Name>'s agents: 1 needs you";
+"…: 1 failed", "…: 1 unreachable", and both where both are hidden ("…: 1 failed, 1 unreachable");
+"…: 1 running outside OATS"; over rows that warn, the count and the reason's own words ("…: 1 may
+still run"). A row warns where its own mark is in the warning tone (the outside feature's
+`rowWarns`: its thread archived in bb while it ran, its session lost with its thread archived, its
+thread deleted in bb; such an agent has no bb thread, so it is inside its closed parent, and
+nothing else would lead a person to it). The parents of the row that is on screen (a thread; or an agent's own page) are open and are never closed over it: while a parent
 holds that row its chevron is drawn open and off (disabled, out of the tab order, named
 "<Name>'s agents shown"), and is live again once another row is on screen.
 A roster with a parent in it keeps a gutter before every row, so every mark stands in one column.

@@ -59,20 +59,19 @@ test.each([
   // Nobody asked: NO second dot beside the chevron; the chevron itself takes the WARNING tone (the lead's ruling on P23).
   const glyph = toggle().querySelector<HTMLElement>('[data-testid="oats-row-toggle-mark"]')!;
   expect([glyph.textContent, toggle().querySelectorAll("[data-mark]").length, glyph.className.split(/\s+/).includes("text-warning-text")]).toEqual(["▸", 0, true]);
-  // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then WHAT THAT ROW ITSELF SAYS: its state's word and its reason,
-  // as the row draws them (ruled 25 Nov 2026: the warning's tone is a colour, and the state's name alone, "stopped", says nothing of it).
+  // The chevron's NAME, for a screen reader and a pointer: whose agents it shows, then what it hides AS A COUNT (the fold hides the row's
+  // words): the count and the REASON's own words, as that row draws them ("1 may still run", "1 deleted in bb": the lead's ruling of 25 Nov 2026).
   const named = toggle().getAttribute("aria-label")!;
-  // (The reason is the outside feature's word for that row: "may still run" for a thread archived in bb, since its change after the lead's read; "deleted in bb".)
-  expect(named).toMatch(/^Show Redesign ui lead's agents: (Idle|Stopped) · (may still run|archived in bb|deleted in bb)$/);
+  expect(named).toMatch(/^Show Redesign ui lead's agents: 1 (may still run|archived in bb|deleted in bb)$/);
   expect(toggle().getAttribute("title")).toBe(named);
   expect(within(parent()).getByTestId("oats-row-facts").textContent).toMatch(/^Working/); // the parent's own word stays its own
   // Opened: the child's row is there with that same mark, and the parent carries none.
   fireEvent.click(toggle());
   const row = slot.getAllByTestId("oats-agent-row-threadless").find((each) => each.getAttribute("data-instance") === CHILD)!;
   expect([row.querySelector("[data-mark]")!.getAttribute("data-state"), row.querySelector("[data-mark]")!.getAttribute("data-tone")]).toEqual([state, "warning"]);
-  // … and those were the row's own words: what a sighted person reads now that it is shown.
-  const drawn = ["state", "reason"].map((phrase) => row.querySelector(`[data-phrase="${phrase}"]`)?.textContent?.replace(/^[\s·]+|[\s·]+$/g, "") ?? "").filter((part) => part !== "").join(" · ");
-  expect(named).toBe(`Show Redesign ui lead's agents: ${drawn}`);
+  // … and the words after the count are the reason that row itself draws, now that it is shown.
+  const reason = row.querySelector('[data-phrase="reason"]')?.textContent?.replace(/^[\s·]+|[\s·]+$/g, "") ?? "";
+  expect(named).toBe(`Show Redesign ui lead's agents: 1 ${reason}`);
   expect(inside()).toBeNull();
 });
 

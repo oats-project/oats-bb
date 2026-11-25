@@ -236,15 +236,15 @@ test("a closed parent whose subtree holds a row that needs a person carries that
   expect([toggles(quiet.slot)[0]!.querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside"), toggles(quiet.slot)[0]!.getAttribute("aria-label")]).toEqual([null, "Show Redesign ui lead's agents"]);
 });
 
-/** The closed parent's name over a hidden row that runs outside OATS: that row's own words, as its row draws them. */
-const OUTSIDE_NAME = "Show Redesign ui lead's agents: Running outside OATS";
+/** The closed parent's name over a hidden row that runs outside OATS: the count, then the state's own name. */
+const OUTSIDE_NAME = "Show Redesign ui lead's agents: 1 running outside OATS";
 // The lead's ruling, the other cases. A hidden row that FAILED or CANNOT BE REACHED, with nobody asked: NO second dot
 // (two dots side by side read as one more state of the parent, told apart by colour alone): the chevron itself takes
 // the tone, and the name says the row's state. A hidden row that runs OUTSIDE OATS needs a person (the home lists it
 // under "Needs you"): its own mark beside the chevron, counted. Two that ask: "2 need you". Pressing the disc opens the row.
 test.each([
-  ["failed", { runtimeState: "shell" }, { inside: "error", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: failed" }],
-  ["unreachable", { running: null, runtimeState: "unreachable" }, { inside: "unreachable", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: unreachable" }],
+  ["failed", { runtimeState: "shell" }, { inside: "error", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: 1 failed" }],
+  ["unreachable", { running: null, runtimeState: "unreachable" }, { inside: "unreachable", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: 1 unreachable" }],
   // (Runs OUTSIDE OATS: NO second dot either (two plain dots is the form the ruling rejects): the chevron in the WARNING
   // tone, named with that row's own words; it is not counted among those that ask.)
   ["runs outside OATS", { sessionEnd: "stopped", outsideOats: { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in desktop-mockups-developer on bb, and OATS recorded this instance stopped" } }, { inside: "outside", tone: /text-warning-text/, dots: 0, name: OUTSIDE_NAME }],
@@ -257,13 +257,28 @@ test.each([
   await waitFor(() => expect(mark.getAttribute("data-inside")).toBe(want.inside));
   expect([mark.textContent, chevron.querySelectorAll("[data-mark]").length, chevron.getAttribute("aria-label"), chevron.getAttribute("title")]).toEqual(["▸", want.dots, want.name, want.name]);
   expect(mark.className).toMatch(want.tone);
-  // The name is what that row itself says once it is shown.
-  if (want.inside === "outside") {
-    fireEvent.click(chevron);
-    const row = rowOn(slot, "thr_mockups")!;
-    const drawn = ["state", "reason"].map((phrase) => row.querySelector(`[data-phrase="${phrase}"]`)?.textContent?.replace(/^[\s·]+|[\s·]+$/g, "") ?? "").filter((part) => part !== "").join(" · ");
-    expect(want.name).toBe(`Show Redesign ui lead's agents: ${drawn}`);
-  }
+});
+
+// The folded parent hides its rows' WORDS: the toggle's name carries them as a COUNT of the kind the chevron speaks for
+// (the lead's ruling): where a failed row and an unreachable one are both hidden, both counts; two of a kind: "2 …".
+test("the toggle's name counts the hidden rows of the kind it speaks for: \"1 failed, 1 unreachable\" where both are hidden; \"2 failed\"; a hidden row that only works is not counted", async () => {
+  const both = fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, runtimeState: "shell" } : agent.instance === "harvest-knowledge-helper" ? { ...agent, running: null, runtimeState: "unreachable" } : agent));
+  const one = await sidebar({ snapshot: () => fixtureSnapshot(both) });
+  await one.slot.findByTestId("oats-tree");
+  await waitFor(() => expect(toggles(one.slot)[0]!.getAttribute("aria-label")).toBe("Show Redesign ui lead's agents: 1 failed, 1 unreachable"));
+  expect(toggles(one.slot)[0]!.getAttribute("title")).toBe("Show Redesign ui lead's agents: 1 failed, 1 unreachable");
+  cleanup();
+  resetApp();
+  const two = fixtureAgents().map((agent) => (agent.parent === "redesign-ui-lead" ? { ...agent, runtimeState: "shell" } : agent));
+  const second = await sidebar({ snapshot: () => fixtureSnapshot(two) });
+  await second.slot.findByTestId("oats-tree");
+  await waitFor(() => expect(toggles(second.slot)[0]!.getAttribute("aria-label")).toBe("Show Redesign ui lead's agents: 2 failed"));
+  cleanup();
+  resetApp();
+  const mixed = fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, runtimeState: "shell" } : agent));
+  const third = await sidebar({ snapshot: () => fixtureSnapshot(mixed) });
+  await third.slot.findByTestId("oats-tree");
+  await waitFor(() => expect(toggles(third.slot)[0]!.getAttribute("aria-label")).toBe("Show Redesign ui lead's agents: 1 failed")); // its sibling works: not counted
 });
 
 test("a hidden row that is GONE (the kernel no longer knows it) is neither counted nor toned by its closed parent: its state in this roster is from before it went", async () => {

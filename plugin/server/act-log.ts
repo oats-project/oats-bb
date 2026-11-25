@@ -8,6 +8,7 @@
 //   oats act <verb> asked <subject> caller=<c> host=<h> at=<iso> n=<k>
 //   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
 //   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> homes=<ok>/<all>
+//   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=DEFERRED ms=<n> homes=<ok>/<all>
 //   oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=<CODE> ms=<n>
 //   oats act <verb> held  <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<words>
 // <subject>: `instance=<name>`; for a spawn `soul=<soul> name=<name asked, or ->`; for an automation
@@ -16,15 +17,19 @@
 // has no person to name: it is one person's.  <h>: bb's id of the machine the kernel was asked on:
 // the SAME on an act's "asked" and "ended" (the one it was sent to); `-` on a hold (no machine was asked).
 // <k>: the act's number in this run of the plugin's server: the lines of ONE act carry the same, so
-// two acts on one agent at once can be told apart.
+// two acts on one agent at once can be told apart. It starts again with each run of the server; an
+// "asked" with no "ended" under its number means the server ended while the act ran.
 // `result`: `ok`; `INCOMPLETE`: the kernel answered, and its receipt says not everything was done (a
-// stop that left a session running; a retire with something left); the kernel's CODE for a refusal
-// (never its sentence); `FAILED` for an act that ended with no code. `homes`: of a stop, the homes
-// its receipt says it stopped, of those it names; of a retire, the same with the retired agent
-// counted. `HELD:<code>`: the kernel was NOT asked: the plugin's own guard refused (the roster could
-// not be read: its code; `invalid`: what was asked names nothing the roster or the provider holds;
-// `error`: the guard itself failed), or the machine was not reached (its code); `why` says which, in
-// the plugin's own words.
+// stop that left a session running; a retire whose home is still there, or with something left);
+// `DEFERRED`: a retire the kernel accepted and finishes in the background: not done yet; the
+// kernel's CODE for a refusal (never its sentence); `FAILED` for an act that ended with no code.
+// `homes`: of a stop, the homes its receipt says do not run after it (stopped by it, or idle
+// already), of those it names; of a retire, the children the same way and the retired agent with
+// them (counted as done only once its home is gone). `ms`: from the moment the act was sent.
+// `HELD:<code>`: the kernel was NOT asked: the plugin's own guard refused (the roster could not be
+// read: its code; `invalid`: what was asked names nothing the roster or the provider holds; `error`:
+// the guard itself failed: `why` is then the fault's name, never its message), or the machine was
+// not reached (its code); `why` says which, in the plugin's own words.
 //
 // WHAT NEVER GOES IN: a spawn's opening instruction, a description's text, a message, a path, the
 // kernel's sentence, a secret. Every value is one word: whatever is not a letter, a digit or one of
@@ -52,7 +57,7 @@ export const ACTS_BY_ARGUMENT = { automationTest: (input: unknown): boolean => (
 /** A verb `core.act` carries: an act, or one that is an act by its argument. */
 export type ActVerb = Act | keyof typeof ACTS_BY_ARGUMENT;
 /** Whether asking `verb` with this input is an act. */
-export const isAct = (verb: string, input?: unknown): boolean => (ACTS as readonly string[]).includes(verb) || (verb in ACTS_BY_ARGUMENT && ACTS_BY_ARGUMENT[verb as keyof typeof ACTS_BY_ARGUMENT](input));
+export const isAct = (verb: string, input?: unknown): boolean => (ACTS as readonly string[]).includes(verb) || (Object.hasOwn(ACTS_BY_ARGUMENT, verb) && ACTS_BY_ARGUMENT[verb as keyof typeof ACTS_BY_ARGUMENT](input));
 
 /** Who an act is about. */
 export type Subject = { instance: string } | { soul: string; name: string | null } | { automation: string } | { scheduler: true };
@@ -71,13 +76,17 @@ export const callerOf = (asker: Asker | undefined): string => {
 
 /**
  * What the kernel's ANSWER to an act says, for its "ended" line: whether everything was done, the homes it took, the
- * instance a spawn made. A stop's receipt names each home and whether it stopped (`results`, and its own `ok`); a
- * retire's names the children it stopped (`children`) and what it left undone (`incomplete`): the retired agent is
- * counted with them. An answer that says something was NOT done is `INCOMPLETE`, never `ok`: "I pressed Stop and
- * nothing happened" must not read as a success.
+ * instance a spawn made. It reads what the window reads to word the result (app/lifecycle/words.ts): an answer that
+ * says something is NOT done never reads `ok`: "I pressed Stop and nothing happened" must not look like a success.
+ * - A stop's receipt names each home and whether it does not run after the stop (`results`: stopped by it, or idle
+ *   already; and the receipt's own `ok`).
+ * - A retire's names the children it stopped (`children`), what it left undone (`incomplete`), whether the retired
+ *   home is gone (`removedDir`), and whether the kernel only ACCEPTED it and finishes in the background (`deferred`):
+ *   DEFERRED is not done yet, and a home that is still there is INCOMPLETE; the retired agent is counted among the
+ *   homes, as done only once its home is gone.
  */
-export function outcomeOf(verb: ActVerb, value: unknown): { result: "ok" | "INCOMPLETE"; homes?: string; made?: string } {
-  const answer = (typeof value === "object" && value !== null ? value : {}) as { ok?: unknown; results?: unknown; children?: unknown; incomplete?: unknown; instance?: unknown };
+export function outcomeOf(verb: ActVerb, value: unknown): { result: "ok" | "INCOMPLETE" | "DEFERRED"; homes?: string; made?: string } {
+  const answer = (typeof value === "object" && value !== null ? value : {}) as { ok?: unknown; results?: unknown; children?: unknown; incomplete?: unknown; instance?: unknown; deferred?: unknown; removedDir?: unknown };
   const stopped = (rows: unknown[]) => rows.filter((row) => (row as { ok?: unknown } | null)?.ok === true).length;
   if (verb === "stopApply" && Array.isArray(answer.results)) {
     const ok = stopped(answer.results);
@@ -85,8 +94,9 @@ export function outcomeOf(verb: ActVerb, value: unknown): { result: "ok" | "INCO
   }
   if (verb === "retireApply" && Array.isArray(answer.children)) {
     const ok = stopped(answer.children);
-    const left = Array.isArray(answer.incomplete) && answer.incomplete.length > 0;
-    return { result: left || ok < answer.children.length ? "INCOMPLETE" : "ok", homes: `${ok + 1}/${answer.children.length + 1}` };
+    const gone = answer.removedDir === true && answer.deferred !== true;
+    const left = !gone || (Array.isArray(answer.incomplete) && answer.incomplete.length > 0) || ok < answer.children.length;
+    return { result: answer.deferred === true ? "DEFERRED" : left ? "INCOMPLETE" : "ok", homes: `${ok + (gone ? 1 : 0)}/${answer.children.length + 1}` };
   }
   return { result: "ok", ...(verb === "spawn" && typeof answer.instance === "string" ? { made: answer.instance } : {}) };
 }

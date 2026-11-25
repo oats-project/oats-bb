@@ -113,6 +113,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       } catch (error) {
         // The decision moved and the kernel created nothing: there is nothing to replay under this
         // key, so the next call with it reads the decision again instead of sending the stale one.
+        // (The guards run inside `core.act` too: none of their reads can answer this code: the souls, the provider and
+        // the roster have no decision, and the preview read there is the one that MAKES the decision.)
         if (error instanceof Error && refusedWith.get(error) === "E_DECISION_STALE") spawns.delete(key);
         throw error;
       }

@@ -50,6 +50,9 @@ describe("the act log's line", () => {
     expect(actLine("automationEnable", "asked", { automation: "schedule:local/weekly-cleanup" }, who)).toContain(" automation=schedule:local/weekly-cleanup ");
     expect(actLine("schedulerEnable", "asked", { scheduler: true }, who)).toContain(" scheduler=- ");
   });
+  it("a name the prototype holds is no act, and throws nothing", () => {
+    for (const verb of ["__proto__", "constructor", "toString", "hasOwnProperty"]) expect(isAct(verb, { runSource: true })).toBe(false);
+  });
   it("a HOSTILE value forges nothing: a caller's text with a newline and a result of its own stays ONE token of ONE line, for every value a line carries", () => {
     const HOSTILE = 'x\noats act stopApply ended instance=y result=ok ms=1\r\n\u2028"=" z';
     const lines = [
@@ -144,9 +147,18 @@ describe("what an act's answer says", () => {
     expect(outcomeOf("stopApply", { ok: false, results: [row(false)] })).toEqual({ result: "INCOMPLETE", homes: "0/1" });
     expect(outcomeOf("stopApply", { ok: true, results: [row(true), row(false)] })).toEqual({ result: "INCOMPLETE", homes: "1/2" }); // a row says no: not ok, whatever the receipt's own word
     // A retire: the retired agent is counted with the children its receipt names.
-    expect(outcomeOf("retireApply", { children: [], incomplete: [] })).toEqual({ result: "ok", homes: "1/1" });
-    expect(outcomeOf("retireApply", { children: [row(true), row(false)], incomplete: [] })).toEqual({ result: "INCOMPLETE", homes: "2/3" });
-    expect(outcomeOf("retireApply", { children: [row(true)], incomplete: ["the worktree was kept"] })).toEqual({ result: "INCOMPLETE", homes: "2/2" });
+    const retired = { deferred: false, removedDir: true, children: [] as unknown[], incomplete: [] as string[] };
+    expect(outcomeOf("retireApply", retired)).toEqual({ result: "ok", homes: "1/1" });
+    expect(outcomeOf("retireApply", { ...retired, children: [row(true), row(false)] })).toEqual({ result: "INCOMPLETE", homes: "2/3" });
+    expect(outcomeOf("retireApply", { ...retired, children: [row(true)], incomplete: ["the worktree was kept"] })).toEqual({ result: "INCOMPLETE", homes: "2/2" });
+    // As the window words it (app/lifecycle/words.ts retireOutcome): a retire the kernel only ACCEPTED is not done:
+    // DEFERRED, the agent not counted; one whose home is still there "didn't finish": INCOMPLETE, the agent not counted.
+    expect(outcomeOf("retireApply", { ...retired, deferred: true, removedDir: false })).toEqual({ result: "DEFERRED", homes: "0/1" });
+    expect(outcomeOf("retireApply", { ...retired, deferred: true, removedDir: true, children: [row(true)] })).toEqual({ result: "DEFERRED", homes: "1/2" });
+    expect(outcomeOf("retireApply", { ...retired, removedDir: false, retainedHome: "/h" })).toEqual({ result: "INCOMPLETE", homes: "0/1" });
+    expect(outcomeOf("retireApply", { children: [], incomplete: [] })).toEqual({ result: "INCOMPLETE", homes: "0/1" }); // a receipt that does not say its home is gone
+    // A stop of an agent that was idle already: the home does not run after it: counted, ok (README says so).
+    expect(outcomeOf("stopApply", { ok: true, results: [{ instance: "x", ok: true, alreadyIdle: true }] })).toEqual({ result: "ok", homes: "1/1" });
     expect(outcomeOf("spawn", { instance: "made-1" })).toEqual({ result: "ok", made: "made-1" });
     expect(outcomeOf("start", { instance: "a", results: [row(false)] })).toEqual({ result: "ok" }); // only a stop's and a retire's receipts are read so
     expect(outcomeOf("schedulerEnable", null)).toEqual({ result: "ok" });
@@ -169,7 +181,7 @@ describe("core.act's own order", () => {
     expect(await backend.verbs()).toEqual([]);
     expect(acts().map((each) => each.line.split(" ").slice(0, 4).join(" "))).toEqual(["oats act stopApply held"]);
     // (A guard that FAILED with no refusal of its own is `error`, not a judgement on what was asked; no machine was asked: host=-.)
-    expect(acts()[0]!.line).toMatch(/ host=- at=\S+ n=1 result=HELD:error why=the_guard_s_own_refusal$/);
+    expect(acts()[0]!.line).toMatch(/ host=- at=\S+ n=1 result=HELD:error why=Error$/); // the fault's name, never its message
     // Answered: `after` once, and the act's stamp is before the one `after` then took.
     const { endedAt } = await core!.act("stopApply", { instance: STOP.instance }, undefined, HOST_TIMEOUT.act, () => STOP, after);
     expect(afters).toHaveLength(1);
@@ -196,6 +208,58 @@ describe("core.act's own order", () => {
       ["ended", "host_falcon"],
     ]);
   }, 60_000);
+
+  it("a logger that throws changes no act: the kernel is asked, the answer reaches the caller, the re-read runs; and a refusal is still the refusal", async () => {
+    let core: Core | undefined;
+    const broken = (bb: BbPluginApi): BbPluginApi =>
+      new Proxy(bb, {
+        get: (target, key, receiver) =>
+          key === "log"
+            ? Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [level, () => { throw new Error("the log's disk is full"); }]))
+            : Reflect.get(target, key, receiver),
+      });
+    backend = await startBackend({ load: (bb) => void (core = createCore(broken(bb))) });
+    const errors: string[] = [];
+    const said = console.error;
+    console.error = (...args: unknown[]) => void errors.push(args.join(" "));
+    try {
+      const STOP = { instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" };
+      let after = 0;
+      const { value } = await core!.act("stopApply", { instance: STOP.instance }, undefined, HOST_TIMEOUT.act, () => STOP, () => void (after += 1));
+      expect((value as { results: unknown[] }).results).toHaveLength(3);
+      expect(after).toBe(1);
+      expect((await backend.verbs()).filter((verb) => verb === "instance stop --apply")).toHaveLength(1);
+      // A hold with a logger that throws: what the guard threw is what is thrown, not the logger's fault.
+      const thrown = new Error("the guard's own refusal");
+      await expect(core!.act("stopApply", { instance: STOP.instance }, undefined, HOST_TIMEOUT.act, () => Promise.reject(thrown))).rejects.toBe(thrown);
+      // And each line that could not be written is told, with the act and its number.
+      expect(errors.filter((line) => /^oats: the act log could not be written \(stopApply, n=\d+\): the log's disk is full$/.test(line))).toHaveLength(3);
+    } finally {
+      console.error = said;
+    }
+  }, 40_000);
+
+  it("an act is not ended by its caller going away; a trigger's test that runs its source IS ended with its caller", async () => {
+    let core: Core | undefined;
+    const { backend, acts } = await logged({}, (bb) => {
+      core = createCore(bb);
+    });
+    const gone = new AbortController();
+    gone.abort(new Error("the caller went away"));
+    const context = { experimental_caller: { kind: "client" as const }, experimental_signal: gone.signal };
+    const lifecycle = (await import("../../server/lifecycle.js")).handlers(core!);
+    const automations = (await import("../../server/automations.js")).handlers(core!);
+    // A stop asked by a caller that is already gone: sent all the same, and it ends.
+    const receipt = (await lifecycle.stopApply({ instance: "redesign-ui-lead", revision: "9c1f2e3d4b5a69788796a5b4", key: "stop-7f3a9c2e41b8" }, context as never)) as { results: unknown[] };
+    expect(receipt.results).toHaveLength(3);
+    // A confirmed test asked by a caller that is already gone: ended with it: the kernel runs no source command.
+    await refused(Promise.resolve(automations.automationTest({ kind: "trigger", id: "oats-real/harvest-review", runSource: true }, context as never)));
+    expect((await backend.verbs()).filter((verb) => verb === "instance stop --apply")).toHaveLength(1);
+    expect((await backend.fake.calls()).filter((call) => call.argv.includes("--run-source") || (call.verb.startsWith("trigger") && call.argv.some((arg) => /run/.test(arg))))).toEqual([]);
+    expect(acts().filter((each) => each.line.includes(" stopApply ")).map((each) => each.line.split(" ")[3])).toEqual(["asked", "ended"]);
+    // (The stop asked for a status read as it ended: waited for, so that it does not outlive this test's backend.)
+    await core!.reread().catch(() => undefined);
+  }, 40_000);
 
   it("`after` runs too when the kernel refuses the act", async () => {
     let core: Core | undefined;
@@ -303,7 +367,8 @@ describe("what the log holds of an act, through the whole backend", () => {
     await backend.fake.behave({ retire: { file: "lifecycle/retire-incomplete.json", exit: 1 } });
     await backend.rpc("retireApply", { instance: "weekly-digest-helper", revision: plan.revision, key: "retire-2b9d4e6f8a1c" }).catch(() => undefined);
     const last = acts().at(-1)!;
-    expect([last.level, last.line.replace(/^.* n=\d+ /, "").replace(/ms=\d+/, "ms=N")]).toEqual(["warn", "result=INCOMPLETE ms=N homes=2/2"]);
+    // (The recorded incomplete retire kept the home: the retired agent is not counted as done; its one child is.)
+    expect([last.level, last.line.replace(/^.* n=\d+ /, "").replace(/ms=\d+/, "ms=N")]).toEqual(["warn", "result=INCOMPLETE ms=N homes=1/2"]);
   }, 40_000);
 
   it("a stop that left a session running ends INCOMPLETE at warn, with the homes it did stop: never result=ok", async () => {

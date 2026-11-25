@@ -1014,6 +1014,7 @@ The line is a contract: one act, one line, `key=value` separated by one space, i
 oats act <verb> asked <subject> caller=<c> host=<h> at=<iso> n=<k>
 oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
 oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> homes=<ok>/<all>
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=DEFERRED ms=<n> homes=<ok>/<all>
 oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=<CODE> ms=<n>
 oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<words>
 ```
@@ -1027,21 +1028,29 @@ oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<c
   server reads meanwhile. `-` on a hold: no machine was asked.
 - `at`: the plugin server's clock, UTC.
 - `n`: the act's number in this run of the plugin's server: the lines of one act carry the same
-  number, so two acts on one agent at the same time are told apart.
+  number, so two acts on one agent at the same time are told apart. It starts again with each run
+  of the server. An `asked` with no `ended` under its number: the server ended while the act ran.
 - `result`: `ok`; `INCOMPLETE`: the kernel answered and its receipt says not everything was done (a
-  stop that left a session running; a retire that left something undone): "I pressed Stop and
-  nothing happened" never reads as `ok`; the kernel's CODE for a refusal (never its sentence);
-  `FAILED` for an act that ended with no code. `homes`: of a stop, the homes its receipt says it
-  stopped, of those it names; of a retire, the same with the retired agent counted. `made`: the
-  instance a spawn made. `ms`: how long the kernel took.
+  stop that left a session running; a retire whose home is still there, or that left something
+  undone): "I pressed Stop and nothing happened" never reads as `ok`; `DEFERRED`: a retire the
+  kernel accepted and finishes in the background: not done yet (its row shows the result); the
+  kernel's CODE for a refusal (never its sentence); `FAILED` for an act that ended with no code.
+  It is read from what the window reads to word the result (`app/lifecycle/words.ts`).
+- `homes`: of a stop, the homes its receipt says do not run after it (stopped by it, OR idle
+  already: a stop of an agent that was idle reads `ok homes=1/1`), of those it names; of a retire,
+  the children the same way and the retired agent with them, counted as done only once its home is
+  gone. `made`: the instance a spawn made. `ms`: how long the kernel took, from the moment the act
+  was sent.
 - `HELD:<code>`: the kernel was NOT asked. The plugin's guard refused: `invalid` (what was asked
   names nothing the roster or the provider holds: an agent that is not in the roster now, a harness
   nothing declares, a row that is gone), the code of the read the act rests on (OATS could not be
-  read), `error` (the guard itself failed); or the machine was not reached (its code). `why` says
-  which, in the plugin's own words, as one word. A button that is OFF in the window (while the
+  read), `error` (the guard itself failed: `why` is then the fault's name alone); or the machine was
+  not reached (its code). `why` says which, in the plugin's own words, as one word. A button that is OFF in the window (while the
   roster is stale, or "Reading…") asks the server nothing: there is no line for a press that could
   not be made.
-- `asked` and `ok` are written at bb's level `info`; `INCOMPLETE`, a refusal and a hold at `warn`.
+- `asked` and `ok` are written at bb's level `info`; `INCOMPLETE`, `DEFERRED`, a refusal and a hold
+  at `warn`. A line that cannot be written never changes an act: the act goes on, and the fault is
+  told to the server process's error stream.
 
 WHERE the lines are: bb writes what a plugin logs in two places under its data directory:
 `plugins/oats/logs/plugin.log` (the plugin's own file: JSON lines `{"ts","level","message"}`, every
@@ -1058,7 +1067,8 @@ No act can go round it: `core.act` (`server/core.ts`) is the only way a verb tha
 reaches the kernel (`core.call` refuses one, in its types and when it runs), and every verb of the
 host's contract is a read (marked `experimental_retryable`), an act, or named with why it is
 neither (`NOT_ACTS`), or an act by its argument (`ACTS_BY_ARGUMENT`): a new verb fails
-`test/server/act-log.test.ts` until it is one of them. A value a caller sent (an id, a name) is
+`test/server/act-log.test.ts` until it is one of them. (A verb that changes something and is
+marked `experimental_retryable` by mistake is a read to every test: the mark is the contract's word.) A value a caller sent (an id, a name) is
 never written as it came: it is one token of the line (above), so it cannot forge a line or a
 result.
 

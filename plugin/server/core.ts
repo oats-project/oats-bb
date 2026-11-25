@@ -703,6 +703,15 @@ export function createCore(bb: BbPluginApi) {
     const about = () => (typeof subject === "function" ? subject() : subject);
     const who = (host: string | null) => ({ caller: callerOf(asker), host, at: new Date().toISOString(), n });
     const codeOf = (error: unknown): string | undefined => (typeof error === "object" && error !== null ? refusedWith.get(error) : undefined);
+    // A line that cannot be written never changes an act: a logger that throws is told to the process's own error
+    // stream and the act goes on (it matters more than its line).
+    const say = (level: "info" | "warn", line: () => string) => {
+      try {
+        bb.log[level](line());
+      } catch (error) {
+        console.error(`oats: the act log could not be written (${method}, n=${n}): ${String((error as Error)?.message ?? error)}`);
+      }
+    };
     let extra: Extra<Method>;
     try {
       extra = await guards();
@@ -710,32 +719,39 @@ export function createCore(bb: BbPluginApi) {
       const code = codeOf(error);
       // The plugin's own words for its own guard; for a refusal that carries the kernel's code (the roster could not
       // be read; a read the act rests on was refused) the code says it, and the kernel's sentence stays out. A guard
-      // that FAILED (no refusal: a fault of the plugin's own) is `error`, not a judgement on what was asked.
-      const held = code ?? (error instanceof experimental_PluginRpcRefusal ? "invalid" : "error");
-      bb.log.warn(actLine(method, "held", about(), who(null), { held, why: code === undefined ? String((error as Error)?.message ?? error) : "refused before the act was asked" }));
+      // that FAILED (no refusal: a fault of the plugin's own) is `error`, not a judgement on what was asked, and its
+      // `why` is the fault's NAME alone: its message is any text.
+      const refused = error instanceof experimental_PluginRpcRefusal;
+      const why = code !== undefined ? "refused before the act was asked" : refused ? String(error.message) : String((error as Error)?.name ?? "fault");
+      say("warn", () => actLine(method, "held", about(), who(null), { held: code ?? (refused ? "invalid" : "error"), why }));
       throw error;
     }
     // The machine the act is SENT to: named on "asked" and, the same, on "ended" (never the machine the server
     // happens to hold when the act ends: a status read that failed meanwhile, or a changed setting, moves that).
     let host: string | null = null;
-    const from = Date.now();
+    let from = Date.now();
+    let took = 0;
+    let answered: { value: Value<Method>; endedAt: string };
     try {
       const value = await ask(method, extra, timeoutMs, signal, (hostId) => {
         host = hostId;
-        bb.log.info(actLine(method, "asked", about(), who(host)));
+        from = Date.now(); // `ms` is the kernel's time: from the moment the act is sent
+        say("info", () => actLine(method, "asked", about(), who(host)));
       });
-      const endedAt = actEnded();
-      const said = outcomeOf(method, value);
-      bb.log[said.result === "ok" ? "info" : "warn"](actLine(method, "ended", about(), who(host), { ...said, ms: Date.now() - from }));
-      return { value, endedAt };
+      answered = { value, endedAt: actEnded() };
+      took = Date.now() - from;
     } catch (error) {
       // Not sent: the machine or the deployment was not found: the kernel was not asked: a hold, with that read's code.
-      if (host === null) bb.log.warn(actLine(method, "held", about(), who(null), { held: codeOf(error) ?? "FAILED", why: "the machine that runs oats was not reached" }));
-      else bb.log.warn(actLine(method, "ended", about(), who(host), { result: codeOf(error) ?? "FAILED", ms: Date.now() - from }));
+      if (host === null) say("warn", () => actLine(method, "held", about(), who(null), { held: codeOf(error) ?? "FAILED", why: "the machine that runs oats was not reached" }));
+      else say("warn", () => actLine(method, "ended", about(), who(host), { result: codeOf(error) ?? "FAILED", ms: Date.now() - from }));
       throw error;
     } finally {
       after?.();
     }
+    // The kernel answered: the act is done whatever becomes of its line (written outside the act's own try: reading
+    // the answer for the line cannot turn a done act into a refusal).
+    say(outcomeOf(method, answered.value).result === "ok" ? "info" : "warn", () => actLine(method, "ended", about(), who(host), { ...outcomeOf(method, answered.value), ms: took }));
+    return answered;
   }
 
   /**

@@ -176,16 +176,17 @@ async function stopExtraBb(dir) {
  *  `out`: the file bb-app's output goes to; `prefix`: what runs before bb-app in the shell (env -u …); `env`: variables
  *  for its server (docker exec -e); `args`: its address and port flags; `ports`: the ports those flags name;
  *  `answered`: the read whose answer a time-out quotes.
- *  The ports are below Linux's ephemeral range (32768-60999): a port in it can be taken, as a listener, by any process of
- *  the container that listens on port 0, the first bb's workers among them (CI, 2026-11-25, run 45519214063: the exposed
- *  bb's server failed with EADDRINUSE on 0.0.0.0:48886, twice, with no other bb of the test on it). Where bb-app exits,
- *  what listens on its ports is printed, from /proc/net/tcp*. */
+ *  The ports are below Linux's ephemeral range (32768-60999): a port in it can be held by a listener on port 0 or by any
+ *  outgoing connection of the container (curl, bb's CLI, the first bb's workers), and either makes a bind of it fail
+ *  (CI, 2026-11-25, run 45519214063: the exposed bb's server failed with EADDRINUSE on 0.0.0.0:48886, twice, with no
+ *  other bb of the test on it). Where bb-app exits, every socket on its ports is printed, from /proc/net/tcp*. */
 async function startExtraBb({ dir, out, prefix = "", env = {}, args, ports, up, what, answered, timeoutMs = 180_000 }) {
   const command = `cd ~ && echo started > ${out} && ${prefix ? `${prefix} ` : ""}bb-app --data-dir ~/${dir} ${args} --no-in-app-updates >> ${out} 2>&1; echo "bb-app exited with status $?" >> ${out}`;
   const exited = async () => (await sh(`cat ${out} 2>/dev/null || true`)).includes("bb-app exited with status");
-  // A listener on one of its ports, by the kernel's own table (state 0A is LISTEN): this image has no ss or netstat.
-  const holders = () => said(ports.map((port) => `grep -ih ':${port.toString(16).padStart(4, "0")} [0-9A-F:]* 0A ' /proc/net/tcp /proc/net/tcp6 2>/dev/null | sed 's/^/:${port} /'`).join("; ") + "; true");
-  const printed = async () => `bb-app printed: ${await said(`tail -c 1500 ${out} 2>&1 || true`)}. Listening on its ports: ${(await holders()).trim() || "nothing"}. Its logs: ${await said(`{ tail -n 30 ~/${dir}/logs/* 2>/dev/null || echo none; } | tail -c 3000`)}`;
+  // Every socket whose LOCAL port is one of its ports, in any state (its 4th column: 0A is LISTEN, 01 an established
+  // connection), by the kernel's own table: this image has no ss or netstat.
+  const holders = () => said(ports.map((port) => `grep -ihE '^ *[0-9]+: [0-9A-F]+:${port.toString(16).padStart(4, "0")} ' /proc/net/tcp /proc/net/tcp6 2>/dev/null | sed 's/^/:${port} /'`).join("; ") + "; true");
+  const printed = async () => `bb-app printed: ${await said(`tail -c 1500 ${out} 2>&1 || true`)}. Sockets on its ports: ${(await holders()).trim() || "none"}. Its logs: ${await said(`{ tail -n 30 ~/${dir}/logs/* 2>/dev/null || echo none; } | tail -c 3000`)}`;
   // Whether anything still answers on one of its ports: a server or daemon of that bb left alive.
   const open = async () => (await sh(ports.map((port) => `curl -s -o /dev/null -m 1 http://127.0.0.1:${port}/ && echo open`).join("; ") + "; true")).includes("open");
   for (let attempt = 1; ; attempt += 1) {

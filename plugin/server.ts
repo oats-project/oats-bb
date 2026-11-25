@@ -12,6 +12,7 @@ import * as lifecycle from "./server/lifecycle.js";
 import * as panel from "./server/panel.js";
 import * as roster from "./server/roster.js";
 import * as spawn from "./server/spawn.js";
+import * as terminal from "./server/terminal.js";
 import * as workspace from "./server/workspace.js";
 
 export { rpcContract } from "./contract/index.js";
@@ -27,6 +28,7 @@ export default async function plugin(bb: BbPluginApi) {
     ...lifecycle.handlers(core),
     ...automations.handlers(core),
     ...panel.handlers(core),
+    ...terminal.handlers(core),
   });
   core.start();
 }

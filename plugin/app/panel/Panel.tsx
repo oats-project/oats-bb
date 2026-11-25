@@ -3,6 +3,7 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { TerminalButton } from "../terminal/Terminal";
 import { OutsideAgent, OutsideAgentDetails, pageActs, pageParts, words as outsideWords } from "../outside";
 import type { ReactNode } from "react";
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
@@ -304,7 +305,7 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held, 
       )}
 
       {readState}
-      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} running={agent.running} lost={agent.sessionEnd === "lost"} instance={agent.instance} startedAt={agent.startedAt ?? null} now={now} />}
+      {facts === undefined ? null : <InstanceFacts oats={oats} facts={facts} state={status} running={agent.running} lost={agent.sessionEnd === "lost"} instance={agent.instance} startedAt={agent.startedAt ?? null} now={now} held={held} />}
       <Readiness instance={agent.instance} of="instance" context={answerRoot === null ? null : { name: agent.instance, root: answerRoot }} now={now} unread={unread} />
       {/* The header's claim is the roster's; a recorded activity that names a newer one asks for the roster again. */}
       <Activity instance={agent.instance} claimSince={agent.waiting?.since ?? null} onNewerClaim={oats.retry} now={now} unread={unread} />
@@ -313,7 +314,7 @@ function InstancePage({ oats, agent, read, now, state: readState, status, held, 
 }
 
 /** `state` is the state the header says: what OATS says of an unreachable session is said there, once, and an agent that does not run was last started, not started. */
-function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt, now }: { oats: Roster; facts: PanelInstance; state: AgentState; /** the kernel's row says its session was lost (`sessionEnd: "lost"`): nobody stopped it */ lost: boolean; /** the kernel's own word of the roster's row, as `state` is read from it */ running: Agent["running"]; instance: string; /** the roster's own time of the session's last start: a stop recorded before it is not this stop */ startedAt: string | null; now: number }) {
+function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt, now, held }: { oats: Roster; facts: PanelInstance; /** the page's acts are off (the roster is the last one read, or it reads "Reading…"): so is Terminal, over the attach command */ held: boolean; state: AgentState; /** the kernel's row says its session was lost (`sessionEnd: "lost"`): nobody stopped it */ lost: boolean; /** the kernel's own word of the roster's row, as `state` is read from it */ running: Agent["running"]; instance: string; /** the roster's own time of the session's last start: a stop recorded before it is not this stop */ startedAt: string | null; now: number }) {
   const unreachable = state === "unreachable";
   // When OATS stopped it: the time of the instance's last recorded "stopped" (also for one that runs
   // outside OATS, which OATS recorded stopped). One read, for this agent, only while it is stopped.
@@ -488,6 +489,8 @@ function InstanceFacts({ oats, facts, state, running, lost, instance, startedAt,
             {/* An agent on tmux has no thread in bb: where its session is and how to reach it, in one sentence and one command to copy (the home's card of such an agent gives the same command). Only while the kernel itself says it runs (`running: true`; it works, or it waits on a person): a stopped one has no session, and for one the kernel cannot reach, or says nothing of, `oats session attach` refuses, also when such an agent still carries a claim. */}
             {attachOffered(where?.where === "tmux session", running, state) ? (
               <div data-testid="oats-panel-attach" className="flex min-w-0 flex-col gap-1">
+                {/* bb's own Terminal tab, attached to its session (app/terminal): the command to copy stays under it, for a person's own terminal. */}
+                <TerminalButton instance={instance} held={held} />
                 <p className="m-0">{ATTACH}</p>
                 <p className="m-0 flex min-w-0 flex-wrap items-center gap-2">
                   <CommandText command={attachCommand(facts.home)} />

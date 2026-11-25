@@ -85,7 +85,7 @@ export function FoldToggle({
   insideTone?: "warning" | null;
   /** That row's own words, as the row draws them ("Stopped · may still run"): the chevron's name over a row that WARNS. */
   insideSays?: string | null;
-  /** How many hidden rows need a person (they ask, or run outside OATS): the toggle's name says the count. */
+  /** How many hidden rows ask (their state is needs-you): the toggle's name says the count. */
   insideAsks?: number;
 }) {
   // Only a CLOSED parent hides rows: open, each row carries its own mark.
@@ -94,17 +94,18 @@ export function FoldToggle({
   // WHAT A CLOSED PARENT SAYS OF THE ROWS IT HIDES (the lead's ruling of 25 Nov 2026, after its reader's second look):
   // - THE CHEVRON NEVER LEAVES a row that has children: it is what says the row opens. On the row, in this order: the
   //   chevron, the hidden rows' mark, the parent's own dot.
-  // - a hidden row that NEEDS A PERSON (it asks; or it runs outside OATS, which the home lists under "Needs you"): that
-  //   row's own mark BESIDE the chevron, after it (the needs-you disc with its "!"): found without colour;
-  // - a hidden row that failed, cannot be reached, or warns, with nobody asked: NO second dot (two dots side by side
-  //   read as one more state of the parent, told apart by colour alone): the CHEVRON itself takes the tone;
+  // - a hidden row that ASKS (its state is needs-you): that row's own mark BESIDE the chevron, after it (the needs-you
+  //   disc with its "!"): found without colour;
+  // - a hidden row that failed or cannot be reached, or that runs outside OATS or warns, with nobody asking: NO second
+  //   dot (two plain dots side by side read as one more state of the parent, told apart by colour alone): the CHEVRON
+  //   itself takes the tone: the failure's for the first two, the warning's for the others;
   // - the chevron and the mark are ONE button: pressing either opens the row;
-  // - its name and title say what is inside, in words: how many hidden rows need a person ("1 needs you"); in the
-  //   tone cases what that row itself says (its state's name; over a row that warns, its own words:
-  //   "Stopped · may still run");
+  // - its name and title say what is inside, in words: how many hidden rows ask ("1 needs you"); in the tone cases
+  //   what that row itself says (a failed or unreachable row: its state's name; a row in the warning tone: its own
+  //   words, as the row draws them: "Stopped · may still run", "Running outside OATS");
   // - opened, the marks leave: the rows show their own.
-  const asks = hides === "needs-you" || hides === "outside";
-  const tone = hides === null || asks ? "" : insideTone === "warning" ? "text-warning-text" : hides === "error" || hides === "unreachable" ? "text-destructive-text" : "";
+  const asks = hides === "needs-you";
+  const tone = hides === null || asks ? "" : hides === "error" || hides === "unreachable" ? "text-destructive-text" : insideTone === "warning" ? "text-warning-text" : "";
   const inWords = hides === null ? "" : asks ? `${insideAsks} ${insideAsks > 1 ? "need" : "needs"} you` : insideTone === "warning" && insideSays !== null && insideSays !== "" ? insideSays : STATE[hides].name;
   const label = hides === null ? says : `${says}: ${inWords}`;
   return (

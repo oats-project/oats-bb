@@ -236,6 +236,8 @@ test("a closed parent whose subtree holds a row that needs a person carries that
   expect([toggles(quiet.slot)[0]!.querySelector('[data-testid="oats-row-toggle-mark"]')!.getAttribute("data-inside"), toggles(quiet.slot)[0]!.getAttribute("aria-label")]).toEqual([null, "Show Redesign ui lead's agents"]);
 });
 
+/** The closed parent's name over a hidden row that runs outside OATS: that row's own words, as its row draws them. */
+const OUTSIDE_NAME = "Show Redesign ui lead's agents: Running outside OATS";
 // The lead's ruling, the other cases. A hidden row that FAILED or CANNOT BE REACHED, with nobody asked: NO second dot
 // (two dots side by side read as one more state of the parent, told apart by colour alone): the chevron itself takes
 // the tone, and the name says the row's state. A hidden row that runs OUTSIDE OATS needs a person (the home lists it
@@ -243,9 +245,10 @@ test("a closed parent whose subtree holds a row that needs a person carries that
 test.each([
   ["failed", { runtimeState: "shell" }, { inside: "error", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: failed" }],
   ["unreachable", { running: null, runtimeState: "unreachable" }, { inside: "unreachable", tone: /text-destructive-text/, dots: 0, name: "Show Redesign ui lead's agents: unreachable" }],
-  // (Runs OUTSIDE OATS: it needs a person: its own mark beside the chevron, counted; the chevron has no tone.)
-  ["runs outside OATS", { sessionEnd: "stopped", outsideOats: { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in desktop-mockups-developer on bb, and OATS recorded this instance stopped" } }, { inside: "outside", tone: /^(?!.*text-(warning|destructive)).*$/, dots: 1, name: "Show Redesign ui lead's agents: 1 needs you" }],
-] as const)("a closed parent over a hidden child that %s: the chevron stays; a tone and no second dot where nobody asked, the row's own mark beside it where it needs a person", async (_what, child, want) => {
+  // (Runs OUTSIDE OATS: NO second dot either (two plain dots is the form the ruling rejects): the chevron in the WARNING
+  // tone, named with that row's own words; it is not counted among those that ask.)
+  ["runs outside OATS", { sessionEnd: "stopped", outsideOats: { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in desktop-mockups-developer on bb, and OATS recorded this instance stopped" } }, { inside: "outside", tone: /text-warning-text/, dots: 0, name: OUTSIDE_NAME }],
+] as const)("a closed parent over a hidden child that %s, nobody asking: the chevron stays and takes the tone; no second dot", async (_what, child, want) => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "desktop-mockups-developer" ? { ...agent, ...child } : agent));
   const { slot } = await sidebar({ snapshot: () => fixtureSnapshot(agents) });
   await slot.findByTestId("oats-tree");
@@ -254,7 +257,13 @@ test.each([
   await waitFor(() => expect(mark.getAttribute("data-inside")).toBe(want.inside));
   expect([mark.textContent, chevron.querySelectorAll("[data-mark]").length, chevron.getAttribute("aria-label"), chevron.getAttribute("title")]).toEqual(["▸", want.dots, want.name, want.name]);
   expect(mark.className).toMatch(want.tone);
-  if (want.dots === 1) expect(chevron.querySelector("[data-mark]")!.getAttribute("data-state")).toBe(want.inside);
+  // The name is what that row itself says once it is shown.
+  if (want.inside === "outside") {
+    fireEvent.click(chevron);
+    const row = rowOn(slot, "thr_mockups")!;
+    const drawn = ["state", "reason"].map((phrase) => row.querySelector(`[data-phrase="${phrase}"]`)?.textContent?.replace(/^[\s·]+|[\s·]+$/g, "") ?? "").filter((part) => part !== "").join(" · ");
+    expect(want.name).toBe(`Show Redesign ui lead's agents: ${drawn}`);
+  }
 });
 
 test("a hidden row that is GONE (the kernel no longer knows it) is neither counted nor toned by its closed parent: its state in this roster is from before it went", async () => {

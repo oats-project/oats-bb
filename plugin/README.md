@@ -143,14 +143,18 @@ stored. A closed parent's children are not in the page, so nothing of them takes
 closed parent's line says only the parent (its own state, mark and word). The mark of any row its
 subtree hides that itself carries one is said AT ITS CHEVRON, which never leaves a row that has
 children (it is what says the row opens; the lead's ruling of 25 Nov 2026 on P23): a hidden row
-that NEEDS A PERSON (it asks, or it runs outside OATS) puts its own mark, the needs-you disc, BESIDE
-the chevron, after it and before the parent's own dot, in the same button (pressing either opens
-the row): found without colour; a hidden row that failed, cannot be reached or warns, with nobody
-asked, puts NO second dot there (two dots read as one more state of the parent, told apart by
-colour alone): the chevron itself takes the tone. The toggle is named in words for a screen reader
-and a pointer: how many hidden rows need a person ("Show <Name>'s agents: 1 needs you"); in the
-tone cases the row's own state ("…: failed"), or, over a row that WARNS, what that row itself says
-("…: Stopped · archived in bb"). In the model (`insideOf`): a row that needs a
+that ASKS (its state is "needs you") puts its own mark, the needs-you disc, BESIDE the chevron,
+after it and before the parent's own dot (4 px apart from it), in the same button (pressing either
+opens the row): found without colour; a hidden row that failed or cannot be reached, or that runs
+outside OATS or warns, with nobody asking, puts NO second dot there (two plain dots read as one
+more state of the parent, told apart by colour alone): the chevron itself takes the tone: the
+failure's for the first two, the warning's for the others. Which hidden row it speaks for, wherever
+each stands: one that asks; then one that failed or cannot be reached (a failed row is never hidden
+behind a milder one); then one that runs outside OATS or warns; among equals the tree's order. A
+row that is gone, or behind a result ("Reading…"), is a quiet one for the fold. The toggle is named
+in words for a screen reader and a pointer: how many hidden rows ask ("Show <Name>'s agents: 1
+needs you"); a failed or unreachable row's state ("…: failed"); in the warning tone what that row
+itself says ("…: Stopped · archived in bb", "…: Running outside OATS"). In the model (`insideOf`): a row that needs a
 person, one a person must look at (it runs outside OATS, or failed), and one whose own mark is in
 the warning tone, in that tone (the outside feature's `rowWarns`: its thread archived in bb while it
 ran, its session lost with its thread archived, its thread deleted in bb; such an agent has no bb

@@ -44,6 +44,8 @@ function run() {
     const n = String(readdirSync(config.records).filter((name) => name.endsWith(".json")).length + 1).padStart(4, "0");
     const words = argv.filter((word) => /^[a-z-]+$/.test(word)).slice(0, 3).join("-") || "none";
     const record = { at: startedAt.toISOString(), ms: Date.now() - startedAt.getTime(), delayMs, argv, cwd: process.cwd(), exit: code, signal, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
+    // (As container/files.mjs `atomicWrite`, written out here: this file is installed alone, as the
+    // plugin's `oats`, and imports nothing of the checkout.)
     // Written whole beside its place, then renamed into it: the run reads this directory while the
     // plugin's calls end (scenario.mjs `records`), and a record it finds must be a whole one. The
     // name being written does not end in `.json`, so no reader takes it for a record.

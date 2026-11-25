@@ -1,7 +1,11 @@
-// Files that one process of a run writes and ANOTHER reads while it runs (the harnesses' own:
-// the recording wrapper's records and its settings, the fake oats' settings, the mocks' request
-// logs). A plain write of a whole file empties it first and fills it after: a reader that comes
-// between reads nothing, or half ("Unexpected end of JSON input", which failed a real run on main).
+// Files that one process of a run writes and ANOTHER reads while it runs. Whole files, renamed
+// into place (`atomicWrite`): the recording wrapper's settings, the fake oats' settings, pi's
+// settings.json in the pi run, Claude Code's state before the tmux part. Logs another process
+// appends to, read by their complete lines (`completeLines`): the fake oats' log, the two mocks'
+// request logs. A plain write of a whole file empties it first and fills it after: a reader that
+// comes between reads nothing, or half ("Unexpected end of JSON input", which failed a real run on
+// main). The recording wrapper's RECORDS are written the same way by the wrapper itself
+// (real/oats-record.mjs: it is installed alone, and imports nothing of this directory).
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 
 /**

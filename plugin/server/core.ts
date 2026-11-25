@@ -670,7 +670,8 @@ export function createCore(bb: BbPluginApi) {
         answer = (await host.call(method, input, { hostId: where.target.hostId, signal, timeoutMs })) as Answer<unknown>;
       }
     } catch (error) {
-      throw refusal({ code: codes.hostUnreachable, message: `The machine that runs oats did not answer: ${String((error as Error).message)}` });
+      // (What is thrown may be an aborted signal's reason, which need not be an Error.)
+      throw refusal({ code: codes.hostUnreachable, message: `The machine that runs oats did not answer: ${String((error as Error)?.message ?? error)}` });
     }
     if ("ok" in where) throw refusal({ code: where.code, message: where.message });
     if (answer === null) throw refusal({ code: codes.hostUnreachable, message: "The machine that runs oats did not answer." });

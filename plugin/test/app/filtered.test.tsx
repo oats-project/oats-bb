@@ -76,8 +76,10 @@ test("the machines page: a server's id, its route and its folder are each one fi
     { id: `dev${BIDI}box`, route: "ssh://joan:pw@devbox.invalid", isThisMachine: false, label: null, folder: "/srv/oats\nmore" },
   ];
   const slot = await page("machines", "", handlers({ machines: () => ({ machines }) }));
-  const row = await slot.findByTestId("oats-machine-row");
-  expect(Array.from(row.children).map((part) => part.textContent)).toEqual([`dev${GONE}box`, "[withheld]", "/srv/oats more"]);
+  const row = (await slot.findAllByTestId("oats-machine-row"))[1]!;
+  expect(row.firstElementChild!.firstElementChild!.textContent).toBe(`dev${GONE}box`);
+  // Under its Details: the ssh host (a credential in it is withheld whole) and the folder, each one filtered line.
+  expect(Array.from(row.querySelectorAll("details p")).map((part) => part.textContent)).toEqual(["ssh host: [withheld]", "Folder: /srv/oats more"]);
 });
 
 test("the thread's row: an agent's question with a character that is no text is drawn with U+FFFD; its soul and its alias are not drawn there", async () => {
@@ -115,5 +117,5 @@ test("a soul's page: its description and its problem, and a capability's descrip
   );
   const capability = await capabilities.findByTestId("oats-capability-row");
   expect(capability.querySelector("span")!.textContent).toBe(`oats${GONE}core`);
-  expect(capability.querySelector("p")!.textContent).toBe("[withheld]");
+  expect(capability.querySelector('[data-testid="oats-capability-does"]')!.textContent).toBe("[withheld]");
 });

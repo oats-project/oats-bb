@@ -983,30 +983,34 @@ with its reply, as for any other agent (the board's question is on the Board tab
 never left empty for it: while the board is read it says what is asked (the claim's text is the
 question's own), and where the board cannot be read it is the card as ever, the text and the
 reply. The thread line's **Answer** goes by the same fact: to Board, with the focus on the
-question's first option, for a claim that is the board's; to "Needs input" for any other.
+question's ZONE, for a claim that is the board's (never on an option: the focus does not land by
+itself on a control whose press sends; the arrow keys turn the questions there, and one Tab
+reaches the first option); to "Needs input" for any other.
 Whether an agent has a board at all (`hasBoard`) rides on the row too: a card or a command needs
 no read of its own to know. The agent's own events between two status reads do not carry the
 two: a row learns them at the next status read, seconds later (for those seconds the card looks
 at whose the claim is once more, in the board's own read).
 
-**With the other tabs.** The row is Board, Instance, Soul, Mail, each drawn only where the agent
-has it. The panel's memory of the tab it was left on stands under the board's one rule: a panel
-whose board asks opens on Board until a tab is chosen on it, also when the memory was left on
-Mail for another agent (Mail is never opened by memory); one whose board holds facts alone opens
-where the memory leads (`app/panel/Panel.tsx`, `tabOf` then `boardTabOf`). WHERE A PANEL OPENS IS
-DECIDED ONCE, when the board's first read lands: a panel that is open never turns by itself,
-neither to Board when the agent asks under a person reading another tab, nor away from Board
-when the agent clears its question under a person reading its facts. Only a press moves it; a
-Board tab that is no longer drawn (its last fact and question gone) leaves it on Instance. A
-PRESS IS AN EVENT, not a change of the memory (`showPanelTab` counts each one): a press that
-names the tab the memory already holds moves a panel that opened on Board all the same (the
-header's soul link, the thread line's Answer for a claim that is not the board's), and a press
-made for an agent whose panel is not open yet (`showPanelTab(tab, { for: instance })`: Answer)
-decides where that panel opens: one shot, spent by the panel that opens next and lapsing by
-itself after ten seconds (a press whose panel never opened decides nothing later). The panel's
-own leaving of Mail is not a press. A
-question asked while the panel is open on another tab is not missed: the thread's own line says
-"Needs you" with **Answer**, which turns the panel to Board.
+**With the other tabs.** The row is Board, Instance, Soul, Mail. Board is drawn where the
+agent's board has a fact, a question, or could not be read or shown, and, until the board's own
+read has answered and where that read failed, where the agent's row says it has a board (the tab
+is there at once, and "could not be read" with Retry can be reached); Mail where the row gives a
+messaging id; Instance and Soul always.
+
+THE TAB SHOWN IS ONE STATE of the panel of one agent (`app/panel/tab-state.ts`; the panel is
+keyed by the agent), and it changes on exactly four events:
+1. the MOUNT: the tab the window remembers (Mail only where it was pressed for this agent; a tab not drawn: Instance);
+2. the BOARD's FIRST READ ANSWERS, once (a failed read is not an answer): Board, if a question is open then and no press came since the mount;
+3. a PRESS (an event, also where it names the tab already remembered): the tab pressed;
+4. the tab shown STOPS BEING DRAWN: Instance, and it stays there.
+
+The memory is only what a press writes and a mount reads; nothing is derived at a draw, so a
+screen never moves under a reader: a question asked while the panel is open on another tab is
+said by the thread's own line, "Needs you" with **Answer**, which turns the panel to Board. A
+press made for an agent whose panel is not open yet (Answer) is the memory that panel reads:
+one shot, spent by the panel that opens next and lapsing by itself after ten seconds. Mail is
+never opened by memory for another agent, and a press on Mail is good for its agent until
+another agent's panel is shown (`test/panel/tab-state.test.ts` is the four as a table).
 
 **The command.** bb takes a plugin's commands once, when it starts, with fixed titles: so the board
 has ONE, **Board**, with no shortcut and nothing per question. It is listed only on the thread of

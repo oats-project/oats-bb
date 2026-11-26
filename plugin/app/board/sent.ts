@@ -9,6 +9,8 @@ import { useSyncExternalStore } from "react";
 import { onWindowReset } from "../store";
 
 const sent = new Map<string, number>();
+/** What the last press of an occurrence was refused with: said under its options wherever, and however often, they are drawn (a refusal that lands while the options were drawn anew is not lost). */
+const refusals = new Map<string, string>();
 /** The occurrences an answer is ON ITS WAY for: one press is one send, wherever the question is drawn and however often its options are mounted anew. */
 const going = new Set<string>();
 const listeners = new Set<() => void>();
@@ -30,13 +32,27 @@ export function takeSend(instance: string, occurrence: string): boolean {
   const key = keyOf(instance, occurrence);
   if (going.has(key) || sent.has(key)) return false;
   going.add(key);
+  refusals.delete(key); // a new press: what the last one was refused with is no longer what is said
   for (const listener of listeners) listener();
   return true;
 }
-/** The send of that occurrence ended without sending (a refusal, a failure): it may be pressed again. */
-export function dropSend(instance: string, occurrence: string): void {
+/** The send of that occurrence ended without sending, and why (a refusal, a failure): it may be pressed again. */
+export function dropSend(instance: string, occurrence: string, why: string): void {
   going.delete(keyOf(instance, occurrence));
+  refusals.set(keyOf(instance, occurrence), why);
   for (const listener of listeners) listener();
+}
+/** What the last press of that occurrence was refused with, in this window, or null. */
+export function useRefused(instance: string, occurrence: string): string | null {
+  const key = keyOf(instance, occurrence);
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+    () => refusals.get(key) ?? null,
+    () => null,
+  );
 }
 /** Whether an answer of that occurrence is on its way, in this window. */
 export function useGoing(instance: string, occurrence: string): boolean {
@@ -67,5 +83,6 @@ export function useSent(instance: string, occurrence: string): number | null {
 onWindowReset(() => {
   sent.clear();
   going.clear();
+  refusals.clear();
   for (const listener of listeners) listener();
 });

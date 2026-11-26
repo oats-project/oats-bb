@@ -61,7 +61,7 @@ test("a Board tab that goes (its last fact and question gone) leaves the panel o
   expect(shown()).toBe("Instance");
 });
 
-test("the agent asks while its panel is open on Instance: the panel stays; the thread's line says so with Answer, and Answer turns the panel to Board, the focus on the question's first option", async () => {
+test("the agent asks while its panel is open on Instance: the panel stays; the thread's line says so with Answer, and Answer turns the panel to Board, the focus on the question's zone (never on an option)", async () => {
   const { panelAgents } = await import("../panel/handlers");
   const app = await loadApp();
   const Row = app.threadHeaderRows[0]!.component;
@@ -105,5 +105,5 @@ test("the agent asks while its panel is open on Instance: the panel stays; the t
   expect(shown()).toBe("Instance"); // a screen never moves under a reader
   fireEvent.click(answer);
   await waitFor(() => expect(shown()).toBe("Board"));
-  await waitFor(() => expect(slot.getAllByTestId("oats-board-answer")[0]!.contains(document.activeElement)).toBe(true));
+  await waitFor(() => expect(document.activeElement).toBe(slot.getByTestId("oats-board-questions")));
 });

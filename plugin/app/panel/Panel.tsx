@@ -32,6 +32,8 @@ import { useNow, usePanelEvents, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
+import { isDrawn, mountedOn, moved } from "./tab-state";
+import type { Drawn, TabId } from "./tab-state";
 import { ATTACH, SHARED_TITLE, ageText, attachCommand, attachOffered, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
@@ -44,7 +46,7 @@ const NO_NODES: ReadonlyMap<string, Node> = new Map();
 type RosterFailure = { code: string; message: string; machine: string | null; line: string; /** when the roster kept was read; null where none ever was */ at: string | null; retry(): void };
 
 /** The panel's tabs. */
-export type TabId = "board" | "instance" | "soul" | "mail";
+export type { TabId } from "./tab-state";
 const TABS: readonly TabItem<TabId>[] = [
   // The agent's questions and facts, FIRST: a view of its own (app/board) that takes the agent's name and nothing of the panel's.
   // Drawn only for an agent whose board has a fact or a question (`tabsOf`): what there is nothing of is not offered.
@@ -55,21 +57,13 @@ const TABS: readonly TabItem<TabId>[] = [
   // Drawn only for an agent that has a messaging id (`tabsOf`): what cannot be done is not offered.
   { id: "mail", label: MAIL.tab },
 ];
-/** The tabs of one agent's panel: Board only for an agent whose board has a fact or a question, Mail only for one that has a messaging id. */
-const tabsOf = (hasBoard: boolean, hasMail: boolean): readonly TabItem<TabId>[] => TABS.filter((tab) => (tab.id !== "board" || hasBoard) && (tab.id !== "mail" || hasMail));
-/**
- * The tab the panel of one agent shows, given the one the tabs' own memory leads to (`tabOf`). It
- * OPENS on Board where the agent's board had an open question when the panel opened (`onBoard`: a
- * question is what needs the person), until a tab is chosen on this panel; else on that tab, but
- * never on a Board the agent does not have. WHERE IT OPENS IS DECIDED ONCE (`Pages`): a panel that
- * is open never turns by itself, neither to Board when the agent asks under a reader, nor away
- * from it when the agent clears its question under a person reading its facts.
- */
-const boardTabOf = (remembered: TabId, shown: boolean, onBoard: boolean, chosen: boolean): TabId => (onBoard && shown && !chosen ? "board" : remembered === "board" && !shown ? "instance" : remembered);
+const tabsOf = (drawn: Drawn): readonly TabItem<TabId>[] => TABS.filter((tab) => isDrawn(tab.id, drawn));
 /**
  * The agent whose Mail tab a person pressed. Mail is NOT remembered from one agent to the next, as
  * the other tabs are: showing an agent's mail reads it (over the network, with the agent's own
- * identities), and that takes a press on THAT agent's tab. Another agent's panel opens on Instance.
+ * identities), and that takes a press on THAT agent's tab. A press on Mail is good for the agent
+ * it was pressed on until another agent's panel is shown: that panel drops the marker (not the
+ * memory), so the first agent's panel, shown again, opens on Instance and reads no mail by itself.
  */
 let mailOf: string | null = null;
 /** A tab pressed in the panel of `instance`. */
@@ -77,8 +71,6 @@ function pressTab(instance: string, tab: TabId): void {
   mailOf = tab === "mail" ? instance : null;
   showPanelTab(tab);
 }
-/** The tab the panel of `instance` shows: the one remembered, but Mail only where it was pressed for this agent and this agent has mail to read. */
-const tabOf = (instance: string, remembered: TabId, hasMail: boolean): TabId => (remembered === "mail" && !(hasMail && mailOf === instance) ? "instance" : remembered);
 /** The id of the panel's one tab panel: the tabs name it, and it names the tab it shows. */
 const PANEL_ID = "oats-panel-page";
 
@@ -118,12 +110,6 @@ export function showPanelTab(tab: TabId, { focus = false, for: instance = null }
   tell();
   // Once the open panel has drawn the tab selected (the store's change is drawn before this runs).
   if (focus) queueMicrotask(() => document.getElementById(`${PANEL_ID}-tab-${tab}`)?.focus());
-}
-/** The memory set by the panel itself (it leaves Mail for another agent): NOT a press. */
-function keepTab(tab: TabId): void {
-  if (shownTab === tab) return;
-  shownTab = tab;
-  tell();
 }
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
@@ -251,36 +237,27 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   const line = pageParts(agent, oats, status);
   const reading = useReading(agent.instance);
   const soul = shown(oats.soulOf(agent));
-  // Whether this agent has a board, and whether it asks: the Board tab is drawn, and the panel opens on it, by that.
+  // The agent's board, for the tabs: whether there is one to show, whether it asks, and whether its first read has answered.
   const board = useBoardTab(agent.instance);
-  // The Mail tab stands only for an agent the roster's row gives a messaging id: one with no messaging layer has no mail to read.
-  const hasMail = read.data !== undefined && read.data.facts.messagingId !== null;
-  // A tab was chosen for this agent's panel: a press since it was mounted (here, or another feature's `showPanelTab`:
-  // a press is an event, also where it names the tab the memory already holds), or one made FOR this agent just
-  // before its panel opened (the thread line's Answer). The panel then no longer opens by itself.
+  // Which tabs are drawn for this agent (the rule over `Drawn`). The row's own word (`hasBoard`) draws the Board tab at
+  // once, and keeps it where the board's read failed: what could not be read is said there, with Retry.
+  // (Once the board's own read has ANSWERED, it says: it is the board itself, where the row's word is a summary of it
+  // that the roster may hold a moment longer.)
+  const drawn: Drawn = { board: board.answered ? board.shown : agent.hasBoard === true, mail: read.data !== undefined && read.data.facts.messagingId !== null };
+  // THE TAB SHOWN: a state of this panel (one agent's: `Pages` is keyed by the agent's name where it is drawn, so a
+  // panel bb keeps open while the thread changes is mounted anew), moved by the four events of `TabState` and by
+  // nothing else. (An event is taken as it is seen, in the draw that sees it: the state it leaves is kept.)
   const pressed = usePresses();
-  // (Taken once per mount, and a mount is ONE agent's: `Pages` is keyed by the agent's name where it is drawn, so a
-  // panel that bb keeps open while the thread changes is mounted anew for the next agent, with a baseline of its own.)
-  const [mounted] = useState(() => ({ presses, chosen: takesShot(agent.instance) }));
+  const [held, setHeld] = useState(() => mountedOn({ memory: shownTab, mailOf, presses, pressedFor: takesShot(agent.instance) }, agent.instance, drawn));
+  const tabNow = moved(held, { presses: pressed, pressedTab: remembered, board, drawn });
+  if (tabNow !== held) setHeld(tabNow);
+  const tab = tabNow.tab;
   useEffect(() => {
-    // The one shot is SPENT by the panel that opens after it: taken by the agent it was made for (above), and dropped
-    // by any other agent's panel, so that a press made for one agent never decides where a later panel opens.
+    // A press made for an agent is SPENT by the panel that opens after it (taken above by the agent it was made for,
+    // dropped by any other's); and a press on Mail is good for its agent until another agent's panel is shown.
     pressedFor = null;
+    if (mailOf !== null && mailOf !== agent.instance) mailOf = null;
   }, [agent.instance, pressed]);
-  const chosen = mounted.chosen || pressed !== mounted.presses;
-  // Where this panel OPENS, decided once: when the board's first read lands, on Board if a question is open THEN.
-  // (A Board tab that then goes, its last fact and question gone, ends it: the panel does not come back by itself.)
-  const onBoard = useRef<boolean | null>(null);
-  if (onBoard.current === null && board.read) onBoard.current = board.asks;
-  if (onBoard.current === true && board.read && !board.shown) onBoard.current = false;
-  // The tab the memory leads to (Mail only where it was pressed for this agent), then the board's rule over it.
-  const kept = tabOf(agent.instance, remembered, hasMail);
-  const tab = boardTabOf(kept, board.shown, onBoard.current === true, chosen);
-  // The memory itself leaves Mail too. (The panel's own doing, not a person's press: it is not counted as one, so a
-  // panel that opens on Board still does.)
-  useEffect(() => {
-    if (remembered === "mail" && kept !== "mail") keepTab("instance");
-  }, [remembered, kept]);
   return (
     <>
       {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}
@@ -332,7 +309,7 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
       <div className="shrink-0 px-3">
         <Tabs
           label="Instance context"
-          tabs={tabsOf(board.shown, hasMail)}
+          tabs={tabsOf(drawn)}
           value={tab}
           onChange={(id) => pressTab(agent.instance, id)}
           panelId={PANEL_ID}

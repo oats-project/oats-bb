@@ -127,9 +127,11 @@ test("the thread line's Answer turns the panel to BOARD for an agent whose board
     await waitFor(() => expect(selected(slot)).toBe("Soul"));
     fireEvent.click(slot.getByTestId("oats-status-act"));
     await waitFor(() => expect(selected(slot), JSON.stringify(change)).toBe(tab));
-    // The focus lands on what is to be answered: the board's first option, or "Needs input".
-    const landing = tab === "Board" ? () => slot.getAllByTestId("oats-board-answer")[0]! : () => slot.getByTestId("oats-panel-waiting");
-    await waitFor(() => expect(landing().contains(document.activeElement), JSON.stringify(change)).toBe(true));
+    // The focus lands on what is to be answered: the board's question (its ZONE, never an option: a control that sends), or "Needs input".
+    if (tab === "Board") {
+      await waitFor(() => expect(document.activeElement, JSON.stringify(change)).toBe(slot.getByTestId("oats-board-questions")));
+      expect((document.activeElement as HTMLElement).tagName).not.toBe("BUTTON");
+    } else await waitFor(() => expect(slot.getByTestId("oats-panel-waiting").contains(document.activeElement), JSON.stringify(change)).toBe(true));
     resetApp();
   }
 });

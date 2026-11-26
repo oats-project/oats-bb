@@ -418,7 +418,7 @@ test("Answer turns the instance panel to its Instance tab, where Needs input is,
 });
 
 // A question of an agent's BOARD is on the panel's Board tab, with its options: Answer leads there.
-test("Answer on an agent whose board asks shows the Board tab, opens the panel and lands the focus on the question's first option: it does not look for Needs input", async () => {
+test("Answer on an agent whose board asks shows the Board tab, opens the panel and lands the focus on the question's zone (never on an option, whose press sends): it does not look for Needs input", async () => {
   const app = await loadApp();
   const { InstancePanel, showPanelTab } = await import("../../app/panel/Panel");
   const Row = app.threadHeaderRows[0]!.component;
@@ -441,7 +441,9 @@ test("Answer on an agent whose board asks shows the Board tab, opens the panel a
   await vi.waitFor(() => expect(slot.container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Soul"));
   fireEvent.click(slot.getByTestId("oats-status-act"));
   await vi.waitFor(() => expect(slot.container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Board"));
-  await vi.waitFor(() => expect(slot.getAllByTestId("oats-board-answer")[0]!.contains(document.activeElement)).toBe(true));
+  await vi.waitFor(() => expect(document.activeElement).toBe(slot.getByTestId("oats-board-questions")));
+  // An Enter that follows the press on Answer (held, or pressed twice) lands on no control that sends.
+  expect(slot.getAllByTestId("oats-board-answer").some((option) => option.contains(document.activeElement))).toBe(false);
   expect(opened).toEqual([{ tab: { id: "home", context: { kind: "thread" }, availability: "fixed" } }]); // the thread's OATS tab is opened
   expect(slot.queryByTestId("oats-panel-waiting")).toBeNull(); // "Needs input" is on the Instance tab: not shown, and not looked for
 });

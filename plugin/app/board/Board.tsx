@@ -19,7 +19,7 @@ import { guarded, mayWrite, sendText, type Target } from "../home/send";
 import { useOats } from "../oats";
 import { readingNow, useActed } from "../roster/reading";
 import { errorMessage } from "../store";
-import { dropSend, noteSent, takeSend, useGoing, useSent } from "./sent";
+import { dropSend, noteSent, takeSend, useGoing, useRefused, useSent } from "./sent";
 import { shown, shownBlock } from "../../model/text";
 import { useNow } from "../roster/now";
 import { Button } from "../ui";
@@ -221,13 +221,12 @@ function Options({ instance, asked, answering }: { instance: string; asked: Boar
   const sent = useSent(instance, occurrence);
   // On its way: the window's, by the agent and this occurrence (sent.ts), not this mount's.
   const busy = useGoing(instance, occurrence);
-  const [refused, setRefused] = useState<string | null>(null);
-  // What was refused was said of the question it was pressed on.
-  useEffect(() => setRefused(null), [occurrence]);
+  // What the last press was refused with: the window's too, by the agent and this occurrence, so that it is said
+  // under these options also where they were drawn anew while the answer travelled.
+  const refused = useRefused(instance, occurrence);
   const press = (index: number) => {
     const text = answerText(asked, index);
     if (answering === null || text === null || !takeSend(instance, occurrence)) return;
-    setRefused(null);
     guarded(rpc, answering.target, async () => {
       // What is sent is built from the ROW AT THE PRESS, not from what this window holds: the
       // question must still be open on the server's roster, the same occurrence, with that option.
@@ -246,10 +245,7 @@ function Options({ instance, asked, answering }: { instance: string; asked: Boar
       return sendText(sdk, answering.threadId, said);
     }).then(
       () => noteSent(instance, occurrence, index),
-      (cause: unknown) => {
-        dropSend(instance, occurrence);
-        setRefused(errorMessage(cause));
-      },
+      (cause: unknown) => dropSend(instance, occurrence, errorMessage(cause)),
     );
   };
   return (
@@ -378,24 +374,17 @@ export function Board({ instance }: { instance: string }) {
   const board = read.status === "ready" ? read.board : null;
   // The board is in view whenever this is mounted (a tab that is shown): its detail is read then.
   const detail = useBoardDetail(instance, board, true);
-  // The place the palette command focuses (index.ts).
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const element = root.current;
-    if (element === null) return;
-    element.setAttribute("data-instance", instance);
-  }, [instance]);
   if (read.status === "loading") {
     return (
-      <div ref={root} data-testid="oats-board" data-state="reading">
+      <div data-testid="oats-board" data-state="reading">
         <Quiet testId="oats-board-reading">{BOARD.reading}</Quiet>
       </div>
     );
   }
-  if (read.status === "unsupported") return <div ref={root} data-testid="oats-board" data-state="unsupported" />;
+  if (read.status === "unsupported") return <div data-testid="oats-board" data-state="unsupported" />;
   if (read.status === "error") {
     return (
-      <div ref={root} data-testid="oats-board" data-state="failed" className="flex min-w-0 flex-wrap items-center gap-2">
+      <div data-testid="oats-board" data-state="failed" className="flex min-w-0 flex-wrap items-center gap-2">
         <Quiet testId="oats-board-unreadable" failed>
           {BOARD.unreadable}
         </Quiet>
@@ -407,7 +396,7 @@ export function Board({ instance }: { instance: string }) {
   }
   const empty = board === null || (board.facts.length === 0 && board.questions.length === 0 && !board.malformed && board.dropped === 0);
   return (
-    <div ref={root} data-testid="oats-board" data-state={empty ? "empty" : "shown"} className="flex min-w-0 flex-col gap-4">
+    <div data-testid="oats-board" data-state={empty ? "empty" : "shown"} className="flex min-w-0 flex-col gap-4">
       {board === null ? null : (
         <>
           {board.malformed ? (

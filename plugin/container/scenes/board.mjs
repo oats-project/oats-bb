@@ -7,7 +7,7 @@
 //   board-later an agent that ASKS while its panel is open on another tab: a screen never moves
 //               under a reader. The panel opened on Instance (facts alone); the agent asks; the
 //               panel stays; the thread's own line says "Needs you" with Answer; Answer turns the
-//               panel to Board, the focus on the question's first option.
+//               panel to Board, the focus on the question's zone (never on an option).
 //   board-busy  THE WORST CASE (specs: every screen has a worst-case twin, judged first): the same
 //               row with its board MULTIPLIED to the kernel's bounds: twelve facts with the longest
 //               label, value and unit the kernel takes and an address each, nine questions of two
@@ -221,8 +221,8 @@ export default [
       check(Boolean(said) && (await page.evaluate(selected)) === "Instance", `${at} the agent asks while the panel is open on Instance: the thread's line says "Needs you" with Answer, and the panel STAYS on Instance`, `the line: ${JSON.stringify(said)}; selected: ${await page.evaluate(selected)}`);
       await page.shot(`board-${viewport.name}-later-stays`);
       await page.evaluate(`${act}.click()`);
-      const turned = await page.until(`(() => { const now = ${selected}; const first = document.querySelector(${JSON.stringify(inBoard("oats-board-answer"))}); return now === "Board" && first !== null && first.contains(document.activeElement) ? (${flat})(document.querySelector(${JSON.stringify(inBoard("oats-board-question"))})) : ""; })()`, 40);
-      check(turned === "Which base branch?", `${at} Answer turns the panel to Board: the question, with the focus on its first option`, `${turned}; selected: ${await page.evaluate(selected)}`);
+      const turned = await page.until(`(() => { const now = ${selected}; const zone = document.querySelector(${JSON.stringify(inBoard("oats-board-questions"))}); return now === "Board" && zone !== null && document.activeElement === zone && zone.querySelector(${JSON.stringify(testId("oats-board-answer"))}) !== null ? (${flat})(document.querySelector(${JSON.stringify(inBoard("oats-board-question"))})) : ""; })()`, 40);
+      check(turned === "Which base branch?", `${at} Answer turns the panel to Board: the question, with the focus on its zone, not on an option (a control that sends)`, `${turned}; selected: ${await page.evaluate(selected)}`);
       await page.shot(`board-${viewport.name}-later`);
     },
   },

@@ -11,8 +11,8 @@ import { useBoard } from "./read";
  * out of the contract) has something to say too: its tab is drawn, so that what could not be read is said where a
  * person looks for the board, never by the board's silence.
  */
-export function useBoardTab(instance: string): { /** the board's first read has landed (whatever it said): a place decides where it opens then, once */ read: boolean; /** at least one fact or one question, or a board that could not be read or shown whole */ shown: boolean; /** at least one open question */ asks: boolean } {
+export function useBoardTab(instance: string): { /** the board's first read has ANSWERED (a board, none, or a kernel that sends none; a read that failed is not an answer): a place decides where it opens then, once */ answered: boolean; /** at least one fact or one question, or a board that could not be read or shown whole */ shown: boolean; /** at least one open question */ asks: boolean } {
   const read = useBoard(instance);
   const board = read.status === "ready" ? read.board : null;
-  return { read: read.status !== "loading", shown: board !== null && (board.facts.length > 0 || board.questions.length > 0 || board.malformed || board.dropped > 0), asks: board !== null && board.questions.length > 0 };
+  return { answered: read.status === "ready" || read.status === "unsupported", shown: board !== null && (board.facts.length > 0 || board.questions.length > 0 || board.malformed || board.dropped > 0), asks: board !== null && board.questions.length > 0 };
 }

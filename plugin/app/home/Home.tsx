@@ -349,13 +349,18 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const fit = useFit(line, "card", "oats-needs-where");
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} sending={busy === "send"} held={held || reading} said={said} onSend={send} />;
   // The agent needs the person FOR A QUESTION OF ITS BOARD (the row's claim is the board's own: the ROSTER's word,
-  // `boardAsks`; another claim in front of the board's keeps this card as it is): where the card would offer a
-  // reply, it draws THAT question by the board's own component and answer path (app/board): one thing to a person,
-  // here and on the agent's Board tab. The card is never left empty for it: while the board is read it says what
-  // is asked (the claim's text is the question's own), and where the board cannot be read it is the card as ever,
-  // the text and the reply. (The text keeps its order: a `detail` is drawn only beside choices of bb's own request,
-  // the offer "choices"; under the offer "reply" there is none, so nothing stands between the text and the reply.)
-  const boardAsks = entry.agent.boardAsks === true && offer === "reply";
+  // `boardAsks`; another claim in front of the board's keeps this card as it is). ONE FACT says whether this card
+  // draws that question by the board's own component (app/board: one thing to a person, here and on the agent's
+  // Board tab): `drawsBoard`, computed from THE ARM THAT IS REALLY DRAWN below, and the claim's text is taken away
+  // by that fact alone: a card is never left with no question. The arms: where the card offers a reply, the board's
+  // question stands in the reply's place; where bb's own request was just answered on the card ("Answered: Allow."),
+  // under that line (the approval is done: the question is what the card is about now). Under every other offer
+  // (bb's request with choices, in the thread, stopped, unreachable, tmux) the card is as ever, the text included.
+  // While the board is read the card says what is asked (the claim's text is the question's own), and where the
+  // board cannot be read it is the card as ever. (The text keeps its order: a `detail` is drawn only beside choices.)
+  // (THE ARM: what the card draws under its line, one of these and no other; the JSX below switches on it alone.)
+  const arm = offer === "unreachable" || offer === "stopped" ? offer : answered !== null ? "answered" : offer;
+  const drawsBoard = entry.agent.boardAsks === true && (arm === "reply" || (arm === "answered" && offer === "reply"));
   const asks =
     message === null ? null : (
       <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
@@ -399,18 +404,18 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           </Button>
         </div>
         {waitInline ? null : wait}
-        {boardAsks ? null : asks}
+        {drawsBoard ? null : asks}
         {detail === null ? null : (
           <p data-testid="oats-needs-detail" dir="auto" className="m-0 break-words text-xs text-muted-foreground">
             {shown(detail)}
           </p>
         )}
-        {offer === "unreachable" ? (
+        {arm === "unreachable" ? (
           // Nobody can tell where an answer or a message would go: none is offered, and no Start (the lifecycle has none for it).
           <p data-testid="oats-needs-unreachable" className="m-0 text-xs text-muted-foreground">
             {entry.status.state === "unreachable" ? UNREACHABLE_WAITS : `${UNREACHABLE} ${UNREACHABLE_WAITS}`}
           </p>
-        ) : offer === "stopped" ? (
+        ) : arm === "stopped" ? (
           <div data-testid="oats-needs-stopped" className="flex min-w-0 flex-col gap-2">
             {/* Behind a result that says it started, until the roster is read again: never "Not running." stated plainly; "Reading…" in its place, Start… off (L13). */}
             <p role={reading ? "status" : undefined} data-testid={reading ? "oats-needs-reading" : undefined} className="m-0 text-xs text-muted-foreground">
@@ -422,12 +427,16 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
               </Button>
             </div>
           </div>
-        ) : answered !== null ? (
+        ) : arm === "answered" && answered !== null ? (
           // A choice was pressed and bb took it: said here until the agent goes on (its card then leaves) or asks again.
-          <p role="status" data-testid="oats-needs-answered" className="m-0 text-muted-foreground">
-            {answeredWith(shown(answered.label))}
-          </p>
-        ) : offer === "choices" ? (
+          <>
+            <p role="status" data-testid="oats-needs-answered" className="m-0 text-muted-foreground">
+              {answeredWith(shown(answered.label))}
+            </p>
+            {/* bb's own request is answered, and the agent still needs the person for a question of its board: the question, under that line. */}
+            {drawsBoard ? <BoardAsk instance={entry.agent.instance} pending={asks} fallback={asks} /> : null}
+          </>
+        ) : arm === "choices" ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
               {(asked?.choices ?? []).map((choice, index) => (
@@ -438,11 +447,11 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             </div>
             {instead}
           </>
-        ) : offer === "in-thread" ? (
+        ) : arm === "in-thread" ? (
           // Answered in its thread: the card's button says "Answer" and leads there; a message is not an answer.
           instead
-        ) : offer === "reply" ? (
-          boardAsks ? (
+        ) : arm === "reply" ? (
+          drawsBoard ? (
             <BoardAsk
               instance={entry.agent.instance}
               pending={asks}

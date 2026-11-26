@@ -10,7 +10,7 @@
 #   A15 `bb plugin reload oats` during a slow oats leaves no oats process
 #   G1  the plugin installs from git with --subdirectory plugin (the README's route), and runs
 #   A15b stopping bb during a slow oats leaves none either
-. "$(dirname "$0")/guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)
+. "$(dirname "$0")/guard.sh" && [ -f /etc/oats-bb-checks-image ] || exit 97 # refuses outside the checks' container, before anything is touched (also where the guard is not beside it, or another file of its name is)
 set -euo pipefail
 PLUGIN=$(cd "$(dirname "$0")/.." && pwd)
 HOME_DIR=/home/node

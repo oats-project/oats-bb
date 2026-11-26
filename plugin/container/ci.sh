@@ -109,7 +109,8 @@ run sh container/setup.sh
 # stage's first pass can make the mark absent only by the guard's own switch, so a guard that no longer looked for the
 # mark at all would pass it. Here the mark is moved away as root, the test runs with no switch (it says which pass it
 # is in, and holds that the mark is gone), and the mark is put back whatever the test said: the live stage follows.
-# (An interrupt in between: the clean-up puts it back too, so that a kept container has its mark.)
+# (A stop in between that runs the clean-up puts it back too. An interrupt under a `sh` that runs no EXIT trap on a
+# signal, dash, leaves a KEPT container without its mark: container/README.md says how to put it back.)
 mark_gone_pass() {
   docker exec -u root "$NAME" mv /etc/oats-bb-checks-image /etc/oats-bb-checks-image.moved
   gone=0

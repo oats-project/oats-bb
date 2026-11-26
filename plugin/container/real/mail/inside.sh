@@ -3,7 +3,7 @@
 # OATS kernel, the real messaging layer and real `aw` against aweb's local stack, two agents that
 # mail each other, bb with the plugin installed, and the Mail tab read in a browser (check.mjs).
 # Every word of mail is written here: nothing is taken from a real workspace.
-. "$(dirname "$0")/../../guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)
+. "$(dirname "$0")/../../guard.sh" && [ -f /etc/oats-bb-checks-image ] || exit 97 # refuses outside the checks' container, before anything is touched (also where the guard is not beside it, or another file of its name is)
 set -euo pipefail
 PLUGIN=$(cd "$(dirname "$0")/../../.." && pwd)
 HOME_DIR=/home/node

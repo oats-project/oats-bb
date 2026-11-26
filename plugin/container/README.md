@@ -295,8 +295,9 @@ container alone. Run by mistake on a person's machine, each REFUSES before it to
 
     refused: live-ui.mjs runs only inside the container of the oats-bb plugin checks (it changes the machine it runs on); start it with plugin/container/ci.sh, never by hand
 
-(exit 97). The guard is one line at the very top of each: `. "$(dirname "$0")/guard.sh" || exit 97` in a shell
-script (a copy of the script with no guard beside it stops there too), `import "./guard.mjs";` as the first import of a `.mjs`.
+(exit 97). The guard is one line at the very top of each: `. "$(dirname "$0")/guard.sh" && [ -f /etc/oats-bb-checks-image ] || exit 97`
+in a shell script (the line asks for the mark itself too: a copy of the script with no guard beside it stops there, and so
+does one started in a way that leads to another file of the guard's name), `import "./guard.mjs";` as the first import of a `.mjs`.
 
 **The mark** is a file that only the image built from this directory's `Dockerfile` carries,
 `/etc/oats-bb-checks-image`. A file and not an environment variable: the scripts start their own
@@ -344,7 +345,9 @@ as a shell script's first statement, `import "<up to the root>/plugin/container/
 from another image has no mark there: it needs that image to write the same file first.
 
 **A container made from an older image has no mark**: build the image again (`ci.sh` does) before
-you run a guarded script in it.
+you run a guarded script in it. And a KEPT container (`KEEP=1`) whose unit stage was interrupted in its
+second pass may be left with its mark moved away: `docker exec -u root <name> mv
+/etc/oats-bb-checks-image.moved /etc/oats-bb-checks-image` puts it back.
 
 ## The busy workspace: every screen's worst case
 

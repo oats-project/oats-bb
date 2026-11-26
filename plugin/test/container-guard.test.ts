@@ -43,7 +43,9 @@ const MODULE_DIRECTORIES = ["scenes/", "real/parts/"];
  * passed: the guard refuses because the mark is truly absent. That second pass is what fails a guard that no longer
  * looks for the mark.
  */
-const MARKED = existsSync(MARK);
+/** A FILE of that name, as the guards ask: a directory there is no mark. */
+const isFile = (path: string) => statSync(path, { throwIfNoEntry: false })?.isFile() ?? false;
+const MARKED = isFile(MARK);
 const ABSENT: Record<string, string> = MARKED ? { OATS_BB_CHECKS_MARK_ABSENT: "1" } : {};
 
 /**
@@ -59,7 +61,7 @@ const ABSENT: Record<string, string> = MARKED ? { OATS_BB_CHECKS_MARK_ABSENT: "1
  */
 const MOVED = `${MARK}.moved`;
 const inChecksContainer = (facts: { marked: boolean; pass: string | undefined; moved: boolean }) => facts.marked || (facts.pass === "mark-gone" && facts.moved);
-const IN_CONTAINER = inChecksContainer({ marked: MARKED, pass: process.env.OATS_BB_GUARD_PASS, moved: existsSync(MOVED) });
+const IN_CONTAINER = inChecksContainer({ marked: MARKED, pass: process.env.OATS_BB_GUARD_PASS, moved: isFile(MOVED) });
 /** → true where an entry may be started; else it says, by name, what was not run and why. */
 function mayStart(script: string): boolean {
   if (!IN_CONTAINER) console.log(`not run here: it would start ${script} on this machine (entries are started only inside the checks' container: plugin/container/ci.sh unit runs both passes there)`);
@@ -71,7 +73,8 @@ const LINE_END = /\r\n|[\n\r\u2028\u2029]/;
 /** The first line of a script that DOES something: after the shebang, blank lines and whole-line comments. A statement on a comment's line counts. */
 function firstEffective(script: string, runner: "sh" | "bash" | "node"): string | undefined {
   const lines = readFileSync(join(CONTAINER, script), "utf8").split(LINE_END);
-  if (runner !== "node") return lines.slice(1).find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"));
+  // (For a shell only a space and a tab are blank: a line that begins with another character JavaScript would trim, a no-break space, a form feed, is a COMMAND for the shell.)
+  if (runner !== "node") return lines.slice(1).find((line) => !/^[ \t]*(#|$)/.test(line));
   let inComment = false;
   for (const [index, line] of lines.entries()) {
     let rest = line;
@@ -99,7 +102,7 @@ function guardLine(script: string, runner: "sh" | "bash" | "node"): string {
   const up = relative(dirname(join(CONTAINER, script)), CONTAINER); // "" beside the guard, "..", "../..", or a path back into this directory
   return runner === "node"
     ? `import "${up === "" ? "." : up}/guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched`
-    : `. "$(dirname "$0")/${up === "" ? "" : `${up}/`}guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)`;
+    : `. "$(dirname "$0")/${up === "" ? "" : `${up}/`}guard.sh" && [ -f ${MARK} ] || exit 97 # refuses outside the checks' container, before anything is touched (also where the guard is not beside it, or another file of its name is)`;
 }
 /**
  * THE GUARD ITSELF REFUSES HERE, run alone (it touches nothing): asked with the environment the entries are started
@@ -186,6 +189,9 @@ describe("only inside the checks' container", () => {
     expect(first('// a comment\rimport "./evil.mjs";\nimport "./guard.mjs";\n', "node")).toBe('import "./evil.mjs";'); // a bare CR ends the comment
     expect(first("#!/bin/sh\n# a comment\n\n  # another\n. ./guard.sh\nrm -rf x\n", "sh")).toBe(". ./guard.sh");
     expect(first("#!/bin/sh\n: > /tmp/x # a comment\n. ./guard.sh\n", "sh")).toBe(": > /tmp/x # a comment");
+    // A line that begins with a character JavaScript trims and the shell does not is a command, not a comment or a blank line.
+    for (const blank of ["\u00a0", "\f", "\v", "\u2003"]) expect(first(`#!/bin/sh\n${blank}# 2>/dev/null; echo x >> /tmp/x\n. ./guard.sh\n`, "sh")).toBe(`${blank}# 2>/dev/null; echo x >> /tmp/x`);
+    expect(first("#!/bin/sh\n \t# a comment\n \t\n. ./guard.sh\n", "sh")).toBe(". ./guard.sh");
   });
 
   it("the unit stage runs this file a second time where the mark is truly gone, and this is that pass when ci.sh says so", () => {
@@ -198,7 +204,7 @@ describe("only inside the checks' container", () => {
     expect(ci).toContain(`cleanup() {\n  status=$?\n  docker exec -u root "$NAME" sh -c '[ ! -e ${MARK}.moved ] || mv ${MARK}.moved ${MARK}' > /dev/null 2>&1 || true\n`);
     // In that pass the mark IS gone: every refusal above was made with no switch.
     // …and the entries WERE started in it: the pass cannot go green with every one "not run here".
-    if (process.env.OATS_BB_GUARD_PASS === "mark-gone") expect([MARKED, ABSENT, existsSync(MOVED), IN_CONTAINER]).toEqual([false, {}, true, true]);
+    if (process.env.OATS_BB_GUARD_PASS === "mark-gone") expect([MARKED, ABSENT, isFile(MOVED), IN_CONTAINER]).toEqual([false, {}, true, true]);
     else expect(process.env.OATS_BB_GUARD_PASS).toBeUndefined();
     // Where the mark is (the first pass) they are started too.
     if (MARKED) expect(IN_CONTAINER).toBe(true);
@@ -213,7 +219,7 @@ describe("only inside the checks' container", () => {
     expect(inChecksContainer({ marked: false, pass: undefined, moved: true })).toBe(false);
     expect(inChecksContainer({ marked: false, pass: "1", moved: true })).toBe(false);
     // What this run is, is those facts and nothing else.
-    expect(IN_CONTAINER).toBe(MARKED || (process.env.OATS_BB_GUARD_PASS === "mark-gone" && existsSync(MOVED)));
+    expect(IN_CONTAINER).toBe(MARKED || (process.env.OATS_BB_GUARD_PASS === "mark-gone" && isFile(MOVED)));
     // The second fact is ci.sh's: it moves the mark THERE, as root, and nothing else of the directory writes that name.
     expect(readFileSync(join(CONTAINER, "ci.sh"), "utf8")).toContain(`docker exec -u root "$NAME" mv ${MARK} ${MOVED}\n`);
   });
@@ -241,6 +247,27 @@ describe("only inside the checks' container", () => {
     expect((readdirSync(alone, { recursive: true }) as string[]).filter((entry) => statSync(join(alone, entry)).isFile())).toEqual([join("a", "b", "c", "d", "e", name)]);
   });
 
+  it.each(Object.entries(GUARDED).filter(([, runner]) => runner !== "node"))("%s, copied beside ANOTHER file of the guard's name that refuses nothing, does not run on where the mark is not", (script, runner) => {
+    // (The guard's line asks for the mark itself too. Only in the mark-gone pass: where the mark IS, such a copy rightly runs on.)
+    if (MARKED || !mayStart(`a copy of ${script} beside a foreign guard.sh`)) return;
+    readToBeGuarded(script, runner);
+    const person = home();
+    const alone = mkdtempSync(join(tmpdir(), "oats-bb-guard-foreign-"));
+    made.push(alone);
+    const name = script.slice(script.lastIndexOf("/") + 1);
+    const copy = join(alone, "a", "b", "c", "d", "e", name);
+    const guardOfCopy = resolve(dirname(copy), relative(dirname(join(CONTAINER, script)), CONTAINER), "guard.sh");
+    expect(guardOfCopy.startsWith(`${alone}/`)).toBe(true);
+    mkdirSync(dirname(copy), { recursive: true });
+    mkdirSync(dirname(guardOfCopy), { recursive: true });
+    writeFileSync(copy, readFileSync(join(CONTAINER, script)));
+    writeFileSync(guardOfCopy, "# another file of the guard's name: it refuses nothing\n");
+    const before = holds(person);
+    const ran = spawnSync(runner, [copy], { cwd: person, encoding: "utf8", timeout: 30_000, env: { HOME: person, USER: "person", PATH: `${join(person, ".local", "bin")}:${dirname(process.execPath)}:/usr/bin:/bin` } });
+    expect([ran.status, ran.stdout, ran.stderr]).toEqual([97, "", ""]);
+    expect(holds(person)).toEqual(before);
+  });
+
   it("where the mark is, the guard lets a script run; and the switch that makes it absent can only refuse", () => {
     const run = (env: Record<string, string>) => spawnSync("sh", ["-c", `. "${join(CONTAINER, "guard.sh")}"; echo ran`], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", ...env } });
     const inside = existsSync(MARK);
@@ -262,7 +289,8 @@ describe("only inside the checks' container", () => {
     // Every file counts but documents and data (a script under another extension is not let through unlisted).
     const NOT_RUN = /(^|\/)(Dockerfile|\.gitignore)$|\.(md|json|yml|ts|png)$/;
     const files = (readdirSync(CONTAINER, { recursive: true }) as string[])
-      .filter((name) => statSync(join(CONTAINER, name)).isFile() && !/(^|\/)out(\.|\/|$)/.test(name) && !name.startsWith("locks/") && !NOT_RUN.test(name))
+      // (Only what a RUN wrote is left out: the `out` and `out.<name>` DIRECTORIES. A script named `out.sh`, or one under `locks/`, is a script.)
+      .filter((name) => statSync(join(CONTAINER, name)).isFile() && !/(^|\/)out(\.[^/]*)?\//.test(name) && !NOT_RUN.test(name))
       .sort();
     const listed = [...Object.keys(GUARDED).filter((name) => !name.startsWith("../")), ...HOST, ...TOOLS, ...MODULES].sort();
     expect(files.filter((name) => !MODULE_DIRECTORIES.some((directory) => name.startsWith(directory)))).toEqual(listed);

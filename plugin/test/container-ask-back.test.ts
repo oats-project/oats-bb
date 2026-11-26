@@ -61,6 +61,15 @@ test("no answer in time is 'not yet': asked again, and back once bb accepts and 
   expect(result.answers).toEqual(["no-answer: no answer in 20 s", "accepted: falcon: auto"]);
 });
 
+test("no answer twice, then accepted: back, asked three times", async () => {
+  const { askedBack } = await module();
+  const silent: Answer = { outcome: "no-answer", said: "no answer in 20.0 s" };
+  const { options, slept, count } = scene([silent, silent, ACCEPTED], ["60", "60", "auto, 2"]);
+  const result = await askedBack(options);
+  expect([result.back, result.refused, count.asked, slept]).toEqual([true, null, 3, [2000, 2000]]);
+  expect(result.answers.map((answer) => answer.split(":")[0])).toEqual(["no-answer", "no-answer", "accepted"]);
+});
+
 test("REFUSED is 'no': over at once with bb's answer, asked ONCE, never read, never waited on", async () => {
   const { askedBack } = await module();
   const { options, slept, count } = scene([{ outcome: "refused", said: "Unknown host:\n  host_x" }, ACCEPTED], ["auto, 2"]);

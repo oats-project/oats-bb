@@ -165,17 +165,22 @@ function tell(...args) {
   }
 }
 /**
- * One command asked of bb, with its OUTCOME kept: → `{ outcome, said }`, where `outcome` is "accepted" (bb did it:
- * `said` is what it printed), "no-answer" (bb did not answer within `ASK_MS`: the command was ended), or "refused"
- * (bb answered with an error: `said` is that error). A caller that asks again does so on "no-answer" only.
+ * One command asked of bb, with its OUTCOME kept: → `{ outcome, said }`, where `outcome` is "accepted" (bb did it),
+ * "no-answer" (bb did not answer within `ASK_MS`: the command was ended), or "refused" (bb answered with an error:
+ * a non-zero exit). `said` holds how long it took and, by the outcome, what bb printed, or its exit and the first
+ * line of its error. A caller that asks again does so on "no-answer" only, never on "refused".
  */
 const ASK_MS = 20_000;
 function asked(...args) {
+  const from = Date.now();
+  const seconds = () => `${((Date.now() - from) / 1000).toFixed(1)} s`;
   try {
-    return { outcome: "accepted", said: execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: ASK_MS }).trim() };
+    const printed = execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: ASK_MS }).trim();
+    return { outcome: "accepted", said: `in ${seconds()}: ${printed}` };
   } catch (error) {
-    if (error.code === "ETIMEDOUT") return { outcome: "no-answer", said: `no answer in ${ASK_MS / 1000} s` };
-    return { outcome: "refused", said: String(error.stderr || error.message).trim() };
+    if (error.code === "ETIMEDOUT") return { outcome: "no-answer", said: `no answer in ${seconds()}, the command was ended` };
+    const first = String(error.stderr || error.message).trim().split("\n")[0];
+    return { outcome: "refused", said: `exit ${error.status ?? `by ${error.signal ?? error.code}`} in ${seconds()}: ${first}` };
   }
 }
 /** The status bb gives one thread now (`bb thread show`), or what it printed where that is none. */

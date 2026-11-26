@@ -7,7 +7,7 @@
 // Configuration: the JSON file named by FAKE_OATS_CONFIG, else `fake-oats.json` beside this script:
 //   { "fixtures": "<dir of the fixture files>",
 //     "log": "<file: one JSON line per call>",              (optional)
-//     "verbs": { "<verb>": { "file": "<feature>/x.json" | "stdout": "…", "exit": 0, "sleepMs": 0,
+//     "verbs": { "<verb>": { "file": "<feature>/x.json" | "stdout": "…", "exit": 0, "sleepMs": 0, "whileFile": "<file>",
 //                            "grandchild": false, "stderr": "…" } } }   (optional overrides)
 //
 // The verbs it knows are the features' own lists: `<fixtures>/<feature>/verbs.json`, an object
@@ -96,5 +96,13 @@ function answer() {
   process.stdout.write(text, () => process.exit(exit));
 }
 
-if (behaviour.sleepMs) setTimeout(answer, behaviour.sleepMs);
+// `whileFile`: the answer WAITS for as long as that file is there (a test holds a read in flight by it, and lets it
+// go by removing the file: a gate, where `sleepMs` is a length of time a test would then have to race).
+if (behaviour.whileFile) {
+  const gate = setInterval(() => {
+    if (existsSync(behaviour.whileFile)) return;
+    clearInterval(gate);
+    answer();
+  }, 10);
+} else if (behaviour.sleepMs) setTimeout(answer, behaviour.sleepMs);
 else answer();

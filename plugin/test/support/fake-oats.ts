@@ -9,7 +9,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const FIXTURES = join(here, "..", "fixtures");
 const SCRIPT = join(here, "..", "..", "container", "fake-oats.mjs");
 
-export type Behaviour = { file?: string; stdout?: string; exit?: number; sleepMs?: number; grandchild?: boolean; stderr?: string };
+export type Behaviour = { file?: string; stdout?: string; exit?: number; sleepMs?: number; /** the answer waits for as long as this file is there: a gate a test opens by removing it */ whileFile?: string; grandchild?: boolean; stderr?: string };
 export type Call = {
   /** When the fake started, as it stamped it. */
   at: string;

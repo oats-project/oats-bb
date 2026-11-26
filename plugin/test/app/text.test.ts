@@ -142,7 +142,7 @@ describe("the Desktop's display filter", () => {
     expect(displayLine("a".repeat(2_000_000))).toHaveLength(2048);
     expect(displayLine(`${"a".repeat(2_000_000)}://u@h`)).toBe(DETAIL_WITHHELD);
     expect(performance.now() - started).toBeLessThan(20_000);
-  });
+  }, 60_000); // (the test's own limit stands ABOVE the bound: the bound decides, not the runner's five seconds)
 });
 
 describe("the copy follows the Desktop's file", () => {

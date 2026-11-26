@@ -168,7 +168,7 @@ describe("A1 view(): the tree", () => {
     expect(performance.now() - started).toBeLessThan(20_000);
     expect(flatten(v.roots)).toHaveLength(2_000);
     expect(v.roots).toHaveLength(1);
-  });
+  }, 60_000); // (the test's own limit stands ABOVE the bound: the bound decides, not the runner's five seconds)
 });
 
 describe("A2 state(): first match wins", () => {

@@ -207,7 +207,7 @@ describe("where it runs", () => {
     expect([named, hereOf(null), hereOf(undefined), hereOf("")]).toEqual([{ on: "checks-host", name: "checks-host" }, HERE, HERE, HERE]);
     expect(HERE).toEqual({ on: "this computer", name: "This computer" });
     // bb's name is free text: it is drawn as a display line.
-    expect(hereOf("fal\u202Econ\nx").on).toBe(displayLine("fal\u202Econ\nx"));
+    expect(hereOf("checks\u202E-host\nx").on).toBe(displayLine("checks\u202E-host\nx"));
     const list = schedules();
     expect(groupRows(list.rows, true, named).map((group) => group.title)).toEqual(["Runs on checks-host", "Needs attention here", "Runs elsewhere"]);
     expect(groupRows(list.rows, false, named)[0]!.title).toBe("Set to run on checks-host");

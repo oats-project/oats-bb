@@ -24,6 +24,6 @@ test("each failure has a title in a person's words, a sentence where one helps, 
   expect(said("PLUGIN_RPC_FAILED")).toEqual(["OATS could not be read", null, false, true]);
   // With no machine known, and a machine's name that is no text.
   expect(said(codes.notFound, "raw", null)[0]).toBe("OATS is not installed on this machine");
-  expect(said(codes.timeout, "raw", "fal\u202Econ")[0]).toBe("OATS did not answer on fal\uFFFDcon");
+  expect(said(codes.timeout, "raw", "checks\u202E-host")[0]).toBe("OATS did not answer on checks\uFFFD-host");
   expect(said("E_X", "token=abc123")[1]).toBe("OATS says: [withheld]");
 });

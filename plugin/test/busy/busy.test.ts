@@ -16,7 +16,7 @@ import { build } from "../fixtures/busy/generate.mjs";
 
 const BUSY = join(fileURLToPath(new URL("..", import.meta.url)), "fixtures", "busy");
 type Made = { row: Record<string, unknown>; from: Record<string, unknown>; swaps: [string, string][]; was: [string[], unknown][]; kind?: string };
-const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions" | "mail" | "messages" | "conversations" | "groups" | "problems" | "triggerStates", Made[]> };
+const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions" | "mail" | "messages" | "conversations" | "groups" | "problems" | "triggerStates" | "capabilities" | "soulCapabilities", Made[]> };
 
 // THE RULE IS HELD HERE, not by the generator: this file reads the recorded answers ITSELF and puts a busy row back
 // with its OWN hands. Of the generator it takes only what it says it did to a row (`swaps`, `was`), which is then proven.
@@ -50,6 +50,9 @@ const SOURCES: Record<string, unknown[]> = {
   facts: board.facts,
   questions: board.questions,
   souls: answer("workspace/souls.json").souls as unknown[],
+  capabilities: answer("workspace/capabilities.json").capabilities as unknown[],
+  // (A soul's own rows of its capabilities: what `oats souls` answers under a soul.)
+  soulCapabilities: (answer("workspace/souls.json").souls as { capabilities: unknown[] | null }[]).flatMap((soul) => soul.capabilities ?? []),
   schedules: recordedSchedules,
   runs: recordedSchedules.flatMap((row) => row.recentRuns ?? []),
   triggers: answer("automations/trigger-list.json").triggers as unknown[],
@@ -89,12 +92,14 @@ describe("the busy set", () => {
 
   it("what is varied is a name, an id, a time, a relation or a text, and nothing else: no row is shaped", () => {
     const ALLOWED: Record<string, string[]> = {
-      agents: ["agent", "parentInstance", "relation", "relativeTo", "attributedHuman", "waitingOnYou.since", "waitingOnYou.message", "board", "identity"],
-      facts: ["key", "label", "value", "at"],
-      questions: ["id", "question", "since"],
+      agents: ["agent", "parentInstance", "relation", "relativeTo", "attributedHuman", "createdAt", "waitingOnYou.since", "waitingOnYou.message", "board", "identity"],
+      facts: ["key", "label", "value", "at", "link"],
+      questions: ["id", "question", "since", "options"],
       mail: ["result.result.mail.messages", "result.result.mail.conversations"],
       messages: ["subject", "threadTitle", "createdAt", "body"],
-      souls: ["description"],
+      souls: ["description", "capabilities"],
+      capabilities: [],
+      soulCapabilities: [],
       schedules: ["description", "task", "recentRuns", "history.stored", "lastRun.instance", "lastRun.home"],
       triggerStates: [],
       groups: ["name", "instances"],
@@ -119,6 +124,9 @@ describe("the busy set", () => {
       "agents:identity": () => true,
       "agents:board": () => true,
       "groups:instances": () => true,
+      // a question's options: texts, as many as it offers (two to four).
+      "questions:options": (now) => Array.isArray(now) && now.length >= 2 && now.length <= 4 && now.every((option) => typeof option === "string" && option.length > 0),
+      "souls:capabilities": () => true,
       "schedules:recentRuns": () => true,
       "mail:result.result.mail.messages": () => true,
       "mail:result.result.mail.conversations": () => true,
@@ -144,6 +152,8 @@ describe("the busy set", () => {
     const chatMade = Date.parse(String(made.agents.find((each) => each.kind === "board")!.row.createdAt));
     for (const [list, path] of [["agents", ["waitingOnYou", "since"]], ["facts", ["at"]], ["questions", ["since"]]] as const) for (const each of made[list]) for (const [set, was] of each.was) if (set.join(".") === path.join(".")) expect([list, Date.parse(String(at(each.row, [...path]))) >= Date.parse(String(was))]).toEqual([list, true]);
     for (const each of made.messages) expect([Date.parse(String(each.row.createdAt)) <= Date.parse(String(each.from.createdAt)), Date.parse(String(each.row.createdAt)) > chatMade]).toEqual([true, true]);
+    // (The agent was made before its oldest mail: a time of the row's that follows what the row is given.)
+    expect(chatMade).toBeLessThan(Math.min(...made.messages.map((each) => Date.parse(String(each.row.createdAt)))));
     // ONE field is joined from a second recorded row, on ONE row: the busy chat's agent's messaging identity (README.md).
     const lent = made.agents.filter((each) => each.was.some(([path]) => path[0] === "identity"));
     expect(lent.map((each) => [each.kind, each.from.identity ?? null, each.row.identity])).toEqual([["board", null, { ...(made.agents.find((each) => each.from.instance === "redesign-ui-lead")!.from.identity as object), alias: lent[0]!.row.instance }]]);
@@ -157,6 +167,8 @@ describe("the busy set", () => {
     const NAMES: Record<string, (row: Record<string, unknown>) => unknown[]> = {
       agents: (row) => [row.instance, String(row.home).match(/\/agents\/[^/]+\//)?.[0], (row.session as { threadId?: unknown } | null | undefined)?.threadId],
       souls: (row) => [row.name],
+      capabilities: (row) => [row.name],
+      soulCapabilities: (row) => [row.name],
       schedules: (row) => [tail(row.id)],
       triggers: (row) => [tail(row.id)],
       triggerStates: (row) => [tail(row.id)],
@@ -194,7 +206,7 @@ describe("the busy set", () => {
     const less = (document: unknown, ...keys: string[]) => Object.fromEntries(Object.entries(document as Record<string, unknown>).filter(([key]) => !keys.includes(key)));
     const byInstance = (list: unknown[]) => [...(list as { instance: string }[])].sort((a, b) => (a.instance < b.instance ? -1 : 1));
     // No file but these, and the two that are no kernel answer (the chat, made up and said; the threads to fail, read from the rows).
-    expect(Object.keys(files).sort()).toEqual(["chat.json", "mail.json", "schedule-list.json", "servers.json", "souls.json", "status.json", "teams.json", "threads.json", "trigger-list.json", "trigger-status.json"]);
+    expect(Object.keys(files).sort()).toEqual(["capabilities.json", "chat.json", "mail.json", "schedule-list.json", "servers.json", "souls.json", "status.json", "teams.json", "threads.json", "trigger-list.json", "trigger-status.json"]);
     // status.json: the recorded roster's document, with the features of the kernel that recorded the board (README); its groups; their rows.
     const status = files["status.json"] as { features: unknown; agents: { instances: Record<string, unknown>[] }[] };
     expect(less(status, "agents", "features")).toEqual(less(recorded("roster/status.json"), "agents", "features"));
@@ -215,6 +227,20 @@ describe("the busy set", () => {
     expect([less(states, "triggers"), states.triggers]).toEqual([less(recorded("automations/trigger-status.json"), "triggers"), rows("triggerStates")]);
     expect(states.triggers.map((state) => state.id)).toEqual(made.triggers.map((each) => each.row.id));
     expect(made.triggerStates.map((each) => [each.from.id, each.swaps])).toEqual(made.triggers.map((each) => [each.from.id, each.swaps]));
+    // …and the ONE soul whose capabilities were set holds exactly the rows the rule's tests read: fifteen, each a recorded
+    // row of that soul under a busy capability's name; and capabilities.json: the recorded document around its thirty rows.
+    const fullest = made.souls.filter((each) => each.was.some(([path]) => path[0] === "capabilities"));
+    expect(fullest).toHaveLength(1);
+    expect([fullest[0]!.row.capabilities, rows("soulCapabilities").length]).toEqual([rows("soulCapabilities"), 15]);
+    const named = new Set((rows("capabilities") as { name: string }[]).map((row) => row.name));
+    expect((rows("soulCapabilities") as { name: string }[]).filter((row) => !named.has(row.name))).toEqual([]);
+    const capabilities = files["capabilities.json"] as { capabilities: { layer?: string | null }[] };
+    expect([less(capabilities, "capabilities"), capabilities.capabilities, capabilities.capabilities.length]).toEqual([less(recorded("workspace/capabilities.json"), "capabilities"), rows("capabilities"), 30]);
+    // (Names of up to sixty characters, most of the added ones long.)
+    const capabilityNames = (rows("capabilities") as { name: string }[]).map((row) => row.name);
+    expect([Math.max(...capabilityNames.map((name) => name.length)) <= 60, capabilityNames.filter((name) => name.length >= 40).length >= 10, new Set(capabilityNames).size]).toEqual([true, true, 30]);
+    // (A core place held by FOUR: the Workspace page names three and counts the rest.)
+    expect(capabilities.capabilities.filter((row) => row.layer === "knowledge")).toHaveLength(4);
     const triggers = files["trigger-list.json"] as { triggers: unknown[] };
     expect([less(triggers, "triggers"), triggers.triggers]).toEqual([less(recorded("automations/trigger-list.json"), "triggers"), rows("triggers")]);
     const servers = files["servers.json"] as { servers: unknown[] };
@@ -244,7 +270,7 @@ describe("the busy set", () => {
     expect([mail.messages, mail.conversations]).toEqual([rows("messages"), rows("conversations")]);
     // A CONTAINER put into a row (a list, an object) is one of these, each read above or just below: never another.
     const containers = Object.entries(made).flatMap(([list, entries]) => entries.flatMap((each) => each.was.filter(([path]) => { const now = path.reduce<unknown>((inner, key) => (inner as Record<string, unknown> | undefined)?.[key], each.row); return typeof now === "object" && now !== null; }).map(([path]) => `${list}:${path.join(".")}`)));
-    expect([...new Set(containers)].sort()).toEqual(["agents:board", "agents:identity", "groups:instances", "mail:result.result.mail.conversations", "mail:result.result.mail.messages", "schedules:recentRuns"]);
+    expect([...new Set(containers)].sort()).toEqual(["agents:board", "agents:identity", "groups:instances", "mail:result.result.mail.conversations", "mail:result.result.mail.messages", "questions:options", "schedules:recentRuns", "souls:capabilities"]);
   });
 
   it("holds the busy workspace of the rule: sixty agents four levels deep, eleven asking, some failed, lost and outside OATS; 24 souls; 37 automations, five failing, some with fifty runs; seven teams; five machines; names of sixty characters; a question of four lines", () => {
@@ -263,7 +289,14 @@ describe("the busy set", () => {
     const raws = (files["status.json"] as { agents: { instances: { instance: string; backend: string; home: string; board?: { facts: { key: string }[]; questions: { id: string; question: string }[] } | null; waitingOnYou?: { message: string } | null }[] }[] }).agents.flatMap((group) => group.instances);
     const boards = raws.filter((row) => row.board);
     expect(boards.map((row) => [row.backend, row.board!.facts.length, new Set(row.board!.facts.map((fact) => fact.key)).size, row.board!.questions.length, new Set(row.board!.questions.map((question) => question.id)).size, row.board!.questions.filter((question) => question.question.split("\n").length === 4).length])).toEqual([["bb", 12, 12, 9, 9, 1]]);
-    expect(boards[0]!.waitingOnYou?.message).toBe(boards[0]!.board!.questions[0]!.question); // the claim says the oldest question, as the kernel's does
+    expect(boards[0]!.waitingOnYou?.message).toBe(boards[0]!.board!.questions[0]!.question);
+    // THE BOARD's long things: a question of 200 characters on one line; one question with FOUR long options; a fact's link on a long host; a long value.
+    const fullBoard = boards[0]!.board! as unknown as { facts: { value: string; link: string | null }[]; questions: { question: string; options: string[] }[] };
+    expect(fullBoard.questions.filter((question) => question.question.length >= 200 && !question.question.includes("\n")).length).toBeGreaterThanOrEqual(1);
+    expect(fullBoard.questions.map((question) => question.options.length).sort()).toEqual([2, 2, 2, 2, 2, 2, 2, 2, 4]);
+    expect(fullBoard.questions.find((question) => question.options.length === 4)!.options.every((option) => option.length >= 100)).toBe(true);
+    expect(fullBoard.facts.filter((fact) => fact.link !== null && new URL(fact.link).hostname.length >= 50).length).toBeGreaterThanOrEqual(1);
+    expect(Math.max(...fullBoard.facts.map((fact) => fact.value.length))).toBeGreaterThanOrEqual(150); // the claim says the oldest question, as the kernel's does
     const chat = files["chat.json"] as { agent: string; turns: { you: string; agent: string }[] };
     expect(chat.agent).toBe(boards[0]!.instance);
     // Its MAIL: the recorded answer of the mail read, for this agent, its received messages multiplied to a FULL page;
@@ -276,6 +309,12 @@ describe("the busy set", () => {
     expect(senders.every((from) => from.address.endsWith(`/${from.alias}`))).toBe(true);
     expect([senders.filter((from) => from.alias.length >= 55).length >= 30, senders.some((from) => from.alias === "mail-writer"), senders.filter((from) => from.alias !== "mail-writer").every((from) => raws.some((row) => row.instance === from.alias))]).toEqual([true, true, true]);
     const mail = parseMail(mailDocument.result);
+    // HOW OLD THEY ARE: a spread, newest first: within the hour, hours, days, months, and more than a year for the oldest.
+    const ages = (mailDocument.result.result.mail.messages as unknown as { createdAt: string }[]).map((message) => Date.parse(message.createdAt));
+    expect(ages).toEqual([...ages].sort((a, b) => b - a));
+    const old = ages.map((at) => (ages[0]! - at) / 60_000);
+    const within = (from: number, to: number) => old.filter((minutes) => minutes >= from && minutes < to).length;
+    expect([old[0], within(1, 60) >= 5, within(60, 24 * 60) >= 5, within(24 * 60, 30 * 24 * 60) >= 5, within(30 * 24 * 60, 365 * 24 * 60) >= 3, within(365 * 24 * 60, Infinity) >= 1]).toEqual([0, true, true, true, true, true]);
     // THERE IS MORE: the document is the recorded first page, so the reader hands on the cursor that reads the older page ("Older" is offered).
     expect(mail.ok && mail.value.older).toBe((whole("mail/mail-first-page.json").result as { result: { mail: { nextCursor: string } } }).result.mail.nextCursor);
     expect(mail.ok && [mail.value.messages.length, new Set(mail.value.messages.map((message) => message.key)).size, mail.value.messages.filter((message) => message.shortened).length >= 15, mail.value.messages.filter((message) => (message.subject ?? "").length > 90).length >= 10]).toEqual([MAIL_PAGE, MAIL_PAGE, true, true]);
@@ -306,6 +345,11 @@ describe("the busy set", () => {
     // FIVE FAIL (a launch that failed, a definition that cannot run); ONE more is a launch whose state is unknown: a warning, not a failure.
     const failing = rows.filter((row) => row.invalid !== null || row.lastRun?.outcome === "launch-failed" || row.lastRun?.outcome === "invalid");
     expect([failing.length, rows.filter((row) => row.lastRun?.outcome === "unknown").length]).toEqual([5, 1]);
+    // FIVE automations have a name of sixty characters, two of them alike but for their last character.
+    // (An automation's NAME: its id's last part, as the kernel writes it in the list.)
+    const names = [...(files["schedule-list.json"] as { schedules: { id: string }[] }).schedules, ...(files["trigger-list.json"] as { triggers: { id: string }[] }).triggers].map((row) => row.id.slice(row.id.lastIndexOf("/") + 1));
+    const sixty = names.filter((name) => name.length === 60);
+    expect([sixty.length >= 5, Math.max(...names.map((name) => name.length)), sixty.some((name) => sixty.some((other) => other !== name && other.slice(0, -1) === name.slice(0, -1)))]).toEqual([true, 60, true]);
     // ONE schedule's three newest runs are of three agents of the set: one that asks, one that is stopped, one that works; and one instruction is twelve lines long.
     const ofAgents = (files["schedule-list.json"] as { schedules: { task?: string; recentRuns?: { session?: { instance?: string } | null }[] }[] }).schedules;
     const kindOf = (instance: string | undefined) => made.agents.find((each) => each.row.instance === instance)?.kind;

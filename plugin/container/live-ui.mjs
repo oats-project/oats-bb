@@ -591,6 +591,14 @@ function claudeBack() {
   if (claude !== "" && existsSync(`${claude}.away`)) renameSync(`${claude}.away`, claude);
   rmSync(CLAUDE_AWAY, { force: true });
 }
+/** The busy chat's mail (the set's mail.json), every `createdAt` moved by the same amount: the newest is a few seconds before now. */
+function busyMailNow() {
+  const document = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/mail.json"), "utf8"));
+  const messages = document.result.result.mail.messages;
+  const shift = Date.now() - 5_000 - Math.max(...messages.map((message) => Date.parse(message.createdAt)));
+  for (const message of messages) message.createdAt = new Date(Date.parse(message.createdAt) + shift).toISOString();
+  return JSON.stringify(document);
+}
 function busyStage() {
   const made = []; // the threads this stage made: { instance, id }
   const away = []; // the fixtures' own threads it archived for its length
@@ -750,13 +758,16 @@ function busyStage() {
       fake({
         status: { stdout: text },
         souls: { file: "busy/souls.json" },
+        capabilities: { file: "busy/capabilities.json" },
         teams: { file: "busy/teams.json" },
         "server list": { file: "busy/servers.json" },
         "schedule list": { file: "busy/schedule-list.json" },
         "trigger list": { file: "busy/trigger-list.json" },
         "trigger status": { file: "busy/trigger-status.json" },
         // The busy chat's agent's mail (a full page of fifty): the set holds ONE agent's, so every agent's Mail tab answers it.
-        "operation run messaging:mail": { file: "busy/mail.json" },
+        // …with ONE shift of every message's time, so that the newest is "just now" at this run: the set holds the
+        // SPREAD of their ages (minutes, hours, days, months, over a year), and an age is read against the run's clock.
+        "operation run messaging:mail": { stdout: busyMailNow() },
       });
       const total = rowsOf(status).length;
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === total, 60);

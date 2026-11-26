@@ -73,11 +73,19 @@ const later = (time, minutes) => new Date(Date.parse(time) + minutes * 60_000).t
 const QUESTION = ["The migration is ready to run against production.", "It rewrites 48 000 invoices and cannot be undone once the old table is dropped.", "A dry run on the copy of last night took 41 minutes and changed nothing it should not.", "Run it now, wait for the Sunday window, or stop here?"].join("\n");
 // The busy chat's board: twelve facts [label, value] and nine questions (the fourth is four lines long).
 // (The recorded facts are two, taken in turn: one with a link, one counted "failing": the made-up labels follow them.)
-const BOARD_FACTS = [["Pull request", "#1842"], ["Tests", "17"], ["Branch", "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-its-three-transitive-pins"], ["Checks", "3"], ["Build", "#20418"], ["Advisories", "9"], ["Reviewer", "release-notes-drafting-helper"], ["Lockfile checks", "14"], ["Estimated time left for the whole upgrade across every service", "about three working days"], ["End-to-end tests across every service and both mobile clients", "41"], ["Blocked on", "the payments team's answer"], ["Audits", "2"]];
+const BOARD_FACTS = [["Pull request", "#1842"], ["Tests", "17"], ["Branch", "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-its-three-transitive-pins-and-the-date-parser-and-the-template-engine-in-all-fourteen-services"], ["Checks", "3"], ["Build", "#20418"], ["Advisories", "9"], ["Reviewer", "release-notes-drafting-helper"], ["Lockfile checks", "14"], ["Estimated time left for the whole upgrade across every service", "about three working days"], ["End-to-end tests across every service and both mobile clients", "41"], ["Blocked on", "the payments team's answer"], ["Audits", "2"]];
+const BOARD_LINK = "https://code-review.payments-and-billing-platform.internal.example.invalid/dependency-audit/pull/1842";
+const BOARD_OPTIONS = [
+  "Upgrade now: the payment client moves a major version in this pass, with the idempotency key stored beside each payment attempt",
+  "Pin it until the release: the two advisories stay open for three more weeks, with a note in the audit of why and until when",
+  "Upgrade behind a flag: both versions ship, the new one for one region first, and the old one is removed once a week has passed clean",
+  "Hand it to the payments team: this agent stops at the lockfiles and opens an issue for them with everything it found so far",
+];
 const BOARD_QUESTIONS = [
   "Which base branch?",
   "Upgrade the payment client across a major version now, or pin it until the release?",
-  "Who signs off the licence change in the image library?",
+  // (200 characters, one line.)
+  "The image library's fixed release changes its licence to one that asks for the source of a distributed work that links to it; the mobile clients link to it and are distributed: who signs that off, and when?",
   QUESTION,
   "Drop support for the old runtime in this pass?",
   "Open one pull request per service, or one for all fourteen?",
@@ -103,15 +111,42 @@ const CHAT = [
 ];
 // The busy chat's MAIL: fifty messages received, a full page. [subject, body]: every third message keeps the recorded
 // long report's body (16 KiB, cut by the messaging layer); the others say a few lines. Subjects: short, and long.
+// HOW OLD each of the fifty is, in minutes before the newest (which keeps its recorded time): a spread, each about a
+// third older than the one before: minutes, hours, days, months, and more than a year for the oldest. (The live stage
+// moves the whole page so that its newest message is "just now" at the run: the gaps are these.)
+const MAIL_AGES = (() => {
+  const ages = [0];
+  for (let n = 1; n < 50; n += 1) ages.push(ages[n - 1] + Math.floor((ages[n - 1] * 32) / 100) + 1);
+  return ages;
+})();
+const LONG_AUTOMATION = ["of-every-open-pull-request-across-all-fourteen-services", "for-the-payments-and-billing-platform-in-every-region", "after-each-release-train-leaves-the-staging-cluster", "with-a-summary-for-the-owning-team-and-follow-ups"];
 const MAIL_SUBJECTS = ["Lockfile audit: results", "Re: Re: Re: the payment client's major version, the idempotency key and what happens to a retry that crosses a deploy", "Advisory on the archive reader", "Licence question for the image library: who signs off, and by when do the mobile builds need the answer?", "Flaky: ledger closes a period that spans a daylight-saving change", "Thumbnails compared", "Base branch?", "Fourteen pull requests or one: a note on what each service's owners said when I asked them last week", "Checks on #1842", "Rounding cases for currencies with no minor unit"];
 const MAIL_BODIES = ["The audit of the fourteen lockfiles is done. 63 packages are behind, nine advisories are open.\n\nThe two patch releases are ready in #1842.", "Your question on the base branch is still open on my board.\n\n- main: the default\n- release: the 0.1 line\n\nI stop at the payment client until it is settled.", "One test failed once and passed twice. It is not this change.\n\nI will fix it in a pull request of its own."];
 const LONG = (what) => `${what}: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone`;
 
 export function build() {
-  const made = { agents: [], souls: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], triggerStates: [], facts: [], questions: [], mail: [], messages: [], conversations: [], groups: [], problems: [] };
+  const made = { agents: [], souls: [], capabilities: [], soulCapabilities: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], triggerStates: [], facts: [], questions: [], mail: [], messages: [], conversations: [], groups: [], problems: [] };
+
+  // ---- capabilities: the recorded twelve, then eighteen more (30) ----
+  // The eighteen are recorded rows under longer names: two more of each capability the fullest soul has (below), three
+  // more of the one that fills the knowledge place (a core place then holds FOUR: the Workspace page names three and
+  // counts the rest), and one more of five others.
+  const capabilitiesDoc = recorded("workspace/capabilities.json");
+  const capabilityOf = (name) => capabilitiesDoc.capabilities.find((row) => row.name === name);
+  const MORE_CAPABILITIES = ["oats.aweb", "oats.build", "oats.core", "oats.developer", "oats.landing-rules", "oats.aweb", "oats.build", "oats.core", "oats.developer", "oats.landing-rules", "oats.okf", "oats.okf", "oats.okf", "oats.code-review", "oats.desktop-ui", "oats.maintainer", "oats.okf-harvest", "oats.workspace-experts"];
+  for (const from of capabilitiesDoc.capabilities) made.capabilities.push(vary(from, []));
+  const moreNames = MORE_CAPABILITIES.map((model, n) => `oats.${SOUL_WORDS[(n * 5 + 2) % SOUL_WORDS.length]}-${SOUL_WORDS[(n * 3 + 7) % SOUL_WORDS.length]}-${["review-and-ship", "delivery"][n % 2]}-${model.slice("oats.".length)}-${n + 1}`);
+  MORE_CAPABILITIES.forEach((model, n) => made.capabilities.push(vary(capabilityOf(model), [[model, moreNames[n]]])));
+  const capabilities = { ...copy(capabilitiesDoc), capabilities: made.capabilities.map((each) => each.row) };
 
   // ---- souls: the recorded souls, each multiplied (24) ----
   const soulsDoc = recorded("workspace/souls.json");
+  // ONE soul with FIFTEEN capabilities (a soul's page lists eight and offers the rest): the recorded soul that has five,
+  // with two more of each: every row of its list is one of its recorded rows, under a busy capability's name.
+  const FULLEST = "oats-developer";
+  const fullest = soulsDoc.souls.find((soul) => soul.name === FULLEST);
+  for (const from of fullest.capabilities) made.soulCapabilities.push(vary(from, []));
+  MORE_CAPABILITIES.slice(0, 10).forEach((model, n) => made.soulCapabilities.push(vary(fullest.capabilities.find((row) => row.name === model), [[model, moreNames[n]]])));
   const soulModels = soulsDoc.souls.filter((soul, index, all) => all.findIndex((other) => other.name === soul.name) === index);
   const busySouls = [];
   for (let n = 0; n < 24; n += 1) {
@@ -119,7 +154,7 @@ export function build() {
     const turn = Math.floor(n / soulModels.length);
     // The recorded souls stand as they are (their names are the roster's groups); the others are longer names of the same shape.
     const name = turn === 0 ? from.name : `${SOUL_WORDS[(n * 7) % SOUL_WORDS.length]}-${["feature-delivery", "quality-and-release-readiness"][turn - 1]}-${from.name}`;
-    const row = vary(from, turn === 0 ? [] : [[from.name, name]], turn === 0 ? [] : [[["description"], LONG(`Works on ${name.replace(/-/g, " ")}`)]]);
+    const row = vary(from, turn === 0 ? [] : [[from.name, name]], turn === 0 ? (from.name === FULLEST ? [[["capabilities"], made.soulCapabilities.map((each) => each.row)]] : []) : [[["description"], LONG(`Works on ${name.replace(/-/g, " ")}`)]]);
     made.souls.push(row);
     // The name the roster gives this soul's agents: the soul's own, or `<package>--<soul>` for a package's soul ("." written "-").
     busySouls.push(typeof row.row.package === "string" ? `${row.row.package.replaceAll(".", "-")}--${name}` : name);
@@ -199,13 +234,17 @@ export function build() {
       const facts = Array.from({ length: 12 }, (_, f) => {
         const from = board.facts[f % board.facts.length];
         const [label, value] = BOARD_FACTS[f];
-        const fact = vary(from, [], [[["key"], `${from.key}-${f + 1}`], [["label"], label], [["value"], value], [["at"], later(from.at, f)]]);
+        // (A link stays where the recorded fact has one; the first is on a long host.)
+        const link = typeof from.link === "string" && f === 0 ? [[["link"], BOARD_LINK]] : [];
+        const fact = vary(from, [], [[["key"], `${from.key}-${f + 1}`], [["label"], label], [["value"], value], [["at"], later(from.at, f)], ...link]);
         made.facts.push(fact);
         return fact.row;
       });
       const questions = BOARD_QUESTIONS.map((question, q) => {
         const from = board.questions[0];
-        const asked = vary(from, [], [[["id"], `q${q + 1}`], [["question"], question], [["since"], later(from.since, q * 11)]]);
+        // (The second question has FOUR LONG options; the others keep the recorded two.)
+        const options = q === 1 ? [[["options"], BOARD_OPTIONS]] : [];
+        const asked = vary(from, [], [[["id"], `q${q + 1}`], [["question"], question], [["since"], later(from.since, q * 11)], ...options]);
         made.questions.push(asked);
         return asked.row;
       });
@@ -215,6 +254,9 @@ export function build() {
       // set that is JOINED from another recorded row. README.md says so.
       const lent = byName.get("redesign-ui-lead").row.identity;
       set.push([["identity"], swapped(copy(lent), [[lent.alias, instance]])]);
+      // WHEN IT WAS MADE: before the oldest of its mail (the busy chat's mail goes back more than a year): a day before it.
+      const newestMail = JSON.parse(readFileSync(join(FIXTURES, "mail/mail.json"), "utf8")).result.result.mail.messages.find((message) => message.direction === "received").createdAt;
+      set.push([["createdAt"], later(newestMail, -MAIL_AGES[MAIL_AGES.length - 1] - 24 * 60)]);
       set.push([["board"], { ...copy(board), facts, questions }], [["waitingOnYou", "message"], questions[0].question]);
     }
     const row = vary(model.row, swaps, set);
@@ -242,7 +284,7 @@ export function build() {
     // sender's alias wherever the recorded message writes it (its `from.alias`, and its address).
     const senders = made.agents.map((each) => each.row.instance).filter((instance) => instance !== chatAgent && instance.length >= 55);
     const sender = n % 3 === 0 ? [] : [[from.from.alias, senders[n % senders.length]]];
-    const message = vary(from, [[from.id, `${number}${from.id.slice(2)}`], [from.conversationId, `${number}${from.conversationId.slice(2)}`], [mailDoc.result.target.instance, chatAgent], ...sender], [[["subject"], subject], [["threadTitle"], subject], ...(n < received.length ? [] : [[["createdAt"], later(from.createdAt, -n * 3).replace("Z", "+00:00")]]), ...(long || n < received.length ? [] : [[["body"], MAIL_BODIES[n % MAIL_BODIES.length]]])]);
+    const message = vary(from, [[from.id, `${number}${from.id.slice(2)}`], [from.conversationId, `${number}${from.conversationId.slice(2)}`], [mailDoc.result.target.instance, chatAgent], ...sender], [[["subject"], subject], [["threadTitle"], subject], ...(n === 0 ? [] : [[["createdAt"], later(received[0].createdAt, -MAIL_AGES[n]).replace("Z", "+00:00")]]), ...(long || n < received.length ? [] : [[["body"], MAIL_BODIES[n % MAIL_BODIES.length]]])]);
     made.messages.push(message);
     return message.row;
   });
@@ -278,7 +320,9 @@ export function build() {
   for (const [id, count] of SCHEDULES) {
     for (let k = 0; k < count; k += 1, s += 1) {
       const from = schedule(id);
-      const name = `${bare(id)}-${ALONE[s % ALONE.length]}`;
+      // FIVE names of sixty characters (the schedules 2 to 6), the first two alike but for their last character.
+      const sixty = (stem, end) => `${`${bare(id)}-${stem}`.slice(0, 58).replace(/-+$/, "").padEnd(58, "x")}-${end}`;
+      const name = s >= 2 && s <= 6 ? sixty(LONG_AUTOMATION[Math.max(0, s - 3)], s === 2 ? 1 : s === 3 ? 2 : s) : `${bare(id)}-${ALONE[s % ALONE.length]}`;
       const set = [];
       if (typeof from.description === "string") set.push([["description"], LONG(`${from.description} (${name.replace(/-/g, " ")})`)]);
       // ONE long instruction (the first schedule's second copy): the recorded task, twelve times, numbered.
@@ -350,7 +394,7 @@ export function build() {
   });
   const servers = { ...copy(serversDoc), servers: made.servers.map((each) => each.row) };
 
-  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "trigger-status.json": triggerStates, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "mail.json": mail.row, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
+  return { files: { "status.json": busyStatus, "souls.json": souls, "capabilities.json": capabilities, "schedule-list.json": schedules, "trigger-list.json": triggers, "trigger-status.json": triggerStates, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "mail.json": mail.row, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
 }
 
 // (Run as a program, by any path to this file: a symlinked one too.)
@@ -359,5 +403,5 @@ if (process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathS
   mkdirSync(out, { recursive: true });
   const { files, made } = build();
   for (const [name, document] of Object.entries(files)) writeFileSync(join(out, name), `${JSON.stringify(document, null, 1)}\n`);
-  console.log(`busy: ${made.agents.length} agents, ${made.souls.length} souls, ${made.schedules.length + made.triggers.length} automations (${made.runs.length} runs), ${made.teams.length} teams, ${made.servers.length} machines → ${out}`);
+  console.log(`busy: ${made.agents.length} agents, ${made.souls.length} souls, ${made.capabilities.length} capabilities, ${made.schedules.length + made.triggers.length} automations (${made.runs.length} runs), ${made.teams.length} teams, ${made.servers.length} machines → ${out}`);
 }

@@ -389,7 +389,7 @@
        "file": "TASK.md"
       }
      },
-     "createdAt": "2026-11-23T18:00:56.149Z",
+     "createdAt": "2024-02-22T04:36:44.497Z",
      "modules": [
       {
        "name": "oats.bb",
@@ -573,7 +573,7 @@
         "label": "Pull request",
         "value": "#1842",
         "unit": null,
-        "link": "https://github.com/oats-project/oats-bb/pull/42",
+        "link": "https://code-review.payments-and-billing-platform.internal.example.invalid/dependency-audit/pull/1842",
         "at": "2026-11-23T18:00:58.348Z"
        },
        {
@@ -587,7 +587,7 @@
        {
         "key": "pr-3",
         "label": "Branch",
-        "value": "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-its-three-transitive-pins",
+        "value": "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-its-three-transitive-pins-and-the-date-parser-and-the-template-engine-in-all-fourteen-services",
         "unit": null,
         "link": "https://github.com/oats-project/oats-bb/pull/42",
         "at": "2026-11-23T18:02:58.348Z"
@@ -680,15 +680,17 @@
         "id": "q2",
         "question": "Upgrade the payment client across a major version now, or pin it until the release?",
         "options": [
-         "main: the default",
-         "release: the 0.1 line"
+         "Upgrade now: the payment client moves a major version in this pass, with the idempotency key stored beside each payment attempt",
+         "Pin it until the release: the two advisories stay open for three more weeks, with a note in the audit of why and until when",
+         "Upgrade behind a flag: both versions ship, the new one for one region first, and the old one is removed once a week has passed clean",
+         "Hand it to the payments team: this agent stops at the lockfiles and opens an issue for them with everything it found so far"
         ],
         "hasContext": false,
         "since": "2026-11-23T18:12:45.724Z"
        },
        {
         "id": "q3",
-        "question": "Who signs off the licence change in the image library?",
+        "question": "The image library's fixed release changes its licence to one that asks for the source of a distributed work that links to it; the mobile clients link to it and are distributed: who signs that off, and when?",
         "options": [
          "main: the default",
          "release: the 0.1 line"

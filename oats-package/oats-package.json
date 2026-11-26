@@ -1,6 +1,6 @@
 {
   "package": "oats.bb",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "compatibility": {
     "oats": ">=0.70.5"
   },

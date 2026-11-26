@@ -80,6 +80,10 @@ afterEach(async () => {
   await fake.remove();
 });
 
+/** A publish's token (server/core.ts `token`): a time of this server's, one per publish, each later than the last. */
+const TOKEN = expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/) as unknown as string;
+const tokenOf = (signal: unknown): string => (signal as { payload: { at: string } }).payload.at;
+
 describe("snapshot", () => {
   it("answers the deployment and its agents, read once for every client", async () => {
     const first = await rpc("snapshot");
@@ -91,7 +95,10 @@ describe("snapshot", () => {
     const again = await Promise.all([rpc("snapshot"), rpc("snapshot"), rpc("snapshot")]);
     expect(again.every((snapshot) => snapshot.at === first.at)).toBe(true);
     expect(await verbs()).toEqual(["status"]);
-    expect(server.harness.realtimeSignals).toEqual([{ channel: REALTIME_CHANGED, payload: { at: first.at } }]);
+    // ONE publish, with its token. (Not `first.at`: the token is the read's start on the bare clock and the roster's
+    // `at` is the stamp, two readings of the clock a line apart in server/core.ts: they differ when a millisecond
+    // turns between them, and a test that held them equal failed one run in some.)
+    expect(server.harness.realtimeSignals).toEqual([{ channel: REALTIME_CHANGED, payload: { at: TOKEN } }]);
     // The watch on the event log was asserted on the machine that holds the homes.
     await expect.poll(() => server.harness.experimental_hostRpcCalls.map((call) => call.method)).toEqual(["discover", "status", "watch"]);
     expect(server.harness.experimental_hostRpcCalls.every((call) => call.hostId === "host_falcon")).toBe(true);
@@ -244,7 +251,9 @@ describe("snapshot", () => {
     await expect.poll(() => server.harness.realtimeSignals.length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
     const next = await rpc("snapshot");
     expect(next.agents).toEqual([]);
-    expect(server.harness.realtimeSignals[1]).toEqual({ channel: REALTIME_CHANGED, payload: { at: next.at } });
+    // The second publish, with a token of its own, later than the first's (a client acts once per token).
+    expect(server.harness.realtimeSignals[1]).toEqual({ channel: REALTIME_CHANGED, payload: { at: TOKEN } });
+    expect(tokenOf(server.harness.realtimeSignals[1]) > tokenOf(server.harness.realtimeSignals[0])).toBe(true);
   }, 20_000);
 
   it("rereads when bb creates or deletes a thread", async () => {

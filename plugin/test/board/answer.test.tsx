@@ -35,6 +35,8 @@ async function drawn(given: { instance?: string; change?: Partial<Agent>; board?
   const threadId = agents.find((agent) => agent.instance === instance)!.threadId;
   const sent: Sent[] = [];
   const asked: string[] = [];
+  /** What bb holds on the thread, as its own list answers it at a press. */
+  const interactions: { id: string; status: string; payload: { kind: string } }[] = [];
   /** What the server answers from now on, where a test changes it after the draw: the snapshot, and the row's claim. */
   const server: { snapshot: ((agents: Agent[]) => unknown) | null; claim: { producer: string; reason: string } | null | undefined; board: unknown; stale: boolean } = { snapshot: null, claim: given.claim, board: given.board ?? { facts: [], questions: [QUESTION] }, stale: false };
   const threads = fixtureThreads().map((thread) => (thread.id === threadId && given.pending ? { ...thread, hasPendingInteraction: true } : thread));
@@ -53,7 +55,17 @@ async function drawn(given: { instance?: string; change?: Partial<Agent>; board?
       agents,
     ),
     sidebarThreads: { status: "ready" as const, threads },
-    sdk: { threads: { send: async ({ threadId: to, input }: { threadId: string; input: { text: string }[] }) => (sent.push({ threadId: to, text: input.map((part) => part.text).join("") }), { ok: true }) } } as never as RenderSlotOptions<Contract>["sdk"],
+    sdk: {
+      threads: {
+        interactions: {
+          list: async () => {
+            if ((interactions as unknown as { fail?: boolean }).fail === true) throw new Error("bb did not answer");
+            return [...interactions];
+          },
+        },
+        send: async ({ threadId: to, input }: { threadId: string; input: { text: string }[] }) => (sent.push({ threadId: to, text: input.map((part) => part.text).join("") }), { ok: true }),
+      },
+    } as never as RenderSlotOptions<Contract>["sdk"],
   });
   await waitFor(() => expect(slot.getByTestId("oats-board").getAttribute("data-state")).toBe("shown"));
   await act(async () => {});
@@ -63,7 +75,7 @@ async function drawn(given: { instance?: string; change?: Partial<Agent>; board?
   // The answers are offered once the ROSTER is read too (who the agent is, and that it may be written to): wait for that.
   if (given.offered ?? true) await waitFor(() => expect(answers().length).toBeGreaterThan(0));
   else await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 60))));
-  return { slot, zone, sent, asked, answers, options, server, threadId: threadId! };
+  return { slot, zone, sent, asked, answers, options, server, interactions, threadId: threadId! };
 }
 
 test("an agent on a bb thread that runs: each option is a button; a press sends `<id>: <option>` to its thread, once; the question stays, with \"Sent.\" beside the option sent and the options off", async () => {
@@ -164,6 +176,28 @@ for (const [what, given] of [
     expect(zone.textContent).not.toMatch(/Answer|type|terminal|thread/i); // nothing tells how to answer
   });
 }
+
+test("a request bb itself holds on the thread that arose since the draw (the board's claim still in front of it on the row): asked of bb at the press, refused, nothing sent", async () => {
+  const { zone, sent, answers, interactions } = await drawn();
+  interactions.push({ id: "int_1", status: "pending", payload: { kind: "approval" } });
+  fireEvent.click(answers()[0]!);
+  await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).toBe("It waits on an approval. Nothing sent."));
+  expect(sent).toEqual([]);
+  // A request that was answered since (resolved) holds nothing back.
+  interactions.length = 0;
+  interactions.push({ id: "int_1", status: "resolved", payload: { kind: "approval" } });
+  await waitFor(() => expect(answers().every((button) => !button.disabled)).toBe(true));
+  fireEvent.click(answers()[0]!);
+  await waitFor(() => expect(sent.map((each) => each.text)).toEqual(["q3: main: the default"]));
+});
+
+test("where bb cannot say whether it holds a request (its list fails at the press), nothing is sent", async () => {
+  const { zone, sent, answers, interactions } = await drawn();
+  (interactions as unknown as { fail: boolean }).fail = true;
+  fireEvent.click(answers()[0]!);
+  await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).not.toBe(""));
+  expect(sent).toEqual([]);
+});
 
 test("an option the display filter withholds is never a button and never sent; the others are", async () => {
   const { answers, options } = await drawn({ board: { facts: [], questions: [{ ...QUESTION, options: ["main: the default", "token=abcdefgh12345"] }] } });

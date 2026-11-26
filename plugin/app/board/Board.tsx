@@ -238,6 +238,11 @@ function Options({ instance, asked, answering }: { instance: string; asked: Boar
       const now = boardData(row.board)?.questions.find((each) => questionOccurrence(each) === occurrence);
       const said = now === undefined ? null : answerText(now, index);
       if (said === null || said !== text) throw new Error(BOARD.noLongerAsked);
+      // bb is asked whether it holds a request of its own on the thread NOW (an approval of the agent's harness, a
+      // question): a message then would be read as its answer. What was drawn knew it from bb's row of the thread;
+      // the press asks bb itself, once (no process: bb's own call), and where bb cannot say, nothing is sent.
+      const held = (await sdk.threads.interactions.list({ threadId: answering.threadId })) as readonly { status?: unknown }[];
+      if (held.some((each) => each.status === "pending")) throw new Error(BOARD.approvalFirst);
       return sendText(sdk, answering.threadId, said);
     }).then(
       () => noteSent(instance, occurrence, index),

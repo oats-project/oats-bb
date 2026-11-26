@@ -60,3 +60,50 @@ test("a Board tab that goes (its last fact and question gone) leaves the panel o
   await change({ facts: [], questions: [QUESTION] });
   expect(shown()).toBe("Instance");
 });
+
+test("the agent asks while its panel is open on Instance: the panel stays; the thread's line says so with Answer, and Answer turns the panel to Board, the focus on the question's first option", async () => {
+  const { panelAgents } = await import("../panel/handlers");
+  const app = await loadApp();
+  const Row = app.threadHeaderRows[0]!.component;
+  const CHILD = "panel-worktree-helper";
+  const rows = (asks: boolean) =>
+    panelAgents().map((agent) => {
+      if (agent.instance !== CHILD) return agent;
+      const { boardAsks: _asked, ...row } = agent;
+      return asks ? { ...row, hasBoard: true as const, boardAsks: true as const, waiting: { reason: "attention", message: "Which base branch?", since: QUESTION.since } } : { ...row, hasBoard: true as const, waiting: null };
+    });
+  let asks = false;
+  type Props = { threadId: string; projectId: string; environment: null };
+  const slot = renderSlot<Props, Contract>(
+    { component: (props: Props) => (<><Row {...props} /><InstancePanel threadId={props.threadId} /></>) } as never,
+    { threadId: CHILD_THREAD, projectId: "p", environment: null },
+    {
+      rpc: handlers({
+        snapshot: () => panelSnapshot(rows(asks)),
+        panelInstance: ({ instance }) => instanceAnswer(instance),
+        board: () => ({ at: BOARD_AT, supported: true, stale: false, board: { facts: [FACT], questions: asks ? [QUESTION] : [] }, claim: asks ? { producer: "oats.board", reason: "attention" } : null }),
+      }),
+      sidebarThreads: panelThreads(),
+      sdk: { threads: { interactions: { list: async () => [] } } } as never,
+    },
+  );
+  const shown = () => within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab").find((tab) => tab.getAttribute("aria-selected") === "true")?.textContent;
+  await slot.findByTestId("oats-panel-header", {}, { timeout: 4000 });
+  await waitFor(() => expect(within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Board", "Instance", "Soul"]));
+  expect(shown()).toBe("Instance");
+  asks = true;
+  await act(async () => {
+    slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  });
+  const answer = await waitFor(() => {
+    const button = slot.getByTestId("oats-status-act");
+    expect(button.textContent).toBe("Answer");
+    return button;
+  });
+  expect(slot.getByTestId("oats-identity-row").textContent).toMatch(/Needs you/);
+  expect(shown()).toBe("Instance"); // a screen never moves under a reader
+  fireEvent.click(answer);
+  await waitFor(() => expect(shown()).toBe("Board"));
+  await waitFor(() => expect(slot.getAllByTestId("oats-board-answer")[0]!.contains(document.activeElement)).toBe(true));
+});

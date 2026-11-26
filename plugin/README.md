@@ -953,6 +953,12 @@ person to send: bb has no way to put text in a thread's composer.
   asked. Nothing sent.**
 - While bb itself shows a request on the thread, or the agent waits on an approval of its harness,
   no option is offered; if that is found only at the press: **It waits on an approval. Nothing sent.**
+  At the press bb itself is asked, once, whether it holds a request on the thread (bb's own call,
+  no process); where bb cannot say, nothing is sent. A NAMED LIMIT: of the kernel's claims the
+  press reads the ONE the row shows (the newest with a message), so the board's own claim can
+  stand in front of a harness's `permission` claim that has no message (the Desktop reads every
+  live claim for that). For an agent on bb the harness's approval IS a request bb shows on the
+  thread, which is what the press asks bb for; an agent on tmux is offered no button at all.
 - While the roster is the last one read, or behind a lifecycle result ("Reading…"), no option is
   offered either. An option that is not offered is drawn as text, never as a control that is off.
 - After a press the question stays until the agent clears it, with **Sent.** beside the option and
@@ -988,7 +994,9 @@ where the memory leads (`app/panel/Panel.tsx`, `tabOf` then `boardTabOf`). WHERE
 DECIDED ONCE, when the board's first read lands: a panel that is open never turns by itself,
 neither to Board when the agent asks under a person reading another tab, nor away from Board
 when the agent clears its question under a person reading its facts. Only a press moves it; a
-Board tab that is no longer drawn (its last fact and question gone) leaves it on Instance.
+Board tab that is no longer drawn (its last fact and question gone) leaves it on Instance. A
+question asked while the panel is open on another tab is not missed: the thread's own line says
+"Needs you" with **Answer**, which turns the panel to Board.
 
 **The command.** bb takes a plugin's commands once, when it starts, with fixed titles: so the board
 has ONE, **Board**, with no shortcut and nothing per question. It is listed only on the thread of

@@ -28,7 +28,7 @@ test("one press is one send, however often the question's options are mounted an
       board: () => ({ at: BOARD_AT, supported: true, stale: false, board: { facts: [], questions: [Q1, Q2] }, claim: { producer: "oats.board", reason: "attention" } }),
     }, agents),
     sidebarThreads: { status: "ready" as const, threads: fixtureThreads() },
-    sdk: { threads: { send: async ({ input }: { input: { text: string }[] }) => (sent.push(input.map((part) => part.text).join("")), { ok: true }) } } as never as RenderSlotOptions<Contract>["sdk"],
+    sdk: { threads: { interactions: { list: async () => [] }, send: async ({ input }: { input: { text: string }[] }) => (sent.push(input.map((part) => part.text).join("")), { ok: true }) } } as never as RenderSlotOptions<Contract>["sdk"],
   });
   await waitFor(() => expect(slot.getByTestId("oats-board").getAttribute("data-state")).toBe("shown"));
   const zone = slot.getByTestId("oats-board-questions");

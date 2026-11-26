@@ -4,6 +4,10 @@
 //               one question, the board's own claim): the panel OPENS on Board, first in the row;
 //               the question with its options; the facts in bb's own list; the home's card draws
 //               the same question.
+//   board-later an agent that ASKS while its panel is open on another tab: a screen never moves
+//               under a reader. The panel opened on Instance (facts alone); the agent asks; the
+//               panel stays; the thread's own line says "Needs you" with Answer; Answer turns the
+//               panel to Board, the focus on the question's first option.
 //   board-busy  THE WORST CASE (specs: every screen has a worst-case twin, judged first): the same
 //               row with its board MULTIPLIED to the kernel's bounds: twelve facts with the longest
 //               label, value and unit the kernel takes and an address each, nine questions of two
@@ -23,12 +27,17 @@ const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test"
 const CHILD = { instance: "panel-worktree-helper", recorded: "thr_kjrgkze2sz", thread: "thr_mockups" };
 const PARENT = { instance: "redesign-ui-lead", recorded: "thr_bkyz48xf96", thread: "thr_redesign" };
 
-/** The recorded roster, with bb's own ids for its two threads; `change(board)` over the child's board. */
-function roster(threads, change = (board) => board) {
+/** The recorded roster, with bb's own ids for its two threads; `change(board)` over the child's board; `asks: false`: without its question and the claim the question set (as the kernel's row is before the agent asks). */
+function roster(threads, change = (board) => board, { asks = true } = {}) {
   let status = readFileSync(FIXTURE, "utf8");
   for (const agent of [CHILD, PARENT]) status = status.replaceAll(agent.recorded, threads.get(agent.thread).id);
   const document = JSON.parse(status);
-  for (const group of document.agents) for (const row of group.instances) if (row.instance === CHILD.instance) row.board = change(row.board);
+  for (const group of document.agents)
+    for (const row of group.instances)
+      if (row.instance === CHILD.instance) {
+        row.board = change(row.board);
+        if (!asks) Object.assign(row, { board: { ...row.board, questions: [] }, waitingOnYou: null });
+      }
   return document;
 }
 const rowOf = (document) => document.agents.flatMap((group) => group.instances).find((row) => row.instance === CHILD.instance);
@@ -103,6 +112,14 @@ export const stages = {
       await untilSnapshot(asksNow);
     },
   },
+  "board-later": {
+    label: "BDL",
+    enter: async ({ fake, threads, untilSnapshot }) => {
+      const document = roster(threads, undefined, { asks: false });
+      fake({ status: { stdout: JSON.stringify(document) }, "inspect --home --board": detailOf(rowOf(document).board) });
+      await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === CHILD.instance && agent.hasBoard === true && agent.boardAsks !== true && agent.waiting === null));
+    },
+  },
   "board-busy": {
     label: "BDB",
     enter: async ({ fake, threads, untilSnapshot }) => {
@@ -157,6 +174,54 @@ export default [
       check(asked === "Which base branch?", `${at} the home's card of that agent draws the same question, by the board's own component`, String(asked));
       await targets(page, viewport, check, at, `board-${viewport.name}-home-card`);
       await page.shot(`board-${viewport.name}-home-card`);
+    },
+  },
+  {
+    stage: "board-later",
+    name: "an agent asks while its panel is open on Instance: the panel stays (a screen never moves under a reader); the thread's line says it, and its Answer turns the panel to Board",
+    run: async ({ page, at, viewport, threads, check, fake }) => {
+      const selected = `[...document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]')].find((t) => t.getAttribute("aria-selected") === "true")?.innerText.trim() ?? ""`;
+      const before = roster(threads, undefined, { asks: false });
+      const after = roster(threads);
+      // (Each view starts from the agent that has not asked yet: the view before left it asking.)
+      fake({ status: { stdout: JSON.stringify(before) }, "inspect --home --board": detailOf(rowOf(before).board) });
+      // The server's roster is that one before anything is opened: the home is drawn, with no card of the agent.
+      await page.goto("/plugins/oats/home");
+      const quiet = await page.until(`document.querySelector(${JSON.stringify(testId("oats-home-tiles"))}) !== null && document.querySelector(${JSON.stringify(`${testId("oats-needs-card")}[data-instance="${CHILD.instance}"]`)}) === null ? "yes" : ""`, 60);
+      check(quiet === "yes", `${at} before it asks, the agent has no needs-you card on the home`, String(quiet));
+      const thread = threads.get(CHILD.thread);
+      const act = `document.querySelector(${JSON.stringify(testId("oats-status-act"))})`;
+      const line = `(${flat})(document.querySelector(${JSON.stringify(`${testId("oats-identity-row")} ${testId("oats-status-line")}`)}))`;
+      if (viewport.mobile) {
+        // At the phone's width bb has no side panel: the agent's panel is a page of its own, with no thread line beside it.
+        await page.goto(`/plugins/oats/agent/${CHILD.instance}`);
+        const opened = await page.until(`(() => { const now = ${selected}; return document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]').length === 3 && now === "Instance" ? now : ""; })()`, 60);
+        check(opened === "Instance", `${at} the page of an agent with facts alone opens on Instance, with a Board tab`, String(opened));
+        fake({ status: { stdout: JSON.stringify(after) }, "inspect --home --board": detailOf(rowOf(after).board) });
+        const asks = await page.until(`/Needs you/.test((${flat})(document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-panel-state")}`)}))) ? "yes" : ""`, 60);
+        await page.until("false", 2); // what a jump would need to show
+        check(asks === "yes" && (await page.evaluate(selected)) === "Instance", `${at} the agent asks while the page is on Instance: the header says "Needs you", and the page STAYS on Instance`, `asks: ${asks}; selected: ${await page.evaluate(selected)}`);
+        await page.evaluate(`document.getElementById("oats-panel-page-tab-board")?.click()`);
+        const there = await page.until(`(${flat})(document.querySelector(${JSON.stringify(inBoard("oats-board-question"))}))`, 30);
+        check(there === "Which base branch?", `${at} a press on Board shows the question`, String(there));
+        await page.shot(`board-${viewport.name}-later`);
+        return;
+      }
+      await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
+      await page.until(visible(testId("oats-open-panel")), 30);
+      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-open-panel"))}).click()`);
+      const opened = await page.until(`(() => { const now = ${selected}; return ${visible(testId("oats-panel"))} && document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]').length === 3 && now === "Instance" ? now : ""; })()`, 60);
+      check(opened === "Instance", `${at} the panel of an agent with facts alone opens on Instance, with a Board tab`, String(opened));
+      // The agent asks.
+      fake({ status: { stdout: JSON.stringify(after) }, "inspect --home --board": detailOf(rowOf(after).board) });
+      const said = await page.until(`(() => { const line = ${line}; const button = ${act}; return /Needs you/.test(line) && button && button.innerText.trim() === "Answer" ? line : ""; })()`, 60);
+      await page.until("false", 2); // what a jump would need to show
+      check(Boolean(said) && (await page.evaluate(selected)) === "Instance", `${at} the agent asks while the panel is open on Instance: the thread's line says "Needs you" with Answer, and the panel STAYS on Instance`, `the line: ${JSON.stringify(said)}; selected: ${await page.evaluate(selected)}`);
+      await page.shot(`board-${viewport.name}-later-stays`);
+      await page.evaluate(`${act}.click()`);
+      const turned = await page.until(`(() => { const now = ${selected}; const first = document.querySelector(${JSON.stringify(inBoard("oats-board-answer"))}); return now === "Board" && first !== null && first.contains(document.activeElement) ? (${flat})(document.querySelector(${JSON.stringify(inBoard("oats-board-question"))})) : ""; })()`, 40);
+      check(turned === "Which base branch?", `${at} Answer turns the panel to Board: the question, with the focus on its first option`, `${turned}; selected: ${await page.evaluate(selected)}`);
+      await page.shot(`board-${viewport.name}-later`);
     },
   },
   {

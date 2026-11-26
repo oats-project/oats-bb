@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // A9: the IdentityRow (experimental_threadHeaderRow).
+import { useState } from "react";
 import { afterEach, expect, test, vi } from "vitest";
-import { fireEvent, within } from "@testing-library/react";
+import { act, fireEvent, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
@@ -443,4 +444,42 @@ test("Answer on an agent whose board asks shows the Board tab, opens the panel a
   await vi.waitFor(() => expect(slot.getAllByTestId("oats-board-answer")[0]!.contains(document.activeElement)).toBe(true));
   expect(opened).toEqual([{ tab: { id: "home", context: { kind: "thread" }, availability: "fixed" } }]); // the thread's OATS tab is opened
   expect(slot.queryByTestId("oats-panel-waiting")).toBeNull(); // "Needs input" is on the Instance tab: not shown, and not looked for
+});
+
+// The press is FOR the agent of the line: a panel that then opens for ANOTHER agent does not take it.
+test("Answer on one agent, then a panel that opens for another agent: that panel opens by its own rule (on Board, its board asks), not on the tab the press asked for; the shot is spent", async () => {
+  const app = await loadApp();
+  const { InstancePanel } = await import("../../app/panel/Panel");
+  const Row = app.threadHeaderRows[0]!.component;
+  const other = fixtureAgents().find((agent) => agent.threadId === "thr_research")!.instance;
+  const question = { id: "q3", question: "Which base branch?", options: ["main: the default", "release: the 0.1 line"], hasContext: false, since: "2026-11-23T18:01:45.724Z" };
+  let panelOf: string | null = null;
+  let redraw: () => void = () => {};
+  const Both = (props: ExperimentalThreadHeaderRowProps) => {
+    const [, set] = useState(0);
+    redraw = () => set((count: number) => count + 1);
+    return (<><Row {...props} />{panelOf === null ? null : <InstancePanel threadId={panelOf} />}</>);
+  };
+  const slot = renderSlot<ExperimentalThreadHeaderRowProps, Contract>(
+    { component: Both } as never,
+    { threadId: "thr_release", projectId: "p", environment: null },
+    {
+      rpc: handlers({ board: ({ instance }: { instance: string }) => ({ at: "2026-11-23T18:17:00.000Z", supported: true, stale: false, board: { facts: [], questions: [question] }, claim: instance === other ? null : { producer: "agent", reason: "question" } }) } as never),
+      sidebarThreads: sidebarThreads(),
+      sdk: { threads: { interactions: { list: async () => [] } } } as never,
+      experimental_panel: { openTab: () => true } as never,
+    },
+  );
+  fireEvent.click(await slot.findByTestId("oats-status-act")); // Answer, for the agent of thr_release: it asks for Instance
+  const selected = () => slot.container.querySelector('[role="tab"][aria-selected="true"]')?.textContent;
+  panelOf = "thr_research"; // the panel that opens next is another agent's
+  await act(async () => redraw());
+  await vi.waitFor(() => expect(slot.getByTestId("oats-panel-name").getAttribute("title")).toBe(other));
+  await vi.waitFor(() => expect(selected()).toBe("Board")); // by its own rule: the press was not for it
+  // And the shot is spent: the first agent's panel, opened LATER, opens by its own rule too (its board holds an open
+  // question behind its own claim: Board), not on the Instance tab a press long ago asked for.
+  panelOf = "thr_release";
+  await act(async () => redraw());
+  await vi.waitFor(() => expect(slot.getByTestId("oats-panel-name").getAttribute("title")).not.toBe(other));
+  await vi.waitFor(() => expect(selected()).toBe("Board"));
 });

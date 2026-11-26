@@ -252,8 +252,9 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   const pressed = usePresses();
   const [mounted] = useState(() => ({ presses, chosen: pressedFor === agent.instance }));
   useEffect(() => {
-    // The one shot is this panel's: taken, so that the agent's panel opened another time opens by its own rule again.
-    if (pressedFor === agent.instance) pressedFor = null;
+    // The one shot is SPENT by the panel that opens after it: taken by the agent it was made for (above), and dropped
+    // by any other agent's panel, so that a press made for one agent never decides where a later panel opens.
+    pressedFor = null;
   }, [agent.instance, pressed]);
   const chosen = mounted.chosen || pressed !== mounted.presses;
   // Where this panel OPENS, decided once: when the board's first read lands, on Board if a question is open THEN.

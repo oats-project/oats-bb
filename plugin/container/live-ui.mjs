@@ -769,12 +769,6 @@ function busyStage() {
       // Claude Code is in its place: READ (the stage took it away for the failed starts).
       const claude = execFileSync("sh", ["-c", "command -v claude || true"], { encoding: "utf8" }).trim();
       check(claude !== "" && existsSync(claude) && !existsSync(CLAUDE_AWAY), "BUSY Claude Code is in its place when the stage leaves", `command -v claude: "${claude}"; the note of where it was is ${existsSync(CLAUDE_AWAY) ? "still there" : "gone"}`);
-      // bb's own concurrency limit is back: asked, and READ.
-      for (const { host, before } of limited.splice(0)) {
-        tell("concurrency-limit", "host", host, "auto");
-        const after = tell("concurrency-limit", "host", host, "--json");
-        check(after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", `before ${before.slice(0, 200)} | after ${after.slice(0, 200)}`);
-      }
       if (starOff) {
         const said = tell("plugin", "enable", "bb--github-star");
         check(!said.startsWith("(bb plugin enable failed"), "BUSY bb's star request is turned on again when the stage leaves", said.slice(0, 200));
@@ -789,6 +783,23 @@ function busyStage() {
       while (Date.now() < deadline && running().length > 0) await sleep(2000);
       const still = running();
       check(still.length === 0, "BUSY no turn of the stage's is still held when it leaves: bb shows none of its threads active", still.map((thread) => thread.title).join(" | "));
+      // bb's own concurrency limit is back: ASKED UNTIL bb SAYS SO, and only now, once the held turns have ended.
+      // (It was asked ONCE, right after the turns were let go, and read at once: in one light run bb was then so busy
+      // ending fourteen turns, 12.8 s for the two commands, that the asking failed, unseen, and the read said the
+      // raised limit. Each asking's answer is kept: the check says them.)
+      for (const { host, before } of limited.splice(0)) {
+        const answers = [];
+        let after = "";
+        const until = Date.now() + 60_000;
+        for (;;) {
+          answers.push(tell("concurrency-limit", "host", host, "auto").replace(/\s+/g, " ").slice(0, 140));
+          after = tell("concurrency-limit", "host", host, "--json");
+          if (after === before || Date.now() > until) break;
+          await sleep(2000);
+        }
+        check(after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${answers.length} time(s); bb answered: ${[...new Set(answers)].join(" | ")}`);
+        if (answers.length > 1) console.log(`NOTE BUSY bb's limit was asked back ${answers.length} times before bb said so; bb answered: ${[...new Set(answers)].join(" | ")}`);
+      }
       const failed = [];
       for (const id of ids) {
         const said = tell("thread", "archive", id);

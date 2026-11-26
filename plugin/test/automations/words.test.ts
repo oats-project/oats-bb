@@ -20,7 +20,6 @@ import {
   runState,
   sourceLabel,
   sourceParams,
-  summaryLine,
   taskParts,
   HERE,
   hereOf,
@@ -51,20 +50,6 @@ import { rowOf, schedules, triggers } from "./fixtures";
 
 const NOW = Date.parse("2026-11-21T12:00:00.000Z");
 const row = (raw: Record<string, unknown>, kind: "schedule" | "trigger" = "schedule"): AutomationRow => automationRowOf({ id: "x", ...raw }, kind)!;
-
-describe("a row's summary", () => {
-  it("the authored one; else the first line of what it sends, marked derived; else none", () => {
-    const list = schedules();
-    expect(summaryLine(rowOf(list, "local/daily-review"))).toEqual({ text: "Review open pull requests every weekday morning", title: "Review open pull requests every weekday morning", derived: false });
-    expect(summaryLine(rowOf(list, "local/hourly-check"))).toEqual({ text: "Check the build queue.", title: "No summary set — first line of the prompt", derived: true });
-    expect(summaryLine(list.rows.find((entry) => entry.run === "wake")!)).toMatchObject({ text: "Anything new on your review?", derived: true });
-    // A command has nothing it sends to an agent: no label is made from its argv.
-    expect(summaryLine(row({ kind: "command", argv: ["oats", "status"] }))).toBeNull();
-    expect(summaryLine(row({ kind: "operation", operation: "knowledge:harvest" }))).toBeNull();
-    expect(summaryLine(row({ kind: "spawn", task: "\n\n  second line is the first with text  \nthird" }))).toMatchObject({ text: "second line is the first with text", derived: true });
-    expect(summaryLine(rowOf(triggers(), "oats-real/docs-review"))).toMatchObject({ text: "Review docs PR {repo}#{number}.", derived: true });
-  });
-});
 
 describe("a soul and where it comes from", () => {
 

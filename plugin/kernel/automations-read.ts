@@ -121,9 +121,7 @@ export function runOf(raw: unknown): AutomationRun | null {
     subject: text(raw.subject),
     key: text(raw.key),
     instance: text(session.instance) ?? text(raw.instance),
-    home: text(session.home) ?? text(raw.home),
     runId: text(raw.runId),
-    settled: typeof raw.settled === "boolean" ? raw.settled : null,
   };
 }
 
@@ -355,7 +353,7 @@ function statusOf(row: Json, source: string | null): TriggerStatus {
   return {
     fired: list(row.fired)
       .filter(record)
-      .map((entry) => ({ key: text(entry.key), at: text(entry.at), outcome: text(entry.outcome), event: eventWords(entry.event), label: eventLabel(entry, source), instance: displayLine(entry.instance), home: text(entry.home) })),
+      .map((entry) => ({ key: text(entry.key), at: text(entry.at), outcome: text(entry.outcome), event: eventWords(entry.event), label: eventLabel(entry, source), instance: displayLine(entry.instance) })),
     firedTotal: integer(row.firedTotal),
     live: list(row.live)
       .filter(record)

@@ -507,6 +507,39 @@ const scenes = [
     },
   },
   {
+    stage: "automations-busy-held",
+    name: "Automations: the busy list under a notice",
+    run: async ({ page, at, viewport, check }) => {
+      // The worst case under a notice: 37 automations read, then a re-read the kernel refuses. The notice stands over the list;
+      // the card of rows keeps a floor, and where the page's height does not hold the head, the notice and that floor, the page scrolls whole.
+      await open(page, "", ROW);
+      await settle(page, count(ROW), 37);
+      await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-automations-refresh"))})?.disabled === false ? "ready" : "")()`, 40);
+      refuseBusy();
+      await page.evaluate(click(testId("oats-automations-refresh")));
+      const notice = testId("oats-automations-failed");
+      const failed = await page.until(`(() => { const t = ${textOf(notice)}; return t !== "" && !t.includes("Refreshing…") && document.querySelector(${JSON.stringify(testId("oats-automations-rereading"))}) === null ? t : ""; })()`, 40);
+      check(/^Schedules could not be read/.test(failed ?? "") && (await page.evaluate(count(ROW))) === 37, `${at} the refused re-read is said over the 37 rows that were read`, String(failed).slice(0, 120));
+      const card = testId("oats-automations-rows");
+      const sizes = JSON.parse(await page.evaluate(`(() => { const page = document.querySelector(${JSON.stringify(testId("oats-automations-page"))}); const card = document.querySelector(${JSON.stringify(card)}); const row = document.querySelector(${JSON.stringify(`${ROW}[data-state="needs"]`)}); return JSON.stringify({ card: Math.round(card.getBoundingClientRect().height), row: Math.round(row.getBoundingClientRect().height), page: page.clientHeight, whole: page.scrollHeight }); })()`));
+      // The row that needs a person is the first, and the tallest kind of row there is: the card holds it whole.
+      check(sizes.card >= 352 && sizes.card >= sizes.row, `${at} under the notice the card of rows keeps its floor, and holds the row that needs a person whole`, JSON.stringify(sizes));
+      // Its "Answer" can be reached: brought into view, it is on screen (the page scrolls whole where it has to).
+      const answer = `${ROW}[data-state="needs"] ${testId("oats-automation-answer")}`;
+      const reached = await page.evaluate(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(answer)})].find((each) => each.getClientRects().length > 0); if (!e) return "none"; e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect(); const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return r.top >= 0 && r.bottom <= innerHeight && top !== null && (e === top || e.contains(top)) ? "reached" : "hidden " + Math.round(r.top) + " " + Math.round(r.bottom); })()`);
+      check(reached === "reached", `${at} under the notice the "Answer" of the automation that asks can be brought on screen, with nothing over it`, String(reached));
+      await page.shot(`automations-${viewport.name}-busy-held`, { targets: true });
+      // And the last of the 37 rows: the card scrolled to its end and brought into view.
+      const last = await page.evaluate(`(() => { const card = document.querySelector(${JSON.stringify(card)}); card.scrollTop = card.scrollHeight; const rows = document.querySelectorAll(${JSON.stringify(ROW)}); const e = rows[rows.length - 1]; e.scrollIntoView({ block: "end" }); const r = e.getBoundingClientRect(); return r.bottom <= innerHeight + 0.5 && r.bottom > 0; })()`);
+      check(last === true, `${at} under the notice the last of the 37 rows can be brought on screen`);
+      await page.shot(`automations-${viewport.name}-busy-held-end`, { targets: true });
+      // The stage is entered once for every window: the lists answer again before the next one reads them.
+      readBusy();
+      await page.evaluate(click(testId("oats-automations-refresh")));
+      await page.until(`(() => document.querySelector(${JSON.stringify(notice)}) === null ? "gone" : "")()`, 40);
+    },
+  },
+  {
     stage: "automations-slow",
     name: "Automations: reading, reading again, and a re-read that fails over the list still shown",
     run: async ({ page, at, viewport, check, sleep }) => {
@@ -688,6 +721,9 @@ const OLD_OATS = JSON.stringify({ schemaVersion: 1, name: "@awebai/oats", versio
 // What the "automations-slow" stage's scene changes while it runs: the lists slow, then the schedules refused.
 let slow = () => undefined;
 let refuse = () => undefined;
+// What the "automations-busy-held" stage's scene does once the busy lists are read: the schedules refused.
+let refuseBusy = () => undefined;
+let readBusy = () => undefined;
 
 /** bb's own automations, for the busy list's check of our type against bb's page: one is enough to draw bb's row. Made once; bb keeps it. */
 function bbAutomation() {
@@ -706,6 +742,17 @@ export const stages = {
     enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
       bbAutomation();
       fake({ status: { stdout: statusWithRealIds(threads) }, "schedule list": { stdout: BUSY.schedules }, "trigger list": { stdout: BUSY.triggers }, "trigger status": { stdout: BUSY.status } });
+      await settled(untilSnapshot);
+    },
+  },
+  // The busy set once more, for the scene that has the kernel refuse a re-read over it.
+  "automations-busy-held": {
+    label: "AU13",
+    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
+      const busyLists = { status: { stdout: statusWithRealIds(threads) }, "trigger list": { stdout: BUSY.triggers }, "trigger status": { stdout: BUSY.status } };
+      refuseBusy = () => fake({ ...busyLists, "schedule list": { stdout: REFUSAL } });
+      readBusy = () => fake({ ...busyLists, "schedule list": { stdout: BUSY.schedules } });
+      readBusy();
       await settled(untilSnapshot);
     },
   },

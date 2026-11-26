@@ -51,12 +51,8 @@ export const automationRun = z.object({
   key: text,
   /** the agent the run made or woke: a schedule run's `session.instance`, a trigger fire's `instance` */
   instance: text,
-  /** that agent's home, as the kernel recorded it */
-  home: text,
   /** the kernel's own id of a schedule's run: opaque, a row's key and nothing else; null on a row from before the history */
   runId: text,
-  /** whether the kernel holds the run's outcome as final; null where it does not say */
-  settled: z.boolean().nullable(),
 });
 
 /** What a trigger watches. `params` are a capability source's, as the trigger file gives them. */
@@ -159,7 +155,7 @@ export const automationList = z.object({
 });
 
 const says = z.object({ code: text, message: text });
-const fired = z.object({ key: text, at: text, outcome: text, event: text, label: text, instance: text, home: text });
+const fired = z.object({ key: text, at: text, outcome: text, event: text, label: text, instance: text });
 /** One failed spawn of a trigger (feature `trigger-failure-history`): one row per attempt; `resolved` once a later attempt of its key spawned. */
 export const triggerFailure = z.object({
   attempt: count,

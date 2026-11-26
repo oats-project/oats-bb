@@ -1,10 +1,12 @@
 // Automations' verbs through the whole backend: bb's fake plugin host, the real host entry, and
 // the fake `oats` printing what the real kernel printed.
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { automationList, host, triggerStatus } from "../../contract/automations";
 import { LISTS_TTL_MS } from "../../server/automations";
 import { startBackend, type Backend } from "../support/backend";
 import { alive } from "../support/fake-oats";
+import { fixturePath } from "./fixtures";
 
 let backend: Backend | undefined;
 afterEach(async () => {
@@ -36,11 +38,45 @@ describe("every trigger's state, beside the lists", () => {
     expect(await allStatus(backend)).toEqual([["trigger", "status", "--json"]]);
   });
 
-  it("a kernel that does not list `trigger-failure-history` is never said to keep failures, whatever its answer holds", async () => {
-    backend = await startBackend();
+  // The kernel's fields of a failed spawn (`failures[]`: attempt, at, key, event, subject, number, code, message, resolved: {at, instance};
+  // `failuresTotal`), as its contract names them for the feature `trigger-failure-history` (awebai/oats docs/desktop-cli-api.md), ADDED BY
+  // HAND to the recorded `trigger status`: no released kernel answers them yet (test/fixtures/automations/README.md).
+  const withFailures = (): string => {
+    const answer = JSON.parse(readFileSync(fixturePath("trigger-status.json"), "utf8")) as { result: { triggers: Record<string, unknown>[] } };
+    const row = answer.result.triggers.find((entry) => (entry.qualifiedId ?? entry.id) === "oats-real/proposal-review")!;
+    const failure = { key: "oats-real/proposal-review:44", event: "opened", subject: "44", number: 44, code: "E_SPAWN_NAME", message: "the name is taken" };
+    row.failures = [
+      { ...failure, attempt: 2, at: "2026-11-21T20:30:00.000Z" },
+      { ...failure, attempt: 1, at: "2026-11-21T20:25:00.000Z", resolved: { at: "2026-11-21T20:40:00.000Z", instance: "oats-developer-review-pr-44" } },
+    ];
+    row.failuresTotal = 7;
+    return JSON.stringify(answer);
+  };
+  const versionWith = (features: string[]): string => JSON.stringify({ schemaVersion: 1, name: "@awebai/oats", version: "0.70.5", desktopApi: 1, automationsApi: 1, features });
+  const proposal = (lists: Statuses) => triggerStatus.parse(lists.statuses.statuses!.find((entry) => entry.id === "oats-real/proposal-review")!.status);
+
+  it("NAMED FIELDS ADDED TO A RECORDED ANSWER: a kernel that does not list `trigger-failure-history` is never said to keep failures, though its answer holds them", async () => {
+    backend = await startBackend({ verbs: { "trigger status": { stdout: withFailures() }, version: { stdout: versionWith(["automations", "automation-descriptions", "trigger-sources"]) } } });
     const lists = await backend.rpc<Lists & Statuses>("automations");
     expect(lists.oats!.features).not.toContain("trigger-failure-history");
-    for (const entry of lists.statuses.statuses!) expect(triggerStatus.parse(entry.status).failures).toBeNull();
+    expect([proposal(lists).failures, proposal(lists).failuresTotal]).toEqual([null, null]);
+    // One trigger's own read is held to the same.
+    const one = triggerStatus.parse(await backend.rpc("triggerStatus", { id: "oats-real/proposal-review" }));
+    expect([one.failures, one.failuresTotal]).toEqual([null, null]);
+  });
+
+  it("NAMED FIELDS ADDED TO A RECORDED ANSWER: a kernel that lists the feature has its failed spawns read as rows: the attempt, when, the event by its subject, the code and message, and what a later attempt made", async () => {
+    backend = await startBackend({ verbs: { "trigger status": { stdout: withFailures() }, version: { stdout: versionWith(["automations", "automation-descriptions", "trigger-sources", "trigger-failure-history"]) } } });
+    const lists = await backend.rpc<Lists & Statuses>("automations");
+    const state = proposal(lists);
+    expect(state.failuresTotal).toBe(7);
+    expect(state.failures).toEqual([
+      { attempt: 2, at: "2026-11-21T20:30:00.000Z", key: "oats-real/proposal-review:44", event: "opened", label: "#44", code: "E_SPAWN_NAME", message: "the name is taken", instance: null, resolved: null },
+      { attempt: 1, at: "2026-11-21T20:25:00.000Z", key: "oats-real/proposal-review:44", event: "opened", label: "#44", code: "E_SPAWN_NAME", message: "the name is taken", instance: null, resolved: { at: "2026-11-21T20:40:00.000Z", instance: "oats-developer-review-pr-44" } },
+    ]);
+    // A row the kernel sent no `failures` key for claims none, feature or not: the plugin reads what the answer holds.
+    const other = triggerStatus.parse(lists.statuses.statuses!.find((entry) => entry.id === "local/pr-triage")!.status);
+    expect(other.failures).toBeNull();
   });
 
   it("the kernel's refusal of it is answered beside the lists, which stand", async () => {

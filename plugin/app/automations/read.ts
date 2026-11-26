@@ -8,8 +8,8 @@ import { rpcContract } from "../../contract";
 import { attempt, onWindowReset, useRead } from "../store";
 import type { Contract, Read, Result } from "../store";
 import type { AutomationKind, TriggerStatuses } from "../../contract/automations";
-import type { Agent, AgentState } from "../../model/types";
-import { claimOf, state as stateOf } from "../../model/view";
+import type { Agent, AgentState, BbThread } from "../../model/types";
+import { state as stateOf } from "../../model/view";
 import { useOats } from "../oats";
 import type { PageMark } from "../workspace/pages";
 import { FAILED_RUN_TEXT, failing, statusFor } from "./words";
@@ -66,8 +66,9 @@ export function useAgents(): ReadonlyMap<string, { agent: Agent; state: AgentSta
 /**
  * Which agents of the roster ask, for the sidebar's mark: read from the window's own copy of the
  * roster and bb's own list of threads, and never by a read of its own (the sidebar reads the
- * roster once: a second reader there would read it twice at every change). An agent asks by the
- * kernel's claim, or by a question its thread waits on (the two halves of the tree's "Needs you").
+ * roster once: a second reader there would read it twice at every change). An agent's state is the
+ * tree's own rule over the kernel's row and the thread bb lists for it, so the dot, the row and the
+ * filter cannot disagree on who asks.
  */
 function useAsksNow(): ReadonlyMap<string, { state: AgentState }> | null {
   // Not enabled, not live: this reader starts no read of the roster and repeats none; it sees the copy the sidebar's own reader keeps.
@@ -76,8 +77,9 @@ function useAsksNow(): ReadonlyMap<string, { state: AgentState }> | null {
   const roster = snapshot === undefined ? undefined : snapshot.ok ? snapshot.agents : snapshot.last?.agents;
   return useMemo(() => {
     if (roster === undefined) return null;
-    const pending = new Set(threads.filter((thread) => thread.hasPendingInteraction === true).map((thread) => thread.id));
-    return new Map(roster.map((agent) => [agent.instance, { state: claimOf(agent) !== null || (agent.threadId !== null && pending.has(agent.threadId)) ? ("needs-you" as const) : ("idle" as const) }]));
+    // By the tree's own rule (model/view.ts `state`), with the thread bb lists for the agent: "outside" comes before "needs-you" there, and so it does here.
+    const byId = new Map(threads.map((thread) => [thread.id, thread]));
+    return new Map(roster.map((agent) => [agent.instance, { state: stateOf(agent, agent.threadId === null ? null : ((byId.get(agent.threadId) as BbThread | undefined) ?? null)) }]));
   }, [roster, threads]);
 }
 

@@ -19,6 +19,9 @@ import { useHere } from "./here";
 import { attention, EMPTY, filterList, inOrder, hostNameHow, hostUnnamed, LIST_FILTERS, listBanners, NO_MATCH, oneList, rowLine, schedulerOffLine, SEARCH_FROM, searchRows, statusFor } from "./words";
 import type { Asking, Attention, LinePart, ListFilter } from "./words";
 
+/** The least height of the card of rows: room for a busy row or two at a phone's width. Under it the card is not squeezed: the page scrolls whole. */
+export const CARD_FLOOR = "min-h-[22rem]";
+
 /** What a row's acts add to it, where the page has them: its switch and its menu, at the row's end. */
 export type RowActs = { switchOf: (row: AutomationRow) => ReactNode; menuOf: (row: AutomationRow) => MenuItem[] };
 
@@ -153,7 +156,7 @@ export function List({ schedules, triggers, statuses, now, filter, onFilter, que
   const count = (id: ListFilter): number => filterList(all, id, statuses, asking).length;
   return (
     // The notices, the search and the filter keep their place; the card of rows takes what is left and scrolls alone.
-    <div data-testid="oats-automations-list" className="flex min-h-0 flex-1 flex-col gap-3">
+    <div data-testid="oats-automations-list" className="flex flex-1 flex-col gap-3">
       {banners.hostUnnamed ? (
         <div data-testid="oats-automations-host-unnamed">
           <Notice tone="warning" title={hostUnnamed(here).title} details={hostNameHow(here)} />
@@ -183,7 +186,7 @@ export function List({ schedules, triggers, statuses, now, filter, onFilter, que
               <Empty title={NO_MATCH} />
             </div>
           ) : (
-            <div role="list" aria-label="Automations" data-testid="oats-automations-rows" className={`${CARD} ${ROWS} min-h-0 flex-1 overflow-y-auto`}>
+            <div role="list" aria-label="Automations" data-testid="oats-automations-rows" className={`${CARD} ${ROWS} ${CARD_FLOOR} flex-1 basis-0 overflow-y-auto`}>
               {drawn.map((row) => {
                 const status = statusFor(row, statuses);
                 const asks = asking?.(row) ?? null;

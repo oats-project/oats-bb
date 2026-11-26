@@ -37,11 +37,14 @@ export type AgentLink = (instance: string) => RunAgent | null;
 const keyOf = (entry: RunEntry, at: number): string =>
   `${entry.owner.kind}:${entry.owner.id}:${entry.of}:${entry.of === "run" ? (entry.run.runId ?? at) : entry.of === "fired" ? (entry.fired.key ?? at) : entry.of === "failure" ? `${entry.failure.key ?? ""}#${entry.failure.attempt ?? at}` : at}:${entry.at ?? ""}`;
 
-function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, open, onToggle }: { entry: RunEntry; line: RunLine; now: number; withOwner: boolean; onOpenOwner?: (owner: RunOwner) => void; agentLink?: AgentLink; open: boolean; onToggle: () => void }) {
+function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, newest, open, onToggle }: { entry: RunEntry; line: RunLine; now: number; withOwner: boolean; onOpenOwner?: (owner: RunOwner) => void; agentLink?: AgentLink; /** this is the newest entry of the table that names its agent */ newest: boolean; open: boolean; onToggle: () => void }) {
   const when = runWhen(line.at, now);
   const said = line.error !== null && (line.error.code !== null || line.error.message !== null) ? line.error : null;
-  const agent = line.agent === null ? null : (agentLink?.(line.agent) ?? null);
-  // An agent that asks is the first thing its run says.
+  const known = line.agent === null ? null : (agentLink?.(line.agent) ?? null);
+  // What an agent is NOW (it asks; it is stopped) is said once, on the newest run that names it: an agent that many runs name (a wake's:
+  // every run wakes the one agent) does not turn each of them into "Needs you". Every run of it still opens its chat, and says what came of that run.
+  const agent = known === null ? null : newest ? known : { ...known, asks: false, start: null };
+  // An agent that asks is the first thing its newest run says.
   const mark = MARKS[agent?.asks ? "asks" : line.mark];
   const word = agent?.asks ? "Needs you" : [line.what, line.word].filter(Boolean).map((text) => shown(text as string)).join(" · ");
   const tone = agent?.asks || line.mark === "unknown" ? "text-warning-text" : line.mark === "failed" ? "text-destructive-text" : "text-muted-foreground";
@@ -52,11 +55,12 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, open, onTogg
       {/* The row: the mark, when, (in the Runs tab: its automation), what came of it, the agent. Nothing else. */}
       <div className={`${RUN_ROW} ${TARGET} relative`}>
         {/* The WHOLE row is the way into the chat of the agent the run made: one button under the row's content. A run whose agent is gone, or that made none, has none, and no chevron. */}
-        {agent === null ? null : <button type="button" data-testid="oats-run-row" aria-label={`Open ${shown(line.agent ?? "")}`} className="absolute inset-0 cursor-pointer rounded-sm hover:bg-accent" onClick={agent.open} />}
+        {agent === null ? null : <button type="button" data-testid="oats-run-row" aria-label={`Open ${shown(line.agent ?? "")}`} title={when?.title} className="absolute inset-0 cursor-pointer rounded-sm hover:bg-accent" onClick={agent.open} />}
         <span role="img" aria-label={mark.name} className={`${THROUGH} inline-flex shrink-0 ${mark.tone}`}>
           {agent?.asks ? <StateMark state="needs-you" hidden /> : <Icon name={mark.icon} className="size-4" />}
         </span>
-        <time dateTime={line.at ?? undefined} title={when?.title} className={`${THROUGH} min-w-[16ch] shrink-0 whitespace-nowrap text-sm tabular-nums text-foreground`}>
+        {/* The whole time is one hover away: on the row's own button where it has one (what lies over the button lets the pointer through), else on the time. */}
+        <time dateTime={line.at ?? undefined} title={agent === null ? when?.title : undefined} className={`${agent === null ? "relative" : THROUGH} min-w-[16ch] shrink-0 whitespace-nowrap text-sm tabular-nums text-foreground`}>
           {when?.label ?? "—"}
         </time>
         {withOwner ? (
@@ -130,13 +134,21 @@ export type RunsProps = {
   cut?: { count: number | null } | null;
   /** An automation's own page: the newest run stands open when it failed, as bb's own does. */
   openFirst?: boolean;
+  /** The whole table these entries are drawn from, where a filter cut it: which run is the newest of its agent is said of the whole. */
+  all?: readonly RunEntry[];
 };
 
-export function Runs({ entries, now, withOwner = false, onOpenOwner, agentLink, step, cut = null, openFirst = false }: RunsProps) {
+export function Runs({ entries, now, withOwner = false, onOpenOwner, agentLink, step, cut = null, openFirst = false, all = entries }: RunsProps) {
   const [shownCount, setShownCount] = useState(step);
   // Which rows a person opened or closed; the first, where it failed and nobody touched it, is open.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
   const drawn = entries.slice(0, shownCount);
+  // The newest entry that names each agent (the table is newest first): the one that says what the agent is now.
+  const newestOf = new Map<string, RunEntry>();
+  for (const entry of all) {
+    const name = runLine(entry).agent;
+    if (name !== null && !newestOf.has(name)) newestOf.set(name, entry);
+  }
   if (entries.length === 0)
     return (
       <p data-testid="oats-runs-empty" className="py-1 text-sm text-muted-foreground">
@@ -150,7 +162,7 @@ export function Runs({ entries, now, withOwner = false, onOpenOwner, agentLink, 
           const key = keyOf(entry, at);
           const line = runLine(entry);
           const open = toggled.get(key) ?? (openFirst && at === 0 && line.mark === "failed");
-          return <Row key={key} entry={entry} line={line} now={now} withOwner={withOwner} onOpenOwner={onOpenOwner} agentLink={agentLink} open={open} onToggle={() => setToggled((before) => new Map(before).set(key, !open))} />;
+          return <Row key={key} entry={entry} line={line} now={now} withOwner={withOwner} onOpenOwner={onOpenOwner} agentLink={agentLink} newest={line.agent !== null && newestOf.get(line.agent) === entry} open={open} onToggle={() => setToggled((before) => new Map(before).set(key, !open))} />;
         })}
         {entries.length > shownCount ? (
           <div className="p-1">
@@ -211,7 +223,7 @@ export function RunsTab({ entries, cut, now, onOpenOwner, agentLink }: { entries
         </div>
       )}
       {/* A new filter is a new table: it starts at its first rows again. */}
-      <Runs key={`${owner ?? ""}:${filter.failed}`} entries={kept} now={now} withOwner onOpenOwner={onOpenOwner} agentLink={agentLink} step={RUNS_SHOWN.tab} cut={cut ? { count: null } : null} />
+      <Runs key={`${owner ?? ""}:${filter.failed}`} entries={kept} all={entries} now={now} withOwner onOpenOwner={onOpenOwner} agentLink={agentLink} step={RUNS_SHOWN.tab} cut={cut ? { count: null } : null} />
     </div>
   );
 }

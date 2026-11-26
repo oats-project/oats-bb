@@ -6,6 +6,7 @@ import { afterEach, expect, test } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
+import { fixtureAgents } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import { AT, OATS, STATUSES } from "./handlers";
@@ -82,4 +83,17 @@ test("while an agent an automation made asks, the row carries an amber dot, befo
   const calmSlot = await sidebar({ automations: lists(calm(asks), calm(triggers())) });
   const calmRow = await calmSlot.findByTestId("oats-page-link-automations");
   await waitFor(() => expect(Array.from(calmRow.querySelectorAll('[data-testid="oats-mark"]')).map((dot) => dot.getAttribute("aria-label"))).toEqual(["Automations, needs you"]));
+});
+
+test("the amber dot is by the row's own rule: an agent that runs outside OATS is told as that, not as asking, though it has a claim", async () => {
+  const list = schedules();
+  const asks = { ...list, rows: list.rows.map((row) => (row.id === "local/daily-review" ? { ...row, recentRuns: row.recentRuns.map((run) => ({ ...run, instance: "release-070-maintainer" })) } : row)) };
+  const report = { code: "running-outside-oats" as const, backend: "bb", message: "a harness runs in release-070-maintainer on bb, and OATS recorded this instance stopped" };
+  const agents = fixtureAgents().map((agent) => (agent.instance === "release-070-maintainer" ? { ...agent, sessionEnd: "stopped" as const, outsideOats: report } : agent));
+  const app = await loadApp();
+  const slot = renderSlot<PluginThreadListProps, Contract>(app.threadLists[0]!, { activeThreadId: null, onNavigate: () => undefined } as PluginThreadListProps, { rpc: handlers({ automations: lists(calm(asks), calm(triggers())) }, agents), sidebarThreads: sidebarThreads() });
+  const row = await slot.findByTestId("oats-page-link-automations");
+  await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("automations"));
+  await slot.findByTestId("oats-tree");
+  expect(mark(row)).toBeNull();
 });

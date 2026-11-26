@@ -30,19 +30,6 @@ export const GROUPS = [{ id: "here" }, { id: "attention" }, { id: "elsewhere" }]
 
 
 
-// ---- the summary line ----
-const PROMPT_LINE = "No summary set — first line of the prompt";
-/**
- * The row's summary: the authored description, else the first non-empty line of what it sends to
- * an agent (a spawn's or a trigger's task, a wake's message), marked derived; else null (a command
- * or an operation: "No summary", never a label made from its argv).
- */
-export function summaryLine(row: AutomationRow): { text: string; title: string; derived: boolean } | null {
-  if (row.description !== null) return { text: row.description, title: row.description, derived: false };
-  const prompt = row.run === "wake" ? row.message : row.run === "spawn" ? row.task : null;
-  const first = prompt === null ? undefined : prompt.split(/\r\n|[\n\r\u2028\u2029]/).map((line) => line.trim()).find((line) => line !== "");
-  return first === undefined ? null : { text: first, title: PROMPT_LINE, derived: true };
-}
 
 
 /** A harness's display name (Claude, Pi, Codex), else the value as reported. */
@@ -303,13 +290,8 @@ export function runState(row: AutomationRow): RunState | null {
   return running !== null || unknown !== null || pendingWake !== null ? { running, unknown, pendingWake } : null;
 }
 
-// The kernel's own shell-safe word test for a --dir it prints.
-const shellWord = (value: string): string => (/^[\w./@%+=:,-]+$/.test(value) ? value : `'${value.replaceAll("'", `'\\''`)}'`);
 
 
-// ---- the failed-run mark ----
-/** The producer's words for a run that did not happen. */
-export const FAILED_OUTCOMES: readonly string[] = ["launch-failed", "invalid"];
 /** What the red mark says, after the row's name: "Automations, a failure". */
 export const FAILED_RUN_TEXT = ", a failure";
 
@@ -432,7 +414,7 @@ export function ownerWords(row: AutomationRow): string | null {
 /** One part of the small line. `lead` is said plainly before a text that carries a tone ("Last 1 h ago, " before a red "Launch failed"). */
 export type LinePart = { text: string; lead?: string; title?: string; tone?: "bad" | "warn" | "ask" };
 /** A trigger's state, as much as the row's line reads of it: its last fire, its last poll and its failed spawns. */
-export type LineStatus = { fired: readonly { at: string | null; label: string | null }[]; lastPoll: { ok: boolean } | null; lastError: { at: string | null } | null; failures: readonly { at: string | null; resolved: unknown }[] | null };
+export type LineStatus = { fired: readonly { at: string | null; label: string | null }[]; lastPoll: { ok: boolean } | null; lastError: { at: string | null; key: string | null } | null; failures: readonly { at: string | null; resolved: unknown }[] | null };
 
 /** Why a row cannot run on the machine, as a failure: its account, its trust, its definition. Null where nothing stops it. */
 function stoppedPart(row: AutomationRow): LinePart | null {
@@ -450,8 +432,8 @@ const time = (iso: string | null): number => {
 };
 /**
  * What failed last on a trigger: its failed last poll, or its failed spawn that no later spawn
- * followed (with a failure history: the newest failure, unless resolved; without: the last error,
- * unless a fire is newer). A schedule's failure is its last run's outcome, said with the run.
+ * followed (with a failure history: the newest failure, unless resolved; without: the last error
+ * of a spawn, unless a fire is newer). A schedule's failure is its last run's outcome, said with the run.
  */
 function triggerFailure(row: AutomationRow, status: LineStatus | null): LinePart | null {
   // A capability source's check that failed at a poll: the definition stands, its source no longer answers to it.
@@ -463,7 +445,10 @@ function triggerFailure(row: AutomationRow, status: LineStatus | null): LinePart
     const newest = status.failures[0];
     return newest !== undefined && newest.resolved === null && time(newest.at) >= fired ? { text: "Launch failed", tone: "bad" } : null;
   }
-  return status.lastError !== null && time(status.lastError.at) > fired ? { text: "Launch failed", tone: "bad" } : null;
+  // Without a history, the kernel's last error is a failed SPAWN only where it names the event it was for (`key`): a failed poll or
+  // source check writes the same field with no key, and the kernel never clears it, so a poll that failed once and mended would read
+  // as a failed launch until the next fire.
+  return status.lastError !== null && status.lastError.key !== null && time(status.lastError.at) > fired ? { text: "Launch failed", tone: "bad" } : null;
 }
 
 /** A schedule's last run: when, then what came of it in a person's word, red where it did not launch and a warning where nobody knows. Null where it never ran. */

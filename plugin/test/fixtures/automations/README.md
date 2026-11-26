@@ -45,7 +45,8 @@ The busy sets (test/automations/busy.ts for the unit tests, container/scenes/aut
 for the live scenes: 37 automations, five failing, fifty-run histories, names of sixty
 characters) are no recording either: they MULTIPLY the recorded rows of this directory (every row
 is a recorded row; only its id, its name and the times and ids of its repeated runs are varied;
-the live one also names, as the agent of three runs, three agents of the scenes' roster). They
+the live one also names, as the agent of three runs, three agents of the scenes' roster, and
+repeats the recorded instruction of one schedule twelve times, numbered, for a long one). They
 are for the worst-case scenes and images, and for the one test that the row's red, the filter's
 count and the sidebar's dot agree; a parser's tests stay on the recorded answers.
 

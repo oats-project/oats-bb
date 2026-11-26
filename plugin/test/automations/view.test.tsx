@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import type { AutomationList, AutomationRow, TriggerStatus, TriggerStatuses } from "../../contract/automations";
 import { shownBlock } from "../../app/ui/text";
 import { PROSE_BOUND } from "../../app/automations/Detail";
+import { CARD_FLOOR } from "../../app/automations/List";
 import { View } from "../../app/automations/View";
 import type { Gate, ListRead, Open, Tab, ViewProps } from "../../app/automations/View";
 import { rowOf, schedules, statusOf, triggers } from "./fixtures";
@@ -156,12 +157,18 @@ describe("the page and its two tabs", () => {
     expect(view.log).toEqual(["refresh"]);
   });
 
-  it("the list's tab keeps the page's height, so that its card scrolls alone; a row's page and the Runs tab scroll whole", () => {
+  it("the list's tab keeps the page's height, so that its card scrolls alone, down to a floor under which the page scrolls whole; a row's page and the Runs tab scroll whole", () => {
     const view = page();
-    expect(view.getByTestId("oats-automations-page").className).not.toContain("overflow-y-auto");
-    expect(view.getByTestId("oats-automations-rows").className).toContain("overflow-y-auto");
-    view.open("local/daily-review");
+    expect(view.getByTestId("oats-automations-page").dataset.fixed).toBe("true");
+    expect(view.getByTestId("oats-automations").className).toContain("h-full");
+    const card = view.getByTestId("oats-automations-rows");
+    expect(card.className).toContain("overflow-y-auto");
+    // The card has a floor: under it the page scrolls whole, so a notice over the list never squeezes the rows to nothing.
+    expect(card.className).toContain(CARD_FLOOR);
     expect(view.getByTestId("oats-automations-page").className).toContain("overflow-y-auto");
+    view.open("local/daily-review");
+    expect(view.getByTestId("oats-automations-page").dataset.fixed).toBe("false");
+    expect(view.getByTestId("oats-automations").className).not.toContain("h-full");
   });
 });
 
@@ -284,12 +291,27 @@ describe("a row", () => {
     expect(parts(view.row("local/graph-watch"))).toEqual(["On acme.graph: harvest-branches", "Runs on this computer", "Last 2 h ago, harvest/a", "Poll failed"]);
     cleanup();
     const later = new Date(NOW - 60e3).toISOString();
-    const failed = page({ statuses: withStatus("local/pr-triage", (status) => ({ ...status, lastError: { at: later, code: "E_SPAWN", message: "the spawn failed", key: null, says: null } })) });
+    const failed = page({ statuses: withStatus("local/pr-triage", (status) => ({ ...status, lastError: { at: later, code: "E_SPAWN", message: "the spawn failed", key: "local/pr-triage:44", says: null } })) });
     expect(parts(failed.row("local/pr-triage")).at(-1)).toBe("Launch failed");
     cleanup();
     // An error older than the last fire is over: a fire followed it.
-    const over = page({ statuses: withStatus("local/pr-triage", (status) => ({ ...status, lastError: { at: "2026-11-21T10:00:00.000Z", code: "E_SPAWN", message: "the spawn failed", key: null, says: null } })) });
+    const over = page({ statuses: withStatus("local/pr-triage", (status) => ({ ...status, lastError: { at: "2026-11-21T10:00:00.000Z", code: "E_SPAWN", message: "the spawn failed", key: "local/pr-triage:40", says: null } })) });
     expect(parts(over.row("local/pr-triage")).at(-1)).toBe("Last 2 h ago, #41");
+  });
+
+  it("a poll that failed once and is well again is not a failed launch: the kernel keeps its last error, with no event's key, and the row is calm", () => {
+    // The recorded state after a failed poll (its last error is the poll's: no key), with the poll good again.
+    const mended = STATUSES("trigger-status-poll-failed.json").statuses.map((entry) => ({ id: entry.id, status: entry.status.lastPoll !== null && !entry.status.lastPoll.ok ? { ...entry.status, lastPoll: { ...entry.status.lastPoll, ok: true, error: null, cause: null, says: null, events: 3, filtered: 0, skipped: 0, refused: 0 } } : entry.status }));
+    const before = STATUSES("trigger-status-poll-failed.json").statuses.find((entry) => entry.id === "local/graph-watch")!.status;
+    expect([before.lastPoll?.ok, before.lastError?.key, before.lastError !== null]).toEqual([false, null, true]);
+    const view = page({ trigger: ready(triggers()), statuses: mended });
+    const row = view.row("local/graph-watch");
+    expect(parts(row)).toEqual(["On acme.graph: harvest-branches", "Runs on this computer", "Last 2 h ago, harvest/a"]);
+    expect(row.dataset.failing).toBe("false");
+    // And one that never fired keeps no red either.
+    cleanup();
+    const never = page({ statuses: withStatus("local/old-prs", (status) => ({ ...status, lastError: { at: new Date(NOW - 60e3).toISOString(), code: "E_TRIGGER_POLL", message: "gh: not logged in", key: null, says: null } })) });
+    expect(never.row("local/old-prs").dataset.failing).toBe("false");
   });
 
   it("one that is off is drawn muted; one another machine runs says which", () => {
@@ -563,6 +585,9 @@ describe("a prompt and a wake message are drawn whole, and a long one has a boun
     const short = opened("Review the open pull requests.");
     expect(short.getByTestId("oats-automation-prose").dataset.bounded).toBe("false");
     expect(short.queryByTestId("oats-automation-prose-more")).toBeNull();
+    // The bound is a number of whole lines, never a height that cuts a line through its letters.
+    expect(short.getByTestId("oats-automation-prose").className).toMatch(/line-clamp-\[8\]/);
+    expect(short.getByTestId("oats-automation-prose").className).not.toMatch(/max-h-/);
     cleanup();
     for (const long of ["z".repeat(PROSE_BOUND.characters + 1), Array(PROSE_BOUND.lines + 1).fill("a line").join("\n")]) {
       const view = opened(long);
@@ -642,6 +667,23 @@ describe("an automation's runs", () => {
     expect(item.textContent).toBe("Start…");
     fireEvent.click(item);
     expect(log.at(-1)).toBe("start oats-developer-review-202611212017");
+  });
+
+  it("what an agent is now is said ONCE, on the newest run that names it: older runs of the same agent keep their own mark and word, and still open its chat", () => {
+    // A wake's runs all name the one agent it wakes: three runs of one instance, which asks.
+    const run = rowOf(schedules(), "local/daily-review").recentRuns[0]!;
+    const three = [0, 1, 2].map((day) => ({ ...run, runId: `run-${day}`, outcome: day === 1 ? "launch-failed" : "ended", error: day === 1 ? "the provider refused" : null, startedAt: new Date(Date.parse(run.startedAt!) - day * 86400e3).toISOString() }));
+    const opened: string[] = [];
+    const view = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, recentRuns: three }))), agentLink: (instance) => ({ open: () => opened.push(instance), asks: true, start: () => undefined }) });
+    view.open("local/daily-review");
+    expect(view.runs().map((entry) => [entry.dataset.outcome, mark(entry), said(entry), within(entry).queryByTestId("oats-run-answer") !== null, within(entry).queryByTestId("oats-run-menu") !== null])).toEqual([
+      ["asks", "Needs you", "Needs you", true, true],
+      ["failed", "Failed", "Launch failed", false, false],
+      ["done", "Done", "Run ended", false, false],
+    ]);
+    // Each of them is still the way into the agent's chat.
+    for (const entry of view.runs()) fireEvent.click(within(entry).getByTestId("oats-run-row"));
+    expect(opened).toHaveLength(3);
   });
 
   it("a run that failed says so by its mark and its word; the newest one stands open to the kernel's code and message, and closes", () => {
@@ -745,7 +787,7 @@ describe("an automation's runs", () => {
   });
 
   it("on a kernel that keeps no history of failures, the last error alone is said, as the kernel words it, and nothing claims a history", () => {
-    const view = page({ statuses: withStatus("local/pr-triage", (status) => ({ ...status, lastError: { at: new Date(NOW - 60e3).toISOString(), code: "E_SPAWN_NAME", message: "the name is taken", key: null, says: null } })) });
+    const view = page({ statuses: withStatus("local/pr-triage", (status) => ({ ...status, lastError: { at: new Date(NOW - 60e3).toISOString(), code: "E_SPAWN_NAME", message: "the name is taken", key: "local/pr-triage:44", says: null } })) });
     view.open("local/pr-triage");
     expect(view.text("oats-automation-last-error")).toBe("Last error: the name is taken E_SPAWN_NAME");
     expect(view.runs().some((run) => run.dataset.of === "failure")).toBe(false);

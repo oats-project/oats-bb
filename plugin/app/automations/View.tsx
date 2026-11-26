@@ -127,7 +127,9 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
   const host = schedules ?? triggers;
   const running = host === undefined || host.scheduler === null || schedulerOn(host.scheduler);
   const openOwner = (owner: RunOwner) => onOpen({ kind: owner.kind, id: owner.id });
-  // The list's tab keeps the page's height and scrolls its card alone; everything else scrolls whole.
+  // The list's tab takes the page's height, and its card of rows scrolls alone under a head that stays, while the head, the notices
+  // and a floor of rows fit (List.tsx: the card's least height); when they do not (a notice or two over the list at a phone's width),
+  // the page scrolls whole, so that the rows are never squeezed to nothing behind a notice. Everything else scrolls whole.
   const fixed = !onRowPage && !gated && tab === "list";
 
   const notices = (
@@ -171,8 +173,8 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
   );
 
   return (
-    <div data-testid="oats-automations-page" className={fixed ? "flex h-full min-h-0 flex-col" : "h-full min-h-0 overflow-y-auto"}>
-      <div data-testid="oats-automations" data-tab={tab} className={`@container ${FRAME} ${fixed ? "min-h-0 flex-1" : ""}`}>
+    <div data-testid="oats-automations-page" data-fixed={fixed} className="h-full min-h-0 overflow-y-auto">
+      <div data-testid="oats-automations" data-tab={tab} className={`@container ${FRAME} ${fixed ? "h-full" : ""}`}>
         {onRowPage ? null : (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <PillTabs
@@ -191,7 +193,7 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
           </div>
         )}
         {/* A row's page draws no tabs, so no tab is there to name the panel: it is named in words. */}
-        <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={onRowPage ? undefined : `${PANEL}-tab-${tab}`} aria-label={onRowPage ? "Automation" : undefined} className={`flex flex-col gap-4 ${fixed ? "min-h-0 flex-1" : ""}`}>
+        <div ref={panel} id={PANEL} role="tabpanel" aria-labelledby={onRowPage ? undefined : `${PANEL}-tab-${tab}`} aria-label={onRowPage ? "Automation" : undefined} className={`flex flex-col gap-4 ${fixed ? "flex-1" : ""}`}>
           {unreadable !== null ? (
             // OATS itself cannot be read (no `oats`, no deployment, no machine): the one notice every place of the plugin shows for it.
             <div data-testid="oats-automations-gate">{unreadable}</div>

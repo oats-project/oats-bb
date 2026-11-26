@@ -25,8 +25,11 @@ const FAILING_SCHEDULES = ["local/hourly-check", "local/legacy-herdr", "oats-rea
 const CALM_SCHEDULES = ["local/daily-review", "local/notes-checkpoint", "oats-real/nightly-digest", "local/weekly-cleanup", "oats-real/weekly-report", "local/wake-oats-developer-review-202611212017"];
 const FAILING_TRIGGERS = ["oats-real/harvest-closed"];
 const CALM_TRIGGERS = ["local/pr-triage", "oats-real/proposal-review", "local/graph-watch", "oats-real/harvest-review", "oats-real/docs-review"];
-/** A long instruction: the recorded one, many times over, as a real one of several paragraphs is. */
-export const LONG_TASK = Array.from({ length: 12 }, (_, at) => `${at + 1}. Read the support inbox of the enterprise accounts since the last run. For each new message find the account, its plan and its open incidents; sort it as a bug, a billing question, an access request or a how-to; draft a first reply in the customer's language and tone, never promising a date.`).join("\n");
+/**
+ * A long instruction: the RECORDED one of the first calm schedule, twelve times over with a number before each, as a real one of
+ * several paragraphs is long. No word of it is written here.
+ */
+export const longTask = (task) => Array.from({ length: 12 }, (_, at) => `${at + 1}. ${task}`).join("\n\n");
 
 /**
  * `agents`: instances of the scene's roster (one that asks, one that is stopped, one that runs):
@@ -66,7 +69,7 @@ export function busy(fixtures, { agents = [] } = {}) {
   for (let n = 0; n < 22; n += 1) scheduleRows.push(fifty(named(pick(schedules.result.schedules, CALM_SCHEDULES[n % CALM_SCHEDULES.length]))));
   // The first calm schedule (a spawn with a run): the one whose page the scenes open. Its instruction is a long one.
   const long = scheduleRows[FAILING_SCHEDULES.length];
-  long.task = LONG_TASK;
+  long.task = longTask(long.task);
   const made = agents.map((instance, n) => {
     const row = scheduleRows[FAILING_SCHEDULES.length + n * CALM_SCHEDULES.length];
     // The newest runs of this one, each the next agent's: the first given is the newest run's.

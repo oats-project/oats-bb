@@ -1,10 +1,12 @@
 // One automation's page, in the manner of bb's own (whose breadcrumb, "Automations / its name", is
-// in bb's own header: Page.tsx `usePageTitle`): the name with its switch and its "…" menu; one small line (who it starts · when · the next run or
-// the last fire) and under it, in red, what is wrong; a card of WHAT IT DOES (the instruction, the
-// wake message, the command or the operation, whole, with the soul, the harness and the model at
-// its foot); then Runs, a table; then one closed fold, Details, for the few facts bb's manner has
-// no place for. Nothing here is a sentence that explains.
-import { useEffect, useRef, useState } from "react";
+// in bb's own header: Page.tsx `HeaderTitle`): the name with its switch and its "…" menu (and
+// Answer, while an agent of it asks); the one sentence of what it does; one small line (when · the
+// machine it runs on · its owner · the next run · its last run) and under it, in red, what is
+// wrong; WHAT IT DOES as plain text between separators (the instruction, the wake message, the
+// command or the operation, whole, with the soul, the harness and the model at its foot); then
+// Runs, a table; then one closed fold, Details, for the few facts bb's manner has no place for.
+// Nothing here is a sentence that explains, and no text has a box around it.
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { experimental_DetailRow as DetailRow, experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { AutomationHost, AutomationProblem, AutomationRow, TriggerStatus } from "../../contract/automations";
@@ -43,7 +45,7 @@ import type { CapabilitySource, FileTarget } from "./words";
 const NOTE = "text-xs text-muted-foreground";
 const LINE = "min-w-0 break-words text-sm";
 
-/** A text of more lines or characters than these is drawn to its bound, with "Show more" to the rest. */
+/** A text is drawn to this many lines, with "Show more" to the rest. Where a page has no layout to measure (a test), a text of more lines or characters than these counts as longer than its bound. */
 export const PROSE_BOUND = { lines: 8, characters: 640 } as const;
 const long = (text: string): boolean => text.length > PROSE_BOUND.characters || text.split("\n").length > PROSE_BOUND.lines;
 
@@ -54,10 +56,20 @@ const long = (text: string): boolean => text.length > PROSE_BOUND.characters || 
 // reorder or hide what the page shows. A long one has a bound and a way to the rest.
 function Prose({ text, children }: { /** the text, for its length */ text: string; children: ReactNode }) {
   const [whole, setWhole] = useState(false);
-  const bounded = long(text);
+  const block = useRef<HTMLDivElement>(null);
+  // Whether the text is longer than its bound: what the page measures (the bound is in WHOLE lines, so it depends on the width);
+  // before it is measured, and where nothing can be (no layout), the rule of lines and characters.
+  const [measured, setMeasured] = useState<boolean | null>(null);
+  useLayoutEffect(() => {
+    const element = block.current;
+    if (element === null || whole || element.clientHeight === 0) return;
+    setMeasured(element.scrollHeight > element.clientHeight + 1);
+  }, [text, whole]);
+  const bounded = measured ?? long(text);
   return (
     <div className="flex min-w-0 flex-col items-start gap-1">
-      <div data-testid="oats-automation-prose" data-bounded={bounded && !whole} className={`w-full min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground ${bounded && !whole ? "max-h-44 overflow-hidden" : ""}`}>
+      {/* The bound is a number of whole lines: a line is never cut through its letters. */}
+      <div ref={block} data-testid="oats-automation-prose" data-bounded={bounded && !whole} className={`w-full min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground ${whole ? "" : "line-clamp-[8] overflow-hidden"}`}>
         {children}
       </div>
       {bounded ? (

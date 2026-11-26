@@ -18,9 +18,7 @@ describe("a schedule's runs", () => {
   it("a run names the agent it made, from the kernel's `session`, and its own id", () => {
     const run = rowOf(schedules(), "local/daily-review").recentRuns[0]!;
     expect(run.instance).toBe("oats-developer-review-202611212017");
-    expect(run.home).toBe("/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017");
     expect(run.runId).toBe("32b84ee63dec280096616896");
-    expect(typeof run.settled).toBe("boolean");
   });
   it("a run that made no agent names none", () => {
     const run = rowOf(schedules(), "local/hourly-check").recentRuns[0]!;
@@ -43,10 +41,6 @@ describe("every trigger's state in one read", () => {
     expect(all.map((entry) => entry.id).sort()).toEqual(triggers().rows.map((row) => row.id).sort());
     for (const entry of all) expect(entry.status).toEqual(statusOf(entry.id));
     expect(triggerStatuses.safeParse(all).success).toBe(true);
-  });
-  it("a fire names its agent's home", () => {
-    const fired = statusOf("local/graph-watch").fired[0]!;
-    expect(fired.home).toBe("/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-graph-watch-harvest-a");
   });
   it("a kernel that keeps no failure history (OATS 0.70) answers none: `failures` is null, never an empty list", () => {
     for (const entry of statuses()) {

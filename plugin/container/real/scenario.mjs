@@ -15,6 +15,7 @@
 //   part C  the steps each other feature adds for its own acts: parts/<feature>.mjs.
 // What the kernel printed for the plugin's calls is written to $OUT/fixtures/, with the paths and the
 // host name replaced and nothing else edited (fixtures.mjs says how).
+import "../guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";

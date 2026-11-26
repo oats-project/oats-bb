@@ -8,6 +8,7 @@
 //   4  every `oats` the plugin ran for the mail is the one argv that marks nothing read
 //   5  an agent with no messaging layer has the Mail tab as every agent, and it says "No messaging." (no read)
 // No check prints a body: a failing one prints subjects, counts or an argv.
+import "../../guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { launchBrowser, testId, textOf, texts, visible } from "../../browser.mjs";

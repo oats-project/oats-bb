@@ -7041,7 +7041,7 @@
        },
        {
         "key": "pr-9",
-        "label": "Estimated time left for the whole upgrade across every service",
+        "label": "Time left for the upgrade, every service",
         "value": "about three working days",
         "unit": null,
         "link": "https://github.com/oats-project/oats-bb/pull/42",
@@ -7049,7 +7049,7 @@
        },
        {
         "key": "tests-10",
-        "label": "Slowest checkout request in the end-to-end run",
+        "label": "Slowest checkout request, end to end",
         "value": "1840",
         "unit": "milliseconds p95",
         "link": null,
@@ -7107,7 +7107,7 @@
        },
        {
         "id": "q4",
-        "question": "The migration is ready to run on production.\nIt rewrites 48 000 invoices and cannot be undone.\nA dry run took 41 minutes and changed nothing else.\nRun it now, wait for Sunday, or stop here?",
+        "question": "The migration is ready to run on production; it rewrites 48 000 invoices and cannot be undone. Run it now, wait for Sunday, or stop here?",
         "options": [
          "main: the default",
          "release: the 0.1 line"

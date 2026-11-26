@@ -73,9 +73,11 @@ const later = (time, minutes) => new Date(Date.parse(time) + minutes * 60_000).t
 const QUESTION = ["The migration is ready to run against production.", "It rewrites 48 000 invoices and cannot be undone once the old table is dropped.", "A dry run on the copy of last night took 41 minutes and changed nothing it should not.", "Run it now, wait for the Sunday window, or stop here?"].join("\n");
 // The busy chat's board: twelve facts [label, value] and nine questions (the fourth is four lines long).
 // (The recorded facts are two, taken in turn: one with a link, one counted "failing": the made-up labels follow them.)
-const BOARD_FACTS = [["Pull request", "#1842"], ["Tests", "17"], ["Branch", "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-three-pins"], ["Checks", "3"], ["Build", "#20418"], ["Advisories", "9"], ["Reviewer", "release-notes-drafting-helper"], ["Lockfile checks", "14"], ["Estimated time left for the whole upgrade across every service", "about three working days"], ["Slowest checkout request in the end-to-end run", "1840"], ["Blocked on", "the payments team's answer on the idempotency key, due before Friday's freeze"], ["Audits", "2"]];
-// The board's texts are AT THE KERNEL's OWN BOUNDS, not past them: an option of 60 characters, a question of 200, a
-// value of 80, a unit of 16 (the board's own contract).
+const BOARD_FACTS = [["Pull request", "#1842"], ["Tests", "17"], ["Branch", "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-three-pins"], ["Checks", "3"], ["Build", "#20418"], ["Advisories", "9"], ["Reviewer", "release-notes-drafting-helper"], ["Lockfile checks", "14"], ["Time left for the upgrade, every service", "about three working days"], ["Slowest checkout request, end to end", "1840"], ["Blocked on", "the payments team's answer on the idempotency key, due before Friday's freeze"], ["Audits", "2"]];
+// THE BUSY BOARD IS A BOARD THE KERNEL CAN HOLD: every text is inside the kernel's bounds (the board's contract: a
+// label of 40, a value of 80, a unit of 16, an option of 60 with two to four of them, a question of 200 on ONE line, a
+// link of 512, a key of sixteen lower-case letters, digits and "-"; twelve facts, nine questions), and AT them where
+// the worst case wants it. An entry over a bound is refused by `oats instance board`, and dropped by a reader.
 const BOARD_LINK = "https://dependency-audit-preview-1842-payments-and-billing-platform-staging-eu-central.code-review.example.invalid/pull/1842";
 const BOARD_OPTIONS = [
   ["Upgrade the payment client now, with the key stored per try", "Pin it until the release, with a note of why and until when", "Upgrade behind a flag, one region first, the old one a week", "Hand it to the payments team with what this agent has found"],
@@ -87,8 +89,8 @@ const BOARD_QUESTIONS = [
   "Upgrade the payment client across a major version now, or pin it until the release?",
   // (200 characters, one line: as long as a question may be.)
   "The image library's fixed release changes its licence to one that asks for the sources of any distributed work linking to it; the mobile clients link to it and are distributed: who signs it off, when?",
-  // (Four lines, within the 200 characters a board's question may have.)
-  ["The migration is ready to run on production.", "It rewrites 48 000 invoices and cannot be undone.", "A dry run took 41 minutes and changed nothing else.", "Run it now, wait for Sunday, or stop here?"].join("\n"),
+  // (A board's question is ONE line: the kernel refuses a line feed in it. The four-line text is a CLAIM's, above.)
+  "The migration is ready to run on production; it rewrites 48 000 invoices and cannot be undone. Run it now, wait for Sunday, or stop here?",
   "Drop support for the old runtime in this pass?",
   "Open one pull request per service, or one for all fourteen?",
   "The advisory on the archive reader has no fix yet: accept it with a note, or replace the library?",

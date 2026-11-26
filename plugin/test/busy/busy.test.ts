@@ -277,22 +277,27 @@ describe("the busy set", () => {
     expect(Math.max(...agents.map((agent) => depth(agent.instance)))).toBe(3); // four levels
     expect(agents.filter((agent) => agent.parent !== null && !parent.has(agent.parent))).toEqual([]);
     expect(agents.filter((agent) => agent.waiting !== null)).toHaveLength(11);
-    // THE BUSY CHAT: one agent on bb holds a full board (twelve facts; nine questions, one of four lines) and a long conversation.
+    // THE BUSY CHAT: one agent on bb holds a full board (twelve facts; nine questions, each on one line) and a long conversation.
     const raws = (files["status.json"] as { agents: { instances: { instance: string; backend: string; home: string; board?: { facts: { key: string }[]; questions: { id: string; question: string }[] } | null; waitingOnYou?: { message: string } | null }[] }[] }).agents.flatMap((group) => group.instances);
     const boards = raws.filter((row) => row.board);
-    expect(boards.map((row) => [row.backend, row.board!.facts.length, new Set(row.board!.facts.map((fact) => fact.key)).size, row.board!.questions.length, new Set(row.board!.questions.map((question) => question.id)).size, row.board!.questions.filter((question) => question.question.split("\n").length === 4).length])).toEqual([["bb", 12, 12, 9, 9, 1]]);
+    expect(boards.map((row) => [row.backend, row.board!.facts.length, new Set(row.board!.facts.map((fact) => fact.key)).size, row.board!.questions.length, new Set(row.board!.questions.map((question) => question.id)).size, row.board!.questions.filter((question) => question.question.split("\n").length === 4).length])).toEqual([["bb", 12, 12, 9, 9, 0]]); // (no board question of several lines: the kernel refuses a line feed there; the four-line text is a claim's)
     expect(boards[0]!.waitingOnYou?.message).toBe(boards[0]!.board!.questions[0]!.question);
-    // THE BOARD's texts AT THE KERNEL's BOUNDS, never past them: a question of 200 characters on one line (and one of four
-    // lines); three questions with FOUR options of up to 60; a value of 80 with spaces (it wraps) and one with none; a
-    // unit of 16; a link on a host of a hundred characters.
-    const fullBoard = boards[0]!.board! as unknown as { facts: { value: string; unit: string | null; link: string | null }[]; questions: { question: string; options: string[] }[] };
-    expect([Math.max(...fullBoard.questions.map((question) => question.question.length)), fullBoard.questions.filter((question) => question.question.length === 200 && !question.question.includes("\n")).length]).toEqual([200, 1]);
+    // THE BUSY BOARD IS A BOARD THE KERNEL CAN HOLD: every text inside the kernel's bounds (label 40, value 80, unit 16,
+    // an option 60 with two to four of them, a question 200 on ONE line, a link 512, a key of sixteen), twelve facts and
+    // nine questions; and AT a bound where the worst case wants it. (A reader drops an entry that is over, alone.)
+    const fullBoard = boards[0]!.board! as unknown as { facts: { key: string; label: string; value: string; unit: string | null; link: string | null }[]; questions: { question: string; options: string[] }[] };
+    const over = [
+      ...fullBoard.facts.filter((fact) => !/^[a-z0-9][a-z0-9-]{0,15}$/.test(fact.key) || [...fact.label].length > 40 || [...fact.value].length > 80 || [...(fact.unit ?? "")].length > 16 || (fact.link ?? "").length > 512).map((fact) => fact.key),
+      ...fullBoard.questions.filter((question) => [...question.question].length > 200 || question.question.includes("\n") || question.options.length < 2 || question.options.length > 4 || question.options.some((option) => [...option].length > 60)).map((question) => question.question.slice(0, 30)),
+    ];
+    expect([over, fullBoard.facts.length, fullBoard.questions.length]).toEqual([[], 12, 9]);
+    expect([Math.max(...fullBoard.facts.map((fact) => fact.label.length)), Math.max(...fullBoard.questions.map((question) => question.question.length))]).toEqual([40, 200]);
     expect(fullBoard.questions.map((question) => question.options.length).sort()).toEqual([2, 2, 2, 2, 2, 2, 4, 4, 4]);
     const options = fullBoard.questions.flatMap((question) => question.options);
-    expect([Math.max(...options.map((option) => option.length)) <= 60, options.filter((option) => option.length >= 53).length >= 12]).toEqual([true, true]);
+    expect(options.filter((option) => option.length >= 53).length).toBeGreaterThanOrEqual(12);
     const values = fullBoard.facts.map((fact) => fact.value);
-    expect([Math.max(...values.map((value) => value.length)) <= 80, values.some((value) => value.length >= 76 && value.includes(" ")), values.some((value) => value.length >= 76 && !value.includes(" "))]).toEqual([true, true, true]);
-    expect([Math.max(...fullBoard.facts.map((fact) => (fact.unit ?? "").length)), fullBoard.facts.filter((fact) => fact.unit === "milliseconds p95").length]).toEqual([16, 1]);
+    expect([values.some((value) => value.length >= 76 && value.includes(" ")), values.some((value) => value.length >= 76 && !value.includes(" "))]).toEqual([true, true]);
+    expect(fullBoard.facts.filter((fact) => fact.unit === "milliseconds p95").length).toBe(1);
     expect(fullBoard.facts.filter((fact) => fact.link !== null && new URL(fact.link).hostname.length >= 100).length).toBe(1);
     const chat = files["chat.json"] as { agent: string; turns: { you: string; agent: string }[] };
     expect(chat.agent).toBe(boards[0]!.instance);

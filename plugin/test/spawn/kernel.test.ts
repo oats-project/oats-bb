@@ -228,3 +228,56 @@ describe("a preview that is no decision a spawn could apply says why, with the c
     expect(missing).toEqual({ problem: { code: "E_BACKEND_UNAVAILABLE", message: "the bb backend is not installed on this machine" } });
   });
 });
+
+// The preview's schema (kernel/spawn.ts) is the contract check for what the form's column draws from the document:
+// the parser itself reads none of these six, and they are not dead for that.
+describe("a preview whose drawn fields have another shape is refused whole, as an answer the plugin cannot read: nothing of it is drawn", () => {
+  // SHAPED: the recorded preview (test/fixtures/spawn/spawn-preview.json) with ONE field given another shape.
+  const answered = async (change: (result: Record<string, unknown>) => void) => {
+    const { readFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const document = JSON.parse(await readFile(join(process.cwd(), "test/fixtures/spawn/spawn-preview.json"), "utf8")) as { result: Record<string, unknown> };
+    change(document.result);
+    await fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });
+    return oats.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context());
+  };
+  const OTHER_SHAPES: [field: string, value: unknown][] = [
+    ["modules", "none"],
+    ["modules", [{ from: { kind: "package" } }]], // a module with no name
+    ["modules", [{ name: "oats.aweb", from: "package" }]], // where it is from, which the column draws: no object
+    ["modules", [{ name: "oats.aweb", from: { kind: "package", version: 5 } }]], // its version: no text
+    ["modules", [{ name: "oats.aweb", from: { kind: 5 } }]], // its kind: no text
+    ["teams", 3],
+    ["teams", [{ team: "default:oats.aweb.ai" }]], // a team with no label
+    ["harness", 5],
+    ["model", {}],
+    ["modelSource", []],
+    ["warnings", "one"],
+    ["warnings", [{ code: "hook-event-unsupported", message: "a warning that is no sentence" }]],
+    ["warnings", ["a sentence", null]],
+  ];
+  it.each(OTHER_SHAPES)("%s: %j", async (field, value) => {
+    const preview = await answered((result) => {
+      result[field] = value;
+    });
+    // Refused whole: no decision a spawn could apply, no facts for the column.
+    expect(preview).toMatchObject({ ok: false, error: { code: "OATS_BAD_ANSWER" } });
+    expect(preview).not.toHaveProperty("value");
+  });
+
+  it("the recorded preview itself is answered, and so is one that leaves each of the six out or null (the kernel says nothing of it)", async () => {
+    expect(await answered(() => undefined)).toMatchObject({ ok: true, value: { problem: null } });
+    for (const field of ["modules", "teams", "harness", "model", "modelSource", "warnings"]) {
+      expect(await answered((result) => delete result[field]), `${field} left out`).toMatchObject({ ok: true });
+      expect(await answered((result) => (result[field] = null)), `${field}: null`).toMatchObject({ ok: true });
+    }
+  });
+
+  it("a key of the preview that nothing reads is not held to a shape: `launchConfig`, and a team's `team` and `default` (the column reads its label alone)", async () => {
+    expect(await answered((result) => (result.launchConfig = 7))).toMatchObject({ ok: true, value: { problem: null } });
+    // (A team that is not the default one, so that its label, which IS read, is what the column draws of it.)
+    const teams = await answered((result) => (result.teams = [{ label: "eng", team: 9, default: "yes" }]));
+    expect(teams).toMatchObject({ ok: true, value: { problem: null } });
+    if (teams.ok) expect(teams.value.facts.facts.filter((fact) => fact.label === "Team").map((fact) => fact.parts.map((part) => part.text))).toEqual([["oats", " · default", "may also join eng"]]);
+  });
+});

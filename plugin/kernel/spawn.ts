@@ -131,16 +131,30 @@ export const spawnArgv = (input: Checked, taskFile: string | null, apply: SpawnA
 ];
 
 const text = z.string().nullish();
+/**
+ * The kernel's preview, held to the shape of the fields below (the column reads more of the document than these,
+ * each with its own guard in model/spawn.ts). Two readers:
+ * - the parser below reads four of these (`decision`, `preflight`, `backendStatus`, `launch`);
+ * - the form's column (`formFacts`, model/spawn.ts) reads the DOCUMENT itself, and draws `modules`, `teams`, `harness`,
+ *   `model`, `modelSource` and `warnings` from it. Those six are here for that reader: they are NOT dead, though
+ *   nothing below names them. For them this schema is the contract check: a preview where one has another shape is
+ *   refused WHOLE, as an answer the plugin cannot read (`OATS_BAD_ANSWER`), and nothing of it is drawn. Without
+ *   their line the column would draw something FALSE of four of them (a model that is no text as the harness's
+ *   "default model"; teams that are no list, where there is no default team, as "Team none"; modules with no name
+ *   as empty slots; a warning that is no sentence as text), and quietly nothing of the two others (a harness or a
+ *   model's source that is no text: no row, no line). test/spawn/kernel.test.ts holds each key of these six.
+ * A key nothing reads is not held to a shape, at the top (`launchConfig`) or inside a field (a team's `team` and
+ * `default`: the column reads its `label` alone).
+ */
 const preview = z.looseObject({
   decision: z.looseObject({ revision: z.string().min(1) }),
   modules: z
     .array(z.looseObject({ name: z.string(), from: z.looseObject({ kind: text, version: text }).nullish() }))
     .nullish(),
-  teams: z.array(z.looseObject({ label: z.string(), team: text, default: z.boolean().nullish() })).nullish(),
+  teams: z.array(z.looseObject({ label: z.string() })).nullish(),
   harness: text,
   model: text,
   modelSource: text,
-  launchConfig: text,
   warnings: z.array(z.string()).nullish(),
   preflight: z.looseObject({ status: text, budgetMs: z.number().nullish() }).nullish(),
   backendStatus: z.looseObject({ name: text, installed: z.boolean().nullish() }).nullish(),

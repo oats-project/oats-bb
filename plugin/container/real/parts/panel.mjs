@@ -144,6 +144,10 @@ export default async (run) => {
   const read = (selector) => `(document.querySelector(${JSON.stringify(selector)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`;
   await run.views("real-panel", async ({ page, at: where, shot }) => {
     await page.goto(`/plugins/oats/agent/${CHILD}`);
+    // The child's board asks: its page OPENS on the Board tab (parts/board.mjs holds that). This part is of the
+    // Instance and Soul tabs: the Instance tab is turned to, as a person would.
+    await page.until(`document.querySelector('[data-testid="oats-tab-instance"]') !== null`, 40);
+    await page.evaluate(`document.querySelector('[data-testid="oats-tab-instance"]').click()`);
     const header = await page.until(`(() => { const name = ${read(at("oats-panel-name"))}; const state = ${read(at("oats-panel-state"))}; return name !== "" && /Needs you/.test(state) && document.querySelector(${JSON.stringify(at("oats-panel-work"))}) !== null ? name + " | " + state : ""; })()`, 40);
     check(typeof header === "string" && header.startsWith("Panel worktree helper | ") && /Needs you . (under a minute|\d+ (min|h|d))$/.test(header), `${where}: the panel names the real child in words and says it needs the person, and how long it has waited`, header ?? (await page.evaluate(read('[data-testid="oats-panel"]'))));
     const asks = await page.until(`(() => { const text = ${read(at("oats-panel-waiting"))}; return text.includes("Which base branch?") ? text : ""; })()`, 20);

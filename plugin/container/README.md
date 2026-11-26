@@ -324,6 +324,18 @@ was built), and its `NOTE BUSY` line says the seconds of each part in every run'
    (`auto`), which is read back;
 5. the thread of each agent whose session was lost on bb is archived, and so are the fixtures' own
    agents' threads; bb's request for a star is turned off (the chat alone is ten prompts).
+**Its start under load.** The stage holds a turn on every working agent of the set at once
+(fourteen), on the checks' two processors. Its held spawns are PACED ON bb's STATE: after each one
+the stage waits, with a bound, until bb's list answers in under a second again; and each spawn
+KEEPS ITS OUTCOME: one bb did not answer (the harness's own limit, bb's CLI giving up, or bb's 502
+for a fetch that failed inside it) is looked for in bb's list: there, it happened; not there, it is
+made again, three times at most; a thread is never made twice; any other answer throws
+(`ask-back.mjs`: `untilQuickAgain`, `madeOnce`, `outcomeOfMaking`). Each run says in a NOTE bb's
+longest event-loop stall while the stage started and what the pacing waited. A thread that does
+not hold its turn: bb's whole log of it is written to `busy-threads-not-held.json` in the run's
+artefacts. By hand, `LIVE_BUSY_HELD=<n>` holds a turn on the first n working agents only (the
+others' one turn is answered: they read "Idle").
+
 When it leaves, each thing it changed is put back and READ: the held turns are answered (no
 thread of its own is active), its threads are archived, bb says of the host's limit what it said
 before (asked once the held turns have ended, each asking's outcome kept: where bb gives no answer

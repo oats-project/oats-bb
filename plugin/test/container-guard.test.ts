@@ -46,6 +46,26 @@ const MODULE_DIRECTORIES = ["scenes/", "real/parts/"];
 const MARKED = existsSync(MARK);
 const ABSENT: Record<string, string> = MARKED ? { OATS_BB_CHECKS_MARK_ABSENT: "1" } : {};
 
+/**
+ * THIS TEST NEVER STARTS A GUARDED ENTRY OUTSIDE THE CHECKS' CONTAINER. The thing it would start is the thing the
+ * guard exists to stop, and a test that leans on the guard under test to stay harmless is not harmless. So the tests
+ * that RUN an entry run only where this file KNOWS it is in the container:
+ *   - the image's mark is there (CI's first pass), or
+ *   - it is the mark-gone pass: `ci.sh` says so (`OATS_BB_GUARD_PASS=mark-gone`) AND the mark it moved away lies
+ *     where only `ci.sh` puts it, as root, in the container it made (`MOVED`). The variable alone is not enough: a
+ *     person can export one.
+ * Anywhere else (a person's machine) they are NOT RUN, and each says so by its name in the output. What runs
+ * everywhere is all that only reads, and the guard alone, which touches nothing. CI runs both passes in the image.
+ */
+const MOVED = `${MARK}.moved`;
+const inChecksContainer = (facts: { marked: boolean; pass: string | undefined; moved: boolean }) => facts.marked || (facts.pass === "mark-gone" && facts.moved);
+const IN_CONTAINER = inChecksContainer({ marked: MARKED, pass: process.env.OATS_BB_GUARD_PASS, moved: existsSync(MOVED) });
+/** → true where an entry may be started; else it says, by name, what was not run and why. */
+function mayStart(script: string): boolean {
+  if (!IN_CONTAINER) console.log(`not run here: it would start ${script} on this machine (entries are started only inside the checks' container: plugin/container/ci.sh unit runs both passes there)`);
+  return IN_CONTAINER;
+}
+
 /** Every end of a line a shell or JavaScript knows: a bare CR ends a `//` comment too. */
 const LINE_END = /\r\n|[\n\r\u2028\u2029]/;
 /** The first line of a script that DOES something: after the shebang, blank lines and whole-line comments. A statement on a comment's line counts. */
@@ -131,6 +151,7 @@ const holds = (directory: string): Record<string, string> =>
 
 describe("only inside the checks' container", () => {
   it.each(Object.entries(GUARDED))("%s, run where the image's mark is not, is REFUSED with one line and changes nothing: a person's claude, oats and settings are as they were", (script, runner) => {
+    if (!mayStart(script)) return;
     readToBeGuarded(script, runner);
     const person = home();
     const before = holds(person);
@@ -176,12 +197,30 @@ describe("only inside the checks' container", () => {
     // …and from its clean-up too, first of all: an interrupted pass does not leave a kept container without its mark.
     expect(ci).toContain(`cleanup() {\n  status=$?\n  docker exec -u root "$NAME" sh -c '[ ! -e ${MARK}.moved ] || mv ${MARK}.moved ${MARK}' > /dev/null 2>&1 || true\n`);
     // In that pass the mark IS gone: every refusal above was made with no switch.
-    if (process.env.OATS_BB_GUARD_PASS === "mark-gone") expect([MARKED, ABSENT]).toEqual([false, {}]);
+    // …and the entries WERE started in it: the pass cannot go green with every one "not run here".
+    if (process.env.OATS_BB_GUARD_PASS === "mark-gone") expect([MARKED, ABSENT, existsSync(MOVED), IN_CONTAINER]).toEqual([false, {}, true, true]);
     else expect(process.env.OATS_BB_GUARD_PASS).toBeUndefined();
+    // Where the mark is (the first pass) they are started too.
+    if (MARKED) expect(IN_CONTAINER).toBe(true);
+  });
+
+  it("an entry is started only where this file knows it is in the checks' container: the pass's variable alone does not say so", () => {
+    expect(inChecksContainer({ marked: true, pass: undefined, moved: false })).toBe(true); // the image: CI's first pass
+    expect(inChecksContainer({ marked: false, pass: "mark-gone", moved: true })).toBe(true); // ci.sh's second pass
+    // A person's machine: no mark. Not with the variable exported, not with a file of that name and no variable, not with another value.
+    expect(inChecksContainer({ marked: false, pass: undefined, moved: false })).toBe(false);
+    expect(inChecksContainer({ marked: false, pass: "mark-gone", moved: false })).toBe(false);
+    expect(inChecksContainer({ marked: false, pass: undefined, moved: true })).toBe(false);
+    expect(inChecksContainer({ marked: false, pass: "1", moved: true })).toBe(false);
+    // What this run is, is those facts and nothing else.
+    expect(IN_CONTAINER).toBe(MARKED || (process.env.OATS_BB_GUARD_PASS === "mark-gone" && existsSync(MOVED)));
+    // The second fact is ci.sh's: it moves the mark THERE, as root, and nothing else of the directory writes that name.
+    expect(readFileSync(join(CONTAINER, "ci.sh"), "utf8")).toContain(`docker exec -u root "$NAME" mv ${MARK} ${MOVED}\n`);
   });
 
   it.each(Object.entries(GUARDED).filter(([, runner]) => runner !== "node"))("%s, copied somewhere WITHOUT the guard beside it, does not run on: it ends there, and changes nothing", (script, runner) => {
     // (bash goes on after a `.` of a file that is not there: `|| exit 97` on the guard's own line stops it. A `.mjs` whose import is not there does not load at all.)
+    if (!mayStart(`a copy of ${script}`)) return;
     readToBeGuarded(script, runner);
     const person = home();
     const alone = mkdtempSync(join(tmpdir(), "oats-bb-guard-alone-"));

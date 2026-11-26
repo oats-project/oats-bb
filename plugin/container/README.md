@@ -317,8 +317,13 @@ tools; the modules): they are written there once, and not here. What is NOT guar
   `real/oats-record.mjs`, `real/bb-logs.sh`, `real/bb-plugin-command.sh` and its own test).
 
 The test runs each guarded script in a made-up home that holds a `claude`, an `oats` and settings,
-where the mark is not, and reads that nothing of it changed; before it runs one, it has read that
-the guard is the script's first line that does something. In the image the mark is there, so the
+where the mark is not, and reads that nothing of it changed. IT STARTS AN ENTRY ONLY INSIDE THE
+CHECKS' CONTAINER (the mark is there; or it is `ci.sh`'s second pass, which the test knows by the
+pass's variable AND the moved mark lying where `ci.sh` put it): the thing it would start is the
+thing the guard exists to stop. On any other machine those tests are not run and say so by name
+("not run here: it would start …"); what runs everywhere is all that only reads, and the guard
+alone. Before it starts one, the guard alone has refused there, and the test has read that the
+guard is the script's first line that does something. In the image the mark is there, so the
 first pass asks for the refusal by the guard's own switch (`OATS_BB_CHECKS_MARK_ABSENT=1`, which
 can only refuse); `ci.sh` then runs the test A SECOND TIME with the mark truly moved away, and
 puts it back: that pass is what fails a guard that no longer looks for the mark. The lists

@@ -938,6 +938,20 @@ try {
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   const stopAt = Date.now();
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
+  // THE ACT LOG (P-51; README, "The act log"): bb's log of the plugin holds the stop's two lines: the kernel was asked,
+  // and it ended ok. Read from the PLUGIN's own log file, which bb appends to before the handler goes on (bb's server
+  // log gets the same lines through a writer of its own, a moment later: not read here). The file holds JSON lines;
+  // each of ours is looked for by its own words.
+  {
+    const file = join(homedir(), "bbdata", "plugins", "oats", "logs", "plugin.log");
+    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    // (ONE of each: this is the first stop of that agent in the run, read before the next ones; in the run's fresh
+    // container the file holds no earlier run's lines.)
+    const of = (phase) => text.split("\n").filter((line) => line.includes(`oats act stopApply ${phase} instance=${A.instance} `));
+    const [asked, ended] = [of("asked"), of("ended")];
+    check(asked.length === 1 && / caller=\S+ host=\S+ at=\d{4}-\d\d-\d\dT[\d:.]+Z n=\d+/.test(asked[0]), "the act log: bb's log of the plugin holds ONE line that the plugin asked the kernel to stop the agent (who asked, the machine, when)", `${asked.length} line(s) in ${file}${existsSync(file) ? "" : " (no such file)"}`);
+    check(ended.length === 1 && / result=ok ms=\d+ homes=1\/1/.test(ended[0]) && ended[0].match(/ n=(\d+)/)?.[1] === asked[0]?.match(/ n=(\d+)/)?.[1], "the act log: and ONE line that the stop ended ok, with how long it took and the home it took, under the same number", `${ended.length} line(s)${ended[0] ? `: …${ended[0].slice(ended[0].indexOf("oats act"))}` : ""}`);
+  }
   // The stop is the plugin's own act: it rereads by itself afterwards, so this one measures how soon an act's result is on hand, not the watch (that the act rereads is test/lifecycle/server.test.ts's).
   await fresh("the agent stopped (the plugin's own act)", { instance: A.instance, home, kind: "stopped", since: stopAt }, (agent) => agent.runtimeState === "stopped");
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");

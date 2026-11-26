@@ -1,0 +1,5 @@
+{
+ "operation run messaging:mail": {
+  "file": "mail.json"
+ }
+}

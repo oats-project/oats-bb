@@ -1,0 +1,110 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "operationsApi": 2,
+  "operation": "messaging:mail",
+  "capability": "oats.aweb",
+  "version": "1.48.0",
+  "argv": [
+   "aweb",
+   "mail",
+   "--limit",
+   "2",
+   "--cursor",
+   "eyJ2IjoxLCJhdCI6IjIwMjYtMTEtMjVUMTE6NTk6NDQuNDA2MTYwKzAwOjAwIiwiaWQiOiJlZDFjODI4NC1kOTZiLTRjOWItOGVkMi1lZmNlMmQ2ZTM0ZjYiLCJ0ZWFtIjoibWFpbHNwaWtlIn0"
+  ],
+  "cwd": "/abs/deployment/agents/oats-developer/instances/mail-reader",
+  "target": {
+   "home": "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "instance": "mail-reader"
+  },
+  "result": {
+   "documents": [
+    {
+     "label": "Mail",
+     "kind": "markdown",
+     "text": "# Mail\n\nRead 2026-11-25T12:00:14.162Z; never acknowledges. 2 messages, newest first.\n- mailspike: mail\\-reader (primary)\n\n## Re: first read\n\nsent to mail\\-writer in mailspike, 2026-11-25T11:59:11.155111+00:00\n\n> Thanks\\. I will read it today\\.\n\n## Parser ready for a first read\n\nreceived from mail\\-writer in mailspike, 2026-11-25T11:59:11.094116+00:00 (unread)\n\n> The parser is ready for a first read\\.\n> \n> Two things are still open:\n> \\- the list at 390 px\n> \\- the words of the refusals"
+    }
+   ],
+   "mail": {
+    "mailApi": 1,
+    "acknowledges": false,
+    "observedAt": "2026-11-25T12:00:14.162Z",
+    "identities": [
+     {
+      "team": "mailspike",
+      "alias": "mail-reader",
+      "identity": "did:key:placeholder-1",
+      "primary": true,
+      "error": null
+     }
+    ],
+    "messages": [
+     {
+      "id": "89e6ff76-e4c7-44d0-a549-e22c2462ef8e",
+      "conversationId": "036c0cb8-3211-4759-b8c0-afbf56169b3b",
+      "threadTitle": "Re: first read",
+      "direction": "sent",
+      "team": "mailspike",
+      "from": {
+       "alias": "mail-reader",
+       "address": "mailspike.test/mail-reader",
+       "identity": "did:key:placeholder-1"
+      },
+      "to": {
+       "alias": "mail-writer",
+       "address": "mail-writer",
+       "identity": "did:key:placeholder-2"
+      },
+      "subject": "Re: first read",
+      "body": "Thanks. I will read it today.",
+      "truncated": false,
+      "createdAt": "2026-11-25T11:59:11.155111+00:00",
+      "readByAgent": true,
+      "encrypted": false,
+      "verification": "verified",
+      "priority": "normal"
+     },
+     {
+      "id": "24c3d896-04d8-4d40-8e4a-ea33778383c0",
+      "conversationId": "7a0e96de-87a1-401b-a5c3-a169df897c43",
+      "threadTitle": "Parser ready for a first read",
+      "direction": "received",
+      "team": "mailspike",
+      "from": {
+       "alias": "mail-writer",
+       "address": "mailspike.test/mail-writer",
+       "identity": "did:key:placeholder-2"
+      },
+      "to": {
+       "alias": "mail-reader",
+       "address": "mail-reader",
+       "identity": "did:key:placeholder-1"
+      },
+      "subject": "Parser ready for a first read",
+      "body": "The parser is ready for a first read.\n\nTwo things are still open:\n- the list at 390 px\n- the words of the refusals",
+      "truncated": false,
+      "createdAt": "2026-11-25T11:59:11.094116+00:00",
+      "readByAgent": false,
+      "encrypted": false,
+      "verification": "verified",
+      "priority": "normal"
+     }
+    ],
+    "conversations": [
+     {
+      "id": "036c0cb8-3211-4759-b8c0-afbf56169b3b",
+      "partial": null
+     },
+     {
+      "id": "7a0e96de-87a1-401b-a5c3-a169df897c43",
+      "partial": null
+     }
+    ],
+    "hasMore": false,
+    "nextCursor": null
+   }
+  }
+ }
+}

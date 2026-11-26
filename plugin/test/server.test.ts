@@ -71,6 +71,7 @@ beforeEach(async () => {
     experimental_watch: () => ({ dispose: async () => undefined }),
   });
   hosts = [makeHostResponse({ id: "host_falcon", name: "falcon" })];
+  born = Date.now();
   projects = [{ id: "proj_release", sources: [{ hostId: "host_falcon", path: join(fake.deployment, "agents", "oats-maintainer", "instances", "release-070-maintainer") }] }];
   await load();
 });
@@ -80,9 +81,14 @@ afterEach(async () => {
   await fake.remove();
 });
 
-/** A publish's token (server/core.ts `token`): a time of this server's, one per publish, each later than the last. */
-const TOKEN = expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/) as unknown as string;
+/**
+ * A publish's token (server/core.ts `token`): an instant written as ISO text, one per publish, each later than the
+ * last, and never before the read behind it started: so never before this test's server was made (`born`, read
+ * before it: a floor the code promises, not two readings held equal).
+ */
+const TOKEN = expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
 const tokenOf = (signal: unknown): string => (signal as { payload: { at: string } }).payload.at;
+let born = 0;
 
 describe("snapshot", () => {
   it("answers the deployment and its agents, read once for every client", async () => {
@@ -99,6 +105,7 @@ describe("snapshot", () => {
     // `at` is the stamp, two readings of the clock a line apart in server/core.ts: they differ when a millisecond
     // turns between them, and a test that held them equal failed one run in some.)
     expect(server.harness.realtimeSignals).toEqual([{ channel: REALTIME_CHANGED, payload: { at: TOKEN } }]);
+    expect(Date.parse(tokenOf(server.harness.realtimeSignals[0]))).toBeGreaterThanOrEqual(born); // the read's start, not a count from nothing
     // The watch on the event log was asserted on the machine that holds the homes.
     await expect.poll(() => server.harness.experimental_hostRpcCalls.map((call) => call.method)).toEqual(["discover", "status", "watch"]);
     expect(server.harness.experimental_hostRpcCalls.every((call) => call.hostId === "host_falcon")).toBe(true);
@@ -602,9 +609,10 @@ describe("the event path", () => {
     const after = await rpc<Shown>("snapshot");
     expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(receipt.endedAt)); // the roster the window then fetches was read after the act's end
     expect(after.agents).toEqual(first.agents); // and it says nothing new: it was published for the act alone
-    // A token no client has acted on (the app acts once per token), later than the act's end.
+    // A token no client has acted on (the app acts once per token). (Not "later than the act's end": that is promised
+    // of the roster's `at`, the stamp, held three lines above; a token is the bare clock, and the read an act is owed
+    // can start in the millisecond the act ended: the two are then the same instant.)
     expect(earlier.has(tokens()[0]!) || tokens()[0] === first.at).toBe(false);
-    expect(Date.parse(tokens()[0]!)).toBeGreaterThan(Date.parse(receipt.endedAt));
     // A read that no act asked for (a person's Retry), saying the same: read, and not published.
     const again = await rpc<{ at: string }>("refresh");
     expect(Date.parse(again.at)).toBeGreaterThan(Date.parse(after.at));

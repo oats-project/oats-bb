@@ -25,6 +25,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, lowTargets, gapsIn, tight, loose, MAX_GAP } from "./browser.mjs";
+import { askedBack, outcomeOfFailure, wordsOfFailure } from "./ask-back.mjs";
 import { atomicWrite, completeLines } from "./files.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
@@ -162,6 +163,24 @@ function tell(...args) {
     return bb(...args).trim();
   } catch (error) {
     return `(bb ${args.slice(0, 2).join(" ")} failed: ${String(error.stderr || error.message).trim().slice(0, 300)})`;
+  }
+}
+/**
+ * One command asked of bb, with its OUTCOME kept: → `{ outcome, said }`, where `outcome` is "accepted" (bb did it),
+ * "no-answer" (bb did not answer: our limit of `ASK_MS` ended the command, or bb's CLI gave up by itself) or
+ * "refused" (bb answered with an error); which of the last two a failed command is: `outcomeOfFailure`
+ * (ask-back.mjs). `said` holds how long it took and what bb printed, or its exit and its error's own line (`wordsOfFailure`).
+ * A caller that asks again does so on "no-answer" only, never on "refused".
+ */
+const ASK_MS = 20_000;
+function asked(...args) {
+  const from = Date.now();
+  const seconds = () => `${((Date.now() - from) / 1000).toFixed(1)} s`;
+  try {
+    const printed = execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: ASK_MS }).trim();
+    return { outcome: "accepted", said: `in ${seconds()}: ${printed}` };
+  } catch (error) {
+    return { outcome: outcomeOfFailure(error), said: `${error.code === "ETIMEDOUT" ? "ended by our limit" : `exit ${error.status ?? `by ${error.signal ?? error.code}`}`} in ${seconds()}: ${wordsOfFailure(error)}` };
   }
 }
 /** The status bb gives one thread now (`bb thread show`), or what it printed where that is none. */
@@ -770,12 +789,6 @@ function busyStage() {
       // Claude Code is in its place: READ (the stage took it away for the failed starts).
       const claude = execFileSync("sh", ["-c", "command -v claude || true"], { encoding: "utf8" }).trim();
       check(claude !== "" && existsSync(claude) && !existsSync(CLAUDE_AWAY), "BUSY Claude Code is in its place when the stage leaves", `command -v claude: "${claude}"; the note of where it was is ${existsSync(CLAUDE_AWAY) ? "still there" : "gone"}`);
-      // bb's own concurrency limit is back: asked, and READ.
-      for (const { host, before } of limited.splice(0)) {
-        tell("concurrency-limit", "host", host, "auto");
-        const after = tell("concurrency-limit", "host", host, "--json");
-        check(after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", `before ${before.slice(0, 200)} | after ${after.slice(0, 200)}`);
-      }
       if (starOff) {
         const said = tell("plugin", "enable", "bb--github-star");
         check(!said.startsWith("(bb plugin enable failed"), "BUSY bb's star request is turned on again when the stage leaves", said.slice(0, 200));
@@ -783,13 +796,35 @@ function busyStage() {
       }
       // (Found by their titles too: a stage that stopped half way made threads it had not yet counted.)
       const list = () => listOf(bbJson("thread", "list"), "threads");
-      const titles = new Set(rowsOf(set()).filter((row) => row.backend === "bb").map((row) => providerTitle(row.instance)));
-      const ids = [...new Set([...made.splice(0).map((thread) => thread.id), ...list().filter((thread) => titles.has(thread.title)).map((thread) => thread.id)])];
-      const deadline = Date.now() + 120_000;
-      const running = () => list().filter((thread) => ids.includes(thread.id) && thread.status === "active");
-      while (Date.now() < deadline && running().length > 0) await sleep(2000);
-      const still = running();
-      check(still.length === 0, "BUSY no turn of the stage's is still held when it leaves: bb shows none of its threads active", still.map((thread) => thread.title).join(" | "));
+      let ids = [];
+      try {
+        const titles = new Set(rowsOf(set()).filter((row) => row.backend === "bb").map((row) => providerTitle(row.instance)));
+        ids = [...new Set([...made.splice(0).map((thread) => thread.id), ...list().filter((thread) => titles.has(thread.title)).map((thread) => thread.id)])];
+        const deadline = Date.now() + 120_000;
+        const running = () => list().filter((thread) => ids.includes(thread.id) && thread.status === "active");
+        while (Date.now() < deadline && running().length > 0) await sleep(2000);
+        const still = running();
+        check(still.length === 0, "BUSY no turn of the stage's is still held when it leaves: bb shows none of its threads active", still.map((thread) => thread.title).join(" | "));
+      } finally {
+        // bb's own concurrency limit is back: asked only now, once the held turns have ended (bb is slow while they
+        // end), and asked WHATEVER the lines above did: a `bb` of theirs that threw must not leave the override behind.
+        // Each asking KEEPS ITS OUTCOME (`asked`, above), which the loop (ask-back.mjs, held by a unit test) tells apart:
+        //   bb's read says what it said before the stage: done;
+        //   bb accepted but its read does not say so yet, or bb gave NO ANSWER: "not yet": asked again, within a minute;
+        //   bb ANSWERED NO (an error it returned): the check fails at once on that answer: asked once, never again.
+        for (const { host, before } of limited.splice(0)) {
+          // (What bb said before the stage could not be read: nothing can equal it, so the check fails at once, not
+          // after a minute of askings. The limit is ASKED BACK all the same, once: the stage may have raised it.)
+          const unread = before.startsWith("(bb ");
+          const once = unread ? asked("concurrency-limit", "host", host, "auto") : null;
+          const { back, refused, after, answers } = once !== null ? { back: false, refused: null, after: "", answers: [`${once.outcome}: ${once.said.replace(/\s+/g, " ").slice(0, 140)}`] } : await askedBack({ ask: () => asked("concurrency-limit", "host", host, "auto"), read: () => tell("concurrency-limit", "host", host, "--json"), before });
+          // EVERY asking is said, numbered, in order: askings that answered alike are not folded into one.
+          const all = answers.map((answer, index) => `(${index + 1}) ${answer}`).join(" | ");
+          const detail = unread ? `what bb said of the limit before the stage could not be read (${before.slice(0, 200)}), so nothing can be compared; it was asked back once all the same; bb answered: ${all}` : `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${answers.length} time(s); bb answered: ${all}`;
+          check(back, "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", refused === null ? detail : `bb answered NO to the asking, which is not asked again: ${refused.slice(0, 300)} | ${detail}`);
+          if (back && answers.length > 1) console.log(`NOTE BUSY bb's limit was asked back ${answers.length} times before bb said so; bb answered: ${all}`);
+        }
+      }
       const failed = [];
       for (const id of ids) {
         const said = tell("thread", "archive", id);

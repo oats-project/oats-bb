@@ -34,7 +34,7 @@ const HOST = ["ci.sh", "real/run.sh", "real/mail/run.sh", "relock.sh"];
 /** Tools: run by the guarded, by a developer in a checkout, and by unit tests on any machine; none does what the guard is for (container/README.md says what each does). */
 const TOOLS = ["unit.sh", "no-pi-tools-fetch.sh", "no-toolchain-fetch.sh", "fake-oats.mjs", "real/bb-logs.sh", "real/bb-plugin-command.sh", "real/bb-plugin-command.test.sh", "real/oats-record.mjs", "real/mock-anthropic.mjs", "real/pi/mock-openai.mjs"];
 /** Modules: imported, never run (the guards themselves among them). */
-const MODULES = ["guard.sh", "guard.mjs", "browser.mjs", "contrast.mjs", "files.mjs", "images.mjs", "tmux-roster.mjs", "real/fixtures.mjs"];
+const MODULES = ["guard.sh", "guard.mjs", "ask-back.mjs", "browser.mjs", "contrast.mjs", "files.mjs", "images.mjs", "tmux-roster.mjs", "real/fixtures.mjs"];
 const MODULE_DIRECTORIES = ["scenes/", "real/parts/"];
 
 /**

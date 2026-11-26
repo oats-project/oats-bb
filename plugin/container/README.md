@@ -300,7 +300,9 @@ stage of your own. The fake `oats` answers `status`, `souls`, `capabilities`, `t
 list`, `trigger list`, `trigger status` and `operation run messaging:mail` from the set for the stage's length. (The
 set holds ONE agent's mail, the busy chat's: the mail read answers it for EVERY agent; and the stage
 moves that page's times by ONE shift, so that its newest message is "just now" at the run and the
-ages the set spreads, from minutes to over a year, read as such.) A verb the set does not hold (yours)
+ages the set spreads, from minutes to over a year, read as such. That is as of the stage's START: a scene that
+wants the newest to read "just now" at its own moment asks `busyMail()` again, which gives the answer and the shift
+it moved every time by, and puts it over the stage's with `fakeOver`.) A verb the set does not hold (yours)
 answers its recorded fixture as always (a scene that needs ONE verb to answer otherwise for a moment, a refusal over the busy list, asks `fakeOver({ … })`, which keeps the stage's other answers and gives back what puts them back); if your screen needs a busy answer of it, the answer goes
 INTO the set, made by its generator from your recorded answer (`test/fixtures/busy/generate.mjs`,
 whose test holds that every busy row is a recorded row with only names, ids, times and relations

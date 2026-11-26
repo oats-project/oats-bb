@@ -603,13 +603,18 @@ function claudeBack() {
   if (claude !== "" && existsSync(`${claude}.away`)) renameSync(`${claude}.away`, claude);
   rmSync(CLAUDE_AWAY, { force: true });
 }
-/** The busy chat's mail (the set's mail.json), every `createdAt` moved by the same amount: the newest is a few seconds before now. */
-function busyMailNow() {
+/**
+ * The busy chat's mail (the set's mail.json), every `createdAt` moved by the SAME amount, so that the newest is a few
+ * seconds before `now`: → `{ stdout, shiftMs }`: the answer for the fake, and by how much every time was moved (a
+ * scene that compares a row's age with the set's file adds it). The stage answers it as of its start; a scene that
+ * wants the newest to read "just now" at ITS moment asks again: `fakeOver({ "operation run messaging:mail": { stdout: busyMail().stdout } })`.
+ */
+function busyMail(now = Date.now()) {
   const document = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/mail.json"), "utf8"));
   const messages = document.result.result.mail.messages;
-  const shift = Date.now() - 5_000 - Math.max(...messages.map((message) => Date.parse(message.createdAt)));
-  for (const message of messages) message.createdAt = new Date(Date.parse(message.createdAt) + shift).toISOString();
-  return JSON.stringify(document);
+  const shiftMs = now - 5_000 - Math.max(...messages.map((message) => Date.parse(message.createdAt)));
+  for (const message of messages) message.createdAt = new Date(Date.parse(message.createdAt) + shiftMs).toISOString();
+  return { stdout: JSON.stringify(document), shiftMs };
 }
 function busyStage() {
   const made = []; // the threads this stage made: { instance, id }
@@ -779,7 +784,7 @@ function busyStage() {
         // The busy chat's agent's mail (a full page of fifty): the set holds ONE agent's, so every agent's Mail tab answers it.
         // …with ONE shift of every message's time, so that the newest is "just now" at this run: the set holds the
         // SPREAD of their ages (minutes, hours, days, months, over a year), and an age is read against the run's clock.
-        "operation run messaging:mail": { stdout: busyMailNow() },
+        "operation run messaging:mail": { stdout: busyMail().stdout },
       });
       const total = rowsOf(status).length;
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === total, 60);
@@ -977,7 +982,7 @@ try {
           const page = await themedPage(browser, viewport, theme, at);
           try {
             for (const scene of mine) {
-              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, fakeOver, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads, recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, retitle: (fixtureId, title) => void bb("thread", "update", threads.get(fixtureId).id, "--title", title) /* bb's own rename of a thread */, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, fakeOver, busyMail, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads, recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, retitle: (fixtureId, title) => void bb("thread", "update", threads.get(fixtureId).id, "--title", title) /* bb's own rename of a thread */, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
               if (!PILOT) await scene.run(given);
               else {
                 // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.

@@ -292,7 +292,7 @@ needs them there too.
 The stage `busy` (`live-ui.mjs`, `busyStage`) answers the ONE shared busy set
 (`test/fixtures/busy/`, its README: sixty agents four levels deep, 52 of them on bb threads, eleven
 asking, 24 souls, 37 automations, seven teams, five machines, names of sixty characters, and one
-agent with a long conversation and a full board). Every screen has a worst-case twin here, and it
+agent with a long conversation, a full board and a full page of mail). Every screen has a worst-case twin here, and it
 is the one judged first.
 
 **To add your screen's busy scene**: one more scene in your feature's file under `scenes/`, with

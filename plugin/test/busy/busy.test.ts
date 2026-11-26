@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseScheduleList, parseTriggerList } from "../../kernel/automations-read.js";
+import { MAIL_PAGE, parseMail } from "../../kernel/mail.js";
 import { parseStatus } from "../../kernel/roster.js";
 import { parseServers, parseSouls, parseTeams } from "../../kernel/workspace.js";
 // @ts-expect-error the generator is plain JavaScript, with no types of its own
@@ -13,7 +14,7 @@ import { build, restored } from "../fixtures/busy/generate.mjs";
 
 const BUSY = join(fileURLToPath(new URL("..", import.meta.url)), "fixtures", "busy");
 type Made = { row: Record<string, unknown>; from: Record<string, unknown>; swaps: [string, string][]; was: [string[], unknown][]; kind?: string; shaped?: string[] };
-const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions", Made[]> };
+const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions" | "mail" | "messages", Made[]> };
 
 describe("the busy set", () => {
   it("is exactly what its generator makes: the same files, byte for byte, and no other", async () => {
@@ -32,7 +33,7 @@ describe("the busy set", () => {
         rows += 1;
       }
     }
-    expect(rows).toBeGreaterThan(350); // 60 agents, 24 souls, 37 automations, 200 runs, 7 teams, 5 machines, 12 facts, 9 questions
+    expect(rows).toBeGreaterThan(400); // 60 agents, 24 souls, 37 automations, 200 runs, 7 teams, 5 machines, 12 facts, 9 questions, the mail's document and its 50 messages
   });
 
   it("what is varied is a name, an id, a time, a relation or a text, and nothing else: no row is shaped", () => {
@@ -40,6 +41,8 @@ describe("the busy set", () => {
       agents: ["agent", "parentInstance", "waitingOnYou.since", "waitingOnYou.message", "board"],
       facts: ["key", "label", "value", "at"],
       questions: ["id", "question", "since"],
+      mail: ["result.result.mail.messages", "result.result.mail.conversations"],
+      messages: ["subject", "threadTitle", "createdAt", "body"],
       souls: ["description"],
       schedules: ["cron", "description", "recentRuns", "history.stored"],
       triggers: ["description"],
@@ -69,12 +72,19 @@ describe("the busy set", () => {
     expect(agents.filter((agent) => agent.parent !== null && !parent.has(agent.parent))).toEqual([]);
     expect(agents.filter((agent) => agent.waiting !== null)).toHaveLength(11);
     // THE BUSY CHAT: one agent on bb holds a full board (twelve facts; nine questions, one of four lines) and a long conversation.
-    const raws = (files["status.json"] as { agents: { instances: { instance: string; backend: string; board?: { facts: { key: string }[]; questions: { id: string; question: string }[] } | null; waitingOnYou?: { message: string } | null }[] }[] }).agents.flatMap((group) => group.instances);
+    const raws = (files["status.json"] as { agents: { instances: { instance: string; backend: string; home: string; board?: { facts: { key: string }[]; questions: { id: string; question: string }[] } | null; waitingOnYou?: { message: string } | null }[] }[] }).agents.flatMap((group) => group.instances);
     const boards = raws.filter((row) => row.board);
     expect(boards.map((row) => [row.backend, row.board!.facts.length, new Set(row.board!.facts.map((fact) => fact.key)).size, row.board!.questions.length, new Set(row.board!.questions.map((question) => question.id)).size, row.board!.questions.filter((question) => question.question.split("\n").length === 4).length])).toEqual([["bb", 12, 12, 9, 9, 1]]);
     expect(boards[0]!.waitingOnYou?.message).toBe(boards[0]!.board!.questions[0]!.question); // the claim says the oldest question, as the kernel's does
     const chat = files["chat.json"] as { agent: string; turns: { you: string; agent: string }[] };
     expect(chat.agent).toBe(boards[0]!.instance);
+    // Its MAIL: the recorded answer of the mail read, for this agent, its received messages multiplied to a FULL page;
+    // the plugin's reader takes it, and a third of the bodies is the recorded long report, cut by the messaging layer.
+    const mailDocument = files["mail.json"] as { result: { target: { instance: string; home: string }; result: { mail: { messages: { subject: string; truncated: boolean; conversationId: string }[]; conversations: { id: string }[] } } } };
+    expect([mailDocument.result.target.instance, mailDocument.result.target.home]).toEqual([chat.agent, raws.find((row) => row.instance === chat.agent)!.home]);
+    const mail = parseMail(mailDocument.result);
+    expect(mail.ok && [mail.value.messages.length, new Set(mail.value.messages.map((message) => message.key)).size, mail.value.messages.filter((message) => message.shortened).length >= 15, mail.value.messages.filter((message) => (message.subject ?? "").length > 90).length >= 10]).toEqual([MAIL_PAGE, MAIL_PAGE, true, true]);
+    expect(mailDocument.result.result.mail.conversations.map((row) => row.id)).toEqual(mailDocument.result.result.mail.messages.map((message) => message.conversationId));
     expect(chat.turns.length).toBeGreaterThanOrEqual(10);
     expect(new Set(chat.turns.map((turn) => turn.you)).size).toBe(chat.turns.length); // the mock model finds an answer by its message
     expect(chat.turns.filter((turn) => chat.turns.some((other) => other !== turn && other.you.includes(turn.you)))).toEqual([]);

@@ -99,10 +99,14 @@ const CHAT = [
   ["Which test is flaky?", "`ledger › closes a period that spans a daylight-saving change`. It fails when the suite starts within a minute of the hour in the build machine's zone: the test builds its period from the current time instead of a fixed one. It failed once in the first run and passed in the two after it.\n\nIt is not caused by this change, and I have not touched it. I would fix it in a pull request of its own, by giving the test a fixed clock, so that #1842 stays the two patch releases and nothing else."],
   ["Yes, its own pull request. Keep going on the rest while I look at the board.", "Understood. While you look at the board I am doing what needs none of its answers: the fixed clock for the ledger test, and the rounding cases for currencies with no minor unit and with three decimals, written against the code as it is today so that they pass before the payment client changes anything.\n\nI will stop at the payment client itself until the base branch is settled."],
 ];
+// The busy chat's MAIL: fifty messages received, a full page. [subject, body]: every third message keeps the recorded
+// long report's body (16 KiB, cut by the messaging layer); the others say a few lines. Subjects: short, and long.
+const MAIL_SUBJECTS = ["Lockfile audit: results", "Re: Re: Re: the payment client's major version, the idempotency key and what happens to a retry that crosses a deploy", "Advisory on the archive reader", "Licence question for the image library: who signs off, and by when do the mobile builds need the answer?", "Flaky: ledger closes a period that spans a daylight-saving change", "Thumbnails compared", "Base branch?", "Fourteen pull requests or one: a note on what each service's owners said when I asked them last week", "Checks on #1842", "Rounding cases for currencies with no minor unit"];
+const MAIL_BODIES = ["The audit of the fourteen lockfiles is done. 63 packages are behind, nine advisories are open.\n\nThe two patch releases are ready in #1842.", "Your question on the base branch is still open on my board.\n\n- main: the default\n- release: the 0.1 line\n\nI stop at the payment client until it is settled.", "One test failed once and passed twice. It is not this change.\n\nI will fix it in a pull request of its own."];
 const LONG = (what) => `${what}: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone`;
 
 export function build() {
-  const made = { agents: [], souls: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], facts: [], questions: [] };
+  const made = { agents: [], souls: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], facts: [], questions: [], mail: [], messages: [] };
 
   // ---- souls: the recorded souls, each multiplied (24) ----
   const soulsDoc = recorded("workspace/souls.json");
@@ -205,7 +209,29 @@ export function build() {
     if (!groups.has(soul)) groups.set(soul, { ...copy(status.agents[0]), name: soul, instances: [] });
     groups.get(soul).instances.push(row.row);
   });
-  const chatAgent = made.agents.find((each) => each.kind === "board").row.instance;
+  const chatRow = made.agents.find((each) => each.kind === "board").row;
+  const chatAgent = chatRow.instance;
+  // ---- the busy chat's mail: the recorded answer of the mail read (the WHOLE document, its envelope too), its
+  // received messages multiplied to a full page of fifty, for the busy chat's agent ----
+  const mailDoc = JSON.parse(readFileSync(join(FIXTURES, "mail/mail.json"), "utf8"));
+  const recordedMail = mailDoc.result.result.mail;
+  const received = recordedMail.messages.filter((message) => message.direction === "received");
+  const messages = Array.from({ length: 50 }, (_, n) => {
+    const from = received[n % received.length];
+    const long = from.truncated === true; // the recorded long report: its body stays as the messaging layer cut it
+    const number = String(n + 1).padStart(2, "0");
+    const subject = long ? `${from.subject} ${n + 1}: ${MAIL_SUBJECTS[n % MAIL_SUBJECTS.length]}` : MAIL_SUBJECTS[n % MAIL_SUBJECTS.length];
+    const message = vary(from, [[from.id, `${number}${from.id.slice(2)}`], [from.conversationId, `${number}${from.conversationId.slice(2)}`]], [[["subject"], subject], [["threadTitle"], subject], [["createdAt"], iso(-n * 53).replace("Z", "+00:00")], ...(long || n < received.length ? [] : [[["body"], MAIL_BODIES[n % MAIL_BODIES.length]]])]);
+    made.messages.push(message);
+    return message.row;
+  });
+  const mailHome = (row) => row.home.slice(0, row.home.lastIndexOf("/instances/") + 1);
+  const mail = vary(
+    mailDoc,
+    [[`${mailDoc.result.target.home.slice(0, mailDoc.result.target.home.lastIndexOf("/instances/") + 1)}`, mailHome(chatRow)], [mailDoc.result.target.instance, chatAgent]],
+    [[["result", "result", "mail", "messages"], messages], [["result", "result", "mail", "conversations"], messages.map((message) => ({ id: message.conversationId, partial: null }))]],
+  );
+  made.mail.push(mail);
   const busyStatus = { ...copy(status), features: copy(recorded("panel/status-board.json").features), agents: [...groups.values()] };
 
   // ---- automations: the recorded schedules (25) and triggers (12); five fail; some hold fifty runs ----
@@ -271,7 +297,7 @@ export function build() {
   });
   const servers = { ...copy(serversDoc), servers: made.servers.map((each) => each.row) };
 
-  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
+  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "mail.json": mail.row, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

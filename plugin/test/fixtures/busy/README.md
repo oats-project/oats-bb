@@ -11,7 +11,7 @@ images. No feature shapes busy data of its own.
 | souls | 24, most with long names |
 | automations | 37 (25 schedules, 12 triggers); 5 failing; 4 schedules hold 50 runs each |
 | teams, machines | 7 and 5 |
-| a busy chat | ONE agent on bb (`chat.json` names it) with a long conversation (ten turns: paragraphs, lists, a code block) and a full board: twelve facts, nine open questions, one of four lines. Its mail: a slot, filled when the mail piece's recorded answers are on main |
+| a busy chat | ONE agent on bb (`chat.json` names it) with a long conversation (ten turns: paragraphs, lists, a code block) and a full board: twelve facts, nine open questions, one of four lines; and a full page of mail: fifty messages received, subjects short and long, every third the recorded long report |
 | names | up to 61 characters (the kernel's own limit is 63); two efforts' names read alike once they are cut |
 
 ## Where it comes from: the recorded answers, multiplied
@@ -26,6 +26,7 @@ times and relations are varied, and a count that follows the rows. Nothing else.
 | `souls.json` | `../workspace/souls.json` | the soul's name wherever the row writes it; `description` |
 | `schedule-list.json` | `../automations/schedule-list.json` | the schedule's name wherever the row writes it; the minute of `cron`; `description`; on four of them `recentRuns` is the recorded run fifty times, each with its own `runId`, `scheduledFor` and `startedAt`, and `history.stored` follows |
 | `trigger-list.json` | `../automations/trigger-list.json` | the trigger's name wherever the row writes it; `description` |
+| `mail.json` | `../mail/mail.json`, the WHOLE answer with its envelope (the busy chat's agent's mail; the set holds one agent's, so the stage answers it for every agent) | the agent it is of (its name and its soul's directory, wherever the answer writes them: the target, the alias of its identity, `to`); `messages` is the recorded received messages fifty times, each with its own `id`, `conversationId`, `createdAt`, `subject` and `threadTitle`, and a made-up `body` on the short ones (the long report's body stays as the messaging layer cut it); `conversations` follows. `documents`, the messaging layer's own rendering, is the recorded one: the plugin does not read it |
 | `teams.json` | `../workspace/teams.json` | `label`, `team`, `description`, `default`, and the label in `at`; an unmapped team's problem row follows it |
 | `servers.json` | `../workspace/servers.json` | `id`, the host's name, `label` |
 

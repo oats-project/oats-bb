@@ -734,6 +734,8 @@ function busyStage() {
         "server list": { file: "busy/servers.json" },
         "schedule list": { file: "busy/schedule-list.json" },
         "trigger list": { file: "busy/trigger-list.json" },
+        // The busy chat's agent's mail (a full page of fifty): the set holds ONE agent's, so every agent's Mail tab answers it.
+        "operation run messaging:mail": { file: "busy/mail.json" },
       });
       const total = rowsOf(status).length;
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === total, 60);

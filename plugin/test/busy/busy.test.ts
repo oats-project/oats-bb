@@ -285,10 +285,11 @@ describe("the busy set", () => {
     // THE BUSY BOARD IS A BOARD THE KERNEL CAN HOLD: every text inside the kernel's bounds (label 40, value 80, unit 16,
     // an option 60 with two to four of them, a question 200 on ONE line, a link 512, a key of sixteen), twelve facts and
     // nine questions; and AT a bound where the worst case wants it. (A reader drops an entry that is over, alone.)
-    const fullBoard = boards[0]!.board! as unknown as { facts: { key: string; label: string; value: string; unit: string | null; link: string | null }[]; questions: { question: string; options: string[] }[] };
+    const fullBoard = boards[0]!.board! as unknown as { facts: { key: string; label: string; value: string; unit: string | null; link: string | null }[]; questions: { id: string; question: string; options: string[] }[] };
+    const oneLine = (text: string) => !/[\u0000-\u001f\u007f]/.test(text); // every text of a board is ONE line: no line feed, no control character
     const over = [
-      ...fullBoard.facts.filter((fact) => !/^[a-z0-9][a-z0-9-]{0,15}$/.test(fact.key) || [...fact.label].length > 40 || [...fact.value].length > 80 || [...(fact.unit ?? "")].length > 16 || (fact.link ?? "").length > 512).map((fact) => fact.key),
-      ...fullBoard.questions.filter((question) => [...question.question].length > 200 || question.question.includes("\n") || question.options.length < 2 || question.options.length > 4 || question.options.some((option) => [...option].length > 60)).map((question) => question.question.slice(0, 30)),
+      ...fullBoard.facts.filter((fact) => !/^[a-z0-9][a-z0-9-]{0,15}$/.test(fact.key) || [...fact.label].length > 40 || [...fact.value].length > 80 || [...(fact.unit ?? "")].length > 16 || (fact.link ?? "").length > 512 || !/^https?:\/\//.test(fact.link ?? "https://") || ![fact.label, fact.value, fact.unit ?? ""].every(oneLine)).map((fact) => fact.key),
+      ...fullBoard.questions.filter((question) => !/^[a-z0-9][a-z0-9-]{0,15}$/.test(question.id) || [...question.question].length > 200 || ![question.question, ...question.options].every(oneLine) || question.options.length < 2 || question.options.length > 4 || question.options.some((option) => [...option].length > 60)).map((question) => question.question.slice(0, 30)),
     ];
     expect([over, fullBoard.facts.length, fullBoard.questions.length]).toEqual([[], 12, 9]);
     expect([Math.max(...fullBoard.facts.map((fact) => fact.label.length)), Math.max(...fullBoard.questions.map((question) => question.question.length))]).toEqual([40, 200]);

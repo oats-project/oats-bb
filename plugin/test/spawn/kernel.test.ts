@@ -244,6 +244,8 @@ describe("a preview whose drawn fields have another shape is refused whole, as a
   const OTHER_SHAPES: [field: string, value: unknown][] = [
     ["modules", "none"],
     ["modules", [{ from: { kind: "package" } }]], // a module with no name
+    ["modules", [{ name: "oats.aweb", from: "package" }]], // where it is from, which the column draws: no object
+    ["modules", [{ name: "oats.aweb", from: { kind: "package", version: 5 } }]], // its version: no text
     ["teams", 3],
     ["teams", [{ team: "default:oats.aweb.ai" }]], // a team with no label
     ["harness", 5],
@@ -270,7 +272,11 @@ describe("a preview whose drawn fields have another shape is refused whole, as a
     }
   });
 
-  it("a key of the preview that nothing reads is not held to a shape: `launchConfig`", async () => {
+  it("a key of the preview that nothing reads is not held to a shape: `launchConfig`, and a team's `team` and `default` (the column reads its label alone)", async () => {
     expect(await answered((result) => (result.launchConfig = 7))).toMatchObject({ ok: true, value: { problem: null } });
+    const teams = await answered((result) => (result.teams = [{ label: "oats", team: 9, default: "yes" }]));
+    expect(teams).toMatchObject({ ok: true, value: { problem: null } });
+    // (And the label, which IS read, is drawn from it as before.)
+    if (teams.ok) expect(teams.value.facts.facts.filter((fact) => fact.label === "Team").map((fact) => fact.parts[0]!.text)).toEqual(["oats"]);
   });
 });

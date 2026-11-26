@@ -15,7 +15,7 @@ import { parseServers, parseSouls, parseTeams } from "../../kernel/workspace.js"
 import { build } from "../fixtures/busy/generate.mjs";
 
 const BUSY = join(fileURLToPath(new URL("..", import.meta.url)), "fixtures", "busy");
-type Made = { row: Record<string, unknown>; from: Record<string, unknown>; swaps: [string, string][]; was: [string[], unknown][]; kind?: string; shaped?: string[] };
+type Made = { row: Record<string, unknown>; from: Record<string, unknown>; swaps: [string, string][]; was: [string[], unknown][]; kind?: string };
 const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions" | "mail" | "messages" | "conversations" | "groups" | "problems", Made[]> };
 
 // THE RULE IS HELD HERE, not by the generator: this file reads the recorded answers ITSELF and puts a busy row back
@@ -217,9 +217,10 @@ describe("the busy set", () => {
     for (const each of withRuns) expect((each.row.history as { stored: number }).stored).toBe((each.row.recentRuns as unknown[]).length);
     // The NEWEST of a schedule's fifty is the recorded run as it is (the row's `lastRun`, recorded, is of that run), and each older one is an hour before.
     for (const each of withRuns) {
-      const runs = each.row.recentRuns as { runId: string; scheduledFor: string }[];
+      const runs = each.row.recentRuns as { runId: string; scheduledFor: string; startedAt: string }[];
       expect(runs[0]).toEqual(swappedBack((each.from.recentRuns as unknown[])[0], each.swaps)); // the recorded run, under the schedule's busy name, as the row's `lastRun` is
       expect(runs.map((run) => Date.parse(run.scheduledFor))).toEqual(runs.map((_, r) => Date.parse(runs[0]!.scheduledFor) - r * 3_600_000));
+      expect(runs.map((run) => Date.parse(run.startedAt))).toEqual(runs.map((_, r) => Date.parse(runs[0]!.startedAt) - r * 3_600_000));
     }
     // mail.json: the one document of the rule's, and in it the rule's messages and conversations.
     expect(made.mail).toHaveLength(1);

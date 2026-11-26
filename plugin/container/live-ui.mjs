@@ -568,11 +568,15 @@ const BUILT_IN = {
  * row with no thread standing for an agent that has one would be a picture of another problem). The stage MAKES
  * them. ONE has THE BUSY CHAT (the set's chat.json: a long conversation, with the agent that holds the full board): a
  * thread of its own, whose turns the mock model answers with the set's long answers (its say.json), one after the
- * other. Each of the others is an idle FORK of one healthy fixture thread (`bb thread fork --title`, with no prompt: no turn is
- * run and no harness is started for it), titled as the provider titles that agent's thread. Then, as the set says:
- * - an agent whose session was lost on bb has its thread ARCHIVED (the recorded row is of a thread a person archived);
- * - an agent the kernel says runs has a turn HELD OPEN on its thread (bb, not the kernel, says that an agent on a
- *   thread works: the same hold as the fixtures' two, with a hold of its own), so that the screen says "Working".
+ * other. Then, as the set says of each agent:
+ * - one with no turn to run stands on an idle FORK of one healthy fixture thread (`bb thread fork --title`, with no
+ *   prompt: no turn is run and no harness is started for it), titled as the provider titles that agent's thread;
+ * - one that FAILED AT ITS START stands on a thread of its own that did: spawned while Claude Code is away, so that
+ *   bb records an error and never a turn (checked then, and again once Claude Code is back);
+ * - one the kernel says runs stands on a thread of its own whose FIRST turn is held open (bb, not the kernel, says
+ *   that an agent on a thread works; a hold of the stage's own), so that the screen says "Working"; bb's own limit
+ *   of running threads is raised for the stage's length;
+ * - one whose session was lost on bb has its thread ARCHIVED (the recorded row is of a thread a person archived).
  * What it costs is said (a NOTE: the seconds, the threads made). When the stage leaves, the held turns are answered
  * and every thread it made is archived: the stages after it see none of them.
  */
@@ -731,7 +735,7 @@ function busyStage() {
       const all = Object.fromEntries(working.map((row) => [row.instance, statusNow(byInstance.get(row.instance).id)]));
       const idle = working.filter((row) => all[row.instance] !== "active");
       check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${working.length} busy agents that work`, idle.map((row) => `${row.instance}: ${all[row.instance]}`).join(" | "));
-      // The three failed starts, read AGAIN now that Claude Code is back and fourteen turns run: still an error and never a turn.
+      // The three failed starts, read AGAIN now that Claude Code is back and the held turns run: still an error and never a turn.
       {
         const now = list();
         const ran = failedAtStart.filter((instance) => !failedAtItsStart(recordOf(now.find((thread) => thread.title === providerTitle(instance)))));
@@ -771,7 +775,8 @@ function busyStage() {
         check(after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", `before ${before.slice(0, 200)} | after ${after.slice(0, 200)}`);
       }
       if (starOff) {
-        tell("plugin", "enable", "bb--github-star");
+        const said = tell("plugin", "enable", "bb--github-star");
+        check(!said.startsWith("(bb plugin enable failed"), "BUSY bb's star request is turned on again when the stage leaves", said.slice(0, 200));
         starOff = false;
       }
       // (Found by their titles too: a stage that stopped half way made threads it had not yet counted.)

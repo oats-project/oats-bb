@@ -60,6 +60,10 @@ has the conversation for real, with the mock model answering each `you` with its
 the claims' words; the board's nine questions and its twelve facts' labels and values; the mail's
 ten subjects and three short bodies; the long descriptions of souls, automations and teams.
 
+**What a row keeps of its recorded soul.** Only `agent` and the soul's directory in `home` name
+the busy soul; `workspace.soul.id` and `launchAt` still name the recorded one. The plugin reads
+neither field.
+
 **What follows what.** A varied time stays beside the recorded times of its row: a claim's, a
 fact's and a question's are the recorded time or minutes after it; a message's is the recorded one
 or minutes before it (never before its agent was made). Where a recorded row says a relation (the

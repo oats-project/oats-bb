@@ -1070,8 +1070,8 @@ export default [
       await page.goto("/plugins/oats/home");
       const cards = `document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)}).length`;
       // The home crops what needs the person (its first eight) and offers the rest: both are shown.
-      const drawn = await page.until(`${cards} >= 8 ? String(${cards}) : ""`, 60);
-      check(Number(drawn) >= 8, `${at} the busy home draws the first cards of what needs the person`, drawn ?? (await page.evaluate(`String(${cards})`)));
+      const drawn = await page.until(`${cards} === 8 ? "8" : ""`, 60);
+      check(drawn === "8", `${at} the busy home draws the first eight cards of what needs the person`, drawn ?? (await page.evaluate(`String(${cards})`)));
       note("the home", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: (() => { let up = document.querySelector('[data-testid="oats-home-needs"]'); while (up && !(up.scrollHeight > up.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(up).overflowY))) up = up.parentElement; return up ? Math.round((up.scrollHeight / up.clientHeight) * 10) / 10 : 1; })(), cardsOnFirstScreen: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})].filter((card) => card.getBoundingClientRect().bottom <= window.innerHeight).length })`));
       await page.shot(`busy-${viewport.name}-home`);
       const more = `document.querySelector(${JSON.stringify(`${testId("oats-home")} ${testId("oats-home-needs-all")}, ${testId("oats-home-needs-all")}`)})`;
@@ -1124,6 +1124,9 @@ export default [
       await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-open-panel"))}).click()`);
       const named = await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-panel-name")}`)})?.getAttribute("title") === ${JSON.stringify(chat.agent)} ? "1" : ""`, 30);
       check(named === "1", `${at} the busy chat's panel names its agent`);
+      // The panel is WHOLE before it is measured and drawn: its own reads have answered (nothing in it says "Reading…").
+      const whole = await page.until(`(() => { const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); return panel && !panel.innerText.includes("Reading…") ? "1" : ""; })()`, 60);
+      check(whole === "1", `${at} the busy chat's panel has read what it shows: nothing in it is still "Reading…"`);
       note("the busy chat's panel", await page.evaluate(`JSON.stringify((() => { const pane = document.querySelector(${JSON.stringify(`${testId("oats-panel")} [role="tabpanel"]`)}); return { screens: pane ? Math.round((pane.scrollHeight / Math.max(1, pane.clientHeight)) * 10) / 10 : null }; })())`));
       await page.shot(`busy-${viewport.name}-chat-panel`);
       // Its MAIL: a full page of fifty messages, subjects short and long; then the long report, opened.

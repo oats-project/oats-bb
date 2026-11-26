@@ -36,8 +36,12 @@ export type Harnesses = {
   choice: boolean;
   hostId: string | null;
   error: string | null;
-  /** The deployment has NO bb session provider: the kernel's own code and sentence of it; null where it has one (or the read has not answered). */
-  absent: { code: string; message: string } | null;
+  /** false: the deployment has no bb session provider: a spawn there is not a bb thread (nothing of bb's is offered for it: no harness, no model list). */
+  provider: boolean;
+  /** The harnesses the kernel launches itself: what a spawn that is not a bb thread may name. */
+  kernel: HarnessOption[];
+  /** The workspace pins the bb session provider and it is not synced yet: the kernel's own code and sentence; null otherwise. */
+  unsynced: { code: string; message: string } | null;
   retry(): void;
 };
 /** The first entry of the harness field: selected at the start, and nothing is passed while it is. */
@@ -56,7 +60,9 @@ export function useHarnesses(): Harnesses {
     options: ids.map((id) => ({ id, label: harnessLabel(id) })),
     choice: ids.length > 1,
     hostId: read.data?.hostId ?? null,
-    absent: read.data?.absent ?? null,
+    provider: read.data?.provider !== false,
+    kernel: (read.data?.kernelHarnesses ?? []).map((id) => ({ id, label: harnessLabel(id) })),
+    unsynced: read.data?.unsynced ?? null,
     error: read.status === "error" ? read.error : null,
     retry: read.retry,
   };

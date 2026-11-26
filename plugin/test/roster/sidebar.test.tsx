@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { noteActed } from "../../app/roster/reading";
 import { addPageLink } from "../../app/workspace/pages";
@@ -16,14 +17,14 @@ afterEach(() => {
   resetApp();
 });
 
-async function sidebar(over: Partial<Handlers> = {}, activeThreadId: string | null = null, threads = sidebarThreads()) {
+async function sidebar(over: Partial<Handlers> = {}, activeThreadId: string | null = null, threads = sidebarThreads(), more: Pick<RenderSlotOptions<Contract>, "sidebarShortcuts"> = {}) {
   const app = await loadApp();
   expect(app.threadLists.map((list) => list.id)).toEqual(["agents"]);
   let navigated = 0;
   const slot = renderSlot<PluginThreadListProps, Contract>(
     app.threadLists[0]!,
     { activeThreadId, activeProjectId: null, isCompactViewport: false, onNavigate: () => void navigated++, searchQuery: "" },
-    { rpc: handlers(over), sidebarThreads: threads },
+    { rpc: handlers(over), sidebarThreads: threads, ...more },
   );
   return { slot, navigated: () => navigated };
 }
@@ -434,6 +435,30 @@ test("a modified click is left to the anchor: nothing is navigated by the plugin
   expect(navigated()).toBe(0);
 });
 
+test("while bb's modifier is held a thread row shows the jump key bb gave it, as bb's own rows do, and says it in aria-keyshortcuts; a row bb gave none, and every row the rest of the time, shows none", async () => {
+  // Held: bb gives keys to the rows it numbers (here an agent's and the thread that is no agent's).
+  const { slot } = await sidebar({}, null, sidebarThreads(), { sidebarShortcuts: { thr_release: { label: "Ctrl + Shift + 1", ariaKeyshortcuts: "Control+Shift+1" }, thr_plain: { label: "Ctrl + Shift + 5", ariaKeyshortcuts: "Control+Shift+5" } } });
+  await slot.findByTestId("oats-tree");
+  const rows = [...slot.getAllByTestId("oats-agent-row"), ...slot.getAllByTestId("oats-other-row")];
+  const keyed = rows.filter((row) => row.querySelector('[data-testid="oats-jump-key"]') !== null);
+  expect(keyed.map((row) => [row.getAttribute("data-sidebar-thread-id"), row.querySelector('[data-testid="oats-jump-key"]')!.textContent, row.getAttribute("aria-keyshortcuts")])).toEqual([
+    ["thr_release", "Ctrl + Shift + 1", "Control+Shift+1"],
+    ["thr_plain", "Ctrl + Shift + 5", "Control+Shift+5"],
+  ]);
+  // The key is bb's word beside the row's own: it is not read twice (the anchor says it), and it takes no press.
+  for (const row of keyed) expect([row.querySelector('[data-testid="oats-jump-key"]')!.getAttribute("aria-hidden"), row.querySelector('[data-testid="oats-jump-key"]')!.className.includes("pointer-events-none")]).toEqual(["true", true]);
+  expect(rows.filter((row) => !keyed.includes(row) && row.hasAttribute("aria-keyshortcuts"))).toEqual([]);
+  // A row with no thread is none of bb's: it has neither the attribute bb numbers by nor a key.
+  for (const row of slot.queryAllByTestId("oats-agent-row-threadless")) expect([row.hasAttribute("data-sidebar-thread-shortcut-target"), row.querySelector('[data-testid="oats-jump-key"]')]).toEqual([false, null]);
+});
+
+test("the rest of the time (bb's modifier is not held) no row shows a key or names one", async () => {
+  const { slot } = await sidebar();
+  await slot.findByTestId("oats-tree");
+  expect(slot.queryAllByTestId("oats-jump-key")).toEqual([]);
+  expect([...slot.getAllByTestId("oats-agent-row"), ...slot.getAllByTestId("oats-other-row")].filter((row) => row.hasAttribute("aria-keyshortcuts"))).toEqual([]);
+});
+
 test('"Other threads" lists the thread that is no OATS agent, and it opens like any other', async () => {
   const { slot, navigated } = await sidebar();
   await slot.findByTestId("oats-tree");
@@ -467,17 +492,14 @@ test("the workspace's name, with no heading under it; at the roster's foot New a
   expect(navigated()).toBe(1);
 });
 
-test("the four page rows call toPluginPanel, then onNavigate", async () => {
+test("the Workspace row (ONE row for the page's four tabs, as the Desktop has it) calls toPluginPanel, then onNavigate", async () => {
   const { slot, navigated } = await sidebar();
   await slot.findByTestId("oats-workspace-line");
-  for (const path of ["souls", "capabilities", "teams", "machines"]) fireEvent.click(slot.getByTestId(`oats-page-link-${path}`));
-  expect(slot.inspection.navigateCalls).toEqual([
-    { method: "toPluginPanel", path: "souls" },
-    { method: "toPluginPanel", path: "capabilities" },
-    { method: "toPluginPanel", path: "teams" },
-    { method: "toPluginPanel", path: "machines" },
-  ]);
-  expect(navigated()).toBe(4);
+  // The tabs are not rows of the sidebar.
+  for (const path of ["souls", "capabilities", "teams", "machines"]) expect(slot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
+  fireEvent.click(slot.getByTestId("oats-page-link-workspace"));
+  expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "workspace" }]);
+  expect(navigated()).toBe(1);
 });
 
 test("the active thread's row is marked", async () => {
@@ -657,20 +679,20 @@ test("a page whose hook gives two marks draws two dots after its title, in the o
   }
 });
 
-test("a feature's own page is a row under the four pages, with its mark while its hook gives one", async () => {
+test("a feature's own page is a row under Workspace, with its mark while its hook gives one", async () => {
   let failed = true;
   const remove = addPageLink({ path: "example", title: "Example", useMark: () => (failed ? { label: "Example, a run failed" } : null) });
   try {
     const { slot } = await sidebar();
     const row = await slot.findByTestId("oats-page-link-example");
-    // The four pages first, then what the features added, this one last.
+    // Workspace first, then what the features added, this one last.
     const rows = Array.from(slot.container.querySelectorAll('[data-testid^="oats-page-link-"]')).map((link) => link.textContent);
-    expect(rows.slice(0, 4)).toEqual(["Souls", "Capabilities", "Teams", "Machines"]);
+    expect(rows[0]).toBe("Workspace");
     expect(rows.at(-1)).toBe("Example");
     const mark = row.querySelector('[data-testid="oats-mark"]')!;
     expect([mark.getAttribute("role"), mark.getAttribute("aria-label")]).toEqual(["img", "Example, a run failed"]);
-    // The four pages have no mark.
-    expect(slot.getByTestId("oats-page-link-souls").querySelector('[data-testid="oats-mark"]')).toBeNull();
+    // Workspace has no mark.
+    expect(slot.getByTestId("oats-page-link-workspace").querySelector('[data-testid="oats-mark"]')).toBeNull();
     fireEvent.click(row);
     expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "example" }]);
     slot.unmount();
@@ -681,9 +703,9 @@ test("a feature's own page is a row under the four pages, with its mark while it
   } finally {
     remove();
   }
-  // Taken away: the block is the four pages again.
+  // Taken away: the block is Workspace again.
   const { slot } = await sidebar();
-  await slot.findByTestId("oats-page-link-souls");
+  await slot.findByTestId("oats-page-link-workspace");
   expect(slot.queryByTestId("oats-page-link-example")).toBeNull();
 });
 
@@ -734,15 +756,40 @@ test("an agent the kernel refused as one it does not know says so in its row, un
 test("the row of the plugin's page that is shown is the selected one (D-037), and none is while a thread is shown", async () => {
   const { slot } = await sidebar();
   await slot.findByTestId("oats-workspace-line");
-  const current = () => ["souls", "capabilities", "teams", "machines"].filter((path) => slot.getByTestId(`oats-page-link-${path}`).getAttribute("aria-current") === "page");
+  const current = () => ["workspace"].filter((path) => slot.getByTestId(`oats-page-link-${path}`).getAttribute("aria-current") === "page");
   expect(current()).toEqual([]);
+  // A tab of the Workspace page is drawn (as app/workspace registers it: its row is Workspace).
   const { shownPage } = await import("../../app/workspace/pages");
-  const Teams = shownPage("teams", () => null);
+  const Teams = shownPage("teams", () => null, "workspace");
   const page = renderSlot<object, Contract>({ component: Teams } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads() });
-  await waitFor(() => expect(current()).toEqual(["teams"]));
-  expect(slot.getByTestId("oats-page-link-teams").className).toContain("bg-accent");
+  await waitFor(() => expect(current()).toEqual(["workspace"]));
+  expect(slot.getByTestId("oats-page-link-workspace").className).toContain("bg-accent");
   page.unmount();
   await waitFor(() => expect(current()).toEqual([]));
+});
+
+// The Workspace page's four tabs are four routes that mark ONE row. Where the next tab is drawn before the last one
+// is taken away, the row stays the selected one: only the LAST page that marks it clears it (app/workspace/pages.ts `drawn`).
+test("two tabs of the Workspace page drawn at once mark the one row: taking the first away leaves it selected; taking the last away clears it", async () => {
+  const { slot } = await sidebar();
+  await slot.findByTestId("oats-workspace-line");
+  const current = () => slot.getByTestId("oats-page-link-workspace").getAttribute("aria-current") === "page";
+  const { shownPage } = await import("../../app/workspace/pages");
+  const tab = (path: string) => renderSlot<object, Contract>({ component: shownPage(path, () => null, "workspace") } as never, {}, { rpc: handlers(), sidebarThreads: sidebarThreads() });
+  const teams = tab("teams");
+  await waitFor(() => expect(current()).toBe(true));
+  const machines = tab("machines"); // the next tab's page, drawn while the last one still is
+  await waitFor(() => expect(current()).toBe(true));
+  teams.unmount(); // the last tab's page goes after the next one came
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(current()).toBe(true);
+  machines.unmount();
+  await waitFor(() => expect(current()).toBe(false));
+  // And again from nothing: the count went back to none, so one page alone marks and clears the row as before.
+  const souls = tab("souls");
+  await waitFor(() => expect(current()).toBe(true));
+  souls.unmount();
+  await waitFor(() => expect(current()).toBe(false));
 });
 
 // ONE tree for every backend (model/view.ts `rows`; its table is test/model/tree.test.ts): an agent
@@ -1127,10 +1174,10 @@ test("a stopped tmux agent says Stopped in its sidebar row and in its own panel"
 });
 
 // The plugin's setting `pages`: a release shows only the pages that are finished (its default: the
-// home alone). A page that is not shown has no link in the sidebar and no mark; the count of who
+// home and the Workspace page's four tabs). A page that is not shown has no link in the sidebar and no mark; the count of who
 // waits still opens the home; "New agent" stays, whatever pages are shown: the form is a page of its
 // own (app/spawn), not one a release leaves out.
-test("with the release's default (pages: home) the sidebar has the roster, New agent and no page link; with every page, all of them", async () => {
+test("with the home alone (pages: home) the sidebar has the roster, New agent and no page link; with every page, Workspace and Automations", async () => {
   const withPages = async (pages: string) => {
     const app = await loadApp();
     return renderSlot<PluginThreadListProps, Contract>(
@@ -1142,7 +1189,7 @@ test("with the release's default (pages: home) the sidebar has the roster, New a
   const pilot = await withPages("home");
   await pilot.findByTestId("oats-tree");
   expect(pilot.queryByTestId("oats-pages")).toBeNull();
-  for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(pilot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
+  for (const path of ["workspace", "souls", "capabilities", "teams", "machines", "automations"]) expect(pilot.queryByTestId(`oats-page-link-${path}`)).toBeNull();
   expect(pilot.getByTestId("oats-new-agent").textContent).toBe("New agent"); // the way to start an agent survives the hidden pages
   // (The home is reached from bb's own entry for the plugin, which carries the badge: the sidebar has no line that opens it.)
   expect(pilot.queryByTestId("oats-needs-line")).toBeNull();
@@ -1152,15 +1199,27 @@ test("with the release's default (pages: home) the sidebar has the roster, New a
   resetApp();
   const all = await withPages(ALL_PAGES);
   await all.findByTestId("oats-tree");
-  for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) expect(all.getByTestId(`oats-page-link-${path}`)).toBeTruthy();
-  expect(all.getByTestId("oats-new-agent")).toBeTruthy();
+  for (const path of ["workspace", "automations"]) expect(all.getByTestId(`oats-page-link-${path}`)).toBeTruthy();
+  // Two rows under it: the heading "Workspace" is drawn.
+  expect([all.getByTestId("oats-pages-heading").textContent, all.getByTestId("oats-pages-heading").className.includes("sr-only")]).toEqual(["Workspace", false]);
   all.unmount();
+  resetApp();
+  // The release's default: the ONE row "Workspace". No visible heading over it (the word would stand twice); the list
+  // is still named for a screen reader, and keeps the place a heading's block gives it.
+  const one = await withPages("home, souls, capabilities, teams, machines");
+  await one.findByTestId("oats-tree");
+  expect(Array.from(one.getByTestId("oats-pages").querySelectorAll("button")).map((row) => row.textContent)).toEqual(["Workspace"]);
+  const heading = one.getByTestId("oats-pages-heading");
+  expect([heading.tagName, heading.textContent, heading.className]).toEqual(["H2", "Workspace", "sr-only"]);
+  expect(one.getByTestId("oats-pages").className).toContain("pt-8");
+  expect(one.getByTestId("oats-new-agent")).toBeTruthy();
+  one.unmount();
   resetApp();
   // With the home itself left out: no count either.
   const none = await withPages("souls");
   await none.findByTestId("oats-tree");
   expect(none.queryByTestId("oats-needs-line")).toBeNull();
-  expect(none.getByTestId("oats-page-link-souls")).toBeTruthy();
+  expect(none.getByTestId("oats-page-link-workspace")).toBeTruthy(); // one tab shown: the page is there
 });
 
 test("the path of a page that is not shown answers one line and the way back; the page itself is not drawn", async () => {
@@ -1236,12 +1295,15 @@ test("while bb is still reading the settings no page is known to be shown or hid
     const loading = pagesOf({ values: undefined, isLoading: true });
     expect([loading.known, loading.has("home"), loading.has("souls")]).toEqual([false, false, false]);
     const unavailable = pagesOf({ values: undefined, isLoading: false });
-    expect([unavailable.known, unavailable.has("home"), unavailable.has("souls")]).toEqual([true, true, false]);
+    // The default: the home and the Workspace page's four tabs; not Automations.
+    expect([unavailable.known, unavailable.has("home"), unavailable.has("souls"), unavailable.has("machines"), unavailable.has("workspace"), unavailable.has("automations")]).toEqual([true, true, true, true, true, false]);
     const read = pagesOf({ values: { pages: "home, Souls" }, isLoading: false });
     expect([read.known, read.has("home"), read.has("souls"), read.has("teams")]).toEqual([true, true, true, false]);
+    // The Workspace page is there while one of its tabs is, and not with the home alone.
+    expect([read.has("workspace"), pagesOf({ values: { pages: "home" }, isLoading: false }).has("workspace")]).toEqual([true, false]);
     // A cleared field is the default, as for the plugin's other settings.
     const cleared = pagesOf({ values: { pages: " " }, isLoading: false });
-    expect([cleared.has("home"), cleared.has("souls")]).toEqual([true, false]);
+    expect([cleared.has("home"), cleared.has("souls")]).toEqual([true, true]);
     // The values of a read before stay while bb reads them again.
     expect(pagesOf({ values: { pages: "souls" }, isLoading: true }).known).toBe(true);
   } finally {

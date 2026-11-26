@@ -105,7 +105,7 @@ bb plugin remove oats --yes > /dev/null 2>&1 || true
 (cd "$LIVE" && bb plugin install . --yes) > "$OUT/install.txt" 2>&1 || { cat "$OUT/install.txt"; exit 1; }
 # bb built it with the locked toolchain, and fetched none from npm (no-toolchain-fetch.sh).
 sh "$PLUGIN/container/no-toolchain-fetch.sh" || { fail "bb fetched its build toolchain at the plugin's install"; exit 1; }
-# Every page is shown for the checks (the plugin's setting `pages`; its default, `home` alone, is
+# Every page is shown for the checks (the plugin's setting `pages`; its default, the home and the Workspace page's four tabs, is
 # what a release shows): each page's scenes run. The stage "pages-default" of live-ui.mjs puts the
 # default back for its scenes, and asserts what is then absent.
 bb plugin config oats set pages "$ALL_PAGES" > /dev/null

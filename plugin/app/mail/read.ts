@@ -1,15 +1,20 @@
 // The read of one agent's mail: when the view is shown, on Refresh and on Older, and at no other
-// time: never on the roster's poll, never on `oats/changed`, never on a timer. One press reads one
+// time: never on the roster's poll, never on `oats/changed`, never on a timer. A view mounted
+// while what it holds for that agent is FRESH (its first page landed less than FRESH_MS ago) shows
+// it and reads nothing: one press is one read, and a mount is not always a person's (bb mounts its
+// side panel's content a second time now and then, a fraction of a second after it opens). One press reads one
 // page, and up to PAGES_A_PRESS where a page holds no received mail. Each read is one
 // `aw` call per identity of the agent, over the network, and it marks nothing read.
 //
 // What was read is kept for the app window, by instance: a view shown again shows it at once, and
-// reads again behind it. Every read carries a serial: an answer that is not of the latest read of
+// reads again behind it once it is no longer fresh, or where the last read of its first page was
+// refused (a refusal is not forgotten by a mount). Every read carries a serial: an answer that is not of the latest read of
 // the view that asked (another agent now, a newer Refresh, a view that is gone) is dropped.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { MailMessage, MailPage, MailUnread } from "../../kernel/mail";
 import { attempt, errorMessage, onWindowReset, type Contract } from "../store";
+import { FRESH_MS } from "../ui/words";
 
 /** What is held of one agent's mail. */
 export type Held = {
@@ -34,6 +39,10 @@ export type MailRead = {
   readOlder(): void;
 };
 
+// The bound of "fresh" is the plugin's one (`FRESH_MS`, app/ui/words.ts): while what is held is
+// fresh the head says no age and a view that is mounted reads nothing; once it is older, the head
+// says "Read <age>." and a view that is mounted reads again behind it. Refresh reads at any time.
+
 const kept = new Map<string, Held>();
 /**
  * The read of an agent's first page that is on its way, by instance: a view shown while one is in
@@ -41,10 +50,22 @@ const kept = new Map<string, Held>();
  * process. Each is an `oats` that may run for minutes, with one `aw` call per identity.
  */
 const flying = new Map<string, Promise<MailPage>>();
+/**
+ * The agents whose last read of the first page was REFUSED. What is held for one of them is not
+ * fresh, however young: a view mounted again reads again, so that the refusal a person saw is not
+ * gone with a mount (it would be, since the notice is the view's own state). Off when a read lands.
+ */
+const refused = new Set<string>();
 onWindowReset(() => {
   kept.clear();
   flying.clear();
+  refused.clear();
 });
+/** Whether a view mounted now for `instance` has nothing to read: its first page landed less than FRESH_MS ago, no read of it is on its way (one that is, it takes), and its last read was not refused. */
+const fresh = (instance: string): boolean => {
+  const held = kept.get(instance);
+  return held !== undefined && !flying.has(instance) && !refused.has(instance) && Date.now() - held.readAt < FRESH_MS;
+};
 
 /**
  * The most pages ONE press reads. A page is the messaging layer's 50 newest messages of both
@@ -61,7 +82,7 @@ const merged = (held: Held, page: MailPage): Held => {
 
 export function useMail(instance: string): MailRead {
   const rpc = useRpc<Contract>();
-  const [state, setState] = useState<{ instance: string; held: Held | null; fetching: MailRead["fetching"]; error: MailRead["error"] }>(() => ({ instance, held: kept.get(instance) ?? null, fetching: "first", error: null }));
+  const [state, setState] = useState<{ instance: string; held: Held | null; fetching: MailRead["fetching"]; error: MailRead["error"] }>(() => ({ instance, held: kept.get(instance) ?? null, fetching: fresh(instance) ? null : "first", error: null }));
   const serial = useRef(0);
   const read = useCallback(
     (of: "first" | "older") => {
@@ -79,7 +100,11 @@ export function useMail(instance: string): MailRead {
           const started = flight;
           flying.set(instance, started);
           const landed = () => void (flying.get(instance) === started && flying.delete(instance));
-          started.then(landed, landed);
+          // By the read itself, whatever view is still there to hear it: refused, or landed.
+          started.then(
+            () => (landed(), void refused.delete(instance)),
+            () => (landed(), void refused.add(instance)),
+          );
         }
       }
       /** The pages after the first of this press, while a page added no received mail and an older one is there. */
@@ -117,16 +142,18 @@ export function useMail(instance: string): MailRead {
     },
     [instance, rpc],
   );
-  // Shown (and shown for another agent): one read of the first page. Gone: its answer is dropped.
+  // Shown (and shown for another agent): one read of the first page, unless what is held for the agent is fresh
+  // (then it is shown as it is: Refresh is there for a person who wants a read). Gone: its answer is dropped.
   useEffect(() => {
-    read("first");
+    if (fresh(instance)) setState({ instance, held: kept.get(instance) ?? null, fetching: null, error: null });
+    else read("first");
     return () => {
       serial.current += 1;
     };
-  }, [read]);
+  }, [instance, read]);
   const refresh = useCallback(() => read("first"), [read]);
   const readOlder = useCallback(() => read("older"), [read]);
   // Another agent since the last draw: nothing of the one before is shown while the effect starts its read.
-  if (state.instance !== instance) return { held: kept.get(instance) ?? null, fetching: "first", error: null, refresh, readOlder };
+  if (state.instance !== instance) return { held: kept.get(instance) ?? null, fetching: fresh(instance) ? null : "first", error: null, refresh, readOlder };
   return { held: state.held, fetching: state.fetching, error: state.error, refresh, readOlder };
 }

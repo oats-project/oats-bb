@@ -70,14 +70,16 @@ test("the home: what bb says an agent asks (its title, its choices) and an agent
   expect(slot.getAllByTestId("oats-reply-text").map((box) => (box as HTMLTextAreaElement).placeholder)).toContain(`Write to Flaky${GONE}ci developer…`);
 });
 
-test("the machines page: a server's id, its route and its note are each one filtered line", async () => {
+test("the machines page: a server's id, its route and its folder are each one filtered line", async () => {
   const machines = [
-    { id: "falcon", route: null, isThisMachine: true, note: null },
-    { id: `dev${BIDI}box`, route: "ssh://joan:pw@devbox.invalid", isThisMachine: false, note: "workspace /srv/oats\n2 saved instance routes" },
+    { id: "falcon", route: null, isThisMachine: true, label: null, folder: null },
+    { id: `dev${BIDI}box`, route: "ssh://joan:pw@devbox.invalid", isThisMachine: false, label: null, folder: "/srv/oats\nmore" },
   ];
   const slot = await page("machines", "", handlers({ machines: () => ({ machines }) }));
-  const row = await slot.findByTestId("oats-machine-row");
-  expect(Array.from(row.children).map((part) => part.textContent)).toEqual([`dev${GONE}box`, "[withheld]", "workspace /srv/oats 2 saved instance routes"]);
+  const row = (await slot.findAllByTestId("oats-machine-row"))[1]!;
+  expect(row.firstElementChild!.firstElementChild!.textContent).toBe(`dev${GONE}box`);
+  // Under its Details: the ssh host (a credential in it is withheld whole) and the folder, each one filtered line.
+  expect(Array.from(row.querySelectorAll("details p")).map((part) => part.textContent)).toEqual(["ssh host: [withheld]", "Folder: /srv/oats more"]);
 });
 
 test("the thread's row: an agent's question with a character that is no text is drawn with U+FFFD; its soul and its alias are not drawn there", async () => {
@@ -104,7 +106,9 @@ test("a soul's page: its description and its problem, and a capability's descrip
   soul.unmount();
   // A refusal keeps its code; what is unsafe in its message is withheld whole.
   const broken = await page("souls", "broken-soul", handlers({ souls: () => ({ souls }) }));
-  expect((await broken.findByTestId("oats-soul-problem")).textContent).toBe("E_SOUL_INVALID: [withheld]");
+  await broken.findByTestId("oats-soul-detail");
+  // (The kernel's words on why it cannot be spawned are under the page's Details.)
+  expect(Array.from(broken.getByTestId("oats-soul-details").querySelectorAll("p")).map((line) => line.textContent)).toContain("E_SOUL_INVALID: [withheld]");
   broken.unmount();
   const capabilities = await page(
     "capabilities",
@@ -113,21 +117,5 @@ test("a soul's page: its description and its problem, and a capability's descrip
   );
   const capability = await capabilities.findByTestId("oats-capability-row");
   expect(capability.querySelector("span")!.textContent).toBe(`oats${GONE}core`);
-  expect(capability.querySelector("p")!.textContent).toBe("[withheld]");
-});
-
-test("the spawn preview: each of the kernel's items is one filtered line", async () => {
-  const slot = await page(
-    "souls",
-    "oats-developer",
-    handlers({
-      spawnPreview: () => ({ summary: { modules: ["oats.core\t2.6.0"], teams: [`oats${BIDI}`], launch: "claude ·\nopus", warnings: ["the hook printed token: abc123"], problems: ["no clone\nof the repository"] } }),
-    }),
-  );
-  await slot.findByTestId("oats-spawn-form");
-  fireEvent.change(slot.getByTestId("oats-spawn-name"), { target: { value: "ranker-v4-probe" } });
-  fireEvent.change(slot.getByTestId("oats-spawn-task"), { target: { value: "Sweep." } });
-  fireEvent.click(slot.getByTestId("oats-spawn-preview"));
-  const preview = await slot.findByTestId("oats-preview");
-  await waitFor(() => expect(Array.from(preview.querySelectorAll("li")).map((item) => item.textContent)).toEqual(["no clone of the repository", "[withheld]", "oats.core 2.6.0", `oats${GONE}`, "claude · opus"]));
+  expect(capability.querySelector('[data-testid="oats-capability-does"]')!.textContent).toBe("[withheld]");
 });

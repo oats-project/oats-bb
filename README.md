@@ -4,7 +4,7 @@ Official [OATS](https://github.com/oats-project/oats) package for
 [bb](https://www.npmjs.com/package/bb-app): the bb session provider and plugin, which let OATS
 agents run as bb threads beside the kernel's tmux backend.
 
-The latest release is 0.6.0 ([CHANGELOG.md](CHANGELOG.md)): a tmux agent's page gets Terminal, bb's own terminal tab on the agent's session, and every agent with messaging gets a read-only Mail tab. The work arrives as reviewed pull
+The latest release is 0.7.0 ([CHANGELOG.md](CHANGELOG.md)): the plugin's Workspace page (Souls, Capabilities, Teams, Machines) is shown by default, New agent works on a deployment with no bb session provider, and the plugin logs every act it asks of OATS. The work arrives as reviewed pull
 requests, and it follows the OATS session-provider contract as decided on the OATS side. The lane map
 records how work lands here: <https://github.com/oats-project/oats/issues/1566>.
 
@@ -89,7 +89,7 @@ stays the default; nothing changes for a home that does not ask for `--backend b
    ```yaml
    # oats-workspace.yaml
    packages:
-     oats.bb: git:github.com/oats-project/oats-bb@v0.6.0
+     oats.bb: git:github.com/oats-project/oats-bb@v0.7.0
    defaults:
      capabilities:
        oats.bb: { from: package }

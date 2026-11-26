@@ -30,7 +30,7 @@ import { RowFacts } from "../ui/row-facts";
 import { Button, Card, Code, CopyButton, Disclosure, Empty, Fact, Facts, INPUT, Loading, Mark, Notice, Page, Section, State, StatusLine, TARGET, plainClick } from "../ui";
 import { refusalLines, shown } from "../ui/text";
 import { agentName, waitingLabel } from "../ui/words";
-import { marksOf, hasNewAgent, newAgentHeld, openNewAgent, pageLinks, usePagesShown } from "../workspace/pages";
+import { marksOf, hasNewAgent, newAgentHeld, openNewAgent, pageTiles, usePagesShown } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { forgetAgent, forgetAgents, getAgentTab, openAgentPage, rememberAgent, rememberedAgent } from "./agent-tab";
 import { board, mayAnswer, refusal } from "./board";
@@ -731,7 +731,7 @@ function PageTile({ page, n, look, visible, onOpen }: { page: PageLink; n: numbe
 
 /**
  * The workspace's tiles: the plugin's pages that this release shows, each with its count. With the
- * default (the home alone) there is none, and nothing is drawn. No tile for the agents: the
+ * default there are four, one per tab of the Workspace page; where the home alone is shown there is none, and nothing is drawn. No tile for the agents: the
  * sidebar lists every one (the lead's ruling L1 on the text audit, 23 Nov 2026). Home › Agents
  * stays, reached by its address alone.
  */
@@ -751,7 +751,7 @@ function Tiles({ visible }: { visible: boolean }) {
     machines: counted(machines, machines.data?.machines.length),
   };
   const tile = "flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md border border-border bg-card px-3 py-2 text-left hover:bg-accent";
-  const shown = pageLinks().filter((page) => pages.has(page.path));
+  const shown = pageTiles().filter((page) => pages.has(page.path));
   if (shown.length === 0) return null;
   return (
     <ul data-testid="oats-home-tiles" className="m-0 grid list-none grid-cols-2 gap-2 p-0 md:grid-cols-3">

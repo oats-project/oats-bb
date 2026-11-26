@@ -19,8 +19,8 @@ bb's light theme and `plugin-live-dark` in its dark one; `plugin-real`), and the
 `LIVE_THEMES=light` (or `dark`) makes the live stage draw one theme, as each of CI's two live jobs
 does; with none named it draws both, as `ci.sh live` and `ci.sh all` do on a machine.
 `LIVE_PILOT_IMAGES=1`, by hand only and never in CI, takes the images of the pilot's six screens as a
-fresh install shows them: the plugin's `pages` stays at its default (the home alone) through every
-stage, and only those screens' scenes run. It is a pass for images: a check that asserts another
+fresh install shows them: the plugin's `pages` stays at its default (the home and the Workspace
+page's four tabs) through every stage, and only those screens' scenes run. It is a pass for images: a check that asserts another
 page's link or tile does not hold in it, and the gate is the run without it.
 In a scene, `showSidebar(page, viewport)` opens every parent of the roster's tree (the children are
 collapsed when the page loads), so a scene reads a child's row as a person who opened it;
@@ -147,9 +147,8 @@ open, a confirmation before its act, in progress, done, refused and with another
 - **A13** the sidebar with the tree, an agent's thread with its header row, the thread of an agent
   that needs you (the thread's own row says "Needs you", how long and its question; in the sidebar
   its row is the open one, with its "!"), the thread of a stopped agent ("Stopped", Start), the home (its badge
-  shows 3) and its reply box with a message typed (Send enabled), the four pages, and a soul's
-  page with the spawn form: empty, with a name it refuses, and with a name and a task it takes
-  and their preview (Preview and Spawn enabled).
+  shows 3) and its reply box with a message typed (Send enabled), the Workspace page's four tabs,
+  and a soul's page (its facts, its capabilities, its agents, New agent).
 - **TM** a deployment that is mostly tmux agents (stage `tmux-roster`, the agents in
   `tmux-roster.mjs`): three agents on bb threads and nineteen on tmux over seven souls, five of them
   waiting, two stopped with OATS, two whose session was lost, some with a parent. The real run holds one tmux-backed agent (`real/parts/lost.mjs`), not a
@@ -194,7 +193,7 @@ open, a confirmation before its act, in progress, done, refused and with another
   ("OATS is not installed on …", "Read <age>. Acts are off.", Retry, Open settings; what to do,
   the code and the message under its Details); a thread opens from it and its own row says the
   same on one line, with its act off; the home keeps its cards under the same notice.
-- **A16** an agent whose thread bb does not have: its soul's page says "thread missing", and
+- **A16** an agent whose thread bb does not have: its soul's page says of it what the roster says ("archived in bb" or "deleted in bb"), and
   Retire opens the plan dialog with the kernel's plan. Then the two states no fixture row is in,
   each in the thread's own row and in the sidebar's: an agent the kernel cannot reach
   ("Unreachable", Retry) and one whose session fell back to a shell ("Failed", "session ended",
@@ -244,7 +243,7 @@ text the plugin draws there reads at 4.5:1 or more against its effective backgro
 mark at 3:1 or more against what is behind it (the WCAG contrast ratio, from the computed
 colours). It covers every rendered element with text of its own inside the plugin's elements
 (`data-testid="oats-…"`: the sidebar block and tree, the thread's row, the home's
-cards and lists, the four pages, the spawn form with its refusal and its preview, the plan dialog,
+cards and lists, the Workspace page's tabs, the New agent form with its refusal and its preview, the plan dialog,
 and the buttons that are enabled in a scene: default, primary and destructive), what a field
 shows (the typed value of an input or a textarea, the chosen option of a select, or the
 placeholder of an empty one), and the marks (a state's in each of its seven states, a toned dot, a row's mark). A failing scene
@@ -286,6 +285,56 @@ docker rm -f bb-plugin-dev
 `oats-package/capabilities/oats-bb/oats.json`) beside the plugin, to `/home/node/oats-package/`:
 `test/kernel-compat.test.ts` holds the plugin's OATS floor against theirs. A container made by hand
 needs them there too.
+
+## The busy workspace: every screen's worst case
+
+The stage `busy` (`live-ui.mjs`, `busyStage`) answers the ONE shared busy set
+(`test/fixtures/busy/`, its README: sixty agents four levels deep, 52 of them on bb threads, eleven
+asking, 24 souls, 37 automations, seven teams, five machines, names of sixty characters, and one
+agent with a long conversation, a full board and a full page of mail). Every screen has a worst-case twin here, and it
+is the one judged first.
+
+**To add your screen's busy scene**: one more scene in your feature's file under `scenes/`, with
+`stage: "busy"`, and its images named `busy-<view>-<what>`. Nothing else: no fixture of your own, no
+stage of your own. The fake `oats` answers `status`, `souls`, `teams`, `server list`, `schedule
+list`, `trigger list` and `operation run messaging:mail` from the set for the stage's length. (The
+set holds ONE agent's mail, the busy chat's: the mail read answers it for EVERY agent.) A verb the set does not hold (yours)
+answers its recorded fixture as always; if your screen needs a busy answer of it, the answer goes
+INTO the set, made by its generator from your recorded answer (`test/fixtures/busy/generate.mjs`,
+whose test holds that every busy row is a recorded row with only names, ids, times and relations
+varied): ask the set's owner, never shape one beside it.
+
+What the stage does when it starts. It takes under three minutes (about seventy seconds when it
+was built), and its `NOTE BUSY` line says the seconds of each part in every run's log:
+1. the busy chat's thread is made and its ten turns are had with the mock model (`say.json`,
+   `real/mock-anthropic.mjs`);
+2. every busy agent on bb with no turn to run gets a thread of this run, an idle fork of a fixture
+   thread, titled as the provider titles it (bb's limit of running threads is raised BEFORE any
+   thread is made: a fork that has to wait fails in bb 0.50.1, "Stored queued message … is
+   malformed", HTTP 500, because the wait of a thread with no message cannot be stored);
+3. the three agents that FAILED AT THEIR START get a thread that did: Claude Code is taken away
+   for the length of their spawns, the model named (with none, bb asks the harness for its
+   default and refuses the spawn), and bb's record of each is checked: an error and never a turn;
+   they are read again once Claude Code is back;
+4. each agent the set says runs gets a thread of its own whose first turn is HELD open (bb, not
+   the kernel, says that an agent on a thread works). bb holds a new turn in line once as many
+   threads run as the host has processors (its built-in "concurrency limit": two in this
+   container), and everything made after waits behind it: the stage raises the host's limit for
+   its length, at its very start (`bb concurrency-limit host <id> <n>`), and puts bb's own back
+   (`auto`), which is read back;
+5. the thread of each agent whose session was lost on bb is archived, and so are the fixtures' own
+   agents' threads; bb's request for a star is turned off (the chat alone is ten prompts).
+When it leaves, each thing it changed is put back and READ: the held turns are answered (no
+thread of its own is active), its threads are archived, bb says of the host's limit what it said
+before, the star request is turned on again (bb's answer to that is checked), the fixtures' threads are back and the fake `oats` answers
+the fixtures' roster again, which is waited for. A run that is killed while Claude Code is away
+finds where it was at its next start and puts it back.
+
+A busy scene MEASURES what the worst-case rule asks and the screen does not yet do, and prints it
+as a `NOTE` (the roster's: rows, names cut, New agent on the screen): a number in every run's log,
+not a failure, until its mend is ruled.
+
+By hand: `LIVE_ONLY_STAGES=busy` runs the stage alone.
 
 ## Against a real kernel
 

@@ -32,8 +32,8 @@ import { useNow, usePanelEvents, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
-import { mountedOn, moved } from "./tab-state";
-import type { TabId } from "./tab-state";
+import { tabOf } from "./tab-state";
+import type { TabId, Window } from "./tab-state";
 import { ATTACH, SHARED_TITLE, ageText, attachCommand, attachOffered, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
@@ -56,59 +56,45 @@ const TABS: readonly TabItem<TabId>[] = [
   // The agent's incoming mail, read-only: a view of its own (app/mail) that takes the agent's name and nothing of the panel's.
   { id: "mail", label: MAIL.tab },
 ];
-/**
- * MAIL's MARKER: the agent whose Mail tab a person pressed. Mail is NOT opened for another agent by the window's
- * memory, as the other tabs are: showing an agent's mail reads it (over the network, with the agent's own
- * identities), and that takes a press on THAT agent's tab. Written by a press on Mail, for the agent it was pressed
- * on, and by nothing else: no mount drops it, and the next press on Mail replaces it (tab-state.ts).
- */
-let mailOf: string | null = null;
-/** A tab pressed in the panel of `instance`. */
-function pressTab(instance: string, tab: TabId): void {
-  // THE ORDER: the marker FIRST, then the press is counted and told. The marker is a plain variable the panels read at
-  // a draw, and the draw the press causes must see whose press it was. (Both lines run in one handler, and React draws
-  // after it returns: so no test can tell this order from the other. It is kept so that it does not rest on that.)
-  if (tab === "mail") mailOf = instance;
-  showPanelTab(tab);
-}
 /** The id of the panel's one tab panel: the tabs name it, and it names the tab it shows. */
 const PANEL_ID = "oats-panel-page";
 
-// The tab a person left the panel on, for the length of the app window: another agent opens on it too.
-let shownTab: TabId = "instance";
 /**
- * How many times a tab was ASKED FOR (a press on a tab, or another feature's `showPanelTab`). A
- * press is an EVENT, not a change of the memory: a press that names the tab the memory already
- * holds moves a panel that shows another all the same (the header's soul link on a panel a person
- * turned to Board; Answer for a claim that is not the board's).
+ * THE WINDOW: the tab of the last press and Mail's marker (tab-state.ts), for the length of the app window. ONE
+ * value, replaced by every press: a panel reads it through the store, so a press on Mail that names the tab the
+ * memory already holds (another agent's Mail) is a new value too, and is drawn.
  */
-let presses = 0;
+let shownWindow: Window = { memory: "instance", mailOf: null };
 const listeners = new Set<() => void>();
 const tell = (): void => {
   for (const listener of listeners) listener();
+};
+const press = (next: Window, focus: boolean): void => {
+  shownWindow = next;
+  tell();
+  // Once the open panel has drawn the tab selected (the store's change is drawn before this runs).
+  if (focus) queueMicrotask(() => document.getElementById(`${PANEL_ID}-tab-${next.memory}`)?.focus());
 };
 /**
  * Shows one of the panel's tabs, from anywhere, as a press does: it writes the window's memory, so
  * an open panel turns to the tab and the next one that mounts (bb may mount it twice) opens on
  * it. `focus`: the tab takes the focus too, for a control that leaves the page as the tab turns.
+ * (Mail's marker is left as it is: only a press on an agent's own Mail tab writes it, `pressTab`.)
  */
 export function showPanelTab(tab: TabId, { focus = false }: { focus?: boolean } = {}): void {
-  shownTab = tab;
-  presses += 1;
-  tell();
-  // Once the open panel has drawn the tab selected (the store's change is drawn before this runs).
-  if (focus) queueMicrotask(() => document.getElementById(`${PANEL_ID}-tab-${tab}`)?.focus());
+  press({ memory: tab, mailOf: shownWindow.mailOf }, focus);
+}
+/** A tab pressed in the panel of `instance`: a press on Mail is that agent's. */
+function pressTab(instance: string, tab: TabId): void {
+  press({ memory: tab, mailOf: tab === "mail" ? instance : shownWindow.mailOf }, false);
 }
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
   return () => void listeners.delete(listener);
 };
-const useShownTab = (): TabId => useSyncExternalStore(subscribe, () => shownTab, () => shownTab);
-const usePresses = (): number => useSyncExternalStore(subscribe, () => presses, () => presses);
+const useWindow = (): Window => useSyncExternalStore(subscribe, () => shownWindow, () => shownWindow);
 onWindowReset(() => {
-  mailOf = null;
-  shownTab = "instance";
-  presses = 0;
+  shownWindow = { memory: "instance", mailOf: null };
   tell();
 });
 
@@ -126,7 +112,7 @@ export function AgentTab({ agent, threadId }: AgentTabProps) {
  */
 export function InstancePanel({ threadId, instance, known }: { threadId?: string; instance?: string; known?: Agent }) {
   const oats = useOats();
-  const tab = useShownTab();
+  const shownNow = useWindow();
   const key = threadId ?? instance ?? "";
   // The agent last shown is kept in state, set while drawing when the roster names another one: what
   // a draw shows is then what the roster says at that draw, and nothing is written to a ref on the way.
@@ -170,7 +156,7 @@ export function InstancePanel({ threadId, instance, known }: { threadId?: string
       {/* What the panel draws is as wide as the part of it that is in the window (`useVisibleWidth`). */}
       <div data-testid="oats-panel-visible" className="flex min-h-0 min-w-0 flex-1 flex-col" style={visible === null ? undefined : { width: visible }}>
         {/* One instance at a time: another agent starts from its own read. */}
-        <Pages page={threadId === undefined} key={held.agent.instance} oats={roster} agent={held.agent} node={held.node} thread={thread} tab={tab} failure={failure} />
+        <Pages page={threadId === undefined} key={held.agent.instance} oats={roster} agent={held.agent} node={held.node} thread={thread} tab={tabOf(shownNow, held.agent.instance)} failure={failure} />
       </div>
     </div>
   );
@@ -210,7 +196,7 @@ function useVisibleWidth(element: HTMLElement | null): number | null {
   return width;
 }
 
-function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { oats: Roster; agent: Agent; node: Node | undefined; thread: BbThread | null; tab: TabId; failure: RosterFailure | null; /** the panel is an agent's page, not the tab beside its thread */ page: boolean }) {
+function Pages({ oats, agent, node, thread, tab, failure, page }: { oats: Roster; agent: Agent; node: Node | undefined; thread: BbThread | null; tab: TabId; failure: RosterFailure | null; /** the panel is an agent's page, not the tab beside its thread */ page: boolean }) {
   const read = usePanelInstance(agent.instance);
   const now = useNow();
   // Beside a thread (the tab: `threadId`) the thread's own line says that the roster is the last one read; on an
@@ -224,14 +210,6 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   const line = pageParts(agent, oats, status);
   const reading = useReading(agent.instance);
   const soul = shown(oats.soulOf(agent));
-  // THE TAB SHOWN: a state of this panel (one agent's: `Pages` is keyed by the agent's name where it is drawn, so a
-  // panel bb keeps open while the thread changes is mounted anew), moved by the two events of `TabState` and by
-  // nothing else: the mount reads the window's memory, a press writes it. Nothing here depends on what has been read.
-  const pressed = usePresses();
-  const [held, setHeld] = useState(() => mountedOn({ memory: shownTab, mailOf, presses }, agent.instance));
-  const tabNow = moved(held, { presses: pressed, pressedTab: remembered, mailOf }, agent.instance);
-  if (tabNow !== held) setHeld(tabNow);
-  const tab = tabNow.tab;
   // An agent with no messaging layer has no mail to read: its Mail tab says so, from the row alone, and starts no read.
   const messaging = read.data === undefined ? undefined : read.data.facts.messagingId !== null;
   return (

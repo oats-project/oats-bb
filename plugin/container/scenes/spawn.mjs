@@ -456,15 +456,15 @@ export default [
       if (!viewport.mobile) await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
       // And on the home, which is what a person sees at a phone's width (bb's sidebar is in a drawer there): New agent is in
       // the home's heading, can be pressed, and opens the same page. The checks hold it in the page; no image is taken here
-      // (the home's own image of this stage is of its summary and its four tiles, further down), and where the press lands
+      // (the home's own image of this stage is of its summary and its five tiles, further down), and where the press lands
       // is the image above.
       await page.goto("/plugins/oats/home");
-      // Read once the home itself says the default has drawn: its four tiles, one per tab of the Workspace page (as the
+      // Read once the home itself says the default has drawn: its five tiles, one per tab of the Workspace page and Automations (as the
       // home's own scene of this stage waits). The button is drawn under every value of `pages`, so alone it would say nothing of them.
       const HOME = `(() => { const b = document.querySelector(${q("oats-home-new-agent")}); return JSON.stringify({ words: b?.innerText.trim() ?? null, off: b?.disabled ?? null, tiles: [...document.querySelectorAll(${q("oats-home-tiles")} + " button")].map((tile) => tile.getAttribute("data-testid")), links: document.querySelectorAll('[data-testid^="oats-page-link-"]').length }); })()`;
-      const onHome = await page.until(`${visible(testId("oats-home-new-agent"))} && document.querySelectorAll(${q("oats-home-tiles")} + " button").length === 4 && ${HOME}`, 30);
+      const onHome = await page.until(`${visible(testId("oats-home-new-agent"))} && document.querySelectorAll(${q("oats-home-tiles")} + " button").length === 5 && ${HOME}`, 30);
       const home = onHome ? JSON.parse(onHome) : null;
-      check(home !== null && home.words === "New agent" && home.off === false && home.tiles.length === 4, `${at} under the default (the home has its four tiles), New agent is on the home too, on screen and pressable`, onHome ?? (await page.evaluate(HOME)));
+      check(home !== null && home.words === "New agent" && home.off === false && home.tiles.length === 5, `${at} under the default (the home has its five tiles), New agent is on the home too, on screen and pressable`, onHome ?? (await page.evaluate(HOME)));
       await page.evaluate(click(testId("oats-home-new-agent")));
       // The form takes the focus in an effect after it is drawn: the wait is for the focus too, and a wait that ends without it prints where it was.
       const LANDED = `JSON.stringify({ path: location.pathname, first: document.querySelector(${q("oats-spawn-form")}) ? ${FIRST} : null, focus: ${FOCUSED}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`;

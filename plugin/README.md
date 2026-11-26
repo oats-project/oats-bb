@@ -828,7 +828,8 @@ its session: what a person sees and types there is the agent's own screen (`app/
 
 The tab **Mail** of an agent's panel (the OATS tab of its thread; on a phone the agent's page)
 shows the mail that agent RECEIVED, newest first: who each message is from, its subject, its age.
-A press on a row shows the message in the list's place, as plain text under its sender's alias,
+A press on a row shows the message in the list's place: its subject, who wrote it and when on one
+muted line under it, then its body as plain text,
 with Back. It is read-only: nothing is sent, answered, deleted or marked read, and the view has no
 act but reading again.
 

@@ -44,6 +44,8 @@ function answer(behaviour) {
 const inMail = (id) => `${testId("oats-mail")} ${testId(id)}`;
 const click = (selector, index = 0) => `document.querySelectorAll(${JSON.stringify(selector)})[${index}].click()`;
 const subjects = `JSON.stringify(${texts(inMail("oats-mail-subject"))})`;
+/** A recorded body's first line as the view draws it (the set's bodies are plain lines: spaces folded, ends trimmed). */
+const displayFirst = (body) => (body.split(/\r\n?|\n/)[0] ?? "").replace(/\s+/g, " ").trim();
 /** The head is settled: no read is on its way (the head says "Reading…" while one is). What a scene waits for before it asserts a head with no read in it. */
 const settledHead = `${textOf(inMail("oats-mail-read"))} !== "Reading…" && document.querySelector(${JSON.stringify(inMail("oats-mail-refresh"))})?.disabled === false`;
 /** What is measured before an image: nothing of the mail is wider than the view, the page does not scroll sideways, and every control is high enough to press. */
@@ -135,8 +137,8 @@ export default [
     {
       const read = await page.evaluate(`JSON.stringify({ list: ${visible(inMail("oats-mail-list"))}, title: ${textOf(`${inMail("oats-mail-message")} h3`)}, first: ${textOf(inMail("oats-mail-from"))}, focus: ${FOCUSED}, lines: document.querySelectorAll(${JSON.stringify(`${inMail("oats-mail-body")} p`)}).length, withheld: ${texts(`${inMail("oats-mail-body")} p`)}.filter((line) => line === "[withheld]").length, made: document.querySelectorAll('${testId("oats-mail-body")} b, ${testId("oats-mail-body")} a, ${testId("oats-mail-body")} script').length, raw: /[\\u202A-\\u202E\\u200B\\u0007]/.test(document.querySelector(${JSON.stringify(inMail("oats-mail-body"))}).innerText) })`);
       check(
-        read === JSON.stringify({ list: false, title: "<i>Markup</i> in a subject", first: "mail-writer", focus: "oats-mail-back", lines: 6, withheld: 2, made: 0, raw: false }),
-        `${at} a press on a row shows the message in the list's place: its subject, the sender's alias as its first line, the body's five lines as text (two withheld: a control character, a line shaped like a credential), no element made of its markup, no bidi or zero-width character; the focus is on Back`,
+        read === JSON.stringify({ list: false, title: "<i>Markup</i> in a subject", first: "mail-writer", focus: "oats-mail-back", lines: 5, withheld: 2, made: 0, raw: false }),
+        `${at} a press on a row shows the message in the list's place: its subject, the sender's alias under it (apart from the body), the body's five lines as text (two withheld: a control character, a line shaped like a credential), no element made of its markup, no bidi or zero-width character; the focus is on Back`,
         read,
       );
     }
@@ -295,6 +297,14 @@ export default [
         check(end.older === null, `${at} the set's page is the whole of the busy agent's mail: no "Older" under the fifty`, JSON.stringify(end.older));
         note("the list's end", "the set's answer says hasMore: false: no older page to reach");
       }
+      // THE PANE's OWN END, as a person scrolls to it (the image is of that, not of a control aligned to the edge: brought
+      // into view by itself a control stands ON the scrollport's edge, which says nothing of the room the pane leaves):
+      // under the list's last control stands the pane's own bottom padding, whole.
+      {
+        const room = JSON.parse(await page.evaluate(`JSON.stringify((() => { const pane = ${pane}; pane.scrollTop = pane.scrollHeight; const box = pane.getBoundingClientRect(); const older = document.querySelector(${JSON.stringify(inMail("oats-mail-older"))}); const last = older ?? ${rows}[${rows}.length - 1]; return { under: Math.round((Math.min(box.bottom, innerHeight) - last.getBoundingClientRect().bottom) * 10) / 10, panePaddingBottom: parseFloat(getComputedStyle(pane).paddingBottom), atEnd: Math.abs(pane.scrollTop + pane.clientHeight - pane.scrollHeight) < 1 }; })())`));
+        check(room.atEnd && room.panePaddingBottom > 0 && room.under >= room.panePaddingBottom - 1, `${at} at the pane's own end the list's last control has the pane's bottom padding under it (${room.panePaddingBottom} px): it is not flush on the edge`, JSON.stringify(room));
+        note("the room under the list's last control, at the pane's end", JSON.stringify(room));
+      }
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "the list of fifty, at its end");
       await page.shot(`busy-${viewport.name}-mail-end`);
@@ -307,7 +317,7 @@ export default [
       await page.until(visible(inMail("oats-mail-message")), 30);
       {
         const read = await page.evaluate(`JSON.stringify({ list: ${visible(inMail("oats-mail-list"))}, title: ${textOf(`${inMail("oats-mail-message")} h3`)}, first: ${textOf(inMail("oats-mail-from"))}, focus: ${FOCUSED} })`);
-        check(read === JSON.stringify({ list: false, title: received[middle].subject.replace(/\s+/g, " ").trim(), first: received[middle].from.alias, focus: "oats-mail-back" }), `${at} the ${middle + 1}th message opens in the list's place: its subject, its sender's alias first; the focus is on Back`, String(read.length));
+        check(read === JSON.stringify({ list: false, title: received[middle].subject.replace(/\s+/g, " ").trim(), first: received[middle].from.alias, focus: "oats-mail-back" }), `${at} the ${middle + 1}th message opens in the list's place: its subject, its sender's alias under it; the focus is on Back`, String(read.length));
       }
       await page.evaluate(`${pane}?.scrollTo(0, 0)`);
       await settled(page, viewport);
@@ -336,8 +346,10 @@ export default [
       await page.evaluate(`${rows}[${widest}].click()`);
       await page.until(visible(inMail("oats-mail-message")), 30);
       {
-        const first = JSON.parse(await page.evaluate(`JSON.stringify((() => { const who = document.querySelector(${JSON.stringify(inMail("oats-mail-from"))}); return { name: who.innerText.trim().length, whole: who.scrollWidth <= who.clientWidth + 1 }; })())`));
-        check(first.name === received[widest].from.alias.length && first.whole, `${at} on its message the longest sender's name is whole, as the first line`, JSON.stringify(first));
+        // WHO WROTE IT stands apart from WHAT WAS WRITTEN: the name is whole on the muted line under the subject, with the
+        // age after it, and the first line under the head is the body's own first line.
+        const first = JSON.parse(await page.evaluate(`JSON.stringify((() => { const who = document.querySelector(${JSON.stringify(inMail("oats-mail-who"))}); const name = who.querySelector(${JSON.stringify(testId("oats-mail-from"))}); const body = document.querySelector(${JSON.stringify(inMail("oats-mail-body"))}); const edge = document.querySelector(${JSON.stringify(testId("oats-mail"))}).getBoundingClientRect().right; return { name: name.innerText.trim().length, whole: who.scrollWidth <= who.clientWidth + 1 && who.getBoundingClientRect().right <= edge + 0.5, after: who.innerText.trim().slice(name.innerText.trim().length, name.innerText.trim().length + 3), inBody: body.contains(name), bodyFirst: body.querySelector("p")?.innerText.trim() ?? null, underSubject: who.getBoundingClientRect().top >= document.querySelector(${JSON.stringify(`${inMail("oats-mail-message")} h3`)}).getBoundingClientRect().bottom - 0.5 && who.getBoundingClientRect().bottom <= body.getBoundingClientRect().top + 0.5 }; })())`));
+        check(first.name === received[widest].from.alias.length && first.whole && first.after === " · " && first.inBody === false && first.underSubject && first.bodyFirst === displayFirst(received[widest].body), `${at} on its message the longest sender's name is whole on the line under the subject, the age after it; and the first line under the head is the body's own first line`, JSON.stringify({ ...first, bodyFirst: first.bodyFirst === null ? null : first.bodyFirst.length }));
       }
       await fitted(page, viewport, check, at, "the message of a long-named sender");
       await page.evaluate(click(inMail("oats-mail-back")));

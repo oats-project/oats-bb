@@ -47,3 +47,35 @@ test("one press is one send, however often the question's options are mounted an
   await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 100))));
   expect(sent).toEqual(["q3: main: the default"]);
 });
+
+test("two presses in ONE turn, before the options are drawn off (both handlers run before React draws again): ONE answer is sent", async () => {
+  await loadApp();
+  const agents = fixtureAgents();
+  const sent: string[] = [];
+  const slot = renderSlot<{ instance: string }, Contract>({ component: Board }, { instance: LEAD }, {
+    rpc: handlers({
+      board: () => ({ at: BOARD_AT, supported: true, stale: false, board: { facts: [], questions: [Q1, Q2] }, claim: { producer: "oats.board", reason: "attention" } }),
+    }, agents),
+    sidebarThreads: { status: "ready" as const, threads: fixtureThreads() },
+    sdk: { threads: { interactions: { list: async () => [] }, send: async ({ input }: { input: { text: string }[] }) => (sent.push(input.map((part) => part.text).join("")), { ok: true }) } } as never as RenderSlotOptions<Contract>["sdk"],
+  });
+  await waitFor(() => expect(slot.getByTestId("oats-board").getAttribute("data-state")).toBe("shown"));
+  const zone = slot.getByTestId("oats-board-questions");
+  const answers = () => within(zone).queryAllByTestId("oats-board-answer") as HTMLButtonElement[];
+  await waitFor(() => expect(answers().length).toBe(2));
+  // The settle second of options that took a place is not at work here: these were drawn at the mount.
+  await waitFor(() => expect(answers().every((button) => !button.disabled)).toBe(true));
+  // Inside one act React holds its draws to the act's end: the two clicks reach two handlers of the SAME draw, with
+  // the options still on: the race the window's "on its way" is for (a state would not have told the second).
+  const [main, release] = answers();
+  let offBetween = true;
+  act(() => {
+    main!.click();
+    offBetween = main!.disabled || release!.disabled;
+    release!.click();
+  });
+  expect(offBetween).toBe(false); // nothing was drawn between the two presses
+  await waitFor(() => expect(sent.length).toBeGreaterThan(0));
+  await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 150))));
+  expect(sent).toEqual(["q3: main: the default"]);
+});

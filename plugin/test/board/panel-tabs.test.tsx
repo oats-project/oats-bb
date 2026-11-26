@@ -6,17 +6,19 @@
 // tab twice. The paths the board's four review rounds and its two delta reads found are here,
 // each as what a person sees now.
 import { useState } from "react";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { forgetHidden } from "../../app/board";
 import { InstancePanel, showPanelTab } from "../../app/panel/Panel";
+import { FRESH_MS } from "../../app/ui/words";
 import { handlers, loadApp, resetApp } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import { instanceAnswer, panelAgents, panelSnapshot, panelThreads } from "../panel/handlers";
 import { BOARD_AT } from "./handlers";
 
 afterEach(() => {
+  vi.useRealTimers();
   resetApp();
   forgetHidden();
 });
@@ -484,4 +486,33 @@ test("Answer for a claim that is NOT the board's, with the panel open on Board (
   fireEvent.click(answer); // it asks for Instance, which the window's memory may already hold: a press all the same
   await waitFor(() => expect(shown()).toBe("Instance"));
   await waitFor(() => expect(slot.getByTestId("oats-panel-waiting").contains(document.activeElement)).toBe(true));
+});
+
+// ---- THE ONE PLACE WHERE MAIL IS READ WITH NO NEW PRESS (the mail's owner's edge): an agent's panel left on Mail
+// opens on Mail again, and the mail's view reads nothing while what it holds is fresh (FRESH_MS, app/ui/words.ts).
+test("A's panel left on Mail, B's shown with no press on B's Mail, A's shown again: INSIDE the minute: Mail, and no second read of A's mail; AFTER the minute: Mail, and exactly one more read, of A, none of B", async () => {
+  const NOW = Date.parse("2026-11-25T12:15:00.000Z");
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  const { shown, press, to, calls, wait } = await panel();
+  press("Mail");
+  await waitFor(() => expect(calls("mail", CHILD)).toBe(1)); // by the press
+  await wait();
+  // Inside the minute, twice (bb's second mount of A among them): shown as it is held.
+  for (const [at, mount] of [[NOW + 1_000, 1], [NOW + FRESH_MS - 1, 2]] as const) {
+    await to(PARENT);
+    expect(shown()).toBe("Instance");
+    vi.setSystemTime(at);
+    await to(CHILD, mount);
+    expect(shown()).toBe("Mail");
+    await wait();
+    expect([calls("mail", CHILD), calls("mail", PARENT)], `at ${at - NOW} ms`).toEqual([1, 0]);
+  }
+  // At the minute: what is held is old: one read behind it, of A.
+  await to(PARENT);
+  vi.setSystemTime(NOW + FRESH_MS);
+  await to(CHILD, 3);
+  expect(shown()).toBe("Mail");
+  await waitFor(() => expect(calls("mail", CHILD)).toBe(2));
+  await wait();
+  expect([calls("mail", CHILD), calls("mail", PARENT)]).toEqual([2, 0]);
 });

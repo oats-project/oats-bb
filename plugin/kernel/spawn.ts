@@ -131,17 +131,14 @@ export const spawnArgv = (input: Checked, taskFile: string | null, apply: SpawnA
 ];
 
 const text = z.string().nullish();
+/**
+ * Of the kernel's preview, only what this file reads: the decision's revision (what a spawn applies) and the three
+ * things that make it no decision a spawn could apply. Everything the form's column draws (the modules, the teams,
+ * the harness and its model, the warnings) is read from the document itself by `formFacts`, which holds each to its
+ * own shape and draws nothing it cannot read: this schema does not parse them.
+ */
 const preview = z.looseObject({
   decision: z.looseObject({ revision: z.string().min(1) }),
-  modules: z
-    .array(z.looseObject({ name: z.string(), from: z.looseObject({ kind: text, version: text }).nullish() }))
-    .nullish(),
-  teams: z.array(z.looseObject({ label: z.string(), team: text, default: z.boolean().nullish() })).nullish(),
-  harness: text,
-  model: text,
-  modelSource: text,
-  launchConfig: text,
-  warnings: z.array(z.string()).nullish(),
   preflight: z.looseObject({ status: text, budgetMs: z.number().nullish() }).nullish(),
   backendStatus: z.looseObject({ name: text, installed: z.boolean().nullish() }).nullish(),
   launch: z.looseObject({ problem: z.looseObject({ code: text, message: text }).nullish() }).nullish(),

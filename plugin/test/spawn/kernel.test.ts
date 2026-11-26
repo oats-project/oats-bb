@@ -227,4 +227,24 @@ describe("a preview that is no decision a spawn could apply says why, with the c
     });
     expect(missing).toEqual({ problem: { code: "E_BACKEND_UNAVAILABLE", message: "the bb backend is not installed on this machine" } });
   });
+
+  it("what the preview's parser does not read is not held to a shape by it: the decision and its problem are answered, and the column draws nothing it cannot read", async () => {
+    // SHAPED: the recorded preview with the fields only the column reads (model/spawn.ts `formFacts`) made unreadable.
+    const { readFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const document = JSON.parse(await readFile(join(process.cwd(), "test/fixtures/spawn/spawn-preview.json"), "utf8")) as { result: Record<string, unknown> };
+    const revision = (document.result.decision as { revision: string }).revision;
+    Object.assign(document.result, { modules: "none", teams: 3, harness: 5, model: {}, modelSource: [], launchConfig: 7, warnings: "one" });
+    await fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });
+    const preview = await oats.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context());
+    expect(preview).toMatchObject({ ok: true, value: { revision, problem: null } });
+    if (!preview.ok) return;
+    expect(preview.value.facts.modules).toBeNull();
+    expect(preview.value.facts.resolved).toEqual({ harness: null, model: null });
+    expect(preview.value.facts.facts.map((fact) => fact.label)).not.toContain("Harness");
+    // And what it DOES read is still held: a preview with no decision is no answer.
+    delete document.result.decision;
+    await fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });
+    expect(await oats.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context())).toMatchObject({ ok: false, error: { code: "OATS_BAD_ANSWER" } });
+  });
 });

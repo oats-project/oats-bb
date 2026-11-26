@@ -9,7 +9,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { experimental_useRpcQuery as useRpcQuery, useRealtime } from "@get-bb/plugin-sdk/app";
 import { REALTIME_CHANGED, rpcContract } from "../../contract";
 import { boardData, boardDetailData, detailSignature, type Board, type BoardClaim, type BoardDetail } from "../../model/board";
-import { errorMessage, reread } from "../store";
+import { errorMessage, onWindowReset, reread } from "../store";
 
 export type BoardRead =
   | { status: "loading" }
@@ -37,8 +37,6 @@ export function useBoard(instance: string, { again = false }: { again?: boolean 
   // A read that ended since this mount, with an answer (a read that failed is none). Known two ways, since a read can
   // start and end between two draws: an answer that is not the one held at the mount (none was held, or a new one
   // came), or a read seen on its way and then seen ended (the same answer again: bb keeps the object it held).
-  const failed = useRef(false);
-  failed.current = query.error !== null;
   const atMount = useRef(query.data);
   const heldAtMount = useRef(query.data !== undefined);
   const onItsWay = useRef(false);
@@ -53,9 +51,16 @@ export function useBoard(instance: string, { again = false }: { again?: boolean 
     }
   }, [query.isFetching, query.error, query.data]);
   useEffect(() => {
-    // (Where the read asked for here ends between two draws with the very answer that was held, its end is told here.)
-    if (again && heldAtMount.current) void refetch.current().then(() => (failed.current ? undefined : setFresh(true)));
+    // (Where the read asked for here ends between two draws with the very answer that was held, no draw sees it on
+    // its way: its end is noted here, and its OUTCOME is read at the draw that follows, below: bb says what a read
+    // ended with in the query's state, not in what the call answers.)
+    if (again && heldAtMount.current) void refetch.current().then(() => setEnded(true));
   }, [again]);
+  const [ended, setEnded] = useState(false);
+  useEffect(() => {
+    // A read that FAILED is no answer: what bb held stays what it was, not fresh.
+    if (ended && query.error === null && query.data !== undefined) setFresh(true);
+  }, [ended, query.error, query.data]);
   const first = useRef(false);
   first.current = query.isFetching && query.data === undefined;
   useRealtime(REALTIME_CHANGED, () => reread(`board ${instance}`, first.current, () => refetch.current()));
@@ -67,6 +72,10 @@ export function useBoard(instance: string, { again = false }: { again?: boolean 
   if (!data.supported) return { status: "unsupported", fresh };
   return { status: "ready", board, claim: data.claim, fresh, retry };
 }
+
+/** What each agent's held detail was read for (the board's signature), in this app window. */
+const detailReadFor = new Map<string, string>();
+onWindowReset(() => detailReadFor.clear());
 
 export type DetailRead =
   /** nothing to read it for (no fact, and no question with context) */
@@ -81,8 +90,9 @@ export type DetailRead =
  * to) shows what was read: bb's query client would read a mounted query again once its answer is 2 s old, so the
  * query is on only while it holds no answer (the panel's own reads do the same: app/panel/read.ts).
  */
-export function useBoardDetail(instance: string, board: Board | null, wanted: boolean): DetailRead {
-  const needed = board !== null && (board.facts.length > 0 || board.questions.some((each) => each.hasContext));
+export function useBoardDetail(instance: string, board: Board | null, wanted: boolean, { questionsOnly = false }: { /** the place draws the questions alone (the home's card): a detail is needed only for a context */ questionsOnly?: boolean } = {}): DetailRead {
+  const needed = board !== null && ((!questionsOnly && board.facts.length > 0) || board.questions.some((each) => each.hasContext));
+  // (Of the WHOLE board, whichever place reads: the one answer bb holds for the agent is read for one thing.)
   const signature = detailSignature(board);
   const [on, setOn] = useState(false);
   const query = useRpcQuery({ contract: rpcContract, method: "boardDetail", input: { instance }, enabled: wanted && needed && on });
@@ -92,13 +102,15 @@ export function useBoardDetail(instance: string, board: Board | null, wanted: bo
   useEffect(() => {
     refetch.current = query.refetch;
   });
-  // What the held answer was read for: a change of it is the one reason to read again.
-  const readFor = useRef<string | null>(null);
+  // What the held answer was read for: a change of it is the one reason to read again. Kept by agent, OUTSIDE this
+  // part: the board may change while no part that shows it is mounted (the panel on another tab; the agent asks), and
+  // the part that mounts then holds an answer read for the board as it was: it reads again.
   useEffect(() => {
     if (!(wanted && needed)) return;
-    if (readFor.current !== null && readFor.current !== signature) void refetch.current();
-    readFor.current = signature;
-  }, [signature, wanted, needed]);
+    const readFor = detailReadFor.get(instance);
+    detailReadFor.set(instance, signature);
+    if (readFor !== undefined && readFor !== signature) void refetch.current();
+  }, [instance, signature, wanted, needed]);
   const data = query.data;
   const detail = useMemo(() => (data === undefined ? null : boardDetailData(data.inspection)), [data]);
   if (!needed) return { status: "idle" };

@@ -319,6 +319,7 @@ function Questions({ instance, board, claim, detail, now, inCard = false, onCont
   const asked = board.questions[index]!;
   const turn = (step: number) => {
     turned.current = true;
+    setSettlingUntil(0); // a person's own turn: no wait for the question turned to, also inside another's second
     setAt(questionOccurrence(board.questions[turnQuestion(index, step, total)]!));
   };
   const settling = clock.now() < settlingUntil;
@@ -382,7 +383,7 @@ export function BoardAsk({ instance, pending = null, fallback = null }: { instan
   const now = useNow();
   const [opened, setOpened] = useState(false);
   const board = read.status === "ready" ? read.board : null;
-  const detail = useBoardDetail(instance, board === null ? null : { ...board, facts: [] }, opened);
+  const detail = useBoardDetail(instance, board, opened, { questionsOnly: true });
   if (read.status === "loading") return <>{pending}</>;
   if (read.status !== "ready" || board === null || board.questions.length === 0) return <>{fallback}</>;
   // The row's claim names its producer and it is NOT the board (the agent's own claim, or a failed turn's, in front

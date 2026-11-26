@@ -9,7 +9,13 @@
 //               under a reader. The panel opened on Instance (facts alone); the agent asks; the
 //               panel stays; the thread's own line says "Needs you" with Answer; Answer turns the
 //               panel to Board, the focus on the question's zone (never on an option).
-//   board-busy  THE WORST CASE (specs: every screen has a worst-case twin, judged first): the same
+//   busy        THE WORST CASE (every screen has a worst-case twin, judged first), on the ONE shared
+//               busy set (test/fixtures/busy; the stage is live-ui.mjs's): the agent of the busy
+//               chat, in a workspace of sixty agents with eleven asking: twelve facts, nine
+//               questions, one of four lines, a name of thirty characters. Images busy-<view>-board-*.
+//   board-busy  WHAT THE SHARED SET DOES NOT HOLD YET, at the kernel's bounds (it moves into the set
+//               and this stage goes once the board is on main: the detail read's recorded answer,
+//               which the set's generator must read, lands with it): the same
 //               row with its board MULTIPLIED to the kernel's bounds: twelve facts with the longest
 //               label, value and unit the kernel takes and an address each, nine questions of two
 //               hundred characters with four options of sixty, each with a context of two thousand,
@@ -168,7 +174,63 @@ async function openPanel(page, threads) {
 /** What the board shows: the tabs, the question's place, its text, its options, the facts' rows in view, and whether anything is pushed off sideways. */
 const read = `(() => { const flat = ${flat}; const board = document.querySelector(${JSON.stringify(testId("oats-board"))}); if (!board) return ""; const zone = board.querySelector(${JSON.stringify(testId("oats-board-questions"))}); const box = (e) => { const r = e.getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; const pane = board.closest('[role="tabpanel"]') ?? board.parentElement; return JSON.stringify({ tabs: [...document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]')].map((t) => flat(t) + (t.getAttribute("aria-selected") === "true" ? "*" : "")), place: flat(zone?.querySelector(${JSON.stringify(testId("oats-board-place"))})), question: flat(zone?.querySelector(${JSON.stringify(testId("oats-board-question"))})), options: [...(zone?.querySelectorAll(${JSON.stringify(testId("oats-board-option"))}) ?? [])].map(flat), answers: zone?.querySelectorAll(${JSON.stringify(testId("oats-board-answer"))}).length ?? 0, turn: [zone?.querySelector(${JSON.stringify(testId("oats-board-previous"))}), zone?.querySelector(${JSON.stringify(testId("oats-board-next"))})].filter(Boolean).map((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth; }), facts: [...board.querySelectorAll(${JSON.stringify(testId("oats-board-fact"))})].filter((f) => f.getClientRects().length > 0).length, more: [...board.querySelectorAll(${JSON.stringify(testId("oats-board-facts"))} + " button")].map(flat).filter((t) => /more/.test(t)), sideways: pane.scrollWidth > pane.clientWidth + 1 || document.documentElement.scrollWidth > innerWidth + 1, zone: zone ? box(zone) : null, pane: box(pane), window: innerHeight }); })()`;
 
+const BUSY = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "test", "fixtures", "busy", "chat.json"), "utf8")).agent;
+
 export default [
+  {
+    // THE WORST CASE, judged first: the shared busy workspace's one agent with a full board.
+    stage: "busy",
+    name: "the busy workspace: the board of the agent with twelve facts and nine questions: its tab, the four-line question, all its facts, and its card on a home of eleven",
+    run: async ({ page, at, viewport, check }) => {
+      const cardOf = `document.querySelector(${JSON.stringify(`${testId("oats-needs-card")}[data-instance="${BUSY}"]`)})`;
+      // The home first: eleven agents ask; this one's card draws its question itself.
+      await page.goto("/plugins/oats/home");
+      const onHome = await page.until(`(() => { const c = ${cardOf}; const q = c?.querySelector(${JSON.stringify(testId("oats-board-question"))}); if (!q) return ""; const r = c.getBoundingClientRect(); return JSON.stringify({ cards: document.querySelectorAll(${JSON.stringify(testId("oats-needs-card"))}).length, place: (${flat})(c.querySelector(${JSON.stringify(testId("oats-board-place"))})), question: (${flat})(q), options: c.querySelectorAll(${JSON.stringify(testId("oats-board-answer"))}).length, sideways: r.right > innerWidth + 1 || document.documentElement.scrollWidth > innerWidth + 1 }); })()`, 60);
+      const home = onHome ? JSON.parse(onHome) : null;
+      check(home !== null && home.place === "1 of 9" && home.question === "Which base branch?" && home.options === 2 && home.sideways === false, `${at} busy: on a home where eleven ask, the card of the agent with nine questions draws the first, "1 of 9", with its options; nothing is pushed off sideways`, String(onHome));
+      // Its image: the card at the top of the view, the question's zone focused as the way to a question leaves it (never an option).
+      await page.evaluate(`(() => { const c = ${cardOf}; c?.scrollIntoView({ block: "start" }); c?.querySelector(${JSON.stringify(testId("oats-board-questions"))})?.focus(); })()`);
+      await targets(page, viewport, check, at, `busy-${viewport.name}-board-home-card`);
+      await page.shot(`busy-${viewport.name}-board-home-card`);
+      // The agent's panel, as a person gets to it: the card's Open (the thread, with its long conversation; at the
+      // phone's width the agent's page), then the Board tab, pressed.
+      if (viewport.mobile) await page.goto(`/plugins/oats/agent/${BUSY}`);
+      else {
+        await page.evaluate(`${cardOf}?.querySelector(${JSON.stringify(testId("oats-needs-open"))})?.click()`);
+        const open = await page.until(visible(testId("oats-open-panel")), 40);
+        check(Boolean(open), `${at} busy: the card's Open leads to the agent's thread, with the OATS chip`, String(open));
+        await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-open-panel"))})?.click()`);
+      }
+      const selected = `document.querySelector('[role="tablist"][aria-label="Instance context"] [role="tab"][aria-selected="true"]')?.innerText.trim() ?? ""`;
+      const opened = await page.until(`(() => { const now = ${selected}; return document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]').length === 4 && now !== "" ? now : ""; })()`, 60);
+      check(opened !== null && opened !== "Board", `${at} busy: the panel of an agent whose board asks nine times does not open on Board by itself`, String(opened));
+      await page.evaluate(`document.getElementById("oats-panel-page-tab-board")?.click()`);
+      await page.until(`document.querySelector(${JSON.stringify(inBoard("oats-board-question"))}) !== null`, 40);
+      const drawn = JSON.parse((await page.evaluate(read)) || "null");
+      check(drawn !== null && drawn.tabs.length === 4 && drawn.tabs[0] === "Board*" && drawn.place === "1 of 9" && drawn.options.length === 2 && drawn.turn.length === 2 && drawn.turn.every(Boolean) && drawn.sideways === false, `${at} busy: Board, pressed: four tabs on their row, "1 of 9", the question with its options, ‹ and › in view; nothing is pushed off sideways`, JSON.stringify(drawn));
+      check(drawn !== null && drawn.facts === 3 && drawn.more.length === 1 && /^9 more$/.test(drawn.more[0]), `${at} busy: three of the twelve facts are shown, and bb's own list says "9 more", whole`, JSON.stringify(drawn === null ? null : { facts: drawn.facts, more: drawn.more }));
+      await targets(page, viewport, check, at, `busy-${viewport.name}-board-tab`);
+      await page.shot(`busy-${viewport.name}-board-tab`);
+      // The four-line question (the fourth): whole, each line its own, its options and the way on still in view.
+      for (let turn = 0; turn < 3; turn++) await page.evaluate(`document.querySelector(${JSON.stringify(inBoard("oats-board-next"))})?.click()`);
+      const four = await page.until(`(() => { const q = document.querySelector(${JSON.stringify(inBoard("oats-board-question"))}); const place = (${flat})(document.querySelector(${JSON.stringify(inBoard("oats-board-place"))})); if (!q || place !== "4 of 9") return ""; const r = q.getBoundingClientRect(); const line = parseFloat(getComputedStyle(q).lineHeight) || 20; return JSON.stringify({ place, lines: Math.round(r.height / line), whole: /^The migration is ready/.test(q.innerText.trim()) && /stop here\?$/.test(q.innerText.trim()), cut: q.scrollHeight > q.clientHeight + 1 || q.scrollWidth > q.clientWidth + 1 }); })()`, 20);
+      const long = four ? JSON.parse(four) : null;
+      const after = JSON.parse((await page.evaluate(read)) || "null");
+      check(long !== null && long.whole && long.lines >= 4 && long.cut === false && after !== null && after.options.length === 2 && after.turn.every(Boolean) && after.sideways === false, `${at} busy: the four-line question, "4 of 9", is whole on its four lines or more, never cut, with its options and ‹ › in view`, `${four}; ${JSON.stringify(after === null ? null : { options: after.options.length, turn: after.turn, sideways: after.sideways })}`);
+      await targets(page, viewport, check, at, `busy-${viewport.name}-board-question`);
+      await page.shot(`busy-${viewport.name}-board-question`);
+      // All twelve facts, by bb's own toggle: no value cut (one is a branch name of ninety characters with no space), one order, nothing sideways.
+      await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-facts"))} + " button")].find((b) => /more/.test(b.innerText))?.click()`);
+      const all = await page.until(`document.querySelectorAll(${JSON.stringify(inBoard("oats-board-fact"))}).length === 12 ? "12" : ""`, 20);
+      const facts = JSON.parse((await page.evaluate(read)) || "null");
+      check(all === "12" && facts !== null && facts.sideways === false, `${at} busy: all twelve facts: nothing is pushed off sideways`, JSON.stringify({ all, sideways: facts?.sideways }));
+      const cut = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-fact-value"))})].filter((v) => v.getBoundingClientRect().right > innerWidth || getComputedStyle(v).textOverflow === "ellipsis" || v.scrollWidth > v.clientWidth + 1).map((v) => v.innerText.slice(0, 30)))`));
+      check(cut.length === 0, `${at} busy: no value of the twelve facts is cut (the long branch name breaks onto its next line)`, JSON.stringify(cut));
+      await page.evaluate(`document.querySelector(${JSON.stringify(inBoard("oats-board-facts"))})?.scrollIntoView({ block: "start" })`);
+      await targets(page, viewport, check, at, `busy-${viewport.name}-board-facts`);
+      await page.shot(`busy-${viewport.name}-board-facts`);
+    },
+  },
   {
     stage: "board",
     name: "the board the kernel printed: Board is first in the row and the panel does not open on it by itself; pressed: the question with its options, then the facts; the home's card draws the same question",
@@ -238,7 +300,7 @@ export default [
   },
   {
     stage: "board-busy",
-    name: "THE WORST CASE: nine questions of two hundred characters with four long options and a long context, twelve facts at the kernel's bounds: the controls stay in view, the counts are whole, nothing is pushed off sideways",
+    name: "what the shared busy set does not hold yet, at the kernel's bounds: nine questions of two hundred characters with four long options and a long context, twelve facts with twenty values of history, a long value, a long host: the controls stay in view, the counts are whole, nothing is pushed off sideways",
     run: async ({ page, at, viewport, threads, check }) => {
       const shown = await openPanel(page, threads);
       const drawn = shown ? JSON.parse(await page.evaluate(read)) : null;

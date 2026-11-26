@@ -54,7 +54,7 @@ async function settled(page, viewport) {
 }
 
 /**
- * Shows the agent's panel as a person gets to it, and turns it to its tab "Mail". → whether the mail's view is there.
+ * Shows the agent's panel as a person gets to it, and turns it to its tab "Mail". → whether the mail's view is there (and, at 1280, bb's side panel became whole).
  * At 1280 the tab is pressed only once bb's side panel is whole (`panelWhole`, ./panel.mjs says why): bb 0.50.1 can
  * mount the panel's content a second time a fraction of a second after it opens, and a press before that is a press
  * on a panel that is about to be mounted again.
@@ -64,10 +64,11 @@ async function openMail(page, threads, viewport) {
   await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
   await page.until(visible(testId("oats-open-panel")), 30);
   await page.evaluate(click(testId("oats-open-panel")));
-  if (!viewport.mobile) await page.until(panelWhole, 30);
+  // Its answer is kept: a panel that never becomes whole fails the scene's first check, and does not pass for a wait that ran out.
+  const whole = viewport.mobile || Boolean(await page.until(panelWhole, 30));
   await page.until(visible(testId("oats-tab-mail")), 30);
   await page.evaluate(click(testId("oats-tab-mail")));
-  return Boolean(await page.until(visible(testId("oats-mail")), 30));
+  return whole && Boolean(await page.until(visible(testId("oats-mail")), 30));
 }
 /** Leaves the panel on its first tab, as the scenes after this file's expect it (the panel remembers its tab for the window), with the fake's default answer back. */
 async function leave(page) {
@@ -81,7 +82,7 @@ const scene = (name, first, run) => ({
   run: async (given) => {
     answer(first);
     try {
-      given.check(await openMail(given.page, given.threads, given.viewport), `${given.at} the tab Mail of the agent's panel shows the mail's view`, await given.page.evaluate("location.pathname"));
+      given.check(await openMail(given.page, given.threads, given.viewport), `${given.at} the tab Mail of the agent's panel shows the mail's view`, `${await given.page.evaluate("location.pathname")}${given.viewport.mobile ? "" : `; bb's side panel whole (panelWhole): ${await given.page.evaluate(panelWhole)}`}`);
       await run(given);
     } finally {
       await leave(given.page);

@@ -7,12 +7,14 @@
 // `aw` call per identity of the agent, over the network, and it marks nothing read.
 //
 // What was read is kept for the app window, by instance: a view shown again shows it at once, and
-// reads again behind it. Every read carries a serial: an answer that is not of the latest read of
+// reads again behind it once it is no longer fresh, or where the last read of its first page was
+// refused (a refusal is not forgotten by a mount). Every read carries a serial: an answer that is not of the latest read of
 // the view that asked (another agent now, a newer Refresh, a view that is gone) is dropped.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { MailMessage, MailPage, MailUnread } from "../../kernel/mail";
 import { attempt, errorMessage, onWindowReset, type Contract } from "../store";
+import { FRESH_MS } from "../ui/words";
 
 /** What is held of one agent's mail. */
 export type Held = {
@@ -37,15 +39,9 @@ export type MailRead = {
   readOlder(): void;
 };
 
-/**
- * How long what was read is FRESH: the one bound of the view. While it is fresh the head says no
- * age and a view that is mounted reads nothing; once it is older, the head says "Read <age>." and
- * a view that is mounted reads again behind it. Refresh reads at any time.
- * The plugin has no one constant for this: the instance panel's Readiness says "Read <age>." beside
- * its Refresh by the same minute, as a number of its own (app/panel/Readiness.tsx), and
- * `readAge` (app/ui/words.ts) says "less than a minute ago" under it. This is that minute, named.
- */
-export const FRESH_MS = 60_000;
+// The bound of "fresh" is the plugin's one (`FRESH_MS`, app/ui/words.ts): while what is held is
+// fresh the head says no age and a view that is mounted reads nothing; once it is older, the head
+// says "Read <age>." and a view that is mounted reads again behind it. Refresh reads at any time.
 
 const kept = new Map<string, Held>();
 /**
@@ -54,14 +50,21 @@ const kept = new Map<string, Held>();
  * process. Each is an `oats` that may run for minutes, with one `aw` call per identity.
  */
 const flying = new Map<string, Promise<MailPage>>();
+/**
+ * The agents whose last read of the first page was REFUSED. What is held for one of them is not
+ * fresh, however young: a view mounted again reads again, so that the refusal a person saw is not
+ * gone with a mount (it would be, since the notice is the view's own state). Off when a read lands.
+ */
+const refused = new Set<string>();
 onWindowReset(() => {
   kept.clear();
   flying.clear();
+  refused.clear();
 });
-/** Whether a view mounted now for `instance` has nothing to read: its first page landed less than FRESH_MS ago, and no read of it is on its way (one that is, it takes). */
+/** Whether a view mounted now for `instance` has nothing to read: its first page landed less than FRESH_MS ago, no read of it is on its way (one that is, it takes), and its last read was not refused. */
 const fresh = (instance: string): boolean => {
   const held = kept.get(instance);
-  return held !== undefined && !flying.has(instance) && Date.now() - held.readAt < FRESH_MS;
+  return held !== undefined && !flying.has(instance) && !refused.has(instance) && Date.now() - held.readAt < FRESH_MS;
 };
 
 /**
@@ -97,7 +100,11 @@ export function useMail(instance: string): MailRead {
           const started = flight;
           flying.set(instance, started);
           const landed = () => void (flying.get(instance) === started && flying.delete(instance));
-          started.then(landed, landed);
+          // By the read itself, whatever view is still there to hear it: refused, or landed.
+          started.then(
+            () => (landed(), void refused.delete(instance)),
+            () => (landed(), void refused.add(instance)),
+          );
         }
       }
       /** The pages after the first of this press, while a page added no received mail and an older one is there. */

@@ -8,7 +8,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { waitFor } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { Mail } from "../../app/mail";
-import { FRESH_MS } from "../../app/mail/read";
+import { FRESH_MS } from "../../app/ui/words";
 import { handlers, resetApp } from "../helpers/render";
 import type { Contract } from "../helpers/render";
 import { startBackend, type Backend } from "../support/backend.js";

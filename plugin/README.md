@@ -856,8 +856,9 @@ pages a press, so that a press shows mail or says there is none; after three suc
 claims there is no mail, and Older reads on. Otherwise it reads at no other time: never on the roster's poll, never when
 OATS changes, never on a timer. What was read is kept for the window, and is fresh for a minute:
 a view mounted while it is fresh shows it and reads nothing (one press is one read, and bb itself
-mounts its side panel's content a second time now and then); mounted later, it shows it at once
-and reads again behind it; shown while a read of that agent's first page is still on its
+mounts its side panel's content a second time now and then); mounted later, or after a read of
+its first page that was refused (a refusal is not forgotten by a mount), it shows it at once and
+reads again behind it; shown while a read of that agent's first page is still on its
 way, it takes that read's answer and starts no second one. "Read <age>." stands beside Refresh once what is shown is older
 than a minute.
 

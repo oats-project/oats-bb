@@ -13,8 +13,8 @@ import type { MailMessage } from "../../kernel/mail";
 import { age } from "../format";
 import { useNow } from "../roster/now";
 import { Button, Loading, Notice, TARGET } from "../ui";
-import { readAge, showingRead } from "../ui/words";
-import { FRESH_MS, useMail } from "./read";
+import { FRESH_MS, readAge, showingRead } from "../ui/words";
+import { useMail } from "./read";
 import { MAIL, codeOf, refusalLine, senderWord, unreadLine } from "./words";
 
 const WARN = "text-warning-text";

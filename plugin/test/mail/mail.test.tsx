@@ -8,7 +8,8 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { Mail } from "../../app/mail";
-import { FRESH_MS, PAGES_A_PRESS } from "../../app/mail/read";
+import { PAGES_A_PRESS } from "../../app/mail/read";
+import { FRESH_MS } from "../../app/ui/words";
 import { refusalLine } from "../../app/mail/words";
 import type { MailPage } from "../../kernel/mail";
 import { handlers, resetApp } from "../helpers/render";
@@ -245,10 +246,10 @@ test("mounted again while what it holds is fresh (bb mounts its side panel's con
 });
 
 test.each([
-  ["one millisecond short of the minute", FRESH_MS - 1, 0, ""],
-  ["at the minute, when the head starts to say the age of what is shown", FRESH_MS, 1, "Reading…"],
-  ["ten minutes later", 10 * FRESH_MS, 1, "Reading…"],
-])("mounted again %s: %s read(s) behind what was read", async (_when, later, readsThen, head) => {
+  ["one millisecond short of the minute", 0, FRESH_MS - 1, ""],
+  ["at the minute, when the head starts to say the age of what is shown", 1, FRESH_MS, "Reading…"],
+  ["ten minutes later", 1, 10 * FRESH_MS, "Reading…"],
+])("mounted again %s: %s read(s) behind what was read", async (_when, readsThen, later, head) => {
   const first = mail();
   await first.findByTestId("oats-mail-list");
   first.unmount();
@@ -273,6 +274,37 @@ test("fresh is by agent: another agent's view, mounted in the same second, reads
   expect(rows(await slot.findByTestId("oats-mail-list"))).toHaveLength(3);
   await act(async () => void (await Promise.resolve()));
   expect(reads(slot)).toEqual([{ instance: AGENT, older: null }, { instance: "desktop-mockups-developer", older: null }]);
+});
+
+test("a Refresh that was refused is not forgotten by a mount inside the minute: the view mounted again reads again, and says the refusal again if it is refused again; once a read lands, what is held is fresh again", async () => {
+  let asked = 0;
+  const answer = {
+    mail: () => {
+      asked += 1;
+      if (asked === 2 || asked === 3) throw new Error("E_AW_TOO_OLD: messaging:mail: aw 1.36.33 cannot list mail threads");
+      return recordedMail();
+    },
+  };
+  const slot = mail(answer);
+  await slot.findByTestId("oats-mail-list");
+  fireEvent.click(slot.getByTestId("oats-mail-refresh"));
+  expect(text((await slot.findByTestId("oats-notice")).querySelector("h3"))).toBe("aw is too old to read mail.");
+  slot.unmount();
+  // Twenty seconds later, inside the minute: the mount reads again, and the refusal is said again over what is held.
+  const again = mail(answer, AGENT, NOW + 20_000);
+  expect(text((await again.findByTestId("oats-notice")).querySelector("h3"))).toBe("aw is too old to read mail.");
+  expect(rows(again.getByTestId("oats-mail-list"))).toHaveLength(3);
+  expect(asked).toBe(3);
+  // Retry lands: no notice; and a mount after it, still inside the minute of that read, reads nothing.
+  fireEvent.click(again.getByTestId("oats-mail-retry"));
+  await waitFor(() => expect(again.queryByTestId("oats-notice")).toBeNull());
+  expect(asked).toBe(4);
+  again.unmount();
+  const last = mail(answer, AGENT, NOW + 40_000);
+  await last.findByTestId("oats-mail-list");
+  await act(async () => void (await Promise.resolve()));
+  expect(asked).toBe(4);
+  expect(last.queryByTestId("oats-notice")).toBeNull();
 });
 
 test("a read that failed with nothing held is not fresh: the view mounted again reads", async () => {

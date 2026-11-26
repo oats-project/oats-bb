@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
-import { parseScheduleList, parseTriggerList } from "../../kernel/automations-read.js";
+import { parseScheduleList, parseTriggerList, parseTriggerStatus } from "../../kernel/automations-read.js";
 import { MAIL_PAGE, parseMail } from "../../kernel/mail.js";
 import { parseStatus } from "../../kernel/roster.js";
 import { parseServers, parseSouls, parseTeams } from "../../kernel/workspace.js";
@@ -16,7 +16,7 @@ import { build } from "../fixtures/busy/generate.mjs";
 
 const BUSY = join(fileURLToPath(new URL("..", import.meta.url)), "fixtures", "busy");
 type Made = { row: Record<string, unknown>; from: Record<string, unknown>; swaps: [string, string][]; was: [string[], unknown][]; kind?: string };
-const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions" | "mail" | "messages" | "conversations" | "groups" | "problems", Made[]> };
+const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions" | "mail" | "messages" | "conversations" | "groups" | "problems" | "triggerStates", Made[]> };
 
 // THE RULE IS HELD HERE, not by the generator: this file reads the recorded answers ITSELF and puts a busy row back
 // with its OWN hands. Of the generator it takes only what it says it did to a row (`swaps`, `was`), which is then proven.
@@ -53,6 +53,7 @@ const SOURCES: Record<string, unknown[]> = {
   schedules: recordedSchedules,
   runs: recordedSchedules.flatMap((row) => row.recentRuns ?? []),
   triggers: answer("automations/trigger-list.json").triggers as unknown[],
+  triggerStates: answer("automations/trigger-status.json").triggers as unknown[],
   teams: answer("workspace/teams.json").teams as unknown[],
   problems: answer("workspace/teams.json").problems as unknown[],
   servers: answer("workspace/servers.json").servers as unknown[],
@@ -94,14 +95,15 @@ describe("the busy set", () => {
       mail: ["result.result.mail.messages", "result.result.mail.conversations"],
       messages: ["subject", "threadTitle", "createdAt", "body"],
       souls: ["description"],
-      schedules: ["description", "recentRuns", "history.stored"],
+      schedules: ["description", "task", "recentRuns", "history.stored", "lastRun.instance", "lastRun.home"],
+      triggerStates: [],
       groups: ["name", "instances"],
       problems: ["label"],
       conversations: ["id"],
       triggers: ["description"],
       teams: ["label", "team", "description", "default"],
       servers: ["label"],
-      runs: ["scheduledFor", "startedAt"],
+      runs: ["scheduledFor", "startedAt", "session.instance", "session.home"],
     };
     for (const [list, rows] of Object.entries(made)) for (const each of rows) expect([list, each.was.map(([path]) => path.join(".")).filter((path) => !ALLOWED[list]!.includes(path))]).toEqual([list, []]);
     // WHAT a field may be set TO: a value of the kind the recorded one is (a text stays a text, a number a number, and
@@ -120,6 +122,11 @@ describe("the busy set", () => {
       "schedules:recentRuns": () => true,
       "mail:result.result.mail.messages": () => true,
       "mail:result.result.mail.conversations": () => true,
+      // a run's agent, and the row's last run's: an agent of the set, with that agent's own home; the last run is the newest run's.
+      "runs:session.instance": (now) => instances.has(now),
+      "runs:session.home": (now, _was, each) => now === made.agents.find((agent) => agent.row.instance === (each.row.session as { instance: unknown }).instance)?.row.home,
+      "schedules:lastRun.instance": (now, _was, each) => now === ((each.row.recentRuns as { session: { instance: unknown } }[])[0]!.session.instance),
+      "schedules:lastRun.home": (now, _was, each) => now === ((each.row.recentRuns as { session: { home: unknown } }[])[0]!.session.home),
       // a team that was the default may be made not so; never the other way.
       "teams:default": (now, was) => now === was || (was === true && now === false),
     };
@@ -152,6 +159,7 @@ describe("the busy set", () => {
       souls: (row) => [row.name],
       schedules: (row) => [tail(row.id)],
       triggers: (row) => [tail(row.id)],
+      triggerStates: (row) => [tail(row.id)],
       runs: (row) => [row.runId, ...(SOURCES.schedules as { id: string }[]).map((schedule) => tail(schedule.id))],
       teams: (row) => [`/teams/${String(row.label)}`],
       problems: (row) => [`/teams/${String(row.label)}`, `team ${String(row.label)} `],
@@ -186,7 +194,7 @@ describe("the busy set", () => {
     const less = (document: unknown, ...keys: string[]) => Object.fromEntries(Object.entries(document as Record<string, unknown>).filter(([key]) => !keys.includes(key)));
     const byInstance = (list: unknown[]) => [...(list as { instance: string }[])].sort((a, b) => (a.instance < b.instance ? -1 : 1));
     // No file but these, and the two that are no kernel answer (the chat, made up and said; the threads to fail, read from the rows).
-    expect(Object.keys(files).sort()).toEqual(["chat.json", "mail.json", "schedule-list.json", "servers.json", "souls.json", "status.json", "teams.json", "threads.json", "trigger-list.json"]);
+    expect(Object.keys(files).sort()).toEqual(["chat.json", "mail.json", "schedule-list.json", "servers.json", "souls.json", "status.json", "teams.json", "threads.json", "trigger-list.json", "trigger-status.json"]);
     // status.json: the recorded roster's document, with the features of the kernel that recorded the board (README); its groups; their rows.
     const status = files["status.json"] as { features: unknown; agents: { instances: Record<string, unknown>[] }[] };
     expect(less(status, "agents", "features")).toEqual(less(recorded("roster/status.json"), "agents", "features"));
@@ -202,6 +210,11 @@ describe("the busy set", () => {
     // souls.json, trigger-list.json, servers.json, teams.json: the recorded document around its rows.
     const souls = files["souls.json"] as { souls: unknown[] };
     expect([less(souls, "souls"), souls.souls]).toEqual([less(recorded("workspace/souls.json"), "souls"), rows("souls")]);
+    // trigger-status.json: the recorded document around ONE state per busy trigger, in the triggers' order, each under its trigger's busy name.
+    const states = files["trigger-status.json"] as { triggers: { id: string }[] };
+    expect([less(states, "triggers"), states.triggers]).toEqual([less(recorded("automations/trigger-status.json"), "triggers"), rows("triggerStates")]);
+    expect(states.triggers.map((state) => state.id)).toEqual(made.triggers.map((each) => each.row.id));
+    expect(made.triggerStates.map((each) => [each.from.id, each.swaps])).toEqual(made.triggers.map((each) => [each.from.id, each.swaps]));
     const triggers = files["trigger-list.json"] as { triggers: unknown[] };
     expect([less(triggers, "triggers"), triggers.triggers]).toEqual([less(recorded("automations/trigger-list.json"), "triggers"), rows("triggers")]);
     const servers = files["servers.json"] as { servers: unknown[] };
@@ -218,7 +231,9 @@ describe("the busy set", () => {
     // The NEWEST of a schedule's fifty is the recorded run as it is (the row's `lastRun`, recorded, is of that run), and each older one is an hour before.
     for (const each of withRuns) {
       const runs = each.row.recentRuns as { runId: string; scheduledFor: string; startedAt: string }[];
-      expect(runs[0]).toEqual(swappedBack((each.from.recentRuns as unknown[])[0], each.swaps)); // the recorded run, under the schedule's busy name, as the row's `lastRun` is
+      // (the recorded run, under the schedule's busy name, as the row's `lastRun` is: its id and its times are the recorded ones; at most its agent is one of the set's)
+      const newest = made.runs.find((run) => run.row === runs[0])!;
+      expect([newest.swaps, newest.was.map(([path]) => path.join(".")).filter((path) => !path.startsWith("session."))]).toEqual([each.swaps, []]);
       expect(runs.map((run) => Date.parse(run.scheduledFor))).toEqual(runs.map((_, r) => Date.parse(runs[0]!.scheduledFor) - r * 3_600_000));
       expect(runs.map((run) => Date.parse(run.startedAt))).toEqual(runs.map((_, r) => Date.parse(runs[0]!.startedAt) - r * 3_600_000));
     }
@@ -288,8 +303,17 @@ describe("the busy set", () => {
     const rows = [...schedules.value.rows, ...triggers.value.rows];
     expect(rows).toHaveLength(37);
     expect(new Set(rows.map((row) => `${row.kind}:${row.id}`)).size).toBe(37);
-    const failing = rows.filter((row) => row.invalid !== null || row.lastRun?.outcome === "launch-failed" || row.lastRun?.outcome === "invalid" || row.lastRun?.outcome === "unknown");
-    expect(failing).toHaveLength(5);
+    // FIVE FAIL (a launch that failed, a definition that cannot run); ONE more is a launch whose state is unknown: a warning, not a failure.
+    const failing = rows.filter((row) => row.invalid !== null || row.lastRun?.outcome === "launch-failed" || row.lastRun?.outcome === "invalid");
+    expect([failing.length, rows.filter((row) => row.lastRun?.outcome === "unknown").length]).toEqual([5, 1]);
+    // ONE schedule's three newest runs are of three agents of the set: one that asks, one that is stopped, one that works; and one instruction is twelve lines long.
+    const ofAgents = (files["schedule-list.json"] as { schedules: { task?: string; recentRuns?: { session?: { instance?: string } | null }[] }[] }).schedules;
+    const kindOf = (instance: string | undefined) => made.agents.find((each) => each.row.instance === instance)?.kind;
+    expect(ofAgents.map((row) => (row.recentRuns ?? []).slice(0, 3).map((run) => kindOf(run.session?.instance ?? undefined))).filter((kinds) => kinds.some((kind) => kind !== undefined))).toEqual([["ask", "stopped", "work"]]);
+    expect(ofAgents.filter((row) => (row.task ?? "").split("\n").length === 12)).toHaveLength(1);
+    // Every busy trigger has its state (the Runs tab's fires, a trigger's page), and the plugin reads it.
+    const busyTriggers = (files["trigger-list.json"] as { triggers: { id: string; on?: { source?: string | null } | null }[] }).triggers;
+    expect(busyTriggers.map((row) => parseTriggerStatus(files["trigger-status.json"], row.id, row.on?.source ?? null).ok)).toEqual(busyTriggers.map(() => true));
     const raw = (files["schedule-list.json"] as { schedules: { recentRuns?: { runId: string }[] }[] }).schedules;
     expect(raw.filter((row) => row.recentRuns?.length === 50).length).toBeGreaterThanOrEqual(3);
     for (const row of raw.filter((each) => each.recentRuns?.length === 50)) expect(new Set(row.recentRuns!.map((run) => run.runId)).size).toBe(50);

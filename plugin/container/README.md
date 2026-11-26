@@ -297,7 +297,7 @@ is the one judged first.
 **To add your screen's busy scene**: one more scene in your feature's file under `scenes/`, with
 `stage: "busy"`, and its images named `busy-<view>-<what>`. Nothing else: no fixture of your own, no
 stage of your own. The fake `oats` answers `status`, `souls`, `teams`, `server list`, `schedule
-list`, `trigger list` and `operation run messaging:mail` from the set for the stage's length. (The
+list`, `trigger list`, `trigger status` and `operation run messaging:mail` from the set for the stage's length. (The
 set holds ONE agent's mail, the busy chat's: the mail read answers it for EVERY agent.) A verb the set does not hold (yours)
 answers its recorded fixture as always; if your screen needs a busy answer of it, the answer goes
 INTO the set, made by its generator from your recorded answer (`test/fixtures/busy/generate.mjs`,

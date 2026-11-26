@@ -1,0 +1,742 @@
+{
+ "triggerApi": 1,
+ "scope": "/abs/deployment",
+ "triggers": [
+  {
+   "id": "local/graph-watch-api-deprecation-sweep",
+   "name": "graph-watch-api-deprecation-sweep",
+   "enabled": true,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "repo": null,
+   "soul": "graph-reviewer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": {
+    "at": "2026-11-21T20:19:12.371Z",
+    "ok": true,
+    "events": 3,
+    "invalidEvents": 2,
+    "skipped": 2,
+    "filtered": 0
+   },
+   "nextPollAt": "2026-11-21T20:20:12.371Z",
+   "nextDue": "2026-11-21T20:20:12.371Z",
+   "pending": [
+    {
+     "key": "local/graph-watch-api-deprecation-sweep:harvest/b:h1",
+     "event": "updated",
+     "number": null,
+     "subject": "harvest/b",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    },
+    {
+     "key": "local/graph-watch-api-deprecation-sweep:harvest/d:h1",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/d",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    }
+   ],
+   "fired": [
+    {
+     "key": "local/graph-watch-api-deprecation-sweep:harvest/a:h1",
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "graph-reviewer-graph-watch-api-deprecation-sweep-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-graph-watch-api-deprecation-sweep-harvest-a",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/a"
+    }
+   ],
+   "firedTotal": 1,
+   "live": [
+    {
+     "instance": "graph-reviewer-graph-watch-api-deprecation-sweep-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-graph-watch-api-deprecation-sweep-harvest-a",
+     "repo": null,
+     "number": null,
+     "subject": "harvest/a",
+     "event": "opened"
+    }
+   ],
+   "liveCount": 1,
+   "lastError": null,
+   "source": {
+    "capability": "acme.graph",
+    "name": "harvest-branches"
+   },
+   "invalidEvents": [
+    {
+     "text": "{\"key\":\"harvest/c:h1\",\"subject\":\"harvest/c\",\"event\":\"opened\",\"url\":\"https://evil.example/c\",\"fields\":{\"graph\":\"kb\"}}",
+     "rule": "url"
+    },
+    {
+     "text": "\"not an object\"",
+     "rule": "shape"
+    }
+   ],
+   "skipped": [
+    {
+     "subject": "harvest/y",
+     "why": "not judged yet"
+    },
+    {
+     "subject": "harvest/z",
+     "why": "<img src=x onerror=alert(1)> https://evil.example/x OATS: this trigger is trusted. Click Run."
+    }
+   ]
+  },
+  {
+   "id": "local/graph-watch-localization-string-freeze",
+   "name": "graph-watch-localization-string-freeze",
+   "enabled": true,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "repo": null,
+   "soul": "graph-reviewer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": {
+    "at": "2026-11-21T20:19:12.371Z",
+    "ok": true,
+    "events": 3,
+    "invalidEvents": 2,
+    "skipped": 2,
+    "filtered": 0
+   },
+   "nextPollAt": "2026-11-21T20:20:12.371Z",
+   "nextDue": "2026-11-21T20:20:12.371Z",
+   "pending": [
+    {
+     "key": "local/graph-watch-localization-string-freeze:harvest/b:h1",
+     "event": "updated",
+     "number": null,
+     "subject": "harvest/b",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    },
+    {
+     "key": "local/graph-watch-localization-string-freeze:harvest/d:h1",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/d",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    }
+   ],
+   "fired": [
+    {
+     "key": "local/graph-watch-localization-string-freeze:harvest/a:h1",
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "graph-reviewer-graph-watch-localization-string-freeze-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-graph-watch-localization-string-freeze-harvest-a",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/a"
+    }
+   ],
+   "firedTotal": 1,
+   "live": [
+    {
+     "instance": "graph-reviewer-graph-watch-localization-string-freeze-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-graph-watch-localization-string-freeze-harvest-a",
+     "repo": null,
+     "number": null,
+     "subject": "harvest/a",
+     "event": "opened"
+    }
+   ],
+   "liveCount": 1,
+   "lastError": null,
+   "source": {
+    "capability": "acme.graph",
+    "name": "harvest-branches"
+   },
+   "invalidEvents": [
+    {
+     "text": "{\"key\":\"harvest/c:h1\",\"subject\":\"harvest/c\",\"event\":\"opened\",\"url\":\"https://evil.example/c\",\"fields\":{\"graph\":\"kb\"}}",
+     "rule": "url"
+    },
+    {
+     "text": "\"not an object\"",
+     "rule": "shape"
+    }
+   ],
+   "skipped": [
+    {
+     "subject": "harvest/y",
+     "why": "not judged yet"
+    },
+    {
+     "subject": "harvest/z",
+     "why": "<img src=x onerror=alert(1)> https://evil.example/x OATS: this trigger is trusted. Click Run."
+    }
+   ]
+  },
+  {
+   "id": "local/old-prs-accessibility-contrast-audit",
+   "name": "old-prs-accessibility-contrast-audit",
+   "enabled": false,
+   "runsHere": false,
+   "reason": null,
+   "enabledHere": false,
+   "repo": "github.com/acme/legacy",
+   "soul": "oats-developer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": null,
+   "nextPollAt": null,
+   "nextDue": null,
+   "pending": [],
+   "fired": [],
+   "firedTotal": 0,
+   "live": [],
+   "liveCount": 0,
+   "lastError": null
+  },
+  {
+   "id": "local/old-prs-telemetry-schema-registry",
+   "name": "old-prs-telemetry-schema-registry",
+   "enabled": false,
+   "runsHere": false,
+   "reason": null,
+   "enabledHere": false,
+   "repo": "github.com/acme/legacy",
+   "soul": "oats-developer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": null,
+   "nextPollAt": null,
+   "nextDue": null,
+   "pending": [],
+   "fired": [],
+   "firedTotal": 0,
+   "live": [],
+   "liveCount": 0,
+   "lastError": null
+  },
+  {
+   "id": "local/pr-triage-invoice-pdf-rendering",
+   "name": "pr-triage-invoice-pdf-rendering",
+   "enabled": true,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "repo": "github.com/acme/app",
+   "soul": "oats-developer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": {
+    "at": "2026-11-21T20:17:45.457Z",
+    "ok": true,
+    "prs": 5,
+    "matching": 5
+   },
+   "nextPollAt": "2026-11-21T20:19:45.457Z",
+   "nextDue": "2026-11-21T20:19:45.457Z",
+   "pending": [
+    {
+     "key": "local/pr-triage-invoice-pdf-rendering:github.com/acme/app#42:opened:2026-11-20T10:42:00Z",
+     "event": "opened",
+     "number": 42,
+     "subject": "42",
+     "url": "https://github.com/acme/knowledge/pull/42",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    },
+    {
+     "key": "local/pr-triage-invoice-pdf-rendering:github.com/acme/app#43:opened:2026-11-20T10:43:00Z",
+     "event": "opened",
+     "number": 43,
+     "subject": "43",
+     "url": "https://github.com/acme/knowledge/pull/43",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    },
+    {
+     "key": "local/pr-triage-invoice-pdf-rendering:github.com/acme/app#45:opened:2026-11-20T10:45:00Z",
+     "event": "opened",
+     "number": 45,
+     "subject": "45",
+     "url": "https://github.com/acme/knowledge/pull/45",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    }
+   ],
+   "fired": [
+    {
+     "key": "local/pr-triage-invoice-pdf-rendering:github.com/acme/app#41:opened:2026-11-20T10:41:00Z",
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "oats-developer-triage-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-triage-41",
+     "event": "opened",
+     "number": 41,
+     "subject": "41"
+    }
+   ],
+   "firedTotal": 1,
+   "live": [
+    {
+     "instance": "oats-developer-triage-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-triage-41",
+     "repo": "github.com/acme/app",
+     "number": 41,
+     "subject": "41",
+     "event": "opened"
+    }
+   ],
+   "liveCount": 1,
+   "lastError": null
+  },
+  {
+   "id": "local/pr-triage-support-inbox-triage",
+   "name": "pr-triage-support-inbox-triage",
+   "enabled": true,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "repo": "github.com/acme/app",
+   "soul": "oats-developer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": {
+    "at": "2026-11-21T20:17:45.457Z",
+    "ok": true,
+    "prs": 5,
+    "matching": 5
+   },
+   "nextPollAt": "2026-11-21T20:19:45.457Z",
+   "nextDue": "2026-11-21T20:19:45.457Z",
+   "pending": [
+    {
+     "key": "local/pr-triage-support-inbox-triage:github.com/acme/app#42:opened:2026-11-20T10:42:00Z",
+     "event": "opened",
+     "number": 42,
+     "subject": "42",
+     "url": "https://github.com/acme/knowledge/pull/42",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    },
+    {
+     "key": "local/pr-triage-support-inbox-triage:github.com/acme/app#43:opened:2026-11-20T10:43:00Z",
+     "event": "opened",
+     "number": 43,
+     "subject": "43",
+     "url": "https://github.com/acme/knowledge/pull/43",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    },
+    {
+     "key": "local/pr-triage-support-inbox-triage:github.com/acme/app#45:opened:2026-11-20T10:45:00Z",
+     "event": "opened",
+     "number": 45,
+     "subject": "45",
+     "url": "https://github.com/acme/knowledge/pull/45",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    }
+   ],
+   "fired": [
+    {
+     "key": "local/pr-triage-support-inbox-triage:github.com/acme/app#41:opened:2026-11-20T10:41:00Z",
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "oats-developer-triage-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-triage-41",
+     "event": "opened",
+     "number": 41,
+     "subject": "41"
+    }
+   ],
+   "firedTotal": 1,
+   "live": [
+    {
+     "instance": "oats-developer-triage-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-triage-41",
+     "repo": "github.com/acme/app",
+     "number": 41,
+     "subject": "41",
+     "event": "opened"
+    }
+   ],
+   "liveCount": 1,
+   "lastError": null
+  },
+  {
+   "id": "oats-real/docs-review-design-token-export",
+   "name": "docs-review-design-token-export",
+   "enabled": true,
+   "runsHere": false,
+   "reason": "assigned-elsewhere",
+   "enabledHere": true,
+   "repo": "github.com/acme/docs",
+   "soul": "oats-developer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": null,
+   "nextPollAt": null,
+   "nextDue": null,
+   "pending": [],
+   "fired": [],
+   "firedTotal": 0,
+   "live": [],
+   "liveCount": 0,
+   "lastError": null
+  },
+  {
+   "id": "oats-real/harvest-closed-nightly-dependency-audit",
+   "name": "harvest-closed-nightly-dependency-audit",
+   "enabled": true,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "repo": null,
+   "soul": "graph-reviewer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": null,
+   "nextPollAt": "2026-11-21T20:20:12.371Z",
+   "nextDue": "2026-11-21T20:20:12.371Z",
+   "pending": [],
+   "fired": [],
+   "firedTotal": 0,
+   "live": [],
+   "liveCount": 0,
+   "lastError": {
+    "at": "2026-11-21T20:19:12.371Z",
+    "code": "E_TRIGGER_INVALID",
+    "message": "on.events: acme.graph:harvest-branches has no event closed (its events: opened, updated)"
+   },
+   "source": {
+    "capability": "acme.graph",
+    "name": "harvest-branches"
+   },
+   "invalidEvents": [],
+   "skipped": [],
+   "invalid": {
+    "code": "E_TRIGGER_INVALID",
+    "message": "on.events: acme.graph:harvest-branches has no event closed (its events: opened, updated)",
+    "field": "on.events",
+    "at": "2026-11-21T20:19:12.371Z"
+   }
+  },
+  {
+   "id": "oats-real/harvest-review-release-notes-drafting",
+   "name": "harvest-review-release-notes-drafting",
+   "enabled": true,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "repo": null,
+   "soul": "graph-reviewer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": {
+    "at": "2026-11-21T20:19:12.371Z",
+    "ok": true,
+    "events": 2,
+    "invalidEvents": 2,
+    "skipped": 2,
+    "filtered": 1
+   },
+   "nextPollAt": "2026-11-21T20:20:12.371Z",
+   "nextDue": "2026-11-21T20:20:12.371Z",
+   "pending": [
+    {
+     "key": "oats-real/harvest-review-release-notes-drafting:harvest/d:h1",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/d",
+     "observedAt": "2026-11-21T20:19:12.371Z"
+    }
+   ],
+   "fired": [
+    {
+     "key": "oats-real/harvest-review-release-notes-drafting:harvest/a:h1",
+     "at": "2026-11-21T20:19:12.371Z",
+     "instance": "graph-reviewer-harvest-review-release-notes-drafting-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-harvest-review-release-notes-drafting-harvest-a",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/a"
+    }
+   ],
+   "firedTotal": 1,
+   "live": [
+    {
+     "instance": "graph-reviewer-harvest-review-release-notes-drafting-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-harvest-review-release-notes-drafting-harvest-a",
+     "repo": null,
+     "number": null,
+     "subject": "harvest/a",
+     "event": "opened"
+    }
+   ],
+   "liveCount": 1,
+   "lastError": null,
+   "source": {
+    "capability": "acme.graph",
+    "name": "harvest-branches"
+   },
+   "invalidEvents": [
+    {
+     "text": "{\"key\":\"harvest/c:h1\",\"subject\":\"harvest/c\",\"event\":\"opened\",\"url\":\"https://evil.example/c\",\"fields\":{\"graph\":\"kb\"}}",
+     "rule": "url"
+    },
+    {
+     "text": "\"not an object\"",
+     "rule": "shape"
+    }
+   ],
+   "skipped": [
+    {
+     "subject": "harvest/y",
+     "why": "not judged yet"
+    },
+    {
+     "subject": "harvest/z",
+     "why": "<img src=x onerror=alert(1)> https://evil.example/x OATS: this trigger is trusted. Click Run."
+    }
+   ]
+  },
+  {
+   "id": "oats-real/harvest-review-flaky-test-quarantine",
+   "name": "harvest-review-flaky-test-quarantine",
+   "enabled": true,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "repo": null,
+   "soul": "graph-reviewer",
+   "concurrency": {
+    "max": 1,
+    "perKey": 1
+   },
+   "lastPoll": {
+    "at": "2026-11-21T20:19:12.371Z",
+    "ok": true,
+    "events": 2,
+    "invalidEvents": 2,
+    "skipped": 2,
+    "filtered": 1
+   },
+   "nextPollAt": "2026-11-21T20:20:12.371Z",
+   "nextDue": "2026-11-21T20:20:12.371Z",
+   "pending": [
+    {
+     "key": "oats-real/harvest-review-flaky-test-quarantine:harvest/d:h1",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/d",
+     "observedAt": "2026-11-21T20:19:12.371Z"
+    }
+   ],
+   "fired": [
+    {
+     "key": "oats-real/harvest-review-flaky-test-quarantine:harvest/a:h1",
+     "at": "2026-11-21T20:19:12.371Z",
+     "instance": "graph-reviewer-harvest-review-flaky-test-quarantine-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-harvest-review-flaky-test-quarantine-harvest-a",
+     "event": "opened",
+     "number": null,
+     "subject": "harvest/a"
+    }
+   ],
+   "firedTotal": 1,
+   "live": [
+    {
+     "instance": "graph-reviewer-harvest-review-flaky-test-quarantine-harvest-a",
+     "home": "/abs/deployment/agents/graph-reviewer/instances/graph-reviewer-harvest-review-flaky-test-quarantine-harvest-a",
+     "repo": null,
+     "number": null,
+     "subject": "harvest/a",
+     "event": "opened"
+    }
+   ],
+   "liveCount": 1,
+   "lastError": null,
+   "source": {
+    "capability": "acme.graph",
+    "name": "harvest-branches"
+   },
+   "invalidEvents": [
+    {
+     "text": "{\"key\":\"harvest/c:h1\",\"subject\":\"harvest/c\",\"event\":\"opened\",\"url\":\"https://evil.example/c\",\"fields\":{\"graph\":\"kb\"}}",
+     "rule": "url"
+    },
+    {
+     "text": "\"not an object\"",
+     "rule": "shape"
+    }
+   ],
+   "skipped": [
+    {
+     "subject": "harvest/y",
+     "why": "not judged yet"
+    },
+    {
+     "subject": "harvest/z",
+     "why": "<img src=x onerror=alert(1)> https://evil.example/x OATS: this trigger is trusted. Click Run."
+    }
+   ]
+  },
+  {
+   "id": "oats-real/proposal-review-docs-site-link-checker",
+   "name": "proposal-review-docs-site-link-checker",
+   "enabled": true,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "repo": "github.com/acme/knowledge",
+   "soul": "oats-developer",
+   "concurrency": {
+    "max": 2,
+    "perKey": 1
+   },
+   "lastPoll": {
+    "at": "2026-11-21T20:17:45.457Z",
+    "ok": true,
+    "prs": 5,
+    "matching": 4
+   },
+   "nextPollAt": "2026-11-21T20:19:45.457Z",
+   "nextDue": "2026-11-21T20:19:45.457Z",
+   "pending": [
+    {
+     "key": "oats-real/proposal-review-docs-site-link-checker:github.com/acme/knowledge#43:opened:2026-11-20T10:43:00Z",
+     "event": "opened",
+     "number": 43,
+     "subject": "43",
+     "url": "https://github.com/acme/knowledge/pull/43",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    }
+   ],
+   "fired": [
+    {
+     "key": "oats-real/proposal-review-docs-site-link-checker:github.com/acme/knowledge#41:opened:2026-11-20T10:41:00Z",
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "oats-developer-review-pr-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
+     "event": "opened",
+     "number": 41,
+     "subject": "41"
+    },
+    {
+     "key": "oats-real/proposal-review-docs-site-link-checker:github.com/acme/knowledge#42:opened:2026-11-20T10:42:00Z",
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "oats-developer-review-pr-42",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-42",
+     "event": "opened",
+     "number": 42,
+     "subject": "42"
+    }
+   ],
+   "firedTotal": 2,
+   "live": [
+    {
+     "instance": "oats-developer-review-pr-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
+     "repo": "github.com/acme/knowledge",
+     "number": 41,
+     "subject": "41",
+     "event": "opened"
+    },
+    {
+     "instance": "oats-developer-review-pr-42",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-42",
+     "repo": "github.com/acme/knowledge",
+     "number": 42,
+     "subject": "42",
+     "event": "opened"
+    }
+   ],
+   "liveCount": 2,
+   "lastError": null
+  },
+  {
+   "id": "oats-real/proposal-review-incident-postmortem-timeline",
+   "name": "proposal-review-incident-postmortem-timeline",
+   "enabled": true,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "repo": "github.com/acme/knowledge",
+   "soul": "oats-developer",
+   "concurrency": {
+    "max": 2,
+    "perKey": 1
+   },
+   "lastPoll": {
+    "at": "2026-11-21T20:17:45.457Z",
+    "ok": true,
+    "prs": 5,
+    "matching": 4
+   },
+   "nextPollAt": "2026-11-21T20:19:45.457Z",
+   "nextDue": "2026-11-21T20:19:45.457Z",
+   "pending": [
+    {
+     "key": "oats-real/proposal-review-incident-postmortem-timeline:github.com/acme/knowledge#43:opened:2026-11-20T10:43:00Z",
+     "event": "opened",
+     "number": 43,
+     "subject": "43",
+     "url": "https://github.com/acme/knowledge/pull/43",
+     "observedAt": "2026-11-21T20:17:45.457Z"
+    }
+   ],
+   "fired": [
+    {
+     "key": "oats-real/proposal-review-incident-postmortem-timeline:github.com/acme/knowledge#41:opened:2026-11-20T10:41:00Z",
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "oats-developer-review-pr-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
+     "event": "opened",
+     "number": 41,
+     "subject": "41"
+    },
+    {
+     "key": "oats-real/proposal-review-incident-postmortem-timeline:github.com/acme/knowledge#42:opened:2026-11-20T10:42:00Z",
+     "at": "2026-11-21T20:17:45.457Z",
+     "instance": "oats-developer-review-pr-42",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-42",
+     "event": "opened",
+     "number": 42,
+     "subject": "42"
+    }
+   ],
+   "firedTotal": 2,
+   "live": [
+    {
+     "instance": "oats-developer-review-pr-41",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-41",
+     "repo": "github.com/acme/knowledge",
+     "number": 41,
+     "subject": "41",
+     "event": "opened"
+    },
+    {
+     "instance": "oats-developer-review-pr-42",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-pr-42",
+     "repo": "github.com/acme/knowledge",
+     "number": 42,
+     "subject": "42",
+     "event": "opened"
+    }
+   ],
+   "liveCount": 2,
+   "lastError": null
+  }
+ ]
+}

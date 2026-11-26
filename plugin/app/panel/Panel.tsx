@@ -61,8 +61,8 @@ const PANEL_ID = "oats-panel-page";
 
 /**
  * THE WINDOW: the tab of the last press and Mail's marker (tab-state.ts), for the length of the app window. ONE
- * value, replaced by every press: a panel reads it through the store, so a press on Mail that names the tab the
- * memory already holds (another agent's Mail) is a new value too, and is drawn.
+ * value, replaced by a press: a panel reads it through the store, so a press that changes the marker alone
+ * (another agent's Mail, where the memory already is Mail) is drawn too.
  */
 let shownWindow: Window = { memory: "instance", mailOf: null };
 const listeners = new Set<() => void>();

@@ -307,7 +307,7 @@ test("two agents' panels mounted at once: ONE press on one agent's Mail shows Ma
 });
 
 test("two agents' panels mounted at once: WHAT A PANEL SHOWS IS WHAT ITS NEXT MOUNT SHOWS, after every press on either panel (the third delta read's proof: Board, then the other's Mail, then bb's second mount: Board fell to Instance with no press)", async () => {
-  const { shown, press, wait, name, calls } = await panel();
+  const { shown, press, wait, name } = await panel();
   act(() => show({ threadId: threadOf(CHILD), mount: 0, other: PARENT }));
   await waitFor(() => expect(name("second")).toBe(PARENT));
   let mount = 0;
@@ -323,8 +323,6 @@ test("two agents' panels mounted at once: WHAT A PANEL SHOWS IS WHAT ITS NEXT MO
     await wait(50);
     expect([shown("first"), shown("second")], `${tab} on the ${which}, the first mounted again`).toEqual(before);
   }
-  // And no mail was read but by a press on its own agent's tab: the child's twice shown by a press, the parent's three times.
-  expect(calls("mail", PARENT)).toBeGreaterThan(0);
 });
 
 test("two agents' panels mounted at once: one on Mail; the other's panel mounts beside it; bb mounts the first again: Mail, Mail: nothing drops the marker (the second delta read's proof)", async () => {

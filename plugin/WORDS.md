@@ -72,7 +72,7 @@ instance's name as words).
 | How long an agent has waited, after "Needs you" | "waiting 12 min (since 14:03)" (`waitingSince`) | "12 min", "4 d"; the claim's instant is in the instance panel's Activity ("Waiting claim · Nov 19, 12:22"), not beside the age | Which agent has waited longest is read at a glance; when it began is wanted, not needed. |
 | Why an agent waits, where it sent no message | "Waiting for a tool approval", "Asked you a question", "Asked for your attention" (`LABELS`) | "approval" after "Needs you"; nothing for a question or a call for attention | A reason after the state, in a word, where it says what is needed; the other two repeat "Needs you". |
 | "tmux", where an agent with no bb thread runs, on a row of the sidebar and of the home | (the Desktop's row is the instance, whatever runs it) | bb's own terminal glyph (the name "Terminal" of its icon set), with the accessible name "tmux", also its title; on a bb whose set has no such glyph, the word **tmux** (`app/ui/tmux.tsx`) | A glyph says where it runs without a word; it is bb's, not one the plugin draws (the lead's ruling 1 on the text audit, 23 Nov 2026). bb draws its generic glyph for a name it does not hold, and says nothing: the plugin looks once, and keeps the word then. |
-| The plugin's pages in the sidebar | one **Workspace** row (a page with tabs) | the heading **Workspace** over a row per page | bb's pages are routes, not tabs of one page; the Workspace page with its tabs is a later piece. |
+| The plugin's pages in the sidebar | one **Workspace** row (a page with tabs) | the same: ONE row **Workspace** (its four tabs are routes), with no heading over it; where Automations is shown too, the heading **Workspace** over the two rows | The Desktop's one entry; a heading over the one row would say the word twice (it stays for a screen reader). |
 
 ### Since when, by state (the status line of a thread's row)
 
@@ -335,6 +335,37 @@ labels, hints, statuses and refusals are used as they are; these differ.
 | What will be created: which rows are in view | every row of the preview, one list | in view the rows a person decides on (**Name**, **Works in**, **Harness**, **Access**, **Relationship**); under the column's one **Details**, closed: Home, Soul, Runs on, where the harness came from, Session, Team, Setup, the capabilities. No foot ("Resolved by the installed CLI…") | The text cut: one fold per block; the access an agent runs with stays in view of the button (it is not said a second time over the buttons). |
 | Under the fields | a soul's description under Soul; "Instance name: <name>" or "Left empty, the kernel numbers it." under Name; a line under Relationship; "Which instance" over its choice | nothing: the description is in the soul's list, the name and the relationship are rows of the column, and the instance's choice says "Choose an instance…". (The audit's N4 also names the Soul field's title for the description: not set: the description is whole in the list's option, and a title would say it a second time) | Each repeated the field or the column beside it (the text cut). |
 | "Preview ready" | in the status line once the preview is read | not said | The column itself shows it is read; a status is said only for what a person waits on. |
+
+## The Workspace page: Souls, Capabilities, Teams, Machines
+
+By the audit of these pages and its ruling (25 Nov 2026). Joan's principle ("little text, only when
+absolutely necessary") wins here over "the Desktop's words are the words" wherever the Desktop
+explains.
+
+| what | the Desktop says | the plugin says | why |
+|---|---|---|---|
+| The page | **Workspace**, with a breadcrumb (Home › Workspace › Souls) and five tabs | **Workspace**, one row of the sidebar, four tabs: Souls, Capabilities, Teams, Machines | The Desktop's one entry. No breadcrumb (bb's own bar names the page); no Setup tab (not built). |
+| What a soul is, what a capability is, what a team is | a paragraph over each list | nothing over the lists; **About capabilities**, one fold, closed, with the Desktop's text ("agent" for "instance"; without its last paragraph, on the workspace's defaults, until the tab can say which those are) | No sentence that states the ordinary. |
+| A soul's or a capability's description in a list | two lines, cut with "…" | ONE line, cut at a word with "…"; whole on its page and in the line's title | One line per row; never cut mid-word. |
+| A tab's count while a search narrows its list | "3 of 22" | the same: "3 of 22" in the tab, the count alone otherwise | The Desktop's. |
+| How many agents a soul has | "2 agents running" / "No agents running · 1 stopped" | a dot and "2 running"; nothing where none runs | "No agents running" ten times says the ordinary; the soul's page lists them all. |
+| New agent on a soul's page behind an `oats` the plugin does not work with | (the Desktop's window is replaced by its update screen) | New agent in its place, off; the home's card says why (as for the sidebar's New agent: no second notice on this page) | One rule for every New agent; the reason has one home. |
+| Who made a capability | "by <source>", and a ✓ for an official one | "by workspace", "by <member repository>", "by <package>" (the package's own name: "by oats.aweb"); the ✓ follows with the read that can say "official" | The Desktop's "by"; nothing is called official before a fact says so. |
+| A soul that cannot be spawned, on its row | "Can't spawn here · <reason>" | **Can't spawn**; on its page "Can't spawn here" beside New agent, the kernel's words under Details | Two words on a row; the reason is one press away. |
+| The souls' groups | "WORKSPACE · member repo · host · 8 souls" | "WORKSPACE 8"; "OATS.OKF 6.2.0 2" | The group and its count; the rest is under a soul's Details. |
+| Where a soul's harness was chosen | "this computer's preference" and the like, on the card | under Details: "Harness: <where>" in the New agent form's words ("set for this soul on this computer", "the soul's preference", …) and the file that makes the choice | One press away; the same words as the form. |
+| A soul's agent behind a result (an act ended, the roster not yet read again) | (no such state) | "Reading…" in its state's place, its acts off | As every place that says an agent's state. |
+| Where a soul comes from, on its page | the group's line, and the soul file's path | its group's word under its key ("workspace", "oats.okf 6.2.0"); under Details "from <repository and commit>" and "Defined in <the soul's file>" | One word on the face; the paths one press away. |
+| A soul the kernel could not resolve: its capabilities | (no list) | no Capabilities section at all | What it is composed of is not known; "No capabilities." would be a claim. |
+| A soul's capabilities | rows: name, **by** source, one line, a ✓ | rows: name, "core", why the soul has it ("workspace", "soul") | What a person asks on a soul's page is why it is there; what it does is on the capability. |
+| An agent of the soul whose thread bb does not list | (the Desktop has no thread) | the roster's words ("Stopped · deleted in bb", "Needs you · may still run") and its acts | One sentence per thing everywhere; "thread missing" was said only here. |
+| A team's default mark | the tag **Default team** | **Default team**, as text after the label | The Desktop's words; no bare chip. |
+| A team with no provider id | "The default team <label> has no provider id yet: nothing can be spawned until it has one." | on its row **No address yet**; where it is the default team, the notice "The default team <label> has no address yet: nothing can be spawned until it has one.", the kernel's words and remedy under Details | "Address" is the Desktop's word for the team on the provider; "not mapped" was nobody's. |
+| A team's address, who may join | on the card | under the row's **Details**: "Address: …", "May join: every soul", "May join: every soul but <souls>" (where fewer are left out than are in), "May join: <souls>", "May join: no soul"; and "Default for: <souls>" where a team is some soul's default and not the deployment's. From each soul's teams as the kernel RESOLVED them (`oats souls`), never the plugin's reading of the workspace's rules; a soul the kernel could not resolve is left out | Read once, when wiring a machine. |
+| The Teams tab while the default team has no address | a dot on the tab | a dot on the tab, named "Teams: the default team has no address yet" for a screen reader | The Desktop's mark; a mark has words. |
+| Machines | "The computers this workspace runs on."; **This computer**; reachable; the OATS version | one list: "<name> · this computer · N agents", then each machine by its name; ssh host and folder under Details | No sentence; no check is run yet, so nothing is said of reach or version. |
+| No other machine | "No other machine runs this workspace yet." | nothing under this computer's row ("No machines." stands only where the server does not know its own machine) | A row alone says it. |
+| An empty list | "No souls are materialized in this deployment yet." and the like | "No souls.", "No capabilities.", "No teams.", "No machines.", "No agents." | Two words. |
 
 ## Not kept
 

@@ -2,7 +2,7 @@
 // The app's live checks (A13, A14, A16), run by container/live.sh inside the container once bb-app
 // runs, the plugin is installed from the checkout and the fake `oats` prints the fixtures.
 //   A13 at 1280x800 and 390x800: the sidebar with the tree, an agent's thread with its header
-//       row, the home page (its badge shows 3), and each of the four pages render.
+//       row, the home page (its badge shows 3), and each of the Workspace page's four tabs render.
 //   A14 with the fake oats removed: bb's threads are listed, the "not found" line shows, and a
 //       thread opens.
 //   A16 an agent whose thread bb does not have: its soul's page says so, and Retire opens the
@@ -78,9 +78,9 @@ const fake = (verbs = {}) =>
 
 /**
  * By hand only, never in CI: LIVE_PILOT_IMAGES=1 takes the image set of the pilot's six screens as
- * a fresh install shows them: the plugin's `pages` stays UNSET, its default (the home alone), through
- * every stage, so no image holds the "Workspace" block of the five other pages, and only the
- * scenes of the six screens' features run (`PILOT_FEATURES`). A scene is told (`pilot: true`) and
+ * a fresh install shows them: the plugin's `pages` stays UNSET, its default (the home and the
+ * Workspace page's four tabs; no Automations), through every stage, and only the scenes of the six
+ * screens' features run (`PILOT_FEATURES`). A scene is told (`pilot: true`) and
  * reaches its screen as a person does then (an agent with no bb thread from its row in the
  * sidebar, not from its soul's page). Its checks that assert a page link or a tile of another page
  * do not hold in this pass and are not counted against it: the pass is for images; the gate is
@@ -93,14 +93,14 @@ const ONLY_STAGES = (process.env.LIVE_ONLY_STAGES ?? "").split(",").map((name) =
 const ONLY_SCENE = (process.env.LIVE_ONLY_SCENE ?? "").trim();
 const REPEAT = Math.max(1, Number.parseInt(process.env.LIVE_REPEAT ?? "1", 10) || 1);
 const PILOT_FEATURES = ["roster", "outside", "panel", "home", "lifecycle", "spawn"];
-/** Every page's id, as live.sh sets them for the checks (the default alone in the pilot's image pass); and how a stage or a scene sets the plugin's `pages`. */
+/** Every page's id, as live.sh sets them for the checks; and how a stage or a scene sets the plugin's `pages`. (In the pilot's image pass the word "home" stands for the setting left UNSET: the release's default, which now shows the Workspace page too.) */
 const ALL_PAGES = PILOT ? "home" : "home, automations, souls, capabilities, teams, machines";
 // (In the pilot's image pass "every page" is the setting as a fresh install has it: UNSET, by bb's own unset, never set to "home".)
 const pages = (value) => void (PILOT && value === ALL_PAGES ? bb("plugin", "config", "oats", "unset", "pages") : bb("plugin", "config", "oats", "set", "pages", value));
 /**
  * The setting `pages` as a fresh install has it: UNSET (bb's own `plugin config <id> unset <key>`),
  * not set to its default's value. A stage that shows the release's default leaves it so, and so
- * proves that an unset setting hides the five other pages, not only that "home" does.
+ * proves what an unset setting shows (the home, the Workspace page) and hides (Automations), not only what a value does.
  */
 const pagesAsInstalled = () => void bb("plugin", "config", "oats", "unset", "pages");
 
@@ -472,8 +472,8 @@ const BUILT_IN = {
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper" && agent.threadId === "thr_digest"));
     },
   },
-  // The release's default: only the home is a page that is shown, with the setting left as
-  // installed (unset: `pagesAsInstalled`). Every other stage runs with all pages shown (live.sh,
+  // The release's default: the home and the Workspace page with its four tabs are shown (not
+  // Automations), with the setting left as installed (unset: `pagesAsInstalled`). Every other stage runs with all pages shown (live.sh,
   // which sets all six; this stage sets them again when it leaves); the scenes of this one assert what is absent. `pages(value)` is for a
   // scene that needs another set: it changes the setting; the scene then opens its page and waits on what it reads.
   // A deployment that is mostly tmux agents (tmuxRoster, above): what a person who ran OATS on tmux sees first.

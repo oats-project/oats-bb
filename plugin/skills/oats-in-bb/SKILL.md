@@ -30,7 +30,8 @@ agents, their homes, identities and mail are OATS's and aweb's.
   model, and left alone keep the recorded ones. The result, or the refusal in words with the
   kernel's code and its message under Details, is said in the same dialog.
 - **A thread archived or deleted in bb** takes the agent out of the tree. Nothing is retired: the
-  agent shows on its soul's page as "thread missing", with Start and Retire.
+  agent stays on its soul's page (Workspace › Souls) in the roster's words ("archived in bb",
+  "deleted in bb"), with its acts (Start…, Retire…).
 - **Spawn** with **New agent** (under the sidebar's roster, and first on the home): the form's own page.
   Choose the soul; the rest is optional: an opening instruction (empty: the agent starts and
   waits), the harness and the model (the defaults are the kernel's), a relationship to another
@@ -107,7 +108,7 @@ agents, their homes, identities and mail are OATS's and aweb's.
 
 ## Automations
 
-- **Automations** (sidebar, under Machines) lists OATS's own schedules and triggers, local and
+- **Automations** (sidebar, under Workspace) lists OATS's own schedules and triggers, local and
   from the workspace's members. They are the kernel's: never use bb's own automations for an OATS
   agent. What the page shows is `oats schedule list` and `oats trigger list`.
 - Rows are grouped by where they run: on the machine that holds the deployment (named by bb's

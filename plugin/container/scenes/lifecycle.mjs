@@ -1111,8 +1111,10 @@ export default [
     name: "Retire, from a soul's page, of an agent whose thread bb does not have: the same dialog",
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/plugins/oats/souls/oats-expert");
-      await page.until(visible(testId("oats-detached-retire")), 30);
-      await page.evaluate(click("oats-detached-retire"));
+      // (A soul's page lists its agents as the roster says them; the acts of one whose thread bb does not have are on its row.)
+      const retire = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-soul-agent")}[data-instance="weekly-digest-helper"] button`)})].find((button) => button.innerText.trim() === "Retire…")`;
+      await page.until(`Boolean(${retire})`, 30);
+      await page.evaluate(`${retire}.click()`);
       await page.until(phaseIs("ready"), 30);
       const before = await dialog(page);
       // The image proves what its name says: the dialog is about the agent whose Retire was pressed, and so is the plan in it.

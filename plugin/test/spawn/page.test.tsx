@@ -88,7 +88,7 @@ test("the page is registered whatever pages are shown, out of bb's own navigatio
   const app = await loadApp();
   const panel = app.navPanels.find((candidate) => candidate.id === "new-agent")!;
   expect([panel.path, panel.title, panel.experimental_hideFromNavigation]).toEqual(["new-agent", "New agent", true]);
-  // Under the release's default pages (home alone) the form is still there: it is not a page a release leaves out.
+  // Where the home alone is shown (`pages: home`) the form is still there: it is not a page a deployment leaves out.
   const slot = await form("", previews(), { settings: { pages: "home" } });
   expect(await slot.findByTestId("oats-spawn-form")).toBeTruthy();
   expect(slot.queryByTestId("oats-page-not-shown")).toBeNull();
@@ -194,6 +194,25 @@ test("a warning of the kernel's is drawn as a warning, through the display filte
   await waitFor(() => expect(column(slot).querySelectorAll('[data-testid="oats-notice"][data-tone="warning"]')).toHaveLength(2));
   const notices = Array.from(column(slot).querySelectorAll('[data-testid="oats-notice"]')).map((notice) => notice.textContent);
   expect(notices).toEqual(["OATS warnsthe bb server runs bb-app 0.60.0; the capability was tested up to 0.50.1", "OATS warns[withheld]"]);
+});
+
+// (This holds for the form what the display filter's test held for the earlier short form's preview, which is gone
+// with that form: test/app/filtered.test.tsx, "the spawn preview: each of the kernel's items is one filtered line".)
+test("what will be created: each of the kernel's items is drawn as ONE filtered line: no tab, no line break, no mark that turns the text's direction", async () => {
+  const unsafe = {
+    ...recorded,
+    teams: [{ label: "oats\u202E", team: "default:oats.aweb.ai", default: true }, { label: "wider\tteam\nsecond", team: "wider:oats.aweb.ai", default: false }],
+    defaultTeam: { label: "oats\u202E", team: "default:oats.aweb.ai" },
+    worktreeHooks: [{ capability: "oats.build\tsetup\nsecond", required: true }],
+  };
+  const slot = await form("oats-developer", { spawnPlan: (input) => ({ facts: formFacts(unsafe, { name: input.name ?? null }), revision: REVISION }) });
+  await waitFor(() => expect(column(slot).textContent).toContain("Setup"));
+  // Every row, in view and under the column's fold: read from the page as it is drawn.
+  const drawn = Array.from(column(slot).querySelectorAll("dd")).map((value) => value.textContent!);
+  expect(drawn.join("|")).not.toMatch(/[\n\t\u202E]/);
+  expect(drawn.some((value) => value.includes("oats\uFFFD"))).toBe(true); // the mark is replaced, where it stood
+  expect(drawn.some((value) => value.includes("wider team second"))).toBe(true); // a tab and a line break are one space each
+  expect(drawn.some((value) => value.includes("oats.build setup second"))).toBe(true);
 });
 
 test("the harness: the soul's default passes nothing and says what the kernel resolved; a listed one is passed; with one harness there is no field", async () => {

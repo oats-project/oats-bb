@@ -522,6 +522,9 @@ describe("what needs a person", () => {
     view.open("local/daily-review");
     const head = view.getByTestId("oats-automation-identity");
     expect(parts(head).at(-1)).toBe("Needs you");
+    // The head's mark is the roster's needs-you mark, as its row's is.
+    const icon = within(head).getByTestId("oats-automation-head-icon");
+    expect([icon.dataset.state, icon.querySelector('[data-state="needs-you"]') !== null]).toEqual(["needs", true]);
     fireEvent.click(within(head).getByTestId("oats-automation-answer"));
     expect(answered).toEqual([ASKS]);
   });

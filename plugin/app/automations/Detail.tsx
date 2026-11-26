@@ -11,7 +11,7 @@ import type { AutomationHost, AutomationProblem, AutomationRow, TriggerStatus } 
 import { droppedCount, pageRuns, scheduleCut, triggerCut } from "../../model/automation-runs";
 import { displayLine, shown, shownBlock } from "../ui/text";
 import { readAge } from "../ui/words";
-import { Button, Card, Disclosure, Empty, LINK, Loading, Menu, Notice, TARGET } from "../ui";
+import { Button, Card, Disclosure, Empty, LINK, Loading, Menu, Notice, StateMark, TARGET } from "../ui";
 import type { MenuItem } from "../ui";
 import { RunningContext, useHere } from "./here";
 import { DETAIL, ICON_BUTTON, ICONS, PLAIN, PLAIN_FOOT, SECTION, SECTION_HEAD, SEPARATED } from "./bb";
@@ -402,8 +402,9 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
       >
         <div data-testid="oats-automation-identity" className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-start gap-2">
-            <span aria-hidden="true" className={`flex h-6 w-4 shrink-0 items-center justify-center ${bad ? "text-destructive-text" : "text-muted-foreground"}`}>
-              <Icon name={iconOf(row, bad)} className="size-4" />
+            {/* The row's own mark, at the head: the needs-you mark while an agent of it asks, bb's failing mark while it is failing, else its kind's icon. Its line says each in words. */}
+            <span aria-hidden="true" data-testid="oats-automation-head-icon" data-state={state ?? "calm"} className={`flex h-6 w-4 shrink-0 items-center justify-center ${bad ? "text-destructive-text" : "text-muted-foreground"}`}>
+              {state === "needs" ? <StateMark state="needs-you" hidden /> : <Icon name={iconOf(row, bad)} className="size-4" />}
             </span>
             <h2 data-testid="oats-automation-name-heading" tabIndex={-1} title={shown(row.id)} className="min-w-0 flex-1 break-words text-base font-semibold text-foreground focus:outline-none">
               {shown(row.name)}

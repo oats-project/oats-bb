@@ -326,7 +326,10 @@ was built), and its `NOTE BUSY` line says the seconds of each part in every run'
    agents' threads; bb's request for a star is turned off (the chat alone is ten prompts).
 When it leaves, each thing it changed is put back and READ: the held turns are answered (no
 thread of its own is active), its threads are archived, bb says of the host's limit what it said
-before, the star request is turned on again (bb's answer to that is checked), the fixtures' threads are back and the fake `oats` answers
+before (asked once the held turns have ended, each asking's outcome kept: where bb gives no answer
+(our own limit ended the command, or bb's CLI gave up by itself: "bb did not respond at …"), or accepts and
+does not say so yet, it is asked again, and no asking starts once a minute has passed; where bb answers no, the
+check fails at once on that answer; it is asked back also where the leave's lines before it threw; the loop is `ask-back.mjs`, held by `test/container-ask-back.test.ts`), the star request is turned on again (bb's answer to that is checked), the fixtures' threads are back and the fake `oats` answers
 the fixtures' roster again, which is waited for. A run that is killed while Claude Code is away
 finds where it was at its next start and puts it back.
 

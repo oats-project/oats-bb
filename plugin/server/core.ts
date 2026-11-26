@@ -157,7 +157,7 @@ export function createCore(bb: BbPluginApi) {
       type: "string",
       label: "Pages shown",
       description:
-        "The plugin's pages that are shown, by id, separated by commas: home, souls, capabilities, teams, machines (the default: all five; the last four are the Workspace page's tabs) and automations (not shown by default).",
+        "The plugin's pages that are shown, by id, separated by commas: home, automations, souls, capabilities, teams, machines (the default: all six; the last four are the Workspace page's tabs).",
       default: DEFAULT_PAGES,
     },
   });

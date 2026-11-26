@@ -1157,8 +1157,8 @@ const acts = [
       const check = printing(plain);
       const GONE = "weekly-digest-helper";
       const actsNow = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${inPanel("oats-agent-acts")} button`)})].map((button) => button.innerText.trim() + (button.disabled ? " (off)" : "")))`;
-      // The release's default, by its value (model/pages.ts `DEFAULT_PAGES`): the home and the Workspace page's four tabs; no Automations.
-      pages("home, souls, capabilities, teams, machines");
+      // The release's default, by its value (model/pages.ts `DEFAULT_PAGES`): the home, Automations and the Workspace page's four tabs.
+      pages("home, automations, souls, capabilities, teams, machines");
       try {
         await page.goto(`/plugins/oats/agent/${GONE}`);
         const drawn = await page.until(`(() => { const acts = ${actsNow}; return acts !== "[]" ? acts : ""; })()`, 40);

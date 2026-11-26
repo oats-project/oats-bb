@@ -91,7 +91,7 @@ const fakeOver = (verbs) => {
 /**
  * By hand only, never in CI: LIVE_PILOT_IMAGES=1 takes the image set of the pilot's six screens as
  * a fresh install shows them: the plugin's `pages` stays UNSET, its default (the home and the
- * Workspace page's four tabs; no Automations), through every stage, and only the scenes of the six
+ * Workspace page's four tabs, and Automations), through every stage, and only the scenes of the six
  * screens' features run (`PILOT_FEATURES`). A scene is told (`pilot: true`) and
  * reaches its screen as a person does then (an agent with no bb thread from its row in the
  * sidebar, not from its soul's page). Its checks that assert a page link or a tile of another page

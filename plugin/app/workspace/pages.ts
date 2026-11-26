@@ -138,10 +138,10 @@ export function useOpenPage(): string | null {
 }
 
 // ---- which pages are shown (the plugin's setting `pages`) ----
-// A deployment shows the pages its setting names; the default leaves out the one that is not finished
-// (Automations: built and tested, and left out of the navigation). One switch, read here by every place that links to a page or is one.
+// A deployment shows the pages its setting names; the default shows every one. One switch, read here by every place
+// that links to a page or is one.
 
-/** The ids a page can have in the setting `pages`. The default shows the home and the Workspace page's four tabs (the ruling's R5); Automations is not in it. */
+/** The ids a page can have in the setting `pages`. The default (model/pages.ts) shows them all: the home, Automations and the Workspace page's four tabs. */
 export const PAGE_IDS = ["home", "automations", "souls", "capabilities", "teams", "machines"] as const;
 /** The Workspace page is shown where any of its tabs is. */
 const shows = (ids: { has(id: string): boolean }, id: string): boolean => (id === WORKSPACE.path ? PAGES.some((page) => ids.has(page.path)) : ids.has(id));

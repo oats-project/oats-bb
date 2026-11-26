@@ -918,13 +918,13 @@ test("behind the card New agent is off, and the card on the same screen says why
   expect(list.getByTestId("oats-home-agents")).toBeTruthy();
 });
 
-test("the release's default: the home has a tile for each tab of the Workspace page, in its order, and none for Automations", async () => {
+test("the release's default: the home has a tile for each tab of the Workspace page, in its order, and one for Automations after them", async () => {
   const { showEveryPageWhenUnset } = await import("../../app/workspace/pages");
   showEveryPageWhenUnset(false); // as in the built app: an unset `pages` is the default's
   try {
     const slot = await homePage();
     await slot.findByTestId("oats-home-needs");
-    await waitFor(() => expect(Array.from(slot.getByTestId("oats-home-tiles").querySelectorAll("button")).map((tile) => tile.dataset.testid)).toEqual(["oats-tile-souls", "oats-tile-capabilities", "oats-tile-teams", "oats-tile-machines"]));
+    await waitFor(() => expect(Array.from(slot.getByTestId("oats-home-tiles").querySelectorAll("button")).map((tile) => tile.dataset.testid)).toEqual(["oats-tile-souls", "oats-tile-capabilities", "oats-tile-teams", "oats-tile-machines", "oats-tile-automations"]));
     slot.unmount();
   } finally {
     showEveryPageWhenUnset(true);

@@ -1204,7 +1204,7 @@ test("with the home alone (pages: home) the sidebar has the roster, New agent an
   expect([all.getByTestId("oats-pages-heading").textContent, all.getByTestId("oats-pages-heading").className.includes("sr-only")]).toEqual(["Workspace", false]);
   all.unmount();
   resetApp();
-  // The release's default: the ONE row "Workspace". No visible heading over it (the word would stand twice); the list
+  // A deployment that shows the home and the Workspace page alone: the ONE row "Workspace". No visible heading over it (the word would stand twice); the list
   // is still named for a screen reader, and keeps the place a heading's block gives it.
   const one = await withPages("home, souls, capabilities, teams, machines");
   await one.findByTestId("oats-tree");
@@ -1295,8 +1295,8 @@ test("while bb is still reading the settings no page is known to be shown or hid
     const loading = pagesOf({ values: undefined, isLoading: true });
     expect([loading.known, loading.has("home"), loading.has("souls")]).toEqual([false, false, false]);
     const unavailable = pagesOf({ values: undefined, isLoading: false });
-    // The default: the home and the Workspace page's four tabs; not Automations.
-    expect([unavailable.known, unavailable.has("home"), unavailable.has("souls"), unavailable.has("machines"), unavailable.has("workspace"), unavailable.has("automations")]).toEqual([true, true, true, true, true, false]);
+    // The default: every page: the home, the Workspace page's four tabs, and Automations.
+    expect([unavailable.known, unavailable.has("home"), unavailable.has("souls"), unavailable.has("machines"), unavailable.has("workspace"), unavailable.has("automations")]).toEqual([true, true, true, true, true, true]);
     const read = pagesOf({ values: { pages: "home, Souls" }, isLoading: false });
     expect([read.known, read.has("home"), read.has("souls"), read.has("teams")]).toEqual([true, true, true, false]);
     // The Workspace page is there while one of its tabs is, and not with the home alone.

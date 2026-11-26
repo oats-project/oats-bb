@@ -344,6 +344,14 @@ as a shell script's first statement, `import "<up to the root>/plugin/container/
 `.mjs`'s first import. The line it says names the script by `$0`. An entry whose container is made
 from another image has no mark there: it needs that image to write the same file first.
 
+Three entries outside `plugin/` change the machine they run on and carry NO guard:
+`test/contract/locks/install.sh`, `test/contract/kernel/setup.sh` and `test/contract/kernel/pi-setup.sh`.
+They run only in the provider's contract images (the first at their build, the two others inside a
+contract container), where neither this guard's file nor this image's mark is: the line above would
+stop them where they rightly run. A guard there would need a mark of the contract images' own,
+written by their Dockerfiles before the first of the three runs; until then each says at its top
+that it is never run by hand.
+
 **A container made from an older image has no mark**: build the image again (`ci.sh` does) before
 you run a guarded script in it. And a KEPT container (`KEEP=1`) whose unit stage was interrupted in its
 second pass may be left with its mark moved away: `docker exec -u root <name> mv

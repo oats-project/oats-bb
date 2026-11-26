@@ -68,6 +68,7 @@ MACHINE_NAME=${MACHINE_NAME:-checks-host}
 docker run -d --name "$NAME" --hostname "$MACHINE_NAME" -e "MACHINE_NAME=$MACHINE_NAME" --init --cpus 2 --memory 6g -e BB_TELEMETRY=false ${DOCKER_RUN_ARGS:-} "$IMAGE" sleep infinity > /dev/null
 cleanup() {
   status=$?
+  docker exec -u root "$NAME" sh -c '[ ! -e /etc/oats-bb-checks-image.moved ] || mv /etc/oats-bb-checks-image.moved /etc/oats-bb-checks-image' > /dev/null 2>&1 || true
   # A failed run keeps bb's own logs too (real/bb-logs.sh): a bb that did not start says why only
   # there. A unit stage has no bb: the script then says that there is no log.
   [ "$status" = 0 ] || docker exec -u node "$NAME" sh /home/node/plugin/container/real/bb-logs.sh /home/node/bbdata/logs /home/node/out || echo "ci: bb's logs could not be copied"
@@ -104,11 +105,28 @@ run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e
 (cd "$PLUGIN/.." && tar -c oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json oats-package/capabilities/oats-bb/lib/pi-model.mjs oats-package/capabilities/oats-bb/lib/errors.mjs oats-package/capabilities/oats-bb/lib/title.mjs) | docker exec -i -u node "$NAME" tar -x -C /home/node
 run mkdir -p /home/node/out
 run sh container/setup.sh
+# The guard's own test, a SECOND time, where the image's mark is TRULY gone (container/guard.sh): in the image the unit
+# stage's first pass can make the mark absent only by the guard's own switch, so a guard that no longer looked for the
+# mark at all would pass it. Here the mark is moved away as root, the test runs with no switch (it says which pass it
+# is in, and holds that the mark is gone), and the mark is put back whatever the test said: the live stage follows.
+# (A stop in between that runs the clean-up puts it back too. An interrupt under a `sh` that runs no EXIT trap on a
+# signal, dash, leaves a KEPT container without its mark: container/README.md says how to put it back.)
+mark_gone_pass() {
+  docker exec -u root "$NAME" mv /etc/oats-bb-checks-image /etc/oats-bb-checks-image.moved
+  gone=0
+  run env OATS_BB_GUARD_PASS=mark-gone npx vitest run test/container-guard.test.ts || gone=$?
+  docker exec -u root "$NAME" mv /etc/oats-bb-checks-image.moved /etc/oats-bb-checks-image
+  [ "$gone" = 0 ] || { echo "ci: the guard's test failed where the image's mark is truly gone" >&2; exit "$gone"; }
+}
 case "$STAGE" in
-  unit) run sh container/unit.sh ;;
+  unit)
+    run sh container/unit.sh
+    mark_gone_pass
+    ;;
   live) run bash container/live.sh ;;
   all)
     run sh container/unit.sh
+    mark_gone_pass
     run bash container/live.sh
     ;;
 esac

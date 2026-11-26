@@ -12,6 +12,7 @@
 # five minutes and tried three times: for the network, which is all that is left to fail. (A fetch
 # from the registry was seen to stall for an hour with nothing moving.)
 # The tree goes to ~/tools/<tool>, not into npm's global directory: a global install takes no lock.
+. "$(dirname "$0")/guard.sh" && [ -f /etc/oats-bb-checks-image ] || exit 97 # refuses outside the checks' container, before anything is touched (also where the guard is not beside it, or another file of its name is)
 set -eu
 TOOL=${1:?usage: locked-install.sh <tool>   (a directory of plugin/container/locks/)}
 HERE=$(cd "$(dirname "$0")" && pwd)

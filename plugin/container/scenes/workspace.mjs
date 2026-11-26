@@ -213,41 +213,41 @@ export default [
       check(strip !== null && strip.inside && strip.page && strip.whole && strip.selected, `${at} busy Workspace: the strip is inside the page (it scrolls inside itself, never the page), every tab whole on one line, the selected tab in view`, loaded || (await page.evaluate(textOf(testId("oats-souls-page")))));
       const names = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${q("oats-soul-row")})].map((row) => { const name = row.querySelector(${q("oats-soul-name")}); const counts = [...row.querySelectorAll(${q("oats-soul-running")} + ", " + ${q("oats-soul-capabilities-count")} + ", " + ${q("oats-soul-cannot")})]; return { name: name.innerText.trim(), cut: name.scrollWidth > name.clientWidth + 1, counts: counts.every((cell) => cell.scrollWidth <= cell.clientWidth + 1 && cell.getBoundingClientRect().right <= innerWidth) }; }))`));
       check(names.length >= 20 && names.every((row) => !row.cut && row.counts) && new Set(names.map((row) => row.name)).size >= names.length - 2, `${at} busy Workspace: ${names.length} souls: no name is cut (a long one wraps beside its counts), and no count is cut or pushed off the row`, JSON.stringify(names.filter((row) => row.cut || !row.counts).slice(0, 4)));
-      await page.shot(`workspace-${viewport.name}-busy-souls`, { targets: true });
+      await page.shot(`busy-${viewport.name}-workspace-souls`, { targets: true });
       // The head (the strip and the search) stays in view after the list is scrolled to its end.
       const stays = JSON.parse(await page.evaluate(`(() => { const scroller = document.querySelector(${q("oats-souls-page")}); scroller.scrollTop = scroller.scrollHeight; const head = document.querySelector(${q("oats-workspace-head")}).getBoundingClientRect(); const search = document.querySelector(${q("oats-search")})?.getBoundingClientRect(); const last = [...document.querySelectorAll(${q("oats-soul-row")})].at(-1).getBoundingClientRect(); const top = scroller.getBoundingClientRect().top; return JSON.stringify({ scrolled: scroller.scrollTop > 200, head: Math.abs(head.top - top) <= 1, search: Boolean(search) && search.top >= top && search.bottom <= innerHeight, last: last.bottom <= innerHeight + 1 && last.top >= head.bottom - 1 }); })()`));
       check(stays.scrolled && stays.head && stays.search && stays.last, `${at} busy Workspace: with the souls scrolled to their end the strip and the search field are still at the page's top, and the last row is in view under them`, JSON.stringify(stays));
-      await page.shot(`workspace-${viewport.name}-busy-souls-end`);
+      await page.shot(`busy-${viewport.name}-workspace-souls-end`);
       // A search narrows: the tab's longest form ("N of 24") still leaves every tab whole and the strip inside the page.
       await page.evaluate(fill(testId("oats-search"), "developer"));
       const narrowed = await page.until(`(() => { const now = ${stripNow}; return now !== null && /^Souls \\d+ of \\d+$/.test(now.first) ? JSON.stringify(now) : ""; })()`, 15);
       const narrow = narrowed ? JSON.parse(narrowed) : null;
       check(narrow !== null && narrow.inside && narrow.page && narrow.whole && narrow.selected, `${at} busy Workspace: while a search narrows (${narrow?.first ?? "?"}) the strip is still inside the page and every tab whole`, narrowed || (await page.evaluate(textOf(testId("oats-tabs")))));
-      await page.shot(`workspace-${viewport.name}-busy-souls-search`, { targets: true });
+      await page.shot(`busy-${viewport.name}-workspace-souls-search`, { targets: true });
       // Capabilities: in the order of how many souls have each; a core place names at most three.
       await page.goto("/plugins/oats/capabilities");
       const capabilities = await page.until(`(() => { const rows = [...document.querySelectorAll(${q("oats-capability-souls")})].map((cell) => Number(cell.innerText.split(" ")[0])); if (rows.length === 0) return ""; const core = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-capabilities-core")} dd`)})].map((value) => value.innerText.replace(/\\s+/g, " ").trim()); return JSON.stringify({ n: rows.length, sorted: rows.every((n, i) => i === 0 || rows[i - 1] >= n), core }); })()`, 30);
       const drawn = capabilities ? JSON.parse(capabilities) : null;
       check(drawn !== null && drawn.sorted && drawn.core.every((value) => value.replace(/ \+\d+$/, "").split(", ").length <= 3), `${at} busy Workspace: ${drawn?.n ?? "?"} capabilities in the order of how many souls have each; a core place names at most three`, capabilities || "");
-      await page.shot(`workspace-${viewport.name}-busy-capabilities`, { targets: true });
+      await page.shot(`busy-${viewport.name}-workspace-capabilities`, { targets: true });
       // Teams: seven, with long descriptions: what each is for is ONE line, cut at a word.
       await page.goto("/plugins/oats/teams");
       await page.until(`document.querySelectorAll(${q("oats-team-row")}).length >= 7 && document.querySelector(${q("oats-team-does")})?.clientWidth > 0`, 30);
       const wrong = JSON.parse(await page.evaluate(oneLines("oats-team-does")));
       const teams = await page.evaluate(`document.querySelectorAll(${q("oats-team-row")}).length`);
       check(teams >= 7 && wrong.length === 0, `${at} busy Workspace: ${teams} teams; what each is for is ONE line, inside its row, and one that is cut ends at a word with "…"`, JSON.stringify(wrong.slice(0, 3)));
-      await page.shot(`workspace-${viewport.name}-busy-teams`, { targets: true });
+      await page.shot(`busy-${viewport.name}-workspace-teams`, { targets: true });
       // Machines: five; a long name wraps, none is cut.
       await page.goto("/plugins/oats/machines");
       const machines = await page.until(`(() => { const rows = [...document.querySelectorAll(${q("oats-machine-row")})]; return rows.length >= 5 ? JSON.stringify(rows.map((row) => row.firstElementChild.scrollWidth <= row.firstElementChild.clientWidth + 1)) : ""; })()`, 30);
       check(Boolean(machines) && JSON.parse(machines).every(Boolean), `${at} busy Workspace: the machines: no name is cut`, machines || (await page.evaluate(textOf(testId("oats-machines-page")))));
-      await page.shot(`workspace-${viewport.name}-busy-machines`, { targets: true });
+      await page.shot(`busy-${viewport.name}-workspace-machines`, { targets: true });
       // A soul with agents (the set's fullest: three): its agents stand before its capabilities and are in view without a scroll.
       await page.goto("/plugins/oats/souls/code-reviewer");
       const soul = await page.until(`(() => { const agents = document.querySelector(${q("oats-soul-agents")}); const capabilities = document.querySelector(${q("oats-soul-capabilities")}); const rows = document.querySelectorAll(${q("oats-soul-agent")}); if (!agents || !capabilities || rows.length < 2) return ""; return JSON.stringify({ rows: rows.length, before: Boolean(agents.compareDocumentPosition(capabilities) & Node.DOCUMENT_POSITION_FOLLOWING), inView: [...rows].every((row) => row.getBoundingClientRect().bottom <= innerHeight) }); })()`, 40);
       const fullest = soul ? JSON.parse(soul) : null;
       check(fullest !== null && fullest.before && fullest.inView, `${at} busy Workspace: a soul's ${fullest?.rows ?? "?"} agents stand before its capabilities and are in view without a scroll`, soul || (await page.evaluate(textOf(testId("oats-souls-page")))));
-      await page.shot(`workspace-${viewport.name}-busy-soul`, { targets: true });
+      await page.shot(`busy-${viewport.name}-workspace-soul`, { targets: true });
     },
   },
   {

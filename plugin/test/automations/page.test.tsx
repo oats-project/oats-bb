@@ -67,6 +67,20 @@ describe("the page's title, in bb's own header", () => {
     await waitFor(() => expect(seen.at(-1)).toEqual({ breadcrumbs: [{ label: "nightly-digest" }], windowTitle: "nightly-digest" }));
   });
 
+  it("what bb's header draws: the page's name alone on the tabs; on a row's page, the name, a slash and the automation's name as the place one is", async () => {
+    const header = async (subPath: string) => {
+      const app = await loadApp();
+      const panel = app.navPanels.find((candidate) => candidate.id === "automations")!;
+      return renderSlot<{ subPath: string }, Contract>({ ...panel, component: panel.experimental_headerTitle as never }, { subPath }, { rpc: handlers(), sidebarThreads: sidebarThreads() });
+    };
+    const tabs = await header("");
+    expect([(await tabs.findByTestId("oats-automations-title")).textContent, tabs.container.querySelector('[aria-current="page"]')]).toEqual(["Automations", null]);
+    resetApp();
+    const row = await header("schedules/oats-real/nightly-digest");
+    await waitFor(() => expect(row.getByTestId("oats-automations-title").textContent).toBe("Automations/nightly-digest"));
+    expect(row.container.querySelector('[aria-current="page"]')?.textContent).toBe("nightly-digest");
+  });
+
   it("the icon is bb's own for automations", async () => {
     const app = await loadApp();
     expect(app.navPanels.find((candidate) => candidate.id === "automations")!.icon).toBe("Repeat");

@@ -1299,6 +1299,27 @@ describe("pinned after the mutation run", () => {
     expect(within(view.getByRole("radiogroup", { name: "Result" })).getAllByRole("radio").map((radio) => [radio.textContent, radio.getAttribute("aria-checked"), radio.getAttribute("tabindex"), radio.className.includes("bg-accent")])).toEqual([["All", "false", "-1", false], ["Failed", "true", "0", true]]);
   });
 
+  it("Left and Right move the filter's choice, with the focus; any other key leaves it", () => {
+    const view = page();
+    const all = () => radios(view);
+    fireEvent.keyDown(all()[0]!, { key: "ArrowRight" });
+    expect([all().map((radio) => radio.getAttribute("aria-checked")).indexOf("true"), document.activeElement]).toEqual([1, all()[1]]);
+    fireEvent.keyDown(all()[1]!, { key: "a" });
+    expect(all().map((radio) => radio.getAttribute("aria-checked")).indexOf("true")).toBe(1);
+    fireEvent.keyDown(all()[1]!, { key: "ArrowLeft" });
+    fireEvent.keyDown(all()[0]!, { key: "ArrowLeft" });
+    expect(all().map((radio) => radio.getAttribute("aria-checked")).indexOf("true")).toBe(all().length - 1);
+  });
+
+  it("a time the page draws is a time for a machine too: its element carries the instant", () => {
+    // The recorded state after a failed poll: its notice says when.
+    const view = page({ trigger: ready(triggers("trigger-list-poll-failed.json")), statuses: STATUSES("trigger-status-poll-failed.json").statuses });
+    view.open("local/graph-watch");
+    const times = Array.from(view.getByTestId("oats-automation-detail").querySelectorAll("time")).filter((time) => time.closest('[data-testid="oats-run"]') === null);
+    expect(times.length).toBeGreaterThan(0);
+    for (const time of times) expect(Number.isNaN(Date.parse(time.getAttribute("datetime") ?? ""))).toBe(false);
+  });
+
   it("Escape in the search clears what is written, and does not leave the page; with nothing written it is the page's own Escape", () => {
     const view = page();
     const search = view.getByTestId("oats-search") as HTMLInputElement;

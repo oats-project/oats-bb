@@ -113,3 +113,24 @@ test("with every trigger's state refused while the lists stand, the marks are wh
   await calmSlot.findByTestId("oats-tree");
   expect(mark(calmRow)).toBeNull();
 });
+
+test("an agent asks by a question its bb thread waits on, too: the amber dot reads the thread bb lists for the agent, not the kernel's row alone", async () => {
+  // The recorded run of daily-review, made by an agent with a bb thread and NO claim of the kernel's; its thread waits on a person.
+  const quiet = fixtureAgents().find((agent) => agent.threadId !== null && agent.waiting === null && agent.running)!;
+  const list = schedules();
+  const made = { ...list, rows: list.rows.map((row) => (row.id === "local/daily-review" ? { ...row, recentRuns: row.recentRuns.map((run) => ({ ...run, instance: quiet.instance })) } : row)) };
+  const amber = async (pending: boolean) => {
+    const app = await loadApp();
+    const threads = sidebarThreads();
+    const slot = renderSlot<PluginThreadListProps, Contract>(app.threadLists[0]!, { activeThreadId: null, onNavigate: () => undefined } as PluginThreadListProps, { rpc: handlers({ automations: lists(calm(made), calm(triggers())) }), sidebarThreads: { ...threads, threads: threads.threads.map((thread) => (thread.id === quiet.threadId ? { ...thread, hasPendingInteraction: pending } : { ...thread, hasPendingInteraction: false })) } });
+    const row = await slot.findByTestId("oats-page-link-automations");
+    await slot.findByTestId("oats-tree");
+    await waitFor(() => expect(slot.inspection.rpcCalls.map((call) => call.method)).toContain("automations"));
+    return { row, slot };
+  };
+  const waits = await amber(true);
+  await waitFor(() => expect(mark(waits.row)?.getAttribute("aria-label")).toBe("Automations, needs you"));
+  resetApp();
+  const calmly = await amber(false);
+  expect(mark(calmly.row)).toBeNull();
+});

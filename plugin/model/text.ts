@@ -74,7 +74,9 @@ const NOT_BLOCK_TEXT = /(?![\n\t])[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069\
 /**
  * A person's own definition text shown back to them WHOLE, in one block that keeps its line breaks,
  * blank lines and indentation (`whitespace-pre-wrap`): a schedule's or a trigger's Prompt and Wake
- * message, as the Desktop draws them, and nothing else. It is the one named exception to the
+ * message, as the Desktop draws them; and ONE more text, an agent's context of a question of its
+ * board (app/board), which has passed the board's own filter first (model/board.ts `boardContext`:
+ * no credential shape, no refused character) and is read as the agent wrote it. Nothing else. It is the one named exception to the
  * one-line filter (the spec's author's decision of 2026-11-21): no cut at MAX_DISPLAY_LINE, and
  * nothing is withheld, since the text is the prompt the person wrote and must be read as written.
  * Never for a kernel's message or an agent's note: those are `shown()` and `refusalLines()`.

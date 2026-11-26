@@ -11,6 +11,7 @@
 // using it.
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import * as automations from "./app/automations";
+import * as board from "./app/board";
 import * as home from "./app/home";
 import * as lifecycle from "./app/lifecycle";
 import * as panel from "./app/panel";
@@ -27,5 +28,6 @@ export default definePluginApp((app) => {
   lifecycle.register(app);
   automations.register(app);
   panel.register(app);
+  board.register(app);
   patterns.register(app);
 });

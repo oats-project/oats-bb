@@ -219,6 +219,25 @@ specialist on 25 Nov 2026 (`app/mail/words.ts`).
 | Some of a team's conversations cannot be read | "Mail from <team>: N conversations can't be read" (their ids in a tooltip) | **<team>: N conversations can't be read** | No tooltip: a phone has no hover, and an id says nothing to a person. |
 | A failed read's act | Details, and the sheet's Refresh | **Retry** and Details | The plugin's word on every failed read; Refresh is the head's. |
 
+## The board: an agent's questions and facts
+
+| Thing | The Desktop says | The plugin says | Why |
+|---|---|---|---|
+| Where the board is | a strip over the instance's terminal (`packages/desktop/renderer/agent-board.mjs`), always in view | the panel's first tab, **Board**, which every agent's panel has; the panel does not open on it by itself: a question is reached by a press (the tab, the thread line's **Answer**, the home's card) | bb has no strip over a thread. A panel that chose its tab by itself, or drew a tab only where something stood behind it, could not be made sure on what bb does (it mounts a panel twice, and holds answers from earlier showings): a screen never moves under a reader. The thread's own line and the home's card say that an agent asks. |
+| Answering a question | a press puts `<id>: <option>` in the terminal's input, UNSENT; the person presses Enter | a press SENDS `<id>: <option>` to the agent's thread, and the option then reads **Sent.** | THE NAMED DIFFERENCE: bb has no way to put text in a thread's composer. The answer is built from the server's row at the press, through the one guarded send. |
+| A press that could not be an answer any more | (the text stays in the input: the person sees it) | **No longer asked. Nothing sent.** · **It waits on an approval. Nothing sent.** (once, under the options, in the warning tone) | A send cannot be taken back: the place says that nothing left. |
+| A question's place and age | "2 of 3", " · asked 5 min ago" | **2 of 3**, **5 min ago** (the instant in the title) | Little text: every age of the plugin is the age alone. |
+| A fact's age | "updated <time>" | **5 min ago** | The same. |
+| A context on its way | "Reading the context…" | **Reading…** | The plugin's one word for a read on its way; it stands in the Context fold. |
+| A fact's address | "<Name> says: <host>" on each fact, then the whole address, then "Open in browser" | **<Name> says**, once, on the Facts heading's line; each fact's address is its host alone, as text; a press shows the whole address; then **Open in browser** | Six facts with an address read alike six times (the worst case). The safety is kept: an address is the agent's text until a person asks for it, and it opens only on a second press. |
+| A fact's row | label, value, "updated <time>", its sparkline, on one line | two lines, the same for every fact: the **value** (whole; a long one wraps) with its history line after it, the age and × at the row's end; under it, small, the **label** and the address's host. Drawn by the plugin, in bb's type and spacing, inside bb's own list | bb's own row keeps one line and cuts what does not fit: with a value of eighty characters the number a fact is for was cut. One order for every fact, so the eye has a column to follow. |
+| The facts past the third | "N more" / "Fold", the Desktop's own | bb's own list toggle: **N more** / **Show less** | bb's own part where one fits; its words are bb's. |
+| Hidden facts | "N hidden · show" | **N hidden · show** | The same. |
+| What cannot be shown | "History could not be read.", "The context could not be read.", "This OATS sends no history.", "This agent's board could not be read.", "N entries of this agent's board could not be shown." (and five more for a detail in another shape, a kernel without contexts, an agent with no board now, a question with no context) | those five, as quiet lines, each only in its place; the warning tone only where a read FAILED. A detail in a shape that cannot be read says the "could not be read" line; a Context fold is drawn only where the agent sent one | The Desktop's words, and fewer of them. |
+| An agent with no question and no fact | (the strip is not drawn) | **No questions.** on its Board tab, alone | Every agent's panel has the four tabs: a tab with nothing behind it says so, in two words. An agent with facts and no question shows its facts and no line. |
+| An OATS that sends no board | (the strip is not drawn) | **This OATS sends no board.** | The same: the tab is there, so it says why it is empty. |
+| The palette | (none) | one command, **Board** | bb takes a plugin's commands once, with fixed titles: nothing per question. |
+
 ## The lifecycle dialogs: Stop, Start, Restart, Retire
 
 The sentences they were cut from are the Desktop's (`app/lifecycle/words.ts` names each source).

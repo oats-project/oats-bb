@@ -53,14 +53,14 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
    * root, from the roster's own row of it, never from the caller.
    */
   const checked = async ({ soul, name, task, harness, model, relation }: Choices): Promise<HostChoices> => {
-    if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`);
+    if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`, "soul-not-listed");
     if (harness !== undefined) {
       const named = checkHarness(harness, await harnessesOf(core));
-      if (!named.ok) throw invalid(named.error.message);
+      if (!named.ok) throw invalid(named.error.message, "harness-not-declared");
     }
     if (model !== undefined) {
       const named = checkModel(model);
-      if (!named.ok) throw invalid(named.error.message);
+      if (!named.ok) throw invalid(named.error.message, "spawn-input");
     }
     let anchor: HostChoices["relation"];
     if (relation !== undefined) {
@@ -88,13 +88,15 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       if (problem !== null) throw refusal(problem);
       return { facts, revision };
     },
-    async spawn({ key, revision, ...input }) {
+    async spawn({ key, revision, ...input }, context) {
+      // What the plugin checks and reads before it asks the kernel to spawn: `core.act` runs it, and logs what it refuses as a hold (server/act-log.ts).
+      const guards = async () => {
       const choices = await checked(input);
       // One key is one intent: the same choices, and the same decision when the caller names one.
       // Kept as a digest: a task may be 100 000 characters, and a caller has no login.
       const of = await digest(JSON.stringify([choices, revision ?? null]));
       let decision = spawns.get(key);
-      if (decision && decision.of !== of) throw invalid("this key already belongs to another spawn: a new spawn needs a new key");
+      if (decision && decision.of !== of) throw invalid("this key already belongs to another spawn: a new spawn needs a new key", "key-reused");
       if (!decision) {
         // The kernel binds an idempotency key to the decision it confirms: the one the person saw
         // (`revision`, a preview's), else the decision as it is now, read first.
@@ -102,17 +104,19 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         if (spawns.size >= 200) spawns.delete(spawns.keys().next().value as string);
         spawns.set(key, decision);
       }
-      // An act is not ended by its caller going away: only by the plugin's own end.
+      return { ...choices, key, revision: decision.revision };
+      };
+      // An act is not ended by its caller going away: only by the plugin's own end (`core.act`).
       let spawned: Value<"spawn">;
       try {
-        spawned = await core.call("spawn", { ...choices, key, revision: decision.revision }, HOST_TIMEOUT.long, core.signal);
+        spawned = (await core.act("spawn", { soul: input.soul, name: input.name ?? null }, context, HOST_TIMEOUT.long, guards, core.rereadSoon)).value;
       } catch (error) {
         // The decision moved and the kernel created nothing: there is nothing to replay under this
         // key, so the next call with it reads the decision again instead of sending the stale one.
+        // (The guards run inside `core.act` too: none of their reads can answer this code: the souls, the provider and
+        // the roster have no decision, and the preview read there is the one that MAKES the decision.)
         if (error instanceof Error && refusedWith.get(error) === "E_DECISION_STALE") spawns.delete(key);
         throw error;
-      } finally {
-        core.rereadSoon();
       }
       return { instance: spawned.instance, threadId: await core.threadOf(spawned.instance, spawned.threadId, "Spawned") };
     },

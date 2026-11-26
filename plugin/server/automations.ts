@@ -87,7 +87,7 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     // A list that could not be read names nothing: the act is refused with why the list could not be read, never as "no such row".
     if (!answer.ok) throw refusal({ code: answer.code, message: answer.message });
     const row = answer.list.rows.find((entry) => entry.id === id || entry.id === `local/${id}`);
-    if (row === undefined) throw invalid(`"${id}" is not a ${kind} of this OATS deployment's current list`);
+    if (row === undefined) throw invalid(`"${id}" is not a ${kind} of this OATS deployment's current list`, "row-gone");
     return row;
   };
   /** After an act: the lists are read again for the next client, and so is the roster (a run launches an agent). */
@@ -96,47 +96,64 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     if (held !== null) held.stale = true;
     core.rereadSoon();
   };
-  /** An act is not ended by its caller going away: only by the plugin's own end. */
-  const act = async <Value>(run: () => Promise<Value>): Promise<Value> => {
-    try {
-      return await run();
-    } finally {
-      changed();
-    }
+  // An act (`core.act`: logged; not ended by its caller going away, only by the plugin's own end): its guard is the
+  // row it names, read now; once the kernel was asked, the lists are read again (`changed`).
+  /**
+   * Who an act on a row is about, in the log: the id the caller gave until the guard has found the row, then the ROW's
+   * own id (the kernel is asked with that one: `x` is found as `local/x`), so one row is logged under one name.
+   */
+  const naming = (kind: AutomationKind, id: string) => {
+    let found = id;
+    return {
+      subject: () => ({ automation: `${kind}:${found}` }),
+      row: async () => {
+        const row = await rowOf(kind, id);
+        found = row.id;
+        return row;
+      },
+    };
   };
 
   return {
     automations: () => lists(),
 
-    async automationEnable({ kind, id, enabled }) {
-      const row = await rowOf(kind, id);
-      return act(() => core.call("automationEnable", { kind, id: row.id, enabled }, HOST_TIMEOUT.act, core.signal));
+    async automationEnable({ kind, id, enabled }, context) {
+      const named = naming(kind, id);
+      return (await core.act("automationEnable", named.subject, context, HOST_TIMEOUT.act, async () => ({ kind, id: (await named.row()).id, enabled }), changed)).value;
     },
-    async scheduleRun({ id }) {
-      const row = await rowOf("schedule", id);
-      return act(() => core.call("scheduleRun", { id: row.id }, HOST_TIMEOUT.long, core.signal));
+    async scheduleRun({ id }, context) {
+      const named = naming("schedule", id);
+      return (await core.act("scheduleRun", named.subject, context, HOST_TIMEOUT.long, async () => ({ id: (await named.row()).id }), changed)).value;
     },
     async automationTest({ kind, id, runSource }, context) {
-      const row = await rowOf(kind, id);
-      const source = row.on?.source ?? null;
-      // Only a trigger on a capability's source has a command a test could run, and only a confirmed press runs it.
-      if (runSource === true && (kind !== "trigger" || source === null || source === PULL_REQUEST)) throw invalid(`${row.id} has no capability source for a test to run`);
-      // A test changes nothing: it is ended with its caller.
-      return core.call("automationTest", { kind, id: row.id, source, runSource: runSource === true }, HOST_TIMEOUT.preview, context.experimental_signal);
+      // What a test is asked with, read now: the row it names, and its source.
+      const named = naming(kind, id);
+      const guards = async (run: boolean) => {
+        const row = await named.row();
+        const source = row.on?.source ?? null;
+        // Only a trigger on a capability's source has a command a test could run, and only a confirmed press runs it.
+        if (run && (kind !== "trigger" || source === null || source === PULL_REQUEST)) throw invalid(`${row.id} has no capability source for a test to run`, "no-source");
+        return { kind, id: row.id, source, runSource: run };
+      };
+      // A test changes nothing: it is ended with its caller. One that RUNS the source's command (a confirmed press) is an
+      // act all the same: it is logged, with its hold where the guard refuses (server/act-log.ts ACTS_BY_ARGUMENT), and
+      // `core.call` would refuse it.
+      if (runSource === true) return (await core.act("automationTest", named.subject, context, HOST_TIMEOUT.preview, () => guards(true), undefined, context.experimental_signal)).value;
+      return core.call("automationTest", await guards(false), HOST_TIMEOUT.preview, context.experimental_signal);
     },
-    async automationDescribe({ kind, id, description }) {
-      const row = await rowOf(kind, id);
-      return act(() => core.call("automationDescribe", { kind, id: row.id, description }, HOST_TIMEOUT.act, core.signal));
+    async automationDescribe({ kind, id, description }, context) {
+      const named = naming(kind, id);
+      return (await core.act("automationDescribe", named.subject, context, HOST_TIMEOUT.act, async () => ({ kind, id: (await named.row()).id, description }), changed)).value;
     },
-    async scheduleRemove({ id }) {
-      const row = await rowOf("schedule", id);
-      return act(() => core.call("scheduleRemove", { id: row.id }, HOST_TIMEOUT.act, core.signal));
+    async scheduleRemove({ id }, context) {
+      const named = naming("schedule", id);
+      return (await core.act("scheduleRemove", named.subject, context, HOST_TIMEOUT.act, async () => ({ id: (await named.row()).id }), changed)).value;
     },
-    async scheduleReconcile({ id }) {
-      const row = await rowOf("schedule", id);
-      return act(() => core.call("scheduleReconcile", { id: row.id }, HOST_TIMEOUT.act, core.signal));
+    async scheduleReconcile({ id }, context) {
+      const named = naming("schedule", id);
+      return (await core.act("scheduleReconcile", named.subject, context, HOST_TIMEOUT.act, async () => ({ id: (await named.row()).id }), changed)).value;
     },
-    schedulerEnable: () => act(() => core.call("schedulerEnable", {}, HOST_TIMEOUT.act, core.signal)),
+    schedulerEnable: async (_input, context) => (await core.act("schedulerEnable", { scheduler: true }, context, HOST_TIMEOUT.act, () => ({}), changed)).value,
 
     async triggerStatus({ id }, context) {
       const row = await rowOf("trigger", id);

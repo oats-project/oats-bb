@@ -71,6 +71,7 @@ beforeEach(async () => {
     experimental_watch: () => ({ dispose: async () => undefined }),
   });
   hosts = [makeHostResponse({ id: "host_falcon", name: "falcon" })];
+  born = Date.now();
   projects = [{ id: "proj_release", sources: [{ hostId: "host_falcon", path: join(fake.deployment, "agents", "oats-maintainer", "instances", "release-070-maintainer") }] }];
   await load();
 });
@@ -79,6 +80,15 @@ afterEach(async () => {
   await hostEntry.experimental_dispose();
   await fake.remove();
 });
+
+/**
+ * A publish's token (server/core.ts `token`): an instant written as ISO text, one per publish, each later than the
+ * last, and never before the read behind it started: so never before this test's server was made (`born`, read
+ * before it: a floor the code promises, not two readings held equal).
+ */
+const TOKEN = expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+const tokenOf = (signal: unknown): string => (signal as { payload: { at: string } }).payload.at;
+let born = 0;
 
 describe("snapshot", () => {
   it("answers the deployment and its agents, read once for every client", async () => {
@@ -91,7 +101,11 @@ describe("snapshot", () => {
     const again = await Promise.all([rpc("snapshot"), rpc("snapshot"), rpc("snapshot")]);
     expect(again.every((snapshot) => snapshot.at === first.at)).toBe(true);
     expect(await verbs()).toEqual(["status"]);
-    expect(server.harness.realtimeSignals).toEqual([{ channel: REALTIME_CHANGED, payload: { at: first.at } }]);
+    // ONE publish, with its token. (Not `first.at`: the token is the read's start on the bare clock and the roster's
+    // `at` is the stamp, two readings of the clock a line apart in server/core.ts: they differ when a millisecond
+    // turns between them, and a test that held them equal failed one run in some.)
+    expect(server.harness.realtimeSignals).toEqual([{ channel: REALTIME_CHANGED, payload: { at: TOKEN } }]);
+    expect(Date.parse(tokenOf(server.harness.realtimeSignals[0]))).toBeGreaterThanOrEqual(born); // the read's start, not a count from nothing
     // The watch on the event log was asserted on the machine that holds the homes.
     await expect.poll(() => server.harness.experimental_hostRpcCalls.map((call) => call.method)).toEqual(["discover", "status", "watch"]);
     expect(server.harness.experimental_hostRpcCalls.every((call) => call.hostId === "host_falcon")).toBe(true);
@@ -244,7 +258,9 @@ describe("snapshot", () => {
     await expect.poll(() => server.harness.realtimeSignals.length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
     const next = await rpc("snapshot");
     expect(next.agents).toEqual([]);
-    expect(server.harness.realtimeSignals[1]).toEqual({ channel: REALTIME_CHANGED, payload: { at: next.at } });
+    // The second publish, with a token of its own, later than the first's (a client acts once per token).
+    expect(server.harness.realtimeSignals[1]).toEqual({ channel: REALTIME_CHANGED, payload: { at: TOKEN } });
+    expect(tokenOf(server.harness.realtimeSignals[1]) > tokenOf(server.harness.realtimeSignals[0])).toBe(true);
   }, 20_000);
 
   it("rereads when bb creates or deletes a thread", async () => {
@@ -593,9 +609,14 @@ describe("the event path", () => {
     const after = await rpc<Shown>("snapshot");
     expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(receipt.endedAt)); // the roster the window then fetches was read after the act's end
     expect(after.agents).toEqual(first.agents); // and it says nothing new: it was published for the act alone
-    // A token no client has acted on (the app acts once per token), later than the act's end.
+    // A token no client has acted on (the app acts once per token), LATER THAN EVERY TOKEN BEFORE IT: that is what a
+    // token promises (`token()`: each later than the last).
+    // (NOT held against the act's end, neither "later" nor "not before": `endedAt` is the STAMP, which runs ahead of
+    // the bare clock whenever two stamps fall in one millisecond, and a token is the bare clock: the token of the
+    // publish an act is owed can be a millisecond BEFORE that act's `endedAt`. The test of the clock that stands
+    // still, below, shows it. What IS promised against the act's end is the roster's `at`, held three lines above.)
     expect(earlier.has(tokens()[0]!) || tokens()[0] === first.at).toBe(false);
-    expect(Date.parse(tokens()[0]!)).toBeGreaterThan(Date.parse(receipt.endedAt));
+    expect([...earlier].every((token) => tokens()[0]! > token)).toBe(true);
     // A read that no act asked for (a person's Retry), saying the same: read, and not published.
     const again = await rpc<{ at: string }>("refresh");
     expect(Date.parse(again.at)).toBeGreaterThan(Date.parse(after.at));
@@ -690,8 +711,16 @@ describe("the event path", () => {
       expect(Date.parse(receipt.endedAt)).toBeGreaterThanOrEqual(frozen); // the act ended at the frozen instant (or a stamp after it)
       expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(receipt.endedAt)); // and the read after it is LATER, though the clock never moved
       // A second act and its read, still in that millisecond: later again, each in turn.
+      const published = server.harness.realtimeSignals.length;
       const again = await rpc<{ endedAt: string }>("start", { instance: "weekly-digest-helper" });
       expect(Date.parse(again.endedAt)).toBeGreaterThan(Date.parse(after.at));
+      // The roster published for THAT act is later than its end too. Its TOKEN is not held against the act's end: here
+      // it is the millisecond BEFORE it (the stamp is two steps ahead of the clock that stands still, the token one):
+      // a token is ordered among tokens, a stamp among stamps, and the two are never compared (app/store.ts).
+      await expect.poll(() => server.harness.realtimeSignals.length, { timeout: 15_000 }).toBeGreaterThan(published);
+      const owed = await rpc<Shown>("snapshot");
+      expect(Date.parse(owed.at)).toBeGreaterThan(Date.parse(again.endedAt));
+      expect(tokenOf(server.harness.realtimeSignals.at(-1)) > tokenOf(server.harness.realtimeSignals[published - 1])).toBe(true);
     } finally {
       clock.mockRestore();
     }

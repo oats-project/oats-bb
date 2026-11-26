@@ -250,6 +250,8 @@ export default [
     name: "mail: the busy agent's full page of fifty: the list's head and its end, a message from the middle and the way back, the long report, the longest subject",
     run: async ({ page, at, viewport, check }) => {
       const note = (what, measured) => console.log(`NOTE ${at} busy, ${what}: ${measured}`);
+      // What this scene does NOT check, said in every run's log too: the set does not hold it (the head of this file).
+      for (const unchecked of ["a long sender's alias (the fifty are from one sender, of eleven characters)", 'an older page ("Older" under the fifty)', "the forms of an age (the fifty were sent within one morning)"]) note("not checked: the set does not hold it", unchecked);
       const chat = JSON.parse(readFileSync(new URL("../../test/fixtures/busy/chat.json", import.meta.url), "utf8"));
       const answer = JSON.parse(readFileSync(new URL("../../test/fixtures/busy/mail.json", import.meta.url), "utf8")).result.result.mail;
       const received = answer.messages.filter((message) => message.direction === "received");

@@ -242,6 +242,15 @@ describe("a preview that is no decision a spawn could apply says why, with the c
     expect(preview.value.facts.modules).toBeNull();
     expect(preview.value.facts.resolved).toEqual({ harness: null, model: null });
     expect(preview.value.facts.facts.map((fact) => fact.label)).not.toContain("Harness");
+    expect(preview.value.facts.warnings).toEqual([]);
+    // (The team: the recorded answer's `defaultTeam` is still read; the unreadable list of the others adds nothing.)
+    expect(preview.value.facts.facts.filter((fact) => fact.label === "Team").map((fact) => fact.parts.map((part) => part.text).join(""))).toEqual(["oats · default"]);
+    // A LIST of warnings whose entries are no sentences (the kernel's other answers carry warnings as objects): only
+    // the sentences are drawn, and nothing throws.
+    Object.assign(document.result, { warnings: [{ code: "hook-event-unsupported", message: "m" }, null, 5, ["a", "b"], true, { toString: 1 }, "", "one real sentence\nits second line"] });
+    await fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });
+    const listed = await oats.spawnPreview({ soul: "oats-developer", name: "x-developer", task: "t" }, context());
+    expect(listed).toMatchObject({ ok: true, value: { facts: { warnings: [["one real sentence", "its second line"]] } } });
     // And what it DOES read is still held: a preview with no decision is no answer.
     delete document.result.decision;
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });

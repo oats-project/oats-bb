@@ -135,7 +135,7 @@ const text = z.string().nullish();
  * Of the kernel's preview, only what this file reads: the decision's revision (what a spawn applies) and the three
  * things that make it no decision a spawn could apply. Everything the form's column draws (the modules, the teams,
  * the harness and its model, the warnings) is read from the document itself by `formFacts`, which holds each to its
- * own shape and draws nothing it cannot read: this schema does not parse them.
+ * own shape, a warning to a sentence, and draws nothing it cannot read: this schema does not parse them.
  */
 const preview = z.looseObject({
   decision: z.looseObject({ revision: z.string().min(1) }),

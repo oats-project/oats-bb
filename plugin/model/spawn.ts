@@ -155,7 +155,10 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
     ];
     if (text(policy.consentSource) !== null) prompts.push({ label: "Prompt consent source", text: policy.consentSource as string, mono: true });
   }
-  const warnings = list(data.warnings).map((warning) => String(warning).split("\n"));
+  // Only the kernel's sentences: an entry that is no text (another shape of warning, a number, nothing) is not drawn.
+  const warnings = list(data.warnings)
+    .filter((warning): warning is string => typeof warning === "string" && warning !== "")
+    .map((warning) => warning.split("\n"));
   return { identity, facts, prompts, warnings, modules: previewModules(data.modules), resolved: { harness, model } };
 }
 /**

@@ -609,10 +609,14 @@ describe("the event path", () => {
     const after = await rpc<Shown>("snapshot");
     expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(receipt.endedAt)); // the roster the window then fetches was read after the act's end
     expect(after.agents).toEqual(first.agents); // and it says nothing new: it was published for the act alone
-    // A token no client has acted on (the app acts once per token). (Not "later than the act's end": that is promised
-    // of the roster's `at`, the stamp, held three lines above; a token is the bare clock, and the read an act is owed
-    // can start in the millisecond the act ended: the two are then the same instant.)
+    // A token no client has acted on (the app acts once per token), LATER THAN EVERY TOKEN BEFORE IT: that is what a
+    // token promises (`token()`: each later than the last).
+    // (NOT held against the act's end, neither "later" nor "not before": `endedAt` is the STAMP, which runs ahead of
+    // the bare clock whenever two stamps fall in one millisecond, and a token is the bare clock: the token of the
+    // publish an act is owed can be a millisecond BEFORE that act's `endedAt`. The test of the clock that stands
+    // still, below, shows it. What IS promised against the act's end is the roster's `at`, held three lines above.)
     expect(earlier.has(tokens()[0]!) || tokens()[0] === first.at).toBe(false);
+    expect([...earlier].every((token) => tokens()[0]! > token)).toBe(true);
     // A read that no act asked for (a person's Retry), saying the same: read, and not published.
     const again = await rpc<{ at: string }>("refresh");
     expect(Date.parse(again.at)).toBeGreaterThan(Date.parse(after.at));
@@ -707,8 +711,16 @@ describe("the event path", () => {
       expect(Date.parse(receipt.endedAt)).toBeGreaterThanOrEqual(frozen); // the act ended at the frozen instant (or a stamp after it)
       expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(receipt.endedAt)); // and the read after it is LATER, though the clock never moved
       // A second act and its read, still in that millisecond: later again, each in turn.
+      const published = server.harness.realtimeSignals.length;
       const again = await rpc<{ endedAt: string }>("start", { instance: "weekly-digest-helper" });
       expect(Date.parse(again.endedAt)).toBeGreaterThan(Date.parse(after.at));
+      // The roster published for THAT act is later than its end too. Its TOKEN is not held against the act's end: here
+      // it is the millisecond BEFORE it (the stamp is two steps ahead of the clock that stands still, the token one):
+      // a token is ordered among tokens, a stamp among stamps, and the two are never compared (app/store.ts).
+      await expect.poll(() => server.harness.realtimeSignals.length, { timeout: 15_000 }).toBeGreaterThan(published);
+      const owed = await rpc<Shown>("snapshot");
+      expect(Date.parse(owed.at)).toBeGreaterThan(Date.parse(again.endedAt));
+      expect(tokenOf(server.harness.realtimeSignals.at(-1)) > tokenOf(server.harness.realtimeSignals[published - 1])).toBe(true);
     } finally {
       clock.mockRestore();
     }

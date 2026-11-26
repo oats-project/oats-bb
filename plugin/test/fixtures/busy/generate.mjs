@@ -73,20 +73,22 @@ const later = (time, minutes) => new Date(Date.parse(time) + minutes * 60_000).t
 const QUESTION = ["The migration is ready to run against production.", "It rewrites 48 000 invoices and cannot be undone once the old table is dropped.", "A dry run on the copy of last night took 41 minutes and changed nothing it should not.", "Run it now, wait for the Sunday window, or stop here?"].join("\n");
 // The busy chat's board: twelve facts [label, value] and nine questions (the fourth is four lines long).
 // (The recorded facts are two, taken in turn: one with a link, one counted "failing": the made-up labels follow them.)
-const BOARD_FACTS = [["Pull request", "#1842"], ["Tests", "17"], ["Branch", "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-its-three-transitive-pins-and-the-date-parser-and-the-template-engine-in-all-fourteen-services"], ["Checks", "3"], ["Build", "#20418"], ["Advisories", "9"], ["Reviewer", "release-notes-drafting-helper"], ["Lockfile checks", "14"], ["Estimated time left for the whole upgrade across every service", "about three working days"], ["End-to-end tests across every service and both mobile clients", "41"], ["Blocked on", "the payments team's answer"], ["Audits", "2"]];
-const BOARD_LINK = "https://code-review.payments-and-billing-platform.internal.example.invalid/dependency-audit/pull/1842";
+const BOARD_FACTS = [["Pull request", "#1842"], ["Tests", "17"], ["Branch", "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-three-pins"], ["Checks", "3"], ["Build", "#20418"], ["Advisories", "9"], ["Reviewer", "release-notes-drafting-helper"], ["Lockfile checks", "14"], ["Estimated time left for the whole upgrade across every service", "about three working days"], ["Slowest checkout request in the end-to-end run", "1840"], ["Blocked on", "the payments team's answer on the idempotency key, due before Friday's freeze"], ["Audits", "2"]];
+// The board's texts are AT THE KERNEL's OWN BOUNDS, not past them: an option of 60 characters, a question of 200, a
+// value of 80, a unit of 16 (the board's own contract).
+const BOARD_LINK = "https://dependency-audit-preview-1842-payments-and-billing-platform-staging-eu-central.code-review.example.invalid/pull/1842";
 const BOARD_OPTIONS = [
-  "Upgrade now: the payment client moves a major version in this pass, with the idempotency key stored beside each payment attempt",
-  "Pin it until the release: the two advisories stay open for three more weeks, with a note in the audit of why and until when",
-  "Upgrade behind a flag: both versions ship, the new one for one region first, and the old one is removed once a week has passed clean",
-  "Hand it to the payments team: this agent stops at the lockfiles and opens an issue for them with everything it found so far",
+  ["Upgrade the payment client now, with the key stored per try", "Pin it until the release, with a note of why and until when", "Upgrade behind a flag, one region first, the old one a week", "Hand it to the payments team with what this agent has found"],
+  ["One pull request per service: fourteen, each small to read", "One for all fourteen: a single review, a single revert", "One per team that owns services: four, by who must approve", "Lockfiles first in one, then one per major version moved"],
+  ["Accept the advisory with a note and a check of every path", "Replace the library with the one the build tooling uses", "Turn the import off until a fix is published upstream", "Ask the customer's own security contact what they accept"],
 ];
 const BOARD_QUESTIONS = [
   "Which base branch?",
   "Upgrade the payment client across a major version now, or pin it until the release?",
-  // (200 characters, one line.)
-  "The image library's fixed release changes its licence to one that asks for the source of a distributed work that links to it; the mobile clients link to it and are distributed: who signs that off, and when?",
-  QUESTION,
+  // (200 characters, one line: as long as a question may be.)
+  "The image library's fixed release changes its licence to one that asks for the sources of any distributed work linking to it; the mobile clients link to it and are distributed: who signs it off, when?",
+  // (Four lines, within the 200 characters a board's question may have.)
+  ["The migration is ready to run on production.", "It rewrites 48 000 invoices and cannot be undone.", "A dry run took 41 minutes and changed nothing else.", "Run it now, wait for Sunday, or stop here?"].join("\n"),
   "Drop support for the old runtime in this pass?",
   "Open one pull request per service, or one for all fourteen?",
   "The advisory on the archive reader has no fix yet: accept it with a note, or replace the library?",
@@ -236,14 +238,17 @@ export function build() {
         const [label, value] = BOARD_FACTS[f];
         // (A link stays where the recorded fact has one; the first is on a long host.)
         const link = typeof from.link === "string" && f === 0 ? [[["link"], BOARD_LINK]] : [];
-        const fact = vary(from, [], [[["key"], `${from.key}-${f + 1}`], [["label"], label], [["value"], value], [["at"], later(from.at, f)], ...link]);
+        // (A unit stays where the recorded fact has one; one is as long as a unit may be.)
+        const unit = typeof from.unit === "string" && f === 9 ? [[["unit"], "milliseconds p95"]] : [];
+        const fact = vary(from, [], [[["key"], `${from.key}-${f + 1}`], [["label"], label], [["value"], value], [["at"], later(from.at, f)], ...link, ...unit]);
         made.facts.push(fact);
         return fact.row;
       });
       const questions = BOARD_QUESTIONS.map((question, q) => {
         const from = board.questions[0];
-        // (The second question has FOUR LONG options; the others keep the recorded two.)
-        const options = q === 1 ? [[["options"], BOARD_OPTIONS]] : [];
+        // (Three questions have FOUR options, each as long as an option may be; the others keep the recorded two.)
+        const four = { 1: 0, 5: 1, 6: 2 }[q];
+        const options = four === undefined ? [] : [[["options"], BOARD_OPTIONS[four]]];
         const asked = vary(from, [], [[["id"], `q${q + 1}`], [["question"], question], [["since"], later(from.since, q * 11)], ...options]);
         made.questions.push(asked);
         return asked.row;

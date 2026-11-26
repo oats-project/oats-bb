@@ -93,7 +93,7 @@ describe("the busy set", () => {
   it("what is varied is a name, an id, a time, a relation or a text, and nothing else: no row is shaped", () => {
     const ALLOWED: Record<string, string[]> = {
       agents: ["agent", "parentInstance", "relation", "relativeTo", "attributedHuman", "createdAt", "waitingOnYou.since", "waitingOnYou.message", "board", "identity"],
-      facts: ["key", "label", "value", "at", "link"],
+      facts: ["key", "label", "value", "at", "link", "unit"],
       questions: ["id", "question", "since", "options"],
       mail: ["result.result.mail.messages", "result.result.mail.conversations"],
       messages: ["subject", "threadTitle", "createdAt", "body"],
@@ -290,13 +290,18 @@ describe("the busy set", () => {
     const boards = raws.filter((row) => row.board);
     expect(boards.map((row) => [row.backend, row.board!.facts.length, new Set(row.board!.facts.map((fact) => fact.key)).size, row.board!.questions.length, new Set(row.board!.questions.map((question) => question.id)).size, row.board!.questions.filter((question) => question.question.split("\n").length === 4).length])).toEqual([["bb", 12, 12, 9, 9, 1]]);
     expect(boards[0]!.waitingOnYou?.message).toBe(boards[0]!.board!.questions[0]!.question);
-    // THE BOARD's long things: a question of 200 characters on one line; one question with FOUR long options; a fact's link on a long host; a long value.
-    const fullBoard = boards[0]!.board! as unknown as { facts: { value: string; link: string | null }[]; questions: { question: string; options: string[] }[] };
-    expect(fullBoard.questions.filter((question) => question.question.length >= 200 && !question.question.includes("\n")).length).toBeGreaterThanOrEqual(1);
-    expect(fullBoard.questions.map((question) => question.options.length).sort()).toEqual([2, 2, 2, 2, 2, 2, 2, 2, 4]);
-    expect(fullBoard.questions.find((question) => question.options.length === 4)!.options.every((option) => option.length >= 100)).toBe(true);
-    expect(fullBoard.facts.filter((fact) => fact.link !== null && new URL(fact.link).hostname.length >= 50).length).toBeGreaterThanOrEqual(1);
-    expect(Math.max(...fullBoard.facts.map((fact) => fact.value.length))).toBeGreaterThanOrEqual(150); // the claim says the oldest question, as the kernel's does
+    // THE BOARD's texts AT THE KERNEL's BOUNDS, never past them: a question of 200 characters on one line (and one of four
+    // lines); three questions with FOUR options of up to 60; a value of 80 with spaces (it wraps) and one with none; a
+    // unit of 16; a link on a host of a hundred characters.
+    const fullBoard = boards[0]!.board! as unknown as { facts: { value: string; unit: string | null; link: string | null }[]; questions: { question: string; options: string[] }[] };
+    expect([Math.max(...fullBoard.questions.map((question) => question.question.length)), fullBoard.questions.filter((question) => question.question.length === 200 && !question.question.includes("\n")).length]).toEqual([200, 1]);
+    expect(fullBoard.questions.map((question) => question.options.length).sort()).toEqual([2, 2, 2, 2, 2, 2, 4, 4, 4]);
+    const options = fullBoard.questions.flatMap((question) => question.options);
+    expect([Math.max(...options.map((option) => option.length)) <= 60, options.filter((option) => option.length >= 53).length >= 12]).toEqual([true, true]);
+    const values = fullBoard.facts.map((fact) => fact.value);
+    expect([Math.max(...values.map((value) => value.length)) <= 80, values.some((value) => value.length >= 76 && value.includes(" ")), values.some((value) => value.length >= 76 && !value.includes(" "))]).toEqual([true, true, true]);
+    expect([Math.max(...fullBoard.facts.map((fact) => (fact.unit ?? "").length)), fullBoard.facts.filter((fact) => fact.unit === "milliseconds p95").length]).toEqual([16, 1]);
+    expect(fullBoard.facts.filter((fact) => fact.link !== null && new URL(fact.link).hostname.length >= 100).length).toBe(1);
     const chat = files["chat.json"] as { agent: string; turns: { you: string; agent: string }[] };
     expect(chat.agent).toBe(boards[0]!.instance);
     // Its MAIL: the recorded answer of the mail read, for this agent, its received messages multiplied to a FULL page;

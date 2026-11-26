@@ -573,7 +573,7 @@
         "label": "Pull request",
         "value": "#1842",
         "unit": null,
-        "link": "https://code-review.payments-and-billing-platform.internal.example.invalid/dependency-audit/pull/1842",
+        "link": "https://dependency-audit-preview-1842-payments-and-billing-platform-staging-eu-central.code-review.example.invalid/pull/1842",
         "at": "2026-11-23T18:00:58.348Z"
        },
        {
@@ -587,7 +587,7 @@
        {
         "key": "pr-3",
         "label": "Branch",
-        "value": "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-its-three-transitive-pins-and-the-date-parser-and-the-template-engine-in-all-fourteen-services",
+        "value": "agents/nightly-dependency-audit-probe/upgrade-the-payment-client-and-three-pins",
         "unit": null,
         "link": "https://github.com/oats-project/oats-bb/pull/42",
         "at": "2026-11-23T18:02:58.348Z"
@@ -642,16 +642,16 @@
        },
        {
         "key": "tests-10",
-        "label": "End-to-end tests across every service and both mobile clients",
-        "value": "41",
-        "unit": "failing",
+        "label": "Slowest checkout request in the end-to-end run",
+        "value": "1840",
+        "unit": "milliseconds p95",
         "link": null,
         "at": "2026-11-23T18:09:58.766Z"
        },
        {
         "key": "pr-11",
         "label": "Blocked on",
-        "value": "the payments team's answer",
+        "value": "the payments team's answer on the idempotency key, due before Friday's freeze",
         "unit": null,
         "link": "https://github.com/oats-project/oats-bb/pull/42",
         "at": "2026-11-23T18:10:58.348Z"
@@ -680,17 +680,17 @@
         "id": "q2",
         "question": "Upgrade the payment client across a major version now, or pin it until the release?",
         "options": [
-         "Upgrade now: the payment client moves a major version in this pass, with the idempotency key stored beside each payment attempt",
-         "Pin it until the release: the two advisories stay open for three more weeks, with a note in the audit of why and until when",
-         "Upgrade behind a flag: both versions ship, the new one for one region first, and the old one is removed once a week has passed clean",
-         "Hand it to the payments team: this agent stops at the lockfiles and opens an issue for them with everything it found so far"
+         "Upgrade the payment client now, with the key stored per try",
+         "Pin it until the release, with a note of why and until when",
+         "Upgrade behind a flag, one region first, the old one a week",
+         "Hand it to the payments team with what this agent has found"
         ],
         "hasContext": false,
         "since": "2026-11-23T18:12:45.724Z"
        },
        {
         "id": "q3",
-        "question": "The image library's fixed release changes its licence to one that asks for the source of a distributed work that links to it; the mobile clients link to it and are distributed: who signs that off, and when?",
+        "question": "The image library's fixed release changes its licence to one that asks for the sources of any distributed work linking to it; the mobile clients link to it and are distributed: who signs it off, when?",
         "options": [
          "main: the default",
          "release: the 0.1 line"
@@ -700,7 +700,7 @@
        },
        {
         "id": "q4",
-        "question": "The migration is ready to run against production.\nIt rewrites 48 000 invoices and cannot be undone once the old table is dropped.\nA dry run on the copy of last night took 41 minutes and changed nothing it should not.\nRun it now, wait for the Sunday window, or stop here?",
+        "question": "The migration is ready to run on production.\nIt rewrites 48 000 invoices and cannot be undone.\nA dry run took 41 minutes and changed nothing else.\nRun it now, wait for Sunday, or stop here?",
         "options": [
          "main: the default",
          "release: the 0.1 line"
@@ -722,8 +722,10 @@
         "id": "q6",
         "question": "Open one pull request per service, or one for all fourteen?",
         "options": [
-         "main: the default",
-         "release: the 0.1 line"
+         "One pull request per service: fourteen, each small to read",
+         "One for all fourteen: a single review, a single revert",
+         "One per team that owns services: four, by who must approve",
+         "Lockfiles first in one, then one per major version moved"
         ],
         "hasContext": false,
         "since": "2026-11-23T18:56:45.724Z"
@@ -732,8 +734,10 @@
         "id": "q7",
         "question": "The advisory on the archive reader has no fix yet: accept it with a note, or replace the library?",
         "options": [
-         "main: the default",
-         "release: the 0.1 line"
+         "Accept the advisory with a note and a check of every path",
+         "Replace the library with the one the build tooling uses",
+         "Turn the import off until a fix is published upstream",
+         "Ask the customer's own security contact what they accept"
         ],
         "hasContext": false,
         "since": "2026-11-23T19:07:45.724Z"

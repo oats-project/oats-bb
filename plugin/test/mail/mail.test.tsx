@@ -8,7 +8,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { Mail } from "../../app/mail";
-import { PAGES_A_PRESS } from "../../app/mail/read";
+import { FRESH_MS, PAGES_A_PRESS } from "../../app/mail/read";
 import { refusalLine } from "../../app/mail/words";
 import type { MailPage } from "../../kernel/mail";
 import { handlers, resetApp } from "../helpers/render";
@@ -25,8 +25,9 @@ const AGENT = "redesign-ui-lead";
 const NOW = Date.parse("2026-11-25T12:15:00.000Z");
 const text = (element: Element | null) => element?.textContent ?? "";
 
-function mail(over: Partial<Handlers> = {}, instance = AGENT) {
-  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+/** `at`: the clock when the view is mounted (a test that mounts it again later says when). */
+function mail(over: Partial<Handlers> = {}, instance = AGENT, at = NOW) {
+  vi.useFakeTimers({ now: at, toFake: ["Date"] });
   return renderSlot<{ instance: string }, Contract>({ component: Mail }, { instance }, { rpc: handlers(over) });
 }
 /** The view, for an agent a test changes: the place that mounts it gives it another instance. */
@@ -212,11 +213,77 @@ test("shown again while its first read is still on its way: it takes that read's
   await act(async () => slow.resolve(recordedMail()));
   expect(rows(await again.findByTestId("oats-mail-list"))).toHaveLength(3);
   expect(asked).toBe(1);
-  // Once it has landed, a view shown again reads again.
+  // Once it has landed and is no longer fresh, a view shown again reads again.
   again.unmount();
-  const third = mail({ mail: () => (++asked, recordedMail()) });
+  const third = mail({ mail: () => (++asked, recordedMail()) }, AGENT, NOW + FRESH_MS);
   await third.findByTestId("oats-mail-list");
   await waitFor(() => expect(asked).toBe(2));
+});
+
+// ---- one press is one read: a view mounted again while what it holds is fresh
+
+test("mounted again while what it holds is fresh (bb mounts its side panel's content a second time, a fraction of a second after the press): what was read is shown, nothing is read, the head says no read; Refresh still reads", async () => {
+  let asked = 0;
+  const answer = { mail: () => (++asked, recordedMail()) };
+  const slot = mail(answer);
+  await slot.findByTestId("oats-mail-list");
+  expect(asked).toBe(1);
+  slot.unmount();
+  // 300 ms later, the same view again.
+  const again = mail(answer, AGENT, NOW + 300);
+  expect(rows(await again.findByTestId("oats-mail-list"))).toHaveLength(3);
+  await act(async () => void (await Promise.resolve()));
+  expect(asked).toBe(1);
+  expect(reads(again)).toEqual([]);
+  expect(text(again.getByTestId("oats-mail-read"))).toBe("");
+  expect(again.queryByTestId("oats-loading")).toBeNull();
+  // Refresh is there, on, and reads at any time.
+  const refresh = again.getByTestId("oats-mail-refresh") as HTMLButtonElement;
+  expect(refresh.disabled).toBe(false);
+  fireEvent.click(refresh);
+  await waitFor(() => expect(asked).toBe(2));
+});
+
+test.each([
+  ["one millisecond short of the minute", FRESH_MS - 1, 0, ""],
+  ["at the minute, when the head starts to say the age of what is shown", FRESH_MS, 1, "Reading…"],
+  ["ten minutes later", 10 * FRESH_MS, 1, "Reading…"],
+])("mounted again %s: %s read(s) behind what was read", async (_when, later, readsThen, head) => {
+  const first = mail();
+  await first.findByTestId("oats-mail-list");
+  first.unmount();
+  const wait = pending<MailPage>();
+  const again = mail({ mail: () => wait.promise }, AGENT, NOW + later);
+  // What was read shows at once, either way.
+  expect(rows(await again.findByTestId("oats-mail-list"))).toHaveLength(3);
+  await act(async () => void (await Promise.resolve()));
+  expect(reads(again)).toHaveLength(readsThen);
+  expect(text(again.getByTestId("oats-mail-read"))).toBe(head);
+  // The bound is the head's own: while nothing is read again, the head says no age; once a read lands after it, the age is of that read.
+  expect(FRESH_MS).toBe(60_000);
+});
+
+test("fresh is by agent: another agent's view, mounted in the same second, reads its own mail", async () => {
+  const slot = mailOf({ mail: ({ instance }) => recordedMail(instance === AGENT ? "mail.json" : "mail-none.json") });
+  await slot.findByTestId("oats-mail-list");
+  act(() => showAgent("desktop-mockups-developer"));
+  await slot.findByTestId("oats-mail-empty");
+  // And back, within the minute: the first agent's mail shows and is not read again.
+  act(() => showAgent(AGENT));
+  expect(rows(await slot.findByTestId("oats-mail-list"))).toHaveLength(3);
+  await act(async () => void (await Promise.resolve()));
+  expect(reads(slot)).toEqual([{ instance: AGENT, older: null }, { instance: "desktop-mockups-developer", older: null }]);
+});
+
+test("a read that failed with nothing held is not fresh: the view mounted again reads", async () => {
+  let asked = 0;
+  const failing = { mail: () => { asked += 1; throw new Error("OATS_TIMEOUT: `oats` did not answer within 170 s and was stopped"); } };
+  const slot = mail(failing);
+  await slot.findByTestId("oats-notice");
+  slot.unmount();
+  const again = mail({ mail: () => (++asked, recordedMail("mail-none.json")) }, AGENT, NOW + 300);
+  expect(text(await again.findByTestId("oats-mail-empty"))).toBe("No mail.");
+  expect(asked).toBe(2);
 });
 
 test("it reads when it is shown, on Refresh and on Older, and at no other time: not when the clock ticks, and not when OATS changes", async () => {
@@ -466,7 +533,7 @@ test("some of a team's conversations cannot be read: how many, never which (a re
   await slot.findByTestId("oats-mail-list");
   expect(slot.getAllByTestId("oats-mail-unread").map(text)).toEqual(["wider: 2 conversations can't be read"]);
   slot.unmount();
-  const one = mail({ mail: () => some(["c-1"]) });
+  const one = mail({ mail: () => some(["c-1"]) }, AGENT, NOW + FRESH_MS);
   await waitFor(() => expect(one.getAllByTestId("oats-mail-unread").map(text)).toEqual(["wider: 1 conversation can't be read"]));
 });
 

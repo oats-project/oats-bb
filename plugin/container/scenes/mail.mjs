@@ -19,6 +19,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
 import { atomicWrite } from "../files.mjs";
+import { panelWhole } from "./panel.mjs";
 
 const AGENT = { instance: "redesign-ui-lead", thread: "thr_redesign" };
 const VERB = "operation run messaging:mail";
@@ -37,6 +38,8 @@ function answer(behaviour) {
 const inMail = (id) => `${testId("oats-mail")} ${testId(id)}`;
 const click = (selector, index = 0) => `document.querySelectorAll(${JSON.stringify(selector)})[${index}].click()`;
 const subjects = `JSON.stringify(${texts(inMail("oats-mail-subject"))})`;
+/** The head is settled: no read is on its way (the head says "Reading…" while one is). What a scene waits for before it asserts a head with no read in it. */
+const settledHead = `${textOf(inMail("oats-mail-read"))} !== "Reading…" && document.querySelector(${JSON.stringify(inMail("oats-mail-refresh"))})?.disabled === false`;
 /** What is measured before an image: nothing of the mail is wider than the view, the page does not scroll sideways, and every control is high enough to press. */
 const fits = (min) =>
   `JSON.stringify((() => { const root = document.querySelector(${JSON.stringify(testId("oats-mail"))}); const edge = root.getBoundingClientRect().right; return { wide: [...root.querySelectorAll("*")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().right > Math.min(edge, innerWidth) + 0.5).length, scroll: document.documentElement.scrollWidth - innerWidth, low: [...root.querySelectorAll("button, summary")].filter((e) => e.getClientRects().length > 0 && e.getBoundingClientRect().height < ${min} - 0.5).length }; })())`;
@@ -50,12 +53,18 @@ async function settled(page, viewport) {
   if (!viewport.mobile) await page.until(`!location.pathname.includes("/threads/") || document.body.innerText.includes("Project checkout")`, 20);
 }
 
-/** Shows the agent's panel as a person gets to it, and turns it to its tab "Mail". → whether the mail's view is there. */
-async function openMail(page, threads) {
+/**
+ * Shows the agent's panel as a person gets to it, and turns it to its tab "Mail". → whether the mail's view is there.
+ * At 1280 the tab is pressed only once bb's side panel is whole (`panelWhole`, ./panel.mjs says why): bb 0.50.1 can
+ * mount the panel's content a second time a fraction of a second after it opens, and a press before that is a press
+ * on a panel that is about to be mounted again.
+ */
+async function openMail(page, threads, viewport) {
   const thread = threads.get(AGENT.thread);
   await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
   await page.until(visible(testId("oats-open-panel")), 30);
   await page.evaluate(click(testId("oats-open-panel")));
+  if (!viewport.mobile) await page.until(panelWhole, 30);
   await page.until(visible(testId("oats-tab-mail")), 30);
   await page.evaluate(click(testId("oats-tab-mail")));
   return Boolean(await page.until(visible(testId("oats-mail")), 30));
@@ -72,7 +81,7 @@ const scene = (name, first, run) => ({
   run: async (given) => {
     answer(first);
     try {
-      given.check(await openMail(given.page, given.threads), `${given.at} the tab Mail of the agent's panel shows the mail's view`, await given.page.evaluate("location.pathname"));
+      given.check(await openMail(given.page, given.threads, given.viewport), `${given.at} the tab Mail of the agent's panel shows the mail's view`, await given.page.evaluate("location.pathname"));
       await run(given);
     } finally {
       await leave(given.page);
@@ -101,6 +110,7 @@ export default [
       const rows = JSON.parse(await page.evaluate(`JSON.stringify(${texts(inMail("oats-mail-row"))})`));
       check(rows.length === 3 && rows.every((row) => /^mail-writer (just now|\d+ (min|h|d) ago) \S/.test(row)), `${at} each row: who it is from and its age, then its subject`, String(rows.length));
     }
+    await page.until(settledHead, 20);
     {
       const head = await page.evaluate(`JSON.stringify([${textOf(inMail("oats-mail-refresh"))}, ${textOf(inMail("oats-mail-read"))}, document.querySelector(${JSON.stringify(inMail("oats-mail-list"))})?.getAttribute("aria-label")])`);
       check(head === JSON.stringify(["Refresh", "", "Mail, newest first"]), `${at} the head: Refresh, and no age for what was just read; the list is named "Mail, newest first"`, head);
@@ -163,6 +173,7 @@ export default [
 
   scene("mail: no mail, and the read in flight", "mail-none.json", async ({ page, at, viewport, check, sleep }) => {
     await page.until(visible(inMail("oats-mail-empty")), 30);
+    await page.until(settledHead, 20);
     {
       const read = await page.evaluate(`JSON.stringify([${textOf(inMail("oats-mail-empty"))}, ${textOf(inMail("oats-mail-refresh"))}, ${textOf(inMail("oats-mail-read"))}])`);
       check(read === JSON.stringify(["No mail.", "Refresh", ""]), `${at} an agent nobody wrote to: "No mail.", Refresh, and no "Read now"`, read);

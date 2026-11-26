@@ -353,7 +353,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   // reply, it draws THAT question by the board's own component and answer path (app/board): one thing to a person,
   // here and on the agent's Board tab. The card is never left empty for it: while the board is read it says what
   // is asked (the claim's text is the question's own), and where the board cannot be read it is the card as ever,
-  // the text and the reply.
+  // the text and the reply. (The text keeps its order: a `detail` is drawn only beside choices of bb's own request,
+  // the offer "choices"; under the offer "reply" there is none, so nothing stands between the text and the reply.)
   const boardAsks = entry.agent.boardAsks === true && offer === "reply";
   const asks =
     message === null ? null : (

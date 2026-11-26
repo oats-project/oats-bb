@@ -56,7 +56,7 @@ const SOURCES: Record<string, unknown[]> = {
   teams: answer("workspace/teams.json").teams as unknown[],
   problems: answer("workspace/teams.json").problems as unknown[],
   servers: answer("workspace/servers.json").servers as unknown[],
-  mail: [whole("mail/mail.json")],
+  mail: [whole("mail/mail-first-page.json")], // the document: the recorded FIRST PAGE (it says there is more, with its cursor)
   messages: recordedMail.messages,
   conversations: recordedMail.conversations,
 };
@@ -160,7 +160,7 @@ describe("the busy set", () => {
         const target = (row.result as { target: { home: string; instance: string } }).target;
         return [target.instance, target.home.slice(0, target.home.lastIndexOf("/instances/") + 1)];
       },
-      messages: (row) => [row.id, row.conversationId, (row.to as { alias: unknown }).alias],
+      messages: (row) => [row.id, row.conversationId, (row.to as { alias: unknown }).alias, (row.from as { alias: unknown }).alias],
       facts: () => [],
       questions: () => [],
       conversations: () => [],
@@ -256,7 +256,13 @@ describe("the busy set", () => {
     const mailDocument = files["mail.json"] as { result: { target: { instance: string; home: string }; result: { mail: { messages: { subject: string; truncated: boolean; conversationId: string; to: { alias: string } }[]; conversations: { id: string }[] } } } };
     expect([mailDocument.result.target.instance, mailDocument.result.target.home]).toEqual([chat.agent, raws.find((row) => row.instance === chat.agent)!.home]);
     expect(new Set(mailDocument.result.result.mail.messages.map((message) => message.to.alias))).toEqual(new Set([chat.agent])); // each is written TO the agent it is the mail of
+    // WHO WROTE THEM: the recorded sender, and busy agents with long names (in `from.alias` and in the address, one story).
+    const senders = (mailDocument.result.result.mail.messages as unknown as { from: { alias: string; address: string } }[]).map((message) => message.from);
+    expect(senders.every((from) => from.address.endsWith(`/${from.alias}`))).toBe(true);
+    expect([senders.filter((from) => from.alias.length >= 55).length >= 30, senders.some((from) => from.alias === "mail-writer"), senders.filter((from) => from.alias !== "mail-writer").every((from) => raws.some((row) => row.instance === from.alias))]).toEqual([true, true, true]);
     const mail = parseMail(mailDocument.result);
+    // THERE IS MORE: the document is the recorded first page, so the reader hands on the cursor that reads the older page ("Older" is offered).
+    expect(mail.ok && mail.value.older).toBe((whole("mail/mail-first-page.json").result as { result: { mail: { nextCursor: string } } }).result.mail.nextCursor);
     expect(mail.ok && [mail.value.messages.length, new Set(mail.value.messages.map((message) => message.key)).size, mail.value.messages.filter((message) => message.shortened).length >= 15, mail.value.messages.filter((message) => (message.subject ?? "").length > 90).length >= 10]).toEqual([MAIL_PAGE, MAIL_PAGE, true, true]);
     expect(mailDocument.result.result.mail.conversations.map((row) => row.id)).toEqual(mailDocument.result.result.mail.messages.map((message) => message.conversationId));
     expect(chat.turns.length).toBeGreaterThanOrEqual(10);

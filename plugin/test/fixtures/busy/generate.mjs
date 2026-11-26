@@ -228,15 +228,21 @@ export function build() {
   const chatAgent = chatRow.instance;
   // ---- the busy chat's mail: the recorded answer of the mail read (the WHOLE document, its envelope too), its
   // received messages multiplied to a full page of fifty, for the busy chat's agent ----
-  const mailDoc = JSON.parse(readFileSync(join(FIXTURES, "mail/mail.json"), "utf8"));
-  const recordedMail = mailDoc.result.result.mail;
+  // THE DOCUMENT is the recorded FIRST PAGE of a mail read (it says there is more, and carries the cursor that reads
+  // it: the Mail tab then offers "Older" under the fifty); THE MESSAGES are the recorded messages of the whole read.
+  const mailDoc = JSON.parse(readFileSync(join(FIXTURES, "mail/mail-first-page.json"), "utf8"));
+  const recordedMail = JSON.parse(readFileSync(join(FIXTURES, "mail/mail.json"), "utf8")).result.result.mail;
   const received = recordedMail.messages.filter((message) => message.direction === "received");
   const messages = Array.from({ length: 50 }, (_, n) => {
     const from = received[n % received.length];
     const long = from.truncated === true; // the recorded long report: its body stays as the messaging layer cut it
     const number = String(n + 1).padStart(2, "0");
     const subject = long ? `${from.subject} ${n + 1}: ${MAIL_SUBJECTS[n % MAIL_SUBJECTS.length]}` : MAIL_SUBJECTS[n % MAIL_SUBJECTS.length];
-    const message = vary(from, [[from.id, `${number}${from.id.slice(2)}`], [from.conversationId, `${number}${from.conversationId.slice(2)}`], [mailDoc.result.target.instance, chatAgent]], [[["subject"], subject], [["threadTitle"], subject], ...(n < received.length ? [] : [[["createdAt"], later(from.createdAt, -n * 3).replace("Z", "+00:00")]]), ...(long || n < received.length ? [] : [[["body"], MAIL_BODIES[n % MAIL_BODIES.length]]])]);
+    // WHO WROTE IT: the recorded sender, or (two of every three) one of the busy agents, whose names are long: the
+    // sender's alias wherever the recorded message writes it (its `from.alias`, and its address).
+    const senders = made.agents.map((each) => each.row.instance).filter((instance) => instance !== chatAgent && instance.length >= 55);
+    const sender = n % 3 === 0 ? [] : [[from.from.alias, senders[n % senders.length]]];
+    const message = vary(from, [[from.id, `${number}${from.id.slice(2)}`], [from.conversationId, `${number}${from.conversationId.slice(2)}`], [mailDoc.result.target.instance, chatAgent], ...sender], [[["subject"], subject], [["threadTitle"], subject], ...(n < received.length ? [] : [[["createdAt"], later(from.createdAt, -n * 3).replace("Z", "+00:00")]]), ...(long || n < received.length ? [] : [[["body"], MAIL_BODIES[n % MAIL_BODIES.length]]])]);
     made.messages.push(message);
     return message.row;
   });

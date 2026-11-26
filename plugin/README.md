@@ -1012,9 +1012,12 @@ one shot, spent by the panel that opens next and lapsing by itself after ten sec
 never opened by memory for another agent, and a press on Mail is good for its agent until
 another agent's panel is shown (`test/panel/tab-state.test.ts` is the four as a table).
 A NAMED DIFFERENCE from 0.6.0: whether an agent has mail is known only once its instance is
-read, and a tab not known to be drawn at the mount is not drawn, so the SAME agent's panel,
-closed while on Mail and opened again, opens on Instance: one more press on Mail. (0.6.0
-turned to Mail by itself once the read answered: a move under a reader.)
+read, and a tab not known to be drawn at the mount is not drawn. Where the instance's read is
+still HELD by bb (the panel closed and opened again soon, and bb's own second mount of a panel a
+moment after it opens), Mail is known in the mount's first draw and the panel is still on Mail.
+Where it is not held any more, the SAME agent's panel, left on Mail and opened again, opens on
+Instance: one more press on Mail. (0.6.0 turned to Mail by itself once the read answered: a
+move under a reader.)
 
 **The command.** bb takes a plugin's commands once, when it starts, with fixed titles: so the board
 has ONE, **Board**, with no shortcut and nothing per question. It is listed only on the thread of

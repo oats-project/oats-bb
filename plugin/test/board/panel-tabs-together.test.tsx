@@ -167,7 +167,44 @@ test("a board that starts to ask while a person reads the agent's mail does not 
   fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Mail" }));
   await waitFor(() => expect(shown()).toBe("Mail"));
   board = ASKS;
-  act(() => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" }));
-  await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 80))));
+  await act(async () => {
+    slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" });
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  });
   expect(shown()).toBe("Mail");
+});
+
+// bb's own second mount: bb 0.50.1 now and then mounts the side panel's content again a moment after it opens (the
+// mail developer's measure: 2 opens of 12, at 1280). The SAME agent's panel, Mail pressed, mounted again with the
+// instance's read already held: Mail is known to be drawn in the new mount's FIRST draw, so the panel is still on Mail.
+test("bb mounts the panel again for the SAME agent a moment after Mail was pressed: it is still on Mail, with no press, and its mail is not read a second time by a tab that left and came back", async () => {
+  await loadApp();
+  let remount: () => void = () => {};
+  function Twice({ threadId }: { threadId: string }) {
+    const [mount, setMount] = useState(0);
+    remount = () => setMount((count) => count + 1);
+    return <InstancePanel key={mount} threadId={threadId} />;
+  }
+  const slot = renderSlot<{ threadId: string }, Contract>({ component: Twice }, { threadId: CHILD_THREAD }, {
+    rpc: handlers({
+      snapshot: () => panelSnapshot(),
+      panelInstance: ({ instance }) => instanceAnswer(instance, (facts) => ({ ...facts, messagingId: `mailspike.test/${instance}` })),
+      board: () => ({ at: BOARD_AT, supported: true, stale: false, board: null, claim: null }),
+    }),
+    sidebarThreads: panelThreads(),
+  });
+  const shown = () => within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab").find((tab) => tab.getAttribute("aria-selected") === "true")?.textContent;
+  await slot.findByTestId("oats-panel-header");
+  await waitFor(() => expect(within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Instance", "Soul", "Mail"]));
+  fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Mail" }));
+  await waitFor(() => expect(shown()).toBe("Mail"));
+  // bb's second mount of the same panel.
+  const seen: (string | undefined)[] = [];
+  await act(async () => {
+    remount();
+  });
+  seen.push(shown()); // the new mount's first draw that a person can see
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
+  seen.push(shown());
+  expect(seen).toEqual(["Mail", "Mail"]);
 });

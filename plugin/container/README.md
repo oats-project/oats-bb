@@ -328,6 +328,10 @@ one is harmless: whoever adds a file puts it in a list, and the review of that c
 A `.mjs` entry in a checkout whose other imports do not resolve (no `node_modules`) ends on node's
 own "module not found" before the guard can say its line: nothing is touched there either.
 
+Two entries outside this directory are guarded the same way, since the container runs them too:
+`test/fixtures/automations/record/workspace.sh` and `record.mjs` (the Automations fixtures' recorder;
+its `record.sh` runs on the host and starts the container).
+
 **An entry outside `plugin/`** that runs in a container made from THIS image can take the same
 guard by its path from the repository's root: `. "<up to the root>/plugin/container/guard.sh" || exit 97`
 as a shell script's first statement, `import "<up to the root>/plugin/container/guard.mjs";` as a

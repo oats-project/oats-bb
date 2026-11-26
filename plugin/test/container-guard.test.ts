@@ -25,6 +25,9 @@ const GUARDED: Record<string, "sh" | "bash" | "node"> = {
   "real/pi/scenario.mjs": "node",
   "real/mail/inside.sh": "bash", // installs the kernel, aw and Claude Code for the user
   "real/mail/check.mjs": "node",
+  // Two entries of the same kind OUTSIDE this directory (the Automations fixtures' recorder runs them in the container, after real/setup.sh):
+  "../test/fixtures/automations/record/workspace.sh": "sh", // a `gh` for the user's PATH, commits and pushes, `oats sync`
+  "../test/fixtures/automations/record/record.mjs": "node", // adds schedules and triggers, spawns agents
 };
 /** They run ON THE HOST, and do their work in a container they start (what each writes on the host: container/README.md). */
 const HOST = ["ci.sh", "real/run.sh", "real/mail/run.sh", "relock.sh"];
@@ -71,7 +74,7 @@ function firstEffective(script: string, runner: "sh" | "bash" | "node"): string 
 }
 /** The one line a guarded script must have first. */
 function guardLine(script: string, runner: "sh" | "bash" | "node"): string {
-  const up = relative(dirname(join(CONTAINER, script)), CONTAINER).split("/").filter(Boolean).map(() => "..").join("/");
+  const up = relative(dirname(join(CONTAINER, script)), CONTAINER); // "" beside the guard, "..", "../..", or a path back into this directory
   return runner === "node"
     ? `import "${up === "" ? "." : up}/guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched`
     : `. "$(dirname "$0")/${up === "" ? "" : `${up}/`}guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)`;
@@ -197,7 +200,7 @@ describe("only inside the checks' container", () => {
     const files = (readdirSync(CONTAINER, { recursive: true }) as string[])
       .filter((name) => statSync(join(CONTAINER, name)).isFile() && !/(^|\/)out(\.|\/|$)/.test(name) && !name.startsWith("locks/") && !NOT_RUN.test(name))
       .sort();
-    const listed = [...Object.keys(GUARDED), ...HOST, ...TOOLS, ...MODULES].sort();
+    const listed = [...Object.keys(GUARDED).filter((name) => !name.startsWith("../")), ...HOST, ...TOOLS, ...MODULES].sort();
     expect(files.filter((name) => !MODULE_DIRECTORIES.some((directory) => name.startsWith(directory)))).toEqual(listed);
     expect(new Set(listed).size).toBe(listed.length);
     // A module directory holds `.mjs` modules alone, none made to be run by itself (no shebang).

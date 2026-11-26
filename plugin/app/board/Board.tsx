@@ -11,15 +11,15 @@
 // markup; an address is text until a person presses it, and opens outside bb only on a second
 // press.
 import { useBbNavigate, useRpc, useSdk, experimental_InfoList as InfoList, experimental_InfoSection as InfoSection } from "@get-bb/plugin-sdk/app";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { rpcContract } from "../../contract";
-import { answerText, boardData, dialogOpen, factsView, FACTS_SHOWN, questionOccurrence, sparkValues, turnQuestion, type Board as BoardData, type BoardClaim, type BoardFact, type BoardQuestion } from "../../model/board";
-import { SENT } from "../home/home-words";
+import { answerText, boardClaim, boardData, dialogOpen, factsView, FACTS_SHOWN, questionOccurrence, sparkValues, turnQuestion, type Board as BoardData, type BoardClaim, type BoardFact, type BoardQuestion } from "../../model/board";
+import { NOT_NOW_UNREAD, SENT } from "../home/home-words";
 import { guarded, mayWrite, sendText, type Target } from "../home/send";
 import { useOats } from "../oats";
 import { readingNow, useActed } from "../roster/reading";
 import { errorMessage } from "../store";
-import { noteSent, useSent } from "./sent";
+import { dropSend, noteSent, takeSend, useGoing, useSent } from "./sent";
 import { shown, shownBlock } from "../../model/text";
 import { useNow } from "../roster/now";
 import { Button } from "../ui";
@@ -163,16 +163,23 @@ function Facts({ instance, board, detail, now }: { instance: string; board: Boar
   );
 }
 
-/** The context of one question, for the occurrence it was read for: the agent's own text, plain, line breaks kept. */
-function Context({ asked, detail }: { asked: BoardQuestion; detail: DetailRead }) {
+/**
+ * The context of one question, for the occurrence it was read for: the agent's own text, plain,
+ * line breaks kept. `onOpen`: the fold was opened (a place that reads the detail only then).
+ * The warning tone only where a read FAILED (no answer, or one that cannot be read); a context
+ * the kernel sent none of, that the display filter withholds, or that was read for an earlier
+ * occurrence of the question (the next read brings this one's) is said quietly.
+ */
+function Context({ asked, detail, onOpen }: { asked: BoardQuestion; detail: DetailRead; onOpen?: () => void }) {
   const read = detail.status === "read" && detail.detail.state === "ok" ? detail.detail.questions.get(asked.id) : undefined;
   const text = read !== undefined && read.since === asked.since ? read.context : null;
+  const failed = detail.status === "failed" || (detail.status === "read" && detail.detail.state === "malformed");
   return (
-    <Disclosure summary={BOARD.context} testId="oats-board-context">
+    <Disclosure summary={BOARD.context} testId="oats-board-context" onToggle={(open) => (open ? onOpen?.() : undefined)}>
       {detail.status === "loading" ? (
         <Quiet testId="oats-board-context-reading">{BOARD.reading}</Quiet>
       ) : text === null ? (
-        <Quiet testId="oats-board-context-failed" failed>
+        <Quiet testId="oats-board-context-failed" failed={failed}>
           {BOARD.contextFailed}
         </Quiet>
       ) : (
@@ -212,35 +219,30 @@ function Options({ instance, asked, answering }: { instance: string; asked: Boar
   const rpc = useRpc<typeof rpcContract>();
   const occurrence = questionOccurrence(asked);
   const sent = useSent(instance, occurrence);
-  const [busy, setBusy] = useState(false);
+  // On its way: the window's, by the agent and this occurrence (sent.ts), not this mount's.
+  const busy = useGoing(instance, occurrence);
   const [refused, setRefused] = useState<string | null>(null);
-  const going = useRef(false);
   // What was refused was said of the question it was pressed on.
   useEffect(() => setRefused(null), [occurrence]);
   const press = (index: number) => {
     const text = answerText(asked, index);
-    if (answering === null || text === null || sent !== null || going.current) return;
-    going.current = true;
-    setBusy(true);
+    if (answering === null || text === null || !takeSend(instance, occurrence)) return;
     setRefused(null);
     guarded(rpc, answering.target, async () => {
       // What is sent is built from the ROW AT THE PRESS, not from what this window holds: the
       // question must still be open on the server's roster, the same occurrence, with that option.
       const row = await rpc.call("board", { instance });
+      // The row of a roster that could not be read again is what OATS said before: nothing is sent on it.
+      if (row.stale) throw new Error(NOT_NOW_UNREAD);
       if (dialogOpen(row.claim)) throw new Error(BOARD.approvalFirst);
       const now = boardData(row.board)?.questions.find((each) => questionOccurrence(each) === occurrence);
       const said = now === undefined ? null : answerText(now, index);
       if (said === null || said !== text) throw new Error(BOARD.noLongerAsked);
       return sendText(sdk, answering.threadId, said);
     }).then(
-      () => {
-        going.current = false;
-        noteSent(instance, occurrence, index);
-        setBusy(false);
-      },
+      () => noteSent(instance, occurrence, index),
       (cause: unknown) => {
-        going.current = false;
-        setBusy(false);
+        dropSend(instance, occurrence);
         setRefused(errorMessage(cause));
       },
     );
@@ -283,7 +285,7 @@ function Options({ instance, asked, answering }: { instance: string; asked: Boar
 }
 
 /** `inCard`: drawn inside a card that has a border and says the age already (the home's): no border and no age of its own. */
-function Questions({ instance, board, claim, detail, now, inCard = false }: { instance: string; board: BoardData; claim: BoardClaim; detail: DetailRead; now: number; inCard?: boolean }) {
+function Questions({ instance, board, claim, detail, now, inCard = false, onContext }: { instance: string; board: BoardData; claim: BoardClaim; detail: DetailRead; now: number; inCard?: boolean; onContext?: () => void }) {
   const answering = useAnswering(instance, claim);
   const [at, setAt] = useState<string | null>(null);
   const zone = useRef<HTMLElement>(null);
@@ -334,24 +336,34 @@ function Questions({ instance, board, claim, detail, now, inCard = false }: { in
         {shown(asked.question)}
       </p>
       <Options key={questionOccurrence(asked)} instance={instance} asked={asked} answering={answering} />
-      {asked.hasContext ? <Context asked={asked} detail={detail} /> : null}
+      {asked.hasContext ? <Context asked={asked} detail={detail} onOpen={onContext} /> : null}
     </section>
   );
 }
 
 /**
  * The agent's open QUESTIONS alone, by the board's own reads and its own answer path: for a place
- * that says an agent needs a person (the home's card), so that a question of the board is ONE
- * thing wherever it is drawn: the same options, the same send, the same "Sent." mark. Nothing
- * where the board has no open question.
+ * that says an agent needs a person FOR A QUESTION OF ITS BOARD (the home's card), so that a
+ * question of the board is ONE thing wherever it is drawn: the same options, the same send, the
+ * same "Sent." mark. The place is never left empty: `pending` is what it draws while the board is
+ * read (the claim's own text: it is the question's), `fallback` what it draws where the board
+ * cannot be read or holds no open question after all (the claim's text and the place's own
+ * reply). The detail (the kernel's inspection: a process) is read only once a Context fold is
+ * opened: a home with eleven such cards starts none by being shown.
  */
-export function BoardAsk({ instance }: { instance: string }) {
+export function BoardAsk({ instance, pending = null, fallback = null }: { instance: string; pending?: ReactNode; fallback?: ReactNode }) {
   const read = useBoard(instance);
   const now = useNow();
+  const [opened, setOpened] = useState(false);
   const board = read.status === "ready" ? read.board : null;
-  const detail = useBoardDetail(instance, board === null ? null : { ...board, facts: [] }, true);
-  if (read.status !== "ready" || board === null || board.questions.length === 0) return null;
-  return <Questions instance={instance} board={board} claim={read.claim} detail={detail} now={now} inCard />;
+  const detail = useBoardDetail(instance, board === null ? null : { ...board, facts: [] }, opened);
+  if (read.status === "loading") return <>{pending}</>;
+  if (read.status !== "ready" || board === null || board.questions.length === 0) return <>{fallback}</>;
+  // The row's claim names its producer and it is NOT the board (the agent's own claim, or a failed turn's, in front
+  // of the board's question): the place says that claim. (The roster's row already says so, `boardAsks`; this is
+  // for the seconds between an agent's event and the status read that follows it.)
+  if (read.claim != null && read.claim.producer != null && !boardClaim(read.claim)) return <>{fallback}</>;
+  return <Questions instance={instance} board={board} claim={read.claim} detail={detail} now={now} inCard onContext={() => setOpened(true)} />;
 }
 
 /** The agent's board, read and drawn. `instance`: the agent's name; nothing else is asked of the place. */

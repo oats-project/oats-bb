@@ -6,6 +6,6 @@ import type { rpc } from "../../contract/board";
 export const BOARD_AT = "2026-11-23T18:16:56.000Z";
 
 export const defaults = (): PluginRpcTestHandlers<typeof rpc> => ({
-  board: () => ({ at: BOARD_AT, supported: true, board: null, claim: null }),
+  board: () => ({ at: BOARD_AT, supported: true, stale: false, board: null, claim: null }),
   boardDetail: () => ({ inspection: { instance: { board: null } } }),
 });

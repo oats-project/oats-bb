@@ -64,7 +64,7 @@ test("run: the agent's panel is turned to Board and the thread's OATS tab is ope
   expect(opened).toEqual([{ tab: { id: "home", context: { kind: "thread" }, availability: "fixed" } }]);
   const { InstancePanel } = await import("../../app/panel");
   const panel = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel as never }, { threadId: "thr_research" }, {
-    rpc: handlers({ board: () => ({ at: "2026-11-23T18:17:00.000Z", supported: true, board: { facts: [{ key: "pr", label: "Pull request", value: "#42", unit: null, link: null, at: "2026-11-23T18:01:45.000Z" }], questions: [] }, claim: null }) }, fixtureAgents().map((agent): Agent => (agent.instance === HAS ? { ...agent, hasBoard: true } : agent))),
+    rpc: handlers({ board: () => ({ at: "2026-11-23T18:17:00.000Z", supported: true, stale: false, board: { facts: [{ key: "pr", label: "Pull request", value: "#42", unit: null, link: null, at: "2026-11-23T18:01:45.000Z" }], questions: [] }, claim: null }) }, fixtureAgents().map((agent): Agent => (agent.instance === HAS ? { ...agent, hasBoard: true } : agent))),
     sidebarThreads: sidebarThreads(),
     sdk: {} as never,
   });

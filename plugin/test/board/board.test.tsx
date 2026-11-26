@@ -28,7 +28,7 @@ async function drawn(given: Given, over: Parameters<typeof handlers>[0] = {}) {
   const asked: string[] = [];
   const slot = renderSlot<{ instance: string }, Contract>({ component: Board }, { instance: AGENT }, {
     rpc: handlers({
-      board: () => ({ at: BOARD_AT, supported: given.supported ?? true, board: given.board ?? null, claim: given.claim ?? null }),
+      board: () => ({ at: BOARD_AT, supported: given.supported ?? true, stale: false, board: given.board ?? null, claim: given.claim ?? null }),
       boardDetail: () => {
         asked.push("detail");
         const detail = typeof given.detail === "function" ? (given.detail as () => unknown)() : given.detail;
@@ -116,7 +116,7 @@ test("a fact is its label, its value and unit, its age; bb's own list is given e
 test("a fact hidden on this computer leaves the list and is counted; \"N hidden · show\" brings all back; it shows again by itself when its value changes", async () => {
   const board = { facts: [fact("tests"), fact("pr", { label: "Pull request", value: "#42", unit: null })], questions: [] };
   let now: unknown = board;
-  const { slot } = await drawn({}, { board: () => ({ at: BOARD_AT, supported: true, board: now, claim: null }) });
+  const { slot } = await drawn({}, { board: () => ({ at: BOARD_AT, supported: true, stale: false, board: now, claim: null }) });
   const keys = () => within(slot.getByTestId("oats-board-facts")).queryAllByTestId("oats-board-fact").map((row) => row.getAttribute("data-key"));
   expect(keys()).toEqual(["tests", "pr"]);
   fireEvent.click(within(slot.getAllByTestId("oats-board-fact")[0]!).getByRole("button", { name: "Hide on this computer: Tests" }));
@@ -190,7 +190,7 @@ test("the detail is read once the board is in view: a fact with two numbers in i
   const board = { facts: [fact("tests")], questions: [] };
   let now: unknown = board;
   const detail = { instance: { board: { facts: [{ key: "tests", history: [{ value: "5", at: AT }, { value: "3", at: AT }] }], questions: [] } } };
-  const { slot, asked } = await drawn({ detail }, { board: () => ({ at: BOARD_AT, supported: true, board: now, claim: null }) });
+  const { slot, asked } = await drawn({ detail }, { board: () => ({ at: BOARD_AT, supported: true, stale: false, board: now, claim: null }) });
   expect(asked).toEqual(["detail"]);
   expect(within(slot.getByTestId("oats-board-fact")).getByTestId("oats-board-spark").querySelector("polyline")!.getAttribute("points")!.split(" ")).toHaveLength(2);
   // The roster changes and the board is the same: no new read.
@@ -238,6 +238,18 @@ test("what cannot be shown is said in its place: a board that is no board, entri
   expect(texts(failed.slot.container, "oats-board-history-failed")).toEqual(["History could not be read."]);
   expect(texts(failed.slot.container, "oats-board-context-failed")).toEqual(["The context could not be read."]);
   expect(failed.slot.getByTestId("oats-board-history-failed").getAttribute("data-tone")).toBe("warning");
+  expect(failed.slot.getByTestId("oats-board-context-failed").getAttribute("data-tone")).toBe("warning"); // a read FAILED
+  resetApp();
+  // A detail that was READ and holds no context for the question (the kernel sent none, or the display filter withholds it): said quietly, nothing failed.
+  const without = await drawn({ board: { facts: [], questions: [question("q3", { hasContext: true })] }, detail: { instance: { board: { facts: [], questions: [{ id: "q3", since: question("q3").since, context: null }] } } } });
+  await waitFor(() => expect(texts(without.slot.container, "oats-board-context-failed")).toEqual(["The context could not be read."]));
+  expect(without.slot.getByTestId("oats-board-context-failed").getAttribute("data-tone")).toBeNull();
+  resetApp();
+  // A detail read for an EARLIER occurrence of the question: its context is never shown under this one, and nothing failed.
+  const earlier = await drawn({ board: { facts: [], questions: [question("q3", { hasContext: true })] }, detail: { instance: { board: { facts: [], questions: [{ id: "q3", since: "2026-11-23T17:00:00.000Z", context: "from before" }] } } } });
+  await waitFor(() => expect(texts(earlier.slot.container, "oats-board-context-failed")).toEqual(["The context could not be read."]));
+  expect(earlier.slot.getByTestId("oats-board-context-failed").getAttribute("data-tone")).toBeNull();
+  expect(earlier.slot.container.textContent).not.toContain("from before");
   resetApp();
   const none = await drawn({ board: { facts: [fact("tests")], questions: [] }, detail: { operationsApi: 2 } });
   expect(texts(none.slot.container, "oats-board-no-history")).toEqual(["This OATS sends no history."]);

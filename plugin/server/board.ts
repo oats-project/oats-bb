@@ -15,10 +15,10 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
    * features (`oats version --json`) AND the key on the row: an older kernel's rows have none.
    */
   async board({ instance }) {
-    const { at, row } = await core.rowOf(instance);
+    const { at, stale, row } = await core.rowOf(instance);
     const { features } = await core.versionOf();
     const claim = record(row.waitingOnYou) ? { producer: text(row.waitingOnYou.producer), reason: text(row.waitingOnYou.reason) } : null;
-    return { at, supported: features.includes(BOARD_FEATURE) && Object.hasOwn(row, "board"), board: row.board ?? null, claim };
+    return { at, stale, supported: features.includes(BOARD_FEATURE) && Object.hasOwn(row, "board"), board: row.board ?? null, claim };
   },
   /** The board with history and context: `oats inspect --home --board`, of the home the kernel named. */
   async boardDetail({ instance }, context) {

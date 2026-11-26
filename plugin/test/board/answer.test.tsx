@@ -36,7 +36,7 @@ async function drawn(given: { instance?: string; change?: Partial<Agent>; board?
   const sent: Sent[] = [];
   const asked: string[] = [];
   /** What the server answers from now on, where a test changes it after the draw: the snapshot, and the row's claim. */
-  const server: { snapshot: ((agents: Agent[]) => unknown) | null; claim: { producer: string; reason: string } | null | undefined; board: unknown } = { snapshot: null, claim: given.claim, board: given.board ?? { facts: [], questions: [QUESTION] } };
+  const server: { snapshot: ((agents: Agent[]) => unknown) | null; claim: { producer: string; reason: string } | null | undefined; board: unknown; stale: boolean } = { snapshot: null, claim: given.claim, board: given.board ?? { facts: [], questions: [QUESTION] }, stale: false };
   const threads = fixtureThreads().map((thread) => (thread.id === threadId && given.pending ? { ...thread, hasPendingInteraction: true } : thread));
   const slot = renderSlot<{ instance: string }, Contract>({ component: Board }, { instance }, {
     rpc: handlers(
@@ -47,7 +47,7 @@ async function drawn(given: { instance?: string; change?: Partial<Agent>; board?
         },
         board: () => {
           asked.push("board");
-          return { at: BOARD_AT, supported: true, board: server.board, claim: server.claim === undefined ? CLAIM : server.claim };
+          return { at: BOARD_AT, supported: true, stale: server.stale, board: server.board, claim: server.claim === undefined ? CLAIM : server.claim };
         },
       },
       agents,
@@ -90,6 +90,20 @@ test("the question the agent CLEARED between the draw and the press: refused wit
   await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).toBe("No longer asked. Nothing sent."));
   expect(sent).toEqual([]);
   expect(within(zone).queryByTestId("oats-board-sent")).toBeNull();
+});
+
+test("the row the server answers at the press is the LAST roster's (OATS could not be read since the roster the press was guarded by): nothing is sent on what OATS said before", async () => {
+  const { zone, sent, answers, server } = await drawn();
+  server.stale = true;
+  fireEvent.click(answers()[0]!);
+  await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).not.toBe(""));
+  expect(sent).toEqual([]);
+  expect(within(zone).queryByTestId("oats-board-sent")).toBeNull();
+  // A refusal ends "on its way": the question can be answered once OATS is read again.
+  server.stale = false;
+  await waitFor(() => expect(answers().every((button) => !button.disabled)).toBe(true));
+  fireEvent.click(answers()[0]!);
+  await waitFor(() => expect(sent.map((each) => each.text)).toEqual(["q3: main: the default"]));
 });
 
 test("the same id asked AGAIN (another `since`) at the press: refused, nothing sent", async () => {

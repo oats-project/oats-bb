@@ -956,23 +956,39 @@ person to send: bb has no way to put text in a thread's composer.
 - While the roster is the last one read, or behind a lifecycle result ("Reading…"), no option is
   offered either. An option that is not offered is drawn as text, never as a control that is off.
 - After a press the question stays until the agent clears it, with **Sent.** beside the option and
-  the options off for that occurrence of the question.
+  the options off for that occurrence of the question. One press is one send: "on its way" is
+  held for the window by the agent and the occurrence (`app/board/sent.ts`), so the options stay
+  off while an answer travels, however often they are drawn anew (‹ ›, a tab, the home's card).
+- Where the row the server answers at the press is the LAST roster's (OATS cannot be read at that
+  moment), nothing is sent on it.
 - An agent on tmux is not typed to from bb yet: its options are text.
 
-**One thing wherever it is drawn.** The home's needs-you card of an agent whose board asks draws
-that question by the board's own component (`BoardAsk`), in place of the claim's text and the free
-reply: the same options, the same send, the same "Sent." mark; without a border or an age of its
-own, which the card has. The thread line's **Answer** turns the panel to Board for such an agent,
-with the focus on the question's first option. Whether an agent has a board, and whether it asks,
-ride on the roster's row (`hasBoard`, `boardAsks`: `true` or absent), from the kernel's own row:
-a card or a command needs no read of its own. The agent's own events between two status reads do
-not carry them: a row learns them at the next status read, seconds later.
+**One thing wherever it is drawn.** The home's needs-you card of an agent that needs the person
+FOR A QUESTION OF ITS BOARD draws that question by the board's own component (`BoardAsk`), in
+place of the claim's text and the free reply: the same options, the same send, the same "Sent."
+mark; without a border or an age of its own, which the card has. "For a question of its board" is
+the roster's row (`boardAsks`: `true` or absent): its board holds an open question AND the row's
+needs-input claim is the board's own. The kernel names whose a claim is, and the agent's own
+claim, or a failed turn's, can be live in front of the board's: the card then says THAT claim,
+with its reply, as for any other agent (the board's question is on the Board tab). The card is
+never left empty for it: while the board is read it says what is asked (the claim's text is the
+question's own), and where the board cannot be read it is the card as ever, the text and the
+reply. The thread line's **Answer** goes by the same fact: to Board, with the focus on the
+question's first option, for a claim that is the board's; to "Needs input" for any other.
+Whether an agent has a board at all (`hasBoard`) rides on the row too: a card or a command needs
+no read of its own to know. The agent's own events between two status reads do not carry the
+two: a row learns them at the next status read, seconds later (for those seconds the card looks
+at whose the claim is once more, in the board's own read).
 
 **With the other tabs.** The row is Board, Instance, Soul, Mail, each drawn only where the agent
 has it. The panel's memory of the tab it was left on stands under the board's one rule: a panel
 whose board asks opens on Board until a tab is chosen on it, also when the memory was left on
 Mail for another agent (Mail is never opened by memory); one whose board holds facts alone opens
-where the memory leads (`app/panel/Panel.tsx`, `tabOf` then `boardTabOf`).
+where the memory leads (`app/panel/Panel.tsx`, `tabOf` then `boardTabOf`). WHERE A PANEL OPENS IS
+DECIDED ONCE, when the board's first read lands: a panel that is open never turns by itself,
+neither to Board when the agent asks under a person reading another tab, nor away from Board
+when the agent clears its question under a person reading its facts. Only a press moves it; a
+Board tab that is no longer drawn (its last fact and question gone) leaves it on Instance.
 
 **The command.** bb takes a plugin's commands once, when it starts, with fixed titles: so the board
 has ONE, **Board**, with no shortcut and nothing per question. It is listed only on the thread of
@@ -982,7 +998,8 @@ no side panel), and turns that agent's panel to Board.
 **What it reads and does.** Two reads, no act but the send above: the row's board comes with the
 roster the server already holds (no command); the history and the contexts are one
 `oats inspect --home <home> --board --json`, read when the board is in view and when the board
-changes, never on a timer. Of that answer the server passes on the board's part ALONE: the
+changes, never on a timer. On the home's card it is read only once a Context fold is opened
+there: a home with eleven such cards starts no process by being shown. Of that answer the server passes on the board's part ALONE: the
 inspection also holds the workspace, the souls, the launch and the identity, and a view of a
 board is handed none of it (`kernel/board.ts`). The kernel's `set`, `unset`, `ask` and `ask --clear` are the agent's.
 

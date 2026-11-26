@@ -30,7 +30,7 @@ async function panel(board: unknown, before: () => void = () => {}) {
     rpc: handlers({
       snapshot: () => panelSnapshot(agents),
       panelInstance: ({ instance }) => instanceAnswer(instance, (facts) => ({ ...facts, messagingId: `mailspike.test/${instance}` })),
-      board: () => ({ at: BOARD_AT, supported: true, board, claim: null }),
+      board: () => ({ at: BOARD_AT, supported: true, stale: false, board, claim: null }),
     }),
     sidebarThreads: panelThreads(agents),
   });
@@ -83,7 +83,7 @@ async function two(boards: Record<string, unknown>) {
     rpc: handlers({
       snapshot: () => panelSnapshot(),
       panelInstance: ({ instance }) => instanceAnswer(instance, (facts) => ({ ...facts, messagingId: `mailspike.test/${instance}` })),
-      board: ({ instance }) => ({ at: BOARD_AT, supported: true, board: boards[instance] ?? null, claim: null }),
+      board: ({ instance }) => ({ at: BOARD_AT, supported: true, stale: false, board: boards[instance] ?? null, claim: null }),
     }),
     sidebarThreads: panelThreads(),
   });
@@ -158,7 +158,7 @@ test("a board that starts to ask while a person reads the agent's mail does not 
     rpc: handlers({
       snapshot: () => panelSnapshot(),
       panelInstance: ({ instance }) => instanceAnswer(instance, (facts) => ({ ...facts, messagingId: `mailspike.test/${instance}` })),
-      board: () => ({ at: BOARD_AT, supported: true, board, claim: null }),
+      board: () => ({ at: BOARD_AT, supported: true, stale: false, board, claim: null }),
     }),
     sidebarThreads: panelThreads(),
   });

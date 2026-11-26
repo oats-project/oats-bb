@@ -429,7 +429,7 @@ test("Answer on an agent whose board asks shows the Board tab, opens the panel a
     { component: (props: ExperimentalThreadHeaderRowProps) => (<><Row {...props} /><InstancePanel threadId={props.threadId} /></>) } as never,
     { threadId: "thr_release", projectId: "p", environment: null },
     {
-      rpc: handlers({ board: ({ instance: asked }: { instance: string }) => ({ at: "2026-11-23T18:17:00.000Z", supported: true, board: asked === instance ? { facts: [], questions: [question] } : null, claim: { producer: "oats.board", reason: "attention" } }) } as never, agents),
+      rpc: handlers({ board: ({ instance: asked }: { instance: string }) => ({ at: "2026-11-23T18:17:00.000Z", supported: true, stale: false, board: asked === instance ? { facts: [], questions: [question] } : null, claim: { producer: "oats.board", reason: "attention" } }) } as never, agents),
       sidebarThreads: sidebarThreads(),
       sdk: { threads: { interactions: { list: async () => [] } } } as never,
       experimental_panel: { openTab: (options: unknown) => (opened.push(options), true) } as never,

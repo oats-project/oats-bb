@@ -59,11 +59,13 @@ const TABS: readonly TabItem<TabId>[] = [
 const tabsOf = (hasBoard: boolean, hasMail: boolean): readonly TabItem<TabId>[] => TABS.filter((tab) => (tab.id !== "board" || hasBoard) && (tab.id !== "mail" || hasMail));
 /**
  * The tab the panel of one agent shows, given the one the tabs' own memory leads to (`tabOf`). It
- * OPENS on Board where the agent's board has an open question (a question is what needs the
- * person), until a tab is chosen on this panel; else on that tab, but never on a Board the agent
- * does not have.
+ * OPENS on Board where the agent's board had an open question when the panel opened (`onBoard`: a
+ * question is what needs the person), until a tab is chosen on this panel; else on that tab, but
+ * never on a Board the agent does not have. WHERE IT OPENS IS DECIDED ONCE (`Pages`): a panel that
+ * is open never turns by itself, neither to Board when the agent asks under a reader, nor away
+ * from it when the agent clears its question under a person reading its facts.
  */
-const boardTabOf = (remembered: TabId, board: { shown: boolean; asks: boolean }, chosen: boolean): TabId => (board.asks && !chosen ? "board" : remembered === "board" && !board.shown ? "instance" : remembered);
+const boardTabOf = (remembered: TabId, shown: boolean, onBoard: boolean, chosen: boolean): TabId => (onBoard && shown && !chosen ? "board" : remembered === "board" && !shown ? "instance" : remembered);
 /**
  * The agent whose Mail tab a person pressed. Mail is NOT remembered from one agent to the next, as
  * the other tabs are: showing an agent's mail reads it (over the network, with the agent's own
@@ -227,9 +229,14 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   useEffect(() => {
     if (remembered !== opened.current) setChosen(true);
   }, [remembered]);
+  // Where this panel OPENS, decided once: when the board's first read lands, on Board if a question is open THEN.
+  // (A Board tab that then goes, its last fact and question gone, ends it: the panel does not come back by itself.)
+  const onBoard = useRef<boolean | null>(null);
+  if (onBoard.current === null && board.read) onBoard.current = board.asks;
+  if (onBoard.current === true && board.read && !board.shown) onBoard.current = false;
   // The tab the memory leads to (Mail only where it was pressed for this agent), then the board's rule over it.
   const kept = tabOf(agent.instance, remembered, hasMail);
-  const tab = boardTabOf(kept, board, chosen);
+  const tab = boardTabOf(kept, board.shown, onBoard.current === true, chosen);
   // The memory itself leaves Mail too, so that a press on this agent's Mail tab is a change. (The panel's own doing,
   // not a person's choice of a tab: `opened` follows it, so a panel that opens on Board still does.)
   useEffect(() => {

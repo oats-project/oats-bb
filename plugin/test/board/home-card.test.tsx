@@ -31,7 +31,7 @@ async function home(change: Partial<Agent>, board: unknown = { facts: [], questi
   const agents = fixtureAgents().map((agent): Agent => (agent.instance === ASKS ? { ...agent, ...change } : agent));
   const sent: { threadId: string; text: string }[] = [];
   const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, {
-    rpc: handlers({ board: () => ({ at: BOARD_AT, supported: true, board, claim: { producer: "oats.board", reason: "attention" } }) }, agents),
+    rpc: handlers({ board: () => ({ at: BOARD_AT, supported: true, stale: false, board, claim: { producer: "oats.board", reason: "attention" } }) }, agents),
     sidebarThreads: sidebarThreads(),
     sdk: { threads: { interactions: { list: async () => [] }, send: async ({ threadId, input }: { threadId: string; input: { text: string }[] }) => (sent.push({ threadId, text: input.map((part) => part.text).join("") }), { ok: true }) } } as never as RenderSlotOptions<Contract>["sdk"],
   });
@@ -90,7 +90,7 @@ test("while the roster is the last one read (OATS cannot be read), the card's qu
   const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, {
     rpc: handlers({
       snapshot: () => ({ ok: false, at: "2026-11-23T18:17:00.000Z", code: "E_CONFIG_BROKEN", message: "oats-local.yaml cannot be read", machine: null, last: fixtureSnapshot(agents) }) as never,
-      board: () => ({ at: BOARD_AT, supported: true, board: { facts: [], questions: [QUESTION] }, claim: { producer: "oats.board", reason: "attention" } }),
+      board: () => ({ at: BOARD_AT, supported: true, stale: false, board: { facts: [], questions: [QUESTION] }, claim: { producer: "oats.board", reason: "attention" } }),
     }, agents),
     sidebarThreads: sidebarThreads(),
     sdk: { threads: { interactions: { list: async () => [] } } } as never as RenderSlotOptions<Contract>["sdk"],
@@ -120,7 +120,7 @@ test("the thread line's Answer turns the panel to BOARD for an agent whose board
     const slot = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(
       { component: (props: { threadId: string; projectId: string; environment: null }) => (<><Row {...props} /><InstancePanel threadId={props.threadId} /></>) } as never,
       { threadId: "thr_research", projectId: "p", environment: null },
-      { rpc: handlers({ board: () => ({ at: BOARD_AT, supported: true, board: "boardAsks" in change ? { facts: [], questions: [QUESTION] } : null, claim: { producer: "oats.board", reason: "attention" } }) }, agents), sidebarThreads: sidebarThreads(), sdk: { threads: { interactions: { list: async () => [] } } } as never },
+      { rpc: handlers({ board: () => ({ at: BOARD_AT, supported: true, stale: false, board: "boardAsks" in change ? { facts: [], questions: [QUESTION] } : null, claim: { producer: "oats.board", reason: "attention" } }) }, agents), sidebarThreads: sidebarThreads(), sdk: { threads: { interactions: { list: async () => [] } } } as never },
     );
     await slot.findByTestId("oats-status-act");
     act(() => showPanelTab("soul")); // the panel was left on the Soul tab

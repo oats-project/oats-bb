@@ -12,11 +12,14 @@ const instance = z.object({ instance: instanceName }).strict();
  * file), for the app to read by the one set of rules (model/board.ts): every text in it is the
  * agent's. `supported`: this kernel lists the feature `instance-board` and the row carries the
  * key; false: an older kernel, which says nothing of a board. `claim`: the row's needs-input
- * claim (`waitingOnYou`), as far as the board asks it: whose it is, and why.
+ * claim (`waitingOnYou`), as far as the board asks it: whose it is, and why. `stale`: OATS cannot
+ * be read at this moment and the row is the last roster's.
  */
 export const boardRow = z.object({
   at: z.string(),
   supported: z.boolean(),
+  /** the row is the LAST roster's: OATS cannot be read now (what it says may no longer hold; nothing is sent on it) */
+  stale: z.boolean(),
   board: z.unknown(),
   claim: z.object({ producer: z.string().nullable(), reason: z.string().nullable() }).nullable(),
 });

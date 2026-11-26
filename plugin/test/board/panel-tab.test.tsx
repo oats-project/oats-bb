@@ -30,7 +30,7 @@ async function panel(board: unknown) {
     rpc: handlers({
       snapshot: () => panelSnapshot(agents),
       panelInstance: ({ instance }) => instanceAnswer(instance),
-      board: (input) => (asked.push(input), { at: BOARD_AT, supported: true, board, claim: null }),
+      board: (input) => (asked.push(input), { at: BOARD_AT, supported: true, stale: false, board, claim: null }),
     }),
     sidebarThreads: panelThreads(agents),
   });

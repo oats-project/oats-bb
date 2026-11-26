@@ -348,10 +348,19 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const line = useRef<HTMLDivElement>(null);
   const fit = useFit(line, "card", "oats-needs-where");
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} sending={busy === "send"} held={held || reading} said={said} onSend={send} />;
-  // The agent's BOARD asks (a question with its options): where the card would offer a reply, it draws THAT question
-  // by the board's own component and answer path (app/board): one thing to a person, here and on the agent's Board tab.
-  // (Whether it asks is the ROSTER's own word of the row, `boardAsks`: a card that mounts reads nothing of its own.)
+  // The agent needs the person FOR A QUESTION OF ITS BOARD (the row's claim is the board's own: the ROSTER's word,
+  // `boardAsks`; another claim in front of the board's keeps this card as it is): where the card would offer a
+  // reply, it draws THAT question by the board's own component and answer path (app/board): one thing to a person,
+  // here and on the agent's Board tab. The card is never left empty for it: while the board is read it says what
+  // is asked (the claim's text is the question's own), and where the board cannot be read it is the card as ever,
+  // the text and the reply.
   const boardAsks = entry.agent.boardAsks === true && offer === "reply";
+  const asks =
+    message === null ? null : (
+      <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
+        {shown(message)}
+      </p>
+    );
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
     <Disclosure summary={MESSAGE_INSTEAD} testId="oats-needs-message">
@@ -389,11 +398,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           </Button>
         </div>
         {waitInline ? null : wait}
-        {message === null || boardAsks ? null : (
-          <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
-            {shown(message)}
-          </p>
-        )}
+        {boardAsks ? null : asks}
         {detail === null ? null : (
           <p data-testid="oats-needs-detail" dir="auto" className="m-0 break-words text-xs text-muted-foreground">
             {shown(detail)}
@@ -437,7 +442,16 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           instead
         ) : offer === "reply" ? (
           boardAsks ? (
-            <BoardAsk instance={entry.agent.instance} />
+            <BoardAsk
+              instance={entry.agent.instance}
+              pending={asks}
+              fallback={
+                <>
+                  {asks}
+                  {reply}
+                </>
+              }
+            />
           ) : (
             reply
           )

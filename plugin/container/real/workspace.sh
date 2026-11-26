@@ -113,4 +113,43 @@ Y
 # The soul whose work is a worktree needs a clone of its member repository.
 git clone -q "$WORKSPACE" "$REAL/deploy/oats-real"
 oats sync --dir "$REAL/deploy"
-echo "workspace: kernel $KERNEL_VERSION, provider commit $PROVIDER_OID ($TRIAL), bb $BB_VERSION"
+
+# ---- a SECOND workspace and deployment, with NO bb session provider (parts/plain.mjs)
+# A workspace that does not pin oats.bb, as a deployment that never took the provider is: its
+# capabilities are oats.core alone, so the kernel knows no capability `oats.bb` there and no
+# backend `bb`: a spawn runs where the kernel's own default puts it (tmux). Under $REAL/plain, a
+# path of its own that is no prefix of the first deployment's (the fixtures' substitutions are
+# plain text: $REAL/deploy must not begin it). Nothing of the first deployment is touched.
+PLAIN=$REAL/plain
+rm -rf "$PLAIN"
+mkdir -p "$PLAIN/ws" "$PLAIN/src"
+cd "$PLAIN/ws"
+git init -q -b main
+cat > oats-workspace.yaml <<Y
+schemaVersion: 2
+name: bbplain
+members:
+  - file://$PLAIN/src/oats-plain
+packages:
+  oats.framework: $FRAMEWORK
+defaults:
+  capabilities:
+    oats.core: { from: package }
+  knowledge: none
+  messaging: none
+  tasks: none
+Y
+cat > oats-membership.yaml <<Y
+schemaVersion: 2
+workspace: file://$PLAIN/src/oats-plain
+Y
+soul oats-developer directory "OATS developer: builds and proves one spec."
+git add -A
+commit -m "the real run's second workspace: no bb session provider"
+git clone -q --bare . "$PLAIN/src/oats-plain"
+mkdir -p "$PLAIN/deploy"
+cd "$PLAIN/deploy"
+oats onboard "$PLAIN/deploy" --workspace "file://$PLAIN/src/oats-plain"
+oats sync --dir "$PLAIN/deploy" || { echo "workspace: the second deployment (no bb session provider) did not sync" >&2; exit 1; }
+
+echo "workspace: kernel $KERNEL_VERSION, provider commit $PROVIDER_OID ($TRIAL), bb $BB_VERSION; a second deployment with no bb session provider in $PLAIN/deploy"

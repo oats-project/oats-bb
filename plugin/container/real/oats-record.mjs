@@ -10,7 +10,7 @@
 //     "delayMs": 0,                      wait this long before every call ("oats taking seconds")
 //     "delays": { "<first word>": ms } } or before the calls of one command (status, spawn, …)
 import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,10 +41,17 @@ function run() {
   });
   child.on("close", (code, signal) => {
     mkdirSync(config.records, { recursive: true });
-    const n = String(readdirSync(config.records).length + 1).padStart(4, "0");
+    const n = String(readdirSync(config.records).filter((name) => name.endsWith(".json")).length + 1).padStart(4, "0");
     const words = argv.filter((word) => /^[a-z-]+$/.test(word)).slice(0, 3).join("-") || "none";
     const record = { at: startedAt.toISOString(), ms: Date.now() - startedAt.getTime(), delayMs, argv, cwd: process.cwd(), exit: code, signal, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
-    writeFileSync(join(config.records, `${n}-${process.pid}-${words}.json`), `${JSON.stringify(record, null, 1)}\n`);
+    // (As container/files.mjs `atomicWrite`, written out here: this file is installed alone, as the
+    // plugin's `oats`, and imports nothing of the checkout.)
+    // Written whole beside its place, then renamed into it: the run reads this directory while the
+    // plugin's calls end (scenario.mjs `records`), and a record it finds must be a whole one. The
+    // name being written does not end in `.json`, so no reader takes it for a record.
+    const file = join(config.records, `${n}-${process.pid}-${words}.json`);
+    writeFileSync(`${file}.writing`, `${JSON.stringify(record, null, 1)}\n`);
+    renameSync(`${file}.writing`, file);
     // Let the pipes drain before leaving with the kernel's own exit code.
     process.stdout.write("", () => process.exit(code ?? 1));
   });

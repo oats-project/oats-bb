@@ -15,6 +15,13 @@ const success = z.looseObject({ schemaVersion: z.number(), ok: z.literal(true), 
 
 const markedUnconfirmed = (details: unknown): boolean => typeof details === "object" && details !== null && (details as { unconfirmed?: unknown }).unconfirmed === true;
 
+/** Whether the refusal's `details` name a package or a member (kernel/result.ts `KernelError.within`): the key's presence, a text. */
+const namedWithin = (details: unknown): "package" | "member" | null => {
+  if (typeof details !== "object" || details === null) return null;
+  const named = details as { package?: unknown; member?: unknown };
+  return typeof named.package === "string" ? "package" : typeof named.member === "string" ? "member" : null;
+};
+
 const firstLines = (text: string, lines = 3): string =>
   text
     .split("\n")
@@ -62,7 +69,12 @@ export function answerOf(outcome: RunOutcome, bin: string, options: AnswerOption
   // Of the error's `details` only the kernel's marker passes, and only as the literal `true`: for
   // some codes `details.unconfirmed` is something else (E_SOUL_UNKNOWN: a list of members), which
   // says nothing of how far an act got.
-  if (refused.success) return err(refused.data.error.code, refused.data.error.message, markedUnconfirmed(refused.data.error.details));
+  // (And whether they name a package or a member: `within`.)
+  if (refused.success) {
+    const { code, message, details } = refused.data.error;
+    const within = namedWithin(details);
+    return { ok: false, error: { code, message, ...(markedUnconfirmed(details) ? { unconfirmed: true as const } : {}), ...(within === null ? {} : { within }) } };
+  }
   const enveloped = success.safeParse(document);
   const answered = enveloped.success ? enveloped.data.result : document;
   if (outcome.code !== 0 && !(outcome.signal === null && options.failedDocument?.(answered) === true)) {

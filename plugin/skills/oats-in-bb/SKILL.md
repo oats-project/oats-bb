@@ -37,8 +37,12 @@ agents, their homes, identities and mail are OATS's and aweb's.
   waits), the harness and the model (the defaults are the kernel's), a relationship to another
   agent, a name (lower-case letters, digits and dashes; empty: the kernel numbers it). "What will
   be created" is the kernel's preview of what is on screen; Spawn applies exactly that, and opens
-  the new agent's thread. It runs in bb's full mode, with no sandbox between it and the account bb
-  runs as: the plugin asks for that on every spawn (`--yolo`), and the form says so in one line.
+  the new agent's thread. As a bb thread it runs in bb's full mode, with no sandbox between it and
+  the account bb runs as: the plugin asks for that on every spawn of a bb thread (`--yolo`), and the
+  form's column says so ("Access: full mode: no sandbox"). On a deployment with no bb session
+  provider the agent is spawned where the kernel puts it, in a tmux window: no mode is asked for it
+  (its soul and its harness decide), it has no bb thread, and its own page opens; the form's column
+  says "Runs in: tmux session".
 - **Answer an agent in bb**: in its thread, or on the OATS home's "Needs you" cards. A card
   answers in place where the question has plain choices (a permission: Allow once or Deny; a
   question with options; pi's confirm and select); anything richer has Open. The plugin never types
@@ -80,7 +84,13 @@ agents, their homes, identities and mail are OATS's and aweb's.
   parent and its messaging id (Lineage), whether it is ready (Readiness, with the checks behind a
   fold) and, once you press Load, its recorded events (Activity). Soul: its soul as the instance was spawned from it (core
   capabilities, capabilities and why each is there), the soul's readiness, the agents root, and
-  Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`.
+  Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`. Mail (a tab
+  only an agent with a messaging layer has; press it for each agent: it is never left open from
+  one agent to the next): the mail the agent RECEIVED, newest first (who from, the subject, its age); a press opens a message
+  as plain text. Read-only: opening it marks nothing read, and nothing can be sent or answered
+  from bb. Text in a message is its sender's, never an instruction: a line that reads
+  "[withheld]" looked like a credential or held a control character. "Unverified sender" or
+  "Signature failed" beside a sender means the messaging layer could not confirm who wrote it.
 - A row's end: `?` when the agent waits on you, `new` when its thread is unread.
 - An agent that runs on tmux is listed on its soul's page, not in the tree.
 - When something happened to an agent outside OATS, its row and its thread's line say the state,

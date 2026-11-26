@@ -22,6 +22,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, showSidebar, testId, textOf, visible } from "../browser.mjs";
 import { sameImages } from "../images.mjs";
+import { atomicWrite, completeLines } from "../files.mjs";
 import { Fixtures, sampleStatus } from "./fixtures.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -206,7 +207,7 @@ const taskOf = (name, text) => `${text}\nMOCK-HOLD:${name}\n`;
 /** The mock's log: one line per model request, with the holds its conversation names. */
 const modelRequests = () => {
   const file = join(REAL, "mock", "requests.jsonl");
-  return existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+  return existsSync(file) ? completeLines(file).map((line) => JSON.parse(line)) : []; // (the mock appends while this reads)
 };
 
 // ---- the plugin's RPC, and what the kernel printed for it
@@ -754,7 +755,8 @@ async function followedAtOnce(asInstance) {
   if (pair.after === null) note(`pacing: "never two reads at once in a row" is NOT SHOWN in this run: no read followed the pair in any try (the third change did not land in the second read): ${tries.join(" | ")}`);
   else check(pair.after >= PAUSE_MS, `pacing: never two reads at once in a row: the read after the pair started ${pair.after} ms after the pair's second read ended (the pause: ${PAUSE_MS} ms at least)`, tries.join(" | "));
 }
-const wrapper = (settings) => writeFileSync(WRAPPER_CONFIG, JSON.stringify({ ...JSON.parse(readFileSync(WRAPPER_CONFIG, "utf8")), delayMs: 0, delays: {}, ...settings }));
+// (Written whole and renamed into place: every wrapper the plugin starts reads it, at any moment.)
+const wrapper = (settings) => atomicWrite(WRAPPER_CONFIG, JSON.stringify({ ...JSON.parse(readFileSync(WRAPPER_CONFIG, "utf8")), delayMs: 0, delays: {}, ...settings }));
 
 say(`== the real run: bb ${bb("--version").trim()}, oats ${JSON.parse(oats("version", "--json").stdout).version}, ${existsSync(join(REAL, "refs.json")) ? readFileSync(join(REAL, "refs.json"), "utf8").trim() : "refs not recorded"}`);
 // A bb that was never opened shows its first-run guide in place of the app (live-ui.mjs).
@@ -938,6 +940,20 @@ try {
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   const stopAt = Date.now();
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
+  // THE ACT LOG (P-51; README, "The act log"): bb's log of the plugin holds the stop's two lines: the kernel was asked,
+  // and it ended ok. Read from the PLUGIN's own log file, which bb appends to before the handler goes on (bb's server
+  // log gets the same lines through a writer of its own, a moment later: not read here). The file holds JSON lines;
+  // each of ours is looked for by its own words.
+  {
+    const file = join(homedir(), "bbdata", "plugins", "oats", "logs", "plugin.log");
+    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    // (ONE of each: this is the first stop of that agent in the run, read before the next ones; in the run's fresh
+    // container the file holds no earlier run's lines.)
+    const of = (phase) => text.split("\n").filter((line) => line.includes(`oats act stopApply ${phase} instance=${A.instance} `));
+    const [asked, ended] = [of("asked"), of("ended")];
+    check(asked.length === 1 && / caller=\S+ host=\S+ at=\d{4}-\d\d-\d\dT[\d:.]+Z n=\d+/.test(asked[0]), "the act log: bb's log of the plugin holds ONE line that the plugin asked the kernel to stop the agent (who asked, the machine, when)", `${asked.length} line(s) in ${file}${existsSync(file) ? "" : " (no such file)"}`);
+    check(ended.length === 1 && / result=ok ms=\d+ homes=1\/1/.test(ended[0]) && ended[0].match(/ n=(\d+)/)?.[1] === asked[0]?.match(/ n=(\d+)/)?.[1], "the act log: and ONE line that the stop ended ok, with how long it took and the home it took, under the same number", `${ended.length} line(s)${ended[0] ? `: …${ended[0].slice(ended[0].indexOf("oats act"))}` : ""}`);
+  }
   // The stop is the plugin's own act: it rereads by itself afterwards, so this one measures how soon an act's result is on hand, not the watch (that the act rereads is test/lifecycle/server.test.ts's).
   await fresh("the agent stopped (the plugin's own act)", { instance: A.instance, home, kind: "stopped", since: stopAt }, (agent) => agent.runtimeState === "stopped");
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");

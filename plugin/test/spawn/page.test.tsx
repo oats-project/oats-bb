@@ -631,46 +631,61 @@ test("a name the kernel refuses at the preview is said under the name, in a pers
   expect(slot.queryByTestId("oats-spawn-preview")).toBeNull(); // no refusal drawn in a column: the field says it
 });
 
-test("a deployment with NO bb session provider: the form opens and says it ONCE, in one line; Spawn is off and described by it; no red sentence about harnesses, no Retry, no harness field; nothing is asked of the kernel and nothing is spawned", async () => {
-  const slot = await form("oats-developer", {
-    spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", absent: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace' } }),
-    spawn: () => ({ instance: "never", threadId: "thr_never" }),
-  });
-  const said = await slot.findByTestId("oats-spawn-no-bb");
-  const notice = within(said).getByTestId("oats-notice");
-  // ONE line, in a person's words, no code on the face; the kernel's own code and sentence under Details, closed.
-  expect([notice.querySelector("h3")!.textContent, notice.getAttribute("data-tone")]).toEqual(["bb is not set up for this workspace.", "info"]);
-  expect(Array.from(notice.children).map((child) => child.tagName)).toEqual(["H3", "DETAILS"]);
-  const details = within(notice).getByTestId("oats-notice-details") as HTMLDetailsElement;
-  expect([details.open, details.textContent]).toEqual([false, '▸DetailsE_CAPABILITY_UNKNOWN: no capability "oats.bb" in this workspace']);
-  // Once: no second notice (no refused preview under it: none is asked), no red sentence, no Retry, no harness field.
-  expect(slot.getAllByTestId("oats-notice")).toHaveLength(1);
-  expect(slot.getByTestId("oats-new-agent-page").textContent!.split("bb is not set up for this workspace.")).toHaveLength(2);
-  expect(slot.getByTestId("oats-new-agent-page").querySelector('[role="alert"]')).toBeNull();
-  expect(slot.getByTestId("oats-new-agent-page").textContent).not.toMatch(/Harnesses could not be read|Retry|E_CAPABILITY_UNKNOWN(?!: no capability)/);
-  expect(slot.queryByTestId("oats-spawn-harness")).toBeNull();
+test("a deployment with NO bb session provider: nothing of bb's and no red sentence (nothing failed); the harnesses are the kernel's own; the preview says where it will run, once; a soul alone arms Spawn, which names no harness and no backend; the new agent's own page opens", async () => {
+  // What the kernel decides there, as its own preview said it in the real run's second deployment (recorded): the
+  // soul's own harness, on tmux, and NO mode (`yolo: null`).
+  const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
+  let listed = 0;
+  const slot = await ready(
+    {
+      spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] }),
+      spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }),
+      spawn: () => ({ instance: "oats-developer-3", threadId: null }),
+    },
+    { models: () => ((listed += 1), { modelLoadError: null, models: [] }) },
+  );
+  // Nothing of bb's is offered: the harnesses are the ones the kernel launches itself, no list of bb's models is
+  // asked, and there is no choice of where it runs; and nothing is said to have failed.
+  expect(options(slot, "oats-spawn-harness").map(([label]) => label)).toEqual(["The soul's default: Claude Code", "pi", "Claude Code", "codex"]);
+  expect(slot.queryByTestId("oats-spawn-backend")).toBeNull();
   expect(slot.queryByTestId("oats-spawn-harness-retry")).toBeNull();
-  expect(slot.queryByTestId("oats-spawn-preview")).toBeNull();
-  // Spawn is off and described by that line; the fields are held; nothing beside the button.
-  expect([submit(slot).disabled, reason(slot), submit(slot).getAttribute("aria-describedby"), fieldset(slot).disabled]).toEqual([true, null, said.id, true]);
-  expect(describedBy(slot)).toContain("bb is not set up for this workspace.");
-  // A press of anything asks the kernel nothing: no preview, no spawn.
+  expect(slot.getByTestId("oats-spawn-form").querySelector('[role="alert"]')).toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Harnesses could not be read|bb’s default|not installed in bb/);
+  expect(options(slot, "oats-spawn-model").map(([label]) => label)).toEqual(["Default · claude-opus-5-5", "Custom…"]);
+  expect(listed).toBe(0);
+  // Where it will run, once, in view, in the Session card's words; never "bb thread".
+  expect(rows(slot).inView).toContainEqual(["Runs in", "tmux session"]);
+  expect(slot.getByTestId("oats-spawn-form").textContent!.split("tmux session")).toHaveLength(2);
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/bb thread/);
+  // No mode was asked and the kernel decided none: nothing says "no sandbox", which is bb's and does not hold here.
+  expect(rows(slot).inView.map(([label]) => label)).not.toContain("Access");
+  expect(slot.getByTestId("oats-new-agent-page").textContent).not.toMatch(/no sandbox/);
+  // A soul alone arms Spawn; the preview and the spawn name no harness.
+  expect([submit(slot).disabled, reason(slot)]).toEqual([false, null]);
+  expect(calls(slot, "spawnPlan").every((call) => call.harness === undefined && call.backend === undefined)).toBe(true);
   fireEvent.click(submit(slot));
-  fireEvent.keyDown(slot.getByTestId("oats-spawn-cancel"), { key: "Enter", ctrlKey: true });
-  fireEvent.keyDown(slot.getByTestId("oats-spawn-cancel"), { key: "Enter", metaKey: true });
-  expect([calls(slot, "spawnPlan"), calls(slot, "spawn")]).toEqual([[], []]);
+  await waitFor(() => expect(calls(slot, "spawn")).toHaveLength(1));
+  expect(calls(slot, "spawn")[0]).toEqual({ soul: "oats-developer", task: "", revision: REVISION, key: expect.stringMatching(/^[0-9a-f]{32}$/) });
+  // Created, with no bb thread to open: the agent's own page.
+  await waitFor(() => expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "agent", options: { subPath: "oats-developer-3" } }]));
+  expect(notified().at(-1)).toMatchObject({ tone: "done", title: "Created Oats developer 3." });
 });
 
-test("the preview waits for the harness read: in flight, with a soul chosen, the kernel is asked nothing and no notice is drawn; absent: the one line; present: the preview is asked", async () => {
-  type List = { harnesses: string[]; hostId: string | null; absent?: { code: string; message: string } };
+test("where the deployment has the bb session provider the form has NO choice of where the agent runs: every spawn is a bb thread, and nothing it sends names a backend", async () => {
+  // (The server answers no list of places any more; one that did, from an older build, draws nothing either.)
+  const slot = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true, backends: ["bb", "tmux"] }) as never }));
+  expect(slot.queryByTestId("oats-spawn-backend")).toBeNull();
+  expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Runs in|tmux session/);
+  expect(options(slot, "oats-spawn-harness").map(([label]) => label).slice(1)).toEqual(["Claude Code", "pi"]);
+  expect(rows(slot).inView).toContainEqual(["Access", "full mode: no sandbox"]);
+  expect(calls(slot, "spawnPlan").every((call) => !("backend" in call))).toBe(true);
+});
+
+test("the preview waits for the harness read: in flight, with a soul chosen, the kernel is asked nothing and no notice is drawn; then the preview is asked: of a bb thread where the provider is there, of the kernel's own choice where it is not", async () => {
+  type List = { harnesses: string[]; hostId: string | null; provider?: boolean; kernelHarnesses?: string[] };
+  const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
   let answer: (list: List) => void = () => undefined;
-  const refusing = {
-    spawnHarnesses: () => new Promise<List>((resolve) => (answer = resolve)),
-    spawnPlan: () => {
-      throw new Error('E_BACKEND_UNKNOWN: unknown session backend "bb": no capability of this instance declares it as a session provider');
-    },
-  };
-  const slot = await form("oats-developer", refusing);
+  const slot = await form("oats-developer", { spawnHarnesses: () => new Promise<List>((resolve) => (answer = resolve)), spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }) });
   // In flight, a soul on the form: longer than the preview's own delay, nothing is asked and nothing red is drawn.
   await waitFor(() => expect((slot.getByTestId("oats-spawn-soul") as HTMLButtonElement).disabled).toBe(false));
   await act(async () => {
@@ -680,12 +695,13 @@ test("the preview waits for the harness read: in flight, with a soul chosen, the
   expect(slot.queryByTestId("oats-notice")).toBeNull();
   expect(within(slot.getByTestId("oats-new-agent-page")).queryByRole("button", { name: "Retry" })).toBeNull();
   expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading…"]);
-  // The read answers that the provider is absent: the one line, alone; still nothing asked.
+  // The read answers that the provider is absent: the preview is asked, and it is the kernel's own choice of a place.
   await act(async () => {
-    answer({ harnesses: [], hostId: "host_falcon", absent: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace\'s catalog' } });
+    answer({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] });
   });
-  await waitFor(() => expect(slot.getAllByTestId("oats-notice").map((notice) => notice.querySelector("h3")!.textContent)).toEqual(["bb is not set up for this workspace."]));
-  expect(calls(slot, "spawnPlan")).toEqual([]);
+  await waitFor(() => expect(calls(slot, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
+  await waitFor(() => expect(rows(slot).inView).toContainEqual(["Runs in", "tmux session"]));
+  expect(slot.queryByTestId("oats-notice")).toBeNull();
   slot.unmount();
   resetApp();
   // The read answers that the provider is there: the preview is asked, as before.
@@ -702,22 +718,53 @@ test("the preview waits for the harness read: in flight, with a soul chosen, the
   await waitFor(() => expect(column(present).textContent).toContain("numbered by the kernel"));
 });
 
-test("no bb session provider, while the roster cannot be read: the roster's notice stands alone, and the line comes when it reads again", async () => {
+test("no bb session provider, while the roster cannot be read: the roster's notice stands alone and holds the form; nothing is asked of the kernel until it reads again", async () => {
   const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
   let stale = true;
   const live = handlers().snapshot;
   const slot = await form("oats-developer", {
     snapshot: (input) => (stale ? { ok: false as const, at: "2026-11-23T18:16:56.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last } : live(input)),
-    spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", absent: { code: "E_CAPABILITY_UNKNOWN", message: 'no capability "oats.bb" in this workspace\'s catalog' } }),
+    spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] }),
+    spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }),
   });
   await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).not.toBeNull());
-  expect(slot.queryByTestId("oats-spawn-no-bb")).toBeNull();
-  expect(slot.getByTestId("oats-new-agent-page").textContent).not.toContain("bb is not set up for this workspace.");
+  expect(slot.getAllByTestId("oats-notice")).toHaveLength(1);
   expect(describedBy(slot)).toContain("Acts are off.");
+  expect(calls(slot, "spawnPlan")).toEqual([]);
   stale = false;
   await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:26.000Z" });
   await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).toBeNull());
-  expect(within(await slot.findByTestId("oats-spawn-no-bb")).getByTestId("oats-notice").querySelector("h3")!.textContent).toBe("bb is not set up for this workspace.");
+  await waitFor(() => expect(rows(slot).inView).toContainEqual(["Runs in", "tmux session"]));
+  expect(slot.queryByTestId("oats-notice")).toBeNull();
+});
+
+test("the bb session provider is pinned and not synced: ONE line, \"bb is not synced. Run oats sync.\", the command in the code face, the kernel's sentence under Details, Retry; no preview is asked, the fields and Spawn are held; after the sync, Retry opens the form", async () => {
+  const kernelSays = "package oats.bb is not in the lock — run `oats sync`";
+  let synced = false;
+  const slot = await form("oats-developer", previews({ spawnHarnesses: () => (synced ? { harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true } : { harnesses: [], hostId: "host_falcon", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: kernelSays } }) }));
+  const notice = within(await slot.findByTestId("oats-spawn-not-synced")).getByTestId("oats-notice");
+  // ONE line: the notice's own heading holds both sentences, the command in the code face; no row under it but Details and Retry.
+  expect([notice.querySelector("h3")!.textContent, notice.querySelector("h3 code")!.textContent]).toEqual(["bb is not synced. Run oats sync.", "oats sync"]);
+  expect(Array.from(notice.children).map((child) => child.tagName)).toEqual(["H3", "DETAILS", "DIV"]);
+  expect(slot.getAllByTestId("oats-notice")).toHaveLength(1);
+  // The kernel's own code and sentence, one press away; nothing red, no "could not be read".
+  expect(notice.querySelector("details")!.textContent).toContain(`E_CAPABILITY_UNKNOWN: ${kernelSays}`);
+  expect(slot.getByTestId("oats-new-agent-page").textContent).not.toMatch(/could not be read|not set up/);
+  // Nothing is asked of the kernel, and nothing can be pressed but Retry and Cancel: Spawn is off, described by the line.
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 700));
+  });
+  expect(calls(slot, "spawnPlan")).toEqual([]);
+  expect(fieldset(slot).disabled).toBe(true);
+  expect(submit(slot).disabled).toBe(true);
+  expect(describedBy(slot)).toContain("bb is not synced. Run oats sync.");
+  // `oats sync` has run: Retry reads again, the line goes and the form asks its preview.
+  synced = true;
+  fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(slot.queryByTestId("oats-spawn-not-synced")).toBeNull());
+  await waitFor(() => expect(calls(slot, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
+  await waitFor(() => expect(fieldset(slot).disabled).toBe(false));
 });
 
 test("Spawn applies the decision the preview showed, once: the form says Created, stays held, and opens the new agent's thread", async () => {

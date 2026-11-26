@@ -4,7 +4,8 @@
 #   Claude Code, and a mock model for it (mock-anthropic.mjs): no login, nothing spent
 #   the OATS kernel, packed from the tree in $REAL/kernel with `npm pack --ignore-scripts`, or
 #     with KERNEL_NPM=<version> the registry's tarball of @awebai/oats@<version>, its integrity checked
-#   the bb session provider, from the tree in $REAL/provider, a workspace and a deployment (workspace.sh)
+#   the bb session provider, from the tree in $REAL/provider, a workspace and a deployment, and a
+#   second deployment that has no bb session provider (workspace.sh)
 #   bb-app, started with the mock model's address and a placeholder key in its own environment
 #   the plugin, installed from this checkout, with `oatsBin` set to the recording wrapper
 set -euo pipefail

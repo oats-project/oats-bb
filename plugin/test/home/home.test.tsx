@@ -1205,6 +1205,27 @@ test("behind a result the home's card of a stopped agent that asks says \"Readin
   expect(within(card).getByTestId("oats-needs-stopped").textContent).not.toContain(said!);
 });
 
+test("behind a result the home's card of a RUNNING agent that asks says \"Reading…\" in its state's place, with its reply field and Send off; its choices too", async () => {
+  const { noteActed } = await import("../../app/roster/reading");
+  const slot = await homePage({ rpc: handlers({}, fixtureAgents()) });
+  const card = await cardOf(slot, "release-070-maintainer");
+  const box = () => within(card).getByRole("textbox") as HTMLTextAreaElement;
+  expect([box().disabled, within(card).queryByTestId("oats-reading")]).toEqual([false, null]);
+  act(() => noteActed(["release-070-maintainer"], fixtureSnapshot(fixtureAgents()).at));
+  expect([box().disabled, within(card).getByTestId("oats-reading").textContent]).toEqual([true, "Reading…"]);
+  expect(Array.from(card.querySelectorAll("button")).filter((button) => button.textContent === "Send").every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+  slot.unmount();
+  resetApp();
+  const asks = await homePage({ rpc: handlers({}, fixtureAgents()), sdk: BB_ASKS });
+  const choices = () => asks.queryAllByTestId("oats-needs-choice") as HTMLButtonElement[];
+  await waitFor(() => expect(choices().length).toBeGreaterThan(0));
+  const of = choices()[0]!.closest('[data-testid="oats-needs-card"]')!.getAttribute("data-instance")!;
+  expect(choices().every((choice) => !choice.disabled)).toBe(true);
+  act(() => noteActed([of], fixtureSnapshot(fixtureAgents()).at));
+  expect(choices().filter((choice) => choice.closest(`[data-instance="${of}"]`) !== null).every((choice) => choice.disabled)).toBe(true);
+});
+
+/** The one count line of the home, on Home › Agents ("2 working · 4 need you · …"), for a roster. */
 // THE FIT OF A FACTS LINE (app/home/Home.tsx, the block of that name; ruled 25 Nov 2026): one design and one measure
 // for a card and a row. The measure reads the element's own boxes; jsdom has no layout, so the pure function is tested
 // with the widths the third review round MEASURED in a browser (its report, reviews/polish-r3-report.md of the
@@ -1766,6 +1787,58 @@ test("an agent nobody stopped whose way on is a message (no harness is loaded) i
     slot.unmount();
     resetApp();
   }
+});
+
+// THE MOMENT BEHIND A STOP (the lead's question on the small PR): the act ended, and the read it asked for has not: the
+// server's roster, which the press asks, is still the one from before, so the guard passes and the message goes to bb.
+// What bb does with a message to a thread the Stop archived is bb's (not shown here: the real run's to show); where it
+// refuses, the card says so with bb's words, once, and the plugin asks nothing more. With "Reading…" the window that
+// pressed Stop has the field off in that moment (the test above); this is a window that did not.
+test("a reply sent while the server's roster is still the one from before a Stop goes to bb; where bb refuses it the card says it was not sent, with bb's words, and nothing more is asked", async () => {
+  const sent: unknown[] = [];
+  const sdk = {
+    threads: {
+      send: async (input: unknown) => {
+        sent.push(input);
+        throw new Error("thread is archived");
+      },
+    },
+  } as never;
+  const slot = await homePage({ rpc: handlers({ snapshot: () => fixtureSnapshot(fixtureAgents()) }), sdk });
+  const writes = await cardOf(slot, "ranker-v3-probe");
+  fireEvent.change(within(writes).getByTestId("oats-reply-text"), { target: { value: "keep depth 6" } });
+  fireEvent.click(within(writes).getByTestId("oats-reply-send"));
+  const unsent = await within(writes).findByRole("alert");
+  expect(unsent.querySelector("h3")!.textContent).toBe("The message was not sent");
+  expect(unsent.textContent).toContain("thread is archived");
+  expect(sent).toHaveLength(1);
+  expect(slot.inspection.rpcCalls.map((call) => call.method).filter((method) => ["start", "restart", "stopApply", "retireApply", "spawn"].includes(method))).toEqual([]); // no act of OATS's: nothing is started by the plugin
+  expect((within(writes).getByTestId("oats-reply-text") as HTMLTextAreaElement).value).toBe("keep depth 6");
+});
+
+// While an ANSWER is on its way the card's other act, the message in the "Message instead" fold, is off; it does not say
+// "Sending…": no message is being sent (the fresh reviewer's nit on the wait at a press). And one press is one act: a
+// second press in the same turn, before the card is drawn again, asks nothing more.
+test("while an answer is on its way the fold's Send is off and still says Send; two presses in one turn ask once", async () => {
+  let hold = false;
+  const slot = await homePage({ rpc: handlers({ snapshot: () => (hold ? new Promise<never>(() => undefined) : fixtureSnapshot(fixtureAgents())) }), sdk: BB_ASKS });
+  const card = await cardOf(slot, "flaky-ci-developer");
+  await waitFor(() => expect(within(card).getAllByTestId("oats-needs-choice")).toHaveLength(2));
+  const asked = () => slot.inspection.rpcCalls.filter((call) => call.method === "snapshot").length;
+  const before = asked();
+  hold = true;
+  const [first, second] = within(card).getAllByTestId("oats-needs-choice");
+  act(() => {
+    // Two presses dispatched in ONE turn: the second finds the card not yet drawn again.
+    first!.click();
+    second!.click();
+  });
+  await waitFor(() => expect(asked()).toBe(before + 1));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(asked()).toBe(before + 1);
+  const send = within(card).getByTestId("oats-reply-send") as HTMLButtonElement;
+  expect([send.textContent, send.disabled]).toEqual(["Send", true]);
+  expect(within(card).getAllByTestId("oats-needs-choice").every((choice) => (choice as HTMLButtonElement).disabled)).toBe(true);
 });
 
 test("a press on an agent OATS stopped since its card was drawn sends nothing: the roster the server holds is asked at the press", async () => {

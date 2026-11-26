@@ -1,0 +1,19 @@
+{
+ "schemaVersion": 1,
+ "ok": false,
+ "error": {
+  "code": "E_BAD_ARGS",
+  "message": "messaging:mail: limit must be a whole number from 1 to 200",
+  "details": {
+   "exit": 1,
+   "envelope": {
+    "schemaVersion": 1,
+    "ok": false,
+    "error": {
+     "code": "E_BAD_ARGS",
+     "message": "limit must be a whole number from 1 to 200"
+    }
+   }
+  }
+ }
+}

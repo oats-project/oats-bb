@@ -120,7 +120,8 @@ function outsideOf(source: z.output<typeof row>, features: readonly string[]): {
 
 /**
  * What a row says of its agent's board, only where this kernel lists the feature: that it has one
- * (a fact or an open question), and that it ASKS: its board holds an open question AND the row's
+ * (a fact or an open question; or a board in a shape that cannot be read, or entries that had to
+ * be left out: what could not be shown is said on the board's own tab), and that it ASKS: its board holds an open question AND the row's
  * needs-input claim is the board's own (the kernel names a claim's producer; the agent's own claim,
  * or a failed turn's, can be live beside the board's, and the row shows the newest: a place that
  * says why the agent needs a person then says THAT claim, not the board's question). The board's
@@ -130,7 +131,8 @@ function outsideOf(source: z.output<typeof row>, features: readonly string[]): {
  */
 function boardOf(board: unknown, waiting: { producer?: string | null } | null | undefined, features: readonly string[]): { hasBoard?: true; boardAsks?: true } {
   const read = features.includes(BOARD_FEATURE) ? boardData(board) : null;
-  if (read === null || read.facts.length + read.questions.length === 0) return {};
+  // (A board that cannot be read, or whose entries were left out, is a board to show too: the place says so.)
+  if (read === null || (read.facts.length + read.questions.length === 0 && !read.malformed && read.dropped === 0)) return {};
   const asks = read.questions.length > 0 && waiting != null && (waiting.producer == null || boardClaim(waiting));
   return asks ? { hasBoard: true, boardAsks: true } : { hasBoard: true };
 }

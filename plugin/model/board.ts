@@ -26,8 +26,8 @@ export const BOARD_PRODUCER = "oats.board";
 export const DIALOG_REASONS = Object.freeze(["permission", "question"]);
 
 export type BoardLink = { href: string; host: string };
-export type BoardFact = { key: string; label: string; value: string; unit: string | null; link: BoardLink | null; at: string; /** one of its texts is withheld by the display filter: it is drawn as withheld, never as written */ withheld: boolean };
-export type BoardQuestion = { id: string; question: string; options: string[]; hasContext: boolean; since: string; withheld: boolean; optionsWithheld: boolean[] };
+export type BoardFact = { key: string; label: string; value: string; unit: string | null; link: BoardLink | null; at: string };
+export type BoardQuestion = { id: string; question: string; options: string[]; hasContext: boolean; since: string; optionsWithheld: boolean[] };
 /** A row's board, read: `malformed`: the value was no board (nothing is shown from it); `dropped`: entries left out as out of the contract. Neither ever reads as "no questions". */
 export type Board = { facts: BoardFact[]; questions: BoardQuestion[]; malformed: boolean; dropped: number };
 
@@ -61,7 +61,7 @@ function fact(value: unknown): BoardFact | null {
   if (unit === undefined || link === undefined) return null;
   // An address the display filter would withhold (a token in its query, a known secret's shape) is
   // never shown, nor opened: the fact stays, with no link, like any fact the agent gave none.
-  return { key: value.key, label: value.label, value: value.value, unit, link: link !== null && shown(link.href) ? link : null, at: value.at, withheld: !shown(value.label) || !shown(value.value) || (unit !== null && !shown(unit)) };
+  return { key: value.key, label: value.label, value: value.value, unit, link: link !== null && shown(link.href) ? link : null, at: value.at };
 }
 
 function question(value: unknown): BoardQuestion | null {
@@ -69,7 +69,7 @@ function question(value: unknown): BoardQuestion | null {
   const options = value.options;
   if (!Array.isArray(options) || options.length < BOARD_LIMITS.optionsMin || options.length > BOARD_LIMITS.optionsMax || !options.every((option) => line(option, BOARD_LIMITS.option))) return null;
   // A text the display filter withholds is never shown, so it is never sent either (`answerText`).
-  return { id: value.id, question: value.question, options: [...(options as string[])], hasContext: value.hasContext === true, since: value.since, withheld: !shown(value.question), optionsWithheld: (options as string[]).map((option) => !shown(option)) };
+  return { id: value.id, question: value.question, options: [...(options as string[])], hasContext: value.hasContext === true, since: value.since, optionsWithheld: (options as string[]).map((option) => !shown(option)) };
 }
 
 /** The first of each key (facts) or id (questions), in the kernel's order, up to `max`. */

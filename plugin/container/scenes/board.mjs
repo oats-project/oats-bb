@@ -55,6 +55,7 @@ const fill = (text, length) => {
   return made;
 };
 const LABELS = ["Pull request for the release branch", "Tests failing on the integration runner", "Best score of the ranking run today", "Coverage of the kernel's own suite", "Open review threads on the change", "Time of the slowest live stage", "Bundle size after the last build", "Latency at the ninety-fifth percentile", "Memory of the host daemon at rest", "Queue of the scheduled wakes", "Commits ahead of the default branch", "Flaky checks seen in ten runs"];
+const LONG_HOST = "pr-424-release-candidate-preview.oats-bb-plugin-staging.example-deployments.internal.example.org";
 function busy(board) {
   const [link, plain] = board.facts;
   const question = board.questions[0];
@@ -64,7 +65,8 @@ function busy(board) {
     label: label.slice(0, 40),
     value: index % 3 === 0 ? fill(`${1000 + index * 37} of ${2000 + index * 91} checks passed on the release candidate`, 80) : String(40 + index * 3),
     unit: index % 3 === 0 ? null : "milliseconds p95",
-    link: index % 2 === 0 ? `https://github.com/oats-project/oats-bb/pull/${420 + index}` : null,
+    // One address on a LONG host (a preview deployment's): the label's line is cut at its end, never run under the age and the ×.
+    link: index === 4 ? `https://${LONG_HOST}/pull/424` : index % 2 === 0 ? `https://github.com/oats-project/oats-bb/pull/${420 + index}` : null,
     at: new Date(Date.parse(plain.at) - index * 3_600_000).toISOString(),
   }));
   const questions = Array.from({ length: 9 }, (_, index) => ({
@@ -257,7 +259,10 @@ export default [
       const lefts = new Set(lines.flatMap((line) => line.left));
       check(lines.length === 12 && lefts.size === 1 && lines.every((line) => line.over && line.host !== false), `${at} BUSY: every fact is the same two lines, from one left edge: its value over its label, and an address on the label's line`, JSON.stringify({ lefts: [...lefts], lines }));
       const says = JSON.parse(await page.evaluate(`JSON.stringify({ says: [...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-says"))})].map(${flat}), hosts: [...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-link-show"))})].map(${flat}) })`));
-      check(says.says.length === 1 && says.says[0] === "Panel worktree helper says" && says.hosts.length === 6 && says.hosts.every((host) => host === "github.com"), `${at} BUSY: who says the six addresses is said once, on the Facts heading's line; each address is its host alone`, JSON.stringify(says));
+      check(says.says.length === 1 && says.says[0] === "Panel worktree helper says" && says.hosts.length === 6 && says.hosts.filter((host) => host === "github.com").length === 5 && says.hosts.includes(LONG_HOST), `${at} BUSY: who says the six addresses is said once, on the Facts heading's line; each address is its host alone`, JSON.stringify(says));
+      // A long host: cut at its end inside its fact's line (its whole text is its title), the label keeps a few characters, and the age and the × stay clear of it.
+      const long = JSON.parse(await page.evaluate(`(() => { const fact = [...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-fact"))})].find((f) => f.querySelector('[data-testid="oats-board-link-show"]')?.innerText.trim() === ${JSON.stringify(LONG_HOST)}); if (!fact) return "null"; const box = (id) => fact.querySelector('[data-testid="' + id + '"]').getBoundingClientRect(); const host = fact.querySelector('[data-testid="oats-board-link-show"]'); const h = box("oats-board-link-show"), l = box("oats-board-fact-label"), a = box("oats-board-age"); return JSON.stringify({ label: Math.round(l.width), hostRight: Math.round(h.right), ageLeft: Math.round(a.left), cut: host.scrollWidth > host.clientWidth, title: host.getAttribute("title") }); })()`));
+      check(long !== null && long.label >= 12 && long.hostRight <= long.ageLeft && long.title === LONG_HOST && (viewport.mobile ? long.cut : true), `${at} BUSY: a long host stays inside its fact's line: the label keeps a few characters, the host ends before the age${viewport.mobile ? " and is cut at its end" : ""}, its whole text is its title`, JSON.stringify(long));
       await page.evaluate(`document.querySelector(${JSON.stringify(inBoard("oats-board-facts"))})?.scrollIntoView({ block: "start" })`);
       await targets(page, viewport, check, at, `board-${viewport.name}-busy-facts`);
       await page.shot(`board-${viewport.name}-busy-facts`);

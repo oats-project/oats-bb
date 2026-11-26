@@ -17,7 +17,8 @@ export type BoardRead =
   | { status: "error"; error: string; retry(): void }
   /** this kernel says nothing of boards (an older OATS): nothing is drawn */
   | { status: "unsupported" }
-  | { status: "ready"; board: Board | null; claim: BoardClaim; /** the last read failed: what is shown is what was read before */ stale: string | null; retry(): void };
+  /** (A later read that fails leaves what was read: the roster's own notice says that OATS cannot be read, and holds every act.) */
+  | { status: "ready"; board: Board | null; claim: BoardClaim; retry(): void };
 
 /** The row's board of `instance`, kept fresh. */
 export function useBoard(instance: string): BoardRead {
@@ -35,7 +36,7 @@ export function useBoard(instance: string): BoardRead {
   const retry = () => void refetch.current();
   if (data === undefined) return query.error === null ? { status: "loading" } : { status: "error", error: errorMessage(query.error), retry };
   if (!data.supported) return { status: "unsupported" };
-  return { status: "ready", board, claim: data.claim, stale: query.error === null ? null : errorMessage(query.error), retry };
+  return { status: "ready", board, claim: data.claim, retry };
 }
 
 export type DetailRead =

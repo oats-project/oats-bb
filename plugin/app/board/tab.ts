@@ -5,9 +5,14 @@
 // command of its own.
 import { useBoard } from "./read";
 
-/** `asks` implies `shown` (both read the one board that was read: a board with an open question has something to show): a place may open on a tab it draws. */
-export function useBoardTab(instance: string): { /** the board's first read has landed (whatever it said): a place decides where it opens then, once */ read: boolean; /** at least one fact or one question */ shown: boolean; /** at least one open question */ asks: boolean } {
+/**
+ * `asks` implies `shown` (both read the one board that was read: a board with an open question has something to show): a
+ * place may open on a tab it draws. A board that CANNOT BE SHOWN (no board at all in its place, or entries left out as
+ * out of the contract) has something to say too: its tab is drawn, so that what could not be read is said where a
+ * person looks for the board, never by the board's silence.
+ */
+export function useBoardTab(instance: string): { /** the board's first read has landed (whatever it said): a place decides where it opens then, once */ read: boolean; /** at least one fact or one question, or a board that could not be read or shown whole */ shown: boolean; /** at least one open question */ asks: boolean } {
   const read = useBoard(instance);
   const board = read.status === "ready" ? read.board : null;
-  return { read: read.status !== "loading", shown: board !== null && (board.facts.length > 0 || board.questions.length > 0), asks: board !== null && board.questions.length > 0 };
+  return { read: read.status !== "loading", shown: board !== null && (board.facts.length > 0 || board.questions.length > 0 || board.malformed || board.dropped > 0), asks: board !== null && board.questions.length > 0 };
 }

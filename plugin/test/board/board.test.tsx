@@ -151,6 +151,11 @@ test("a value is never cut, and every fact has the same two lines: a long value 
   expect(within(first!).getByTestId("oats-board-fact-value").textContent).toBe(long);
   // the address belongs to its fact: on the label's own line, after it
   expect(within(first!).getByTestId("oats-board-fact-label").parentElement!.textContent).toBe("Checks · github.com");
+  // One line, cut at its end: the label gives way first and keeps a few characters; a long host is cut too, with its whole text in its title.
+  expect(within(first!).getByTestId("oats-board-fact-label").className).toMatch(/min-w-\[4ch\].*truncate/);
+  const host = within(first!).getByTestId("oats-board-link-show");
+  expect([host.className.includes("truncate"), host.getAttribute("title")]).toEqual([true, "github.com"]);
+  expect(within(first!).getByTestId("oats-board-link").className).toMatch(/max-w-\[70%\]/);
   expect(within(second!).queryByTestId("oats-board-link")).toBeNull();
 });
 

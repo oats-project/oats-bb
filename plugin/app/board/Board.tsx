@@ -88,15 +88,19 @@ function FactRow({ fact, values, now, hide }: { fact: BoardFact; values: readonl
               </span>
             )}
           </span>
-          <div className="flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground">
-            <span data-testid="oats-board-fact-label" title={shown(fact.label)} className="min-w-0 truncate">
+          <div className="flex min-w-0 items-baseline text-xs text-muted-foreground">
+            {/* ONE line, cut at its end: the label gives way first, but keeps a few characters; a host that is long is cut too
+                (its whole text is its title, and the whole address is one press away). Neither runs under the age and the ×. */}
+            <span data-testid="oats-board-fact-label" title={shown(fact.label)} className="min-w-[4ch] shrink truncate">
               {shown(fact.label)}
             </span>
             {link === null ? null : (
-              <span data-testid="oats-board-link" className="shrink-0 whitespace-nowrap">
-                {" · "}
+              <span data-testid="oats-board-link" className="flex min-w-0 max-w-[70%] shrink-0 items-baseline whitespace-nowrap">
+                <span aria-hidden="true" className="whitespace-pre">
+                  {" · "}
+                </span>
                 {/* As high as a press needs (32 px; 44 at the phone's width) by its padding alone, taken back by its margin: the line keeps a line's height. */}
-                <button type="button" data-testid="oats-board-link-show" aria-expanded={whole} className="-my-[13px] inline-block py-[13px] text-xs text-muted-foreground hover:text-foreground md:-my-2 md:py-2" onClick={() => setWhole((was) => !was)}>
+                <button type="button" data-testid="oats-board-link-show" aria-expanded={whole} title={shown(link.host)} className="-my-[13px] inline-block min-w-0 truncate py-[13px] text-xs text-muted-foreground hover:text-foreground md:-my-2 md:py-2" onClick={() => setWhole((was) => !was)}>
                   {shown(link.host)}
                 </button>
               </span>
@@ -148,16 +152,12 @@ function Facts({ instance, board, detail, now }: { instance: string; board: Boar
         </button>
       )}
       {/* The history is the small lines' alone: where it could not be had, one quiet line says which. */}
-      {detail.status === "failed" ? (
+      {detail.status === "failed" || (detail.status === "read" && detail.detail.state === "malformed") ? (
         <Quiet testId="oats-board-history-failed" failed>
           {BOARD.historyFailed}
         </Quiet>
       ) : detail.status === "read" && detail.detail.state === "unsupported" ? (
         <Quiet testId="oats-board-no-history">{BOARD.noHistory}</Quiet>
-      ) : detail.status === "read" && detail.detail.state === "malformed" ? (
-        <Quiet testId="oats-board-history-failed" failed>
-          {BOARD.historyFailed}
-        </Quiet>
       ) : null}
     </div>
   );

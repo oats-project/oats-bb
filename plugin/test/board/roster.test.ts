@@ -65,6 +65,15 @@ describe("the roster's row and the agent's board", () => {
     expect(said(unnamed).keys).toEqual(["hasBoard", "boardAsks"]);
   });
 
+  it("a board in a shape that cannot be read, or whose every entry is out of the contract: it HAS a board (the place says what could not be shown), and it does not ask", () => {
+    const other = recorded();
+    (rowOf(other) as unknown as { board: unknown }).board = "not a board";
+    expect(said(other).keys).toEqual(["hasBoard"]);
+    const dropped = recorded();
+    (rowOf(dropped) as unknown as { board: unknown }).board = { facts: [{ key: "BAD KEY", label: "x", value: "y", at: "2026-11-23T18:00:58.766Z" }], questions: [] };
+    expect(said(dropped).keys).toEqual(["hasBoard"]);
+  });
+
   it("no board, an empty board, no key, or a kernel without the feature: neither key (absent, not false)", () => {
     const none = recorded();
     rowOf(none).board = null;

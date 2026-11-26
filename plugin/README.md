@@ -933,12 +933,15 @@ An agent's **board** is what it tells its person outside its conversation (`oats
 run by the agent in its own home): the **questions** it needs answered and the **facts** it keeps
 in view. The plugin draws it as a view of its own (`app/board`, `<Board instance>`), which takes the
 agent's name and nothing of the place that mounts it, on the panel's **Board** tab; nothing is
-drawn for an agent with neither. It needs a kernel that lists the feature `instance-board`.
+drawn for an agent with neither. A board that CANNOT BE SHOWN has its tab too, and says so on
+it: a board in a shape the plugin does not know ("This agent's board could not be read."), or
+entries left out as out of the kernel's contract ("N entries of this agent's board could not be
+shown."): never the board's silence. It needs a kernel that lists the feature `instance-board`.
 
 | Part | Shows |
 |---|---|
 | **Questions** (first: they are what needs the person) | one question at a time, with its place among the open ones ("2 of 3"), its age, ‹ and › and a dot per question (the arrow keys turn them too); the question, whole; its options, numbered; and **Context**, a fold, only where the agent sent one: the agent's own text, plain, in a box of at most a third of the window that scrolls alone. |
-| **Facts** | bb's own section and list: three, and bb's "N more" for the rest. EVERY fact is the same two lines (ours: bb's own row keeps one line). Line 1: the **value** and unit, whole (a long one wraps: a value is never cut), the small line of its numbers' history right after it where it has one, and at the row's end its age and **×**. Line 2, small and muted: its **label** and, where it has an address, the address's host; the label is what gives way (its whole text is its title). **×** hides a fact on this computer alone (it comes back when its value changes; "N hidden · show" brings all back). |
+| **Facts** | bb's own section and list: three, and bb's "N more" for the rest. EVERY fact is the same two lines (ours: bb's own row keeps one line). Line 1: the **value** and unit, whole (a long one wraps: a value is never cut), the small line of its numbers' history right after it where it has one, and at the row's end its age and **×**. Line 2, small and muted: its **label** and, where it has an address, the address's host: one line, cut at its end; the label gives way first and keeps a few characters (its whole text is its title), and a long host is cut too (its whole text in its title; the whole address is one press away). **×** hides a fact on this computer alone (it comes back when its value changes; "N hidden · show" brings all back). |
 | A fact's **address** | who says it is said once, on the heading's line ("<Name> says"); each fact then shows its address's host alone, as text, after its label. A press shows the whole address, still as text; only then **Open in browser**. An address that looks like it holds a secret is never shown. |
 
 Every word of a board is the agent's: plain text through the display filter, never markup.
@@ -995,6 +998,11 @@ DECIDED ONCE, when the board's first read lands: a panel that is open never turn
 neither to Board when the agent asks under a person reading another tab, nor away from Board
 when the agent clears its question under a person reading its facts. Only a press moves it; a
 Board tab that is no longer drawn (its last fact and question gone) leaves it on Instance. A
+PRESS IS AN EVENT, not a change of the memory (`showPanelTab` counts each one): a press that
+names the tab the memory already holds moves a panel that opened on Board all the same (the
+header's soul link, the thread line's Answer for a claim that is not the board's), and a press
+made for an agent whose panel is not open yet (`showPanelTab(tab, { for: instance })`: Answer)
+decides where that panel opens. The panel's own leaving of Mail is not a press. A
 question asked while the panel is open on another tab is not missed: the thread's own line says
 "Needs you" with **Answer**, which turns the panel to Board.
 

@@ -119,7 +119,8 @@ export function IdentityRow({ threadId }: ExperimentalThreadHeaderRowProps) {
           // BOARD is on the Board tab, with its options: there, for an agent whose board asks. Either
           // way the focus lands on what is to be answered (the board's question does not take it by itself).
           const onBoard = agent.boardAsks === true;
-          showPanelTab(onBoard ? "board" : "instance");
+          // (FOR this agent: its panel may not be open yet, and must open on the tab asked for, not by its own rule.)
+          showPanelTab(onBoard ? "board" : "instance", { for: agent.instance });
           openPanel();
           if (onBoard) focusBoardQuestion();
           else focusNeedsInput();

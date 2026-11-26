@@ -986,8 +986,10 @@ export default [
     name: "the busy workspace: the sidebar as loaded, with every parent opened, and at its foot; the home and what is under its first screen",
     run: async ({ page, at, viewport, check }) => {
       const rowsOf = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row")}, ${testId("oats-sidebar")} ${testId("oats-tree")} ${testId("oats-agent-row-threadless")}`)})]`;
-      // What a busy sidebar measures: its rows; the names that are cut and how many of those read the same as another
-      // as drawn; whether New agent and the first page link are on the screen without scrolling.
+      // What a busy sidebar measures: its rows; the names that are cut (`cut`), and of those how many share their first
+      // thirty letters with another cut name (`cutAndSameFirst30`: a count of the WHOLE names' starts, not of what is
+      // drawn: two lines show about fifty letters); whether New agent and the first page link are on the screen
+      // without scrolling.
       const measure = `(() => { const rows = ${rowsOf}; const names = rows.map((row) => row.querySelector(${JSON.stringify(testId("oats-row-name"))})); const cut = names.filter((name) => name && (name.scrollHeight > name.clientHeight + 1 || name.scrollWidth > name.clientWidth + 1)); const seen = (el) => { if (!el) return null; const box = el.getBoundingClientRect(); return box.height > 0 && box.top >= 0 && box.bottom <= window.innerHeight; }; const alike = (() => { const drawn = new Map(); for (const name of cut) { const key = name.innerText.slice(0, 30); drawn.set(key, (drawn.get(key) ?? 0) + 1); } return [...drawn.values()].filter((n) => n > 1).reduce((sum, n) => sum + n, 0); })(); return JSON.stringify({ rows: rows.length, cut: cut.length, cutAndSameFirst30: alike, asking: document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} [data-mark][data-state="needs-you"]`)}).length, newAgent: seen(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-new-agent")}`)})), pageLink: seen(document.querySelector(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-pages")} a, ${testId("oats-sidebar")} ${testId("oats-pages")} button`)})) }); })()`;
       const note = (what, measured) => console.log(`NOTE ${at} busy, ${what}: ${measured}`);
       await page.goto("/");
@@ -1001,6 +1003,9 @@ export default [
       await openParents(page);
       const opened = await page.until(`${rowsOf}.length === 60 ? "60" : ""`, 30);
       check(opened === "60", `${at} with every parent opened the roster is its sixty agents, four levels deep`, opened ?? (await page.evaluate(`String(${rowsOf}.length)`)));
+      // The three agents that failed at their start say so: their rows are in the failed state (bb's record of each thread says it: an error and never a turn).
+      const failedRows = await page.evaluate(`String(document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-tree")} [data-mark][data-state="error"]`)}).length)`);
+      check(failedRows === "3", `${at} the three agents that failed at their start are drawn failed`, failedRows);
       note("the sidebar with every parent opened", await page.evaluate(measure));
       await page.shot(`busy-${viewport.name}-sidebar-opened`);
       // Its foot: what stands under the list (New agent, the page links), reached by scrolling the list to its end.
@@ -1050,11 +1055,11 @@ export default [
         const letGo = await page.hold("Control+Shift");
         try {
           const keys = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-jump-key")}`)})]`;
-          const shown = await page.until(`${keys}.length > 0 ? JSON.stringify(${keys}.map((key) => [key.closest("a")?.getAttribute("data-sidebar-thread-id"), key.innerText.trim()])) : ""`, 20);
+          const shown = await page.until(`${keys}.length >= Math.min(9, document.querySelectorAll("[data-sidebar-thread-shortcut-target]").length) ? JSON.stringify(${keys}.map((key) => [key.closest("a")?.getAttribute("data-sidebar-thread-id"), key.innerText.trim()])) : ""`, 20);
           const labels = typeof shown === "string" && shown !== "" ? JSON.parse(shown) : [];
           // (Against the order drawn NOW: bb's other threads may have changed places since the walk.)
           const now = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll("[data-sidebar-thread-shortcut-target]")].map((row) => row.getAttribute("data-sidebar-thread-id")))`));
-          check(labels.length > 0 && labels.every(([id], n) => id === now[n]) && labels.every(([, label], n) => label.endsWith(String(n + 1))), `${at} while bb's modifiers are held our thread rows show the jump keys bb gave them, 1 upward in the order drawn, as bb's own rows do`, JSON.stringify(labels));
+          check(labels.length === Math.min(9, now.length) && labels.every(([id], n) => id === now[n]) && labels.every(([, label], n) => label.endsWith(String(n + 1))), `${at} while bb's modifiers are held our thread rows show the jump keys bb gave them, 1 upward in the order drawn, as bb's own rows do`, JSON.stringify(labels));
           await page.shot(`busy-${viewport.name}-jump-keys`);
         } finally {
           await letGo();
@@ -1069,10 +1074,12 @@ export default [
       note("the home", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: (() => { let up = document.querySelector('[data-testid="oats-home-needs"]'); while (up && !(up.scrollHeight > up.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(up).overflowY))) up = up.parentElement; return up ? Math.round((up.scrollHeight / up.clientHeight) * 10) / 10 : 1; })(), cardsOnFirstScreen: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})].filter((card) => card.getBoundingClientRect().bottom <= window.innerHeight).length })`));
       await page.shot(`busy-${viewport.name}-home`);
       const more = `document.querySelector(${JSON.stringify(`${testId("oats-home")} ${testId("oats-home-needs-all")}, ${testId("oats-home-needs-all")}`)})`;
-      if (await page.evaluate(`Boolean(${more})`)) {
+      const offered = await page.evaluate(`Boolean(${more})`);
+      check(offered, `${at} the busy home offers the rest of what needs the person (thirteen, eight shown)`);
+      if (offered) {
         await page.evaluate(`${more}.click()`);
-        const all = await page.until(`${cards} >= 11 ? String(${cards}) : ""`, 30);
-        check(Number(all) >= 11, `${at} with the rest shown the busy home draws a card for each agent that asks (eleven) and each that runs outside OATS`, all ?? (await page.evaluate(`String(${cards})`)));
+        const all = await page.until(`${cards} === 13 ? "13" : ""`, 30);
+        check(all === "13", `${at} with the rest shown the busy home draws thirteen cards: one for each of the eleven agents that ask and the two that run outside OATS`, all ?? (await page.evaluate(`String(${cards})`)));
         note("the home with every card", await page.evaluate(`JSON.stringify({ cards: ${cards}, screens: (() => { let up = document.querySelector('[data-testid="oats-home-needs"]'); while (up && !(up.scrollHeight > up.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(up).overflowY))) up = up.parentElement; return up ? Math.round((up.scrollHeight / up.clientHeight) * 10) / 10 : 1; })() })`));
         // The cards the press added, from the first of them.
         await page.evaluate(`(() => { const all = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-home-needs")} ${testId("oats-needs-card")}`)})]; all[Math.min(8, all.length - 1)]?.scrollIntoView({ block: "start" }); return "1"; })()`);

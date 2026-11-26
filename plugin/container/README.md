@@ -298,31 +298,36 @@ is the one judged first.
 **To add your screen's busy scene**: one more scene in your feature's file under `scenes/`, with
 `stage: "busy"`, and its images named `busy-<view>-<what>`. Nothing else: no fixture of your own, no
 stage of your own. The fake `oats` answers `status`, `souls`, `teams`, `server list`, `schedule
-list` and `trigger list` from the set for the stage's length. A verb the set does not hold (yours)
+list`, `trigger list` and `operation run messaging:mail` from the set for the stage's length. (The
+set holds ONE agent's mail, the busy chat's: the mail read answers it for EVERY agent.) A verb the set does not hold (yours)
 answers its recorded fixture as always; if your screen needs a busy answer of it, the answer goes
 INTO the set, made by its generator from your recorded answer (`test/fixtures/busy/generate.mjs`,
 whose test holds that every busy row is a recorded row with only names, ids, times and relations
 varied): ask the set's owner, never shape one beside it.
 
-What the stage does when it starts, and says in a `NOTE BUSY` line with the seconds each part
-took (67 s in all, measured):
+What the stage does when it starts. It takes under three minutes (about seventy seconds when it
+was built), and its `NOTE BUSY` line says the seconds of each part in every run's log:
 1. the busy chat's thread is made and its ten turns are had with the mock model (`say.json`,
-   `real/mock-anthropic.mjs`): 11 s;
+   `real/mock-anthropic.mjs`);
 2. every busy agent on bb with no turn to run gets a thread of this run, an idle fork of a fixture
-   thread, titled as the provider titles it: 20 s. (The forks come first: bb 0.50.1 refuses a fork
-   while another thread's first message waits in line.);
+   thread, titled as the provider titles it (the forks come first: bb 0.50.1 refuses a fork
+   while another thread's first message waits in line);
 3. the three agents that FAILED AT THEIR START get a thread that did: Claude Code is taken away
    for the length of their spawns, the model named (with none, bb asks the harness for its
-   default and refuses the spawn), and bb's record of each is checked: an error and never a turn: 6 s;
+   default and refuses the spawn), and bb's record of each is checked: an error and never a turn;
+   they are read again once Claude Code is back;
 4. each agent the set says runs gets a thread of its own whose first turn is HELD open (bb, not
    the kernel, says that an agent on a thread works). bb holds a new turn in line once as many
    threads run as the host has processors (its built-in "concurrency limit": two in this
    container), and everything spawned after waits behind it: the stage raises the host's limit for
-   its length (`bb concurrency-limit host <id> <n>`) and puts bb's own back (`auto`): 23 s;
+   its length (`bb concurrency-limit host <id> <n>`) and puts bb's own back (`auto`), which is read back;
 5. the thread of each agent whose session was lost on bb is archived, and so are the fixtures' own
    agents' threads; bb's request for a star is turned off (the chat alone is ten prompts).
-When it leaves, the held turns are answered, its threads are archived, the fixtures' are put back
-and the fake `oats` answers the fixtures' roster again, which is waited for.
+When it leaves, each thing it changed is put back and READ: the held turns are answered (no
+thread of its own is active), its threads are archived, bb says of the host's limit what it said
+before, the star request is on again, the fixtures' threads are back and the fake `oats` answers
+the fixtures' roster again, which is waited for. A run that is killed while Claude Code is away
+finds where it was at its next start and puts it back.
 
 A busy scene MEASURES what the worst-case rule asks and the screen does not yet do, and prints it
 as a `NOTE` (the roster's: rows, names cut, New agent on the screen): a number in every run's log,

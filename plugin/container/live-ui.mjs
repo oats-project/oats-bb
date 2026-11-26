@@ -579,10 +579,22 @@ const BUILT_IN = {
 const BUSY_HOLD = "live-ui-busy";
 const BUSY_HOLD_FILE = join(homedir(), "mock", "hold", BUSY_HOLD);
 const BUSY_SAY_FILE = join(homedir(), "mock", "say.json");
+// Claude Code, while the busy stage has it away (the failed starts): where it was; and the way back.
+const CLAUDE_AWAY = join(homedir(), "mock", "claude-away");
+function claudeBack() {
+  if (!existsSync(CLAUDE_AWAY)) return;
+  const claude = readFileSync(CLAUDE_AWAY, "utf8").trim();
+  if (claude !== "" && existsSync(`${claude}.away`)) renameSync(`${claude}.away`, claude);
+  rmSync(CLAUDE_AWAY, { force: true });
+}
 function busyStage() {
   const made = []; // the threads this stage made: { instance, id }
   const away = []; // the fixtures' own threads it archived for its length
-  const limited = []; // the host whose concurrency limit it raised
+  const limited = []; // the host whose concurrency limit it raised, and what bb said of it before
+  let starOff = false; // bb's star request was turned off by this stage
+  // What bb holds of the thread of an agent that failed at its start: its status, and the types of its events.
+  const recordOf = (thread) => (thread === undefined ? "no thread" : `${thread.status}; ${tell("thread", "log", thread.id, "--json").replace(/\s+/g, " ").match(/"type": ?"[a-z./-]+"/g)?.map((type) => type.replace(/"type": ?/, "")).join(" ") ?? "(no events read)"}`);
+  const failedAtItsStart = (record) => /system\/error/.test(record) && !/turn\/started/.test(record);
   const set = () => JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/status.json"), "utf8"));
   const rowsOf = (status) => status.agents.flatMap((group) => group.instances);
   return {
@@ -592,8 +604,11 @@ function busyStage() {
     tellsAThread: true,
     enter: async ({ threads }) => {
       const started = Date.now();
-      // bb's own request for a star (after five prompts; the chat alone is ten) is no part of any image.
-      tell("plugin", "disable", "bb--github-star");
+      const project = listOf(bbJson("project", "list"), "projects")[0];
+      const root = (project.sources ?? []).find((each) => each.path)?.path;
+      // bb's own request for a star (after five prompts; the chat alone is ten) is no part of any image: off for the
+      // stage's length, and on again when it leaves.
+      starOff = !tell("plugin", "disable", "bb--github-star").startsWith("(bb plugin disable failed");
       const status = set();
       const onBb = rowsOf(status).filter((row) => row.backend === "bb" && typeof row.session?.threadId === "string");
       const source = threads.get("thr_harvest"); // an idle fixture thread: its one turn was answered
@@ -603,8 +618,6 @@ function busyStage() {
       const chat = JSON.parse(readFileSync(join(PLUGIN, "test/fixtures/busy/chat.json"), "utf8"));
       const chatTitle = providerTitle(chat.agent);
       if (!existing.some((thread) => thread.title === chatTitle)) {
-        const project = listOf(bbJson("project", "list"), "projects")[0];
-        const root = (project.sources ?? []).find((each) => each.path)?.path;
         atomicWrite(BUSY_SAY_FILE, JSON.stringify(Object.fromEntries(chat.turns.map((turn) => [turn.you, turn.agent]))));
         // A turn is answered when the thread's last output is that turn's answer and bb shows it idle (never by
         // "idle" alone: a thread just told is still idle for a moment).
@@ -651,8 +664,6 @@ function busyStage() {
       // of the thread (an error and never a turn). So its thread is made to fail at its start: a model the harness
       // cannot start with (TRIED HERE: a provider whose harness is not installed). What bb then holds of each is said.
       {
-        const project = listOf(bbJson("project", "list"), "projects")[0];
-        const root = (project.sources ?? []).find((each) => each.path)?.path;
         const wanted = failedAtStart.filter((instance) => !existing.some((thread) => thread.title === providerTitle(instance)));
         if (wanted.length > 0) {
           // Nothing waits to start (the chat is had, no turn is held yet): the harness is taken away for the spawns.
@@ -660,20 +671,19 @@ function busyStage() {
           // it cannot (seen in this stage's fifth look).
           const claude = realpathSync(execFileSync("sh", ["-c", "command -v claude"], { encoding: "utf8" }).trim());
           const said = [];
+          // (Where it is, written down first: a run that is killed here finds it at its next start and puts it back.)
+          writeFileSync(CLAUDE_AWAY, claude);
           renameSync(claude, `${claude}.away`);
           try {
             for (const instance of wanted) said.push(`${instance}: ${tell("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--model", source.model ?? "claude-opus-5-5", "--title", providerTitle(instance), "--prompt", "hello", "--json").replace(/\s+/g, " ").slice(0, 80)}`);
-            const eventsOf = (instance) => {
-              const thread = list().find((candidate) => candidate.title === providerTitle(instance));
-              return thread === undefined ? "no thread" : `${thread.status}; ${tell("thread", "log", thread.id, "--json").replace(/\s+/g, " ").match(/"type": ?"[a-z./-]+"/g)?.map((type) => type.replace(/"type": ?/, "")).join(" ") ?? "(no events read)"}`;
-            };
+            const eventsOf = (instance) => recordOf(list().find((candidate) => candidate.title === providerTitle(instance)));
             const deadline = Date.now() + 60_000;
             while (Date.now() < deadline && !wanted.every((instance) => eventsOf(instance).includes("system/error"))) await sleep(2000);
             for (const instance of wanted) console.log(`NOTE BUSY failed at its start, ${instance}: bb says ${eventsOf(instance).slice(0, 500)}`);
-            const failed = wanted.filter((instance) => /system\/error/.test(eventsOf(instance)) && !/turn\/started/.test(eventsOf(instance)));
+            const failed = wanted.filter((instance) => failedAtItsStart(eventsOf(instance)));
             check(failed.length === wanted.length, `BUSY the ${wanted.length} threads of the agents that failed at their start did fail at their start in bb: an error and never a turn`, said.join(" | "));
           } finally {
-            renameSync(`${claude}.away`, claude);
+            claudeBack();
           }
           existing = list();
         }
@@ -685,13 +695,12 @@ function busyStage() {
       const machines = bbJson("machine", "list");
       const host = (Array.isArray(machines) ? machines : (machines.machines ?? machines.hosts ?? machines.items ?? []))[0]?.id;
       if (typeof host !== "string") throw new Error("live-ui: bb lists no machine to raise the concurrency limit of");
+      // (What bb says of the host's limit BEFORE, kept: the stage's leave reads that it says the same again.)
+      limited.push({ host, before: tell("concurrency-limit", "host", host, "--json") });
       bb("concurrency-limit", "host", host, String(working.length + 4));
-      limited.push(host);
       mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
       writeFileSync(BUSY_HOLD_FILE, "");
       {
-        const project = listOf(bbJson("project", "list"), "projects")[0];
-        const root = (project.sources ?? []).find((each) => each.path)?.path;
         for (const row of working) {
           const title = providerTitle(row.instance);
           if (!existing.some((thread) => thread.title === title)) bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", title, "--prompt", `hello MOCK-HOLD:${BUSY_HOLD}`, "--json");
@@ -722,6 +731,12 @@ function busyStage() {
       const all = Object.fromEntries(working.map((row) => [row.instance, statusNow(byInstance.get(row.instance).id)]));
       const idle = working.filter((row) => all[row.instance] !== "active");
       check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${working.length} busy agents that work`, idle.map((row) => `${row.instance}: ${all[row.instance]}`).join(" | "));
+      // The three failed starts, read AGAIN now that Claude Code is back and fourteen turns run: still an error and never a turn.
+      {
+        const now = list();
+        const ran = failedAtStart.filter((instance) => !failedAtItsStart(recordOf(now.find((thread) => thread.title === providerTitle(instance)))));
+        check(ran.length === 0, `BUSY the ${failedAtStart.length} threads that failed at their start still hold an error and no turn, with Claude Code back`, ran.join(" | "));
+      }
       // An agent whose session was lost on bb: its thread is archived, as the recorded row's was.
       for (const row of onBb.filter((each) => each.sessionEnd === "lost" && !failedAtStart.includes(each.instance))) bb("thread", "archive", byInstance.get(row.instance).id);
       // The set, with this run's thread in each slot.
@@ -744,13 +759,27 @@ function busyStage() {
     leave: async ({ threads }) => {
       // The held turns are answered, and every thread this stage made is archived: no later stage sees one.
       rmSync(BUSY_HOLD_FILE, { force: true });
-      for (const host of limited.splice(0)) tell("concurrency-limit", "host", host, "auto");
+      rmSync(BUSY_SAY_FILE, { force: true });
+      claudeBack();
+      // bb's own concurrency limit is back: asked, and READ.
+      for (const { host, before } of limited.splice(0)) {
+        tell("concurrency-limit", "host", host, "auto");
+        const after = tell("concurrency-limit", "host", host, "--json");
+        check(after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", `before ${before.slice(0, 200)} | after ${after.slice(0, 200)}`);
+      }
+      if (starOff) {
+        tell("plugin", "enable", "bb--github-star");
+        starOff = false;
+      }
       // (Found by their titles too: a stage that stopped half way made threads it had not yet counted.)
       const list = () => listOf(bbJson("thread", "list"), "threads");
       const titles = new Set(rowsOf(set()).filter((row) => row.backend === "bb").map((row) => providerTitle(row.instance)));
       const ids = [...new Set([...made.splice(0).map((thread) => thread.id), ...list().filter((thread) => titles.has(thread.title)).map((thread) => thread.id)])];
       const deadline = Date.now() + 120_000;
-      while (Date.now() < deadline && list().some((thread) => ids.includes(thread.id) && thread.status === "active")) await sleep(2000);
+      const running = () => list().filter((thread) => ids.includes(thread.id) && thread.status === "active");
+      while (Date.now() < deadline && running().length > 0) await sleep(2000);
+      const still = running();
+      check(still.length === 0, "BUSY no turn of the stage's is still held when it leaves: bb shows none of its threads active", still.map((thread) => thread.title).join(" | "));
       const failed = [];
       for (const id of ids) {
         const said = tell("thread", "archive", id);
@@ -835,6 +864,7 @@ const WORK_HOLD = "live-ui-working";
 const WORK_HOLD_FILE = join(homedir(), "mock", "hold", WORK_HOLD);
 // A run that was killed before its `finally` (in a kept container) left its hold: it does not outlive that run.
 rmSync(WORK_HOLD_FILE, { force: true });
+claudeBack(); // a run that was killed while the busy stage had Claude Code away
 // At this point every thread is a healthy one: its turn was answered and bb shows it idle. (Two are then given a turn that is held, below.)
 const threads = await healthyThreads();
 // Two agents of the fixtures WORK (redesign-ui-lead and desktop-mockups-developer: the roster's
@@ -929,6 +959,7 @@ try {
   rmSync(WORK_HOLD_FILE, { force: true }); // the two held turns are answered now, whatever was thrown
   rmSync(BUSY_HOLD_FILE, { force: true }); // and the busy stage's
   rmSync(BUSY_SAY_FILE, { force: true });
+  claudeBack();
   await browser?.close();
   fake(); // the fixtures as they are, for the checks that follow in live.sh
   try {

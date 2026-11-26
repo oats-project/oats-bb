@@ -9,7 +9,7 @@
 // No clock, no random, no dependency: the same set every run.
 //   node test/fixtures/busy/generate.mjs            writes the files beside this script
 //   node test/fixtures/busy/generate.mjs --out DIR  writes them into DIR (the test's scratch)
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -106,7 +106,7 @@ const MAIL_BODIES = ["The audit of the fourteen lockfiles is done. 63 packages a
 const LONG = (what) => `${what}: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone`;
 
 export function build() {
-  const made = { agents: [], souls: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], facts: [], questions: [], mail: [], messages: [] };
+  const made = { agents: [], souls: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], facts: [], questions: [], mail: [], messages: [], conversations: [], groups: [], problems: [] };
 
   // ---- souls: the recorded souls, each multiplied (24) ----
   const soulsDoc = recorded("workspace/souls.json");
@@ -212,9 +212,11 @@ export function build() {
     }
     const row = vary(model.row, swaps, set);
     made.agents.push({ ...row, kind });
-    if (!groups.has(soul)) groups.set(soul, { ...copy(status.agents[0]), name: soul, instances: [] });
-    groups.get(soul).instances.push(row.row);
+    if (!groups.has(soul)) groups.set(soul, []);
+    groups.get(soul).push(row.row);
   });
+  // A group of the roster: the recorded group, with its soul's name and its rows.
+  for (const [soul, instances] of groups) made.groups.push(vary(status.agents[0], [], [[["name"], soul], [["instances"], instances]]));
   const chatRow = made.agents.find((each) => each.kind === "board").row;
   const chatAgent = chatRow.instance;
   // ---- the busy chat's mail: the recorded answer of the mail read (the WHOLE document, its envelope too), its
@@ -227,18 +229,24 @@ export function build() {
     const long = from.truncated === true; // the recorded long report: its body stays as the messaging layer cut it
     const number = String(n + 1).padStart(2, "0");
     const subject = long ? `${from.subject} ${n + 1}: ${MAIL_SUBJECTS[n % MAIL_SUBJECTS.length]}` : MAIL_SUBJECTS[n % MAIL_SUBJECTS.length];
-    const message = vary(from, [[from.id, `${number}${from.id.slice(2)}`], [from.conversationId, `${number}${from.conversationId.slice(2)}`]], [[["subject"], subject], [["threadTitle"], subject], [["createdAt"], iso(-n * 53).replace("Z", "+00:00")], ...(long || n < received.length ? [] : [[["body"], MAIL_BODIES[n % MAIL_BODIES.length]]])]);
+    const message = vary(from, [[from.id, `${number}${from.id.slice(2)}`], [from.conversationId, `${number}${from.conversationId.slice(2)}`], [mailDoc.result.target.instance, chatAgent]], [[["subject"], subject], [["threadTitle"], subject], [["createdAt"], iso(-n * 53).replace("Z", "+00:00")], ...(long || n < received.length ? [] : [[["body"], MAIL_BODIES[n % MAIL_BODIES.length]]])]);
     made.messages.push(message);
     return message.row;
+  });
+  // A conversation's row follows its message: the recorded row, with that message's conversation.
+  const conversations = messages.map((message) => {
+    const row = vary(recordedMail.conversations[0], [], [[["id"], message.conversationId]]);
+    made.conversations.push(row);
+    return row.row;
   });
   const mailHome = (row) => row.home.slice(0, row.home.lastIndexOf("/instances/") + 1);
   const mail = vary(
     mailDoc,
     [[`${mailDoc.result.target.home.slice(0, mailDoc.result.target.home.lastIndexOf("/instances/") + 1)}`, mailHome(chatRow)], [mailDoc.result.target.instance, chatAgent]],
-    [[["result", "result", "mail", "messages"], messages], [["result", "result", "mail", "conversations"], messages.map((message) => ({ id: message.conversationId, partial: null }))]],
+    [[["result", "result", "mail", "messages"], messages], [["result", "result", "mail", "conversations"], conversations]],
   );
   made.mail.push(mail);
-  const busyStatus = { ...copy(status), features: copy(recorded("panel/status-board.json").features), agents: [...groups.values()] };
+  const busyStatus = { ...copy(status), features: copy(recorded("panel/status-board.json").features), agents: made.groups.map((each) => each.row) };
 
   // ---- automations: the recorded schedules (25) and triggers (12); five fail; some hold fifty runs ----
   const scheduleDoc = recorded("automations/schedule-list.json");
@@ -255,12 +263,15 @@ export function build() {
     for (let k = 0; k < count; k += 1, s += 1) {
       const from = schedule(id);
       const name = `${bare(id)}-${ALONE[s % ALONE.length]}`;
-      const set = [[["cron"], from.cron.replace(/^\S+/, String((s * 7) % 60))]];
+      const set = [];
       if (typeof from.description === "string") set.push([["description"], LONG(`${from.description} (${name.replace(/-/g, " ")})`)]);
       // Fifty runs: the recorded run, fifty times, each with its own id and times; the history's count follows.
       if (k === 0 && Array.isArray(from.recentRuns) && from.recentRuns.length > 0 && typeof from.recentRuns[0].runId === "string") {
         const runs = Array.from({ length: 50 }, (_, r) => {
-          const run = vary(from.recentRuns[0], [[from.recentRuns[0].runId, `${String(s).padStart(2, "0")}${String(r).padStart(2, "0")}${from.recentRuns[0].runId.slice(4)}`]], [[["scheduledFor"], iso(-r * 60)], [["startedAt"], iso(-r * 60 + 1)]]);
+          // The NEWEST of the fifty is the recorded run as it is (the row's `lastRun` names it); each older one is an hour before.
+          const first = from.recentRuns[0];
+          const earlier = (time) => new Date(Date.parse(time) - r * 3_600_000).toISOString();
+          const run = r === 0 ? vary(first, [], []) : vary(first, [[first.runId, `${String(s).padStart(2, "0")}${String(r).padStart(2, "0")}${first.runId.slice(4)}`]], [[["scheduledFor"], earlier(first.scheduledFor)], [["startedAt"], earlier(first.startedAt)]]);
           made.runs.push(run);
           return run.row;
         });
@@ -291,7 +302,11 @@ export function build() {
     made.teams.push(row);
     // An unmapped team's problem row follows it (the recorded problem, for that team).
     const problem = teamsDoc.problems.find((each) => each.label === from.label);
-    if (problem !== undefined) problems.push(label === from.label ? copy(problem) : { ...swapped(copy(problem), [[`/teams/${from.label}`, `/teams/${label}`], [`team ${from.label} `, `team ${label} `]]), label });
+    if (problem !== undefined) {
+      const row = vary(problem, label === from.label ? [] : [[`/teams/${from.label}`, `/teams/${label}`], [`team ${from.label} `, `team ${label} `]], label === from.label ? [] : [[["label"], label]]);
+      made.problems.push(row);
+      problems.push(row.row);
+    }
   });
   const teams = { ...copy(teamsDoc), teams: made.teams.map((each) => each.row), problems };
   const serversDoc = recorded("workspace/servers.json");
@@ -306,7 +321,8 @@ export function build() {
   return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "mail.json": mail.row, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// (Run as a program, by any path to this file: a symlinked one too.)
+if (process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const out = process.argv.includes("--out") ? process.argv[process.argv.indexOf("--out") + 1] : HERE;
   mkdirSync(out, { recursive: true });
   const { files, made } = build();

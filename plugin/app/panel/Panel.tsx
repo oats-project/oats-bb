@@ -294,7 +294,10 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
         {tab === "board" ? <Board instance={agent.instance} /> : tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} unread={failure !== null} /> : tab === "soul" ? <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} /> : messaging === undefined ? (
-          <Loading />
+          // Whether the agent has mail to read is not known (its instance is being read, or could not be): neither the
+          // mail's view (a read for an agent not known to have mail) nor "No messaging." (not known is not none): what
+          // the panel says of a read that is not there, with its Retry.
+          state
         ) : messaging ? (
           <Mail instance={agent.instance} />
         ) : (

@@ -123,6 +123,21 @@ test("a board whose read FAILS: its tab says so, with Retry; a kernel that sends
   await waitFor(() => expect(old.page().textContent).toBe("This OATS sends no board."));
 });
 
+test("the instance's read FAILED (whether the agent has mail is not known): the Mail tab draws neither the mail's view (no read for an agent not known to have mail) nor \"No messaging.\" (not known is not none): the panel's own notice of a read that failed, with Retry (the mail developer's case)", async () => {
+  let fail = true;
+  const { press, page, calls, wait } = await panel({ over: { panelInstance: (({ instance }: { instance: string }) => { if (fail) throw new Error("E_HOME_MISSING: no such home"); return instanceAnswer(instance, (facts) => ({ ...facts, messagingId: `mailspike.test/${instance}` })); }) as never } });
+  press("Mail");
+  await waitFor(() => expect(within(page()).getByRole("button", { name: "Retry" })).toBeTruthy());
+  expect(page().textContent).not.toMatch(/No messaging/);
+  expect(page().querySelector('[data-testid="oats-mail"]')).toBeNull();
+  await wait();
+  expect(calls("mail")).toBe(0);
+  // Read again, and it answers: the agent has mail to read, and its view reads it (the tab is the one a person left it on).
+  fail = false;
+  fireEvent.click(within(page()).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(calls("mail")).toBe(1));
+});
+
 // ---- the panel never chooses a tab by itself
 test("the panel of an agent whose board ASKS opens where it was left (Instance), not on Board; Board is one press away, and a chosen tab stays (round 1, the cut)", async () => {
   const { shown, press, page, wait } = await panel({ boards: { [CHILD]: ASKS } });

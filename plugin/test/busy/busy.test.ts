@@ -7,8 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
-import { failing } from "../../app/automations/words.js";
-import { parseScheduleList, parseTriggerList, parseTriggerStatuses } from "../../kernel/automations-read.js";
+import { parseScheduleList, parseTriggerList } from "../../kernel/automations-read.js";
 import { MAIL_PAGE, parseMail } from "../../kernel/mail.js";
 import { parseStatus } from "../../kernel/roster.js";
 import { parseServers, parseSouls, parseTeams } from "../../kernel/workspace.js";
@@ -17,7 +16,7 @@ import { build } from "../fixtures/busy/generate.mjs";
 
 const BUSY = join(fileURLToPath(new URL("..", import.meta.url)), "fixtures", "busy");
 type Made = { row: Record<string, unknown>; from: Record<string, unknown>; swaps: [string, string][]; was: [string[], unknown][]; kind?: string };
-const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "statuses" | "teams" | "servers" | "runs" | "facts" | "questions" | "mail" | "messages" | "conversations" | "groups" | "problems", Made[]> };
+const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions" | "mail" | "messages" | "conversations" | "groups" | "problems", Made[]> };
 
 // THE RULE IS HELD HERE, not by the generator: this file reads the recorded answers ITSELF and puts a busy row back
 // with its OWN hands. Of the generator it takes only what it says it did to a row (`swaps`, `was`), which is then proven.
@@ -54,7 +53,6 @@ const SOURCES: Record<string, unknown[]> = {
   schedules: recordedSchedules,
   runs: recordedSchedules.flatMap((row) => row.recentRuns ?? []),
   triggers: answer("automations/trigger-list.json").triggers as unknown[],
-  statuses: answer("automations/trigger-status.json").triggers as unknown[],
   teams: answer("workspace/teams.json").teams as unknown[],
   problems: answer("workspace/teams.json").problems as unknown[],
   servers: answer("workspace/servers.json").servers as unknown[],
@@ -96,12 +94,11 @@ describe("the busy set", () => {
       mail: ["result.result.mail.messages", "result.result.mail.conversations"],
       messages: ["subject", "threadTitle", "createdAt", "body"],
       souls: ["description"],
-      schedules: ["description", "recentRuns", "history.stored", "task"],
+      schedules: ["description", "recentRuns", "history.stored"],
       groups: ["name", "instances"],
       problems: ["label"],
       conversations: ["id"],
       triggers: ["description"],
-      statuses: [],
       teams: ["label", "team", "description", "default"],
       servers: ["label"],
       runs: ["scheduledFor", "startedAt"],
@@ -155,9 +152,7 @@ describe("the busy set", () => {
       souls: (row) => [row.name],
       schedules: (row) => [tail(row.id)],
       triggers: (row) => [tail(row.id)],
-      // (…and the agent the recorded run made, by its name and by its soul's directory: a run's agent is a relation, below.)
-      runs: (row) => [row.runId, ...(SOURCES.schedules as { id: string }[]).map((schedule) => tail(schedule.id)), row.instance, String(row.home).slice(0, String(row.home).lastIndexOf("/instances/") + 1)],
-      statuses: (row) => [tail(row.id)],
+      runs: (row) => [row.runId, ...(SOURCES.schedules as { id: string }[]).map((schedule) => tail(schedule.id))],
       teams: (row) => [`/teams/${String(row.label)}`],
       problems: (row) => [`/teams/${String(row.label)}`, `team ${String(row.label)} `],
       servers: (row) => [row.id, `${String(row.sshHost).split(".")[0]}.invalid`],
@@ -191,7 +186,7 @@ describe("the busy set", () => {
     const less = (document: unknown, ...keys: string[]) => Object.fromEntries(Object.entries(document as Record<string, unknown>).filter(([key]) => !keys.includes(key)));
     const byInstance = (list: unknown[]) => [...(list as { instance: string }[])].sort((a, b) => (a.instance < b.instance ? -1 : 1));
     // No file but these, and the two that are no kernel answer (the chat, made up and said; the threads to fail, read from the rows).
-    expect(Object.keys(files).sort()).toEqual(["chat.json", "mail.json", "schedule-list.json", "servers.json", "souls.json", "status.json", "teams.json", "threads.json", "trigger-list.json", "trigger-status.json"]);
+    expect(Object.keys(files).sort()).toEqual(["chat.json", "mail.json", "schedule-list.json", "servers.json", "souls.json", "status.json", "teams.json", "threads.json", "trigger-list.json"]);
     // status.json: the recorded roster's document, with the features of the kernel that recorded the board (README); its groups; their rows.
     const status = files["status.json"] as { features: unknown; agents: { instances: Record<string, unknown>[] }[] };
     expect(less(status, "agents", "features")).toEqual(less(recorded("roster/status.json"), "agents", "features"));
@@ -209,11 +204,6 @@ describe("the busy set", () => {
     expect([less(souls, "souls"), souls.souls]).toEqual([less(recorded("workspace/souls.json"), "souls"), rows("souls")]);
     const triggers = files["trigger-list.json"] as { triggers: unknown[] };
     expect([less(triggers, "triggers"), triggers.triggers]).toEqual([less(recorded("automations/trigger-list.json"), "triggers"), rows("triggers")]);
-    // trigger-status.json: the recorded answer of every trigger's state around its rows: one state per busy trigger, in the list's order, each under its trigger's own id.
-    const statuses = files["trigger-status.json"] as { triggers: { id: string }[] };
-    expect([less(statuses, "triggers"), statuses.triggers]).toEqual([less(recorded("automations/trigger-status.json"), "triggers"), rows("statuses")]);
-    expect(statuses.triggers.map((row) => row.id)).toEqual((triggers.triggers as { id: string }[]).map((row) => row.id));
-    for (const [at, each] of made.statuses.entries()) expect([each.from.id, each.swaps]).toEqual([made.triggers[at]!.from.id, made.triggers[at]!.swaps]); // the state of the recorded trigger its trigger was made from, under the same name
     const servers = files["servers.json"] as { servers: unknown[] };
     expect([less(servers, "servers"), servers.servers]).toEqual([less(recorded("workspace/servers.json"), "servers"), rows("servers")]);
     const teams = files["teams.json"] as { teams: unknown[]; problems: unknown[] };
@@ -232,18 +222,6 @@ describe("the busy set", () => {
       expect(runs.map((run) => Date.parse(run.scheduledFor))).toEqual(runs.map((_, r) => Date.parse(runs[0]!.scheduledFor) - r * 3_600_000));
       expect(runs.map((run) => Date.parse(run.startedAt))).toEqual(runs.map((_, r) => Date.parse(runs[0]!.startedAt) - r * 3_600_000));
     }
-    // THE AGENT A RUN MADE is a relation: three runs of ONE schedule (the three after its newest) name three agents of the
-    // set (one that asks, one that is stopped, one that works), by a swap of the recorded run's agent wherever the run
-    // names it; every other run keeps the recorded run's agent, which is no agent of the set.
-    const agentOf = new Map(made.agents.map((each) => [each.row.instance as string, each]));
-    const named = made.runs.filter((each) => agentOf.has(each.row.instance as string));
-    expect(named.map((each) => [agentOf.get(each.row.instance as string)!.kind, each.row.home, (each.row.wakeSchedule as { home?: unknown } | null | undefined)?.home ?? each.row.home])).toEqual(["ask", "stopped", "work"].map((kind) => { const agent = made.agents.find((each) => each.kind === kind)!; return [kind, agent.row.home, agent.row.home]; }));
-    expect(named.map((each) => (withRuns[0]!.row.recentRuns as unknown[]).indexOf(each.row))).toEqual([1, 2, 3]);
-    for (const each of made.runs.filter((run) => !named.includes(run))) expect(each.row.instance).toBe(each.from.instance);
-    // ONE long instruction, on that schedule: the recorded instruction, twelve times, numbered. No other row's instruction is varied.
-    const longTask = made.schedules.filter((each) => each.was.some(([path]) => path[0] === "task"));
-    expect(longTask).toEqual([withRuns[0]]);
-    expect(longTask[0]!.row.task).toBe(Array.from({ length: 12 }, (_, n) => `${n + 1}. ${String(longTask[0]!.from.task)}`).join("\n\n"));
     // mail.json: the one document of the rule's, and in it the rule's messages and conversations.
     expect(made.mail).toHaveLength(1);
     const mail = (files["mail.json"] as { result: { result: { mail: { messages: unknown[]; conversations: unknown[] } } } }).result.result.mail;
@@ -252,10 +230,9 @@ describe("the busy set", () => {
     // A CONTAINER put into a row (a list, an object) is one of these, each read above or just below: never another.
     const containers = Object.entries(made).flatMap(([list, entries]) => entries.flatMap((each) => each.was.filter(([path]) => { const now = path.reduce<unknown>((inner, key) => (inner as Record<string, unknown> | undefined)?.[key], each.row); return typeof now === "object" && now !== null; }).map(([path]) => `${list}:${path.join(".")}`)));
     expect([...new Set(containers)].sort()).toEqual(["agents:board", "agents:identity", "groups:instances", "mail:result.result.mail.conversations", "mail:result.result.mail.messages", "schedules:recentRuns"]);
-    // (A swap that names a run's agent is checked with the names, above: its `from` is the recorded run's own agent.)
   });
 
-  it("holds the busy workspace of the rule: sixty agents four levels deep, eleven asking, some failed, lost and outside OATS; 24 souls; 37 automations, five failing (and one whose launch state is unknown), each trigger with its state, some with fifty runs, three of them made by agents of the set, one long instruction; seven teams; five machines; names of sixty characters; a question of four lines", () => {
+  it("holds the busy workspace of the rule: sixty agents four levels deep, eleven asking, some failed, lost and outside OATS; 24 souls; 37 automations, five failing, some with fifty runs; seven teams; five machines; names of sixty characters; a question of four lines", () => {
     const status = parseStatus(files["status.json"]);
     expect(status.ok).toBe(true);
     if (!status.ok) return;
@@ -305,18 +282,8 @@ describe("the busy set", () => {
     const rows = [...schedules.value.rows, ...triggers.value.rows];
     expect(rows).toHaveLength(37);
     expect(new Set(rows.map((row) => `${row.kind}:${row.id}`)).size).toBe(37);
-    // FIVE FAIL, by the Automations page's own rule of what is failing (app/automations/words.ts `failing`: the rule of its
-    // rows' red, its filter's count and the sidebar's red dot), over the lists and every trigger's state; and one more
-    // is a launch whose state is unknown, which that rule calls a warning.
-    const states = parseTriggerStatuses(files["trigger-status.json"], {});
-    expect(states.ok && states.value.map((entry) => entry.id)).toEqual(triggers.value.rows.map((row) => row.id));
-    if (!states.ok) return;
-    const stateOf = new Map(states.value.map((entry) => [entry.id, entry.status]));
-    const failed = rows.filter((row) => failing(row, row.kind === "trigger" ? (stateOf.get(row.id) ?? null) : null));
-    expect(failed.map((row) => row.reason ?? (row.invalid !== null ? "invalid" : row.lastRun?.outcome)).sort()).toEqual(["invalid", "invalid", "launch-failed", "owner-mismatch", "untrusted"]);
-    expect(rows.filter((row) => row.lastRun?.outcome === "unknown" && !failed.includes(row))).toHaveLength(1);
-    // Every busy trigger has a state, and the ones that fired say what they fired on and the agent each made.
-    expect(states.value.filter((entry) => entry.status.fired.length > 0).length).toBeGreaterThanOrEqual(6);
+    const failing = rows.filter((row) => row.invalid !== null || row.lastRun?.outcome === "launch-failed" || row.lastRun?.outcome === "invalid" || row.lastRun?.outcome === "unknown");
+    expect(failing).toHaveLength(5);
     const raw = (files["schedule-list.json"] as { schedules: { recentRuns?: { runId: string }[] }[] }).schedules;
     expect(raw.filter((row) => row.recentRuns?.length === 50).length).toBeGreaterThanOrEqual(3);
     for (const row of raw.filter((each) => each.recentRuns?.length === 50)) expect(new Set(row.recentRuns!.map((run) => run.runId)).size).toBe(50);

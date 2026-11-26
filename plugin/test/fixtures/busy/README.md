@@ -9,7 +9,7 @@ images. No feature shapes busy data of its own.
 | asking (needs you) | 11, one of them a lead whose own developer asks too; four of their questions are four lines long |
 | failed, lost, outside OATS | 3 failed at their start; 7 whose session was lost (3 on bb, 4 on tmux); 2 running outside OATS |
 | souls | 24, most with long names |
-| automations | 37 (25 schedules, 12 triggers), each trigger with its recorded state (what it fired, what waits); 5 failing by the Automations page's rule (a launch that failed, an invalid definition, a wrong account, no trust, a source's check that failed) and one more whose launch state is unknown (a warning there, not a failure); 4 schedules hold 50 runs each; three runs of the first name three agents of the set (one asks, one is stopped, one works); the first schedule's instruction is long |
+| automations | 37 (25 schedules, 12 triggers); 5 failing; 4 schedules hold 50 runs each |
 | teams, machines | 7 and 5 |
 | a busy chat | ONE agent on bb (`chat.json` names it) with a long conversation (ten turns: paragraphs, lists, a code block) and a full board: twelve facts, nine open questions, one of four lines (in the data: no screen of the plugin draws a board on main yet); and a full page of mail: fifty messages received, subjects short and long, every third the recorded long report |
 | names | up to 61 characters (the kernel's own limit is 63); two efforts' names read alike once they are cut |
@@ -24,8 +24,7 @@ times and relations are varied, and a count that follows the rows. Nothing else.
 |---|---|---|
 | `status.json` | `../roster/status.json` (its rows that ask, work, are idle, stopped, on tmux), `../outside/status-outside.json` (running outside OATS), `../outside/status-failed-at-start.json` (failed at its start), `../panel/status-board.json` (the agent with a board), `../outside/status-archived-while-running.json` (a session lost on bb), `../lifecycle/tmux-row-lost.json` (a session lost on tmux) | the instance's name wherever the row writes it (`instance`, `home`, the identity's alias, the tmux window); its soul (`agent`, the soul's directory in `home`); its bb thread's id (a slot, `thr_busy_NN`, which the live stage fills with the run's own thread); `parentInstance`; a claim's `since` and `message`. On the busy chat's agent `board` is the recorded board multiplied: each fact a recorded fact (its `key`, `label`, `value`, `at` varied), each question the recorded question (its `id`, `question`, `since` varied), and its claim says the oldest question, as the kernel's does |
 | `souls.json` | `../workspace/souls.json` | the soul's name wherever the row writes it; `description` |
-| `schedule-list.json` | `../automations/schedule-list.json` | the schedule's name wherever the row writes it; `description`; on four of them `recentRuns` is the recorded run fifty times: the NEWEST is the recorded run (the row's `lastRun` is of it), each older one has its own `runId` and is an hour before the one after it (`scheduledFor`, `startedAt`), and `history.stored` follows. `cron` and `nextRun` are the recorded ones. On the FIRST schedule alone: the three runs after the newest name three agents of the set (the first that asks, that is stopped, that works) wherever the recorded run names the agent it made (`instance`, `home`, its wake schedule's `id` and `home`): a relation; and `task` is the recorded instruction twelve times over, numbered |
-| `trigger-status.json` | `../automations/trigger-status.json` (the answer of `oats trigger status` with no id: every trigger's state) | the trigger's name wherever its state writes it (its `id`, its fires' keys and the names of the agents they made): one state per busy trigger, the state of the recorded trigger it was made from |
+| `schedule-list.json` | `../automations/schedule-list.json` | the schedule's name wherever the row writes it; `description`; on four of them `recentRuns` is the recorded run fifty times: the NEWEST is the recorded run (the row's `lastRun` is of it), each older one has its own `runId` and is an hour before the one after it (`scheduledFor`, `startedAt`), and `history.stored` follows. `cron` and `nextRun` are the recorded ones |
 | `trigger-list.json` | `../automations/trigger-list.json` | the trigger's name wherever the row writes it; `description` |
 | `mail.json` | `../mail/mail.json`, the WHOLE answer with its envelope (the busy chat's agent's mail; the set holds one agent's, so the stage answers it for every agent) | the agent it is of (its name and its soul's directory, wherever the answer writes them: the target, the alias of its identity, `to`); `messages` is the recorded received messages fifty times, each with its own `id`, `conversationId`, `createdAt`, `subject` and `threadTitle`, and a made-up `body` on the short ones (the long report's body stays as the messaging layer cut it); `conversations` follows. `documents`, the messaging layer's own rendering, is the recorded one: the plugin does not read it |
 | `teams.json` | `../workspace/teams.json` | `label`, `team`, `description`, `default`, and the label in `at`; an unmapped team's problem row is the recorded problem row, for that team (its `label`, and the label in `at` and in its message) |
@@ -59,8 +58,7 @@ has the conversation for real, with the mock model answering each `you` with its
 
 **The made-up TEXTS in rows** (a text is what a row may be varied in): the four-line question and
 the claims' words; the board's nine questions and its twelve facts' labels and values; the mail's
-ten subjects and three short bodies; the long descriptions of souls, automations and teams; the
-first schedule's long instruction (the recorded instruction repeated and numbered: no new word).
+ten subjects and three short bodies; the long descriptions of souls, automations and teams.
 
 **What a row keeps of its recorded soul.** Only `agent` and the soul's directory in `home` name
 the busy soul; `workspace.soul.id` and `launchAt` still name the recorded one. The plugin reads
@@ -72,8 +70,7 @@ or minutes before it (never before its agent was made). Where a recorded row say
 rows of the kernel that recorded the board), it follows the parent: a child is `"child"` of its
 parent (`relation`, `relativeTo`), a root has neither key, as the recorded roots. A run of a
 schedule carries the schedule's busy name wherever the recorded run writes it, as the row's
-`lastRun` does; all fifty keep the recorded run's `instance`, `home` and `recordedAt`, but the
-three runs of the first schedule that name agents of the set (above), which keep `recordedAt`. The person a
+`lastRun` does; all fifty keep the recorded run's `instance`, `home` and `recordedAt`. The person a
 recorded row names (`attributedHuman`) is not carried into the set: a made-up name stands there.
 
 The made-up names are no person's and no real project's.

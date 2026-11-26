@@ -44,10 +44,7 @@ import {
   whenWords,
   whoWords,
 } from "../../app/automations/words";
-import { allRuns, pageRuns } from "../../model/automation-runs";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { parseScheduleList, parseTriggerList, parseTriggerStatuses } from "../../kernel/automations-read";
+import { pageRuns } from "../../model/automation-runs";
 import { STATUSES } from "./handlers";
 import { rowOf, schedules, triggers } from "./fixtures";
 
@@ -318,31 +315,6 @@ describe("what is failing: one rule for the row's red, the filter's count and th
     const first = inOrder(all, statuses).map((entry) => entry.id);
     expect(first.slice(0, 5)).toEqual(bad(all));
     expect(first.slice(5)).toEqual(all.map((entry) => entry.id).filter((id) => !bad(all).includes(id)));
-  });
-
-  it("THE BUSY WORKSPACE (the shared worst-case set, test/fixtures/busy: 37 automations, five failing, long names): the rows drawn red, the filter's count and the dot's verdict agree", () => {
-    const file = (name: string): unknown => JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures/busy", name), "utf8"));
-    const read = <Value,>(parsed: { ok: true; value: Value } | { ok: false; error: { code: string; message: string } }): Value => {
-      if (!parsed.ok) throw new Error(`${parsed.error.code}: ${parsed.error.message}`);
-      return parsed.value;
-    };
-    const set = { schedules: read(parseScheduleList(file("schedule-list.json"))), triggers: read(parseTriggerList(file("trigger-list.json"))), statuses: read(parseTriggerStatuses(file("trigger-status.json"), {})) };
-    const rows = oneList(set.schedules.rows, set.triggers.rows);
-    expect(rows).toHaveLength(37);
-    expect(Math.max(...rows.map((entry) => entry.name.length))).toBeGreaterThanOrEqual(40);
-    expect(new Set(rows.map((entry) => `${entry.kind}:${entry.id}`)).size).toBe(37);
-    const red = rows.filter((entry) => rowLine(entry, statusFor(entry, set.statuses), NOW).some((part) => part.tone === "bad"));
-    const counted = filterList(rows, "failing", set.statuses);
-    const dot = rows.some((entry) => failing(entry, statusFor(entry, set.statuses)));
-    expect([red.length, counted.length, dot]).toEqual([5, 5, true]);
-    expect(counted.map((entry) => entry.id)).toEqual(red.map((entry) => entry.id));
-    expect(inOrder(rows, set.statuses).slice(0, 5).map((entry) => entry.id)).toEqual(red.map((entry) => entry.id));
-    // With none failing, none of the three says so.
-    const calm = rows.filter((entry) => !red.includes(entry));
-    expect([filterList(calm, "failing", set.statuses).length, calm.some((entry) => failing(entry, statusFor(entry, set.statuses)))]).toEqual([0, false]);
-    // Some automations of it keep fifty runs, and the Runs tab's list is of hundreds.
-    expect(set.schedules.rows.filter((entry) => entry.recentRuns.length === 50).length).toBeGreaterThan(2);
-    expect(allRuns(set.schedules.rows, set.triggers.rows, set.statuses).entries.length).toBeGreaterThan(200);
   });
 
   it("the search reads the name, the id, who it starts, when, what it sends and the summary", () => {

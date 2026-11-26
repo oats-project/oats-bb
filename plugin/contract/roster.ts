@@ -30,7 +30,7 @@ export const agent = z.object({
   sessionEnd: z.string().nullish(),
   /** The kernel's report that a harness runs in a home OATS recorded stopped (kernel/outside.ts); absent where there is none. */
   outsideOats: outsideOats.nullish(),
-  /** its board holds an open question (`true`, or absent) */
+  /** its needs-input claim is its board's own question (`true`, or absent) */
   boardAsks: z.literal(true).optional(),
   /** it has a board: a fact or an open question (`true`, or absent) */
   hasBoard: z.literal(true).optional(),

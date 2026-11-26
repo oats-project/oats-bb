@@ -37,6 +37,23 @@ describe("the roster's row and the agent's board", () => {
     expect(said(document).keys).toEqual(["hasBoard", "boardAsks"]);
   });
 
+  it("ANOTHER claim in front of the board's (the agent's own, a failed turn's: the kernel names a claim's producer): it has a board, and it does NOT ask: the place says that claim", () => {
+    for (const producer of ["agent", "oats.core"]) {
+      const document = recorded();
+      (rowOf(document) as unknown as { waitingOnYou: { producer: string } }).waitingOnYou.producer = producer;
+      expect(said(document), producer).toEqual({ hasBoard: true, boardAsks: undefined, keys: ["hasBoard"] });
+    }
+  });
+
+  it("an open question with NO claim on the row (the agent cleared its claim, or the kernel has not set it yet) does not ask; a claim that names no producer is taken as the board's", () => {
+    const none = recorded();
+    (rowOf(none) as unknown as { waitingOnYou: unknown }).waitingOnYou = null;
+    expect(said(none).keys).toEqual(["hasBoard"]);
+    const unnamed = recorded();
+    delete (rowOf(unnamed) as unknown as { waitingOnYou: { producer?: string } }).waitingOnYou.producer;
+    expect(said(unnamed).keys).toEqual(["hasBoard", "boardAsks"]);
+  });
+
   it("no board, an empty board, no key, or a kernel without the feature: neither key (absent, not false)", () => {
     const none = recorded();
     rowOf(none).board = null;

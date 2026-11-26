@@ -274,6 +274,14 @@ export default [
       check(asked === "Which base branch?", `${at} the home's card of that agent draws the same question, by the board's own component`, String(asked));
       await targets(page, viewport, check, at, `board-${viewport.name}-home-card`);
       await page.shot(`board-${viewport.name}-home-card`);
+      // AN AGENT WITH NO BOARD (its lead, in the same roster): its panel has the Board tab all the same, and the tab
+      // says so, alone. (No image: an empty tab under the panel's head, which the panel's own scene has an image of.)
+      await page.goto(`/plugins/oats/agent/${PARENT.instance}`);
+      await page.until(`document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]').length === 4 ? "4" : ""`, 60);
+      await page.evaluate(`document.getElementById("oats-panel-page-tab-board")?.click()`);
+      const none = await page.until(`(() => { const board = document.querySelector(${JSON.stringify(testId("oats-board"))}); const pane = document.querySelector('[role="tabpanel"]'); return board && board.getAttribute("data-state") === "empty" && pane ? JSON.stringify({ selected: document.querySelector('[role="tablist"][aria-label="Instance context"] [role="tab"][aria-selected="true"]')?.innerText.trim() ?? "", says: (${flat})(pane), controls: pane.querySelectorAll("button, a, input, textarea").length }) : ""; })()`, 40);
+      const empty = none ? JSON.parse(none) : null;
+      check(empty !== null && empty.selected === "Board" && empty.says === "No questions." && empty.controls === 0, `${at} an agent with no board: its Board tab, pressed, says "No questions.", alone: nothing else in the tab, nothing to press`, String(none));
     },
   },
   {

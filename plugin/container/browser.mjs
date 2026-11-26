@@ -126,13 +126,32 @@ export async function launchBrowser({ chromium = "chromium", out, base }) {
        * Tab and closes a dialog on Escape): "Tab", "Shift+Tab", "Enter", "Escape", " ", an arrow.
        */
       press: async (combination) => {
-        const shift = combination.startsWith("Shift+");
-        const key = shift ? combination.slice(6) : combination;
-        const code = KEYS[key];
-        if (code === undefined) throw new Error(`browser: no key "${key}"`);
-        const event = { key, code: code.code, windowsVirtualKeyCode: code.vk, modifiers: shift ? 8 : 0, ...(code.text ? { text: code.text } : {}) };
-        await cdp("Input.dispatchKeyEvent", { type: code.text ? "keyDown" : "rawKeyDown", ...event });
+        const { event, type } = keyEvent(combination);
+        await cdp("Input.dispatchKeyEvent", { type, ...event });
         await cdp("Input.dispatchKeyEvent", { type: "keyUp", ...event });
+      },
+      /** Turns the mouse wheel over a point of the page, as a person scrolls what is under the pointer (`deltaY` < 0: up). */
+      wheel: async (x, y, deltaY) => {
+        await cdp("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY });
+      },
+      /**
+       * Holds bb's modifiers down ("Control+Shift"), as a person does to see bb's key hints, until
+       * the function it returns is called (the keys are let go, last first).
+       */
+      hold: async (modifiers) => {
+        const names = modifiers.split("+");
+        let held = 0;
+        for (const name of names) {
+          held |= MODIFIERS[name].bit;
+          await cdp("Input.dispatchKeyEvent", { type: "rawKeyDown", key: name, code: MODIFIERS[name].code, windowsVirtualKeyCode: MODIFIERS[name].vk, modifiers: held });
+          await new Promise((resolve) => setTimeout(resolve, 1200)); // a person's hand: one key, then the next (bb shows its hints for a key that is HELD)
+        }
+        return async () => {
+          for (const name of [...names].reverse()) {
+            held &= ~MODIFIERS[name].bit;
+            await cdp("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: MODIFIERS[name].code, windowsVirtualKeyCode: MODIFIERS[name].vk, modifiers: held });
+          }
+        };
       },
       close: () => send("Target.disposeBrowserContext", { browserContextId }),
     };
@@ -147,6 +166,22 @@ export async function launchBrowser({ chromium = "chromium", out, base }) {
   };
 }
 
+const MODIFIERS = { Alt: { bit: 1, code: "AltLeft", vk: 18 }, Control: { bit: 2, code: "ControlLeft", vk: 17 }, Shift: { bit: 8, code: "ShiftLeft", vk: 16 } };
+/** A key press as the browser's own event: "Tab", "Shift+Tab", "Control+Shift+]" (bb's next thread). A key with a modifier other than Shift types no text. */
+function keyEvent(combination) {
+  const parts = combination === "+" ? ["+"] : combination.split("+");
+  const key = parts.pop();
+  const code = KEYS[key];
+  if (code === undefined) throw new Error(`browser: no key "${key}"`);
+  let modifiers = 0;
+  for (const name of parts) {
+    if (MODIFIERS[name] === undefined) throw new Error(`browser: no modifier "${name}"`);
+    modifiers |= MODIFIERS[name].bit;
+  }
+  const typed = code.text !== undefined && (modifiers & ~MODIFIERS.Shift.bit) === 0;
+  return { type: typed ? "keyDown" : "rawKeyDown", event: { key: modifiers & MODIFIERS.Shift.bit ? (code.shifted ?? key) : key, code: code.code, windowsVirtualKeyCode: code.vk, modifiers, ...(typed ? { text: code.text } : {}) } };
+}
+
 const KEYS = {
   Tab: { code: "Tab", vk: 9 },
   Enter: { code: "Enter", vk: 13, text: "\r" },
@@ -158,6 +193,8 @@ const KEYS = {
   ArrowDown: { code: "ArrowDown", vk: 40 },
   Home: { code: "Home", vk: 36 },
   End: { code: "End", vk: 35 },
+  "[": { code: "BracketLeft", vk: 219, shifted: "{" },
+  "]": { code: "BracketRight", vk: 221, shifted: "}" },
 };
 
 // ---- what the page is asked

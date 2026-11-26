@@ -328,6 +328,14 @@ describe("the busy set", () => {
     expect(agents.filter((agent) => (agent.waiting?.message ?? "").split("\n").length === 4).length).toBeGreaterThanOrEqual(2);
     // A folded parent that itself asks and hides a child that asks (the rule's open point).
     expect(agents.some((agent) => agent.waiting !== null && agents.some((child) => child.parent === agent.instance && child.waiting !== null))).toBe(true);
+    // ONE soul has MANY agents: twelve of the sixty, on the soul that holds fifteen capabilities (one soul's page then
+    // holds both lists at their worst): three of them ask, one's session is lost, one runs outside OATS, one is on tmux.
+    const bySoul = new Map<string, typeof agents>();
+    for (const agent of agents) bySoul.set(agent.soul, [...(bySoul.get(agent.soul) ?? []), agent]);
+    const fullest = [...bySoul.entries()].sort((a, b) => b[1].length - a[1].length);
+    expect([fullest[0]![0], fullest[0]![1].length, fullest[1]![1].length <= 3, bySoul.size]).toEqual(["oats-developer", 12, true, 24]);
+    const twelve = fullest[0]![1];
+    expect([twelve.filter((agent) => agent.waiting !== null).length, twelve.some((agent) => agent.sessionEnd === "lost"), twelve.filter((agent) => agent.outsideOats !== undefined).length, twelve.filter((agent) => agent.backend === "tmux").length]).toEqual([3, true, 1, 1]);
     // Every agent's soul is one the workspace lists.
     const souls = parseSouls(files["souls.json"]);
     expect(souls.ok && souls.value.souls.length).toBe(24);

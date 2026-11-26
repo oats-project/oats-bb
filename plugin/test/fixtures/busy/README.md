@@ -8,7 +8,7 @@ images. No feature shapes busy data of its own.
 | agents | 60, four levels deep (six efforts: a lead, three developers, a helper under each, a reviewer under the first helper; twelve agents alone); 52 on bb threads, 8 on tmux |
 | asking (needs you) | 11, one of them a lead whose own developer asks too; four of their questions are four lines long |
 | failed, lost, outside OATS | 3 failed at their start; 7 whose session was lost (3 on bb, 4 on tmux); 2 running outside OATS |
-| souls | 24, most with long names; ONE of them (`oats-developer`) with fifteen capabilities |
+| souls | 24, most with long names; ONE of them (`oats-developer`) with fifteen capabilities AND twelve of the sixty agents (three that ask, one lost, one outside OATS, one on tmux, one that failed at its start); no other soul has more than three |
 | capabilities | 30, with names of up to sixty characters; four of them fill ONE core place (knowledge) |
 | automations | 37 (25 schedules, 12 triggers); 5 failing by the Automations page's rule (a launch that failed, two definitions that cannot run, a wrong account, no trust) and one more whose launch state is unknown (a warning there); 4 schedules hold 50 runs each, and on the first the three runs after its newest are of three of the set's agents (one that asks, one that is stopped, one that works); the first schedule's instruction is the recorded one twelve times, numbered; five names are sixty characters long, two of them alike but for their end; every trigger has its recorded state |
 | teams, machines | 7 and 5 |

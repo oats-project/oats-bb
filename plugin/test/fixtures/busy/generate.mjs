@@ -124,6 +124,7 @@ const MAIL_AGES = (() => {
 const LONG_AUTOMATION = ["of-every-open-pull-request-across-all-fourteen-services", "for-the-payments-and-billing-platform-in-every-region", "after-each-release-train-leaves-the-staging-cluster", "with-a-summary-for-the-owning-team-and-follow-ups"];
 const MAIL_SUBJECTS = ["Lockfile audit: results", "Re: Re: Re: the payment client's major version, the idempotency key and what happens to a retry that crosses a deploy", "Advisory on the archive reader", "Licence question for the image library: who signs off, and by when do the mobile builds need the answer?", "Flaky: ledger closes a period that spans a daylight-saving change", "Thumbnails compared", "Base branch?", "Fourteen pull requests or one: a note on what each service's owners said when I asked them last week", "Checks on #1842", "Rounding cases for currencies with no minor unit"];
 const MAIL_BODIES = ["The audit of the fourteen lockfiles is done. 63 packages are behind, nine advisories are open.\n\nThe two patch releases are ready in #1842.", "Your question on the base branch is still open on my board.\n\n- main: the default\n- release: the 0.1 line\n\nI stop at the payment client until it is settled.", "One test failed once and passed twice. It is not this change.\n\nI will fix it in a pull request of its own."];
+const MANY_AGENTS_SOUL = "oats-developer";
 const LONG = (what) => `${what}: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone`;
 
 export function build() {
@@ -212,11 +213,18 @@ export function build() {
 
   if (new Set(plan.map(([instance]) => instance)).size !== plan.length || plan.some(([instance]) => !/^[a-z0-9][a-z0-9-]{0,62}$/.test(instance))) throw new Error("busy: an agent's name is taken twice, or is none the kernel would give");
   const used = {};
+  const manyLeft = { ask: 3, work: 2, idle: 2, stopped: 1, lost: 1, outside: 1, tmux: 1, failed: 1 };
   const groups = new Map();
   plan.forEach(([instance, parent, kind], n) => {
     const models = MODELS[kind];
     const model = models[(used[kind] = (used[kind] ?? 0) + 1) % models.length];
-    const soul = busySouls[(n * 5) % busySouls.length];
+    // ONE soul with MANY agents (a soul's page lists its agents before its capabilities): the soul that holds fifteen
+    // capabilities has TWELVE of the sixty, the first of each kind: three that ask, two that work, two idle, one stopped,
+    // one lost, one outside OATS, one on tmux, one that failed at its start. The others take the other souls in turn.
+    const many = (manyLeft[kind] ?? 0) > 0;
+    if (many) manyLeft[kind] -= 1;
+    const inTurn = busySouls.filter((name) => name !== MANY_AGENTS_SOUL);
+    const soul = many ? MANY_AGENTS_SOUL : inTurn[(n * 5) % inTurn.length];
     const swaps = [];
     if (model.soul !== soul) swaps.push([`/agents/${model.soul}/`, `/agents/${soul}/`]);
     swaps.push([model.row.instance, instance]);

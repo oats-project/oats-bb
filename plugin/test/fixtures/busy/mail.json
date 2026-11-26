@@ -12,9 +12,9 @@
    "--limit",
    "2"
   ],
-  "cwd": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe",
+  "cwd": "/abs/deployment/agents/oats-okf--search-feature-delivery-knowledge-maintainer/instances/nightly-dependency-audit-probe",
   "target": {
-   "home": "/abs/deployment/agents/code-reviewer/instances/nightly-dependency-audit-probe",
+   "home": "/abs/deployment/agents/oats-okf--search-feature-delivery-knowledge-maintainer/instances/nightly-dependency-audit-probe",
    "instance": "nightly-dependency-audit-probe"
   },
   "result": {

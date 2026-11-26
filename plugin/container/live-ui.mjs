@@ -794,10 +794,19 @@ function busyStage() {
       const claude = execFileSync("sh", ["-c", "command -v claude || true"], { encoding: "utf8" }).trim();
       check(claude !== "" && existsSync(claude) && !existsSync(CLAUDE_AWAY), "BUSY Claude Code is in its place when the stage leaves", `command -v claude: "${claude}"; the note of where it was is ${existsSync(CLAUDE_AWAY) ? "still there" : "gone"}`);
       // bb's own concurrency limit is back: asked, and READ.
+      // (ASKED until bb says so, never asked once and read at once: in one run of the light check bb still said the
+      // raised limit at that read, as the held turns were ending under it. What bb answered to each asking is said.)
       for (const { host, before } of limited.splice(0)) {
-        tell("concurrency-limit", "host", host, "auto");
-        const after = tell("concurrency-limit", "host", host, "--json");
-        check(after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", `before ${before.slice(0, 200)} | after ${after.slice(0, 200)}`);
+        const asked = [];
+        let after = "";
+        const deadline = Date.now() + 60_000;
+        do {
+          asked.push(tell("concurrency-limit", "host", host, "auto").replace(/\s+/g, " ").slice(0, 120));
+          after = tell("concurrency-limit", "host", host, "--json");
+          if (after === before) break;
+          await sleep(2000);
+        } while (Date.now() < deadline);
+        check(after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${asked.length} time(s), bb answered: ${[...new Set(asked)].join(" | ")}`);
       }
       if (starOff) {
         const said = tell("plugin", "enable", "bb--github-star");

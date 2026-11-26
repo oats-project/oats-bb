@@ -6,7 +6,8 @@
 // THE GUARD: a message typed into the thread of an agent OATS has stopped starts its harness
 // behind OATS's back. So nothing goes to bb unless, AT THE PRESS, the roster the plugin's server
 // holds reads and says the agent may be written to: what a place drew is asked once more of the
-// server (an agent OATS stopped since the place was drawn is not started by the press).
+// server (an agent OATS stopped since the place was drawn is not started by the press; nor is a
+// message sent to the thread of an agent whose row names another thread by then).
 import type { useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "../../contract";
 import type { Agent } from "../../model/types";
@@ -37,6 +38,9 @@ export async function guarded<Result>(rpc: Rpc, target: Target, run: (now: Agent
   if (!now.ok) throw new Error(NOT_NOW_UNREAD);
   const agent = now.agents.find((each) => each.instance === target.agent.instance);
   if (agent === undefined) throw new Error(NOT_NOW_GONE);
+  // THE THREAD written to is the one the place was DRAWN for: where the server's row names another now (the agent was
+  // started again on a new thread since the draw), the agent the place shows is no longer the one it would write to.
+  if (agent.threadId !== target.agent.threadId) throw new Error(NOT_NOW_GONE);
   const why = refusal(agent, target.thread);
   if (why !== null) throw new Error(why === "unreachable" ? NOT_NOW_UNREACHABLE : NOT_NOW_STOPPED);
   return run(agent);

@@ -969,8 +969,9 @@ person to send: bb has no way to put text in a thread's composer.
   held for the window by the agent and the occurrence (`app/board/sent.ts`), so the options stay
   off while an answer travels, however often they are drawn anew (‹ ›, a tab, the home's card).
 - Where the row the server answers at the press is the LAST roster's (OATS cannot be read at that
-  moment), nothing is sent on it; nor where that row names another thread than the one the place
-  was drawn for (the agent was started again on a new thread since).
+  moment), nothing is sent on it; nor where the server's row of the agent names another thread
+  than the one the place was drawn for (the agent was started again on a new thread since): that
+  check is the guarded send's own, so the home's card has it too.
 - Options that take another question's place WITHOUT a person's turn (the agent cleared the
   question shown, and the next one stands where it stood) are off for one second: a click meant
   for the question that went answers nothing. "1 of 2" is what says the question changed.

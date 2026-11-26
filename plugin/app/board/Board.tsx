@@ -14,7 +14,7 @@ import { useBbNavigate, useRpc, useSdk, experimental_InfoList as InfoList, exper
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { rpcContract } from "../../contract";
 import { answerText, boardClaim, boardData, dialogOpen, factsView, FACTS_SHOWN, questionOccurrence, sparkValues, turnQuestion, type Board as BoardData, type BoardClaim, type BoardFact, type BoardQuestion } from "../../model/board";
-import { NOT_NOW_GONE, NOT_NOW_UNREAD, SENT } from "../home/home-words";
+import { NOT_NOW_UNREAD, SENT } from "../home/home-words";
 import { guarded, mayWrite, sendText, type Target } from "../home/send";
 import { useOats } from "../oats";
 import { readingNow, useActed } from "../roster/reading";
@@ -228,10 +228,8 @@ function Options({ instance, asked, answering, settling }: { instance: string; a
   const press = (index: number) => {
     const text = answerText(asked, index);
     if (answering === null || text === null || !takeSend(instance, occurrence)) return;
-    guarded(rpc, answering.target, async (agentNow) => {
-      // The thread the answer goes to is the one this place was DRAWN for: where the server's row names another now
-      // (the agent was started again on a new thread since), nothing is sent.
-      if (agentNow.threadId !== answering.threadId) throw new Error(NOT_NOW_GONE);
+    guarded(rpc, answering.target, async () => {
+      // (The guarded send has checked that the server's row still names the thread this place was drawn for.)
       // What is sent is built from the ROW AT THE PRESS, not from what this window holds: the
       // question must still be open on the server's roster, the same occurrence, with that option.
       const row = await rpc.call("board", { instance });

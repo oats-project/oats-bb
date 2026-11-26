@@ -115,3 +115,26 @@ test("the server's row at the press names ANOTHER thread than the one the place 
   await waitFor(() => expect(within(zone).getByTestId("oats-board-refused").textContent).toBe("OATS no longer lists this agent: nothing was sent."));
   expect(sent).toEqual([]);
 });
+
+test("the same on the home's card (the guard is the one guarded send's): a reply drawn for one thread, the server's row naming another at the press: nothing is sent, and the card says so", async () => {
+  const app = await loadApp();
+  const panel = app.navPanels.find((candidate) => candidate.id === "home")!;
+  const WHO = "ranker-v3-probe"; // a claim of its own, on thr_research: the card offers a reply
+  const agents = fixtureAgents();
+  let now = agents;
+  const sent: string[] = [];
+  const { sidebarThreads } = await import("../helpers/render");
+  const slot = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, {
+    rpc: handlers({ snapshot: (() => fixtureSnapshot(now)) as never }, agents),
+    sidebarThreads: sidebarThreads(),
+    sdk: { threads: { interactions: { list: async () => [] }, send: async ({ input }: { input: { text: string }[] }) => (sent.push(input.map((part) => part.text).join("")), { ok: true }) } } as never as RenderSlotOptions<Contract>["sdk"],
+  });
+  const card = (await slot.findAllByTestId("oats-needs-card")).find((each) => each.dataset.instance === WHO)!;
+  const box = (await within(card).findByTestId("oats-reply-text")) as HTMLTextAreaElement;
+  fireEvent.change(box, { target: { value: "use main" } });
+  now = agents.map((agent) => (agent.instance === WHO ? { ...agent, threadId: "thr_plain" } : agent)); // T1 drawn, T2 on the server's row
+  fireEvent.click(within(card).getByTestId("oats-reply-send"));
+  await waitFor(() => expect(within(card).getByTestId("oats-needs-why").textContent).toBe("OATS no longer lists this agent: nothing was sent."));
+  expect(sent).toEqual([]);
+  expect(box.value).toBe("use main"); // what was typed is kept
+});

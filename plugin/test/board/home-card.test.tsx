@@ -110,7 +110,7 @@ test("on the card the question has no border of its own and no second age (the c
   expect(within(zone).queryByTestId("oats-board-age")).toBeNull();
 });
 
-test("the thread line's Answer turns the panel to BOARD for an agent whose board asks (the question is there, with its options), and to Instance for any other claim", async () => {
+test("the thread line's Answer turns the panel to BOARD for an agent whose board asks, the focus on the question's ZONE (never an option); and to Instance for any other claim, the focus in Needs input on the reply's FIELD (a field takes typing: not on Send)", async () => {
   const app = await loadApp();
   const { InstancePanel, showPanelTab } = await import("../../app/panel/Panel");
   const Row = app.threadHeaderRows[0]!.component;
@@ -131,7 +131,11 @@ test("the thread line's Answer turns the panel to BOARD for an agent whose board
     if (tab === "Board") {
       await waitFor(() => expect(document.activeElement, JSON.stringify(change)).toBe(slot.getByTestId("oats-board-questions")));
       expect((document.activeElement as HTMLElement).tagName).not.toBe("BUTTON");
-    } else await waitFor(() => expect(slot.getByTestId("oats-panel-waiting").contains(document.activeElement), JSON.stringify(change)).toBe(true));
+    } else {
+      await waitFor(() => expect(slot.getByTestId("oats-panel-waiting").contains(document.activeElement), JSON.stringify(change)).toBe(true));
+      // Neither arm lands the focus on a control whose press sends: here it is the field, or the section itself.
+      expect((document.activeElement as HTMLElement).tagName).not.toBe("BUTTON");
+    }
     resetApp();
   }
 });

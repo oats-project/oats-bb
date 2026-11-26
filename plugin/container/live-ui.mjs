@@ -750,7 +750,6 @@ function busyStage() {
       fake({
         status: { stdout: text },
         souls: { file: "busy/souls.json" },
-        capabilities: { file: "busy/capabilities.json" },
         teams: { file: "busy/teams.json" },
         "server list": { file: "busy/servers.json" },
         "schedule list": { file: "busy/schedule-list.json" },

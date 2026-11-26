@@ -108,28 +108,10 @@ const MAIL_BODIES = ["The audit of the fourteen lockfiles is done. 63 packages a
 const LONG = (what) => `${what}: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone`;
 
 export function build() {
-  const made = { agents: [], souls: [], capabilities: [], soulCapabilities: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], facts: [], questions: [], mail: [], messages: [], conversations: [], groups: [], problems: [] };
-
-  // ---- capabilities: the recorded twelve, then eighteen more (30) ----
-  // The eighteen are recorded rows under longer names: two more of each capability the fullest soul has (below), three
-  // more of the one that fills the knowledge place (a core place then holds FOUR: the Workspace page names three and
-  // counts the rest), and one more of five others.
-  const capabilitiesDoc = recorded("workspace/capabilities.json");
-  const capabilityOf = (name) => capabilitiesDoc.capabilities.find((row) => row.name === name);
-  const MORE_CAPABILITIES = ["oats.aweb", "oats.build", "oats.core", "oats.developer", "oats.landing-rules", "oats.aweb", "oats.build", "oats.core", "oats.developer", "oats.landing-rules", "oats.okf", "oats.okf", "oats.okf", "oats.code-review", "oats.desktop-ui", "oats.maintainer", "oats.okf-harvest", "oats.workspace-experts"];
-  for (const from of capabilitiesDoc.capabilities) made.capabilities.push(vary(from, []));
-  const moreNames = MORE_CAPABILITIES.map((model, n) => `oats.${SOUL_WORDS[(n * 5 + 2) % SOUL_WORDS.length]}-${SOUL_WORDS[(n * 3 + 7) % SOUL_WORDS.length]}-${["review-and-release", "delivery"][n % 2]}-${model.slice("oats.".length)}-${n + 1}`);
-  MORE_CAPABILITIES.forEach((model, n) => made.capabilities.push(vary(capabilityOf(model), [[model, moreNames[n]]])));
-  const capabilities = { ...copy(capabilitiesDoc), capabilities: made.capabilities.map((each) => each.row) };
+  const made = { agents: [], souls: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], facts: [], questions: [], mail: [], messages: [], conversations: [], groups: [], problems: [] };
 
   // ---- souls: the recorded souls, each multiplied (24) ----
   const soulsDoc = recorded("workspace/souls.json");
-  // ONE soul with FIFTEEN capabilities (a soul's page lists eight and offers the rest): the recorded soul that has five,
-  // with two more of each: every row of its list is one of its recorded rows, under a busy capability's name.
-  const FULLEST = "oats-developer";
-  const fullest = soulsDoc.souls.find((soul) => soul.name === FULLEST);
-  for (const from of fullest.capabilities) made.soulCapabilities.push(vary(from, []));
-  MORE_CAPABILITIES.slice(0, 10).forEach((model, n) => made.soulCapabilities.push(vary(fullest.capabilities.find((row) => row.name === model), [[model, moreNames[n]]])));
   const soulModels = soulsDoc.souls.filter((soul, index, all) => all.findIndex((other) => other.name === soul.name) === index);
   const busySouls = [];
   for (let n = 0; n < 24; n += 1) {
@@ -137,7 +119,7 @@ export function build() {
     const turn = Math.floor(n / soulModels.length);
     // The recorded souls stand as they are (their names are the roster's groups); the others are longer names of the same shape.
     const name = turn === 0 ? from.name : `${SOUL_WORDS[(n * 7) % SOUL_WORDS.length]}-${["feature-delivery", "quality-and-release-readiness"][turn - 1]}-${from.name}`;
-    const row = vary(from, turn === 0 ? [] : [[from.name, name]], turn === 0 ? (from.name === FULLEST ? [[["capabilities"], made.soulCapabilities.map((each) => each.row)]] : []) : [[["description"], LONG(`Works on ${name.replace(/-/g, " ")}`)]]);
+    const row = vary(from, turn === 0 ? [] : [[from.name, name]], turn === 0 ? [] : [[["description"], LONG(`Works on ${name.replace(/-/g, " ")}`)]]);
     made.souls.push(row);
     // The name the roster gives this soul's agents: the soul's own, or `<package>--<soul>` for a package's soul ("." written "-").
     busySouls.push(typeof row.row.package === "string" ? `${row.row.package.replaceAll(".", "-")}--${name}` : name);
@@ -344,7 +326,7 @@ export function build() {
   });
   const servers = { ...copy(serversDoc), servers: made.servers.map((each) => each.row) };
 
-  return { files: { "status.json": busyStatus, "souls.json": souls, "capabilities.json": capabilities, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "mail.json": mail.row, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
+  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "mail.json": mail.row, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
 }
 
 // (Run as a program, by any path to this file: a symlinked one too.)
@@ -353,5 +335,5 @@ if (process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathS
   mkdirSync(out, { recursive: true });
   const { files, made } = build();
   for (const [name, document] of Object.entries(files)) writeFileSync(join(out, name), `${JSON.stringify(document, null, 1)}\n`);
-  console.log(`busy: ${made.agents.length} agents, ${made.souls.length} souls, ${made.capabilities.length} capabilities, ${made.schedules.length + made.triggers.length} automations (${made.runs.length} runs), ${made.teams.length} teams, ${made.servers.length} machines → ${out}`);
+  console.log(`busy: ${made.agents.length} agents, ${made.souls.length} souls, ${made.schedules.length + made.triggers.length} automations (${made.runs.length} runs), ${made.teams.length} teams, ${made.servers.length} machines → ${out}`);
 }

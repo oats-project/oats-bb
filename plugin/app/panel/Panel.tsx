@@ -4,7 +4,7 @@
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { BOARD, Board } from "../board";
-import { MAIL, Mail, NO_MESSAGING } from "../mail";
+import { MAIL, MAIL_UNREAD, Mail, NO_MESSAGING } from "../mail";
 import { TerminalButton } from "../terminal/Terminal";
 import { OutsideAgent, OutsideAgentDetails, pageActs, pageParts, words as outsideWords } from "../outside";
 import type { ReactNode } from "react";
@@ -57,16 +57,15 @@ const TABS: readonly TabItem<TabId>[] = [
   { id: "mail", label: MAIL.tab },
 ];
 /**
- * The agent whose Mail tab a person pressed. Mail is NOT remembered from one agent to the next, as
- * the other tabs are: showing an agent's mail reads it (over the network, with the agent's own
- * identities), and that takes a press on THAT agent's tab. A press on Mail is good for the agent
- * it was pressed on until another agent's panel is shown: that panel drops the marker (not the
- * memory), so the first agent's panel, shown again, opens on Instance and reads no mail by itself.
+ * MAIL's MARKER: the agent whose Mail tab a person pressed. Mail is NOT opened for another agent by the window's
+ * memory, as the other tabs are: showing an agent's mail reads it (over the network, with the agent's own
+ * identities), and that takes a press on THAT agent's tab. Written by a press on Mail, for the agent it was pressed
+ * on, and by nothing else: no mount drops it, and the next press on Mail replaces it (tab-state.ts).
  */
 let mailOf: string | null = null;
 /** A tab pressed in the panel of `instance`. */
 function pressTab(instance: string, tab: TabId): void {
-  mailOf = tab === "mail" ? instance : null;
+  if (tab === "mail") mailOf = instance;
   showPanelTab(tab);
 }
 /** The id of the panel's one tab panel: the tabs name it, and it names the tab it shows. */
@@ -77,7 +76,8 @@ let shownTab: TabId = "instance";
 /**
  * How many times a tab was ASKED FOR (a press on a tab, or another feature's `showPanelTab`). A
  * press is an EVENT, not a change of the memory: a press that names the tab the memory already
- * holds moves a panel all the same (one that fell to Instance when the tab it showed went).
+ * holds moves a panel that shows another all the same (the header's soul link on a panel a person
+ * turned to Board; Answer for a claim that is not the board's).
  */
 let presses = 0;
 const listeners = new Set<() => void>();
@@ -226,13 +226,9 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   // nothing else: the mount reads the window's memory, a press writes it. Nothing here depends on what has been read.
   const pressed = usePresses();
   const [held, setHeld] = useState(() => mountedOn({ memory: shownTab, mailOf, presses }, agent.instance));
-  const tabNow = moved(held, { presses: pressed, pressedTab: remembered });
+  const tabNow = moved(held, { presses: pressed, pressedTab: remembered, mailOf }, agent.instance);
   if (tabNow !== held) setHeld(tabNow);
   const tab = tabNow.tab;
-  useEffect(() => {
-    // A press on Mail is good for its agent until another agent's panel is shown: that panel drops the marker.
-    if (mailOf !== null && mailOf !== agent.instance) mailOf = null;
-  }, [agent.instance]);
   // An agent with no messaging layer has no mail to read: its Mail tab says so, from the row alone, and starts no read.
   const messaging = read.data === undefined ? undefined : read.data.facts.messagingId !== null;
   return (
@@ -296,8 +292,17 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
         {tab === "board" ? <Board instance={agent.instance} /> : tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} unread={failure !== null} /> : tab === "soul" ? <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} /> : messaging === undefined ? (
           // Whether the agent has mail to read is not known (its instance is being read, or could not be): neither the
           // mail's view (a read for an agent not known to have mail) nor "No messaging." (not known is not none): what
-          // the panel says of a read that is not there, with its Retry.
-          state
+          // the panel says of a read that is not there, with its Retry. Beside a thread, while the roster itself is the
+          // last one read, that notice is the thread's own line's (one Retry on a screen) and the panel draws none: on
+          // this tab nothing else stands under it, so the tab says its one quiet line: a tab is never empty.
+          <>
+            {state}
+            {!page && failure !== null && read.status !== "loading" ? (
+              <p data-testid="oats-panel-mail-unread" className="m-0 text-sm text-muted-foreground">
+                {MAIL_UNREAD}
+              </p>
+            ) : null}
+          </>
         ) : messaging ? (
           <Mail instance={agent.instance} />
         ) : (

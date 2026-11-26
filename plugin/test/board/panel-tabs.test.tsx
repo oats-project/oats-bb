@@ -32,13 +32,19 @@ const threadOf = (instance: string): string => panelAgents().find((agent) => age
 
 // The panel as bb holds it: a thread that changes, a mount that may be made anew (`mount`: bb mounts a panel's
 // content twice now and then), a panel that may be closed (`null`).
-type Showing = { threadId: string | null; mount: number };
+type Showing = { threadId: string | null; mount: number; /** another agent's panel mounted beside it, by its name (an agent's page) */ other?: string | null };
 let show: (next: Showing) => void = () => {};
 function Shown({ threadId }: { threadId: string }) {
   const [now, setNow] = useState<Showing>({ threadId, mount: 0 });
   show = setNow;
-  return now.threadId === null ? null : <InstancePanel key={now.mount} threadId={now.threadId} />;
+  return (
+    <>
+      <div data-testid="first">{now.threadId === null ? null : <InstancePanel key={now.mount} threadId={now.threadId} />}</div>
+      <div data-testid="second">{now.other == null ? null : <InstancePanel instance={now.other} />}</div>
+    </>
+  );
 }
+type Which = "first" | "second";
 
 /** `boards`: each agent's board by its name, as it is NOW (a test changes it and calls `changed`); `messaging`: the agents with a messaging id. */
 async function panel({ boards = {}, messaging = [CHILD, PARENT], over = {}, before = () => {} }: { boards?: Record<string, unknown>; messaging?: readonly string[]; over?: Partial<Handlers>; before?: () => void } = {}) {
@@ -53,11 +59,12 @@ async function panel({ boards = {}, messaging = [CHILD, PARENT], over = {}, befo
     }),
     sidebarThreads: panelThreads(),
   });
-  const list = () => within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab");
-  const tabs = () => list().map((tab) => tab.textContent);
-  const shown = () => list().find((tab) => tab.getAttribute("aria-selected") === "true")?.textContent;
-  const press = (name: string) => fireEvent.click(within(slot.getByRole("tablist", { name: "Instance context" })).getByRole("tab", { name }));
-  const name = () => slot.getByTestId("oats-panel-name").getAttribute("title");
+  const root = (which: Which) => within(slot.getByTestId(which));
+  const list = (which: Which = "first") => within(root(which).getByRole("tablist", { name: "Instance context" })).getAllByRole("tab");
+  const tabs = (which: Which = "first") => list(which).map((tab) => tab.textContent);
+  const shown = (which: Which = "first") => list(which).find((tab) => tab.getAttribute("aria-selected") === "true")?.textContent;
+  const press = (tab: string, which: Which = "first") => fireEvent.click(within(root(which).getByRole("tablist", { name: "Instance context" })).getByRole("tab", { name: tab }));
+  const name = (which: Which = "first") => root(which).getByTestId("oats-panel-name").getAttribute("title");
   const to = async (instance: string, mount = 0) => {
     act(() => show({ threadId: threadOf(instance), mount }));
     await waitFor(() => expect(name()).toBe(instance));
@@ -68,9 +75,9 @@ async function panel({ boards = {}, messaging = [CHILD, PARENT], over = {}, befo
       await new Promise((resolve) => setTimeout(resolve, 150));
     });
   const wait = (ms = 150) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); });
-  const calls = (method: string) => slot.inspection.rpcCalls.filter((call) => call.method === method).length;
+  const calls = (method: string, instance?: string) => slot.inspection.rpcCalls.filter((call) => call.method === method && (instance === undefined || (call.input as { instance?: string } | null)?.instance === instance)).length;
   await waitFor(() => expect(name()).toBe(CHILD));
-  return { slot, tabs, shown, press, to, changed, wait, calls, page: () => slot.getByRole("tabpanel") };
+  return { slot, tabs, shown, press, to, changed, wait, calls, name, page: () => root("first").getByRole("tabpanel") };
 }
 
 // ---- the four tabs, always
@@ -136,6 +143,22 @@ test("the instance's read FAILED (whether the agent has mail is not known): the 
   fail = false;
   fireEvent.click(within(page()).getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(calls("mail")).toBe(1));
+});
+
+test("beside a thread, the roster the last one read AND the instance never read: the Mail tab is not empty: \"Mail can't be read.\", quietly, with no second Retry (the thread's own line has the one; the second delta read's proof)", async () => {
+  let down = false;
+  const { press, page, changed, shown } = await panel({
+    over: {
+      snapshot: (() => (down ? { ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer", machine: null, last: panelSnapshot() } : panelSnapshot())) as never,
+      panelInstance: (() => { throw new Error("E_HOME_MISSING: no such home"); }) as never,
+    },
+  });
+  press("Mail");
+  await waitFor(() => expect(within(page()).getByRole("button", { name: "Retry" })).toBeTruthy()); // the roster reads: the panel's own notice
+  down = true;
+  await changed();
+  await waitFor(() => expect(page().textContent).toBe("Mail can't be read."));
+  expect([shown(), page().querySelectorAll("button").length]).toEqual(["Mail", 0]);
 });
 
 // ---- the panel never chooses a tab by itself
@@ -212,20 +235,69 @@ test("the memory is the window's, for every agent: left on Board, another agent'
 });
 
 // ---- Mail: read only by a press on THAT agent's tab
-test("left on Mail, opened for another agent, and back, whatever the boards say: the other agent's panel opens on Instance and reads no mail; back at the first, Instance again: it takes a press; one mail read in all of it (rounds 1, 4)", async () => {
+test("left on Mail, opened for another agent, and back, whatever the boards say: the other agent's panel opens on Instance and reads no mail (its own takes a press on ITS tab); back at the first: MAIL, as a person left it (no mount drops Mail's marker)", async () => {
   for (const boards of [{ [CHILD]: ASKS, [PARENT]: ASKS }, { [CHILD]: ASKS, [PARENT]: FACTS }, { [PARENT]: ASKS }, {}] as Record<string, unknown>[]) {
     const { shown, press, to, calls, wait } = await panel({ boards });
     press("Mail");
     await waitFor(() => expect(shown()).toBe("Mail"));
-    await waitFor(() => expect(calls("mail")).toBe(1)); // the child's mail, by the press
+    await waitFor(() => expect(calls("mail", CHILD)).toBe(1)); // the child's mail, by the press
     await to(PARENT);
     expect(shown(), JSON.stringify(boards)).toBe("Instance");
-    await to(CHILD);
-    expect(shown(), JSON.stringify(boards)).toBe("Instance");
     await wait();
-    expect([shown(), calls("mail")]).toEqual(["Instance", 1]);
+    expect(calls("mail", PARENT)).toBe(0);
+    await to(CHILD);
+    expect(shown(), JSON.stringify(boards)).toBe("Mail");
+    await wait();
+    expect(calls("mail", PARENT)).toBe(0);
     resetApp();
   }
+});
+
+test("a press on ANOTHER agent's Mail replaces the marker: back at the first agent, Instance: its mail takes a press on its own tab again", async () => {
+  const { shown, press, to, calls, wait } = await panel();
+  press("Mail");
+  await waitFor(() => expect(calls("mail", CHILD)).toBe(1));
+  await to(PARENT);
+  press("Mail");
+  await waitFor(() => expect(calls("mail", PARENT)).toBe(1));
+  await to(CHILD);
+  expect(shown()).toBe("Instance");
+  await wait();
+  expect(calls("mail", CHILD)).toBe(1);
+});
+
+// ---- two agents' panels mounted AT ONCE (bb keeps a thread's tab mounted while it is hidden; the panel is also an agent's page)
+test("two agents' panels mounted at once: ONE press on one agent's Mail moves THAT panel alone: the other keeps its tab, and its mail is not read (the second delta read's proof)", async () => {
+  const { shown, press, wait, calls, name } = await panel();
+  act(() => show({ threadId: threadOf(CHILD), mount: 0, other: PARENT }));
+  await waitFor(() => expect(name("second")).toBe(PARENT));
+  expect([shown("first"), shown("second")]).toEqual(["Instance", "Instance"]);
+  press("Mail", "first");
+  await waitFor(() => expect(shown("first")).toBe("Mail"));
+  await wait(300);
+  expect([shown("second"), calls("mail", CHILD), calls("mail", PARENT)]).toEqual(["Instance", 1, 0]);
+  // A press on Soul is the window's: both panels turn to it (it reads nothing of another agent).
+  press("Soul", "first");
+  await waitFor(() => expect([shown("first"), shown("second")]).toEqual(["Soul", "Soul"]));
+  // And the next press on the OTHER panel is still an event for it.
+  press("Mail", "second");
+  await waitFor(() => expect(shown("second")).toBe("Mail"));
+  expect(shown("first")).toBe("Soul");
+});
+
+test("two agents' panels mounted at once: one on Mail; the other's panel mounts beside it; bb mounts the first again: Mail, Mail: nothing drops the marker (the second delta read's proof)", async () => {
+  const { shown, press, wait, calls, name } = await panel();
+  press("Mail");
+  await waitFor(() => expect(calls("mail", CHILD)).toBe(1));
+  act(() => show({ threadId: threadOf(CHILD), mount: 0, other: PARENT }));
+  await waitFor(() => expect(name("second")).toBe(PARENT));
+  await wait(300);
+  const seen = [shown("first")];
+  act(() => show({ threadId: threadOf(CHILD), mount: 1, other: PARENT }));
+  await wait(300);
+  seen.push(shown("first"));
+  expect(seen).toEqual(["Mail", "Mail"]);
+  expect([shown("second"), calls("mail", PARENT)]).toEqual(["Instance", 0]);
 });
 
 // ---- whatever bb mounts twice shows the same tab twice

@@ -692,8 +692,9 @@ what has been read, and a tab with nothing behind it says so.
 THE PANEL NEVER CHOOSES A TAB BY ITSELF: it opens on the tab it was left on (one memory for the
 window, which only a press writes; Mail only where it was pressed for this agent, else Instance).
 ONLY A PRESS MOVES IT: a tab, the thread line's **Answer**, the palette's Board, the header's
-soul link. So a screen never moves under a reader, and what bb mounts twice shows the same tab
-twice (`app/panel/tab-state.ts`; its table: `test/panel/tab-state.test.ts`).
+soul link; a press on Mail moves the panel of its own agent alone. So a screen never moves under
+a reader, and what bb mounts twice shows the same tab twice (`app/panel/tab-state.ts`; its
+table: `test/panel/tab-state.test.ts`).
 
 The Instance tab ends with two more sections. **Readiness** (`oats readiness`): one line
 that says whether it is ready ("Ready", or how many checks fail), then, behind "Checks and
@@ -873,10 +874,15 @@ than a minute.
 three. For an agent whose roster row gives no messaging id (the panel's `messagingId`) it says
 "No messaging." from the row alone, and starts no read: an agent with no messaging layer has no
 mail to read. (Where the row gives one and the read says none, the mail's view says the same
-line.) And Mail is the one tab the panel does NOT remember from one agent to the next: showing
-an agent's mail reads it, and that takes a press on that agent's own tab. Left on Mail, another
-agent's panel opens on Instance, and back at the first agent it takes a press again
-(`app/panel/tab-state.ts`; `app/panel/Panel.tsx`, `mailOf`).
+line.) And Mail is the one tab the window's memory does NOT open for another agent: showing an
+agent's mail reads it, and that takes a press on that agent's own tab. Left on Mail, another
+agent's panel opens on Instance; back at the first agent, its panel is on Mail again, as a
+person left it. Whose press Mail's was is written by a press on Mail and replaced by the next
+one, on any agent's tab; nothing else changes it. Where two agents' panels are mounted at once
+(bb keeps a thread's tab mounted while it is hidden), a press on one's Mail moves that panel
+alone (`app/panel/tab-state.ts`; `app/panel/Panel.tsx`, `mailOf`). While nothing of the agent
+could be read (the roster is the last one read and its instance was never read), the tab says
+"Mail can't be read.".
 
 **Mail is other people's text.** Every word of a message is untrusted. The adapter turns it into
 display lines on the machine, before it leaves it (`kernel/mail.ts`, with `model/text.ts`): the

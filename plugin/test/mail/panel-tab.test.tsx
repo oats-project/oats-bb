@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// Where the mail stands: ONE control, the tab "Mail" of an agent's panel (D-132). Drawn only for
-// an agent the roster gives a messaging id; never remembered from one agent to the next, so that
-// no agent's mail is read without a press on its own tab.
+// Where the mail stands: ONE control, the tab "Mail" of an agent's panel (D-132). Every agent's
+// panel has the tab (for an agent with no messaging id it says "No messaging." and reads nothing);
+// it is never opened for ANOTHER agent by the window's memory, so that no agent's mail is read
+// without a press on its own tab.
 import { useState } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";

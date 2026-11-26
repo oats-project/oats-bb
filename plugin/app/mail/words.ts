@@ -36,7 +36,9 @@ const REFUSALS: Record<string, string> = {
   [codes.timeout]: "Reading took too long.",
 };
 /** Why the mail could not be read, in one line, by the refusal's code: each claims only what its code shows. */
-export const refusalLine = (code: string | null): string => (code === null ? undefined : REFUSALS[code]) ?? "Mail can't be read.";
+/** A read of an agent's mail that cannot be made, whatever the cause: the one line (also what the panel's Mail tab says while nothing of the agent could be read). */
+export const MAIL_UNREAD = "Mail can't be read.";
+export const refusalLine = (code: string | null): string => (code === null ? undefined : REFUSALS[code]) ?? MAIL_UNREAD;
 
 /** The code that leads a refusal as the server words it (`<code>: <message>`); null where it names none. */
 export const codeOf = (error: string): string | null => /^([A-Z][A-Z0-9_]*): /.exec(error)?.[1] ?? null;

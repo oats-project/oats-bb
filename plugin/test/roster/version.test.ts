@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { host } from "../../contract/roster.js";
 import { codes, createOats, Processes } from "../../kernel/index.js";
 import { parseVersion } from "../../kernel/roster.js";
 import { createCore, type Core } from "../../server/core.js";
@@ -36,7 +37,7 @@ describe("the kernel's version", () => {
     try {
       const version = await createOats({ bin: fake.bin, cwd: fake.deployment, processes }).version();
       const printed = await recorded();
-      expect(version).toEqual({ ok: true, value: { version: "0.70.5", desktopApi: 1, features: printed.features, apis: APIS } });
+      expect(version).toEqual({ ok: true, value: { version: "0.70.5", desktopApi: 1, features: printed.features, apis: APIS, harnesses: ["pi", "claude", "codex"] } });
       expect(printed.features).toContain("session-providers");
       const [call] = await fake.calls();
       expect(call?.argv).toEqual(["version", "--json"]);
@@ -48,7 +49,12 @@ describe("the kernel's version", () => {
   });
 
   it("a kernel that lists no features, or names no JSON version, is read as having none", () => {
-    expect(parseVersion({ version: "0.41.0", sessionViewer: { prefixScroll: false }, someApi: "2" })).toEqual({ ok: true, value: { version: "0.41.0", desktopApi: null, features: [], apis: {} } });
+    expect(parseVersion({ version: "0.41.0", sessionViewer: { prefixScroll: false }, someApi: "2" })).toEqual({ ok: true, value: { version: "0.41.0", desktopApi: null, features: [], apis: {}, harnesses: [] } });
+  });
+
+  it("a host entry of the build before answers without the kernel's list of harnesses: the server reads it as none, and the version read does not fail", () => {
+    const before = { ok: true, value: { version: "0.70.5", desktopApi: 1, features: ["instance-board"], apis: { desktopApi: 1 } } };
+    expect(host.version.output.parse(before)).toEqual({ ok: true, value: { ...before.value, harnesses: [] } });
   });
 
   it("an answer with no version is the typed error of a document the plugin cannot read", () => {
@@ -67,7 +73,7 @@ describe("the server's one read of it", () => {
     backend = await startBackend({ load: (bb) => void (core = createCore(bb)) });
     const [one, two] = await Promise.all([core.versionOf(), core.versionOf()]);
     const again = await core.versionOf();
-    expect(one).toEqual({ version: "0.70.5", desktopApi: 1, features: (await recorded()).features, apis: APIS });
+    expect(one).toEqual({ version: "0.70.5", desktopApi: 1, features: (await recorded()).features, apis: APIS, harnesses: ["pi", "claude", "codex"] });
     expect(two).toBe(one);
     expect(again).toBe(one);
     expect(await backend.verbs()).toEqual(["version"]);

@@ -28,7 +28,7 @@ import { openAgentPage } from "../home/agent-tab";
 import { useCli } from "../home/cli";
 import { GONE_MARK } from "./gone";
 import { agentStatus, rowState } from "./status";
-import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
+import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown, WORKSPACE } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
@@ -115,6 +115,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // link here, and no mark.
   const pagesNow = usePagesShown();
   const links = pageLinks().filter((page) => pagesNow.has(page.path));
+  // The list is the ONE row "Workspace": no visible heading over it.
+  const alone = links.length === 1 && links[0]!.path === WORKSPACE.path;
   const newAgentShown = hasNewAgent(pagesNow.has("souls"));
   // Where the installed `oats` stands, read once the sidebar is seen: "New agent" here is held by the rule that holds the home's.
   const { cli } = useCli(newAgentShown, oats.phase === "ready");
@@ -432,8 +434,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
 
       {links.length === 0 ? null : (
         <>
-          <h2 className={HEADING}>Workspace</h2>
-          <ul data-testid="oats-pages" className="flex flex-col">
+          {/* Where the list is the ONE row "Workspace" the heading is not drawn (the word would stand twice): it stays
+              for a screen reader, and the list keeps the place a heading's block gives it, so the row does not
+              stick to New agent. With another page's row under it (Automations) the heading stands. */}
+          <h2 data-testid="oats-pages-heading" className={alone ? "sr-only" : HEADING}>Workspace</h2>
+          <ul data-testid="oats-pages" className={`flex flex-col ${alone ? "pt-8" : ""}`}>
             {links.map((page) => (
               <PageRow key={page.path} page={page} open={openPath === page.path} onOpen={() => openPage(page.path)} />
             ))}

@@ -262,8 +262,8 @@ export default [
       await page.goto("/plugins/oats/teams");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const current = `JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-pages")} button`)})].filter((e) => e.getAttribute("aria-current") === "page").map((e) => e.innerText.trim()))`;
-      const onTeams = await page.until(`(() => { const now = ${current}; return now === '["Teams"]' ? now : ""; })()`, 30);
-      check(Boolean(onTeams), `${at} while the Teams page is shown its row is the selected one, and no other`, onTeams ?? (await page.evaluate(current)));
+      const onTeams = await page.until(`(() => { const now = ${current}; return now === '["Workspace"]' ? now : ""; })()`, 30);
+      check(Boolean(onTeams), `${at} while a tab of the Workspace page is shown (Teams) the Workspace row is the selected one, and no other`, onTeams ?? (await page.evaluate(current)));
       if (viewport.mobile) await page.shot(`a13-${viewport.name}-sidebar-page-selected`);
       await page.evaluate(`document.querySelector(${JSON.stringify(`${testId("oats-agent-row")}[data-sidebar-thread-id="${release.id}"]`)}).click()`);
       check(Boolean(await page.until(`location.pathname.endsWith("/threads/${release.id}")`, 15)), `${at} a thread opens from the sidebar`, await page.evaluate("location.pathname"));
@@ -627,21 +627,27 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default, with the setting left as installed (unset): only the home is a page; no link, no mark, no route and no dangling link to another",
+    name: "the release's default, with the setting left as installed (unset): the home and the Workspace page with its four tabs; Automations has no link, no mark and no route",
     run: async ({ page, at, viewport, threads, check }) => {
       const mockups = threads.get("thr_mockups");
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      // The sidebar: the roster; no line that counts who waits, no list of pages, no link to one, no mark of one.
+      // The sidebar: the roster; no line that counts who waits; ONE page link, Workspace (its four tabs are no rows), and none to Automations.
       const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(testId("oats-tree"))})) return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: [...s.querySelectorAll('[data-testid^="oats-page-link-"]')].map((e) => e.getAttribute("data-testid")), needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))})?.tagName ?? "" }); })()`, 30);
-      check(side === JSON.stringify({ pages: false, links: [], needs: "" }), `${at} with the setting left as installed the sidebar has the roster, and no page link and no line that counts who waits`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(side === JSON.stringify({ pages: true, links: ["oats-page-link-workspace"], needs: "" }), `${at} with the setting left as installed the sidebar has the roster, ONE page link (Workspace), and no line that counts who waits`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // The thread's own row: no soul on it and no link at all (who the agent is is the instance panel's): nothing leads to a page that is not shown.
       // Read AFTER the sidebar: bb gives the settings a moment after the roster.
       const soul = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); return e && e.querySelector(${JSON.stringify(testId("oats-status-line"))}) ? JSON.stringify({ text: e.innerText.replace(/\\s+/g, ""), links: e.querySelectorAll("a").length }) : ""; })()`, 30);
       check(soul === JSON.stringify({ text: "WorkingStop…Instancepanel", links: 0 }), `${at} the thread's row is its line alone: no soul and no link to a page that is not shown`, soul ?? (await page.evaluate(textOf(testId("oats-identity-row")))));
       await page.shot(`pages-default-${viewport.name}-sidebar`, { targets: true });
+      // Each tab of the Workspace page has its route, and draws its tab as the selected one.
+      for (const path of ["souls", "capabilities", "teams", "machines"]) {
+        await page.goto(`/plugins/oats/${path}`);
+        const tab = await page.until(`document.querySelector(${JSON.stringify(testId(`oats-${path}-page`))}) !== null && document.querySelector(${JSON.stringify(testId(`oats-tab-${path}`))})?.getAttribute("aria-selected") === "true" ? "shown" : ""`, 30);
+        check(tab === "shown", `${at} /plugins/oats/${path} draws its tab of the Workspace page, selected`, tab ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
+      }
       // A page that is not shown has no route: its path answers one line and the way back.
-      for (const path of ["souls", "capabilities", "teams", "machines", "automations"]) {
+      for (const path of ["automations"]) {
         await page.goto(`/plugins/oats/${path}`);
         const said = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-page-not-shown")}[data-page="${path}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
         check(said === "This page is not shown in this release of the OATS plugin. Back to Home", `${at} /plugins/oats/${path} says it is not shown, with the way back`, said ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));

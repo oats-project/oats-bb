@@ -47,7 +47,7 @@ export function Tabs<Id extends string>({ label, tabs, value, onChange, panelId 
             aria-controls={panelId}
             tabIndex={selected ? 0 : -1}
             data-testid={`oats-tab-${tab.id}`}
-            className={`${TARGET} inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-sm ${selected ? "border-foreground font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`${TARGET} inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-2 text-sm md:px-3 ${selected ? "border-foreground font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => {
               const next = step(event, index, tabs.length, ACROSS);

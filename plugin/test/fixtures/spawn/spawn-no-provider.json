@@ -1,0 +1,84 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "instance": "plain-tmux-developer",
+  "agent": "oats-developer",
+  "home": "/abs/real/plain/deploy/agents/oats-developer/instances/plain-tmux-developer",
+  "work": "directory",
+  "branch": null,
+  "base": null,
+  "launched": true,
+  "warnings": [],
+  "launchPrompts": {
+   "status": "not-engaged",
+   "startId": "5697a4da-a112-438f-83b1-a21ccc995e67",
+   "at": "2026-11-25T09:42:26.020Z"
+  },
+  "tmux": {
+   "session": "oats-agents",
+   "window": "plain-tmux-developer",
+   "socket": "/tmp/tmux-1000/oats"
+  },
+  "backend": "tmux",
+  "repo": "/abs/real/plain/deploy",
+  "harness": "claude",
+  "model": "claude-opus-5-5",
+  "parent": null,
+  "sibling": null,
+  "relation": null,
+  "spawnOrigin": "operator",
+  "attach": "tmux -S /tmp/tmux-1000/oats attach -t oats-agents",
+  "background": false,
+  "decision": {
+   "instance": "plain-tmux-developer",
+   "home": "/abs/real/plain/deploy/agents/oats-developer/instances/plain-tmux-developer",
+   "branch": null,
+   "base": null,
+   "effective": {
+    "repo": "/abs/real/plain/deploy",
+    "work": "directory",
+    "harness": "claude",
+    "model": "claude-opus-5-5",
+    "launchConfig": null,
+    "yolo": null,
+    "backend": "tmux",
+    "childSpawns": true,
+    "relation": null,
+    "providers": {
+     "oats.core": {}
+    }
+   },
+   "resolution": "cc6beadce9ebf27b991d99e4",
+   "revision": "c51df43ec92c263cc0ef86bf"
+  },
+  "replayed": false,
+  "wake": {
+   "requested": false,
+   "saved": null,
+   "error": null
+  },
+  "launchConfig": null,
+  "launch": {
+   "version": 2,
+   "harness": "claude",
+   "launchConfig": null,
+   "launchConfigSource": null,
+   "executable": "/abs/home/.npm-global/bin/claude",
+   "executableDeclared": null,
+   "executableResolvedFrom": "PATH",
+   "args": [],
+   "env": {},
+   "model": "claude-opus-5-5",
+   "hooks": {
+    "launch": {},
+    "env": {},
+    "contributions": []
+   },
+   "prompt": {
+    "kind": "task-file",
+    "file": "TASK.md"
+   }
+  }
+ }
+}

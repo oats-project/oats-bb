@@ -83,3 +83,28 @@ test("the roster's row says an agent HAS a board where it holds a fact or a ques
   const agent = factsOnly.value.agents.find((each) => each.instance === "panel-worktree-helper")!;
   expect([agent.hasBoard, agent.boardAsks]).toEqual([true, undefined]);
 });
+
+test("where the focus lands after the command: on the question's ZONE where the board asks (never on an option: a control that sends); on the Board tab where the board has facts alone", async () => {
+  const { InstancePanel } = await import("../../app/panel");
+  for (const asks of [true, false]) {
+    const loaded = await loadApp();
+    const Overlay = loaded.appOverlays[0]!.component;
+    const agents = fixtureAgents().map((agent): Agent => (agent.instance === HAS ? { ...agent, hasBoard: true, ...(asks ? { boardAsks: true as const } : {}) } : agent));
+    const board = { facts: [{ key: "pr", label: "Pull request", value: "#42", unit: null, link: null, at: "2026-11-23T18:01:45.000Z" }], questions: asks ? [{ id: "q3", question: "Which base branch?", options: ["main: the default", "release: the 0.1 line"], hasContext: false, since: "2026-11-23T18:01:45.724Z" }] : [] };
+    const slot = renderSlot<object, Contract>(
+      { component: () => (<><Overlay /><InstancePanel threadId="thr_research" /></>) } as never,
+      {},
+      { rpc: handlers({ board: () => ({ at: "2026-11-23T18:17:00.000Z", supported: true, stale: false, board, claim: asks ? { producer: "oats.board", reason: "attention" } : null }) }, agents), sidebarThreads: sidebarThreads(), sdk: { threads: { interactions: { list: async () => [] } } } as never },
+    );
+    const { command } = await import("../../app/board");
+    await waitFor(() => expect(command.isAvailable!(context("thr_research"))).toBe(true));
+    await waitFor(() => expect(slot.container.querySelector("#oats-panel-page-tab-board")).not.toBeNull());
+    await command.run(context("thr_research"));
+    await waitFor(() => expect(slot.container.querySelector("#oats-panel-page-tab-board")?.getAttribute("aria-selected")).toBe("true"));
+    if (asks) {
+      await waitFor(() => expect(document.activeElement).toBe(slot.getByTestId("oats-board-questions")));
+      expect(slot.getAllByTestId("oats-board-answer").some((option) => option.contains(document.activeElement))).toBe(false);
+    } else await waitFor(() => expect(document.activeElement).toBe(slot.container.querySelector("#oats-panel-page-tab-board")));
+    resetApp();
+  }
+});

@@ -85,10 +85,11 @@ let shownTab: TabId = "instance";
 let presses = 0;
 /**
  * A press made FOR an agent whose panel is not open yet (the thread line's Answer, which then opens
- * it): that panel opens on the tab asked for. ONE SHOT, and short-lived: it is spent by the panel
- * that opens next (whoever's), replaced by the next press of anyone, and it lapses by itself
- * (`SHOT_MS`): a press whose panel never opened (the open refused, the thread gone) does not decide
- * where that agent's panel opens when a person opens it by hand much later.
+ * it): that panel opens on the tab asked for. Short-lived: it is good for every mount of THAT
+ * agent's panel within `SHOT_MS` (bb may mount a panel twice a moment apart), dropped by another
+ * agent's panel, replaced by the next press of anyone, and it lapses by itself: a press whose
+ * panel never opened (the open refused, the thread gone) does not decide where that agent's
+ * panel opens when a person opens it by hand much later.
  */
 let pressedFor: { instance: string; at: number } | null = null;
 /** How long a press waits for the panel it opens: a navigation and a first draw (the phone's own page), with room. */
@@ -256,9 +257,10 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   if (tabNow !== held) setHeld(tabNow);
   const tab = tabNow.tab;
   useEffect(() => {
-    // A press made for an agent is SPENT by the panel that opens after it (taken above by the agent it was made for,
-    // dropped by any other's); and a press on Mail is good for its agent until another agent's panel is shown.
-    pressedFor = null;
+    // A press made for an agent is good for EVERY mount of that agent's panel within its time (bb may mount a panel
+    // twice a moment apart: a mount is not always an opening); another agent's panel drops it (so does the next press
+    // of anyone, and its own lapse). And a press on Mail is good for its agent until another agent's panel is shown.
+    if (pressedFor !== null && pressedFor.instance !== agent.instance) pressedFor = null;
     if (mailOf !== null && mailOf !== agent.instance) mailOf = null;
   }, [agent.instance, pressed]);
   return (

@@ -48,10 +48,25 @@ describe("2. THE BOARD's FIRST READ ANSWERS, once per panel", () => {
     expect(moved(state("soul", { pressed: true }), now({ board: { answered: true, asks: true } })).tab).toBe("soul");
   });
   it("a read that FAILED is not an answer: nothing moves, and the answer that comes later is the first (round 3, minor)", () => {
-    const failed = moved(state("instance"), now({ board: { answered: false, asks: false } }));
-    expect(failed).toBe(failed); // (the same object back: no event)
+    const held = state("instance");
+    const failed = moved(held, now({ board: { answered: false, asks: false } }));
+    expect(failed).toBe(held); // the same object back: no event
     expect(failed.answered).toBe(false);
     expect(moved(failed, now({ board: { answered: true, asks: true } })).tab).toBe("board");
+  });
+  it("an answer bb HOLDS from before the mount is not this panel's first answer (round 4, major): it is not `answered`, so nothing moves; the read that ends since the mount decides, both ways", () => {
+    // (What is held is shown by the board itself; to the state it is `answered: false`, whatever it says.)
+    const mounted = mountedOn(window({ memory: "instance" }), "a", ALL);
+    expect(moved(mounted, now({ board: { answered: false, asks: true } }))).toBe(mounted); // held: "a question is open": not Board yet
+    expect(moved(mounted, now({ board: { answered: true, asks: false } })).tab).toBe("instance"); // this mount's read: cleared meanwhile: not Board
+    expect(moved(mounted, now({ board: { answered: false, asks: false } }))).toBe(mounted); // held: "no question"
+    expect(moved(mounted, now({ board: { answered: true, asks: true } })).tab).toBe("board"); // this mount's read: asked meanwhile: Board
+  });
+  it("a press made FOR this agent holds at every mount of its panel within its time (round 4, major: bb mounts a panel twice a moment apart)", () => {
+    for (const mount of [1, 2]) {
+      const mounted = mountedOn(window({ memory: "instance", presses: 5, pressedFor: true }), "a", ALL);
+      expect(moved(mounted, now({ presses: 5, board: { answered: true, asks: true } })).tab, `mount ${mount}`).toBe("instance");
+    }
   });
   it("ONCE: a question asked AFTER the first answer does not move an open panel (round 1: the agent asks under a reader)", () => {
     const answered = moved(state("instance"), now({ board: { answered: true, asks: false } }));

@@ -14,11 +14,12 @@ import { useBbNavigate, useRpc, useSdk, experimental_InfoList as InfoList, exper
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { rpcContract } from "../../contract";
 import { answerText, boardClaim, boardData, dialogOpen, factsView, FACTS_SHOWN, questionOccurrence, sparkValues, turnQuestion, type Board as BoardData, type BoardClaim, type BoardFact, type BoardQuestion } from "../../model/board";
-import { NOT_NOW_UNREAD, SENT } from "../home/home-words";
+import { NOT_NOW_GONE, NOT_NOW_UNREAD, SENT } from "../home/home-words";
 import { guarded, mayWrite, sendText, type Target } from "../home/send";
 import { useOats } from "../oats";
 import { readingNow, useActed } from "../roster/reading";
 import { errorMessage } from "../store";
+import { clock, SETTLE_MS } from "./clock";
 import { dropSend, noteSent, takeSend, useGoing, useRefused, useSent } from "./sent";
 import { shown, shownBlock } from "../../model/text";
 import { useNow } from "../roster/now";
@@ -214,7 +215,7 @@ function useAnswering(instance: string, claim: BoardClaim): Answering {
 }
 
 /** One question's options: buttons where an answer may be sent, text where not; "Sent." beside the one sent, and then all off for that occurrence. */
-function Options({ instance, asked, answering }: { instance: string; asked: BoardQuestion; answering: Answering }) {
+function Options({ instance, asked, answering, settling }: { instance: string; asked: BoardQuestion; answering: Answering; /** these options took another question's place by themselves a moment ago: off until a person has seen it */ settling: boolean }) {
   const sdk = useSdk();
   const rpc = useRpc<typeof rpcContract>();
   const occurrence = questionOccurrence(asked);
@@ -227,7 +228,10 @@ function Options({ instance, asked, answering }: { instance: string; asked: Boar
   const press = (index: number) => {
     const text = answerText(asked, index);
     if (answering === null || text === null || !takeSend(instance, occurrence)) return;
-    guarded(rpc, answering.target, async () => {
+    guarded(rpc, answering.target, async (agentNow) => {
+      // The thread the answer goes to is the one this place was DRAWN for: where the server's row names another now
+      // (the agent was started again on a new thread since), nothing is sent.
+      if (agentNow.threadId !== answering.threadId) throw new Error(NOT_NOW_GONE);
       // What is sent is built from the ROW AT THE PRESS, not from what this window holds: the
       // question must still be open on the server's roster, the same occurrence, with that option.
       const row = await rpc.call("board", { instance });
@@ -257,7 +261,7 @@ function Options({ instance, asked, answering }: { instance: string; asked: Boar
           return (
             <li key={number} data-testid="oats-board-option" className="flex min-w-0 flex-wrap items-center gap-2">
               {sendable ? (
-                <Button data-testid="oats-board-answer" disabled={busy || sent !== null} className="min-w-0 max-w-full justify-start gap-2 text-left" onClick={() => press(number)}>
+                <Button data-testid="oats-board-answer" disabled={busy || sent !== null || settling} className="min-w-0 max-w-full justify-start gap-2 text-left" onClick={() => press(number)}>
                   <span className="shrink-0 tabular-nums text-muted-foreground">{number + 1}</span>
                   <span className="min-w-0 whitespace-normal break-words">{shown(option)}</span>
                 </Button>
@@ -291,12 +295,35 @@ function Questions({ instance, board, claim, detail, now, inCard = false, onCont
   const [at, setAt] = useState<string | null>(null);
   const zone = useRef<HTMLElement>(null);
   const total = board.questions.length;
+  // OPTIONS THAT TAKE ANOTHER QUESTION's PLACE WITHOUT A PERSON's TURN (the agent cleared the one shown, and the next
+  // stands where it stood, its options under the pointer) are off for a moment: a click meant for the question that
+  // went answers nothing. "1 of 2" is what says the question changed. (A turn by ‹ › is the person's own: no wait.)
+  const shownNow = total === 0 ? null : questionOccurrence(board.questions[Math.max(0, board.questions.findIndex((each) => questionOccurrence(each) === at))]!);
+  const shownBefore = useRef<string | null>(shownNow);
+  const turned = useRef(false);
+  const [settlingUntil, setSettlingUntil] = useState(0);
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    const before = shownBefore.current;
+    shownBefore.current = shownNow;
+    if (before === null || shownNow === null || before === shownNow) return;
+    if (turned.current) {
+      turned.current = false;
+      return;
+    }
+    setSettlingUntil(clock.now() + SETTLE_MS);
+    return clock.after(SETTLE_MS, () => redraw((count) => count + 1));
+  }, [shownNow]);
   if (total === 0) return null;
   // The question shown is held by its occurrence: when it goes (the agent cleared it), the first one is shown.
   const found = board.questions.findIndex((each) => questionOccurrence(each) === at);
   const index = found === -1 ? 0 : found;
   const asked = board.questions[index]!;
-  const turn = (step: number) => setAt(questionOccurrence(board.questions[turnQuestion(index, step, total)]!));
+  const turn = (step: number) => {
+    turned.current = true;
+    setAt(questionOccurrence(board.questions[turnQuestion(index, step, total)]!));
+  };
+  const settling = clock.now() < settlingUntil;
   const place = placeSaid(index, total);
   return (
     <section
@@ -336,7 +363,7 @@ function Questions({ instance, board, claim, detail, now, inCard = false, onCont
       <p data-testid="oats-board-question" className="m-0 min-w-0 break-words font-medium">
         {shown(asked.question)}
       </p>
-      <Options key={questionOccurrence(asked)} instance={instance} asked={asked} answering={answering} />
+      <Options key={questionOccurrence(asked)} instance={instance} asked={asked} answering={answering} settling={settling} />
       {asked.hasContext ? <Context asked={asked} detail={detail} onOpen={onContext} /> : null}
     </section>
   );

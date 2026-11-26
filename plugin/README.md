@@ -969,7 +969,11 @@ person to send: bb has no way to put text in a thread's composer.
   held for the window by the agent and the occurrence (`app/board/sent.ts`), so the options stay
   off while an answer travels, however often they are drawn anew (‹ ›, a tab, the home's card).
 - Where the row the server answers at the press is the LAST roster's (OATS cannot be read at that
-  moment), nothing is sent on it.
+  moment), nothing is sent on it; nor where that row names another thread than the one the place
+  was drawn for (the agent was started again on a new thread since).
+- Options that take another question's place WITHOUT a person's turn (the agent cleared the
+  question shown, and the next one stands where it stood) are off for one second: a click meant
+  for the question that went answers nothing. "1 of 2" is what says the question changed.
 - An agent on tmux is not typed to from bb yet: its options are text.
 
 **One thing wherever it is drawn.** The home's needs-you card of an agent that needs the person
@@ -1000,7 +1004,7 @@ messaging id; Instance and Soul always.
 THE TAB SHOWN IS ONE STATE of the panel of one agent (`app/panel/tab-state.ts`; the panel is
 keyed by the agent), and it changes on exactly four events:
 1. the MOUNT: the tab the window remembers (Mail only where it was pressed for this agent; a tab not drawn: Instance);
-2. the BOARD's FIRST READ ANSWERS, once (a failed read is not an answer): Board, if a question is open then and no press came since the mount;
+2. the BOARD's FIRST READ ANSWERS, once (a read that ENDED SINCE THIS MOUNT: a failed read is not an answer, nor is one bb still holds from an earlier showing of the agent, which is shown and decides nothing): Board, if a question is open then and no press came since the mount;
 3. a PRESS (an event, also where it names the tab already remembered): the tab pressed;
 4. the tab shown STOPS BEING DRAWN: Instance, and it stays there.
 
@@ -1008,7 +1012,9 @@ The memory is only what a press writes and a mount reads; nothing is derived at 
 screen never moves under a reader: a question asked while the panel is open on another tab is
 said by the thread's own line, "Needs you" with **Answer**, which turns the panel to Board. A
 press made for an agent whose panel is not open yet (Answer) is the memory that panel reads:
-one shot, spent by the panel that opens next and lapsing by itself after ten seconds. Mail is
+good for every mount of THAT agent's panel within ten seconds (A MOUNT IS NOT ALWAYS AN OPENING:
+bb may mount a panel's content twice a moment apart), dropped by another agent's panel, by the
+next press of anyone, and by its lapse. Mail is
 never opened by memory for another agent, and a press on Mail is good for its agent until
 another agent's panel is shown (`test/panel/tab-state.test.ts` is the four as a table).
 A NAMED DIFFERENCE from 0.6.0: whether an agent has mail is known only once its instance is
@@ -1022,7 +1028,8 @@ move under a reader.)
 **The command.** bb takes a plugin's commands once, when it starts, with fixed titles: so the board
 has ONE, **Board**, with no shortcut and nothing per question. It is listed only on the thread of
 an agent that has a board (not on a plugin's page, and so not at the phone's width, where bb has
-no side panel), and turns that agent's panel to Board.
+no side panel), and turns that agent's panel to Board: the focus on the question's zone where
+the board asks, on the tab where it holds facts alone.
 
 **What it reads and does.** Two reads, no act but the send above: the row's board comes with the
 roster the server already holds (no command); the history and the contexts are one

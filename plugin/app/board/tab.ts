@@ -11,8 +11,10 @@ import { useBoard } from "./read";
  * out of the contract) has something to say too: its tab is drawn, so that what could not be read is said where a
  * person looks for the board, never by the board's silence.
  */
-export function useBoardTab(instance: string): { /** the board's first read has ANSWERED (a board, none, or a kernel that sends none; a read that failed is not an answer): a place decides where it opens then, once */ answered: boolean; /** at least one fact or one question, or a board that could not be read or shown whole */ shown: boolean; /** at least one open question */ asks: boolean } {
-  const read = useBoard(instance);
+export function useBoardTab(instance: string): { /** a read of the board has ANSWERED SINCE THIS MOUNT (a board, none, or a kernel that sends none; a read that failed is not an answer, nor is one bb holds from before the mount): a place decides where it opens then, once */ answered: boolean; /** at least one fact or one question, or a board that could not be read or shown whole */ shown: boolean; /** at least one open question */ asks: boolean } {
+  // (Read again at the mount where an answer is held from before it: a mount is not always an opening, and where a
+  // place opens is decided on what the board says NOW.)
+  const read = useBoard(instance, { again: true });
   const board = read.status === "ready" ? read.board : null;
-  return { answered: read.status === "ready" || read.status === "unsupported", shown: board !== null && (board.facts.length > 0 || board.questions.length > 0 || board.malformed || board.dropped > 0), asks: board !== null && board.questions.length > 0 };
+  return { answered: (read.status === "ready" || read.status === "unsupported") && read.fresh, shown: board !== null && (board.facts.length > 0 || board.questions.length > 0 || board.malformed || board.dropped > 0), asks: board !== null && board.questions.length > 0 };
 }

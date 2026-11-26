@@ -5,7 +5,7 @@
 //   command of its own, so read ONCE when the board is in view and has something to read it for,
 //   and again only when what it was read for changed (`detailSignature`: a fact changed, a
 //   question with context was asked). Never on a timer.
-import { useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { experimental_useRpcQuery as useRpcQuery, useRealtime } from "@get-bb/plugin-sdk/app";
 import { REALTIME_CHANGED, rpcContract } from "../../contract";
 import { boardData, boardDetailData, detailSignature, type Board, type BoardClaim, type BoardDetail } from "../../model/board";
@@ -16,17 +16,46 @@ export type BoardRead =
   /** the read failed and nothing is held */
   | { status: "error"; error: string; retry(): void }
   /** this kernel says nothing of boards (an older OATS): nothing is drawn */
-  | { status: "unsupported" }
-  /** (A later read that fails leaves what was read: the roster's own notice says that OATS cannot be read, and holds every act.) */
-  | { status: "ready"; board: Board | null; claim: BoardClaim; retry(): void };
+  | { status: "unsupported"; fresh: boolean }
+  /**
+   * (A later read that fails leaves what was read: the roster's own notice says that OATS cannot be read, and holds every act.)
+   * `fresh`: a read of the board ENDED SINCE THIS MOUNT. bb's query client may hold an answer from before the mount
+   * (the same agent shown earlier in this window): that one is shown, and it decides nothing about where a place opens.
+   */
+  | { status: "ready"; board: Board | null; claim: BoardClaim; fresh: boolean; retry(): void };
 
-/** The row's board of `instance`, kept fresh. */
-export function useBoard(instance: string): BoardRead {
+/**
+ * The row's board of `instance`, kept fresh. `again`: where an answer is held from before this mount, read once more
+ * at the mount (for a place that must know what the board says NOW, not what it said when it was last shown).
+ */
+export function useBoard(instance: string, { again = false }: { again?: boolean } = {}): BoardRead {
   const query = useRpcQuery({ contract: rpcContract, method: "board", input: { instance } });
   const refetch = useRef(query.refetch);
   useEffect(() => {
     refetch.current = query.refetch;
   });
+  // A read that ended since this mount, with an answer (a read that failed is none). Known two ways, since a read can
+  // start and end between two draws: an answer that is not the one held at the mount (none was held, or a new one
+  // came), or a read seen on its way and then seen ended (the same answer again: bb keeps the object it held).
+  const failed = useRef(false);
+  failed.current = query.error !== null;
+  const atMount = useRef(query.data);
+  const heldAtMount = useRef(query.data !== undefined);
+  const onItsWay = useRef(false);
+  const [fresh, setFresh] = useState(false);
+  useEffect(() => {
+    const answered = query.error === null && query.data !== undefined;
+    if (answered && query.data !== atMount.current) setFresh(true);
+    if (query.isFetching) onItsWay.current = true;
+    else if (onItsWay.current) {
+      onItsWay.current = false;
+      if (answered) setFresh(true);
+    }
+  }, [query.isFetching, query.error, query.data]);
+  useEffect(() => {
+    // (Where the read asked for here ends between two draws with the very answer that was held, its end is told here.)
+    if (again && heldAtMount.current) void refetch.current().then(() => (failed.current ? undefined : setFresh(true)));
+  }, [again]);
   const first = useRef(false);
   first.current = query.isFetching && query.data === undefined;
   useRealtime(REALTIME_CHANGED, () => reread(`board ${instance}`, first.current, () => refetch.current()));
@@ -35,8 +64,8 @@ export function useBoard(instance: string): BoardRead {
   const board = useMemo(() => (data === undefined ? null : boardData(data.board)), [data]);
   const retry = () => void refetch.current();
   if (data === undefined) return query.error === null ? { status: "loading" } : { status: "error", error: errorMessage(query.error), retry };
-  if (!data.supported) return { status: "unsupported" };
-  return { status: "ready", board, claim: data.claim, retry };
+  if (!data.supported) return { status: "unsupported", fresh };
+  return { status: "ready", board, claim: data.claim, fresh, retry };
 }
 
 export type DetailRead =
@@ -46,11 +75,19 @@ export type DetailRead =
   | { status: "failed" }
   | { status: "read"; detail: BoardDetail };
 
-/** The board's detail, read once it is `wanted` (the board is in view) and again when the board it was read for changed. */
+/**
+ * The board's detail (a command: `oats inspect`), read ONCE when it is first `wanted` (the board is in view) for the
+ * agent in this window, and again only when the board it was read for changed. A board shown again (a tab turned back
+ * to) shows what was read: bb's query client would read a mounted query again once its answer is 2 s old, so the
+ * query is on only while it holds no answer (the panel's own reads do the same: app/panel/read.ts).
+ */
 export function useBoardDetail(instance: string, board: Board | null, wanted: boolean): DetailRead {
   const needed = board !== null && (board.facts.length > 0 || board.questions.some((each) => each.hasContext));
   const signature = detailSignature(board);
-  const query = useRpcQuery({ contract: rpcContract, method: "boardDetail", input: { instance }, enabled: wanted && needed });
+  const [on, setOn] = useState(false);
+  const query = useRpcQuery({ contract: rpcContract, method: "boardDetail", input: { instance }, enabled: wanted && needed && on });
+  const held = query.data !== undefined;
+  useEffect(() => setOn(!held), [held]);
   const refetch = useRef(query.refetch);
   useEffect(() => {
     refetch.current = query.refetch;

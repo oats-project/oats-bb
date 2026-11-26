@@ -10,6 +10,7 @@ import type { PluginCommandRegistration } from "@get-bb/plugin-sdk/app";
 import { nodeIn } from "../lifecycle";
 import { showPanelTab } from "../panel/Panel";
 import { HOME_TAB } from "../roster/IdentityRow";
+import { focusBoardQuestion } from "./focus";
 import { BOARD } from "./words";
 
 export const command: PluginCommandRegistration = {
@@ -17,9 +18,14 @@ export const command: PluginCommandRegistration = {
   title: BOARD.tab,
   isAvailable: (context) => nodeIn(context.threadId)?.agent.hasBoard === true,
   run: (context) => {
-    if (nodeIn(context.threadId)?.agent.hasBoard !== true) return;
-    // The tab first: the panel that opens now opens on it, and one that is open turns to it.
-    showPanelTab("board", { focus: true });
+    const agent = nodeIn(context.threadId)?.agent;
+    if (agent === undefined || agent.hasBoard !== true) return;
+    // The tab first: the panel that opens now opens on it (the press is FOR this agent), and one that is open turns to
+    // it. Where the board asks, the focus goes to the question's ZONE once it is drawn (never to an option: the focus
+    // does not land by itself on a control that sends); a board with facts alone has nothing to answer: the tab.
+    const asks = agent.boardAsks === true;
+    showPanelTab("board", { focus: !asks, for: agent.instance });
     context.experimental_panel.openTab({ tab: HOME_TAB });
+    if (asks) focusBoardQuestion();
   },
 };

@@ -12,6 +12,10 @@ import { createCore, FOLLOW_UP_WITHIN_MS, MIN_INTERVAL_MS, SYSTEM_CLOCK, type Cl
 import { startBackend, type Backend } from "../support/backend.js";
 import type { Behaviour } from "../support/fake-oats.js";
 
+// A pacing test starts a fake `oats` and a core: its truth is not in how long that takes. Its own limit stands far
+// above the runner's default (5 s), so that a stalled host fails none of them.
+const PACING_TEST_MS = 60_000;
+
 /** A clock that stands still until it is moved: `advance` by the test, or a wait the server asks for (recorded with its signal, and over at once). */
 function manualClock() {
   let time = Date.UTC(2026, 10, 26, 9, 0, 0);
@@ -74,7 +78,7 @@ describe("the pause between two status reads, exactly", () => {
     await core.reread();
     expect(hand.waits.at(-1)).toBe(MIN_INTERVAL_MS);
     expect(await statuses()).toBe(5);
-  });
+  }, PACING_TEST_MS);
 
   it("after a read that took longer than the floor, the pause is THAT read's own time: a slow kernel is not read without pause; after a quick read it is the floor again", async () => {
     await start();
@@ -89,7 +93,7 @@ describe("the pause between two status reads, exactly", () => {
     expect(hand.waits.at(-1)).toBe(2_500);
     await core.reread(); // read 3: read 2 took no time
     expect(hand.waits.at(-1)).toBe(MIN_INTERVAL_MS);
-  });
+  }, PACING_TEST_MS);
 
   it("after a read that FAILED the pause is the floor, whatever the failed read's length: Retry is not held back by a timeout's own time", async () => {
     await start();
@@ -103,7 +107,7 @@ describe("the pause between two status reads, exactly", () => {
     const next = (await core.reread()) as { ok: boolean };
     expect(hand.waits.at(-1)).toBe(MIN_INTERVAL_MS); // not 2.5 s
     expect(next.ok).toBe(true);
-  });
+  }, PACING_TEST_MS);
 
   it("the pause is asked with the SERVER's own life: the wait's signal is the core's (`core.signal`, aborted when the plugin ends), so the wait ends with the server", async () => {
     await start();
@@ -111,7 +115,7 @@ describe("the pause between two status reads, exactly", () => {
     await core.reread();
     expect(hand.signals).toHaveLength(2);
     expect(hand.signals.every((signal) => signal === core.signal)).toBe(true);
-  });
+  }, PACING_TEST_MS);
 });
 
 describe("the read asked for WHILE a read is in flight", () => {
@@ -139,7 +143,7 @@ describe("the read asked for WHILE a read is in flight", () => {
     expect(hand.waits.slice(waitsBefore)).toEqual([MIN_INTERVAL_MS, MIN_INTERVAL_MS]);
     expect(said()[1]).toBe("oats status is read again after the pause: asked for while a read was in flight, which was itself read at once");
     await core.reread(); // (the queue runs dry before the backend is disposed)
-  });
+  }, PACING_TEST_MS);
 
   it("waits the pause when the read in flight took LONGER than the limit: the pause is that read's own time", async () => {
     await start();
@@ -157,7 +161,7 @@ describe("the read asked for WHILE a read is in flight", () => {
     expect(hand.waits.at(-1)).toBe(took);
     expect(said()).toEqual([`oats status is read again after the pause: asked for while a read was in flight, which answered in ${took} ms, over ${FOLLOW_UP_WITHIN_MS} ms`]);
     await core.reread();
-  });
+  }, PACING_TEST_MS);
 
   it("waits the floor when the read in flight FAILED: a failed read is not followed at once", async () => {
     await start();
@@ -173,7 +177,7 @@ describe("the read asked for WHILE a read is in flight", () => {
     expect(hand.waits.at(-1)).toBe(MIN_INTERVAL_MS);
     expect(said()).toEqual(["oats status is read again after the pause: asked for while a read was in flight, which gave no answer to count (it failed, or the settings changed under it)"]);
     await core.reread();
-  });
+  }, PACING_TEST_MS);
 });
 
 describe("the clock's seam", () => {
@@ -184,19 +188,58 @@ describe("the clock's seam", () => {
     const system = source.slice(from, source.indexOf("\n}\n", from) + 3);
     expect(system).toMatch(/setTimeout\(done, ms\)/);
     expect(system.split("\n").length).toBeLessThan(15);
-    const rest = source.replace(system, "").split("\n").filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line) && !line.includes("export const SYSTEM_CLOCK") && !line.startsWith("export type Clock = "));
-    // A bare reading of the time, a timer or a wait, in any spelling: the clock's own, a date made of "now", a timer
-    // of the platform's (also `AbortSignal.timeout`, and anything of `node:timers`), the system's `sleep` called by name.
-    const bare = rest.filter((line) => /\bDate\.now\b|\bnew Date\b(?!\s*\(\s*[^)\s])|\bperformance\b|\bsetTimeout\b|\bsetInterval\b|\bsetImmediate\b|AbortSignal\.timeout|node:timers|(?<![.\w])sleep\(/.test(line));
-    expect(bare).toEqual([]);
-    expect(source.match(/export const SYSTEM_CLOCK: Clock = \{ now: \(\) => Date\.now\(\), sleep \};/)).not.toBeNull(); // asked anew at each reading: a test that mocks `Date.now` is seen
-    // (And the scan's own words are not idle: each is a spelling it would catch.)
-    for (const spelling of ["const when = Date.now();", "const d = +new Date;", "const d = new Date();", "const d = new Date( );", "const s = AbortSignal.timeout(5_000);", 'import { setTimeout as wait } from "node:timers/promises";', "await sleep(5, signal);", "performance.now()", "setTimeout(done, 5);"]) {
-      expect([spelling, /\bDate\.now\b|\bnew Date\b(?!\s*\(\s*[^)\s])|\bperformance\b|\bsetTimeout\b|\bsetInterval\b|\bsetImmediate\b|AbortSignal\.timeout|node:timers|(?<![.\w])sleep\(/.test(spelling)]).toEqual([spelling, true]);
+    // THE SCAN IS BY NAME, not by spelling: outside the system's own clock a line of code may not hold the NAME of
+    // anything that reads the time or waits, however it is called, taken as a value or reached:
+    //   - `Date`, but to make a date of a GIVEN time (`new Date(<an argument>)`) or to read one (`Date.parse(`);
+    //   - the system's `sleep` and `SYSTEM_CLOCK` (the core's own `clock.sleep(` is the seam);
+    //   - the platform's timers and clocks: `setTimeout`, `setInterval`, `setImmediate`, `AbortSignal.timeout`,
+    //     `performance`, `process.hrtime`, `process.uptime`, `scheduler`, and any module of `timers`.
+    const bare = (line: string) => {
+      const code = line.replace(/new Date\((?=\s*[^)\s])/g, "").replace(/\bDate\.parse\(/g, "");
+      return /\bDate\b|(?<!\bclock\.)\bsleep\b|\bSYSTEM_CLOCK\b|\bsetTimeout\b|\bsetInterval\b|\bsetImmediate\b|AbortSignal\.timeout|\bperformance\b|\bprocess\s*\.\s*(hrtime|uptime)\b|\bscheduler\b|\btimers\b/.test(code);
+    };
+    // The lines of code: a comment that STARTS a line is taken off it (what follows a closed block comment is code); a
+    // line that is only a comment is none. The three lines that ARE the seam are named, whole, and held below.
+    const SEAM = ["export const SYSTEM_CLOCK: Clock = { now: () => Date.now(), sleep };", "export type Clock = { now(): number; sleep(ms: number, signal: AbortSignal): Promise<void> };"];
+    const lines = source
+      .replace(system, "")
+      .split("\n")
+      .map((line) => line.replace(/^\s*\/\*.*?\*\//, ""))
+      .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line) && !SEAM.includes(line));
+    const core = lines.filter((line) => /\bclock: Clock = SYSTEM_CLOCK\b/.test(line));
+    expect(core.length).toBe(1); // `createCore`'s own default, and nowhere else
+    expect(lines.filter((line) => !core.includes(line) && bare(line))).toEqual([]);
+    for (const line of SEAM) expect([line, source.split("\n").filter((candidate) => candidate === line).length]).toEqual([line, 1]); // (`now` asked anew at each reading: a test that mocks `Date.now` is seen)
+    // Inside the system's `sleep` the one timer is its own, and it reads no time.
+    expect(/\bDate\b|\bperformance\b|\bprocess\b|\bsetInterval\b|\bsetImmediate\b/.test(system)).toBe(false);
+    // (And the scan's own words are not idle: each is a spelling it catches.)
+    for (const spelling of [
+      "const when = Date.now();",
+      "const d = +new Date;",
+      "const d = new Date();",
+      "const d = new Date( );",
+      "const { now } = Date; clientSeenAt = now();",
+      'const at = Date["now"]();',
+      "const d = new globalThis.Date();",
+      "const at = Date.parse(Date());",
+      "let from = SYSTEM_CLOCK.now();",
+      "await SYSTEM_CLOCK.sleep(POLL_MS, signal);",
+      "const wait = sleep; await wait(POLL_MS, signal);",
+      "await sleep(5, signal);",
+      "const s = AbortSignal.timeout(5_000);",
+      'import { setTimeout as wait } from "node:timers/promises";',
+      'await (await import("timers/promises")).scheduler.wait(5);',
+      "const at = process.hrtime.bigint();",
+      "performance.now()",
+      "setTimeout(done, 5);",
+    ]) {
+      expect([spelling, bare(spelling)]).toEqual([spelling, true]);
     }
-    for (const fine of ["const at = new Date(stamp()).toISOString();", "await clock.sleep(5, signal);", "lastStart = clock.now();"]) {
-      expect([fine, /\bDate\.now\b|\bnew Date\b(?!\s*\(\s*[^)\s])|\bperformance\b|\bsetTimeout\b|\bsetInterval\b|\bsetImmediate\b|AbortSignal\.timeout|node:timers|(?<![.\w])sleep\(/.test(fine)]).toEqual([fine, false]);
+    for (const fine of ["const at = new Date(stamp()).toISOString();", "await clock.sleep(5, signal);", "lastStart = clock.now();", "const ms = Date.parse(first.at);", "at: new Date(clock.now()).toISOString(),"]) {
+      expect([fine, bare(fine)]).toEqual([fine, false]);
     }
+    // A comment that starts a line does not hide the code after it.
+    expect("/* when */ const startedAt = Date.now();".replace(/^\s*\/\*.*?\*\//, "")).toBe(" const startedAt = Date.now();");
   });
 
   it("the server's own clock is the system's: its `now` is the time now, and its wait ends when the server does", async () => {

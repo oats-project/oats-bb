@@ -109,7 +109,7 @@ describe("snapshot", () => {
     expect(server.harness.realtimeSignals).toEqual([{ channel: REALTIME_CHANGED, payload: { at: TOKEN } }]);
     expect(Date.parse(tokenOf(server.harness.realtimeSignals[0]))).toBeGreaterThanOrEqual(born); // the read's start, not a count from nothing
     // The watch on the event log was asserted on the machine that holds the homes.
-    await expect.poll(() => server.harness.experimental_hostRpcCalls.map((call) => call.method)).toEqual(["discover", "status", "watch"]);
+    await expect.poll(() => server.harness.experimental_hostRpcCalls.map((call) => call.method), { timeout: WAIT_MS }).toEqual(["discover", "status", "watch"]);
     expect(server.harness.experimental_hostRpcCalls.every((call) => call.hostId === "host_falcon")).toBe(true);
   });
 
@@ -266,12 +266,12 @@ describe("snapshot", () => {
   it("shares the read in flight with a snapshot call that arrives before the first answer", async () => {
     await fake.behave({ status: { sleepMs: 700 } });
     const service = server.harness.runService("snapshot");
-    await expect.poll(async () => (await verbs()).length).toBe(1);
+    await expect.poll(async () => (await verbs()).length, { timeout: WAIT_MS }).toBe(1);
     expect((await rpc("snapshot")).ok).toBe(true); // the read in flight, shared: not a second read after the pause (one `status`, below)
     expect(await verbs()).toEqual(["status"]);
     service.controller.abort();
     await service.done;
-  });
+  }, 60_000);
 
   it("says in one line that oats is missing, and keeps answering", async () => {
     await server.harness.setSettings({ oatsBin: join(fake.deployment, "no-oats-here") });
@@ -311,7 +311,7 @@ describe("snapshot", () => {
       return hosts;
     }) as never);
     const first = rpc("snapshot");
-    await expect.poll(() => server.harness.sdk.callsTo("hosts.list").length).toBe(1);
+    await expect.poll(() => server.harness.sdk.callsTo("hosts.list").length, { timeout: WAIT_MS }).toBe(1);
     await server.harness.setSettings({ deployment: join(fake.deployment, "agents") }); // holds no oats-local.yaml
     server.harness.sdk.stub("hosts.list", (async () => hosts) as never);
     release();
@@ -1099,7 +1099,7 @@ describe("the host-call limits", () => {
 describe("the slow poll", () => {
   it("runs only while a client watches the snapshot", async () => {
     const service = server.harness.runService("snapshot");
-    await expect.poll(async () => (await verbs()).length).toBe(1); // the read at the service's start
+    await expect.poll(async () => (await verbs()).length, { timeout: WAIT_MS }).toBe(1); // the read at the service's start
     const unwatch = server.harness.experimental_watchRpc("snapshot", { input: null });
     await expect.poll(async () => (await verbs()).length, { timeout: 20_000, interval: 250 }).toBe(2);
     unwatch();

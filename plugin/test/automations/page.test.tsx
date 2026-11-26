@@ -171,6 +171,28 @@ describe("the lists", () => {
     expect(slot.queryByTestId("oats-automations-state-failed")).toBeNull();
   });
 
+  it("a run's row opens its agent where the agent is: bb's thread for one that has one, the agent's own page for one that has none; Start… is offered for a stopped agent alone", async () => {
+    const agents = fixtureAgents();
+    const threaded = agents.find((agent) => agent.threadId !== null && agent.running)!;
+    const bare = agents.find((agent) => agent.threadId === null)!;
+    const stopped = agents.find((agent) => agent.instance === "weekly-digest-helper")!;
+    expect([threaded, bare, stopped].every((agent) => agent !== undefined)).toBe(true);
+    const list = schedules();
+    const run = list.rows.find((row) => row.id === "local/daily-review")!.recentRuns[0]!;
+    const runs = [threaded, bare, stopped].map((agent, day) => ({ ...run, runId: `r${day}`, instance: agent.instance, startedAt: new Date(Date.parse(run.startedAt!) - day * 86400e3).toISOString() }));
+    const slot = await page("schedules/local/daily-review", {
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: { ...list, rows: list.rows.map((row) => (row.id === "local/daily-review" ? { ...row, recentRuns: runs } : row)) } }, trigger: { ok: true as const, list: triggers() } }),
+    });
+    await waitFor(() => expect(slot.getAllByTestId("oats-run-row")).toHaveLength(3));
+    const rows = slot.getAllByTestId("oats-run");
+    fireEvent.click(within(rows[0]!).getByTestId("oats-run-row"));
+    fireEvent.click(within(rows[1]!).getByTestId("oats-run-row"));
+    const went = slot.inspection.navigateCalls.map((call) => call.method);
+    expect(slot.inspection.navigateCalls[0]).toMatchObject({ method: "toThread", threadId: threaded.threadId });
+    expect(went[1]).not.toBe("toThread");
+    expect(rows.map((row) => within(row).queryByTestId("oats-run-menu") !== null)).toEqual([false, false, stopped.running === false]);
+  });
+
   // MENDED AFTER A REFUSAL, read by read: what was said of the refusal is gone, and what was held is given back.
   it("a list that was refused and is read again: its notice is gone, its rows are there, and no act is held", async () => {
     let asked = 0;

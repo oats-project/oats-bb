@@ -1162,3 +1162,181 @@ describe("kept from before the rework", () => {
     expect(view.queryByTestId("oats-automation-last-error")).toBeNull();
   });
 });
+
+// What the mutation run found no test for: each decision below was negated and every test still passed. Now each has one.
+describe("pinned after the mutation run", () => {
+  const icon = (row: HTMLElement) => within(row).getByTestId("oats-automation-icon");
+  const drawnIcon = (element: HTMLElement) => element.querySelector("svg[data-icon]")?.getAttribute("data-icon") ?? null;
+
+  it("a row's icon is its kind's, by bb's name for it, with the kind as its accessible name; a failing row's is the failing one, in red; one that needs a person carries the needs-you mark in its place", () => {
+    const view = page({ asking: (row) => (row.id === "local/weekly-cleanup" ? "release-070-maintainer" : null) });
+    const read = (id: string) => [drawnIcon(icon(view.row(id))), icon(view.row(id)).getAttribute("aria-label"), icon(view.row(id)).className.includes("text-destructive-text")];
+    expect(read("local/daily-review")).toEqual(["Calendar", "Schedule", false]);
+    expect(read("local/wake-oats-developer-review-202611212017")).toEqual(["Clock", "Schedule", false]);
+    expect(read("local/pr-triage")).toEqual(["GitPullRequest", "Trigger", false]);
+    expect(read("local/hourly-check")).toEqual(["CircleX", "Failing", true]);
+    expect(read("oats-real/harvest-closed")).toEqual(["CircleX", "Failing", true]);
+    expect([drawnIcon(icon(view.row("local/weekly-cleanup"))), icon(view.row("local/weekly-cleanup")).getAttribute("aria-label")]).toEqual([null, "Needs you"]);
+    // The page's head: the same icon, red only where it is failing.
+    view.open("local/hourly-check");
+    const head = view.getByTestId("oats-automation-head-icon");
+    expect([drawnIcon(head), head.className.includes("text-destructive-text")]).toEqual(["CircleX", true]);
+    back(view);
+    view.open("local/daily-review");
+    expect([drawnIcon(view.getByTestId("oats-automation-head-icon")), view.getByTestId("oats-automation-head-icon").className.includes("text-destructive-text")]).toEqual(["Calendar", false]);
+  });
+
+  it("the small line's parts are parted by a dot between them, never before the first", () => {
+    const view = page();
+    const line = within(view.row("local/daily-review")).getByTestId("oats-automation-line");
+    const dots = Array.from(line.querySelectorAll<HTMLElement>("[data-part]")).map((part) => part.querySelectorAll('[aria-hidden="true"]').length);
+    expect(dots).toEqual([0, 1, 1]);
+  });
+
+  it("the sentence is one line in the list, with the whole of it one hover away; on the automation's own page it is whole, with no hover", () => {
+    const view = page();
+    const inList = within(view.row("oats-real/nightly-digest")).getByTestId("oats-automation-sentence");
+    expect([inList.className.includes("line-clamp-1"), inList.getAttribute("title")]).toEqual([true, inList.textContent]);
+    view.open("oats-real/nightly-digest");
+    const whole = within(view.getByTestId("oats-automation-identity")).getByTestId("oats-automation-sentence");
+    expect([whole.className.includes("line-clamp-1"), whole.getAttribute("title")]).toEqual([false, null]);
+  });
+
+  it("the foot of what it does names the harness and the model where they are set, and neither where they are not", () => {
+    const set = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, harness: "pi", model: "sol-5.5" }))) });
+    set.open("local/daily-review");
+    expect(Array.from(set.getByTestId("oats-automation-foot").children).map((part) => part.textContent)).toEqual(["oats-developer", "Pi", "sol-5.5"]);
+    cleanup();
+    const bare = page();
+    bare.open("local/daily-review");
+    expect(Array.from(bare.getByTestId("oats-automation-foot").children).map((part) => part.textContent)).toEqual(["oats-developer"]);
+  });
+
+  it("Details of a pull-request trigger: its labels, its base and its poll each only where set; of a recurring wake-up: its time zone and its message where set", () => {
+    const view = page();
+    const row = (id: string) => view.queryByTestId(`oats-automation-detail-${id}`)?.textContent ?? null;
+    view.open("oats-real/proposal-review");
+    expect([row("labels"), row("base"), row("polls")]).toEqual(["Labelsokf-proposal", "Basemain", "Pollsevery 2m"]);
+    back(view);
+    view.open("local/pr-triage");
+    expect([row("labels"), row("base"), row("polls")]).toEqual([null, null, "Pollsevery 2m"]);
+    back(view);
+    // A capability's source polls too.
+    view.open("local/graph-watch");
+    expect(row("polls")).toBe("Pollsevery 1m");
+    back(view);
+    view.open("local/daily-review");
+    expect(row("wake")).toBe("Recurring wake-upEvery 30 minutes · Europe/Madrid · Anything new on your review?");
+    cleanup();
+    const bare = page({ schedule: ready(withRow(schedules(), "local/daily-review", (entry) => ({ ...entry, wake: { ...entry.wake!, tz: null, message: null } }))) });
+    bare.open("local/daily-review");
+    expect(bare.getByTestId("oats-automation-detail-wake").textContent).toBe("Recurring wake-upEvery 30 minutes");
+  });
+
+  it("the trigger file's parameters are quoted only for a source that has some", () => {
+    const view = page();
+    view.open("oats-real/harvest-review");
+    expect(view.queryByTestId("oats-automation-params")).not.toBeNull();
+    back(view);
+    view.open("oats-real/harvest-closed");
+    expect(view.queryByTestId("oats-automation-params")).toBeNull();
+    back(view);
+    view.open("local/pr-triage");
+    expect(view.queryByTestId("oats-automation-params")).toBeNull();
+  });
+
+  it("a run's mark is bb's icon for what came of it, and its word has that tone: failed in red, not known in amber, the rest quiet; one whose agent asks carries the needs-you mark", () => {
+    const run = rowOf(schedules(), "local/daily-review").recentRuns[0]!;
+    const at = (day: number) => new Date(Date.parse(run.startedAt!) - day * 86400e3).toISOString();
+    const runs = [
+      { ...run, runId: "a", outcome: "launch-failed", error: "refused", startedAt: at(1) },
+      { ...run, runId: "b", outcome: "ended", startedAt: at(2) },
+    ];
+    const attempt = { scheduledFor: at(0), startedAt: at(0), error: null, exited: null, exitStatus: null, exitSignal: null };
+    const drawn = (view: ReturnType<typeof page>) => view.runs().map((entry) => [drawnIcon(within(entry).getByRole("img")), ["text-destructive-text", "text-warning-text", "text-muted-foreground"].find((tone) => within(entry).getByTestId("oats-run-said").className.includes(tone))]);
+    const running = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, running: true, attempt, recentRuns: runs, pendingWake: { scheduledFor: at(-1) } }))) });
+    running.open("local/daily-review");
+    expect(drawn(running)).toEqual([["Spinner", "text-muted-foreground"], ["Clock", "text-muted-foreground"], ["CircleX", "text-destructive-text"], ["CircleCheck", "text-muted-foreground"]]);
+    cleanup();
+    const lost = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, running: false, attempt, recentRuns: runs }))) });
+    lost.open("local/daily-review");
+    expect(drawn(lost)[0]).toEqual(["CircleQuestion", "text-warning-text"]);
+    cleanup();
+    const asks = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, recentRuns: runs }))), agentLink: () => ({ open: () => undefined, asks: true, start: null }) });
+    asks.open("local/daily-review");
+    expect(drawn(asks)[0]).toEqual([null, "text-warning-text"]);
+  });
+
+  it("a run's whole time is one hover away: on the row's own button where it opens an agent, on the time where it opens nothing", () => {
+    const plain = page({ agentLink: () => null });
+    plain.open("local/daily-review");
+    const time = plain.runs()[0]!.querySelector("time")!;
+    expect(time.getAttribute("title")).toMatch(/2026/);
+    cleanup();
+    const linked = page({ agentLink: () => ({ open: () => undefined, asks: false, start: null }) });
+    linked.open("local/daily-review");
+    expect([linked.runs()[0]!.querySelector("time")!.getAttribute("title"), within(linked.runs()[0]!).getByTestId("oats-run-row").getAttribute("title")]).toEqual([null, time.getAttribute("title")]);
+  });
+
+  it("an attempt that carries an error has the kernel's words under its fold", () => {
+    const attempt = { scheduledFor: "2026-11-21T21:00:00.000Z", startedAt: "2026-11-21T21:00:03.000Z", error: "boom", exited: null, exitStatus: null, exitSignal: null };
+    const view = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, running: true, attempt }))) });
+    view.open("local/daily-review");
+    const run = view.runs()[0]!;
+    if (within(run).queryByTestId("oats-run-error") === null) fireEvent.click(within(run).getByTestId("oats-run-toggle"));
+    expect(within(run).getByTestId("oats-run-error").textContent).toBe("boom");
+    // One with none has no fold.
+    cleanup();
+    const quiet = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, running: true, attempt: { ...attempt, error: null } }))) });
+    quiet.open("local/daily-review");
+    expect(within(quiet.runs()[0]!).queryByTestId("oats-run-toggle")).toBeNull();
+  });
+
+  it("the tab that is open, the filter that is chosen and a switch that is on each look it, and only the chosen one is in the Tab order", () => {
+    const view = page({ tab: "runs" });
+    expect(view.getAllByRole("tab").map((tab) => [tab.getAttribute("tabindex"), tab.className.includes("bg-accent")])).toEqual([["-1", false], ["0", true]]);
+    fireEvent.click(within(view.getByRole("radiogroup", { name: "Result" })).getByRole("radio", { name: "Failed" }));
+    expect(within(view.getByRole("radiogroup", { name: "Result" })).getAllByRole("radio").map((radio) => [radio.textContent, radio.getAttribute("aria-checked"), radio.getAttribute("tabindex"), radio.className.includes("bg-accent")])).toEqual([["All", "false", "-1", false], ["Failed", "true", "0", true]]);
+  });
+
+  it("Escape in the search clears what is written, and does not leave the page; with nothing written it is the page's own Escape", () => {
+    const view = page();
+    const search = view.getByTestId("oats-search") as HTMLInputElement;
+    fireEvent.change(search, { target: { value: "nightly" } });
+    expect(view.rows()).toHaveLength(1);
+    fireEvent.keyDown(view.getByTestId("oats-search"), { key: "Escape" });
+    expect([(view.getByTestId("oats-search") as HTMLInputElement).value, view.rows().length]).toEqual(["", 18]);
+  });
+
+  it("one fault that failed both lists is one notice, named for both; a fault of one list is named for it", () => {
+    const fault = { code: "E_X", message: "the same fault" };
+    const both = page({ schedule: { list: undefined, loading: false, error: fault, readAt: null }, trigger: { list: undefined, loading: false, error: fault, readAt: null } });
+    expect(both.getAllByTestId("oats-automations-failed").map((notice) => notice.dataset.kind)).toEqual(["both"]);
+    cleanup();
+    const one = page({ trigger: { list: undefined, loading: false, error: fault, readAt: null } });
+    expect(one.getAllByTestId("oats-automations-failed").map((notice) => notice.dataset.kind)).toEqual(["trigger"]);
+  });
+
+  it("with a history of failures: the newest failure stands until a later attempt launched or a later fire followed; then the row is calm", () => {
+    const failure = (at: string, resolved: { at: string; instance: string | null } | null) => ({ attempt: 1, at, key: "local/pr-triage:44", event: "opened", label: "#44", code: "E_SPAWN_NAME", message: "the name is taken", instance: null, resolved });
+    const fired = STATUSES().statuses.find((entry) => entry.id === "local/pr-triage")!.status.fired[0]!.at!;
+    const after = new Date(Date.parse(fired) + 60e3).toISOString();
+    const before = new Date(Date.parse(fired) - 60e3).toISOString();
+    const failingWith = (failures: ReturnType<typeof failure>[]) => {
+      const view = page({ statuses: withStatus("local/pr-triage", (status) => ({ ...status, failures, failuresTotal: failures.length })) });
+      const answer = view.row("local/pr-triage").dataset.failing;
+      cleanup();
+      return answer;
+    };
+    expect(failingWith([failure(after, null)])).toBe("true");
+    expect(failingWith([failure(after, { at: after, instance: "oats-developer-triage-44" })])).toBe("false");
+    expect(failingWith([failure(before, null)])).toBe("false");
+    expect(failingWith([])).toBe("false");
+  });
+
+  it("a last run whose time cannot be read still says what came of it", () => {
+    const view = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, lastRun: row.lastRun === null ? null : { ...row.lastRun, at: null, startedAt: null, scheduledFor: null } }))) });
+    // No time to say: "Last:" and the outcome's word, and no "ago".
+    expect(parts(view.row("local/daily-review")).at(-1)).toMatch(/^Last: [A-Z][a-z]+ [a-z]+$/);
+  });
+});

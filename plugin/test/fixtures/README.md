@@ -1,3 +1,6 @@
+In every fixture the machine's name is the checks' neutral one, `checks-host` (`container/ci.sh`'s
+default; a machine's name is a name: among what a fixture may be varied in).
+
 One directory per feature of the plugin (`../../README.md`, "One module per feature"), each with
 its `verbs.json`: the `oats` verbs the fake answers for that feature, and the file of each
 (`container/fake-oats.mjs`). The files named below are in `roster/` (`status.json`,

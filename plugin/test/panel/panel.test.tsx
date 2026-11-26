@@ -943,7 +943,7 @@ test("OATS cannot be found any more, over what was read: the notice of an agent'
     rpc: handlers({
       snapshot: () => {
         const read = panelSnapshot();
-        return fail ? { ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "OATS_NOT_FOUND", message: "spawn oats ENOENT", machine: "falcon", last: { at: read.at, deployment: read.deployment, agents: read.agents } } : read;
+        return fail ? { ok: false as const, at: "2026-11-23T18:16:26.000Z", code: "OATS_NOT_FOUND", message: "spawn oats ENOENT", machine: "checks-host", last: { at: read.at, deployment: read.deployment, agents: read.agents } } : read;
       },
       panelInstance: ({ instance }) => {
         if (fail) throw new Error("OATS_NOT_FOUND: spawn oats ENOENT");

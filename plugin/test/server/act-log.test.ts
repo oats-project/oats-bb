@@ -38,12 +38,12 @@ const refused = (promise: Promise<unknown>) =>
   );
 
 describe("the act log's line", () => {
-  const who = { caller: "client", host: "host_falcon", at: "2026-11-25T12:00:00.000Z", n: 7 };
+  const who = { caller: "client", host: "host_checks", at: "2026-11-25T12:00:00.000Z", n: 7 };
   it("is one line of key=value, in one order, for each moment of an act", () => {
-    expect(actLine("stopApply", "asked", { instance: "redesign-ui-lead" }, who)).toBe("oats act stopApply asked instance=redesign-ui-lead caller=client host=host_falcon at=2026-11-25T12:00:00.000Z n=7");
-    expect(actLine("stopApply", "ended", { instance: "redesign-ui-lead" }, who, { result: "ok", ms: 1234.4, homes: "3/3" })).toBe("oats act stopApply ended instance=redesign-ui-lead caller=client host=host_falcon at=2026-11-25T12:00:00.000Z n=7 result=ok ms=1234 homes=3/3");
-    expect(actLine("spawn", "ended", { soul: "oats-developer", name: null }, who, { result: "ok", ms: 9, made: "oats-developer-3" })).toBe("oats act spawn ended soul=oats-developer name=- caller=client host=host_falcon at=2026-11-25T12:00:00.000Z n=7 result=ok ms=9 made=oats-developer-3");
-    expect(actLine("start", "ended", { instance: "a" }, who, { result: "E_RESUME_NOT_LOST", ms: 3 })).toBe("oats act start ended instance=a caller=client host=host_falcon at=2026-11-25T12:00:00.000Z n=7 result=E_RESUME_NOT_LOST ms=3");
+    expect(actLine("stopApply", "asked", { instance: "redesign-ui-lead" }, who)).toBe("oats act stopApply asked instance=redesign-ui-lead caller=client host=host_checks at=2026-11-25T12:00:00.000Z n=7");
+    expect(actLine("stopApply", "ended", { instance: "redesign-ui-lead" }, who, { result: "ok", ms: 1234.4, homes: "3/3" })).toBe("oats act stopApply ended instance=redesign-ui-lead caller=client host=host_checks at=2026-11-25T12:00:00.000Z n=7 result=ok ms=1234 homes=3/3");
+    expect(actLine("spawn", "ended", { soul: "oats-developer", name: null }, who, { result: "ok", ms: 9, made: "oats-developer-3" })).toBe("oats act spawn ended soul=oats-developer name=- caller=client host=host_checks at=2026-11-25T12:00:00.000Z n=7 result=ok ms=9 made=oats-developer-3");
+    expect(actLine("start", "ended", { instance: "a" }, who, { result: "E_RESUME_NOT_LOST", ms: 3 })).toBe("oats act start ended instance=a caller=client host=host_checks at=2026-11-25T12:00:00.000Z n=7 result=E_RESUME_NOT_LOST ms=3");
     expect(actLine("start", "held", { instance: "a" }, { ...who, host: null }, { held: "invalid", why: "harness-not-declared" })).toBe(
       "oats act start held instance=a caller=client host=- at=2026-11-25T12:00:00.000Z n=7 result=HELD:invalid why=harness-not-declared",
     );
@@ -111,7 +111,7 @@ describe("the act log's line", () => {
       expect(tokens.filter((token) => token.startsWith("instance=")).length).toBeLessThanOrEqual(1);
     }
     // The forged result is inside a value, with its "=" gone: the line's own result stands alone, last but for ms.
-    expect(lines[0]).toBe("oats act stopApply asked instance=x_oats_act_stopApply_ended_instance_y_result_ok_ms_1_z caller=client host=host_falcon at=2026-11-25T12:00:00.000Z n=7");
+    expect(lines[0]).toBe("oats act stopApply asked instance=x_oats_act_stopApply_ended_instance_y_result_ok_ms_1_z caller=client host=host_checks at=2026-11-25T12:00:00.000Z n=7");
   });
   it("a value is one word: nothing in it ends the value, breaks the line or carries a sentence whole", () => {
     expect(word("two words\nand a line=x")).toBe("two_words_and_a_line_x");
@@ -359,8 +359,8 @@ describe("core.act's own order", () => {
     expect(core!.target()).toBeNull();
     await acting;
     expect(acts().map((each) => [each.line.split(" ")[3], each.line.match(/ host=(\S+) /)![1]])).toEqual([
-      ["asked", "host_falcon"],
-      ["ended", "host_falcon"],
+      ["asked", "host_checks"],
+      ["ended", "host_checks"],
     ]);
   }, 60_000);
 
@@ -438,8 +438,8 @@ describe("what the log holds of an act, through the whole backend", () => {
     await backend.rpc("stopApply", STOP);
     const lines = acts();
     expect(lines.map((each) => each.level)).toEqual(["info", "info"]);
-    expect(lines[0]!.line).toMatch(new RegExp(`^oats act stopApply asked instance=redesign-ui-lead caller=(client|unknown|plugin:\\S+) host=host_falcon at=${ISO} n=\\d+$`));
-    expect(lines[1]!.line).toMatch(new RegExp(`^oats act stopApply ended instance=redesign-ui-lead caller=\\S+ host=host_falcon at=${ISO} n=\\d+ result=ok ms=\\d+ homes=3/3$`));
+    expect(lines[0]!.line).toMatch(new RegExp(`^oats act stopApply asked instance=redesign-ui-lead caller=(client|unknown|plugin:\\S+) host=host_checks at=${ISO} n=\\d+$`));
+    expect(lines[1]!.line).toMatch(new RegExp(`^oats act stopApply ended instance=redesign-ui-lead caller=\\S+ host=host_checks at=${ISO} n=\\d+ result=ok ms=\\d+ homes=3/3$`));
   }, 40_000);
 
   it("an act the kernel refuses ends with the kernel's CODE, as a warning, and never its sentence", async () => {
@@ -447,8 +447,8 @@ describe("what the log holds of an act, through the whole backend", () => {
     const { backend, acts, lines } = await logged({ verbs: { "instance stop --apply": { stdout: JSON.stringify(refusal), exit: 1 } } });
     await refused(backend.rpc("stopApply", STOP));
     expect(acts().map((each) => [each.level, each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N").replace(/ms=\d+/, "ms=N")])).toEqual([
-      ["info", "oats act stopApply asked instance=redesign-ui-lead caller=client host=host_falcon at=AT n=N"],
-      ["warn", "oats act stopApply ended instance=redesign-ui-lead caller=client host=host_falcon at=AT n=N result=E_PLAN_STALE ms=N"],
+      ["info", "oats act stopApply asked instance=redesign-ui-lead caller=client host=host_checks at=AT n=N"],
+      ["warn", "oats act stopApply ended instance=redesign-ui-lead caller=client host=host_checks at=AT n=N result=E_PLAN_STALE ms=N"],
     ]);
     expect(lines.some((each) => each.line.startsWith("oats act") && each.line.includes("SENTENCE"))).toBe(false);
   }, 40_000);
@@ -479,8 +479,8 @@ describe("what the log holds of an act, through the whole backend", () => {
     const { backend, acts, lines } = await logged();
     await backend.rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: TASK, harness: "pi", key: "spawn-1f0c9a7e", revision: "0123456789abcdef01234567" });
     expect(acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N").replace(/ms=\d+/, "ms=N"))).toEqual([
-      "oats act spawn asked soul=oats-developer name=flaky-ci-2-developer caller=client host=host_falcon at=AT n=N",
-      "oats act spawn ended soul=oats-developer name=flaky-ci-2-developer caller=client host=host_falcon at=AT n=N result=ok ms=N made=flaky-ci-2-developer",
+      "oats act spawn asked soul=oats-developer name=flaky-ci-2-developer caller=client host=host_checks at=AT n=N",
+      "oats act spawn ended soul=oats-developer name=flaky-ci-2-developer caller=client host=host_checks at=AT n=N result=ok ms=N made=flaky-ci-2-developer",
     ]);
     expect(lines.filter((each) => /OPENING|customer/.test(each.line))).toEqual([]);
   }, 40_000);
@@ -497,15 +497,15 @@ describe("what the log holds of an act, through the whole backend", () => {
     await refused(backend.rpc("automationTest", { kind: "trigger", id: "oats-real/proposal-review", runSource: true }));
     const said = acts().map((each) => each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N").replace(/ms=\d+/, "ms=N"));
     expect(said).toEqual([
-      "oats act automationEnable asked automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT n=N",
-      "oats act automationEnable ended automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT n=N result=ok ms=N",
-      "oats act automationDescribe asked automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT n=N",
-      "oats act automationDescribe ended automation=schedule:local/weekly-cleanup caller=client host=host_falcon at=AT n=N result=ok ms=N",
-      "oats act schedulerEnable asked scheduler=- caller=client host=host_falcon at=AT n=N",
-      "oats act schedulerEnable ended scheduler=- caller=client host=host_falcon at=AT n=N result=ok ms=N",
+      "oats act automationEnable asked automation=schedule:local/weekly-cleanup caller=client host=host_checks at=AT n=N",
+      "oats act automationEnable ended automation=schedule:local/weekly-cleanup caller=client host=host_checks at=AT n=N result=ok ms=N",
+      "oats act automationDescribe asked automation=schedule:local/weekly-cleanup caller=client host=host_checks at=AT n=N",
+      "oats act automationDescribe ended automation=schedule:local/weekly-cleanup caller=client host=host_checks at=AT n=N result=ok ms=N",
+      "oats act schedulerEnable asked scheduler=- caller=client host=host_checks at=AT n=N",
+      "oats act schedulerEnable ended scheduler=- caller=client host=host_checks at=AT n=N result=ok ms=N",
       "oats act scheduleRun held automation=schedule:no-such-row caller=client host=- at=AT n=N result=HELD:invalid why=row-gone", // (a hold: no machine was asked)
-      "oats act automationTest asked automation=trigger:oats-real/harvest-review caller=client host=host_falcon at=AT n=N",
-      "oats act automationTest ended automation=trigger:oats-real/harvest-review caller=client host=host_falcon at=AT n=N result=ok ms=N",
+      "oats act automationTest asked automation=trigger:oats-real/harvest-review caller=client host=host_checks at=AT n=N",
+      "oats act automationTest ended automation=trigger:oats-real/harvest-review caller=client host=host_checks at=AT n=N result=ok ms=N",
       "oats act automationTest held automation=trigger:oats-real/proposal-review caller=client host=- at=AT n=N result=HELD:invalid why=no-source",
     ]);
     expect(lines.filter((each) => each.line.includes("DESCRIPTION-TEXT"))).toEqual([]);
@@ -516,8 +516,8 @@ describe("what the log holds of an act, through the whole backend", () => {
     const plan = await backend.rpc<{ revision: string }>("retirePlan", { instance: "weekly-digest-helper" });
     await backend.rpc("retireApply", { instance: "weekly-digest-helper", revision: plan.revision, key: "retire-2b9d4e6f8a1c" });
     expect(acts().map((each) => [each.level, each.line.replace(new RegExp(ISO), "AT").replace(/ n=\d+/, " n=N").replace(/ms=\d+/, "ms=N")])).toEqual([
-      ["info", "oats act retireApply asked instance=weekly-digest-helper caller=client host=host_falcon at=AT n=N"],
-      ["info", "oats act retireApply ended instance=weekly-digest-helper caller=client host=host_falcon at=AT n=N result=ok ms=N homes=2/2"],
+      ["info", "oats act retireApply asked instance=weekly-digest-helper caller=client host=host_checks at=AT n=N"],
+      ["info", "oats act retireApply ended instance=weekly-digest-helper caller=client host=host_checks at=AT n=N result=ok ms=N homes=2/2"],
     ]);
     await backend.fake.behave({ retire: { file: "lifecycle/retire-incomplete.json", exit: 1 } });
     await backend.rpc("retireApply", { instance: "weekly-digest-helper", revision: plan.revision, key: "retire-2b9d4e6f8a1c" }).catch(() => undefined);
@@ -542,7 +542,7 @@ describe("what the log holds of an act, through the whole backend", () => {
     const { backend, acts } = await logged();
     // Nothing was read before this act: the server holds no machine yet; the line names the one the act is sent to.
     await backend.rpc("schedulerEnable");
-    expect(acts().map((each) => each.line.match(/ host=(\S+) /)![1])).toEqual(["host_falcon", "host_falcon"]);
+    expect(acts().map((each) => each.line.match(/ host=(\S+) /)![1])).toEqual(["host_checks", "host_checks"]);
     // Two stops of one agent at once: four lines, two numbers, each number on one asked and one ended.
     await Promise.all([backend.rpc("stopApply", STOP).catch(() => undefined), backend.rpc("stopApply", { ...STOP, key: "stop-000011112222" }).catch(() => undefined)]);
     const stops = acts().filter((each) => each.line.includes(" stopApply ")).map((each) => [each.line.match(/ n=(\d+)/)![1], each.line.split(" ")[3]]);

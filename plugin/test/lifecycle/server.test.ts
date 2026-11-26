@@ -233,7 +233,7 @@ describe("start and restart", () => {
     const before = (await verbs()).filter((verb) => verb === "status").length;
     expect(await rpc("startCheck", { instance: "weekly-digest-helper" })).toEqual({
       instance: "weekly-digest-helper",
-      machine: "falcon",
+      machine: "checks-host",
       home: HOME,
       // The pinned sample roster holds neither for a row: a fact the kernel does not print is null, never guessed.
       harness: null,

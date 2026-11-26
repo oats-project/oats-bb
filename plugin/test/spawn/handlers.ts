@@ -5,7 +5,7 @@ import { unexpected } from "../helpers/unexpected";
 
 export const defaults = (): PluginRpcTestHandlers<typeof rpc> => ({
   // What the bb session provider declares on main, and the machine bb's own model list is asked of.
-  spawnHarnesses: () => ({ harnesses: ["claude", "pi"], hostId: "host_falcon" }),
+  spawnHarnesses: () => ({ harnesses: ["claude", "pi"], hostId: "host_checks" }),
   spawnPlan: unexpected("spawnPlan"),
   spawn: unexpected("spawn"),
 });

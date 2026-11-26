@@ -8,17 +8,17 @@ import { failureWords } from "../../app/roster/unreadable";
 afterEach(cleanup);
 
 test("each failure has a title in a person's words, a sentence where one helps, and the acts that can mend it", () => {
-  const said = (code: string, message = "raw", machine: string | null = "falcon") => {
+  const said = (code: string, message = "raw", machine: string | null = "checks-host") => {
     const words = failureWords({ code, message }, machine);
     return [words.title, words.sentence, words.settings, words.retry];
   };
-  expect(said(codes.notFound)).toEqual(["OATS is not installed on falcon", "Install OATS there, or set the path to oats in the plugin's settings.", true, true]);
-  expect(said(codes.noDeployment)).toEqual(["No OATS deployment found on falcon", "Open a bb project inside the deployment, or set its directory in the plugin's settings.", true, true]);
+  expect(said(codes.notFound)).toEqual(["OATS is not installed on checks-host", "Install OATS there, or set the path to oats in the plugin's settings.", true, true]);
+  expect(said(codes.noDeployment)).toEqual(["No OATS deployment found on checks-host", "Open a bb project inside the deployment, or set its directory in the plugin's settings.", true, true]);
   expect(said(codes.chooseHost)).toEqual(["Choose the machine that holds your agents", "This bb server has more than one machine.", true, false]);
-  expect(said(codes.hostNotFound)).toEqual(["Couldn't reach falcon", "The machine in the plugin's settings is not one of this bb server's.", true, true]);
-  expect(said(codes.hostUnreachable)).toEqual(["Couldn't reach falcon", null, false, true]);
-  expect(said(codes.noHost)).toEqual(["Couldn't reach falcon", null, false, true]);
-  expect(said(codes.timeout)).toEqual(["OATS did not answer on falcon", "It took more than 20 s.", false, true]);
+  expect(said(codes.hostNotFound)).toEqual(["Couldn't reach checks-host", "The machine in the plugin's settings is not one of this bb server's.", true, true]);
+  expect(said(codes.hostUnreachable)).toEqual(["Couldn't reach checks-host", null, false, true]);
+  expect(said(codes.noHost)).toEqual(["Couldn't reach checks-host", null, false, true]);
+  expect(said(codes.timeout)).toEqual(["OATS did not answer on checks-host", "It took more than 20 s.", false, true]);
   // A kernel refusal: its first line, after who says it; never the raw code as the title.
   expect(said("E_WORKSPACE_INVALID", "oats-workspace.yaml: unknown key `foo`\nsee the docs")).toEqual(["OATS could not read this deployment", "OATS says: oats-workspace.yaml: unknown key `foo`", false, true]);
   expect(said("PLUGIN_RPC_FAILED")).toEqual(["OATS could not be read", null, false, true]);

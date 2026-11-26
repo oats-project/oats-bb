@@ -43,7 +43,7 @@ export function fixtureThreads(): PluginSidebarThread[] {
   return threads.map((thread) => ({ ...RECORDED_DEFAULTS, ...thread }) as PluginSidebarThread);
 }
 
-export const DEPLOYMENT = { root: "/abs/deployment", workspace: "oats", machine: "falcon" };
+export const DEPLOYMENT = { root: "/abs/deployment", workspace: "oats", machine: "checks-host" };
 
 export function fixtureSnapshot(agents: Agent[] = fixtureAgents()) {
   return { ok: true as const, at: "2026-11-19T12:30:00.000Z", deployment: DEPLOYMENT, agents };

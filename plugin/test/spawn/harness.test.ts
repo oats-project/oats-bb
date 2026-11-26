@@ -39,7 +39,7 @@ describe("the harnesses the bb session provider declares", () => {
   it("the server reads it once for every client and names the machine bb's models are asked of", async () => {
     backend = await startBackend();
     const [first, second] = await Promise.all([backend.rpc<{ harnesses: string[]; hostId: string | null }>("spawnHarnesses"), backend.rpc<{ harnesses: string[]; hostId: string | null }>("spawnHarnesses")]);
-    expect(first).toEqual({ harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true });
+    expect(first).toEqual({ harnesses: ["claude", "pi"], hostId: "host_checks", provider: true });
     expect(second).toEqual(first);
     const calls = (await backend.fake.calls()).filter((call) => call.verb === "capabilities show");
     expect(calls.map((call) => call.argv)).toEqual([["capabilities", "show", "oats.bb", "--json"]]);
@@ -59,7 +59,7 @@ describe("the harnesses the bb session provider declares", () => {
   it("a deployment with NO bb session provider is an answer, not a failed read: no harness of bb's, `provider: false`, and the harnesses the kernel launches itself", async () => {
     backend = await startBackend({ verbs: { "capabilities show": { stdout: ABSENT } } });
     // (The kernel's own list: `harnesses` of `oats version --json`, recorded.)
-    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] });
+    expect(await backend.rpc("spawnHarnesses")).toEqual({ harnesses: [], hostId: "host_checks", provider: false, kernelHarnesses: ["pi", "claude", "codex"] });
   });
 
   it("the same code for a provider the workspace DOES hold is told by what the refusal names, not by its sentence: pinned and not synced is an answer for the form (the way on) and a refusal for every act; a member with none is a failed read", async () => {
@@ -75,7 +75,7 @@ describe("the harnesses the bb session provider declares", () => {
       const refused = `E_CAPABILITY_UNKNOWN: ${error.message}`;
       // The form's read: pinned and not synced is ANSWERED, with the kernel's code and sentence and nothing offered
       // (the form says the way on); a member with no such capability is a failed read.
-      if ("package" in error.details) expect(await backend.rpc("spawnHarnesses"), error.message).toEqual({ harnesses: [], hostId: "host_falcon", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: error.message } });
+      if ("package" in error.details) expect(await backend.rpc("spawnHarnesses"), error.message).toEqual({ harnesses: [], hostId: "host_checks", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: error.message } });
       else await expect(backend.rpc("spawnHarnesses"), error.message).rejects.toThrow(refused);
       // The dialogs' read is refused with the kernel's sentence in both.
       await expect(backend.rpc("startCheck", { instance: "kernel-fix-developer" }), error.message).rejects.toThrow(refused);
@@ -98,7 +98,7 @@ describe("the harnesses the bb session provider declares", () => {
     }
     // And the true case with its sentence reworded is still the answer: the code and the structure decide.
     backend = await startBackend({ verbs: { "capabilities show": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CAPABILITY_UNKNOWN", message: "(reworded)", details: { name: "oats.bb" } } }), exit: 1 } } });
-    expect(await backend.rpc("spawnHarnesses")).toMatchObject({ harnesses: [], hostId: "host_falcon", provider: false });
+    expect(await backend.rpc("spawnHarnesses")).toMatchObject({ harnesses: [], hostId: "host_checks", provider: false });
     expect(await backend.rpc("startCheck", { instance: "kernel-fix-developer" })).toMatchObject({ harnesses: [] });
   });
 

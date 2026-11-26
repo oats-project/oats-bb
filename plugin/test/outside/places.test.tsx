@@ -701,7 +701,7 @@ test("a thread that is no agent's, and the id of a thread bb no longer has, draw
 test("on a roster that is the last one read the acts are held, on the archived thread's row and on the report", async () => {
   const stale = (agents: Agent[]) => {
     const last = fixtureSnapshot(agents);
-    return { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:32:00.000Z", code: "OATS_TIMEOUT", message: "slow", machine: "falcon", last: { at: last.at, deployment: last.deployment, agents: last.agents } }) };
+    return { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:32:00.000Z", code: "OATS_TIMEOUT", message: "slow", machine: "checks-host", last: { at: last.at, deployment: last.deployment, agents: last.agents } }) };
   };
   const archived = await line("thr_digest", { rpc: handlers({ ...noEvents, ...stale(roster({ [DIGEST]: { sessionEnd: "stopped" } })) }), sidebarThreads: withoutDigest(), sdk: bb(["thr_digest"]).sdk });
   // The lifecycle's buttons, held; no reason beside them: the row's one-line notice says "Acts are off.", with Retry.

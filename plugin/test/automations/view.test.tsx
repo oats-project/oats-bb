@@ -527,12 +527,12 @@ describe("a row's page (D-279)", () => {
 
   it("Open file opens the definition on the deployment's machine, and says where it is", () => {
     const opened: unknown[] = [];
-    const view = page({ onOpenFile: (target) => opened.push(target), hostId: "host_falcon" });
+    const view = page({ onOpenFile: (target) => opened.push(target), hostId: "host_checks" });
     view.open("oats-real/nightly-digest");
     const button = view.getByTestId("oats-automation-open-file") as HTMLButtonElement;
     expect([button.textContent, button.disabled, button.title]).toEqual(["Open file", false, "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml"]);
     fireEvent.click(button);
-    expect(opened).toEqual([{ kind: "preview", hostId: "host_falcon", path: "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml" }]);
+    expect(opened).toEqual([{ kind: "preview", hostId: "host_checks", path: "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml" }]);
     // Where this client cannot open files, the page offers none.
     cleanup();
     const without = page();
@@ -549,12 +549,12 @@ describe("a row's page (D-279)", () => {
       return view.getByTestId("oats-automation-open-file") as HTMLButtonElement;
     };
     const opened: unknown[] = [];
-    const onWeb = button(page({ onOpenFile: (target) => opened.push(target), hostId: "host_falcon", schedule: at({ localPath: null, url: web }) }));
+    const onWeb = button(page({ onOpenFile: (target) => opened.push(target), hostId: "host_checks", schedule: at({ localPath: null, url: web }) }));
     expect([onWeb.disabled, onWeb.title]).toEqual([false, web]);
     fireEvent.click(onWeb);
     expect(opened).toEqual([{ kind: "web", url: web }]);
     cleanup();
-    const neither = button(page({ onOpenFile: (target) => opened.push(target), hostId: "host_falcon", schedule: at({ localPath: null, url: null }) }));
+    const neither = button(page({ onOpenFile: (target) => opened.push(target), hostId: "host_checks", schedule: at({ localPath: null, url: null }) }));
     expect([neither.disabled, neither.title]).toEqual([true, "This computer has no clone of this member, and the kernel reports no web address for the file"]);
     cleanup();
     // The machine that holds the deployment is not known (it stopped answering): the web page if there is one, else off, with why.

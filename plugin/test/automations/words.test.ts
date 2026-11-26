@@ -203,21 +203,21 @@ describe("when it runs", () => {
 
 describe("where it runs", () => {
   it("the machine is named by bb's name for it, never as the computer the person sits at; unnamed, it is this computer", () => {
-    const falcon = hereOf("falcon");
-    expect([falcon, hereOf(null), hereOf(undefined), hereOf("")]).toEqual([{ on: "falcon", name: "falcon" }, HERE, HERE, HERE]);
+    const named = hereOf("checks-host");
+    expect([named, hereOf(null), hereOf(undefined), hereOf("")]).toEqual([{ on: "checks-host", name: "checks-host" }, HERE, HERE, HERE]);
     expect(HERE).toEqual({ on: "this computer", name: "This computer" });
     // bb's name is free text: it is drawn as a display line.
     expect(hereOf("fal\u202Econ\nx").on).toBe(displayLine("fal\u202Econ\nx"));
     const list = schedules();
-    expect(groupRows(list.rows, true, falcon).map((group) => group.title)).toEqual(["Runs on falcon", "Needs attention here", "Runs elsewhere"]);
-    expect(groupRows(list.rows, false, falcon)[0]!.title).toBe("Set to run on falcon");
-    expect(placementText(rowOf(list, "local/daily-review"), list.host, true, falcon)).toEqual({ label: "falcon", tone: "ok", detail: "Local: runs on falcon as its own gh login" });
-    expect(placementText(rowOf(list, "oats-real/nightly-digest"), list.host, true, falcon)).toEqual({ label: "falcon", tone: "ok", detail: "falcon's host name is bb-box" });
-    expect(placementText(rowOf(list, "local/daily-review"), list.host, false, falcon).detail).toBe("The scheduler is not running on falcon");
-    expect([schedulerOff(falcon).title, hostUnnamed(falcon).title, notRunHere(falcon)]).toEqual(["The scheduler is not running on falcon", "falcon has no host name in OATS", "Does not run on falcon"]);
-    expect(hostNameHow(falcon)).toBe("In the deployment's oats-local.yaml on falcon, set host: name: to the name it goes by in the workspace, then press Refresh.");
-    expect(emptyHow("schedule", falcon)).toContain("or add a local one on falcon with oats schedule add.");
-    expect(switchTitle(rowOf(list, "local/daily-review"), falcon)).toBe("On here: click to turn it off on falcon");
+    expect(groupRows(list.rows, true, named).map((group) => group.title)).toEqual(["Runs on checks-host", "Needs attention here", "Runs elsewhere"]);
+    expect(groupRows(list.rows, false, named)[0]!.title).toBe("Set to run on checks-host");
+    expect(placementText(rowOf(list, "local/daily-review"), list.host, true, named)).toEqual({ label: "checks-host", tone: "ok", detail: "Local: runs on checks-host as its own gh login" });
+    expect(placementText(rowOf(list, "oats-real/nightly-digest"), list.host, true, named)).toEqual({ label: "checks-host", tone: "ok", detail: "checks-host's host name is bb-box" });
+    expect(placementText(rowOf(list, "local/daily-review"), list.host, false, named).detail).toBe("The scheduler is not running on checks-host");
+    expect([schedulerOff(named).title, hostUnnamed(named).title, notRunHere(named)]).toEqual(["The scheduler is not running on checks-host", "checks-host has no host name in OATS", "Does not run on checks-host"]);
+    expect(hostNameHow(named)).toBe("In the deployment's oats-local.yaml on checks-host, set host: name: to the name it goes by in the workspace, then press Refresh.");
+    expect(emptyHow("schedule", named)).toContain("or add a local one on checks-host with oats schedule add.");
+    expect(switchTitle(rowOf(list, "local/daily-review"), named)).toBe("On here: click to turn it off on checks-host");
   });
   it("each placement in words, with its tone and the kernel's detail", () => {
     const list = schedules();
@@ -332,7 +332,7 @@ describe("last and next", () => {
     // A row that does not run on the machine (it needs attention there) still shows the run it had there, and says it does not run in place of a next one.
     const ran = row({ runsHere: false, group: "attention", reason: "owner-mismatch", origin: { kind: "workspace" }, nextDue: new Date(NOW + 3600e3).toISOString(), lastRun: { startedAt: new Date(NOW - 86400e3).toISOString(), outcome: "agent-launched" } });
     expect(ran.group).not.toBe("here");
-    expect(lastNext(ran, NOW, true, hereOf("falcon"))).toMatchObject({ next: "Does not run on falcon", last: "Last 1 d ago" });
+    expect(lastNext(ran, NOW, true, hereOf("checks-host"))).toMatchObject({ next: "Does not run on checks-host", last: "Last 1 d ago" });
     expect(lastNext(row({ runsHere: false, reason: "assigned-elsewhere", origin: { kind: "workspace" } }), NOW)).toBeNull();
     // A run that has happened is never said to lie ahead, whatever the browser's clock says; nor is the scheduler's last tick.
     expect(lastNext(row({ runsHere: true, lastRun: { startedAt: new Date(NOW + 30e3).toISOString(), outcome: "agent-launched" } }), NOW)).toMatchObject({ last: "Last less than a minute ago" });

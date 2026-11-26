@@ -2,7 +2,7 @@
 import type { PluginRpcTestHandlers } from "@get-bb/plugin-sdk/testing/app";
 import type { rpc } from "../../contract/terminal";
 
-export const HOST = "host_falcon";
+export const HOST = "host_checks";
 export const OATS_BIN = "/usr/local/bin/oats";
 /** The viewer's command as the server answers it for a home, on a kernel that lists both of the viewer's features. */
 export const commandFor = (instance: string) => {

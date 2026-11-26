@@ -13,7 +13,7 @@ const unexpected = (method: string) => (): never => {
 };
 
 export const defaults = (): PluginRpcTestHandlers<typeof rpc> => ({
-  automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } }),
+  automations: () => ({ at: AT, hostId: "host_checks", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } }),
   triggerStatus: ({ id }) => statusOf(id),
   // A test names the acts it is about; one it did not expect fails it.
   automationEnable: unexpected("automationEnable"),

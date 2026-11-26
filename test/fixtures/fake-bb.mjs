@@ -44,7 +44,7 @@ if (key === null && (archivedRead || words.slice(0, 3).join(" ") === "thread que
 // The read readiness makes where the deployment names its host daemon's port: the server's
 // hosts. One, connected: the host the fake daemon of test/fixtures/harness.mjs says it is.
 if (key === null && words.slice(0, 2).join(" ") === "host list") {
-  process.stdout.write(`${JSON.stringify([{ id: "host_1", name: "falcon", type: "persistent", status: "connected", lifecycle: { phase: "active" }, maxPermissionMode: "full", lastSeenAt: 1 }])}\n`);
+  process.stdout.write(`${JSON.stringify([{ id: "host_1", name: "checks-host", type: "persistent", status: "connected", lifecycle: { phase: "active" }, maxPermissionMode: "full", lastSeenAt: 1 }])}\n`);
   process.exit(0);
 }
 // And the read every retire and every move off bb makes: a project bb holds no env for.

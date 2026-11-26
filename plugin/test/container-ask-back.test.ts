@@ -49,12 +49,12 @@ function scene(answers: Answer[], reads: string[], askTakesMs = 0) {
     },
   };
 }
-const ACCEPTED: Answer = { outcome: "accepted", said: "falcon: auto" };
+const ACCEPTED: Answer = { outcome: "accepted", said: "checks-host: auto" };
 
 test("accepted, and bb says the old value at once: back, asked once, no wait", async () => {
   const { askedBack } = await module();
   const { options, slept, count } = scene([ACCEPTED], ["auto, 2"]);
-  expect(await askedBack(options)).toEqual({ back: true, refused: null, after: "auto, 2", answers: ["accepted: falcon: auto"] });
+  expect(await askedBack(options)).toEqual({ back: true, refused: null, after: "auto, 2", answers: ["accepted: checks-host: auto"] });
   expect([count.asked, count.read, slept]).toEqual([1, 1, []]);
 });
 
@@ -71,7 +71,7 @@ test("no answer in time is 'not yet': asked again, and back once bb accepts and 
   const { options, count } = scene([{ outcome: "no-answer", said: "no answer in 20 s" }, ACCEPTED], ["60", "auto, 2"]);
   const result = await askedBack(options);
   expect([result.back, result.refused, count.asked]).toEqual([true, null, 2]);
-  expect(result.answers).toEqual(["no-answer: no answer in 20 s", "accepted: falcon: auto"]);
+  expect(result.answers).toEqual(["no-answer: no answer in 20 s", "accepted: checks-host: auto"]);
 });
 
 test("no answer twice, then accepted: back, asked three times", async () => {

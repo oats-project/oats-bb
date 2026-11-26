@@ -29,5 +29,5 @@ export const defaults = (): PluginRpcTestHandlers<typeof rpc> => ({
     capabilities: [{ id: "oats.core", description: "Day-to-day operation.", origin: "oats.framework 1.12.0", souls: 9 }],
   }),
   teams: () => ({ teams: [{ label: "oats", team: "default:oats.aweb.ai", isDefault: true }] }),
-  machines: () => ({ machines: [{ id: "falcon", route: null, isThisMachine: true, label: null, folder: null }] }),
+  machines: () => ({ machines: [{ id: "checks-host", route: null, isThisMachine: true, label: null, folder: null }] }),
 });

@@ -16,13 +16,17 @@ import { shown } from "../ui/text";
 import { earlierNotKept, NO_RUNS, OLDER, runFailed, runLine, runWhen, RUNS_SHOWN } from "./words";
 import type { RunLine, RunMark } from "./words";
 
-/** The marks, by bb's own names for their icons (each seen to resolve on bb-app 0.50.1 by the live check), their accessible names and their tones. */
+/**
+ * The marks, by bb's own names for their icons, their accessible names and their tones. A name bb's set does not hold is drawn as bb's
+ * generic glyph, silently: the live check holds every icon's DRAWING against that glyph's (bb.tsx IconProbe), on bb-app 0.50.1.
+ * `asks` has no icon of its own: it is drawn with the plugin's needs-you mark (`StateMark`), as the tree's row is.
+ */
 export const MARKS: Record<RunMark | "asks", { icon: string; name: string; tone: string }> = {
-  asks: { icon: "CircleAlert", name: "Needs you", tone: "text-warning-text" },
+  asks: { icon: "AlertCircle", name: "Needs you", tone: "text-warning-text" },
   done: { icon: "CircleCheck", name: "Done", tone: "text-muted-foreground" },
   failed: { icon: "CircleX", name: "Failed", tone: "text-destructive-text" },
-  unknown: { icon: "CircleHelp", name: "Not known", tone: "text-warning-text" },
-  running: { icon: "LoaderCircle", name: "Running", tone: "text-muted-foreground" },
+  unknown: { icon: "CircleQuestion", name: "Not known", tone: "text-warning-text" },
+  running: { icon: "Spinner", name: "Running", tone: "text-muted-foreground" },
   waiting: { icon: "Clock", name: "Waiting", tone: "text-muted-foreground" },
 };
 
@@ -69,7 +73,7 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, newest, open
           </button>
         ) : null}
         {/* At a phone's width what came of it takes the line's room, so that the row's controls stay on the run's own line and the agent goes under. */}
-        <span data-testid="oats-run-said" className={`${THROUGH} min-w-0 flex-1 break-words text-xs @2xl:flex-none ${tone}`}>
+        <span data-testid="oats-run-said" className={`${THROUGH} min-w-0 flex-1 text-xs @2xl:flex-none ${agent?.asks ? "whitespace-nowrap" : "break-words"} ${tone}`}>
           {word}
         </span>
         {line.agent === null ? null : (
@@ -186,12 +190,13 @@ export function Runs({ entries, now, withOwner = false, onOpenOwner, agentLink, 
 export type RunsFilter = { owner: string | null; failed: boolean };
 const ownerKey = (owner: RunOwner): string => `${owner.kind}:${owner.id}`;
 
-export function RunsTab({ entries, cut, now, onOpenOwner, agentLink }: { entries: readonly RunEntry[]; cut: boolean; now: number; onOpenOwner: (owner: RunOwner) => void; agentLink?: AgentLink }) {
+export function RunsTab({ entries, cut, cuts, now, onOpenOwner, agentLink }: { entries: readonly RunEntry[]; cut: boolean; /** the automations that keep less than they ran, by `kind:id`, each with the kernel's count where it gives one */ cuts: ReadonlyMap<string, number | null>; now: number; onOpenOwner: (owner: RunOwner) => void; agentLink?: AgentLink }) {
   const [filter, setFilter] = useState<RunsFilter>({ owner: null, failed: false });
   // The automations that have a run, in the order their newest run comes: the ones a person can filter by.
   const owners = [...new Map(entries.map((entry) => [ownerKey(entry.owner), entry.owner])).values()];
   // An automation that left the list is no filter: back to all of them.
   const owner = filter.owner !== null && owners.some((candidate) => ownerKey(candidate) === filter.owner) ? filter.owner : null;
+  // What is not kept is said of what the table holds: every automation's runs, or the chosen one's alone.
   const kept = entries.filter((entry) => (owner === null || ownerKey(entry.owner) === owner) && (!filter.failed || runFailed(entry)));
   return (
     <div data-testid="oats-automations-runs" className="flex min-w-0 flex-col gap-3">
@@ -223,7 +228,7 @@ export function RunsTab({ entries, cut, now, onOpenOwner, agentLink }: { entries
         </div>
       )}
       {/* A new filter is a new table: it starts at its first rows again. */}
-      <Runs key={`${owner ?? ""}:${filter.failed}`} entries={kept} all={entries} now={now} withOwner onOpenOwner={onOpenOwner} agentLink={agentLink} step={RUNS_SHOWN.tab} cut={cut ? { count: null } : null} />
+      <Runs key={`${owner ?? ""}:${filter.failed}`} entries={kept} all={entries} now={now} withOwner onOpenOwner={onOpenOwner} agentLink={agentLink} step={RUNS_SHOWN.tab} cut={owner === null ? (cut ? { count: null } : null) : cuts.has(owner) ? { count: cuts.get(owner) ?? null } : null} />
     </div>
   );
 }

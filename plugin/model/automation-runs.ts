@@ -58,20 +58,21 @@ export const triggerCut = (status: TriggerStatus): boolean =>
 
 /**
  * Every automation's runs in one list, newest first. `cut` is true where at least one automation
- * keeps less than it ran: the list is then not all there was. A trigger with no state read
+ * keeps less than it ran: the list is then not all there was; `cuts` says which. A trigger with no state read
  * (`statuses` does not name it) adds nothing.
  */
-export function allRuns(schedules: readonly AutomationRow[], triggers: readonly AutomationRow[], statuses: TriggerStatuses): { entries: RunEntry[]; cut: boolean } {
+export function allRuns(schedules: readonly AutomationRow[], triggers: readonly AutomationRow[], statuses: TriggerStatuses): { entries: RunEntry[]; cut: boolean; cuts: Map<string, number | null> } {
   const byId = new Map(statuses.map((entry) => [entry.id, entry.status]));
   const entries: RunEntry[] = schedules.flatMap(scheduleRuns);
-  let cut = schedules.some(scheduleCut);
+  // Which automation keeps less than it ran (by `kind:id`), with the kernel's count where it gives one: for a table of one automation's runs.
+  const cuts = new Map<string, number | null>(schedules.filter(scheduleCut).map((row) => [`${row.kind}:${row.id}`, null]));
   for (const row of triggers) {
     const status = byId.get(row.id);
     if (status === undefined) continue;
     entries.push(...triggerRuns(row, status));
-    cut ||= triggerCut(status);
+    if (triggerCut(status)) cuts.set(`${row.kind}:${row.id}`, droppedCount(status));
   }
-  return { entries: newestFirst(entries), cut };
+  return { entries: newestFirst(entries), cut: cuts.size > 0, cuts };
 }
 
 /**

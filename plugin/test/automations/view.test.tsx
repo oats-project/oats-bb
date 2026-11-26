@@ -750,6 +750,11 @@ describe("an automation's runs", () => {
       ["run", "Done", "Agent launched"],
     ]);
     cleanup();
+    // An attempt that carries an error is not under way, though the job's lock is held: not known, as the row's own state says (and its menu offers "Check run state").
+    const errored = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, running: true, attempt: { ...attempt, error: "boom" } }))) });
+    errored.open("local/daily-review");
+    expect(errored.runs().slice(0, 1).map((run) => [run.dataset.of, mark(run), said(run)])).toEqual([["attempt", "Not known", "Launch state unknown"]]);
+    cleanup();
     const lost = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, running: false, attempt, pendingWake: { scheduledFor: "2026-11-21T21:30:00.000Z" } }))) });
     lost.open("local/daily-review");
     expect(lost.runs().map((run) => [run.dataset.of, mark(run), said(run)])).toEqual([
@@ -995,6 +1000,19 @@ describe("the Runs tab: every automation's runs, newest first", () => {
     fireEvent.click(view.getByTestId("oats-runs-older"));
     expect(view.runs()).toHaveLength(108);
     expect(view.queryByTestId("oats-runs-older")).toBeNull();
+    expect(view.text("oats-runs-cut")).toBe("Earlier runs are not kept");
+    // With ONE automation chosen, it is said of that one alone: the one that keeps every run says nothing; the one that is cut says it.
+    const choose = (id: string) => fireEvent.change(view.getByTestId("oats-runs-by-automation"), { target: { value: `schedule:${id}` } });
+    const toTheEnd = () => {
+      while (view.queryByTestId("oats-runs-older") !== null) fireEvent.click(view.getByTestId("oats-runs-older"));
+    };
+    choose("oats-real/nightly-digest");
+    toTheEnd();
+    expect(view.runs()).toHaveLength(50);
+    expect(view.queryByTestId("oats-runs-cut")).toBeNull();
+    choose("local/daily-review");
+    toTheEnd();
+    expect(view.runs()).toHaveLength(50);
     expect(view.text("oats-runs-cut")).toBe("Earlier runs are not kept");
   });
 

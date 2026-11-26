@@ -82,6 +82,34 @@ const atTheRecording = (scene) =>
           }
         },
       };
+/**
+ * No icon is bb's generic glyph: at every image a scene takes of the page, the drawing of each icon then on it is held against the
+ * drawing of a name no set holds. One check per scene and window, with the names it saw; a scene that takes no image of the page
+ * (one with no `oats`, an old OATS) checks none.
+ */
+const iconsChecked = (scene) => ({
+  ...scene,
+  run: async (context) => {
+    const seen = { drawn: new Set(), generic: new Set(), images: 0, probes: 0 };
+    const page = {
+      ...context.page,
+      shot: async (name, options) => {
+        if (options?.plugin !== false) {
+          const read = JSON.parse(await context.page.evaluate(iconsDrawn));
+          if (read.drawn.length > 0) {
+            seen.images += 1;
+            if (read.probe) seen.probes += 1;
+            for (const each of read.drawn) seen.drawn.add(each);
+            for (const each of read.generic) seen.generic.add(each);
+          }
+        }
+        return context.page.shot(name, options);
+      },
+    };
+    await scene.run({ ...context, page });
+    if (seen.images > 0) context.check(seen.probes === seen.images && seen.generic.size === 0, `${context.at} every icon drawn in this scene's ${seen.images} images is one bb's set holds: none is bb's generic glyph`, `drawn: ${[...seen.drawn].join(", ")}; generic: ${[...seen.generic].join(", ") || "none"}; images with the probe: ${seen.probes} of ${seen.images}`);
+  },
+});
 
 
 const RUN = testId("oats-run");
@@ -104,8 +132,19 @@ const allInside = (selector) => `[...document.querySelectorAll(${JSON.stringify(
 const cutNames = `[...document.querySelectorAll(${JSON.stringify(testId("oats-automation-name"))})].filter((e) => e.scrollWidth > e.clientWidth + 1 || getComputedStyle(e).textOverflow === "ellipsis").map((e) => e.innerText)`;
 /** The computed type of the first element of `selector`: its size and its weight. */
 const typeOf = (selector) => `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return "absent"; const s = getComputedStyle(e); return s.fontSize + " " + s.fontWeight; })()`;
-/** The icons under `within` that bb drew as its generic glyph (a name its set does not hold): the drawing of each against that of a name no set holds. */
-const GENERIC = "OatsNoSuchIcon";
+/**
+ * The icons of the page that bb drew as its generic glyph (a name its set does not hold), by name: the DRAWING of each against the
+ * drawing of a name no set holds, which the page keeps, never seen, for this (app/automations/bb.tsx IconProbe). → JSON
+ * { probe: whether that drawing is there, drawn: the names drawn, generic: those drawn as the generic glyph }
+ */
+const iconsDrawn = `(() => {
+  const drawing = (svg) => svg.outerHTML.replace(/\\s(class|data-icon|data-testid|aria-[a-z]+|width|height|style)="[^"]*"/g, "");
+  const probe = document.querySelector(${JSON.stringify(`${testId("oats-icon-probe")} svg`)});
+  const all = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-automations-page")} svg`)})].filter((svg) => svg !== probe);
+  const name = (svg) => svg.getAttribute("data-icon") ?? "(no name)";
+  const generic = probe === null ? [] : all.filter((svg) => drawing(svg) === drawing(probe)).map(name);
+  return JSON.stringify({ probe: probe !== null && probe.innerHTML !== "", drawn: [...new Set(all.map(name))], generic: [...new Set(generic)] });
+})()`;
 const PLUGIN_DIR = fileURLToPath(new URL("../..", import.meta.url));
 const FIXTURES = `${PLUGIN_DIR}/test/fixtures`;
 /** The roster's agents the busy set gives to runs: one that asks, one that is stopped, one that runs (test/fixtures/roster/status.json). */
@@ -321,10 +360,6 @@ const scenes = [
       const scrolled = await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-automations-rows"))}).scrollTop > 0`);
       check(before === after && scrolled === true, `${at} the card of rows scrolls alone: the tabs, the search and the filter stay`, `${before} ${after} ${scrolled}`);
       await page.evaluate(`(() => { document.querySelector(${JSON.stringify(testId("oats-automations-rows"))}).scrollTop = 0; return true; })()`);
-      // No icon is bb's generic glyph: every name the page draws is one bb's set holds.
-      const icons = await page.evaluate(`JSON.stringify([...new Set([...document.querySelectorAll(${JSON.stringify(`${testId("oats-automations-page")} svg[data-icon]`)})].map((e) => e.getAttribute("data-icon")))])`);
-      const nameless = await page.evaluate(`document.querySelectorAll(${JSON.stringify(`${testId("oats-automations-page")} svg:not([data-icon])`)}).length`);
-      check(nameless === 0 && !icons.includes(GENERIC), `${at} every icon of the page is one bb's set holds`, `${icons} nameless: ${nameless}`);
       const ours = { name: await page.evaluate(typeOf(`${ROW}[data-state="calm"] ${testId("oats-automation-name")}`)), small: await page.evaluate(typeOf(`${ROW}[data-state="calm"] ${testId("oats-automation-line")}`)) };
       await page.shot(`automations-${viewport.name}-busy-list`, { targets: true });
 
@@ -712,7 +747,7 @@ const scenes = [
   },
 ];
 
-export default scenes.map(atTheRecording);
+export default scenes.map(iconsChecked).map(atTheRecording);
 
 const lists = (schedule, trigger) => ({ "schedule list": { file: `automations/${schedule}` }, "trigger list": { file: `automations/${trigger}` } });
 const settled = (untilSnapshot) => untilSnapshot((snapshot) => snapshot.ok === true);

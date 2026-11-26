@@ -28,10 +28,6 @@ export const HERE: Here = hereOf(null);
 // ---- groups, the filter and the search ----
 export const GROUPS = [{ id: "here" }, { id: "attention" }, { id: "elsewhere" }] as const;
 
-
-
-
-
 /** A harness's display name (Claude, Pi, Codex), else the value as reported. */
 export function harnessName(value: string): string {
   const names: Record<string, string> = { claude: "Claude", pi: "Pi", codex: "Codex" };
@@ -202,7 +198,6 @@ export function ownerParts(owner: string | null): { host: string; login: string 
   return match ? { host: match[1]!, login: match[2]! } : null;
 }
 
-
 /** The tone of a placement: it runs here (ok), it cannot (bad), it is off here or another computer's (muted). */
 export type Tone = "ok" | "bad" | "muted";
 /** Where a row runs, in words, with the tone of its dot and the detail behind it. */
@@ -225,7 +220,6 @@ function placedText(row: AutomationRow, host: AutomationHost, here: Here): { lab
   return { label: here.name, tone: row.enabledHere ? "ok" : "muted", detail: host.name !== null ? `${here.name}'s host name is ${host.name}` : null };
 }
 
-
 // ---- the host scheduler ----
 /** Nothing runs unless the host timer is installed, active and registered for this deployment. */
 export const schedulerOn = (scheduler: AutomationScheduler): boolean => scheduler.installed && scheduler.active && scheduler.registered !== false;
@@ -243,9 +237,6 @@ export function listBanners(list: AutomationList): { hostUnnamed: boolean; sched
   };
 }
 
-
-
-
 /**
  * A due time as what is so: ahead it is next; one that has passed (a list kept after a read that
  * failed, a host that was asleep, the moment before the next tick) was due, and is never called
@@ -255,7 +246,6 @@ export function dueWords(iso: string | null, now: number): { word: "Next" | "Was
   const at = relativeTime(iso, now);
   return at === null ? null : { word: Date.parse(iso ?? "") <= now ? "Was due" : "Next", ...at };
 }
-
 
 // ---- run state ----
 export type RunState = {
@@ -289,8 +279,6 @@ export function runState(row: AutomationRow): RunState | null {
   const pendingWake = row.pendingWake !== null ? { scheduledFor: row.pendingWake.scheduledFor } : null;
   return running !== null || unknown !== null || pendingWake !== null ? { running, unknown, pendingWake } : null;
 }
-
-
 
 /** What the red mark says, after the row's name: "Automations, a failure". */
 export const FAILED_RUN_TEXT = ", a failure";
@@ -571,7 +559,6 @@ export const schedulerOffLine = (here: Here = HERE): string => `The scheduler is
 export const EMPTY = "No automations";
 export const NO_MATCH = "No match";
 
-
 // ---- a run's row (an automation's page, and the Runs tab) ----
 /** What a run's mark says: it went through, it did not, nobody knows, it is under way, it waits. Each has its own glyph AND its word beside it: never a colour alone. */
 export type RunMark = "done" | "failed" | "unknown" | "running" | "waiting";
@@ -607,7 +594,9 @@ const what = (label: string | null, event: string | null): string | null => [lab
 /** One run as its row says it. */
 export function runLine(entry: RunEntry): RunLine {
   const none = { what: null, notes: [], agent: null, error: null };
-  if (entry.of === "attempt") return { ...none, mark: entry.running ? "running" : "unknown", at: entry.at, word: entry.running ? "Running" : "Launch state unknown", error: entry.error === null ? null : { code: null, message: entry.error } };
+  // An attempt with an error is not under way, lock or no lock: unknown wins, as in `runState` (the row's menu then offers "Check run state").
+  const live = entry.of === "attempt" && entry.running && entry.error === null;
+  if (entry.of === "attempt") return { ...none, mark: live ? "running" : "unknown", at: entry.at, word: live ? "Running" : "Launch state unknown", error: entry.error === null ? null : { code: null, message: entry.error } };
   if (entry.of === "wake") return { ...none, mark: "waiting", at: entry.at, word: "Waiting" };
   if (entry.of === "pending") return { ...none, mark: "waiting", at: entry.at, what: what(entry.pending.label, entry.pending.event), word: "Waiting" };
   if (entry.of === "fired") return { ...none, mark: "done", at: entry.at, what: what(entry.fired.label, entry.fired.event), word: "Agent launched", agent: entry.fired.instance };

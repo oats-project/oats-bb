@@ -5,7 +5,7 @@
 // reaches the host.
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
-import { NO_AUTOMATIONS, type AutomationKind, type AutomationRow, type automationListAnswer, type rpc, type TriggerStatus, type triggerStatusesAnswer } from "../contract/automations.js";
+import { NO_AUTOMATIONS, TRIGGER_ID, type AutomationKind, type AutomationRow, type automationListAnswer, type rpc, type TriggerStatus, type triggerStatusesAnswer } from "../contract/automations.js";
 import { PULL_REQUEST } from "../model/automations.js";
 import { codes, isKernelCode } from "../kernel/result.js";
 import { HOST_TIMEOUT, invalid, refusal, refusedWith, type Core } from "./core.js";
@@ -47,7 +47,9 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   /** Every listed trigger's state, in one read; where the list itself could not be read, its refusal stands for both. */
   const statusesOf = async (trigger: ListAnswer, features: readonly string[] | null): Promise<StatusesAnswer> => {
     if (!trigger.ok) return trigger;
-    const sources = Object.fromEntries(trigger.list.rows.map((row) => [row.id, row.on?.source ?? null]));
+    // Only ids of the kernel's own grammar are keys the host takes: a listed row whose id is not one (a definition the kernel could not
+    // read may be listed by any text) is left out, and its state is read with no source, rather than refusing every trigger's state.
+    const sources = Object.fromEntries(trigger.list.rows.filter((row) => TRIGGER_ID.test(row.id)).map((row) => [row.id, row.on?.source ?? null]));
     return core.call("triggerStatusAll", { sources }, HOST_TIMEOUT.read, core.signal).then(
       (statuses) => ({ ok: true as const, statuses: statuses.map((entry) => ({ id: entry.id, status: gated(entry.status, features) })) }),
       (error: unknown) => failed(error) as StatusesAnswer,

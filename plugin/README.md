@@ -1152,7 +1152,8 @@ difference). Where it departs from bb's page, on purpose, `WORDS.md` says why.
   list is MERGED IN THE PLUGIN (`model/automation-runs.ts`) from the two reads the page makes
   anyway (every schedule's `recentRuns`; every trigger's `fired` and, with the feature, its
   `failures`), so it is **bounded by what each automation keeps** (its newest 50), never by a
-  time: where any automation keeps less than it ran, the list ends with "Earlier runs are not kept".
+  time: where any automation keeps less than it ran, the list ends with "Earlier runs are not kept"
+  (filtered to one automation: only where THAT one keeps less, with the kernel's count for a trigger).
 - **Above the list**, one line each: "The scheduler is off on <machine>" with **Enable
   scheduler**, while the host timer is off and something there would run; "<machine> has no host
   name in OATS", with where the key is under the notice's Details.

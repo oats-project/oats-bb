@@ -20,11 +20,28 @@ export const ICONS = {
   /** bb's row of an automation whose last run failed */
   failing: "CircleX",
   trigger: "GitPullRequest",
-  wake: "AlarmClock",
+  /** a schedule that wakes an agent (bb's set, as it gives it to a plugin, holds no alarm or timer: seen live, name by name) */
+  wake: "Clock",
   open: "ChevronRight",
   menu: "MoreHorizontal",
   search: "Search",
 } as const;
+
+/** A name no icon set holds: what bb draws for it is its generic glyph. */
+export const NO_ICON = "OatsNoSuchIcon";
+
+/**
+ * Never seen: what bb draws for a name its set does not hold. bb draws its generic glyph for such a name and says nothing, so a
+ * wrong name here would pass every test that reads names; the live check (container/scenes/automations.mjs) holds the drawing of
+ * every icon of the page against this one, in every image it takes.
+ */
+export function IconProbe() {
+  return (
+    <span hidden aria-hidden="true" data-testid="oats-icon-probe">
+      <Icon name={NO_ICON} className="size-4" />
+    </span>
+  );
+}
 
 /** bb's card of rows, and a row of it: an icon's fixed column, what takes the room, the controls' column. */
 export const CARD = "rounded-lg border border-border bg-card px-4 py-1";

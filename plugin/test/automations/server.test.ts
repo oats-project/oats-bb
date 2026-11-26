@@ -88,6 +88,19 @@ describe("every trigger's state, beside the lists", () => {
     expect(lists.schedule.ok).toBe(true);
   });
 
+  it("a listed trigger whose id is not one of the kernel's grammar does not refuse every trigger's state: it is left out of what the host is told", async () => {
+    // The recorded list, with one row's id replaced by a text no id can be (the list's parser takes any text, as for a definition the kernel could not read).
+    const list = JSON.parse(readFileSync(fixturePath("trigger-list.json"), "utf8")) as { result: { triggers: Record<string, unknown>[] } };
+    const odd = list.result.triggers[0]!;
+    odd.qualifiedId = "not an id!";
+    odd.id = "not an id!";
+    backend = await startBackend({ verbs: { "trigger list": { stdout: JSON.stringify(list) } } });
+    const lists = await backend.rpc<Lists & Statuses>("automations");
+    expect(lists.trigger.ok && automationList.parse(lists.trigger.list).rows.some((row) => row.id === "not an id!")).toBe(true);
+    expect(lists.statuses.ok).toBe(true);
+    expect(lists.statuses.statuses!.length).toBeGreaterThan(0);
+  });
+
   it("is not asked for where the trigger list could not be read", async () => {
     const refusal = JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_TRIGGER_INVALID", message: "oats-triggers.json cannot be read" } });
     backend = await startBackend({ verbs: { "trigger list": { stdout: refusal } } });

@@ -9,7 +9,7 @@ import type { AutomationKind, AutomationList, AutomationRow, TriggerStatus, Trig
 import { allRuns } from "../../model/automation-runs";
 import type { RunOwner } from "../../model/automation-runs";
 import { Button, Lines, Loading, Notice, Stale } from "../ui";
-import { BUTTON_OUTLINE, PillTabs } from "./bb";
+import { BUTTON_OUTLINE, PillTabs, IconProbe } from "./bb";
 import { readAge } from "../ui/words";
 import { Detail } from "./Detail";
 import type { DetailProps } from "./Detail";
@@ -197,6 +197,7 @@ export function View({ tab, onTab, reads, statuses, statusesFailure = null, gate
 
   return (
     <div data-testid="oats-automations-page" data-fixed={fixed} className="h-full min-h-0 overflow-y-auto">
+      <IconProbe />
       <div data-testid="oats-automations" data-tab={tab} className={`@container ${FRAME} ${fixed ? "h-full" : ""}`}>
         {onRowPage ? null : (
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -255,7 +256,7 @@ export function View({ tab, onTab, reads, statuses, statusesFailure = null, gate
                   {...rowParts?.(row)}
                 />
               ) : tab === "runs" ? (
-                <RunsTab entries={runs.entries} cut={runs.cut} now={now} onOpenOwner={openOwner} agentLink={agentLink} />
+                <RunsTab entries={runs.entries} cut={runs.cut} cuts={runs.cuts} now={now} onOpenOwner={openOwner} agentLink={agentLink} />
               ) : (
                 <List
                   schedules={schedules}

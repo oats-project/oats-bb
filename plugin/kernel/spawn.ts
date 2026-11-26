@@ -139,9 +139,10 @@ const text = z.string().nullish();
  *   `model`, `modelSource` and `warnings` from it. Those six are here for that reader: they are NOT dead, though
  *   nothing below names them. For them this schema is the contract check: a preview where one has another shape is
  *   refused WHOLE, as an answer the plugin cannot read (`OATS_BAD_ANSWER`), and nothing of it is drawn. Without
- *   their line the column would draw something FALSE of it, not nothing: a model that is no text as the harness's
- *   "default model", teams that are no list as "Team none", modules with no name as empty slots, a warning that is
- *   no sentence as text. test/spawn/kernel.test.ts holds each line.
+ *   their line the column would draw something FALSE of four of them (a model that is no text as the harness's
+ *   "default model"; teams that are no list, where there is no default team, as "Team none"; modules with no name
+ *   as empty slots; a warning that is no sentence as text), and quietly nothing of the two others (a harness or a
+ *   model's source that is no text: no row, no line). test/spawn/kernel.test.ts holds each key of these six.
  * A key nothing reads is not held to a shape, at the top (`launchConfig`) or inside a field (a team's `team` and
  * `default`: the column reads its `label` alone).
  */

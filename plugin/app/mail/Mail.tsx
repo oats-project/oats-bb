@@ -61,6 +61,7 @@ function Message({ message, now, onBack }: { message: MailMessage; now: number; 
   // The message takes the focus on its Back, as the row it came from takes it back.
   const back = useRef<HTMLDivElement>(null);
   useEffect(() => back.current?.querySelector("button")?.focus(), []);
+  const sent = age(message.at, now);
   return (
     <article data-testid="oats-mail-message" className="flex min-w-0 flex-col gap-2">
       <div ref={back}>
@@ -70,12 +71,12 @@ function Message({ message, now, onBack }: { message: MailMessage; now: number; 
       </div>
       <header className="flex min-w-0 flex-col gap-0.5">
         <h3 className="break-words text-sm font-semibold text-foreground">{message.subject ?? MAIL.noSubject}</h3>
-        {/* Who wrote it and when, on ONE muted line under the subject: the alias (whole, on as many lines as it needs),
-            then the age, then what is known of the sender where that is a safety fact. Apart from the body: what
+        {/* Who wrote it and when, in ONE muted run under the subject (it wraps where the alias is long): the alias,
+            whole, then the age, then what is known of the sender where that is a safety fact. Apart from the body: what
             is under this head is what was written, and starts with the body's own first line. */}
         <p data-testid="oats-mail-who" className="break-words text-xs text-muted-foreground">
           <span data-testid="oats-mail-from">{message.from}</span>
-          {age(message.at, now) === null ? null : <>{" · "}{age(message.at, now)}</>}
+          {sent === null ? null : <>{" · "}{sent}</>}
           <Sender message={message} />
         </p>
       </header>

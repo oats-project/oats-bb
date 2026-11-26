@@ -270,6 +270,9 @@ export default [
 
       // THE LIST: the whole page, fifty rows, newest first.
       const rows = `document.querySelectorAll(${JSON.stringify(inMail("oats-mail-row"))})`;
+      // The list is back after a message: its rows are there again. (Not "the list is on the screen": once a row far down
+      // has the focus the list's own head stands over the screen, and a wait for it there runs out in silence.)
+      const listBack = `${rows}.length === ${received.length}`;
       const listed = await page.until(`${rows}.length >= ${received.length} ? String(${rows}.length) : ""`, 60);
       check(listed === String(received.length) && received.length === 50, `${at} the busy agent's Mail lists its full page: fifty messages`, `${String(listed ?? (await page.evaluate(`String(${rows}.length)`)))} rows; the set holds ${received.length} received`);
       await page.until(settledHead, 20);
@@ -289,7 +292,7 @@ export default [
       await page.shot(`busy-${viewport.name}-mail`, { targets: true });
 
       // ITS END: the last row can be brought into view, whole, and what stands under it (an older page's "Older", where the set has one).
-      const lastIn = `(() => { const all = ${rows}; const last = all[all.length - 1]; last.scrollIntoView({ block: "end" }); const box = last.getBoundingClientRect(); const pane = ${pane}?.getBoundingClientRect(); const older = document.querySelector(${JSON.stringify(inMail("oats-mail-older"))}); if (older) older.scrollIntoView({ block: "end" }); const o = older?.getBoundingClientRect(); return JSON.stringify({ lastWhole: box.height > 0 && box.top >= (pane?.top ?? 0) - 0.5 && box.bottom <= Math.min(pane?.bottom ?? innerHeight, innerHeight) + 0.5 || Boolean(older), older: older ? { text: older.innerText.trim(), inView: o.top >= 0 && o.bottom <= innerHeight + 0.5, height: Math.round(o.height) } : null, subject: last.querySelector(${JSON.stringify(testId("oats-mail-subject"))})?.innerText.trim().length ?? null }); })()`;
+      const lastIn = `(() => { const all = ${rows}; const last = all[all.length - 1]; last.scrollIntoView({ block: "end" }); const box = last.getBoundingClientRect(); const pane = ${pane}?.getBoundingClientRect(); const older = document.querySelector(${JSON.stringify(inMail("oats-mail-older"))}); if (older) older.scrollIntoView({ block: "end" }); const o = older?.getBoundingClientRect(); return JSON.stringify({ lastWhole: box.height > 0 && box.top >= (pane?.top ?? 0) - 0.5 && box.bottom <= Math.min(pane?.bottom ?? innerHeight, innerHeight) + 0.5, older: older ? { text: older.innerText.trim(), inView: o.top >= 0 && o.bottom <= innerHeight + 0.5, height: Math.round(o.height) } : null, subject: last.querySelector(${JSON.stringify(testId("oats-mail-subject"))})?.innerText.trim().length ?? null }); })()`;
       const end = JSON.parse(await page.evaluate(lastIn));
       check(end.lastWhole === true, `${at} the last of the fifty rows can be brought into view`, JSON.stringify(end));
       if (answer.hasMore) check(end.older !== null && end.older.text === "Older" && end.older.inView && end.older.height >= (viewport.mobile ? 44 : 32) - 0.5, `${at} under the fifty: "Older", in view and high enough to press`, JSON.stringify(end.older));
@@ -311,24 +314,29 @@ export default [
 
       // ONE MESSAGE FROM THE MIDDLE, and the way back: to the same row, and how far the list stands from where it was.
       const middle = Math.floor(received.length / 2);
-      const placed = `(() => { const row = ${rows}[${middle}]; row.scrollIntoView({ block: "center" }); return String(Math.round(row.getBoundingClientRect().top)); })()`;
+      // The row is put near the pane's TOP before it is pressed: a browser brings a focused element to the middle when it
+      // is off the screen, so a row that started in the middle would be "back in its place" by the focus alone.
+      const placed = `(() => { const row = ${rows}[${middle}]; row.scrollIntoView({ block: "start" }); return String(Math.round(row.getBoundingClientRect().top)); })()`;
       const before = Number(await page.evaluate(placed));
       await page.evaluate(`${rows}[${middle}].click()`);
       await page.until(visible(inMail("oats-mail-message")), 30);
       {
         const read = await page.evaluate(`JSON.stringify({ list: ${visible(inMail("oats-mail-list"))}, title: ${textOf(`${inMail("oats-mail-message")} h3`)}, first: ${textOf(inMail("oats-mail-from"))}, focus: ${FOCUSED} })`);
-        check(read === JSON.stringify({ list: false, title: received[middle].subject.replace(/\s+/g, " ").trim(), first: received[middle].from.alias, focus: "oats-mail-back" }), `${at} the ${middle + 1}th message opens in the list's place: its subject, its sender's alias under it; the focus is on Back`, String(read.length));
+        check(read === JSON.stringify({ list: false, title: received[middle].subject.replace(/\s+/g, " ").trim(), first: received[middle].from.alias, focus: "oats-mail-back" }), `${at} the ${middle + 1}th message opens in the list's place: its subject, its sender's alias under it; the focus is on Back`, (() => { const got = JSON.parse(read); return JSON.stringify({ list: got.list, titleLength: got.title.length, first: got.first, focus: got.focus }); })());
       }
       await page.evaluate(`${pane}?.scrollTo(0, 0)`);
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "a message from the middle");
       await page.shot(`busy-${viewport.name}-mail-message`, { targets: true });
       await page.evaluate(click(inMail("oats-mail-back")));
-      await page.until(visible(inMail("oats-mail-list")), 30);
+      await page.until(listBack, 30);
       {
         const back = JSON.parse(await page.evaluate(`JSON.stringify((() => { const all = ${rows}; const row = all[${middle}]; const box = row.getBoundingClientRect(); const pane = ${pane}?.getBoundingClientRect(); return { rows: all.length, focused: document.activeElement === row, inView: box.top >= (pane?.top ?? 0) - 0.5 && box.bottom <= Math.min(pane?.bottom ?? innerHeight, innerHeight) + 0.5, top: Math.round(box.top) }; })())`));
         check(back.rows === received.length && back.focused && back.inView, `${at} Back returns to the list of fifty: the row it came from has the focus and is in view`, JSON.stringify(back));
+        // WHERE the list stands after Back, against where it stood (the row was near the pane's top): a number, until it is ruled.
         note("the way back", JSON.stringify({ rowTopBefore: before, rowTopAfter: back.top, moved: back.top - before }));
+        await settled(page, viewport);
+        await page.shot(`busy-${viewport.name}-mail-back`);
       }
 
       // THE LONGEST SENDER's NAME of the set (its agents' names run to sixty characters): whole on its row, on as many
@@ -353,7 +361,7 @@ export default [
       }
       await fitted(page, viewport, check, at, "the message of a long-named sender");
       await page.evaluate(click(inMail("oats-mail-back")));
-      await page.until(visible(inMail("oats-mail-list")), 30);
+      await page.until(listBack, 30);
 
       // THE LONG REPORT (the first message of the set that the messaging layer cut: the recorded 16 KiB body): it opens, and says so at its end.
       const cut = received.findIndex((message) => message.truncated === true);
@@ -369,7 +377,7 @@ export default [
       await fitted(page, viewport, check, at, "the long report, at its end");
       await page.shot(`busy-${viewport.name}-mail-shortened`);
       await page.evaluate(click(inMail("oats-mail-back")));
-      await page.until(visible(inMail("oats-mail-list")), 30);
+      await page.until(listBack, 30);
 
       // THE LONGEST SUBJECT of the set: one line on its row, whole on its message.
       const longest = received.reduce((best, message, index) => (message.subject.length > received[best].subject.length ? index : best), 0);

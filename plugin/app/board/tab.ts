@@ -5,6 +5,7 @@
 // command of its own.
 import { useBoard } from "./read";
 
+/** `asks` implies `shown` (both read the one board that was read: a board with an open question has something to show): a place may open on a tab it draws. */
 export function useBoardTab(instance: string): { /** at least one fact or one question */ shown: boolean; /** at least one open question */ asks: boolean } {
   const read = useBoard(instance);
   const board = read.status === "ready" ? read.board : null;

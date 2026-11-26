@@ -270,7 +270,7 @@ describe("only inside the checks' container", () => {
 
   it("where the mark is, the guard lets a script run; and the switch that makes it absent can only refuse", () => {
     const run = (env: Record<string, string>) => spawnSync("sh", ["-c", `. "${join(CONTAINER, "guard.sh")}"; echo ran`], { encoding: "utf8", env: { PATH: "/usr/bin:/bin", ...env } });
-    const inside = existsSync(MARK);
+    const inside = MARKED;
     expect([run({}).status, run({}).stdout]).toEqual(inside ? [0, "ran\n"] : [97, ""]);
     expect(run({ OATS_BB_CHECKS_MARK_ABSENT: "1" }).status).toBe(97);
     // Any other value of the switch changes nothing: it never OPENS the guard where the mark is not.

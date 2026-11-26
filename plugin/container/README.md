@@ -339,7 +339,7 @@ Two entries outside this directory are guarded the same way, since the container
 its `record.sh` runs on the host and starts the container).
 
 **An entry outside `plugin/`** that runs in a container made from THIS image can take the same
-guard by its path from the repository's root: `. "<up to the root>/plugin/container/guard.sh" || exit 97`
+guard by its path from the repository's root: `. "<up to the root>/plugin/container/guard.sh" && [ -f /etc/oats-bb-checks-image ] || exit 97`
 as a shell script's first statement, `import "<up to the root>/plugin/container/guard.mjs";` as a
 `.mjs`'s first import. The line it says names the script by `$0`. An entry whose container is made
 from another image has no mark there: it needs that image to write the same file first.

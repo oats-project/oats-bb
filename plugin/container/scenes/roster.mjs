@@ -1154,20 +1154,7 @@ export default [
       check(whole === "1", `${at} the busy chat's panel has read what it shows: nothing in it is still "Reading…"`);
       note("the busy chat's panel", await page.evaluate(`JSON.stringify((() => { const pane = document.querySelector(${JSON.stringify(`${testId("oats-panel")} [role="tabpanel"]`)}); return { screens: pane ? Math.round((pane.scrollHeight / Math.max(1, pane.clientHeight)) * 10) / 10 : null }; })())`));
       await page.shot(`busy-${viewport.name}-chat-panel`);
-      // Its MAIL: a full page of fifty messages, subjects short and long; then the long report, opened.
-      const tab = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-panel")} [role="tab"]`)})].find((each) => each.innerText.trim() === "Mail")`;
-      check(await page.evaluate(`Boolean(${tab})`), `${at} the busy chat's panel has the Mail tab`);
-      await page.evaluate(`${tab}?.click()`);
-      const mailRows = `document.querySelectorAll(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-mail-row")}`)})`;
-      const listed = await page.until(`${mailRows}.length >= 50 ? String(${mailRows}.length) : ""`, 60);
-      check(listed === "50", `${at} the busy chat's Mail lists its full page: fifty messages`, listed ?? (await page.evaluate(`String(${mailRows}.length)`)));
-      note("the busy chat's mail", await page.evaluate(`JSON.stringify({ rows: ${mailRows}.length, subjectsCut: [...document.querySelectorAll(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-mail-subject")}`)})].filter((each) => each.scrollWidth > each.clientWidth + 1).length })`));
-      await page.shot(`busy-${viewport.name}-chat-mail`);
-      // The second message is the recorded long report: 16 KiB, cut by the messaging layer.
-      await page.evaluate(`${mailRows}[1]?.click()`);
-      const openedMail = await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-mail-message")}`)}) !== null ? "1" : ""`, 30);
-      check(openedMail === "1", `${at} a long message of the busy chat's mail opens`);
-      await page.shot(`busy-${viewport.name}-chat-mail-message`);
+      // Its MAIL (a full page of fifty messages) is the mail's own busy scene: scenes/mail.mjs, with its images.
     },
   },
 ];

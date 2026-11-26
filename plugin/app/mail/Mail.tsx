@@ -1,5 +1,6 @@
 // An agent's incoming mail, read-only: the list of what it received, newest first (who it is from,
-// its subject, its age), and one message in the list's place, with Back. Nothing is sent,
+// its subject, its age), and one message in the list's place, with Back: its subject, who wrote it
+// and when on one line under it, then its body. Nothing is sent,
 // answered, deleted or marked read: the view has no act but reading again.
 //
 // It takes an agent's instance name and NOTHING of the place it is mounted in (today: the tab
@@ -60,6 +61,7 @@ function Message({ message, now, onBack }: { message: MailMessage; now: number; 
   // The message takes the focus on its Back, as the row it came from takes it back.
   const back = useRef<HTMLDivElement>(null);
   useEffect(() => back.current?.querySelector("button")?.focus(), []);
+  const sent = age(message.at, now);
   return (
     <article data-testid="oats-mail-message" className="flex min-w-0 flex-col gap-2">
       <div ref={back}>
@@ -69,16 +71,16 @@ function Message({ message, now, onBack }: { message: MailMessage; now: number; 
       </div>
       <header className="flex min-w-0 flex-col gap-0.5">
         <h3 className="break-words text-sm font-semibold text-foreground">{message.subject ?? MAIL.noSubject}</h3>
-        <p className="text-xs text-muted-foreground">
-          {age(message.at, now) ?? ""}
+        {/* Who wrote it and when, in ONE muted run under the subject (it wraps where the alias is long): the alias,
+            whole, then the age, then what is known of the sender where that is a safety fact. Apart from the body: what
+            is under this head is what was written, and starts with the body's own first line. */}
+        <p data-testid="oats-mail-who" className="break-words text-xs text-muted-foreground">
+          <span data-testid="oats-mail-from">{message.from}</span>
+          {sent === null ? null : <>{" · "}{sent}</>}
           <Sender message={message} />
         </p>
       </header>
       <div data-testid="oats-mail-body" className="flex min-w-0 flex-col text-sm text-foreground">
-        {/* The sender's alias alone, as the message's first line: the body under it is its sender's text. */}
-        <p data-testid="oats-mail-from" className="break-words">
-          {message.from}
-        </p>
         {message.lines.map((line, index) => (
           <p key={index} className="min-h-[1.25rem] break-words">
             {line}

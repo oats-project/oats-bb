@@ -50,10 +50,25 @@ describe("board", () => {
 });
 
 describe("boardDetail", () => {
-  it("runs `oats inspect --home <its home> --board --json` on the home the kernel named, and passes the answer on whole", async () => {
+  it("the answer the REAL kernel printed (recorded: test/fixtures/board/inspect-board.json): the board's part alone is passed on, with each fact's history and each question's context", async () => {
+    backend = await startBackend({ verbs: recorded });
+    const answer = await backend.rpc<{ inspection: Record<string, unknown> }>("boardDetail", { instance: ASKS });
+    // The inspection holds the workspace, the souls, the launch, the identity: none of it is handed to the window.
+    expect(Object.keys(answer.inspection)).toEqual(["instance"]);
+    expect(Object.keys(answer.inspection.instance as object)).toEqual(["board"]);
+    const read = boardDetailData(answer.inspection);
+    if (read.state !== "ok") throw new Error(read.state);
+    expect(read.facts.get("tests")!.history.map((held) => held.value)).toEqual(["12", "7", "3"]); // oldest first
+    expect(read.facts.get("pr")!.history.map((held) => held.value)).toEqual(["#42"]);
+    expect(read.questions.get("q1")!.context).toBe("main is protected and moved twice today.\nThe release line is 0.1 and carries the pilot's fix.\nI will cut the branch from the one you pick.");
+    expect(read.questions.get("q2")!.context).toBeNull();
+  });
+
+  it("runs `oats inspect --home <its home> --board --json` on the home the kernel named, and passes on the board's part of the answer alone", async () => {
     const inspection = { instance: { home: "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper", board: { facts: [{ key: "tests", history: [{ value: "5", at: "2026-11-23T18:00:58.000Z" }, { value: "3", at: "2026-11-23T18:00:58.766Z" }] }], questions: [{ id: "q3", context: "main is protected.\nrelease is the 0.1 line.", since: "2026-11-23T18:01:45.724Z" }] } } };
     backend = await startBackend({ verbs: { ...recorded, "inspect --home --board": { stdout: JSON.stringify(inspection) } } });
     const answer = await backend.rpc<{ inspection: unknown }>("boardDetail", { instance: ASKS });
+    expect(answer.inspection).toEqual({ instance: { board: inspection.instance.board } }); // not the home, nor anything else of the inspection
     const read = boardDetailData(answer.inspection);
     if (read.state !== "ok") throw new Error(read.state);
     expect(read.facts.get("tests")!.history.map((held) => held.value)).toEqual(["5", "3"]);
@@ -62,10 +77,17 @@ describe("boardDetail", () => {
     expect(calls.map((call) => call.argv)).toEqual([["inspect", "--home", "/abs/deployment/agents/oats-expert/instances/panel-worktree-helper", "--board", "--json"]]);
   });
 
-  it("an answer with no board at all (a kernel without the feature) is passed on as it is: the app says it", async () => {
-    backend = await startBackend({ verbs: recorded });
+  it("an answer with no board at all (a kernel without the feature: the recorded plain inspection) is passed on as an empty one: the app says the kernel sends none", async () => {
+    backend = await startBackend({ verbs: { ...recorded, "inspect --home --board": { file: "panel/inspect-home.json" } } });
     const answer = await backend.rpc<{ inspection: unknown }>("boardDetail", { instance: ASKS });
+    expect(answer.inspection).toEqual({});
     expect(boardDetailData(answer.inspection).state).toBe("unsupported");
+    await backend.dispose();
+    // The kernel says the home has no board file: `board: null` is passed on, and is not "unsupported".
+    backend = await startBackend({ verbs: { ...recorded, "inspect --home --board": { stdout: JSON.stringify({ schemaVersion: 1, ok: true, result: { instance: { home: "/abs/x", board: null } } }) } } });
+    const none = await backend.rpc<{ inspection: unknown }>("boardDetail", { instance: ASKS });
+    expect(none.inspection).toEqual({ instance: { board: null } });
+    expect(boardDetailData(none.inspection).state).toBe("none");
   });
 
   it("the kernel's refusal is the refusal", async () => {

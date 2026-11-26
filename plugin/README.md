@@ -982,7 +982,9 @@ no side panel), and turns that agent's panel to Board.
 **What it reads and does.** Two reads, no act but the send above: the row's board comes with the
 roster the server already holds (no command); the history and the contexts are one
 `oats inspect --home <home> --board --json`, read when the board is in view and when the board
-changes, never on a timer. The kernel's `set`, `unset`, `ask` and `ask --clear` are the agent's.
+changes, never on a timer. Of that answer the server passes on the board's part ALONE: the
+inspection also holds the workspace, the souls, the launch and the identity, and a view of a
+board is handed none of it (`kernel/board.ts`). The kernel's `set`, `unset`, `ask` and `ask --clear` are the agent's.
 
 ## The New agent form
 

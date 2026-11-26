@@ -4,9 +4,11 @@ The OATS plugin for bb, in `plugin/` of the `oats-bb` repository.
 
 Your OATS agents in bb: who each one is (soul, instance, aweb alias, parent, children), which ones
 need you, and the workspace they come from (souls, capabilities, teams, machines). From bb you can
-spawn, stop, start, restart and retire an agent. An agent spawned from bb runs in **bb's full
-mode, with no sandbox** between the agent and the account bb runs as: the plugin asks for it on
-every spawn ([How it is built](#how-it-is-built), "Spawn runs in bb's full mode"). The plugin draws and asks; it owns nothing: every
+spawn, stop, start, restart and retire an agent. An agent spawned from bb AS A BB THREAD runs in
+**bb's full mode, with no sandbox** between the agent and the account bb runs as: the plugin asks
+for it on every spawn of a bb thread; on a deployment with no bb session provider an agent is
+spawned where the kernel puts it (tmux), is asked no mode, and runs as its soul and its harness
+decide ([How it is built](#how-it-is-built), "A spawn on bb runs in bb's full mode"). The plugin draws and asks; it owns nothing: every
 OATS fact it shows is an answer of the `oats` CLI's `--json` verbs, every bb fact comes from bb's
 SDK, and everything it does goes through `oats`. It never reads `instance.json`, receipts, event
 files' contents or bb's database, and it never infers whether an agent runs.
@@ -46,7 +48,7 @@ empty and Spawn shows the kernel's refusal (`E_BAD_ARGS: --backend must be tmux`
 | `deployment` | `""` | The deployment directory. Empty: the plugin walks up from each bb project's root on the machine to the first directory that holds `oats-local.yaml`. |
 | `oatsBin` | `""` | An absolute path to `oats`. Empty: `oats` on the PATH of the machine's login shell. |
 | `host` | `""` | The bb machine (its name or id) that holds the homes. Empty: the server's only machine. |
-| `pages` | `"home"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home alone: the other pages are built and tested, and left out until they are finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. The home's own route answers under every value. |
+| `pages` | `"home, souls, capabilities, teams, machines"` | The plugin's pages that are shown, by id (empty: the default), with commas or spaces between them: `home`, `automations`, `souls`, `capabilities`, `teams`, `machines`. The last four are the TABS of ONE page, **Workspace** (one row of the sidebar, as the Desktop has it): the page is there while one of its tabs is shown, and its strip holds the tabs that are. A page that is not shown has no link in the sidebar, no mark there, no link to it from the thread's row, and its path answers "This page is not shown in this release of the OATS plugin." with the way back. The default shows the home and the Workspace page's four tabs; Automations is built and tested, and left out until it is finished. The pattern book (`/plugins/oats/patterns`) is no page of this list: no link leads to it, and its path answers under every value, for the checks that draw it. Changing `pages` reads nothing again: the roster stays as it is. The home's own route answers under every value. |
 
 When something is missing, bb stays fully usable. Every place of the plugin shows one notice: what
 is missing in a person's words (its title), Retry, and Open settings where a setting mends it;
@@ -273,7 +275,7 @@ while its Terminal tab has the focus.
 bb's own composer Stop, Archive and Delete cannot be hidden by a plugin, and the plugin never acts
 on its own when one of them is used: an agent whose thread was archived or deleted in bb stays in
 the roster, as a row that says which of the two happened and what to do
-([Outside OATS](#outside-oats)), and its soul's page says "thread missing", with Start… and Retire…. Nothing is retired because a thread was
+([Outside OATS](#outside-oats)), and its soul's page says the same of it, with its acts. Nothing is retired because a thread was
 deleted. A thread stopped in bb alone is not stopped for OATS: stop an agent with the OATS act, so
 that it stays stopped.
 
@@ -592,7 +594,7 @@ the OATS Desktop's Home: what needs you first, then what you have.
 
 The page has no heading of its own (bb's bar over it names it) and no summary line: its headings
 count who needs you and who works. It has no tile for the agents (the sidebar lists every one):
-its tiles are the plugin's other pages, where the release shows any; with the default, none.
+its tiles are the Workspace page's tabs (Souls, Capabilities, Teams, Machines: each with its count) and a feature's own page, where the release shows them.
 
 **The installed `oats`.** The home says where the installed `oats` stands against what the plugin
 is built for (`kernel/compat.ts`: the oldest OATS it works with, the newest minor it was tested
@@ -628,9 +630,9 @@ It is one RPC, `homeCli`, which answers picked fields (`version`, `desktopApi`, 
 that cannot be run at all is the roster's notice, not this one.
 
 **The pages shown.** A tile leads to a page, so the home has a tile only for a page this release
-shows (the plugin's setting `pages`; the default is `home` alone, and then the tiles are **Agents**
-only), and reads a page's count only then. New agent is offered where it has somewhere to open
-(the New agent form's page, once that feature names it; else the Souls page when it is shown).
+shows (the plugin's setting `pages`; with `home` alone there is no tile), and reads a page's
+count only then. New agent is offered where it has somewhere to open
+(the New agent form's page, once that feature names it; else the Souls tab when it is shown).
 
 **What a card offers.** An agent is answered by the answer its request takes, and the card offers
 that one, not a free-text box beside it as an equal:
@@ -683,7 +685,7 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 | Tab | Shows |
 |---|---|
 | **Instance** | the instance's name as words, with the two letters of that name in a tile beside it (the name's own initials, never its soul's), its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message alone (with none, "approval" for a tool approval). How long it waits is the status line's to say, once ("Needs you · 5 d"); since when, by the clock, is no second line of the page and no tooltip: the Activity's "Waiting claim" row holds the claim's instant. **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the card's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: **Terminal**, which opens bb's own Terminal tab on its session ("A tmux agent's terminal", below), and under it "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`, for a person's own terminal), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: on the page's face the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; under its fold (**Details**, closed) the owning human and the messaging ID, with its Copy: asked for, not read on every page. |
-| **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's: its fold says what was observed, the soul and the agents root). No fold stands alone at the tab's foot. The soul's description is two lines at most here, whole on the soul's page. |
+| **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls tab is shown in this release (the setting `pages`; the default shows it; where a deployment hides it the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's: its fold says what was observed, the soul and the agents root). No fold stands alone at the tab's foot. The soul's description is two lines at most here, whole on the soul's page. |
 
 The Instance tab ends with two more sections. **Readiness** (`oats readiness`): one line
 that says whether it is ready ("Ready", or how many checks fail), then, behind "Checks and
@@ -940,8 +942,8 @@ leave out: whatever a release shows, an agent can be started.
 |---|---|
 | **Soul** | the souls OATS lists, each with its description, with a filter over them from eight on. A soul that cannot be spawned is drawn apart in the list and says why under the field. |
 | **Opening instruction · optional** | what the agent should do. Empty, it starts and waits for its person. |
-| **Harness** | "The soul's default" (nothing is passed, and the entry says what the kernel resolved: "The soul's default: pi"), or one the bb session provider declares. A harness bb cannot run on this machine is marked at the choice ("pi · not installed in bb") and the line under the field says only the way on ("Install it in bb’s settings, or pick another."; the mark says the fault, and the soul's default carries it too when it resolves to such a harness): bb's own state of its providers (`sdk.system.providerStates`), never a guess; it can still be chosen, and the kernel and the provider decide. With one harness declared there is no field; when the list cannot be read the field says so, with Retry, and a spawn uses the soul's default. |
-| *(no bb session provider)* | Where the deployment's workspace does not have the bb session provider (`oats capabilities show oats.bb` answers `E_CAPABILITY_UNKNOWN`), that read is an ANSWER, not a failure (`kernel/spawn.ts` `spawnHarnesses`: `absent`, with the kernel's code and sentence). The form opens and says, once, **bb is not set up for this workspace.** (the kernel's code and sentence under its Details); its fields are held, Spawn is off and described by that line, and the kernel is asked for no preview (it would refuse the bb backend: `E_BACKEND_UNKNOWN`). No Harness field, no red sentence, no Retry. Any OTHER failure of that read keeps its sentence and its Retry. Known, and accepted for now: the kernel uses the same code for a package that is not in the lock yet (a workspace one `oats sync` behind) and for a capability missing from a member; those read as absent too, with the kernel's own sentence under the line's Details. While the harness read is still out (the form's first opening) the kernel is asked for NO preview: the form reads ("Reading…") until it is known whether the deployment has the provider, so no refusal of the bb backend flashes before the one line; where the provider is there the same preview is asked a moment later. The answer is kept by the server for 30 s: after an `oats sync` that brings the provider, the form opened again half a minute on has it. Unit tests on the server's answer and the page; no live stage has such a deployment. |
+| **Harness** | "The soul's default" (nothing is passed, and the entry says what the kernel resolved: "The soul's default: pi"), or one the bb session provider declares. A harness bb cannot run on this machine is marked at the choice ("pi · not installed in bb") and the line under the field says only the way on ("Install it in bb’s settings, or pick another."; the mark says the fault, and the soul's default carries it too when it resolves to such a harness): bb's own state of its providers (`sdk.system.providerStates`), never a guess; it can still be chosen, and the kernel and the provider decide. With one harness declared there is no field; when the list cannot be read the field says so, with Retry, and a spawn uses the soul's default: one that names no harness needs no list, so a failed read of the provider or of the kernel's version does not hold it (it goes as a bb thread, and the kernel takes or refuses it); a harness that IS named is one of a list, and with the list unread it starts no process. |
+| *(a deployment with no bb session provider)* | Where the kernel knows no capability `oats.bb` (`oats capabilities show oats.bb`: `E_CAPABILITY_UNKNOWN`: the workspace does not pin the provider), that read is an ANSWER, not a failure: the form offers nothing it cannot do. No choice of where it runs (the kernel's), no red sentence and no Retry (nothing failed); the Harness field offers the harnesses the kernel launches itself; the Model field is "Default" or a typed id (bb's list of models is not asked: the agent will not be a bb thread). The preview and the spawn then name NO `--backend` and no `--yolo` (and a `--harness` only if one is chosen): the kernel decides as `oats spawn <soul>` does on that deployment, and the column says where the agent will run, once, in view, from the preview's own `backend`: **Runs in** / "tmux session" (the instance panel's Session card's words). The **Access** row follows what was asked: the kernel's own decision where its preview carries one; where it carries none (`yolo: null`, as the kernel answers a spawn with no mode named) the row is not drawn, and nothing says "no sandbox": that is what the plugin asks of bb, and it does not hold here (the harness runs as its own settings say). A spawn there makes an agent with no bb thread: bb's notice says "Created <Name>." and the agent's own page opens. The kernel answers the SAME code for a provider the workspace DOES hold, and the three are told apart by what its refusal names (`details.package`, `details.member`, or neither: OATS 0.70.5), never by its sentence (`kernel/spawn.ts` `providerAbsent`, `providerUnsynced`). **Pinned and not synced** (the provider's package is not in the lock yet: a workspace one `oats sync` behind): the form says the way on, in ONE line, "bb is not synced. Run `oats sync`." (two short sentences, the command in the code face), with the kernel's own code and sentence under its Details and a Retry that reads again; it asks no preview and holds its fields and Spawn (described by the line). Every act is refused there with the kernel's sentence before any spawn reaches the kernel: a preview, a spawn, and the Start and Restart dialogs' read. A member with no such capability, and any OTHER failure of the read, keep their sentence and their Retry. Proven by the real run on a second deployment whose catalog holds no `oats.bb` (`container/real/parts/plain.mjs`): the form, the spawn, the agent on tmux, its Stop and its Retire; the kernel's answers are kept (`test/fixtures/spawn/README.md`). |
 | **Model** | "Default" (nothing is passed; it says the model the kernel resolved), one of bb's own models for the harness, or **Custom…**, which opens a field for a typed model id. Spawn is held for the model in two cases, each said in two words at most, once, as the field's mark: the off button is described by it (`aria-describedby`), with no copy beside it (`model/spawn.ts` `modelCheck`, one rule with its table in `test/spawn/model.test.ts`). **Required**: the person chose a harness that is not the soul's own (the one the kernel resolves when none is chosen: kept from that preview, or asked once where a harness was picked before the soul) and the kernel resolves no model for it (the soul's model is another harness's); the column then names the harness alone, and the field reads "Choose a model…" with no "Default" in its list: there is no default, and none is promised. While bb's list of models for the harness is being read, Spawn is off with "Reading…". A list bb has not given after 10 seconds reads as not read (Spawn goes on the kernel's answer, as where bb gives no list), and the rule is read on it if it answers later: a call of bb's that never settles does not hold the form. **Pick provider**: the model the spawn would send (picked or typed, else the one the kernel resolved from the soul) is a bare id that several of the models bb lists for the harness serve; exactly those are the ones offered, and they are the ids the bb session provider's own refusal names at the launch (the provider says the same there). Which listed models serve an id is ONE function, `model/served.ts` `served` (read by this form; written for the Restart dialog too), and it is the provider's own resolution: a model's bare id is its id minus the provider bb routes it by (so "openrouter/openai/gpt-6" has the bare id "openai/gpt-6", and "gpt-6" is served by nothing there), and a model bb lists for pi with no provider serves nothing. (That bb's list, as the plugin reads it through the SDK, names each pi model's provider was shown on the real kernel by the pi run of the Restart dialog's change, which lands after this one and keeps the step: a bare id is armed there by its provider, `echo` of `mock/echo`, and a nested one, `nested/echo2` of `mock/nested/echo2`, where its tail `echo2` is not. Where a row names none, nothing is held for it.) For a harness whose models are not resolved by provider (Claude Code) nothing is held for the list: the provider checks a model for pi alone. `test/model/served.contract.test.ts` runs one table through the provider's `piModelVerdict` (`oats-package/capabilities/oats-bb/lib/pi-model.mjs`) and through `served`, and fails on any difference. It is not held for an id that holds a slash (where bb's list is not whole such an id may be a held-back model's exact id, and the provider lets it go), nor while bb's list is not read or holds nothing: the kernel's answer then stands. One limit: for a minute after pi's configuration changed the provider does not refuse two listed models, and the form, which has the list alone, still asks for the provider. **That no listed model serves the id is not the form's to judge** ("Not found" is not said): bb's list leaves out models a thread still starts on (an id that ends in a date, a list pi's own configuration narrows, a list older than pi's configuration), and the form must never hold an agent the provider would start. Such a model is armed, the preview passes (a planned launch carries no model at this kernel), and the provider judges it at the launch: it refuses the spawn (`E_BACKEND_LAUNCH_ARG`: "pi has no model …", rolled back, nothing left behind), and the form says the kernel's whole message once under "The agent was not spawned", marks no field, holds nothing, and is editable again; or, where it cannot check the model, it lets the launch go with a warning that this kernel does not carry to the form: nothing is said, and the agent then starts, or its thread fails at its start and the form says it did not start. The soul's own harness with no model declared is not held: bb starts it on its own default, and the column says so. |
 | **Relationship** | Independent, Child of, Sibling of or Parent of, then the choice of the instance ("Choose an instance…", with no label over it): one of the roster's, by its name as words with its soul. Nothing under it repeats the choice. |
 | **Name · optional** | exactly what is typed, in lower case. Empty, the kernel numbers the agent (the column's Name row says so). A name that cannot be used says its fault under the field, and nothing else stands under it. |
@@ -1039,8 +1041,10 @@ root>`: the root is the anchor's home, as the roster's row names it, without its
 `<agent>/instances/<instance>` (the kernel's status names no agents root on a row, and derives it
 from the home the same way); a home of another shape passes none.
 
-Every spawn is `--backend bb --yolo`: the form says so in one line by the button, "Runs in bb's
-full mode: no sandbox.", with no control, and the preview says what the kernel decided
+A spawn of a bb thread is `--backend bb --yolo`, bb's full mode with no sandbox: the form's column
+says so in its Access row ("full mode: no sandbox"), with no control. A spawn that is not a bb thread
+(a deployment with no bb session provider) names no mode,
+and the column says only what the kernel's preview decided
 ([How it is built](#how-it-is-built)).
 
 The live checks show the form in flight and count the spawns the kernel was asked for; they take no
@@ -1048,9 +1052,8 @@ image of the created agent's thread, because their `oats` is a fake that makes n
 it names is one of the fixture's). The created state is shown by the unit tests and by the real
 run, whose image is the new agent's own thread, new in the roster under its parent.
 
-A soul's page (the Souls page is not shown in a release's default) still holds the earlier form: a
-name, a task, Preview (`spawnPreview`, the kernel's preview as short lines) and Spawn in bb. It
-goes when the workspace's pages are rebuilt.
+A soul's page has ONE button, **New agent**, which opens this form with that soul chosen (the
+earlier short form that stood there, a name, a task and Preview, is gone).
 
 Not in the form yet (a later change), by the Desktop's rows: where to run, on another machine
 (D-242, D-263: the agent runs on the machine that holds the deployment, which the preview names);
@@ -1062,9 +1065,70 @@ shown); "Changed: press Spawn again" (D-257: Spawn is off while the values on sc
 preview, so a press is never for other values); the keys to a field (D-258); "Show its row" for a
 spawn in flight (D-259); a failed spawn kept with Reopen (D-262); the draft kept (D-265).
 
+## The Workspace page
+
+ONE row of the sidebar's block, **Workspace**, as the Desktop has it, and one page with four tabs:
+**Souls**, **Capabilities**, **Teams**, **Machines** (the Desktop's order; Souls and Capabilities
+with their count in the tab). A tab is a route of its own (`/plugins/oats/souls`, …: a link to a
+tab, or to a soul, holds); `/plugins/oats/workspace` opens the first tab that is shown. The setting
+`pages` names the tabs that are shown (all four by default); the page is there while one is. It
+was four pages, hidden by default until their text and layout met the standard: they were audited
+row by row against it and against the Desktop, and built by the ruling on that audit (25 Nov 2026).
+
+Rules of every tab: **no sentence** in the ordinary state (none of the Desktop's explaining
+paragraphs came over: the tabs carry the counts; "About capabilities" is the one fold that
+explains); a description is **one line** in a list, cut at a word with "…" (`OneLine`,
+`app/workspace/Workspace.tsx`: the words that fit are measured), whole in the line's title and on
+the thing's own page; a list of twelve or more has a search field; an empty list is two words
+("No souls."), and while a search narrows a list its tab says "3 of 22"; Left and Right on the
+strip go from tab to tab (each tab's page takes the focus on its own tab, so the keys go on);
+while a tab is read it says "Reading…"; a read that failed is a notice in a
+person's words with Retry, the kernel's or the host's message under its Details; what a tab draws
+of the roster (counts of agents, a soul's agents) stands under the roster's one notice while OATS
+cannot be read. Nothing on these tabs acts on the workspace yet (a team's and a machine's acts,
+a capability's and a team's own page, and three more reads follow in their own change).
+
+- **Souls.** The souls in groups by where they come from ("workspace", a member repository's
+  name, a package with its version), a heading only where it tells groups apart. A row: the soul's
+  own name (its key is the row's title), one line of what it does, how many of its agents RUN
+  (a dot and "2 running"; nothing where none does), "Can't spawn" where a spawn would be refused.
+- **A soul's page** (`/plugins/oats/souls/<key>`) opens over the list, at every width, with
+  "← Souls": its key; **New agent** (off, with "Can't spawn here", for a soul that cannot be
+  spawned); its group's word ("workspace", "oats.okf 6.2.0"); what it does, whole; **Harness ·
+  model** (the harness by the New agent form's name for it) and **Teams** (the default first); its
+  **Capabilities** as rows, the ones that fill a core place first and tagged "core", each with why
+  the soul has it (the kernel's word: "workspace", "soul"); its **Agents** as the roster says them
+  (the state as a mark and its word, the reason after it, the tmux mark; a row opens the agent's
+  thread or its own page; one whose thread bb does not list has its acts on the row); and under
+  the page's one **Details**, where it is defined (the repository and commit, the soul's file)
+  where its harness was chosen (the New agent form's words for it, and the file) and why it cannot
+  be spawned. An agent behind a result says "Reading…" in its state's place, its acts off. New
+  agent is held wherever the roster is not the one just read. A soul the kernel could not resolve has no Capabilities section:
+  the kernel answers no list for it, which is "not known", never "none".
+- **Capabilities.** **Core**: Knowledge, Messaging, Tasks, each with every capability of that
+  place or "none" (no Core part where the kernel's answer says nothing of places). Then each capability: its id, "core" and "repo only" where they hold, "by <source>",
+  one line of what it does.
+- **Teams.** Each team: its label, "Default team", how many of this deployment's agents are on it,
+  what it is for; under its Details its address on the messaging provider, who may join (and whose
+  default it is, where it is not the deployment's: both from each soul's teams as the kernel
+  resolved them, `oats souls`; the workspace's rules for it are the kernel's to read), where it
+  is declared. A team with no address yet says "No address yet"; where it is the default team it
+  is a notice first, since nothing can be spawned until it has one, and the Teams tab has a mark
+  (both decided on the kernel's code for it, `team-unmapped`; the notice waits while the roster's
+  own notice stands: one notice on a screen). The workspace's teams and this
+  computer's own stand under a heading each only where both are there. "Which teams each soul may
+  join" is one fold.
+- **Machines.** One list: this computer first, by its name, with its agents; then each machine
+  OATS has registered, by its name; its id, ssh host and the workspace's folder under its Details.
+  No check is run.
+
+What the kernel answers and the tabs read is in `kernel/workspace.ts` (`oats souls`, `oats
+capabilities`, `oats teams`, `oats server list`); a kernel that answers less draws less (no Core
+part, no "by", no groups), never a guess.
+
 ## Automations
 
-**Automations** (in the sidebar's block, under Machines; `/plugins/oats/automations`) shows OATS's
+**Automations** (in the sidebar's block, under Workspace; `/plugins/oats/automations`) shows OATS's
 own schedules and triggers: the ones this deployment holds and the ones the workspace's members
 share through Git. They are the kernel's (`oats schedule …`, `oats trigger …`): the plugin is a
 front for them and never uses bb's own automations. The page is the OATS Desktop's Automations
@@ -1301,7 +1365,7 @@ result.
 ### One module per feature
 
 The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
-`spawn` (the New agent form), `workspace` (the four pages), `lifecycle` (stop, start, restart,
+`spawn` (the New agent form), `workspace` (the Workspace page and its four tabs), `lifecycle` (stop, start, restart,
 retire), `automations`, `panel` (the instance panel), `terminal` (a tmux agent's terminal in bb's own Terminal tab; no slot: its button is on the panel's page), `mail` (an agent's incoming mail, read-only: one view, mounted by the panel, with no slot of its own) and `outside` (what is said when something
 happened to an agent outside OATS; no slot, no read and no `oats` verb of its own). Each has one module, or one directory, in
 every layer, and the entry of a layer only composes them:
@@ -1360,12 +1424,13 @@ What the features share, beyond the entries:
   A place that links to a page asks `usePageShown("<id>")` (or `usePagesShown()` for several) and
   draws plain text, or nothing, where the page is not shown. A feature tests both cases: a slot
   rendered with no settings stands for every page shown (`test/helpers/render.ts`), and a test
-  of the default names `settings: { pages: "home" }`.
+  of a deployment that shows the home alone names `settings: { pages: "home" }` (the release's
+  default, the home and the Workspace page's four tabs, is `model/pages.ts` `DEFAULT_PAGES`).
 - **"New agent".** The form's feature names how to open it, once, in its `register`:
   `setNewAgent((navigate, target) => …)`, where `target.soul` is a soul's key to start with. Every
   "New agent" then opens it through `openNewAgent`; until a feature names one it opens the Souls
-  page where that page is shown, and is absent where it is not.
-- **A row in the sidebar's block.** A feature with a page of its own lists it under the four pages
+  tab where that tab is shown (the souls, to pick one from), and is absent where it is not.
+- **A row in the sidebar's block.** A feature with a page of its own lists it under Workspace
   with `addPageLink({ path, title, useMark })` (`app/workspace/pages.ts`) in its `register`;
   `useMark` is a hook that answers a label while the row needs a look, drawn as a dot.
 - **A server test of a feature's verbs** starts the whole backend with `startBackend()`
@@ -1394,7 +1459,7 @@ Desktop's (`app/ui/words.ts`; `WORDS.md` holds each word that differs, and why).
 | what happened, once the person has moved on | `notify` | a result or a failure through bb's own toaster (`sonner`, which bb shims for plugins: a type-only devDependency at bb's version, no Toaster of the plugin's), with "Open <agent>"; a failure stays until dismissed; `notified()` is what a slot test reads |
 | a form | `Field`, `INPUT`, `DisabledReason` | the label (with "· optional"), a hint, the refusal; why a button is off |
 | tabs, a filter, a search, a switch, a row's menu, a copy | `Tabs`, `Segmented`, `SearchField`, `Switch`, `Menu`, `CopyButton` | the WAI-ARIA pattern of each, with its keys |
-| the rest | `Button`, `Card`, `Chip`, `Heading`, `Page`, `Modal`, `Mark`, `ErrorLine`, `Lines` | `Modal` takes the focus (on `data-autofocus`), keeps it, and returns it to what opened it, or where `returnFocus` says |
+| the rest | `Button`, `Card`, `Chip`, `Heading`, `Page`, `Modal`, `Mark`, `Lines` | `Modal` takes the focus (on `data-autofocus`), keeps it, and returns it to what opened it, or where `returnFocus` says |
 
 A control is 32 px high, and 44 px at bb's compact width (`TARGET`).
 
@@ -1405,7 +1470,7 @@ refusal) goes through one display filter, `app/ui/text.ts` (its functions are in
 (`packages/client/display-text.mjs`). Control characters and line breaks never reach the screen (a
 character that is not text is drawn as U+FFFD), a line is cut at 2048 characters, and a text that
 looks like a secret or a URL with credentials is drawn as `[withheld]`, whole. `shown(text)` is
-one display line; `refusalLines(text)`, which `ErrorLine` and `Lines` of `app/ui.tsx` draw, keeps a
+one display line; `refusalLines(text)`, which `Lines` of `app/ui.tsx` draws, keeps a
 refusal's code and gives each line of the kernel's message a line of its own. The filter is for
 display only: what goes back to OATS (an instance, a soul, a revision) is what the kernel gave.
 One named exception: `shownBlock(text)` draws a person's own definition text whole, in one block
@@ -1427,13 +1492,15 @@ them, and nothing else): no cut, nothing withheld, and only what is no text repl
   file in the host worker's temporary directory, removed when the call ends; an instance must be in
   the current snapshot, and its home is the one the kernel named. The plugin adds no power a caller
   of bb's own API lacks.
-- **Spawn runs in bb's full mode, always.** Every spawn the plugin makes, the preview and the
+- **A spawn on bb runs in bb's full mode, always.** Every spawn of a bb thread the plugin makes, the preview and the
   apply alike, is `oats spawn <soul> --backend bb --yolo`: bb's full mode, with no sandbox between
   the agent and the account bb runs as. The bb session provider launches in no other mode, so a
   spawn that named none would depend on the host having a full-mode default launch configuration
   and be refused without one (`E_BACKEND_SANDBOXED_MODE`). There is no tick box: the New agent
   form says it in one line ("Runs in bb's full mode: no sandbox."). Chosen by Joan on 2026-11-21
-  ("Silent, always full"). Start and Restart name no mode: they keep the home's recorded choice,
+  ("Silent, always full"). A spawn that is NOT a bb thread (a
+  deployment with no bb session provider) names no mode at all: `--yolo` is never passed for it, and
+  nothing on the form says "no sandbox" unless the kernel's own preview decided so. Start and Restart name no mode: they keep the home's recorded choice,
   and a home spawned elsewhere without full mode is refused there by the kernel, shown unchanged.
 - **An agent on tmux starts, restarts and comes back from bb.** Start and Restart are offered for
   an agent on tmux as for one on bb (its page, the panel): a stopped one starts plainly, a

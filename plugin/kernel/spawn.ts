@@ -1,12 +1,12 @@
 // `oats spawn <soul> --backend bb --yolo …`: the preview, and the apply bound to the previewed decision.
+// (On a deployment with no bb session provider: `oats spawn <soul> …` with no backend and no mode named: `common`.)
 // docs/desktop-cli-api.md "Spawn": the kernel takes `--idempotency-key` only with
 // `--expect-decision <revision>`, and the revision is the preview's `decision.revision`.
 import { z } from "zod";
 import { formFacts, type FormFacts } from "../model/spawn.js";
-import type { SpawnSummary } from "../model/types.js";
 import { shaped } from "./envelope.js";
 import { checkInstance, checkKey, checkRevision, checkSoul } from "./input.js";
-import { codes, err, ok, type Result } from "./result.js";
+import { codes, err, ok, type KernelError, type Result } from "./result.js";
 import type { Runner } from "./runner.js";
 import { withTaskFile } from "./task-file.js";
 
@@ -19,11 +19,32 @@ export type SpawnRelation = { kind: (typeof RELATIONS)[number]; to: string; root
  * is numbered by the kernel; `harness` and `model` left out are resolved by the kernel; `relation`
  * left out is an independent agent.
  */
-export type SpawnInput = { soul: string; name?: string | undefined; harness?: string | undefined; model?: string | undefined; relation?: SpawnRelation | undefined };
-type Checked = { soul: string; name: string | null; harness: string | null; model: string | null; relation: SpawnRelation | null };
+export type SpawnInput = {
+  soul: string;
+  name?: string | undefined;
+  harness?: string | undefined;
+  model?: string | undefined;
+  relation?: SpawnRelation | undefined;
+  /** false: the deployment has no bb session provider (`provider` of the harness read). The spawn then names no backend: the kernel decides, as `oats spawn <soul>` does there. */
+  provider?: boolean | undefined;
+};
+type Checked = {
+  soul: string;
+  name: string | null;
+  harness: string | null;
+  model: string | null;
+  relation: SpawnRelation | null;
+  /** the spawn is a bb thread: the deployment has the bb session provider */
+  bb: boolean;
+};
 
 /** A harness's id as a manifest declares it: never an option, never a path. */
-const HARNESS_ID = /^[a-z][a-z0-9-]{0,39}$/;
+const ID = /^[a-z][a-z0-9-]{0,39}$/;
+/**
+ * Of a list the kernel printed, the entries that are ids, each once, in its order: what may be offered, drawn and
+ * named (the provider's own list is held to the same: `parseHarnessList`). Anything else in it is left out.
+ */
+export const idsOf = (listed: readonly unknown[]): string[] => [...new Set(listed.filter((id): id is string => typeof id === "string" && ID.test(id)))];
 
 /**
  * Refuses, before any process: a soul `oats souls` does not list, a name or a relation's instance
@@ -40,7 +61,7 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
   }
   const soul = checkSoul(input.soul, knownSouls);
   if (!soul.ok) return soul;
-  if (input.harness !== undefined && !HARNESS_ID.test(input.harness)) return err(codes.invalidInput, `"${input.harness}" is not a harness id`);
+  if (input.harness !== undefined && !ID.test(input.harness)) return err(codes.invalidInput, `"${input.harness}" is not a harness id`);
   let model: string | null = null;
   if (input.model !== undefined) {
     const checked = checkModel(input.model);
@@ -56,13 +77,14 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
     if (root !== undefined && (!root.startsWith("/") || root.includes("\0"))) return err(codes.invalidInput, "a relation's agents root must be the absolute path the kernel named");
     relation = { kind: input.relation.kind, to: to.value, ...(root === undefined ? {} : { root }) };
   }
-  return ok({ soul: soul.value, name, harness: input.harness ?? null, model, relation });
+  return ok({ soul: soul.value, name, harness: input.harness ?? null, model, relation, bb: input.provider !== false });
 }
 
 /**
  * What the preview and the apply share. `--yolo` is bb's full mode, with no sandbox between the
  * agent and the account bb runs as: the bb session provider launches in no other mode, so the
- * plugin asks for it on every spawn and depends on no default of the host (README, "Spawn"). The
+ * plugin asks for it on every spawn of a bb thread and depends on no default of the host (README,
+ * "Spawn"); a spawn that is not a bb thread names no mode (`common`, below). The
  * kernel binds the apply to the preview's decision, so both carry the same choices, in the same
  * order. What a person did not choose is not passed: no `--name` (the kernel numbers the agent),
  * no `--task-file` for an empty instruction (the agent starts and waits), no `--harness` and no
@@ -72,9 +94,12 @@ export function checkSpawn(input: SpawnInput, knownSouls: readonly string[]): Re
 const common = (input: Checked, taskFile: string | null): string[] => [
   "spawn",
   input.soul,
-  "--backend",
-  "bb",
-  "--yolo",
+  // The two spawns, by what they name:
+  // - a bb thread (the deployment has the bb session provider): `--backend bb --yolo`, bb's full mode;
+  // - a deployment with NO bb session provider (`providerAbsent`): neither: there is no bb backend to ask for, and
+  //   `--yolo` is what the plugin asks of bb, never of a harness in a terminal: the kernel decides as
+  //   `oats spawn <soul>` does there (the soul's own backend and mode). Its preview says which backend that is.
+  ...(input.bb ? ["--backend", "bb", "--yolo"] : []),
   ...(input.name === null ? [] : ["--name", input.name]),
   ...(taskFile === null ? [] : ["--task-file", taskFile]),
   ...(input.harness === null ? [] : ["--harness", input.harness]),
@@ -123,8 +148,6 @@ const preview = z.looseObject({
 });
 
 export type SpawnPreview = {
-  /** The preview as short lines, for a soul's page. */
-  summary: SpawnSummary;
   /** What will be created, in the form's words (model/spawn.ts), for exactly the name asked. */
   facts: FormFacts;
   revision: string;
@@ -137,46 +160,24 @@ export type SpawnPreview = {
   problem: { code: string; message: string } | null;
 };
 
-export function parseSpawnPreview(document: unknown, name: string | null = null): Result<SpawnPreview> {
+/** `fullMode`: whether the previewed spawn asks for bb's full mode (`--yolo`): what the column's Access row says where the kernel's preview is silent. */
+export function parseSpawnPreview(document: unknown, name: string | null = null, fullMode = true): Result<SpawnPreview> {
   const parsed = shaped(preview, document, "oats spawn --preview");
   if (!parsed.ok) return parsed;
   const value = parsed.value;
-  const problems: string[] = [];
   let problem: SpawnPreview["problem"] = null;
   if (value.backendStatus && value.backendStatus.installed === false) {
-    problems.push(`the ${value.backendStatus.name ?? "session"} backend is not installed on this machine`);
-    problem = { code: "E_BACKEND_UNAVAILABLE", message: problems.at(-1)! };
+    problem = { code: "E_BACKEND_UNAVAILABLE", message: `the ${value.backendStatus.name ?? "session"} backend is not installed on this machine` };
   }
   if (value.preflight?.status === "timeout") {
-    problems.push(`the kernel's checks did not finish within ${Math.round((value.preflight.budgetMs ?? 0) / 1000)} s`);
-    problem = { code: "E_PREFLIGHT_INCOMPLETE", message: problems.at(-1)! };
+    problem = { code: "E_PREFLIGHT_INCOMPLETE", message: `the kernel's checks did not finish within ${Math.round((value.preflight.budgetMs ?? 0) / 1000)} s` };
   }
   if (value.launch?.problem) {
-    problems.push([value.launch.problem.code, value.launch.problem.message].filter(Boolean).join(": "));
     problem = { code: value.launch.problem.code ?? codes.failed, message: value.launch.problem.message ?? "the kernel found a problem with this launch and did not say which" };
   }
-  const model = value.model ?? "the harness's default model";
-  const launch = value.harness
-    ? [
-        value.harness,
-        value.modelSource ? `${model} (${value.modelSource})` : model,
-        value.launchConfig ? `launch configuration ${value.launchConfig}` : null,
-      ]
-        .filter((part): part is string => part !== null)
-        .join(" · ")
-    : null;
   return ok({
     revision: value.decision.revision,
-    summary: {
-      modules: (value.modules ?? []).map((module) => (module.from?.version ? `${module.name} ${module.from.version}` : module.name)),
-      teams: (value.teams ?? []).map((team) =>
-        [team.label, team.default ? "(default)" : null, team.team ? null : "(not mapped)"].filter((part) => part !== null).join(" "),
-      ),
-      launch,
-      warnings: value.warnings ?? [],
-      problems,
-    },
-    facts: formFacts(document, { name }),
+    facts: formFacts(document, { name, fullMode }),
     problem,
   });
 }
@@ -211,7 +212,7 @@ export function parseHarnessList(document: unknown): Result<{ harnesses: string[
   const parsed = shaped(shownCapability, document, "oats capabilities show oats.bb");
   if (!parsed.ok) return parsed;
   const declared = parsed.value.sessionProviders?.bb?.harnesses;
-  const harnesses = (Array.isArray(declared) ? declared : []).filter((id): id is string => typeof id === "string" && HARNESS_ID.test(id));
+  const harnesses = (Array.isArray(declared) ? declared : []).filter((id): id is string => typeof id === "string" && ID.test(id));
   // The provider's own version (`result.version`), for a place that must know what this provider does (the lifecycle dialogs).
   const version = typeof parsed.value.version === "string" && VERSION.test(parsed.value.version) ? parsed.value.version : null;
   return ok({ harnesses: [...new Set(harnesses)], version });
@@ -219,10 +220,11 @@ export function parseHarnessList(document: unknown): Result<{ harnesses: string[
 
 /**
  * A harness named for a spawn, a start or a restart (`--harness <id>`): one the bb session provider
- * declares. Anything else starts no process.
+ * declares. Anything else starts no process. (`by`: who lists them, for the refusal: the provider, or
+ * for a spawn that is not a bb thread the kernel itself.)
  */
-export function checkHarness(harness: string, declared: readonly string[]): Result<string> {
-  return HARNESS_ID.test(harness) && declared.includes(harness) ? ok(harness) : err(codes.invalidInput, `"${harness}" is not a harness the bb session provider declares (${declared.join(", ") || "none"})`);
+export function checkHarness(harness: string, declared: readonly string[], by = "the bb session provider declares"): Result<string> {
+  return ID.test(harness) && declared.includes(harness) ? ok(harness) : err(codes.invalidInput, `"${harness}" is not a harness ${by} (${declared.join(", ") || "none"})`);
 }
 /**
  * A model named for a spawn, a start or a restart (`--model <id>`): any id a person typed or picked,
@@ -232,21 +234,40 @@ export function checkModel(model: string): Result<string> {
   return model !== "" && model.length <= 256 && !model.startsWith("-") && !/[\0\n\r]/.test(model) ? ok(model) : err(codes.invalidInput, "a model is one line of up to 256 characters that does not start with a dash");
 }
 
+/**
+ * Whether a refusal of `oats capabilities show oats.bb` says that the deployment has NO bb session provider: the
+ * kernel's code `E_CAPABILITY_UNKNOWN` with nothing named that the capability is in. The kernel answers that code for
+ * three things (OATS 0.70.5 `lib/capability-show.mjs`), told apart by the STRUCTURE of its `details`, never by its
+ * sentence:
+ * - the workspace's catalog holds no such capability: `details: { name }` alone (recorded:
+ *   `test/fixtures/spawn/capabilities-show-bb-absent.json`): ABSENT;
+ * - the catalog holds it, in a package that is not in the lock yet (`details.package`: a workspace one `oats sync`
+ *   behind): the provider is there, the read failed;
+ * - the catalog holds it, in a member that has no such capability (`details.member`): likewise.
+ * The ONE predicate, for the New agent form and for the dialogs (server/lifecycle.ts reads the same answer).
+ */
+export const providerAbsent = (error: KernelError): boolean => error.code === "E_CAPABILITY_UNKNOWN" && error.within === undefined;
+/**
+ * The second of those: the workspace PINS the provider and its package is not in the lock yet (`details.package`).
+ * Not absent, and not a failure a Retry mends: the way on is `oats sync`, and the New agent form says so.
+ */
+export const providerUnsynced = (error: KernelError): boolean => error.code === "E_CAPABILITY_UNKNOWN" && error.within === "package";
+
 /** Spawn's commands. */
 export const verbs = (oats: Runner) => ({
   /** The harnesses the bb session provider declares, for the New agent form and the Start and Restart dialogs. */
   /**
-   * `absent`: the deployment does not have the bb session provider at all (the kernel knows no capability `oats.bb`:
-   * `E_CAPABILITY_UNKNOWN`), with the kernel's own code and sentence. That is an ANSWER, not a failed read: there is
-   * no harness to choose there, and nothing can be spawned on bb (the form says so, once). Any other failure of the
-   * read is a failure.
+   * `absent`: the deployment does not have the bb session provider at all (`providerAbsent`). That is an answer, not
+   * a failed read: there is then no harness to choose and no bb thread to spawn on. Any other failure of the read is
+   * a failure, with the kernel's sentence.
+   * `unsynced`: the workspace pins the provider and it is not synced yet (`providerUnsynced`): an answer too, with the
+   * kernel's own code and sentence: nothing can be spawned on bb until `oats sync` has run.
    */
-  spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null; absent?: { code: string; message: string } }>> => {
+  spawnHarnesses: async (signal?: AbortSignal): Promise<Result<{ harnesses: string[]; version: string | null; absent: boolean; unsynced?: { code: string; message: string } }>> => {
     const read = await oats.run(harnessListArgv(), parseHarnessList, oats.timeouts.read, signal);
-    // (By the code alone, as the dialogs read it. KNOWN: the kernel uses the same code for a package that is not in the
-    // lock yet and for a capability missing from a member; such a workspace reads as absent too, with the kernel's own
-    // sentence under the line's Details.)
-    return !read.ok && read.error.code === "E_CAPABILITY_UNKNOWN" ? ok({ harnesses: [], version: null, absent: { code: read.error.code, message: read.error.message } }) : read;
+    if (read.ok) return ok({ ...read.value, absent: false });
+    if (providerUnsynced(read.error)) return ok({ harnesses: [], version: null, absent: false, unsynced: { code: read.error.code, message: read.error.message } });
+    return providerAbsent(read.error) ? ok({ harnesses: [], version: null, absent: true }) : read;
   },
 
   /**
@@ -261,7 +282,7 @@ export const verbs = (oats: Runner) => ({
   ): Promise<Result<SpawnPreview>> {
     const checked = checkSpawn(input, context.knownSouls);
     if (!checked.ok) return checked;
-    const run = (taskFile: string | null) => oats.run(spawnPreviewArgv(checked.value, taskFile), (document) => parseSpawnPreview(document, checked.value.name), oats.timeouts.preview, signal);
+    const run = (taskFile: string | null) => oats.run(spawnPreviewArgv(checked.value, taskFile), (document) => parseSpawnPreview(document, checked.value.name, checked.value.bb), oats.timeouts.preview, signal);
     return hasTask(input.task) ? withTaskFile(context.tempDir, input.task, run) : run(null);
   },
 

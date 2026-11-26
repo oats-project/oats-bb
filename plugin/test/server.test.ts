@@ -900,7 +900,7 @@ describe("the pages", () => {
     const { capabilities } = await rpc("capabilities");
     expect(capabilities.find((row: { id: string }) => row.id === "oats.core").souls).toBeGreaterThan(1);
     const { teams } = await rpc("teams");
-    expect(teams[0]).toEqual({ label: "oats", team: "default:oats.aweb.ai", isDefault: true });
+    expect(teams[0]).toEqual({ label: "oats", team: "default:oats.aweb.ai", isDefault: true, description: "The OATS framework team", local: false, at: "github.com/awebai/oats:oats-workspace.yaml#/teams/oats" });
     await rpc("snapshot");
     const { machines } = await rpc("machines");
     expect(machines.map((machine: { id: string; isThisMachine: boolean }) => [machine.id, machine.isThisMachine])).toEqual([
@@ -963,7 +963,9 @@ describe("acts", () => {
     const spawned = await rpc("spawn", { soul: "oats-developer", name: "flaky-ci-2-developer", task: "Fix the flaky CI job.", key: "spawn-1f0c9a7e" });
     expect(spawned).toEqual({ instance: "flaky-ci-2-developer", threadId: "thr_ad488edeab" });
     const calls = await fake.calls();
-    expect(calls.map((call) => call.verb).filter((verb) => verb !== "status")).toEqual(["souls", "spawn --preview", "spawn"]);
+    // (The provider is read once, like a page: whether the deployment has it decides what the spawn names. Nothing of
+    // a list is named here, so the kernel's version, which holds the lists, is not asked for it.)
+    expect(calls.map((call) => call.verb).filter((verb) => verb !== "status")).toEqual(["souls", "capabilities show", "spawn --preview", "spawn"]);
     const apply = calls.find((call) => call.verb === "spawn")!;
     expect(apply.argv).toContain("--backend");
     expect(apply.argv).toContain("--yolo");
@@ -1011,7 +1013,7 @@ describe("acts", () => {
 
   it("refuses a soul that is not listed and a name that is no instance name, with no spawn process", async () => {
     expect(await refusalOf(rpc("spawn", { soul: "no-such-soul", name: "x-developer", task: "t", key: "spawn-1f0c9a7e" }))).toMatchObject({ code: "invalid" });
-    expect(await refusalOf(rpc("spawnPreview", { soul: "no-such-soul", name: "x-developer", task: "t" }))).toMatchObject({ code: "invalid" });
+    expect(await refusalOf(rpc("spawnPlan", { soul: "no-such-soul", name: "x-developer", task: "t" }))).toMatchObject({ code: "invalid" });
     for (const name of ["two words", "a/b", "Upper", "-leading"]) {
       await expect(rpc("spawn", { soul: "oats-developer", name, task: "t", key: "spawn-1f0c9a7e" })).rejects.toThrow();
     }
@@ -1022,7 +1024,7 @@ describe("acts", () => {
   it("shows a kernel refusal of a spawn with its code and message", async () => {
     await fake.behave({ "spawn --preview": { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_BAD_ARGS", message: "--backend must be tmux" } }) } });
     expect(await refusalOf(rpc("spawn", { soul: "oats-developer", name: "x-developer", task: "t", key: "spawn-1f0c9a7e" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
-    expect(await refusalOf(rpc("spawnPreview", { soul: "oats-developer", name: "x-developer", task: "t" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
+    expect(await refusalOf(rpc("spawnPlan", { soul: "oats-developer", name: "x-developer", task: "t" }))).toEqual({ code: "conflict", message: "E_BAD_ARGS: --backend must be tmux" });
   });
 
   it("carries the kernel's marker of an unconfirmed outcome on the refusal, as its one issue; a refusal without the marker has none", async () => {

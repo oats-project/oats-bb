@@ -20,7 +20,7 @@ import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import { isUnconfirmed } from "../../contract/shared";
 import type { rpc as spawnRpc, SpawnFacts } from "../../contract/spawn";
-import { bbDefaultModel, modelCheck, MODEL_HELD, spawnProblem, withoutDefault } from "../../model/spawn";
+import { bbDefaultModel, modelCheck, MODEL_HELD, RUNS_IN, spawnProblem, withoutDefault } from "../../model/spawn";
 import type { SpawnProblem, SpawnReason } from "../../model/spawn";
 import { newKey } from "../keys";
 import { openAgentPage } from "../home/agent-tab";
@@ -30,7 +30,7 @@ import { RosterNotice } from "../roster/unreadable";
 import { errorMessage, onWindowReset, useRead } from "../store";
 import type { Contract, Result as Answer } from "../store";
 import { notify } from "../ui";
-import { Button, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading, Notice, Page, Result, Section, Segmented } from "../ui";
+import { Button, Code, DisabledReason, Disclosure, Fact, Facts, Field, INPUT, Loading, Notice, Page, Result, Section, Segmented } from "../ui";
 import { refusalCode, refusalLines, shown } from "../ui/text";
 import { agentName } from "../ui/words";
 import { Choice } from "./Choice";
@@ -104,7 +104,7 @@ const MARK = { soul: "oats-spawn-soul-mark", model: "oats-spawn-model-mark", nam
  * roster's notice. An off Spawn is described by it too (aria-describedby): no word is added to the screen, and for a
  * screen reader the button is never just dimmed (the review of part 7).
  */
-const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice", absent: "oats-spawn-no-bb" } as const;
+const SAYS = { soul: "oats-spawn-soul-field", modelId: "oats-spawn-model-id-field", relative: "oats-spawn-relative-choice", column: "oats-spawn-column", held: "oats-spawn-roster-notice", unsynced: "oats-spawn-not-synced" } as const;
 /** How long Spawn waits for bb's list of models before it goes without it (the wait a thread's start is given too). */
 const MODELS_WAIT_MS = 10_000;
 type Preview = { key: string; input: Input; facts: SpawnFacts; revision: string };
@@ -183,7 +183,7 @@ function Module({ module }: { module: { name: string; source: string; why: strin
 }
 
 /** The rows of the column that stay in view: the ones a person decides on. Every other row is under its one fold. */
-const IN_VIEW: ReadonlySet<string> = new Set(["Works in", "Harness", "Access", "Relationship"]);
+const IN_VIEW: ReadonlySet<string> = new Set(["Works in", "Harness", RUNS_IN, "Access", "Relationship"]);
 
 /** A fact of who the agent is (its name, its home): a value that may be muted, and a title for what was cut short. */
 function Identity({ fact }: { fact: SpawnFacts["identity"][number] }) {
@@ -311,14 +311,20 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
    * Which field keeps these values from being asked of the kernel; null when they can be. No sentence says it beside
    * Spawn: the field is empty in view (its placeholder says what it wants) or carries its own mark.
    */
-  // A deployment with no bb session provider: nothing can be spawned on bb there. The form says so once (its notice),
-  // asks the kernel for no preview (it would be refused for the bb backend), and holds its fields and Spawn.
-  const absent = harnesses.absent;
-  const off: "absent" | "soul" | "cannot" | "name" | "model" | "relation" | null =
-    absent !== null ? "absent" : chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
-  // The preview waits for the harness read's answer: until it is known whether the deployment has the provider at
-  // all, nothing is asked of the kernel (there it would refuse the bb backend, and a red notice would flash before the
-  // one line). Where the provider is there: the same preview, a moment later (the server keeps that read).
+  // ---- the harnesses that can be named ----
+  // A bb thread (the deployment has the bb session provider): the provider's. Where there is no provider the agent
+  // runs where the kernel puts it, and the harnesses are the kernel's own.
+  const onBb = harnesses.provider;
+  const offered = onBb ? harnesses.options : harnesses.kernel;
+  const harnessChoice = offered.length > 1;
+  // The provider is pinned and not synced: nothing can be spawned until `oats sync` has run. The form says so once
+  // (its notice, with the way on), asks the kernel for no preview and holds its fields and Spawn.
+  const unsynced = harnesses.unsynced;
+  const off: "unsynced" | "soul" | "cannot" | "name" | "model" | "relation" | null =
+    unsynced !== null ? "unsynced" : chosen === undefined ? "soul" : !chosen.spawnable ? "cannot" : nameFault !== null ? "name" : modelPick === CUSTOM && model === "" ? "model" : relation !== "unrelated" && relative === "" ? "relation" : null;
+  // The preview waits for the harness read's answer: until it is known where a spawn may run here (whether the
+  // deployment has the bb session provider at all), nothing is asked of the kernel: the preview would be of a spawn
+  // the answer may change. Where the provider is there: the same preview, a moment later (the server keeps that read).
   const harnessesRead = harnesses.status !== "loading";
   const input: Input | null = useMemo(
     () =>
@@ -328,11 +334,11 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
             soul,
             task,
             ...(name === "" ? {} : { name }),
-            ...(harness === "" || !harnesses.choice ? {} : { harness }),
+            ...(harness === "" || !harnessChoice ? {} : { harness }),
             ...(model === "" ? {} : { model }),
             ...(relation === "unrelated" ? {} : { relation: { kind: relation, to: relative } }),
           },
-    [off, harnessesRead, soul, task, name, harness, harnesses.choice, model, relation, relative],
+    [off, harnessesRead, soul, task, name, harness, harnessChoice, model, relation, relative],
   );
   const key = input === null ? null : JSON.stringify(input);
 
@@ -342,8 +348,8 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const [asking, setAsking] = useState(false);
   const [again, setAgain] = useState(0);
   const serial = useRef(0);
-  const latest = useRef<{ key: string | null; input: Input | null; harnessField: boolean }>({ key, input, harnessField: harnesses.choice });
-  latest.current = { key, input, harnessField: harnesses.choice };
+  const latest = useRef<{ key: string | null; input: Input | null; harnessField: boolean }>({ key, input, harnessField: harnessChoice });
+  latest.current = { key, input, harnessField: harnessChoice };
   useEffect(() => {
     const ticket = ++serial.current;
     if (key === null || held) {
@@ -386,7 +392,10 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // column stay as they are until the new answer lands.
   const modelAnswer = preview ?? (settled !== null && input !== null && settled.input.soul === input.soul && settled.input.harness === input.harness && settled.input.model === input.model ? settled : null);
   const effectiveHarness = harness !== "" ? harness : shown(modelAnswer?.facts.resolved?.harness ?? "") || null;
-  const suggestions = useModelSuggestions(effectiveHarness);
+  // What bb has for that harness (its models, whether it can run it here) is asked only where the agent will be a bb
+  // thread. On a deployment with no bb session provider nothing of bb's is offered: the model is "Default" or a typed id.
+  const bbHarness = onBb ? effectiveHarness : null;
+  const suggestions = useModelSuggestions(bbHarness);
   // The soul's own harness: what the kernel resolves for this soul with no harness chosen. It is kept from the
   // preview with none chosen; where none was asked for this soul (a harness picked before the soul, or kept while
   // the soul changes), it is asked once, so that the same values hold or arm Spawn whatever the order of the clicks.
@@ -400,7 +409,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   const [ownFailed, setOwnFailed] = useState<string | null>(null);
   const ownTryNow = useRef(ownTry);
   ownTryNow.current = ownTry;
-  const ownAsked = input !== null && !held && harness !== "" && harnesses.choice && !ownKnown && ownFailed !== ownTry;
+  const ownAsked = onBb && input !== null && !held && harness !== "" && harnessChoice && !ownKnown && ownFailed !== ownTry;
   useEffect(() => {
     if (!ownAsked) return;
     let current = true;
@@ -422,7 +431,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // harness the person chose that is not the soul's own, and a bare id that several of bb's listed models serve needs
   // its provider picked. That no listed model serves it is the provider's to judge, at the launch.
   // bb's list decides only once it is read and holds something: until then the kernel's answer stands.
-  const modelHeld = modelCheck({ chosenHarness: harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models : null, byProvider: effectiveHarness !== null && BB_PROVIDER[effectiveHarness] === "pi" });
+  const modelHeld = modelCheck({ chosenHarness: onBb && harness !== "" ? harness : null, soulHarness, picked: model !== "" ? model : null, resolved: modelAnswer?.facts.resolved ?? null, listed: suggestions.status === "ready" && suggestions.models.length > 0 ? suggestions.models : null, byProvider: effectiveHarness !== null && BB_PROVIDER[effectiveHarness] === "pi" });
   // The "Required" mark waits for the soul's own harness to be known: until then Spawn is off as for any read.
   const modelMark = ownAsked && modelHeld.held === MODEL_HELD.required ? null : modelHeld.held;
   // bb's list for the harness is being read: until it answers, whether bb serves the model is not known.
@@ -439,9 +448,9 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   }, [listLoading, effectiveHarness]);
   const modelsReading = listLoading && !listLate;
   // The kernel resolved a harness and no model for it, and none is chosen: for the soul's own harness bb will start it on bb's own default.
-  const unsetModel = modelHeld.held !== MODEL_HELD.required && model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
+  const unsetModel = onBb && modelHeld.held !== MODEL_HELD.required && model === "" && resolved !== null && resolved.harness !== null && resolved.model === null ? resolved.harness : null;
   // What bb says of the harness this spawn would run on, when bb cannot run it here: said under the field, before any press.
-  const notReady = harnessState(effectiveHarness);
+  const notReady = harnessState(bbHarness);
 
   // ---- Spawn ----
   // idle: the form can be changed. spawning: a spawn is in flight. created: it made the agent.
@@ -449,7 +458,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
   // incomplete: an instance exists, and its start did not finish (or its thread is not known): nothing more to press here.
   const [phase, setPhase] = useState<"idle" | "spawning" | "created" | "unknown" | "incomplete">("idle");
   const [failure, setFailure] = useState<SpawnProblem | null>(null);
-  const [made, setMade] = useState<{ instance: string; threadId: string } | null>(null);
+  const [made, setMade] = useState<{ instance: string; threadId: string | null } | null>(null);
   /** The agent was made and its thread FAILED AT ITS START in bb: bb's own reason (app/outside/threads.ts). Never "Created" of it. */
   const [unstarted, setUnstarted] = useState<{ instance: string; threadId: string; reason: string } | null>(null);
   /** The spawn that was pressed: the values and the decision the person saw, and the key that makes it one spawn however often it is asked. */
@@ -478,26 +487,30 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           // The kernel says "launched" before the thread has started in bb: "Created" is said once
           // bb's own status of the thread is past its start (or after 10 s), the form busy meanwhile.
           // A thread that FAILED AT ITS START is never called created.
-          return startOutcome(sdk, answer.threadId).then((failed) => {
+          // (An agent with no bb thread, on a deployment with no bb session provider, has no thread to wait for: it is
+          // created, and what opens is its own page.)
+          const thread = answer.threadId;
+          const openIt = () => void (thread === null ? openAgentPage(navigate, answer.instance) : navigate.toThread(thread));
+          return (thread === null ? Promise.resolve(null) : startOutcome(sdk, thread)).then((failed) => {
             setFlight(null);
             const created = agentName(answer.instance);
-            if (failed !== null) {
-              const open = () => void (openAgentPage(navigate, answer.instance) || navigate.toThread(answer.threadId));
+            if (failed !== null && thread !== null) {
+              const open = () => void (openAgentPage(navigate, answer.instance) || navigate.toThread(thread));
               // The person left the form: told where they are, and it stays until dismissed (a failure's notification does).
               if (!alive.current) return notify({ tone: "failed", title: W.didNotStart(created), open: { label: W.OPEN, run: open } });
               // An instance exists: the form stays held, so that no second one is made from it.
-              setUnstarted({ ...answer, reason: failed.detail ?? failed.message });
+              setUnstarted({ instance: answer.instance, threadId: thread, reason: failed.detail ?? failed.message });
               setPhase("incomplete");
               return;
             }
             // Said where the person will be: in bb's own toaster, which stays when the thread opens, and
             // reaches a person who left the form meanwhile, with the way to the agent.
-            notify({ tone: "done", title: W.createdNotice(created), open: { label: W.openAgent(created), run: () => navigate.toThread(answer.threadId) } });
+            notify({ tone: "done", title: W.createdNotice(created), open: { label: W.openAgent(created), run: openIt } });
             if (!alive.current) return;
             // Created: the form stays held, says so, and opens the agent's thread.
             setMade(answer);
             setPhase("created");
-            navigate.toThread(answer.threadId);
+            openIt();
           });
         },
         (cause: unknown) => {
@@ -540,14 +553,14 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     if (phaseNow.current === "idle") setFailure(null);
   }, [key]);
 
-  const fieldsHeld = held || phase !== "idle" || absent !== null;
+  const fieldsHeld = held || phase !== "idle" || unsynced !== null;
   /**
    * What holds Spawn while the form can be changed; null when nothing does. Only a read in flight is SAID beside the
    * button ("Reading…"). Every other hold is said once, where it is: the roster's notice while OATS cannot be read
    * ("Acts are off."), the field that is empty or marked, the column's refusal, the button's own word for a spawn
    * that is in flight. The button is described by the mark of the field that holds it, for a screen reader.
    */
-  const hold: "held" | "flight" | "absent" | "soul" | "cannot" | "name" | "model" | "relation" | "refused" | "reading" | "model-mark" | null =
+  const hold: "held" | "flight" | "unsynced" | "soul" | "cannot" | "name" | "model" | "relation" | "refused" | "reading" | "model-mark" | null =
     phase !== "idle"
       ? null
       : held
@@ -575,7 +588,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
     relation: SAYS.relative,
     refused: SAYS.column,
     held: SAYS.held,
-    absent: SAYS.absent,
+    unsynced: SAYS.unsynced,
     // A read in flight says "Reading…" beside the button; a spawn in flight is the button's own word.
     reading: undefined,
     flight: undefined,
@@ -655,10 +668,21 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
         <div id={SAYS.held} className="empty:hidden">
           <RosterNotice oats={oats} />
         </div>
-        {/* A deployment with no bb session provider: said ONCE, in a person's words; the kernel's own code and sentence under Details. Spawn is described by it. */}
-        {absent === null || held ? null : (
-          <div id={SAYS.absent} data-testid="oats-spawn-no-bb">
-            <Notice title={W.NO_BB} details={`${absent.code}: ${absent.message}`} />
+        {/* The provider is pinned and not synced: said ONCE, with the way on; the kernel's own code and sentence under Details; Retry reads again once `oats sync` has run. Spawn is described by it. */}
+        {unsynced === null || held ? null : (
+          <div id={SAYS.unsynced} data-testid="oats-spawn-not-synced">
+            <Notice
+              // ONE line, two short sentences, the command in the code face.
+              title={
+                <>
+                  {W.NOT_SYNCED.before}
+                  <Code>{W.NOT_SYNCED.command}</Code>
+                  {W.NOT_SYNCED.after}
+                </>
+              }
+              details={`${unsynced.code}: ${unsynced.message}`}
+              actions={<Button onClick={harnesses.retry}>{W.RETRY_HARNESSES}</Button>}
+            />
           </div>
         )}
         {/* While OATS cannot be read the roster's notice says so, alone: never a second one for the same cause. */}
@@ -699,7 +723,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
               <textarea data-testid="oats-spawn-task" data-field="task" rows={4} className={`${INPUT} py-2`} value={task} placeholder={W.TASK_PLACEHOLDER} onChange={(event) => setTask(event.target.value)} />
             </Field>
             {/* In its place while the provider's list is read, so that nothing jumps when it arrives; gone only where there is nothing to choose. */}
-            {harnesses.choice || harnesses.status === "loading" || harnessFailed ? (
+            {harnessChoice || harnesses.status === "loading" || harnessFailed ? (
               <>
                 <Field
                   label={W.HARNESS_LABEL}
@@ -711,15 +735,16 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
                   <Choice
                     testId="oats-spawn-harness"
                     field="harness"
-                    value={harnesses.choice ? harness : "\u0000"}
-                    disabled={!harnesses.choice}
+                    value={harnessChoice ? harness : "\u0000"}
+                    disabled={!harnessChoice}
                     placeholder={harnessFailed ? SOUL_DEFAULT : W.READING_HARNESSES}
                     filterLabel={W.FILTER}
                     options={[
                       // (The soul's own harness that bb cannot run here carries the mark an entry of the list does: the line under the field says only the way on.)
                       { id: "", label: `${resolvedLabel(SOUL_DEFAULT, harness === "" ? (resolved?.harness ?? null) : null)}${harness === "" && notReady !== null ? ` · ${notReady.mark}` : ""}` },
-                      ...harnesses.options.map((option) => {
-                        const state = harnessState(option.id);
+                      ...offered.map((option) => {
+                        // (What bb can run is said of a bb thread's harness alone.)
+                        const state = onBb ? harnessState(option.id) : null;
                         return state === null ? option : { ...option, label: `${option.label} · ${state.mark}`, unavailable: true };
                       }),
                     ]}
@@ -836,7 +861,7 @@ export function NewAgentPage({ subPath }: PluginNavPanelProps) {
           <div data-testid="oats-spawn-foot" className="flex min-w-0 flex-col gap-3 lg:col-start-1 lg:row-start-2 lg:self-start">
             {/* (The access the agent runs with is the column's Access row, in view of the button: not said again here.) */}
             {phase === "created" && made !== null ? (
-              <Result title={W.createdTitle(agentName(made.instance))} actions={<Button data-testid="oats-spawn-open" onClick={() => navigate.toThread(made.threadId)}>{W.openAgent(agentName(made.instance))}</Button>} />
+              <Result title={W.createdTitle(agentName(made.instance))} actions={<Button data-testid="oats-spawn-open" onClick={() => void (made.threadId === null ? openAgentPage(navigate, made.instance) : navigate.toThread(made.threadId))}>{W.openAgent(agentName(made.instance))}</Button>} />
             ) : null}
             {unstarted === null ? null : (
               <Result

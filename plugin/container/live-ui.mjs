@@ -761,6 +761,9 @@ function busyStage() {
       rmSync(BUSY_HOLD_FILE, { force: true });
       rmSync(BUSY_SAY_FILE, { force: true });
       claudeBack();
+      // Claude Code is in its place: READ (the stage took it away for the failed starts).
+      const claude = execFileSync("sh", ["-c", "command -v claude || true"], { encoding: "utf8" }).trim();
+      check(claude !== "" && existsSync(claude) && !existsSync(CLAUDE_AWAY), "BUSY Claude Code is in its place when the stage leaves", `command -v claude: "${claude}"; the note of where it was is ${existsSync(CLAUDE_AWAY) ? "still there" : "gone"}`);
       // bb's own concurrency limit is back: asked, and READ.
       for (const { host, before } of limited.splice(0)) {
         tell("concurrency-limit", "host", host, "auto");
@@ -787,8 +790,12 @@ function busyStage() {
       }
       check(failed.length === 0, `BUSY the ${ids.length} threads the stage made are archived when it leaves`, failed.slice(0, 3).join(" | "));
       // And the fixtures' own threads are back, for the stages after this one.
-      const kept = away.splice(0).filter((id) => tell("thread", "unarchive", id).startsWith("(bb thread unarchive failed"));
-      check(kept.length === 0, "BUSY the fixtures' own threads are put back when the stage leaves", kept.join(" | "));
+      // (READ from bb's list, which holds no archived thread: each of them is in it again.)
+      const awayIds = away.splice(0);
+      for (const id of awayIds) tell("thread", "unarchive", id);
+      const listed = new Set(list().map((thread) => thread.id));
+      const kept = awayIds.filter((id) => !listed.has(id));
+      check(kept.length === 0, `BUSY the fixtures' own ${awayIds.length} threads are put back when the stage leaves: bb lists each again`, kept.join(" | "));
       // And the fake oats answers the fixtures again, on this run's threads: the next stage starts from their roster, read.
       fake({ status: { stdout: statusWithRealIds(threads) } });
       await untilSnapshot((snapshot) => snapshot.ok === true && snapshot.agents.length === 8 && snapshot.agents.some((agent) => agent.instance === "weekly-digest-helper"), 60);
@@ -865,6 +872,8 @@ const WORK_HOLD_FILE = join(homedir(), "mock", "hold", WORK_HOLD);
 // A run that was killed before its `finally` (in a kept container) left its hold: it does not outlive that run.
 rmSync(WORK_HOLD_FILE, { force: true });
 claudeBack(); // a run that was killed while the busy stage had Claude Code away
+rmSync(BUSY_HOLD_FILE, { force: true }); // …and its held turns, and the answers it gave the mock model
+rmSync(BUSY_SAY_FILE, { force: true });
 // At this point every thread is a healthy one: its turn was answered and bb shows it idle. (Two are then given a turn that is held, below.)
 const threads = await healthyThreads();
 // Two agents of the fixtures WORK (redesign-ui-lead and desktop-mockups-developer: the roster's

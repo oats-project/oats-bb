@@ -1021,7 +1021,7 @@ export default [
         await showSidebar(page, viewport, { fold: "asLoaded" });
         await page.until(`${rowsOf}.length === 18 ? "1" : ""`, 60);
         // Every row bb walks, ours and bb's other threads, in the order drawn; and what stands between them.
-        const drawn = JSON.parse(await page.evaluate(`JSON.stringify((() => { const all = [...document.querySelectorAll("[data-sidebar-thread-shortcut-target], ${testId("oats-agent-row-threadless").replaceAll('"', "'")}")]; return { threads: all.filter((row) => row.hasAttribute("data-sidebar-thread-shortcut-target")).map((row) => ({ id: row.getAttribute("data-sidebar-thread-id"), href: row.getAttribute("href") })), threadless: all.filter((row) => !row.hasAttribute("data-sidebar-thread-shortcut-target")).length, hidden: 60 - ${rowsOf}.length }; })())`));
+        const drawn = JSON.parse(await page.evaluate(`JSON.stringify((() => { const all = [...document.querySelectorAll("[data-sidebar-thread-shortcut-target], ${testId("oats-agent-row-threadless").replaceAll('"', "'")}")]; return { threads: all.filter((row) => row.hasAttribute("data-sidebar-thread-shortcut-target")).map((row) => ({ id: row.getAttribute("data-sidebar-thread-id"), href: row.getAttribute("href"), ours: row.closest('[data-testid="oats-tree"]') !== null })), threadless: all.filter((row) => !row.hasAttribute("data-sidebar-thread-shortcut-target")).length, hidden: 60 - ${rowsOf}.length }; })())`));
         const onThread = `(location.pathname.match(/\\/threads\\/([^/]+)/) ?? [])[1] ?? ""`;
         // A press is made once bb's thread page is whole (its composer is drawn: bb takes its keys then), and what it
         // did is read from where the page went.
@@ -1031,7 +1031,8 @@ export default [
           await page.press(key);
           return page.until(`(() => { const now = ${onThread}; return now !== "" && now !== ${JSON.stringify(from)} ? now : ""; })()`, 20);
         };
-        check(drawn.threads.length >= 8, `${at} the folded busy sidebar draws thread rows for bb's keys to walk`, String(drawn.threads.length));
+        // Sixteen: fifteen of the eighteen roots stand on a bb thread (two run on tmux, one's thread is archived), and bb's one thread that is no agent's, after ours.
+        check(drawn.threads.length === 16 && drawn.threads.slice(0, 15).every((row) => row.ours) && !drawn.threads[15].ours && drawn.threadless === 3, `${at} the folded busy sidebar draws sixteen thread rows for bb's keys to walk: fifteen of our tree, then bb's own; three of our rows have no thread`, JSON.stringify({ threads: drawn.threads.length, ours: drawn.threads.filter((row) => row.ours).length, threadless: drawn.threadless }));
         await page.goto(drawn.threads[0].href);
         await page.until(`${onThread} === ${JSON.stringify(drawn.threads[0].id)} ? "1" : ""`, 30);
         const went = [];
@@ -1123,7 +1124,7 @@ export default [
       await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-open-panel"))}).click()`);
       const named = await page.until(`document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-panel-name")}`)})?.getAttribute("title") === ${JSON.stringify(chat.agent)} ? "1" : ""`, 30);
       check(named === "1", `${at} the busy chat's panel names its agent`);
-      note("the busy chat's panel", await page.evaluate(`JSON.stringify({ screens: Math.round(((document.querySelector(${JSON.stringify(testId("oats-panel"))})?.scrollHeight ?? 0) / window.innerHeight) * 10) / 10 })`));
+      note("the busy chat's panel", await page.evaluate(`JSON.stringify((() => { const pane = document.querySelector(${JSON.stringify(`${testId("oats-panel")} [role="tabpanel"]`)}); return { screens: pane ? Math.round((pane.scrollHeight / Math.max(1, pane.clientHeight)) * 10) / 10 : null }; })())`));
       await page.shot(`busy-${viewport.name}-chat-panel`);
       // Its MAIL: a full page of fifty messages, subjects short and long; then the long report, opened.
       const tab = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-panel")} [role="tab"]`)})].find((each) => each.innerText.trim() === "Mail")`;

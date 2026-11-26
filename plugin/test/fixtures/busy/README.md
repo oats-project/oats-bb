@@ -24,7 +24,7 @@ times and relations are varied, and a count that follows the rows. Nothing else.
 |---|---|---|
 | `status.json` | `../roster/status.json` (its rows that ask, work, are idle, stopped, on tmux), `../outside/status-outside.json` (running outside OATS), `../outside/status-failed-at-start.json` (failed at its start), `../panel/status-board.json` (the agent with a board), `../outside/status-archived-while-running.json` (a session lost on bb), `../lifecycle/tmux-row-lost.json` (a session lost on tmux) | the instance's name wherever the row writes it (`instance`, `home`, the identity's alias, the tmux window); its soul (`agent`, the soul's directory in `home`); its bb thread's id (a slot, `thr_busy_NN`, which the live stage fills with the run's own thread); `parentInstance`; a claim's `since` and `message`. On the busy chat's agent `board` is the recorded board multiplied: each fact a recorded fact (its `key`, `label`, `value`, `at` varied), each question the recorded question (its `id`, `question`, `since` varied), and its claim says the oldest question, as the kernel's does |
 | `souls.json` | `../workspace/souls.json` | the soul's name wherever the row writes it; `description` |
-| `schedule-list.json` | `../automations/schedule-list.json` | the schedule's name wherever the row writes it; `description`; on four of them `recentRuns` is the recorded run fifty times: the NEWEST is the recorded run as it is (the row's `lastRun` names it), each older one has its own `runId` and is an hour before the one after it (`scheduledFor`, `startedAt`), and `history.stored` follows. `cron` and `nextRun` are the recorded ones |
+| `schedule-list.json` | `../automations/schedule-list.json` | the schedule's name wherever the row writes it; `description`; on four of them `recentRuns` is the recorded run fifty times: the NEWEST is the recorded run (the row's `lastRun` is of it), each older one has its own `runId` and is an hour before the one after it (`scheduledFor`, `startedAt`), and `history.stored` follows. `cron` and `nextRun` are the recorded ones |
 | `trigger-list.json` | `../automations/trigger-list.json` | the trigger's name wherever the row writes it; `description` |
 | `mail.json` | `../mail/mail.json`, the WHOLE answer with its envelope (the busy chat's agent's mail; the set holds one agent's, so the stage answers it for every agent) | the agent it is of (its name and its soul's directory, wherever the answer writes them: the target, the alias of its identity, `to`); `messages` is the recorded received messages fifty times, each with its own `id`, `conversationId`, `createdAt`, `subject` and `threadTitle`, and a made-up `body` on the short ones (the long report's body stays as the messaging layer cut it); `conversations` follows. `documents`, the messaging layer's own rendering, is the recorded one: the plugin does not read it |
 | `teams.json` | `../workspace/teams.json` | `label`, `team`, `description`, `default`, and the label in `at`; an unmapped team's problem row is the recorded problem row, for that team (its `label`, and the label in `at` and in its message) |
@@ -51,10 +51,23 @@ that ONE agent holds the conversation, the board and the mail, the busy chat's r
 `identity` of the recorded roster's lead, with its own name as the alias. No other row has a field
 of another's.
 
-**The one made-up text: the busy chat's conversation** (`chat.json`). A conversation is no answer
-of the kernel's, so none is recorded: the generator holds its ten turns, and the live stage has the
-conversation for real, with the mock model answering each `you` with its `agent`
+**The one made-up DOCUMENT: the busy chat's conversation** (`chat.json`). A conversation is no
+answer of the kernel's, so none is recorded: the generator holds its ten turns, and the live stage
+has the conversation for real, with the mock model answering each `you` with its `agent`
 (`container/real/mock-anthropic.mjs`, `say.json`).
+
+**The made-up TEXTS in rows** (a text is what a row may be varied in): the four-line question and
+the claims' words; the board's nine questions and its twelve facts' labels and values; the mail's
+ten subjects and three short bodies; the long descriptions of souls, automations and teams.
+
+**What follows what.** A varied time stays beside the recorded times of its row: a claim's, a
+fact's and a question's are the recorded time or minutes after it; a message's is the recorded one
+or minutes before it (never before its agent was made). Where a recorded row says a relation (the
+rows of the kernel that recorded the board), it follows the parent: a child is `"child"` of its
+parent (`relation`, `relativeTo`), a root has neither key, as the recorded roots. A run of a
+schedule carries the schedule's busy name wherever the recorded run writes it, as the row's
+`lastRun` does; all fifty keep the recorded run's `instance`, `home` and `recordedAt`. The person a
+recorded row names (`attributedHuman`) is not carried into the set: a made-up name stands there.
 
 The made-up names are no person's and no real project's.
 
@@ -65,6 +78,10 @@ edit fails; run `node test/fixtures/busy/generate.mjs` after a change to a recor
 commit both); every busy row, with its varied fields put back, is the recorded row it was
 multiplied from; what was SET in a row is in the table above and nowhere else, and what was
 SWAPPED is the row's own name or id (a closed list per kind: never another string of the row);
+every row put back IS a row of the recorded answers, which the test reads ITSELF from the fixture
+files and puts back with its own hands (a closed list of sources per kind: a row from anywhere
+else, or made with no varying, fails); what a field may be set TO is of the recorded value's kind
+(nothing stays nothing; a relation is an agent of the set);
 THE FILES hold nothing but those rows (every row of every list in every file is one the two tests
 above read, in a recorded document that is otherwise unchanged; a list or an object put into a row
 is one of six, each compared); the set holds the numbers above; and the plugin's own parsers read

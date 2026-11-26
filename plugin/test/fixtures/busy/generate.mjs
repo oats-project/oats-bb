@@ -12,6 +12,7 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, "..");
@@ -46,7 +47,7 @@ function vary(from, swaps, set = []) {
   const was = set.map(([path]) => [path, copy(at(from, path))]);
   for (const [path, next] of set) put(row, path, next);
   const made = { row, from, swaps, was };
-  if (JSON.stringify(restored(made)) !== JSON.stringify(from)) throw new Error(`busy: a row made from ${JSON.stringify(from).slice(0, 80)}… does not come back to it: a varied name hides inside another`);
+  if (!isDeepStrictEqual(restored(made), from)) throw new Error(`busy: a row made from ${JSON.stringify(from).slice(0, 80)}… does not come back to it: a varied name hides inside another`);
   return made;
 }
 /** The recorded row a busy row was made from: its varied fields put back. */
@@ -67,7 +68,8 @@ const TOPICS = [
 ];
 const ALONE = ["nightly-dependency-audit", "release-notes-drafting", "flaky-test-quarantine", "docs-site-link-checker", "incident-postmortem-timeline", "api-deprecation-sweep", "localization-string-freeze", "accessibility-contrast-audit", "telemetry-schema-registry", "invoice-pdf-rendering", "support-inbox-triage", "design-token-export"];
 const SOUL_WORDS = ["platform", "payments", "search", "mobile", "compliance", "growth", "data", "design", "support", "infrastructure", "security", "billing", "documentation", "release", "research"];
-const iso = (minutes) => new Date(Date.UTC(2026, 10, 19, 8, 0, 0) + minutes * 60_000).toISOString();
+/** A recorded time, `minutes` later (earlier, if negative): a varied time stays beside the recorded times of its row. */
+const later = (time, minutes) => new Date(Date.parse(time) + minutes * 60_000).toISOString();
 const QUESTION = ["The migration is ready to run against production.", "It rewrites 48 000 invoices and cannot be undone once the old table is dropped.", "A dry run on the copy of last night took 41 minutes and changed nothing it should not.", "Run it now, wait for the Sunday window, or stop here?"].join("\n");
 // The busy chat's board: twelve facts [label, value] and nine questions (the fourth is four lines long).
 // (The recorded facts are two, taken in turn: one with a link, one counted "failing": the made-up labels follow them.)
@@ -184,7 +186,12 @@ export function build() {
     const thread = model.row.session?.threadId;
     if (typeof thread === "string") swaps.push([thread, `thr_busy_${String(n + 1).padStart(2, "0")}`]);
     const set = [[["agent"], soul], [["parentInstance"], parent]];
-    if (kind === "ask") set.push([["waitingOnYou", "since"], iso(n * 37)], [["waitingOnYou", "message"], n % 2 === 0 ? QUESTION : `${model.row.waitingOnYou.message} (${instance.replace(/-/g, " ")})`]);
+    // A relation FOLLOWS the parent, where the recorded row says one (a kernel that does: the rows with a board): a
+    // child is "child" of its parent; a root has neither key, as the recorded roots.
+    if ("relation" in model.row || "relativeTo" in model.row) set.push([["relation"], parent === null ? undefined : "child"], [["relativeTo"], parent === null ? undefined : parent]);
+    // The person a recorded row names is no part of the set: a made-up name in its place.
+    if (typeof model.row.attributedHuman === "string") set.push([["attributedHuman"], "ada"]);
+    if (kind === "ask") set.push([["waitingOnYou", "since"], later(model.row.waitingOnYou.since, n * 37)], [["waitingOnYou", "message"], n % 2 === 0 ? QUESTION : `${model.row.waitingOnYou.message} (${instance.replace(/-/g, " ")})`]);
     if (kind === "board") {
       // A FULL BOARD: the recorded facts and the recorded question, multiplied: twelve facts, nine open questions (one
       // of four lines). The claim follows the board, as the kernel's does: it says the oldest question.
@@ -192,13 +199,13 @@ export function build() {
       const facts = Array.from({ length: 12 }, (_, f) => {
         const from = board.facts[f % board.facts.length];
         const [label, value] = BOARD_FACTS[f];
-        const fact = vary(from, [], [[["key"], `${from.key}-${f + 1}`], [["label"], label], [["value"], value], [["at"], iso(n * 37 + f)]]);
+        const fact = vary(from, [], [[["key"], `${from.key}-${f + 1}`], [["label"], label], [["value"], value], [["at"], later(from.at, f)]]);
         made.facts.push(fact);
         return fact.row;
       });
       const questions = BOARD_QUESTIONS.map((question, q) => {
         const from = board.questions[0];
-        const asked = vary(from, [], [[["id"], `q${q + 1}`], [["question"], question], [["since"], iso(n * 37 + q * 11)]]);
+        const asked = vary(from, [], [[["id"], `q${q + 1}`], [["question"], question], [["since"], later(from.since, q * 11)]]);
         made.questions.push(asked);
         return asked.row;
       });
@@ -208,7 +215,7 @@ export function build() {
       // set that is JOINED from another recorded row. README.md says so.
       const lent = byName.get("redesign-ui-lead").row.identity;
       set.push([["identity"], swapped(copy(lent), [[lent.alias, instance]])]);
-      set.push([["board"], { ...copy(board), facts, questions }], [["waitingOnYou", "since"], questions[0].since], [["waitingOnYou", "message"], questions[0].question]);
+      set.push([["board"], { ...copy(board), facts, questions }], [["waitingOnYou", "message"], questions[0].question]);
     }
     const row = vary(model.row, swaps, set);
     made.agents.push({ ...row, kind });
@@ -229,7 +236,7 @@ export function build() {
     const long = from.truncated === true; // the recorded long report: its body stays as the messaging layer cut it
     const number = String(n + 1).padStart(2, "0");
     const subject = long ? `${from.subject} ${n + 1}: ${MAIL_SUBJECTS[n % MAIL_SUBJECTS.length]}` : MAIL_SUBJECTS[n % MAIL_SUBJECTS.length];
-    const message = vary(from, [[from.id, `${number}${from.id.slice(2)}`], [from.conversationId, `${number}${from.conversationId.slice(2)}`], [mailDoc.result.target.instance, chatAgent]], [[["subject"], subject], [["threadTitle"], subject], [["createdAt"], iso(-n * 53).replace("Z", "+00:00")], ...(long || n < received.length ? [] : [[["body"], MAIL_BODIES[n % MAIL_BODIES.length]]])]);
+    const message = vary(from, [[from.id, `${number}${from.id.slice(2)}`], [from.conversationId, `${number}${from.conversationId.slice(2)}`], [mailDoc.result.target.instance, chatAgent]], [[["subject"], subject], [["threadTitle"], subject], ...(n < received.length ? [] : [[["createdAt"], later(from.createdAt, -n * 3).replace("Z", "+00:00")]]), ...(long || n < received.length ? [] : [[["body"], MAIL_BODIES[n % MAIL_BODIES.length]]])]);
     made.messages.push(message);
     return message.row;
   });
@@ -268,10 +275,11 @@ export function build() {
       // Fifty runs: the recorded run, fifty times, each with its own id and times; the history's count follows.
       if (k === 0 && Array.isArray(from.recentRuns) && from.recentRuns.length > 0 && typeof from.recentRuns[0].runId === "string") {
         const runs = Array.from({ length: 50 }, (_, r) => {
-          // The NEWEST of the fifty is the recorded run as it is (the row's `lastRun` names it); each older one is an hour before.
+          // The NEWEST of the fifty is the recorded run (the row's `lastRun` is of it); each older one is an hour before.
           const first = from.recentRuns[0];
           const earlier = (time) => new Date(Date.parse(time) - r * 3_600_000).toISOString();
-          const run = r === 0 ? vary(first, [], []) : vary(first, [[first.runId, `${String(s).padStart(2, "0")}${String(r).padStart(2, "0")}${first.runId.slice(4)}`]], [[["scheduledFor"], earlier(first.scheduledFor)], [["startedAt"], earlier(first.startedAt)]]);
+          // (Each carries the schedule's name wherever the recorded run writes it, as the row's `lastRun` does.)
+          const run = r === 0 ? vary(first, [[bare(id), name]], []) : vary(first, [[bare(id), name], [first.runId, `${String(s).padStart(2, "0")}${String(r).padStart(2, "0")}${first.runId.slice(4)}`]], [[["scheduledFor"], earlier(first.scheduledFor)], [["startedAt"], earlier(first.startedAt)]]);
           made.runs.push(run);
           return run.row;
         });

@@ -5,17 +5,61 @@ import { readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { describe, expect, it } from "vitest";
 import { parseScheduleList, parseTriggerList } from "../../kernel/automations-read.js";
 import { MAIL_PAGE, parseMail } from "../../kernel/mail.js";
 import { parseStatus } from "../../kernel/roster.js";
 import { parseServers, parseSouls, parseTeams } from "../../kernel/workspace.js";
 // @ts-expect-error the generator is plain JavaScript, with no types of its own
-import { build, restored } from "../fixtures/busy/generate.mjs";
+import { build } from "../fixtures/busy/generate.mjs";
 
 const BUSY = join(fileURLToPath(new URL("..", import.meta.url)), "fixtures", "busy");
 type Made = { row: Record<string, unknown>; from: Record<string, unknown>; swaps: [string, string][]; was: [string[], unknown][]; kind?: string; shaped?: string[] };
 const { files, made } = build() as { files: Record<string, unknown>; made: Record<"agents" | "souls" | "schedules" | "triggers" | "teams" | "servers" | "runs" | "facts" | "questions" | "mail" | "messages" | "conversations" | "groups" | "problems", Made[]> };
+
+// THE RULE IS HELD HERE, not by the generator: this file reads the recorded answers ITSELF and puts a busy row back
+// with its OWN hands. Of the generator it takes only what it says it did to a row (`swaps`, `was`), which is then proven.
+const FIXTURES = join(BUSY, "..");
+const answer = (file: string): Record<string, unknown> => {
+  const document = JSON.parse(readFileSync(join(FIXTURES, file), "utf8")) as Record<string, unknown>;
+  return (document.result as Record<string, unknown> | undefined) ?? document;
+};
+const whole = (file: string) => JSON.parse(readFileSync(join(FIXTURES, file), "utf8")) as Record<string, unknown>;
+const instancesOf = (file: string) => (answer(file).agents as { instances: unknown[] }[]).flatMap((group) => group.instances);
+/** Every string of a value with each `[from, to]` replaced, in order. */
+const swappedBack = (value: unknown, swaps: [string, string][]): unknown =>
+  typeof value === "string" ? swaps.reduce((text, [from, to]) => text.split(from).join(to), value) : Array.isArray(value) ? value.map((each) => swappedBack(each, swaps)) : value !== null && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([key, each]) => [key, swappedBack(each, swaps)])) : value;
+/** A busy row put back: what was set returned to what it was (a key that was not there, removed), then every swap undone, last first. */
+function putBack({ row, swaps, was }: Made): unknown {
+  const back = JSON.parse(JSON.stringify(row)) as Record<string, unknown>;
+  for (const [path, value] of was) {
+    const holder = path.slice(0, -1).reduce<Record<string, unknown>>((inner, key) => inner[key] as Record<string, unknown>, back);
+    if (value === undefined) delete holder[path[path.length - 1]!];
+    else holder[path[path.length - 1]!] = value;
+  }
+  return swappedBack(back, [...swaps].reverse().map(([from, to]) => [to, from]));
+}
+/** THE SOURCES: for each kind of busy row, the recorded rows it may be made from. Closed: a row from anywhere else, or from nowhere, fails. */
+const board = (instancesOf("panel/status-board.json") as { board?: { facts: unknown[]; questions: unknown[] } | null }[]).find((row) => row.board)!.board!;
+const recordedSchedules = answer("automations/schedule-list.json").schedules as { recentRuns?: unknown[] }[];
+const recordedMail = (whole("mail/mail.json").result as { result: { mail: { messages: unknown[]; conversations: unknown[] } } }).result.mail;
+const SOURCES: Record<string, unknown[]> = {
+  agents: [...instancesOf("roster/status.json"), ...instancesOf("outside/status-outside.json"), ...instancesOf("outside/status-archived-while-running.json"), ...instancesOf("outside/status-failed-at-start.json"), ...instancesOf("panel/status-board.json"), whole("lifecycle/tmux-row-lost.json")],
+  groups: [(answer("roster/status.json").agents as unknown[])[0]],
+  facts: board.facts,
+  questions: board.questions,
+  souls: answer("workspace/souls.json").souls as unknown[],
+  schedules: recordedSchedules,
+  runs: recordedSchedules.flatMap((row) => row.recentRuns ?? []),
+  triggers: answer("automations/trigger-list.json").triggers as unknown[],
+  teams: answer("workspace/teams.json").teams as unknown[],
+  problems: answer("workspace/teams.json").problems as unknown[],
+  servers: answer("workspace/servers.json").servers as unknown[],
+  mail: [whole("mail/mail.json")],
+  messages: recordedMail.messages,
+  conversations: recordedMail.conversations,
+};
 
 describe("the busy set", () => {
   it("is exactly what its generator makes: the same files, byte for byte, and no other", async () => {
@@ -26,20 +70,25 @@ describe("the busy set", () => {
     expect(JSON.stringify(build().files)).toBe(JSON.stringify(files));
   });
 
-  it("THE RULE: every busy row, with its varied fields put back, is the recorded row it was multiplied from", () => {
+  it("THE RULE: every busy row, with its varied fields put back, IS a recorded row: one of the answers the fixtures hold, read here", () => {
+    expect(Object.keys(made).sort()).toEqual(Object.keys(SOURCES).sort());
     let rows = 0;
-    for (const list of Object.values(made)) {
-      for (const each of list) {
-        expect(restored(each)).toEqual(each.from);
+    for (const [list, entries] of Object.entries(made)) {
+      for (const each of entries) {
+        const back = putBack(each);
+        // …a row of the recorded answers of its kind (found by this file, in the files)…
+        expect([list, SOURCES[list]!.some((source) => isDeepStrictEqual(source, back))]).toEqual([list, true]);
+        // …and it is the row the generator says it took.
+        expect(back).toEqual(each.from);
         rows += 1;
       }
     }
-    expect(rows).toBeGreaterThan(480); // also the 24 groups, the 50 conversations and the problem rows; 60 agents, 24 souls, 37 automations, 200 runs, 7 teams, 5 machines, 12 facts, 9 questions, the mail's document and its 50 messages
+    expect(rows).toBeGreaterThan(480); // 60 agents, 24 groups, 24 souls, 37 automations, 200 runs, 7 teams and their problems, 5 machines, 12 facts, 9 questions, the mail's document, its 50 messages and conversations
   });
 
   it("what is varied is a name, an id, a time, a relation or a text, and nothing else: no row is shaped", () => {
     const ALLOWED: Record<string, string[]> = {
-      agents: ["agent", "parentInstance", "waitingOnYou.since", "waitingOnYou.message", "board", "identity"],
+      agents: ["agent", "parentInstance", "relation", "relativeTo", "attributedHuman", "waitingOnYou.since", "waitingOnYou.message", "board", "identity"],
       facts: ["key", "label", "value", "at"],
       questions: ["id", "question", "since"],
       mail: ["result.result.mail.messages", "result.result.mail.conversations"],
@@ -55,6 +104,39 @@ describe("the busy set", () => {
       runs: ["scheduledFor", "startedAt"],
     };
     for (const [list, rows] of Object.entries(made)) for (const each of rows) expect([list, each.was.map(([path]) => path.join(".")).filter((path) => !ALLOWED[list]!.includes(path))]).toEqual([list, []]);
+    // WHAT a field may be set TO: a value of the kind the recorded one is (a text stays a text, a number a number, and
+    // NOTHING stays nothing: a team with no provider id, a description that is not there), but for the named few:
+    const instances = new Set(made.agents.map((each) => each.row.instance));
+    const at = (value: unknown, path: string[]) => path.reduce<unknown>((inner, key) => (inner as Record<string, unknown> | null | undefined)?.[key], value);
+    const SPECIAL: Record<string, (now: unknown, was: unknown, each: Made) => boolean> = {
+      // a relation: no parent, or an agent of the set; and where the recorded row says a relation, it follows the parent.
+      "agents:parentInstance": (now) => now === null || instances.has(now),
+      "agents:relation": (now, _was, each) => (each.row.parentInstance === null ? now === undefined : now === "child"),
+      "agents:relativeTo": (now, _was, each) => (each.row.parentInstance === null ? now === undefined : now === each.row.parentInstance),
+      // the one joined field (read below), and the containers (read in the files' test).
+      "agents:identity": () => true,
+      "agents:board": () => true,
+      "groups:instances": () => true,
+      "schedules:recentRuns": () => true,
+      "mail:result.result.mail.messages": () => true,
+      "mail:result.result.mail.conversations": () => true,
+      // a team that was the default may be made not so; never the other way.
+      "teams:default": (now, was) => now === was || (was === true && now === false),
+    };
+    for (const [list, entries] of Object.entries(made)) {
+      for (const each of entries) {
+        for (const [path, was] of each.was) {
+          const now = at(each.row, path);
+          const special = SPECIAL[`${list}:${path.join(".")}`];
+          expect([list, path.join("."), special ? special(now, was, each) : typeof now === typeof was && (was === null) === (now === null)]).toEqual([list, path.join("."), true]);
+        }
+      }
+    }
+    // A TIME that was varied stays beside the recorded times of its row: a claim, a fact and a question are never before
+    // the recorded one they replace; a message is never after the recorded one, nor before its agent was made.
+    const chatMade = Date.parse(String(made.agents.find((each) => each.kind === "board")!.row.createdAt));
+    for (const [list, path] of [["agents", ["waitingOnYou", "since"]], ["facts", ["at"]], ["questions", ["since"]]] as const) for (const each of made[list]) for (const [set, was] of each.was) if (set.join(".") === path.join(".")) expect([list, Date.parse(String(at(each.row, [...path]))) >= Date.parse(String(was))]).toEqual([list, true]);
+    for (const each of made.messages) expect([Date.parse(String(each.row.createdAt)) <= Date.parse(String(each.from.createdAt)), Date.parse(String(each.row.createdAt)) > chatMade]).toEqual([true, true]);
     // ONE field is joined from a second recorded row, on ONE row: the busy chat's agent's messaging identity (README.md).
     const lent = made.agents.filter((each) => each.was.some(([path]) => path[0] === "identity"));
     expect(lent.map((each) => [each.kind, each.from.identity ?? null, each.row.identity])).toEqual([["board", null, { ...(made.agents.find((each) => each.from.instance === "redesign-ui-lead")!.from.identity as object), alias: lent[0]!.row.instance }]]);
@@ -70,7 +152,7 @@ describe("the busy set", () => {
       souls: (row) => [row.name],
       schedules: (row) => [tail(row.id)],
       triggers: (row) => [tail(row.id)],
-      runs: (row) => [row.runId],
+      runs: (row) => [row.runId, ...(SOURCES.schedules as { id: string }[]).map((schedule) => tail(schedule.id))],
       teams: (row) => [`/teams/${String(row.label)}`],
       problems: (row) => [`/teams/${String(row.label)}`, `team ${String(row.label)} `],
       servers: (row) => [row.id, `${String(row.sshHost).split(".")[0]}.invalid`],
@@ -89,7 +171,8 @@ describe("the busy set", () => {
     for (const [list, rows] of Object.entries(made)) {
       for (const each of rows) {
         const names = NAMES[list]!(each.from).filter((name) => typeof name === "string");
-        for (const [from, to] of each.swaps) expect([list, from, names.includes(from), from.length > 3, to.length > 3, JSON.stringify(each.row).includes(to)]).toEqual([list, from, true, true, true, true]);
+        // (Every swap TOOK, but a run's swap of its schedule's name where the recorded run does not write that name.)
+        for (const [from, to] of each.swaps) expect([list, from, names.includes(from), from.length > 3, to.length > 3, JSON.stringify(each.row).includes(to) || (list === "runs" && from !== each.from.runId && !JSON.stringify(each.from).includes(from))]).toEqual([list, from, true, true, true, true]);
       }
     }
   });
@@ -135,7 +218,7 @@ describe("the busy set", () => {
     // The NEWEST of a schedule's fifty is the recorded run as it is (the row's `lastRun`, recorded, is of that run), and each older one is an hour before.
     for (const each of withRuns) {
       const runs = each.row.recentRuns as { runId: string; scheduledFor: string }[];
-      expect(runs[0]).toEqual((each.from.recentRuns as unknown[])[0]);
+      expect(runs[0]).toEqual(swappedBack((each.from.recentRuns as unknown[])[0], each.swaps)); // the recorded run, under the schedule's busy name, as the row's `lastRun` is
       expect(runs.map((run) => Date.parse(run.scheduledFor))).toEqual(runs.map((_, r) => Date.parse(runs[0]!.scheduledFor) - r * 3_600_000));
     }
     // mail.json: the one document of the rule's, and in it the rule's messages and conversations.
@@ -210,7 +293,9 @@ describe("the busy set", () => {
     expect(machines.ok && machines.value.machines.length).toBe(5);
   });
 
-  it("names no person and no place of a person's: what it adds to the recorded answers is made up", () => {
+  it("names no person and no place of a person's: what it adds to the recorded answers is made up, and the person a recorded row names is not carried into the set", () => {
+    expect(new Set(made.agents.map((each) => each.row.attributedHuman).filter((human) => typeof human === "string"))).toEqual(new Set(["ada"]));
+    expect(Object.values(files).map((document) => JSON.stringify(document)).filter((text) => /joan|reyero/i.test(text))).toEqual([]);
     const added = [...made.agents, ...made.souls, ...made.schedules, ...made.triggers, ...made.teams, ...made.servers].flatMap((each) => each.swaps.map(([, to]) => to));
     expect(added.length).toBeGreaterThan(100);
     expect(added.filter((name) => /\/home\/|@|joan|reyero|octolens/i.test(name))).toEqual([]);

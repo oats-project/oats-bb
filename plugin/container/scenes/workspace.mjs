@@ -199,9 +199,9 @@ export default [
   },
   {
     // THE WORST CASE: the Workspace page on the shared busy set (test/fixtures/busy: 24 souls with names of up to 66
-    // characters, 7 teams with long descriptions, 5 machines, sixty agents). Its images are the ones a change to these
-    // screens is judged by FIRST. What the set does not hold is held by unit tests alone: a soul of more than eight
-    // capabilities ("Show all N"), a core place of more than three, a three-digit count in the strip.
+    // characters, one of them with fifteen capabilities; 30 capabilities, four of them of one core place; 7 teams with
+    // long descriptions; 5 machines; sixty agents). Its images are the ones a change to these screens is judged by
+    // FIRST. (A three-digit count in the strip is not in the set: the strip's widest form is "N of 24", below.)
     stage: "busy",
     name: "the busy workspace, the Workspace page: the strip whole while a search narrows, the head in view after a scroll, a team's one line, a soul's agents before its capabilities",
     run: async ({ page, at, viewport, check }) => {
@@ -228,7 +228,7 @@ export default [
       await page.goto("/plugins/oats/capabilities");
       const capabilities = await page.until(`(() => { const rows = [...document.querySelectorAll(${q("oats-capability-souls")})].map((cell) => Number(cell.innerText.split(" ")[0])); if (rows.length === 0) return ""; const core = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-capabilities-core")} dd`)})].map((value) => value.innerText.replace(/\\s+/g, " ").trim()); return JSON.stringify({ n: rows.length, sorted: rows.every((n, i) => i === 0 || rows[i - 1] >= n), core }); })()`, 30);
       const drawn = capabilities ? JSON.parse(capabilities) : null;
-      check(drawn !== null && drawn.sorted && drawn.core.every((value) => value.replace(/ \+\d+$/, "").split(", ").length <= 3), `${at} busy Workspace: ${drawn?.n ?? "?"} capabilities in the order of how many souls have each; a core place names at most three`, capabilities || "");
+      check(drawn !== null && drawn.n === 30 && drawn.sorted && drawn.core.every((value) => value.replace(/ \+\d+$/, "").split(", ").length <= 3) && drawn.core.some((value) => / \+1$/.test(value)), `${at} busy Workspace: thirty capabilities in the order of how many souls have each; a core place names at most three, and the place that four fill says "+1"`, capabilities || "");
       await page.shot(`busy-${viewport.name}-workspace-capabilities`, { targets: true });
       // Teams: seven, with long descriptions: what each is for is ONE line, cut at a word.
       await page.goto("/plugins/oats/teams");
@@ -242,12 +242,15 @@ export default [
       const machines = await page.until(`(() => { const rows = [...document.querySelectorAll(${q("oats-machine-row")})]; return rows.length >= 5 ? JSON.stringify(rows.map((row) => row.firstElementChild.scrollWidth <= row.firstElementChild.clientWidth + 1)) : ""; })()`, 30);
       check(Boolean(machines) && JSON.parse(machines).every(Boolean), `${at} busy Workspace: the machines: no name is cut`, machines || (await page.evaluate(textOf(testId("oats-machines-page")))));
       await page.shot(`busy-${viewport.name}-workspace-machines`, { targets: true });
-      // A soul with agents (the set's fullest: three): its agents stand before its capabilities and are in view without a scroll.
-      await page.goto("/plugins/oats/souls/code-reviewer");
-      const soul = await page.until(`(() => { const agents = document.querySelector(${q("oats-soul-agents")}); const capabilities = document.querySelector(${q("oats-soul-capabilities")}); const rows = document.querySelectorAll(${q("oats-soul-agent")}); if (!agents || !capabilities || rows.length < 2) return ""; return JSON.stringify({ rows: rows.length, before: Boolean(agents.compareDocumentPosition(capabilities) & Node.DOCUMENT_POSITION_FOLLOWING), inView: [...rows].every((row) => row.getBoundingClientRect().bottom <= innerHeight) }); })()`, 40);
+      // The soul of fifteen capabilities: its agents stand before them and are in view without a scroll; eight are listed, then "Show all 15", which lists them all.
+      await page.goto("/plugins/oats/souls/oats-developer");
+      const soul = await page.until(`(() => { const agents = document.querySelector(${q("oats-soul-agents")}); const capabilities = document.querySelector(${q("oats-soul-capabilities")}); const rows = document.querySelectorAll(${q("oats-soul-agent")}); if (!agents || !capabilities || rows.length < 2) return ""; return JSON.stringify({ rows: rows.length, before: Boolean(agents.compareDocumentPosition(capabilities) & Node.DOCUMENT_POSITION_FOLLOWING), inView: [...rows].every((row) => row.getBoundingClientRect().bottom <= innerHeight), listed: document.querySelectorAll(${q("oats-soul-capability")}).length, all: document.querySelector(${q("oats-soul-capabilities-all")})?.innerText.trim() ?? null }); })()`, 40);
       const fullest = soul ? JSON.parse(soul) : null;
-      check(fullest !== null && fullest.before && fullest.inView, `${at} busy Workspace: a soul's ${fullest?.rows ?? "?"} agents stand before its capabilities and are in view without a scroll`, soul || (await page.evaluate(textOf(testId("oats-souls-page")))));
+      check(fullest !== null && fullest.before && fullest.inView && fullest.listed === 8 && fullest.all === "Show all 15", `${at} busy Workspace: the soul of fifteen capabilities: its ${fullest?.rows ?? "?"} agents stand before them and are in view without a scroll; eight are listed, then "Show all 15"`, soul || (await page.evaluate(textOf(testId("oats-souls-page")))));
       await page.shot(`busy-${viewport.name}-workspace-soul`, { targets: true });
+      await page.evaluate(`document.querySelector(${q("oats-soul-capabilities-all")}).click()`);
+      check(Boolean(await page.until(`document.querySelectorAll(${q("oats-soul-capability")}).length === 15 && document.querySelector(${q("oats-soul-capabilities-all")}) === null`, 10)), `${at} busy Workspace: "Show all 15" lists the fifteen, and is gone`, await page.evaluate(`String(document.querySelectorAll(${q("oats-soul-capability")}).length)`));
+      await page.shot(`busy-${viewport.name}-workspace-soul-all`, { targets: true });
     },
   },
   {

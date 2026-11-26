@@ -50,6 +50,9 @@ const SOURCES: Record<string, unknown[]> = {
   facts: board.facts,
   questions: board.questions,
   souls: answer("workspace/souls.json").souls as unknown[],
+  capabilities: answer("workspace/capabilities.json").capabilities as unknown[],
+  // (A soul's own rows of its capabilities: what `oats souls` answers under a soul.)
+  soulCapabilities: (answer("workspace/souls.json").souls as { capabilities: unknown[] | null }[]).flatMap((soul) => soul.capabilities ?? []),
   schedules: recordedSchedules,
   runs: recordedSchedules.flatMap((row) => row.recentRuns ?? []),
   triggers: answer("automations/trigger-list.json").triggers as unknown[],
@@ -93,7 +96,9 @@ describe("the busy set", () => {
       questions: ["id", "question", "since"],
       mail: ["result.result.mail.messages", "result.result.mail.conversations"],
       messages: ["subject", "threadTitle", "createdAt", "body"],
-      souls: ["description"],
+      souls: ["description", "capabilities"],
+      capabilities: [],
+      soulCapabilities: [],
       schedules: ["description", "recentRuns", "history.stored"],
       groups: ["name", "instances"],
       problems: ["label"],
@@ -117,6 +122,7 @@ describe("the busy set", () => {
       "agents:identity": () => true,
       "agents:board": () => true,
       "groups:instances": () => true,
+      "souls:capabilities": () => true,
       "schedules:recentRuns": () => true,
       "mail:result.result.mail.messages": () => true,
       "mail:result.result.mail.conversations": () => true,
@@ -150,6 +156,8 @@ describe("the busy set", () => {
     const NAMES: Record<string, (row: Record<string, unknown>) => unknown[]> = {
       agents: (row) => [row.instance, String(row.home).match(/\/agents\/[^/]+\//)?.[0], (row.session as { threadId?: unknown } | null | undefined)?.threadId],
       souls: (row) => [row.name],
+      capabilities: (row) => [row.name],
+      soulCapabilities: (row) => [row.name],
       schedules: (row) => [tail(row.id)],
       triggers: (row) => [tail(row.id)],
       runs: (row) => [row.runId, ...(SOURCES.schedules as { id: string }[]).map((schedule) => tail(schedule.id))],
@@ -186,7 +194,7 @@ describe("the busy set", () => {
     const less = (document: unknown, ...keys: string[]) => Object.fromEntries(Object.entries(document as Record<string, unknown>).filter(([key]) => !keys.includes(key)));
     const byInstance = (list: unknown[]) => [...(list as { instance: string }[])].sort((a, b) => (a.instance < b.instance ? -1 : 1));
     // No file but these, and the two that are no kernel answer (the chat, made up and said; the threads to fail, read from the rows).
-    expect(Object.keys(files).sort()).toEqual(["chat.json", "mail.json", "schedule-list.json", "servers.json", "souls.json", "status.json", "teams.json", "threads.json", "trigger-list.json"]);
+    expect(Object.keys(files).sort()).toEqual(["capabilities.json", "chat.json", "mail.json", "schedule-list.json", "servers.json", "souls.json", "status.json", "teams.json", "threads.json", "trigger-list.json"]);
     // status.json: the recorded roster's document, with the features of the kernel that recorded the board (README); its groups; their rows.
     const status = files["status.json"] as { features: unknown; agents: { instances: Record<string, unknown>[] }[] };
     expect(less(status, "agents", "features")).toEqual(less(recorded("roster/status.json"), "agents", "features"));
@@ -202,6 +210,17 @@ describe("the busy set", () => {
     // souls.json, trigger-list.json, servers.json, teams.json: the recorded document around its rows.
     const souls = files["souls.json"] as { souls: unknown[] };
     expect([less(souls, "souls"), souls.souls]).toEqual([less(recorded("workspace/souls.json"), "souls"), rows("souls")]);
+    // …and the ONE soul whose capabilities were set holds exactly the rows the rule's tests read: fifteen, each a recorded
+    // row of that soul under a busy capability's name; and capabilities.json: the recorded document around its thirty rows.
+    const fullest = made.souls.filter((each) => each.was.some(([path]) => path[0] === "capabilities"));
+    expect(fullest).toHaveLength(1);
+    expect([fullest[0]!.row.capabilities, rows("soulCapabilities").length]).toEqual([rows("soulCapabilities"), 15]);
+    const named = new Set((rows("capabilities") as { name: string }[]).map((row) => row.name));
+    expect((rows("soulCapabilities") as { name: string }[]).filter((row) => !named.has(row.name))).toEqual([]);
+    const capabilities = files["capabilities.json"] as { capabilities: { layer?: string | null }[] };
+    expect([less(capabilities, "capabilities"), capabilities.capabilities, capabilities.capabilities.length]).toEqual([less(recorded("workspace/capabilities.json"), "capabilities"), rows("capabilities"), 30]);
+    // (A core place held by FOUR: the Workspace page names three and counts the rest.)
+    expect(capabilities.capabilities.filter((row) => row.layer === "knowledge")).toHaveLength(4);
     const triggers = files["trigger-list.json"] as { triggers: unknown[] };
     expect([less(triggers, "triggers"), triggers.triggers]).toEqual([less(recorded("automations/trigger-list.json"), "triggers"), rows("triggers")]);
     const servers = files["servers.json"] as { servers: unknown[] };
@@ -229,7 +248,7 @@ describe("the busy set", () => {
     expect([mail.messages, mail.conversations]).toEqual([rows("messages"), rows("conversations")]);
     // A CONTAINER put into a row (a list, an object) is one of these, each read above or just below: never another.
     const containers = Object.entries(made).flatMap(([list, entries]) => entries.flatMap((each) => each.was.filter(([path]) => { const now = path.reduce<unknown>((inner, key) => (inner as Record<string, unknown> | undefined)?.[key], each.row); return typeof now === "object" && now !== null; }).map(([path]) => `${list}:${path.join(".")}`)));
-    expect([...new Set(containers)].sort()).toEqual(["agents:board", "agents:identity", "groups:instances", "mail:result.result.mail.conversations", "mail:result.result.mail.messages", "schedules:recentRuns"]);
+    expect([...new Set(containers)].sort()).toEqual(["agents:board", "agents:identity", "groups:instances", "mail:result.result.mail.conversations", "mail:result.result.mail.messages", "schedules:recentRuns", "souls:capabilities"]);
   });
 
   it("holds the busy workspace of the rule: sixty agents four levels deep, eleven asking, some failed, lost and outside OATS; 24 souls; 37 automations, five failing, some with fifty runs; seven teams; five machines; names of sixty characters; a question of four lines", () => {

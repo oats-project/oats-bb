@@ -387,6 +387,66 @@
      "kind": "member",
      "repoKey": "github.com/awebai/oats",
      "from": "soul"
+    },
+    {
+     "name": "oats.search-design-review-and-release-aweb-1",
+     "kind": "package",
+     "package": "oats.search-design-review-and-release-aweb-1",
+     "from": "workspace"
+    },
+    {
+     "name": "oats.design-security-delivery-build-2",
+     "kind": "member",
+     "repoKey": "github.com/awebai/oats",
+     "from": "soul"
+    },
+    {
+     "name": "oats.documentation-release-review-and-release-core-3",
+     "kind": "package",
+     "package": "oats.framework",
+     "from": "workspace"
+    },
+    {
+     "name": "oats.search-payments-delivery-developer-4",
+     "kind": "member",
+     "repoKey": "github.com/awebai/oats",
+     "from": "soul"
+    },
+    {
+     "name": "oats.design-compliance-review-and-release-landing-rules-5",
+     "kind": "member",
+     "repoKey": "github.com/awebai/oats",
+     "from": "soul"
+    },
+    {
+     "name": "oats.documentation-design-delivery-aweb-6",
+     "kind": "package",
+     "package": "oats.documentation-design-delivery-aweb-6",
+     "from": "workspace"
+    },
+    {
+     "name": "oats.search-security-review-and-release-build-7",
+     "kind": "member",
+     "repoKey": "github.com/awebai/oats",
+     "from": "soul"
+    },
+    {
+     "name": "oats.design-release-delivery-core-8",
+     "kind": "package",
+     "package": "oats.framework",
+     "from": "workspace"
+    },
+    {
+     "name": "oats.documentation-payments-review-and-release-developer-9",
+     "kind": "member",
+     "repoKey": "github.com/awebai/oats",
+     "from": "soul"
+    },
+    {
+     "name": "oats.search-compliance-delivery-landing-rules-10",
+     "kind": "member",
+     "repoKey": "github.com/awebai/oats",
+     "from": "soul"
     }
    ]
   },

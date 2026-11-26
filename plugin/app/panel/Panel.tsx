@@ -49,7 +49,7 @@ type RosterFailure = { code: string; message: string; machine: string | null; li
 export type { TabId } from "./tab-state";
 const TABS: readonly TabItem<TabId>[] = [
   // The agent's questions and facts, FIRST: a view of its own (app/board) that takes the agent's name and nothing of the panel's.
-  // Drawn only for an agent whose board has a fact or a question (`tabsOf`): what there is nothing of is not offered.
+  // When it is drawn: `Drawn`, in tab-state.ts.
   { id: "board", label: BOARD.tab },
   { id: "instance", label: "Instance" },
   { id: "soul", label: "Soul" },

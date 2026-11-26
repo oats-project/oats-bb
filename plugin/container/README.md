@@ -286,6 +286,37 @@ docker rm -f bb-plugin-dev
 `test/kernel-compat.test.ts` holds the plugin's OATS floor against theirs. A container made by hand
 needs them there too.
 
+## Only inside the checks' container
+
+The entry scripts here CHANGE THE MACHINE THEY RUN ON: `live-ui.mjs` renames `oats` and `claude` and
+sets bb's concurrency limit; the setups install bb, Claude Code, the kernel and pi for the user and
+write the user's settings; the real run removes and makes a workspace. They are for the checks'
+container alone. Run by mistake on a person's machine, each REFUSES before it touches anything:
+
+    refused: live-ui.mjs runs only inside the container of the oats-bb plugin checks (it changes the machine it runs on); start it with plugin/container/ci.sh, never by hand
+
+(exit 97). The guard is one line at the very top of each: `. "$(dirname "$0")/guard.sh"` in a shell
+script, `import "./guard.mjs";` as the first import of a `.mjs`.
+
+**The mark** is a file that only the image built from this directory's `Dockerfile` carries,
+`/etc/oats-bb-checks-image`. A file and not an environment variable: the scripts start their own
+processes with a bare environment (`env -i`), and a variable is inherited by whatever a person's
+shell starts. Not `/.dockerenv`: every container has that one, a person's too.
+
+Guarded: `setup.sh`, `live.sh`, `live-ui.mjs`, `locked-install.sh`, `real/setup.sh`,
+`real/workspace.sh`, `real/scenario.mjs`, `real/pi/setup.sh`, `real/pi/scenario.mjs`,
+`real/mail/inside.sh`, `real/mail/check.mjs`. NOT guarded, and why: the four that run on the host
+and start the container (`ci.sh`, `real/run.sh`, `real/mail/run.sh`, `relock.sh`: they write their
+own `out/` alone); and the tools that change nothing but the directory they are handed, or only
+read, which unit tests run on any machine (`unit.sh`, the two `no-…-fetch.sh`, `fake-oats.mjs`,
+the mocks, `real/oats-record.mjs`, `real/bb-logs.sh`, `real/bb-plugin-command.sh`).
+`test/container-guard.test.ts` holds the lists: it runs each guarded script in a made-up home that
+holds a `claude`, an `oats` and settings, with the mark made absent, and reads that nothing of it
+changed; a new script of this directory must be put in one of the lists.
+
+**A container made from an older image has no mark**: build the image again (`ci.sh` does) before
+you run a guarded script in it.
+
 ## The busy workspace: every screen's worst case
 
 The stage `busy` (`live-ui.mjs`, `busyStage`) answers the ONE shared busy set

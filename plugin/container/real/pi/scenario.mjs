@@ -29,6 +29,7 @@
 // this run records no fixture (the fixtures are the main run's, ../scenario.mjs). One answer of
 // P6 (`oats status --json` of the agent whose thread failed at its start) is kept there and is the
 // source of a fixture that is copied from it by hand (README.md beside this file).
+import "../../guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

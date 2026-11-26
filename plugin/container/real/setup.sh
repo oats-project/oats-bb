@@ -8,6 +8,7 @@
 #   second deployment that has no bb session provider (workspace.sh)
 #   bb-app, started with the mock model's address and a placeholder key in its own environment
 #   the plugin, installed from this checkout, with `oatsBin` set to the recording wrapper
+. "$(dirname "$0")/../guard.sh" # refuses outside the checks' container, before anything is touched
 set -euo pipefail
 PLUGIN=$(cd "$(dirname "$0")/../.." && pwd)
 REAL=${REAL:-/home/node/real}

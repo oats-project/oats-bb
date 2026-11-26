@@ -18,6 +18,7 @@
 // The fixtures name threads bb does not have (`thr_release`, …). So that the join is real, this
 // script makes one bb thread per fixture thread, by title, and has the fake print status.json
 // with those threads' real ids: the same rows, joined by the ids bb gave.
+import "./guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";

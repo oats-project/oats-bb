@@ -2,7 +2,8 @@
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { rpc } from "../contract/lifecycle.js";
-import { HOST_TIMEOUT, invalid, type Core, type Value } from "./core.js";
+import type { Asker } from "./act-log.js";
+import { HOST_TIMEOUT, invalid, type Core } from "./core.js";
 import { harnessesOf, providerVersionOf } from "./spawn.js";
 
 /** What the Start and Restart dialogs show of the kernel's own row, beside what `Agent` holds. */
@@ -55,30 +56,31 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
   /** A harness a caller names must be one the provider declares: nothing else reaches the argv. */
   async function chosen(harness: string | undefined): Promise<string | undefined> {
     if (harness === undefined) return undefined;
-    if (!(await declared()).includes(harness)) throw invalid(`"${harness}" is not a harness the bb session provider declares`);
+    if (!(await declared()).includes(harness)) throw invalid(`"${harness}" is not a harness the bb session provider declares`, "harness-not-declared");
     return harness;
   }
-  async function begin(verb: "start" | "restart", { instance, harness, model, resume }: { instance: string; harness?: string | undefined; model?: string | undefined; resume?: true | undefined }) {
+  async function begin(verb: "start" | "restart", { instance, harness, model, resume }: { instance: string; harness?: string | undefined; model?: string | undefined; resume?: true | undefined }, asker: Asker) {
+    // What the plugin checks before it asks the kernel: `core.act` runs it, and logs what it refuses as a hold (server/act-log.ts).
+    const guards = async () => {
     const agent = await core.agentForAct(instance);
     // A resume is for a home on tmux alone (on bb `--resume` is another act: a notice into the same thread), and
     // takes no harness and no model. Whether its session is still LOST is the kernel's to say, under its own
     // claim (E_RESUME_NOT_LOST): this never turns a resume into a plain start, nor the reverse.
-    if (resume === true && (agent.backend !== "tmux" || harness !== undefined || model !== undefined)) throw invalid(`a resume is the start of a tmux home with no harness and no model ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`);
+    if (resume === true && (agent.backend !== "tmux" || harness !== undefined || model !== undefined)) throw invalid(`a resume is the start of a tmux home with no harness and no model ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`, "resume-not-tmux");
     // The harness list and the models the plugin knows are the bb session provider's: no other home is started with
     // a choice of them. It starts with the launch its home recorded.
-    if (agent.backend !== "bb" && (harness !== undefined || model !== undefined)) throw invalid(`a harness or a model is chosen for a home on bb alone ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`);
-    const choice = given({ harness: await chosen(harness), model, resume });
-    let started: Value<"start">;
-    let endedAt: string;
-    try {
-      started = verb === "start" ? await core.call("start", { home: agent.home, ...choice }, HOST_TIMEOUT.act, core.signal) : await core.call("restart", { home: agent.home, ...given({ harness: choice.harness, model: choice.model }) }, HOST_TIMEOUT.act, core.signal);
-      // The act ended when its command returned (not after the wait for the new thread, below).
-      endedAt = core.actEnded();
-    } finally {
-      core.rereadAfterAct();
-    }
+    if (agent.backend !== "bb" && (harness !== undefined || model !== undefined)) throw invalid(`a harness or a model is chosen for a home on bb alone ("${instance}" runs on ${agent.backend ?? "no backend the kernel names"})`, "choice-not-bb");
+    return { agent, choice: given({ harness: await chosen(harness), model, resume }) };
+    };
+    let backend: string | null = null;
+    // The act ended when its command returned (`endedAt`: not after the wait for the new thread, below); the read it
+    // asks for as it ends is `core.act`'s last step, after that stamp.
+    const { value: started, endedAt } =
+      verb === "start"
+        ? await core.act("start", { instance }, asker, HOST_TIMEOUT.act, async () => { const { agent, choice } = await guards(); backend = agent.backend; return { home: agent.home, ...choice }; }, core.rereadAfterAct)
+        : await core.act("restart", { instance }, asker, HOST_TIMEOUT.act, async () => { const { agent, choice } = await guards(); backend = agent.backend; return { home: agent.home, ...given({ harness: choice.harness, model: choice.model }) }; }, core.rereadAfterAct);
     // A home on bb is in a new thread after the act; any other has no bb thread, and none is waited for.
-    return { ...started, endedAt, threadId: agent.backend === "bb" ? await core.threadOf(instance, started.threadId, verb === "start" ? "Started" : "Restarted") : null };
+    return { ...started, endedAt, threadId: backend === "bb" ? await core.threadOf(instance, started.threadId, verb === "start" ? "Started" : "Restarted") : null };
   }
   return {
     async stopPlan({ instance, recursive }, context) {
@@ -92,14 +94,9 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const plan = await core.call("stopPlan", { instance, ...given({ recursive }) }, HOST_TIMEOUT.read, context.experimental_signal);
       return { ...plan, providerVersion: await within(VERSION_WAIT_MS, version) };
     },
-    async stopApply({ instance, revision, key, recursive }) {
-      await core.agentForAct(instance);
-      try {
-        const receipt = await core.call("stopApply", { instance, revision, key, ...given({ recursive }) }, HOST_TIMEOUT.act, core.signal);
-        return { ...receipt, endedAt: core.actEnded() };
-      } finally {
-        core.rereadAfterAct();
-      }
+    async stopApply({ instance, revision, key, recursive }, context) {
+      const { value: receipt, endedAt } = await core.act("stopApply", { instance }, context, HOST_TIMEOUT.act, async () => { await core.agentForAct(instance); return { instance, revision, key, ...given({ recursive }) }; }, core.rereadAfterAct);
+      return { ...receipt, endedAt };
     },
     /**
      * The agent as the kernel names it NOW: the roster is read again for this answer (the one
@@ -127,8 +124,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         harnesses,
       };
     },
-    start: (input) => begin("start", input),
-    restart: (input) => begin("restart", input),
+    start: (input, context) => begin("start", input, context),
+    restart: (input, context) => begin("restart", input, context),
     async retirePlan({ instance }, context) {
       await core.agentForAct(instance);
       // The harness is the kernel's status row's, not the plan's: the roster this act was admitted on holds it.
@@ -137,19 +134,18 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       const read = launch.safeParse(row);
       return { ...plan, harness: read.success ? (read.data.harness ?? null) : null };
     },
-    async retireApply({ instance, revision, key, discardWorktree }) {
-      const sent = retires.get(key);
-      if (sent === undefined || sent.instance !== instance || sent.revision !== revision) {
-        await core.agentForAct(instance);
-        if (retires.size >= 200) retires.delete(retires.keys().next().value as string);
-        retires.set(key, { instance, revision });
-      }
-      try {
-        const receipt = await core.call("retireApply", { instance, revision, key, ...given({ discardWorktree }) }, HOST_TIMEOUT.long, core.signal);
-        return { ...receipt, endedAt: core.actEnded() };
-      } finally {
-        core.rereadAfterAct();
-      }
+    async retireApply({ instance, revision, key, discardWorktree }, context) {
+      const guards = async () => {
+        const sent = retires.get(key);
+        if (sent === undefined || sent.instance !== instance || sent.revision !== revision) {
+          await core.agentForAct(instance);
+          if (retires.size >= 200) retires.delete(retires.keys().next().value as string);
+          retires.set(key, { instance, revision });
+        }
+        return { instance, revision, key, ...given({ discardWorktree }) };
+      };
+      const { value: receipt, endedAt } = await core.act("retireApply", { instance }, context, HOST_TIMEOUT.long, guards, core.rereadAfterAct);
+      return { ...receipt, endedAt };
     },
   };
 };

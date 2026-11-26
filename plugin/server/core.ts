@@ -10,6 +10,7 @@ import { UNCONFIRMED_ISSUE } from "../contract/shared.js";
 import { codes, type KernelError } from "../kernel/result.js";
 import { withEvents, type EventsSaid } from "../model/events.js";
 import type { Agent } from "../model/types.js";
+import { actLine, callerOf, isAct, outcomeOf, type Act, type ActVerb, type Asker, type HoldReason, type Subject } from "./act-log.js";
 
 /** What the kernel printed for one instance: its own row, and its agent group's row without the instances. */
 export type RawRow = { readonly row: Readonly<Record<string, unknown>>; readonly agent: Readonly<Record<string, unknown>> };
@@ -113,7 +114,14 @@ export function refusal(error: KernelError): experimental_PluginRpcRefusal {
   refusedWith.set(refused, error.code);
   return refused;
 }
-export const invalid = (message: string) => new experimental_PluginRpcRefusal({ code: "invalid", message });
+/** The word an act's guard gives for its refusal, for the act log's `why` (server/act-log.ts HOLD_REASONS): the message is the window's, never the log's. */
+const heldFor = new WeakMap<object, HoldReason>();
+/** A refusal of the plugin's own. `reason`: where it is the refusal of an ACT's guard, the word the act log writes for it. */
+export const invalid = (message: string, reason?: HoldReason) => {
+  const refused = new experimental_PluginRpcRefusal({ code: "invalid", message });
+  if (reason !== undefined) heldFor.set(refused, reason);
+  return refused;
+};
 
 /** A host verb that runs `oats` in the deployment: every one but the two that find and watch it. */
 export type Verb = Exclude<keyof typeof hostContract, "discover" | "watch">;
@@ -154,6 +162,8 @@ export function createCore(bb: BbPluginApi) {
   });
   const host = bb.hosts.experimental_client({ contract: hostContract, experimental_signals: hostSignals });
   const lifetime = new AbortController();
+  /** How many acts this server has carried: an act's number, on each of its lines (server/act-log.ts). */
+  let acts = 0;
 
   let target: Target | null = null;
   /** Counts the settings changes, so that a discovery that read the old settings is not kept. */
@@ -299,8 +309,13 @@ export function createCore(bb: BbPluginApi) {
     // Taken as the read STARTS: a read in flight when the act ended has passed this line, and is not the one owed.
     const forAct = owedToActs;
     owedToActs = false;
-    lastStart = stamp(); // (not the bare clock: a read that starts in the millisecond an act ended is LATER than the act's end)
-    const at = new Date(lastStart).toISOString();
+    // Two clocks, on purpose. `lastStart` is the BARE clock: the pacing (`reread`), the poll a client's snapshot asks
+    // for and the patches' order all compare it with `Date.now()`, as they did before there was a stamp. The roster's
+    // `at` is the STAMP: a read that starts in the millisecond an act ended is later than the act's end. (With one
+    // value for both, a stamp that ran ahead of a clock set back held the poll off until the clock caught up, and a
+    // read's length came out negative, which reads as "answered fast": the next read then followed at once.)
+    lastStart = Date.now();
+    const at = new Date(stamp()).toISOString();
     let next: Snapshot;
     let rows: Map<string, RawRow> | null = null;
     let root = "";
@@ -422,8 +437,11 @@ export function createCore(bb: BbPluginApi) {
    * than the act's end: app/roster/reading.tsx), and both are whole milliseconds: a read that
    * starts in the very millisecond the act ended would be a tie, read as "before", with no later
    * read owed. One strictly increasing stamp for both: of two events on this server the later has
-   * the later stamp, always. (It can run a millisecond ahead of the clock in such a tie; nothing
-   * reads it as a wall time but the roster's age, in minutes.)
+   * the later stamp, always. It stamps the roster's `at` and an act's end ONLY: the pacing and the
+   * poll read the bare clock (`lastStart`). (It can run a millisecond ahead of the clock in such a tie, and by the
+   * whole step after the clock is set back, until the clock catches up; nothing reads it as a wall
+   * time but the roster's age, in minutes. While it is ahead, an events answer, stamped by the bare
+   * clock, is dropped as older than the status read: fail safe, the status read carries it.)
    */
   function stamp(): number {
     lastStamp = Math.max(Date.now(), lastStamp + 1);
@@ -574,7 +592,13 @@ export function createCore(bb: BbPluginApi) {
             : `oats status is read again after the pause: asked for while a read was in flight, which ${lastStartedAtOnce ? "was itself read at once" : lastAnsweredInMs === null ? "gave no answer to count (it failed, or the settings changed under it)" : `answered in ${lastAnsweredInMs} ms, over ${FOLLOW_UP_WITHIN_MS} ms`}`,
         );
       }
-      if (!atOnce) await sleep(Math.max(0, lastEnd + Math.max(MIN_INTERVAL_MS, lastAnsweredInMs ?? 0) - Date.now()), lifetime.signal);
+      if (!atOnce) {
+        // The pause is counted from the last read's end by the clock, and is NEVER longer than the pause itself: after
+        // the machine's clock is set back, `lastEnd` lies ahead of it, and what was a pause of a second became a sleep
+        // of the whole step (an hour set back: an hour with no read).
+        const pause = Math.max(MIN_INTERVAL_MS, lastAnsweredInMs ?? 0);
+        await sleep(Math.min(pause, Math.max(0, lastEnd + pause - Date.now())), lifetime.signal);
+      }
       queued = null;
       lastStartedAtOnce = atOnce;
       const mine = read();
@@ -641,14 +665,18 @@ export function createCore(bb: BbPluginApi) {
     const now = await current();
     if (!now.ok) throw refusal({ code: now.code, message: now.message });
     const found = now.agents.find((agent) => agent.instance === instance);
-    if (!found) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`);
+    if (!found) throw invalid(`"${instance}" is not an agent of this OATS deployment's current snapshot`, "agent-not-in-roster");
     return found;
   }
 
   // ---- calls to the host entry ----
 
-  /** Runs one verb on the machine; a kernel refusal, a failed `oats` and an unreachable machine are RPC refusals. */
-  async function call<Method extends Verb>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal): Promise<Value<Method>> {
+  /**
+   * Runs one verb on the machine; a kernel refusal, a failed `oats` and an unreachable machine are RPC refusals.
+   * `sent` is told the machine's id at the moment the verb is SENT to it (once the
+   * machine and the deployment are found): an act logs its "asked" line there, with the machine it was sent to.
+   */
+  async function ask<Method extends Verb>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal, sent?: (hostId: string) => void): Promise<Value<Method>> {
     let where: Awaited<ReturnType<typeof base>>;
     let answer: Answer<unknown> | null = null;
     try {
@@ -656,15 +684,102 @@ export function createCore(bb: BbPluginApi) {
       where = await base(signal);
       if (!("ok" in where)) {
         const input = { ...where.input, ...extra } as z.input<(typeof hostContract)[Method]["input"]>;
+        // A call whose signal is already aborted is not sent (the host refuses it unasked): it is refused here, before
+        // `sent`, so that an act that never left is not logged as one that did.
+        signal.throwIfAborted();
+        sent?.(where.target.hostId);
         answer = (await host.call(method, input, { hostId: where.target.hostId, signal, timeoutMs })) as Answer<unknown>;
       }
     } catch (error) {
-      throw refusal({ code: codes.hostUnreachable, message: `The machine that runs oats did not answer: ${String((error as Error).message)}` });
+      // (What is thrown may be an aborted signal's reason, which need not be an Error.)
+      throw refusal({ code: codes.hostUnreachable, message: `The machine that runs oats did not answer: ${String((error as Error)?.message ?? error)}` });
     }
     if ("ok" in where) throw refusal({ code: where.code, message: where.message });
     if (answer === null) throw refusal({ code: codes.hostUnreachable, message: "The machine that runs oats did not answer." });
     if (!answer.ok) throw refusal(answer.error);
     return answer.value as Value<Method>;
+  }
+  /**
+   * A READ of the kernel (a read, a preview, a plan, a test): any verb that is no act. An ACT never comes this way:
+   * it is refused here, in the types and when it runs, so that no act reaches the kernel without its lines in the
+   * log (`act`, below; test/server/act-log.test.ts).
+   */
+  function call<Method extends Exclude<Verb, Act>>(method: Method, extra: Extra<Method>, timeoutMs: number, signal: AbortSignal): Promise<Value<Method>> {
+    if (isAct(method, extra)) return Promise.reject(new Error(`"${String(method)}" is an act: it reaches the kernel through core.act alone, which logs it`));
+    return ask(method, extra, timeoutMs, signal);
+  }
+
+  /**
+   * AN ACT: the ONLY way a verb that changes something reaches the kernel, and it is LOGGED (server/act-log.ts: the
+   * line's form, and what never goes in): one line when the kernel is asked, one when it ends (ok, or the kernel's
+   * code), and one where the act was HELD: `guards` is everything the plugin checks before it asks (the agent is one
+   * the roster names now, a harness is one the provider declares, the row exists): what it throws is logged as the
+   * hold and thrown on; what it returns is the verb's input.
+   * An act is not ended by its caller going away: only by the plugin's own end (the signal is the plugin's), but
+   * where the act says otherwise (`signal`: a test that runs a command is ended with its caller, as it was).
+   * → the kernel's answer, and `endedAt`: the server's stamp at the instant the command returned (`actEnded`), taken
+   * BEFORE `after` runs (the read an act asks for as it ends: its roster must be stamped after the act's end).
+   * `after` runs once the guards passed, whether the kernel answered, refused or was not reached (as each act's own
+   * `finally` had it); never where a guard refused.
+   */
+  async function act<Method extends ActVerb>(method: Method, subject: Subject | (() => Subject), asker: Asker | undefined, timeoutMs: number, guards: () => Promise<Extra<Method>> | Extra<Method>, after?: () => void, signal: AbortSignal = lifetime.signal): Promise<{ value: Value<Method>; endedAt: string }> {
+    const n = (acts += 1);
+    // The subject is read at each line: an act whose guard finds the row's own id names it by that from then on.
+    const about = () => (typeof subject === "function" ? subject() : subject);
+    const who = (host: string | null) => ({ caller: callerOf(asker), host, at: new Date().toISOString(), n });
+    const codeOf = (error: unknown): string | undefined => (typeof error === "object" && error !== null ? refusedWith.get(error) : undefined);
+    // A line that cannot be written never changes an act: a logger that throws is told to the process's own error
+    // stream and the act goes on (it matters more than its line).
+    const say = (level: "info" | "warn" | (() => "info" | "warn"), line: () => string) => {
+      try {
+        bb.log[typeof level === "function" ? level() : level](line());
+      } catch (error) {
+        console.error(`oats: the act log could not be written (${method}, n=${n}): ${String((error as Error)?.message ?? error)}`);
+      }
+    };
+    let extra: Extra<Method>;
+    try {
+      extra = await guards();
+    } catch (error) {
+      const code = codeOf(error);
+      // WHY, as one word of the closed list (server/act-log.ts HOLD_REASONS), never a message: the word the guard
+      // gave its refusal; `read-refused` for a refusal that carries a kernel's code (the roster could not be read; a
+      // read the act rests on was refused: the code says which); `fault` for a guard that FAILED with no refusal (a
+      // fault of the plugin's own: `error`, not a judgement on what was asked); `refused` where a refusal names none.
+      const refused = error instanceof experimental_PluginRpcRefusal;
+      const why: HoldReason = code !== undefined ? "read-refused" : refused ? (heldFor.get(error) ?? "refused") : "fault";
+      say("warn", () => actLine(method, "held", about(), who(null), { held: code ?? (refused ? "invalid" : "error"), why }));
+      throw error;
+    }
+    // The machine the act is SENT to: named on "asked" and, the same, on "ended" (never the machine the server
+    // happens to hold when the act ends: a status read that failed meanwhile, or a changed setting, moves that).
+    let host: string | null = null;
+    let from = Date.now();
+    let took = 0;
+    let answered: { value: Value<Method>; endedAt: string };
+    try {
+      const value = await ask(method, extra, timeoutMs, signal, (hostId) => {
+        host = hostId;
+        from = Date.now(); // `ms` is the kernel's time: from the moment the act is sent
+        say("info", () => actLine(method, "asked", about(), who(host)));
+      });
+      answered = { value, endedAt: actEnded() };
+      took = Date.now() - from;
+    } catch (error) {
+      // Not sent: the machine or the deployment was not found, or the call was cancelled before it left (its caller
+      // was gone already; the plugin was ending): the kernel was not asked: a hold, with that refusal's code.
+      if (host === null) say("warn", () => actLine(method, "held", about(), who(null), { held: codeOf(error) ?? "FAILED", why: signal.aborted ? "cancelled-before-sent" : "machine-not-reached" }));
+      else say("warn", () => actLine(method, "ended", about(), who(host), { result: codeOf(error) ?? "FAILED", ms: Date.now() - from }));
+      throw error;
+    } finally {
+      after?.();
+    }
+    // The kernel answered: the act is done whatever becomes of its line (written outside the act's own try: reading
+    // the answer for the line cannot turn a done act into a refusal). What the answer says is read once.
+    let said: ReturnType<typeof outcomeOf> | undefined;
+    const read = () => (said ??= outcomeOf(method, answered.value));
+    say(() => (read().result === "ok" ? "info" : "warn"), () => actLine(method, "ended", about(), who(host), { ...read(), ms: took }));
+    return answered;
   }
 
   /**
@@ -723,7 +838,9 @@ export function createCore(bb: BbPluginApi) {
   /** The snapshot for a client: the cached one, read again behind it when nobody refreshed it for a while. */
   async function clientSnapshot(): Promise<Snapshot> {
     clientSeenAt = Date.now();
-    if (cached && Date.now() - lastStart > POLL_MS) rereadSoon();
+    // (A last read that started "after now" is one from before the clock was set back: as stale as an old one.)
+    const since = Date.now() - lastStart;
+    if (cached && (since > POLL_MS || since < 0)) rereadSoon();
     return current();
   }
   /** Retry: the pages' answers are dropped and OATS is read again now. */
@@ -805,6 +922,7 @@ export function createCore(bb: BbPluginApi) {
     /** Where `oats` runs, once found; null before, and after a failed read. */
     target: () => target,
     call,
+    act,
     page,
     reread,
     rereadSoon,

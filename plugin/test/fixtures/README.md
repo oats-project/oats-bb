@@ -5,7 +5,9 @@ its `verbs.json`: the `oats` verbs the fake answers for that feature, and the fi
 `teams.json`, `servers.json`), `spawn/` (`spawn-preview.json`, `spawn.json`) and `lifecycle/` (the
 stop, start, restart and retire answers). `outside/` has a README of its own: its five files are
 recorded live by the real run's outside part (`container/real/parts/outside.mjs`), the kernel's own
-`outsideOats` among them.
+`outsideOats` among them. `mail/` has a README of its own too: its files are answers of the real
+kernel and messaging layer to the mail read, recorded by hand on aweb's local stack, and every word
+of mail in them was made up for the recording.
 
 Pinned by the spec.
 - `status.json`: `oats status --json` reduced to the fields the plugin reads, in the shape agreed

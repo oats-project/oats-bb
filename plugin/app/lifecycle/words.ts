@@ -355,9 +355,14 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
     return { tone: "unknown", title: "Retirement accepted", lines: ["Its row in the sidebar shows the result."], code: null, details: under(receipt.replayed && REPLAYED), offers: ["check"] };
   }
   const complete = receipt.removedDir && receipt.incomplete.length === 0;
+  // The children, each by its OWN row: one that says it did not stop is never counted as stopped. (The kernel this
+  // was written against refuses the whole retire then, E_CHILDREN_RUNNING, and answers no such receipt: the words
+  // hold all the same for an answer that says it, since "stopped" is a claim only a row that is `ok` makes.)
+  const stopped = receipt.children.filter((child) => child.ok);
+  const running = rowLines(receipt.children);
   // The result's lines are the facts a person needs LATER (where the work that was kept is): a step that only says what was asked is not one.
   const lines: string[] = [];
-  if (receipt.children.length > 0) lines.push(`${plural(receipt.children.length, "child agent")} stopped and kept.`);
+  if (stopped.length > 0) lines.push(`${plural(stopped.length, "child agent")} stopped and kept.`);
   // In view: WHAT was kept, in a few words each. WHERE it is (a whole path) is under the result's Details: a path
   // on the face is long, and breaks in the middle of a word at a phone's width; under Details it stands on a line
   // of its own, with no full stop glued to it, and can be selected whole.
@@ -376,13 +381,20 @@ export function retireOutcome(receipt: RetireReceipt, plan: RetirePlan): Outcome
   const keptOnBb = !receipt.removedDir && plan.backend === "bb";
   // Under Details: a branch an interrupted spawn left, and what the kernel, or a capability's retire hook, warns of.
   const compensation = receipt.compensation === null ? null : receipt.compensation.deleted ? `Branch ${receipt.compensation.branch} deleted: an interrupted spawn left it, and it held no work.` : `Branch ${receipt.compensation.branch} kept: ${receipt.compensation.reason ?? "no reason given"}`;
+  // The agent is retired and a child of it did not stop: the title stays (it is true), the result is NOT done: in the
+  // warning tone, each such child in the Stop result's own words for a session that did not stop, with that result's
+  // code; the kernel's word on each row is under Details. (No "Review again": that reads the retire's plan anew, and
+  // the agent it would be read for is retired. The child is stopped from its own row.)
+  if (complete && running.length > 0) {
+    return { tone: "unknown", title: `${name} retired.`, lines: [...running, ...lines], code: "E_SESSION_STOP_FAILED", details: under(...quotes(receipt.children), ...where, compensation, ...receipt.warnings, receipt.replayed && REPLAYED), offers: [], warns: true };
+  }
   if (complete) return { tone: "done", title: `${name} retired.`, lines, code: null, details: under(...where, compensation, ...receipt.warnings, receipt.replayed && REPLAYED), offers: [] };
   return {
     tone: "failed",
     title: "Retirement didn't finish",
-    lines: [...lines, "Check what was kept before trying again."],
+    lines: [...running, ...lines, "Check what was kept before trying again."],
     code: "RETIRE_INCOMPLETE",
-    details: under(...where, compensation, ...receipt.incomplete, ...receipt.warnings, receipt.replayed && REPLAYED),
+    details: under(...quotes(receipt.children), ...where, compensation, ...receipt.incomplete, ...receipt.warnings, receipt.replayed && REPLAYED),
     offers: ["review"],
     ...(keptOnBb ? { warning: { title: HOME_KEPT, details: HOME_KEPT_DETAILS } } : {}),
   };

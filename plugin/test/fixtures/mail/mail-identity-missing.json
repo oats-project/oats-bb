@@ -1,0 +1,173 @@
+{
+ "schemaVersion": 1,
+ "ok": true,
+ "result": {
+  "operationsApi": 2,
+  "operation": "messaging:mail",
+  "capability": "oats.aweb",
+  "version": "1.48.0",
+  "argv": [
+   "aweb",
+   "mail",
+   "--limit",
+   "50"
+  ],
+  "cwd": "/abs/deployment/agents/oats-developer/instances/mail-reader",
+  "target": {
+   "home": "/abs/deployment/agents/oats-developer/instances/mail-reader",
+   "instance": "mail-reader"
+  },
+  "result": {
+   "documents": [
+    {
+     "label": "Mail",
+     "kind": "markdown",
+     "text": "# Mail\n\nRead 2026-11-25T12:01:26.117Z; never acknowledges. 4 messages, newest first.\n- mailspike: mail\\-reader (primary)\n- wider: unknown alias: identity-missing\n\n## \\<i\\>Markup\\</i\\> in a subject\n\nreceived from mail\\-writer in mailspike, 2026-11-25T11:59:44.497165+00:00 (unread)\n\n> \\<b\\>bold?\\</b\\> \\<script\\>alert\\(1\\)\\</script\\>\n> \\[a link\\]\\(https://example\\.invalid/x\\) https://example\\.invalid/y\n> reversed ‮txet‬ here, zero​width, bell\\.\n> password: not\\-a\\-real\\-one\n> last line\\.\n\n## A long report\n\nreceived from mail\\-writer in mailspike, 2026-11-25T11:59:44.406160+00:00 (unread, body truncated)\n\n> Line 1 of a long report about nothing in particular\\.\n> Line 2 of a long report about nothing in particular\\.\n> Line 3 of a long report about nothing in particular\\.\n> Line 4 of a long report about nothing in particular\\.\n> Line 5 of a long report about nothing in particular\\.\n> Line 6 of a long report about nothing in particular\\.\n> Line 7 of a long report about nothing in particular\\.\n> Line 8 of a long report about nothing in particular\\.\n> Line 9 of a long report about nothing in particular\\.\n> Line 10 of a long repor…\n\n## Re: first read\n\nsent to mail\\-writer in mailspike, 2026-11-25T11:59:11.155111+00:00\n\n> Thanks\\. I will read it today\\.\n\n## Parser ready for a first read\n\nreceived from mail\\-writer in mailspike, 2026-11-25T11:59:11.094116+00:00 (unread)\n\n> The parser is ready for a first read\\.\n> \n> Two things are still open:\n> \\- the list at 390 px\n> \\- the words of the refusals"
+    }
+   ],
+   "mail": {
+    "mailApi": 1,
+    "acknowledges": false,
+    "observedAt": "2026-11-25T12:01:26.117Z",
+    "identities": [
+     {
+      "team": "mailspike",
+      "alias": "mail-reader",
+      "identity": "did:key:placeholder-1",
+      "primary": true,
+      "error": null
+     },
+     {
+      "team": "wider",
+      "alias": "",
+      "identity": "",
+      "primary": false,
+      "error": "identity-missing"
+     }
+    ],
+    "messages": [
+     {
+      "id": "d7a4c337-fb05-4d90-85e8-243479a60e57",
+      "conversationId": "01307168-066a-4b96-8201-502cbf9dd580",
+      "threadTitle": "<i>Markup</i> in a subject",
+      "direction": "received",
+      "team": "mailspike",
+      "from": {
+       "alias": "mail-writer",
+       "address": "mailspike.test/mail-writer",
+       "identity": "did:key:placeholder-2"
+      },
+      "to": {
+       "alias": "mail-reader",
+       "address": "mail-reader",
+       "identity": "did:key:placeholder-1"
+      },
+      "subject": "<i>Markup</i> in a subject",
+      "body": "<b>bold?</b> <script>alert(1)</script>\n[a link](https://example.invalid/x) https://example.invalid/y\nreversed ‮txet‬ here, zero​width, bell\u0007.\npassword: not-a-real-one\nlast line.",
+      "truncated": false,
+      "createdAt": "2026-11-25T11:59:44.497165+00:00",
+      "readByAgent": false,
+      "encrypted": false,
+      "verification": "verified",
+      "priority": "normal"
+     },
+     {
+      "id": "ed1c8284-d96b-4c9b-8ed2-efce2d6e34f6",
+      "conversationId": "721918e4-7cd9-4437-a28e-285e61c27414",
+      "threadTitle": "A long report",
+      "direction": "received",
+      "team": "mailspike",
+      "from": {
+       "alias": "mail-writer",
+       "address": "mailspike.test/mail-writer",
+       "identity": "did:key:placeholder-2"
+      },
+      "to": {
+       "alias": "mail-reader",
+       "address": "mail-reader",
+       "identity": "did:key:placeholder-1"
+      },
+      "subject": "A long report",
+      "body": "Line 1 of a long report about nothing in particular.\nLine 2 of a long report about nothing in particular.\nLine 3 of a long report about nothing in particular.\nLine 4 of a long report about nothing in particular.\nLine 5 of a long report about nothing in particular.\nLine 6 of a long report about nothing in particular.\nLine 7 of a long report about nothing in particular.\nLine 8 of a long report about nothing in particular.\nLine 9 of a long report about nothing in particular.\nLine 10 of a long report about nothing in particular.\nLine 11 of a long report about nothing in particular.\nLine 12 of a long report about nothing in particular.\nLine 13 of a long report about nothing in particular.\nLine 14 of a long report about nothing in particular.\nLine 15 of a long report about nothing in particular.\nLine 16 of a long report about nothing in particular.\nLine 17 of a long report about nothing in particular.\nLine 18 of a long report about nothing in particular.\nLine 19 of a long report about nothing in particular.\nLine 20 of a long report about nothing in particular.\nLine 21 of a long report about nothing in particular.\nLine 22 of a long report about nothing in particular.\nLine 23 of a long report about nothing in particular.\nLine 24 of a long report about nothing in particular.\nLine 25 of a long report about nothing in particular.\nLine 26 of a long report about nothing in particular.\nLine 27 of a long report about nothing in particular.\nLine 28 of a long report about nothing in particular.\nLine 29 of a long report about nothing in particular.\nLine 30 of a long report about nothing in particular.\nLine 31 of a long report about nothing in particular.\nLine 32 of a long report about nothing in particular.\nLine 33 of a long report about nothing in particular.\nLine 34 of a long report about nothing in particular.\nLine 35 of a long report about nothing in particular.\nLine 36 of a long report about nothing in particular.\nLine 37 of a long report about nothing in particular.\nLine 38 of a long report about nothing in particular.\nLine 39 of a long report about nothing in particular.\nLine 40 of a long report about nothing in particular.\nLine 41 of a long report about nothing in particular.\nLine 42 of a long report about nothing in particular.\nLine 43 of a long report about nothing in particular.\nLine 44 of a long report about nothing in particular.\nLine 45 of a long report about nothing in particular.\nLine 46 of a long report about nothing in particular.\nLine 47 of a long report about nothing in particular.\nLine 48 of a long report about nothing in particular.\nLine 49 of a long report about nothing in particular.\nLine 50 of a long report about nothing in particular.\nLine 51 of a long report about nothing in particular.\nLine 52 of a long report about nothing in particular.\nLine 53 of a long report about nothing in particular.\nLine 54 of a long report about nothing in particular.\nLine 55 of a long report about nothing in particular.\nLine 56 of a long report about nothing in particular.\nLine 57 of a long report about nothing in particular.\nLine 58 of a long report about nothing in particular.\nLine 59 of a long report about nothing in particular.\nLine 60 of a long report about nothing in particular.\nLine 61 of a long report about nothing in particular.\nLine 62 of a long report about nothing in particular.\nLine 63 of a long report about nothing in particular.\nLine 64 of a long report about nothing in particular.\nLine 65 of a long report about nothing in particular.\nLine 66 of a long report about nothing in particular.\nLine 67 of a long report about nothing in particular.\nLine 68 of a long report about nothing in particular.\nLine 69 of a long report about nothing in particular.\nLine 70 of a long report about nothing in particular.\nLine 71 of a long report about nothing in particular.\nLine 72 of a long report about nothing in particular.\nLine 73 of a long report about nothing in particular.\nLine 74 of a long report about nothing in particular.\nLine 75 of a long report about nothing in particular.\nLine 76 of a long report about nothing in particular.\nLine 77 of a long report about nothing in particular.\nLine 78 of a long report about nothing in particular.\nLine 79 of a long report about nothing in particular.\nLine 80 of a long report about nothing in particular.\nLine 81 of a long report about nothing in particular.\nLine 82 of a long report about nothing in particular.\nLine 83 of a long report about nothing in particular.\nLine 84 of a long report about nothing in particular.\nLine 85 of a long report about nothing in particular.\nLine 86 of a long report about nothing in particular.\nLine 87 of a long report about nothing in particular.\nLine 88 of a long report about nothing in particular.\nLine 89 of a long report about nothing in particular.\nLine 90 of a long report about nothing in particular.\nLine 91 of a long report about nothing in particular.\nLine 92 of a long report about nothing in particular.\nLine 93 of a long report about nothing in particular.\nLine 94 of a long report about nothing in particular.\nLine 95 of a long report about nothing in particular.\nLine 96 of a long report about nothing in particular.\nLine 97 of a long report about nothing in particular.\nLine 98 of a long report about nothing in particular.\nLine 99 of a long report about nothing in particular.\nLine 100 of a long report about nothing in particular.\nLine 101 of a long report about nothing in particular.\nLine 102 of a long report about nothing in particular.\nLine 103 of a long report about nothing in particular.\nLine 104 of a long report about nothing in particular.\nLine 105 of a long report about nothing in particular.\nLine 106 of a long report about nothing in particular.\nLine 107 of a long report about nothing in particular.\nLine 108 of a long report about nothing in particular.\nLine 109 of a long report about nothing in particular.\nLine 110 of a long report about nothing in particular.\nLine 111 of a long report about nothing in particular.\nLine 112 of a long report about nothing in particular.\nLine 113 of a long report about nothing in particular.\nLine 114 of a long report about nothing in particular.\nLine 115 of a long report about nothing in particular.\nLine 116 of a long report about nothing in particular.\nLine 117 of a long report about nothing in particular.\nLine 118 of a long report about nothing in particular.\nLine 119 of a long report about nothing in particular.\nLine 120 of a long report about nothing in particular.\nLine 121 of a long report about nothing in particular.\nLine 122 of a long report about nothing in particular.\nLine 123 of a long report about nothing in particular.\nLine 124 of a long report about nothing in particular.\nLine 125 of a long report about nothing in particular.\nLine 126 of a long report about nothing in particular.\nLine 127 of a long report about nothing in particular.\nLine 128 of a long report about nothing in particular.\nLine 129 of a long report about nothing in particular.\nLine 130 of a long report about nothing in particular.\nLine 131 of a long report about nothing in particular.\nLine 132 of a long report about nothing in particular.\nLine 133 of a long report about nothing in particular.\nLine 134 of a long report about nothing in particular.\nLine 135 of a long report about nothing in particular.\nLine 136 of a long report about nothing in particular.\nLine 137 of a long report about nothing in particular.\nLine 138 of a long report about nothing in particular.\nLine 139 of a long report about nothing in particular.\nLine 140 of a long report about nothing in particular.\nLine 141 of a long report about nothing in particular.\nLine 142 of a long report about nothing in particular.\nLine 143 of a long report about nothing in particular.\nLine 144 of a long report about nothing in particular.\nLine 145 of a long report about nothing in particular.\nLine 146 of a long report about nothing in particular.\nLine 147 of a long report about nothing in particular.\nLine 148 of a long report about nothing in particular.\nLine 149 of a long report about nothing in particular.\nLine 150 of a long report about nothing in particular.\nLine 151 of a long report about nothing in particular.\nLine 152 of a long report about nothing in particular.\nLine 153 of a long report about nothing in particular.\nLine 154 of a long report about nothing in particular.\nLine 155 of a long report about nothing in particular.\nLine 156 of a long report about nothing in particular.\nLine 157 of a long report about nothing in particular.\nLine 158 of a long report about nothing in particular.\nLine 159 of a long report about nothing in particular.\nLine 160 of a long report about nothing in particular.\nLine 161 of a long report about nothing in particular.\nLine 162 of a long report about nothing in particular.\nLine 163 of a long report about nothing in particular.\nLine 164 of a long report about nothing in particular.\nLine 165 of a long report about nothing in particular.\nLine 166 of a long report about nothing in particular.\nLine 167 of a long report about nothing in particular.\nLine 168 of a long report about nothing in particular.\nLine 169 of a long report about nothing in particular.\nLine 170 of a long report about nothing in particular.\nLine 171 of a long report about nothing in particular.\nLine 172 of a long report about nothing in particular.\nLine 173 of a long report about nothing in particular.\nLine 174 of a long report about nothing in particular.\nLine 175 of a long report about nothing in particular.\nLine 176 of a long report about nothing in particular.\nLine 177 of a long report about nothing in particular.\nLine 178 of a long report about nothing in particular.\nLine 179 of a long report about nothing in particular.\nLine 180 of a long report about nothing in particular.\nLine 181 of a long report about nothing in particular.\nLine 182 of a long report about nothing in particular.\nLine 183 of a long report about nothing in particular.\nLine 184 of a long report about nothing in particular.\nLine 185 of a long report about nothing in particular.\nLine 186 of a long report about nothing in particular.\nLine 187 of a long report about nothing in particular.\nLine 188 of a long report about nothing in particular.\nLine 189 of a long report about nothing in particular.\nLine 190 of a long report about nothing in particular.\nLine 191 of a long report about nothing in particular.\nLine 192 of a long report about nothing in particular.\nLine 193 of a long report about nothing in particular.\nLine 194 of a long report about nothing in particular.\nLine 195 of a long report about nothing in particular.\nLine 196 of a long report about nothing in particular.\nLine 197 of a long report about nothing in particular.\nLine 198 of a long report about nothing in particular.\nLine 199 of a long report about nothing in particular.\nLine 200 of a long report about nothing in particular.\nLine 201 of a long report about nothing in particular.\nLine 202 of a long report about nothing in particular.\nLine 203 of a long report about nothing in particular.\nLine 204 of a long report about nothing in particular.\nLine 205 of a long report about nothing in particular.\nLine 206 of a long report about nothing in particular.\nLine 207 of a long report about nothing in particular.\nLine 208 of a long report about nothing in particular.\nLine 209 of a long report about nothing in particular.\nLine 210 of a long report about nothing in particular.\nLine 211 of a long report about nothing in particular.\nLine 212 of a long report about nothing in particular.\nLine 213 of a long report about nothing in particular.\nLine 214 of a long report about nothing in particular.\nLine 215 of a long report about nothing in particular.\nLine 216 of a long report about nothing in particular.\nLine 217 of a long report about nothing in particular.\nLine 218 of a long report about nothing in particular.\nLine 219 of a long report about nothing in particular.\nLine 220 of a long report about nothing in particular.\nLine 221 of a long report about nothing in particular.\nLine 222 of a long report about nothing in particular.\nLine 223 of a long report about nothing in particular.\nLine 224 of a long report about nothing in particular.\nLine 225 of a long report about nothing in particular.\nLine 226 of a long report about nothing in particular.\nLine 227 of a long report about nothing in particular.\nLine 228 of a long report about nothing in particular.\nLine 229 of a long report about nothing in particular.\nLine 230 of a long report about nothing in particular.\nLine 231 of a long report about nothing in particular.\nLine 232 of a long report about nothing in particular.\nLine 233 of a long report about nothing in particular.\nLine 234 of a long report about nothing in particular.\nLine 235 of a long report about nothing in particular.\nLine 236 of a long report about nothing in particular.\nLine 237 of a long report about nothing in particular.\nLine 238 of a long report about nothing in particular.\nLine 239 of a long report about nothing in particular.\nLine 240 of a long report about nothing in particular.\nLine 241 of a long report about nothing in particular.\nLine 242 of a long report about nothing in particular.\nLine 243 of a long report about nothing in particular.\nLine 244 of a long report about nothing in particular.\nLine 245 of a long report about nothing in particular.\nLine 246 of a long report about nothing in particular.\nLine 247 of a long report about nothing in particular.\nLine 248 of a long report about nothing in particular.\nLine 249 of a long report about nothing in particular.\nLine 250 of a long report about nothing in particular.\nLine 251 of a long report about nothing in particular.\nLine 252 of a long report about nothing in particular.\nLine 253 of a long report about nothing in particular.\nLine 254 of a long report about nothing in particular.\nLine 255 of a long report about nothing in particular.\nLine 256 of a long report about nothing in particular.\nLine 257 of a long report about nothing in particular.\nLine 258 of a long report about nothing in particular.\nLine 259 of a long report about nothing in particular.\nLine 260 of a long report about nothing in particular.\nLine 261 of a long report about nothing in particular.\nLine 262 of a long report about nothing in particular.\nLine 263 of a long report about nothing in particular.\nLine 264 of a long report about nothing in particular.\nLine 265 of a long report about nothing in particular.\nLine 266 of a long report about nothing in particular.\nLine 267 of a long report about nothing in particular.\nLine 268 of a long report about nothing in particular.\nLine 269 of a long report about nothing in particular.\nLine 270 of a long report about nothing in particular.\nLine 271 of a long report about nothing in particular.\nLine 272 of a long report about nothing in particular.\nLine 273 of a long report about nothing in particular.\nLine 274 of a long report about nothing in particular.\nLine 275 of a long report about nothing in particular.\nLine 276 of a long report about nothing in particular.\nLine 277 of a long report about nothing in particular.\nLine 278 of a long report about nothing in particular.\nLine 279 of a long report about nothing in particular.\nLine 280 of a long report about nothing in particular.\nLine 281 of a long report about nothing in particular.\nLine 282 of a long report about nothing in particular.\nLine 283 of a long report about nothing in particular.\nLine 284 of a long report about nothing in particular.\nLine 285 of a long report about nothing in particular.\nLine 286 of a long report about nothing in particular.\nLine 287 of a long report about nothing in particular.\nLine 288 of a long report about nothing in particular.\nLine 289 of a long report about nothing in particular.\nLine 290 of a long report about nothing in particular.\nLine 291 of a long report about nothing in particular.\nLine 292 of a long report about nothing in particular.\nLine 293 of a long report about nothing in particular.\nLine 294 of a long report about nothing in particular.\nLine 295 of a long report about nothing in particular.\nLine 296 of a long report about nothing in particular.\nLine 297 of a long report about nothing in particular.\nLine 298 of a long report about nothing in particular.\nLine 299 of a long report about nothing in particular.\nLine 300 of a long report about nothing in part",
+      "truncated": true,
+      "createdAt": "2026-11-25T11:59:44.406160+00:00",
+      "readByAgent": false,
+      "encrypted": false,
+      "verification": "verified",
+      "priority": "normal"
+     },
+     {
+      "id": "89e6ff76-e4c7-44d0-a549-e22c2462ef8e",
+      "conversationId": "036c0cb8-3211-4759-b8c0-afbf56169b3b",
+      "threadTitle": "Re: first read",
+      "direction": "sent",
+      "team": "mailspike",
+      "from": {
+       "alias": "mail-reader",
+       "address": "mailspike.test/mail-reader",
+       "identity": "did:key:placeholder-1"
+      },
+      "to": {
+       "alias": "mail-writer",
+       "address": "mail-writer",
+       "identity": "did:key:placeholder-2"
+      },
+      "subject": "Re: first read",
+      "body": "Thanks. I will read it today.",
+      "truncated": false,
+      "createdAt": "2026-11-25T11:59:11.155111+00:00",
+      "readByAgent": true,
+      "encrypted": false,
+      "verification": "verified",
+      "priority": "normal"
+     },
+     {
+      "id": "24c3d896-04d8-4d40-8e4a-ea33778383c0",
+      "conversationId": "7a0e96de-87a1-401b-a5c3-a169df897c43",
+      "threadTitle": "Parser ready for a first read",
+      "direction": "received",
+      "team": "mailspike",
+      "from": {
+       "alias": "mail-writer",
+       "address": "mailspike.test/mail-writer",
+       "identity": "did:key:placeholder-2"
+      },
+      "to": {
+       "alias": "mail-reader",
+       "address": "mail-reader",
+       "identity": "did:key:placeholder-1"
+      },
+      "subject": "Parser ready for a first read",
+      "body": "The parser is ready for a first read.\n\nTwo things are still open:\n- the list at 390 px\n- the words of the refusals",
+      "truncated": false,
+      "createdAt": "2026-11-25T11:59:11.094116+00:00",
+      "readByAgent": false,
+      "encrypted": false,
+      "verification": "verified",
+      "priority": "normal"
+     }
+    ],
+    "conversations": [
+     {
+      "id": "01307168-066a-4b96-8201-502cbf9dd580",
+      "partial": null
+     },
+     {
+      "id": "036c0cb8-3211-4759-b8c0-afbf56169b3b",
+      "partial": null
+     },
+     {
+      "id": "7a0e96de-87a1-401b-a5c3-a169df897c43",
+      "partial": null
+     },
+     {
+      "id": "721918e4-7cd9-4437-a28e-285e61c27414",
+      "partial": null
+     }
+    ],
+    "hasMore": false,
+    "nextCursor": null
+   }
+  }
+ }
+}

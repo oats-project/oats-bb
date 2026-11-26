@@ -154,7 +154,8 @@ number in the home's badge, its heading and Home › Agents' count line (the sid
 | Thing | The Desktop says | The plugin says | Why |
 |---|---|---|---|
 | The acts on an agent, in its panel | at the panel's foot: **Restart…**, **Start…**, **Stop…**, **Retire…** (`packages/desktop/renderer/context-panel.mjs`) | the same four words, under the header's state, in the lifecycle's order (**Stop…**, **Start…**, **Restart…**, **Retire…**): the lifecycle's own buttons and dialogs | One drawing of the acts for every place, which the panel places; under the state they act on, where they stay in view on both tabs and on a phone (the panel's foot is a scroll away there). |
-| An agent on tmux, on its own page (Session) | the Desktop opens its terminal in a tab | "Attach:" and `oats session attach --home <its home>` to copy ("Runs in" over it already says tmux) | bb has no terminal and the plugin never types into a session: the page gives the way there, in the kernel's own command. The home's card of such an agent has no command: its Open leads here. |
+| An agent on tmux, on its own page (Session) | the Desktop opens its terminal in a tab | **Terminal** (bb's own word for that tab; it opens bb's Terminal tab on the agent's session; pressed again, the same tab), and under it "Attach:" and `oats session attach --home <its home>` to copy ("Runs in" over them already says tmux) | The tab is the kernel's own viewer of the agent (README, "A tmux agent's terminal"). The command stays for a person's own terminal, and is the only way for an agent on another machine. No tooltip, and no sentence about what a terminal is. The home's card of such an agent has neither: its Open leads here. |
+| The terminal's tab did not come up | (the Desktop's own tab) | **Terminal did not open.**, in the warning tone, with ONE fold, Details: the command that was run, then **The command ended at once, with status <n>.** or **bb did not show it.** (or the server's own refusal, as it says it), and last, where a terminal the press made is still there, **bb did not close it.** | One line for a person, whichever it was; the fold says which (the specialist's ruling of 25 Nov 2026). Nothing is said when the agent stops while its tab is open: the page's state line says it. |
 | An inspection the installed OATS answered and the reader cannot read (the Soul tab, `app/panel/refusal-words.ts`) | "The installed OATS CLI returned an inspection this Desktop cannot read. Update OATS and retry." | "The installed OATS CLI returned an inspection this plugin cannot read. Update OATS and retry." | It is the plugin that reads it, not the Desktop. |
 | A running agent, in the panel's header (R2) | "Running · 12h" | **Working**, the word its row and its thread say; "Started 12 h ago" is a fact of its Session ("Last started" for one that does not run, and "Stopped 14:03" under it for one OATS stopped) | One state word everywhere; since when it runs, and when it stopped, are labelled facts: this is the place they are said. |
 | What an agent waits for, in the activity's summary (R5) | "… · Reported waiting: oats.board since <time> — <message>" or "… · Waiting on you: unknown" | "<kind> · <time>" ("Stopped · 18:23"), the newest row said as what it is ("No events" for an empty record); and the list has no line "oats.board: reported waiting · <time> · attention" | What an agent waits for has one place, the header and Needs input, from the roster as it is now: the log's reading of it at another moment never stands under them. Each recorded claim is a "Waiting claim" row of the list, at its own time. |
@@ -192,6 +193,31 @@ number in the home's badge, its heading and Home › Agents' count line (the sid
 | Another agent in Lineage | its instance name ("redesign-ui-lead") | its name as words ("Redesign ui lead"); the instance name is the title | One name for an agent everywhere the plugin draws it (R1). |
 | After a refusal of the soul's read that reading again cannot change | nothing to press | a button under the notice, "Retry" | Readiness and the activity keep their Refresh for whoever mended what was wrong; the Soul tab had no such button. |
 | A refusal that is no fault: OATS has none of it for this kind of agent (`E_UNSUPPORTED_MODE`) | the sentence in the error colour, as every refusal | nothing is drawn for it, in any of the three parts (the row above) | A state that is not a fault is not drawn as one; and where there is nothing to show, nothing is said. |
+
+## An agent's mail
+
+The Desktop's mail sheet (`packages/desktop/renderer/mail-sheet.mjs`, `MAIL_WORDS`) is the source.
+The plugin's words are shorter by the direction "little text"; each was ruled by the plugin's
+specialist on 25 Nov 2026 (`app/mail/words.ts`).
+
+| Thing | The Desktop says | The plugin says | Why |
+|---|---|---|---|
+| The control | the panel's button **Mail** ("Read this agent's mail (read-only)"), Alt+M, the palette's "Agent: mail": a sheet from the right | the tab **Mail** of the agent's panel | bb's panel has tabs; one control. |
+| While it reads | "Reading mail…" / "Reading older mail…" | **Reading…** | The tab says what. |
+| No mail | "Nothing in the agent's mail." | **No mail.** | Little text. |
+| Read again, read further back | "Refresh mail", "Older mail" | **Refresh**, **Older** | The tab says what. |
+| Who wrote a message | "From <alias>", and "<alias> wrote:" over the body | the alias alone: on the row, and as the message's first line | Only received mail is shown, so "From" says nothing. |
+| A message that was cut | "Shortened: the message is too long to show whole." | **Shortened.** | Little text. |
+| The agent's messaging has no mail operation (`E_OPERATION_UNKNOWN`) | "This agent's messaging is too old to show mail; stop it and upgrade it (oats instance upgrade), or start a new agent of its soul." | **Its messaging is too old for mail.** | One line; the kernel's sentence is under Details. |
+| No messaging layer (`E_OPERATION_UNAVAILABLE`) | "This agent has no messaging layer, so it has no mail." | **No messaging.** | The same. |
+| `E_AW_TOO_OLD` | "This computer's aw is too old to read mail: <detail>" | **aw is too old to read mail.** | The same; the detail is the kernel's sentence, under Details. "This computer" would be the machine that holds the deployment, not the one a person sits at. |
+| `E_MAIL_UNREADABLE` | "None of this agent's mail identities could be read." | **Its mail can't be read.** | The same. |
+| `E_MAIL_TOO_LARGE`, and any other failure | "Couldn't read the agent's mail." | **Too much mail to read.** for `E_MAIL_TOO_LARGE`; **Mail can't be read.** for any other | Each line claims only what its code shows. |
+| An answer outside the contract | "The messaging layer answered mail this Desktop can't read. Update OATS Desktop, or this agent's messaging." | **Mail can't be read.**, with "… answered mail the plugin cannot read" under Details | "this plugin" where the Desktop says "this Desktop"; one line. |
+| A read that ran out of time | (the Desktop has no line of its own) | **Reading took too long.** | The plugin stops a read after 170 s. |
+| One team's mail cannot be read | "Mail from <team> can't be read: <code> — <what it means>" | **<team>: can't be read** | One line with no fold: the messaging layer's word is left out. |
+| Some of a team's conversations cannot be read | "Mail from <team>: N conversations can't be read" (their ids in a tooltip) | **<team>: N conversations can't be read** | No tooltip: a phone has no hover, and an id says nothing to a person. |
+| A failed read's act | Details, and the sheet's Refresh | **Retry** and Details | The plugin's word on every failed read; Refresh is the head's. |
 
 ## The lifecycle dialogs: Stop, Start, Restart, Retire
 
@@ -490,3 +516,15 @@ its meaning now. A row above that was shortened says its new words there, and ke
 | "Opening its thread…" | the created result | nothing: the thread opens |
 | "“What will be created” was read again: it shows the values as they are now." | a refused spawn, after a decision that moved | nothing: the column beside it shows them |
 | the kernel's code on the face | the column's refusal; a result; after a refused name | under Details ("<code>: <line>"); the sentence's title under a field |
+
+### An agent's mail
+
+| The Desktop's | Where | What says it now |
+|---|---|---|
+| the mail the agent SENT ("To <alias>") | the sheet's list | nothing: the plugin shows received mail only (the specialist's ruling) |
+| "<name> · mail" and "The agent's own mail. You can read it; the app never marks it read." | the sheet's head | the tab's name; the view has no act |
+| **Encrypted**, **Not read by the agent yet**, **High priority** | a message's badges | nothing: only the two safety facts are said ("Unverified sender", "Signature failed") |
+| the team of a message, when the agent reads more than one | a message's head | nothing |
+| "Older part of a long conversation shown; the newest messages can't be read yet." | once per conversation | nothing |
+| six lines of a body until the item is expanded; ↑ ↓ Home End between messages; `r` | the sheet | the list holds no body: a press shows one message whole, with Back; Refresh is a button |
+| the kernel's code on the face of a refusal | the sheet's notice | under Details, with the kernel's sentence |

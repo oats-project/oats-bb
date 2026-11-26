@@ -1,9 +1,104 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
+
+Two new plugin features:
+- **Terminal** on the page of an agent that runs on tmux;
+- a read-only **Mail** tab for every agent with a messaging layer.
+
+The session provider doesn't change: package `oats.bb` 0.6.0 is 0.5.1's provider, unchanged apart from its version.
+
+**Upgrade:**
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.6.0`, then `oats sync`. The floor stays OATS 0.70.5, and bb-app stays 0.50.1.
+- Install the plugin in bb again at `v0.6.0` (`plugin/README.md`, "Install").
+- A home's provider copy needs no move: it is the same provider.
+
+**Known in this release:**
+- New agent needs the `oats.bb` package in the workspace. Without it, the form says "bb is not set up for this workspace." and spawns nothing. Spawning a tmux agent from bb comes later.
+- A workspace whose lock doesn't yet hold `oats.bb` (run `oats sync`), or a member missing the capability, also reads "bb is not set up for this workspace.". The form keeps that answer for 30 seconds and has no Retry.
+- bb can't send a message to an agent on tmux. Its Terminal tab types straight into the agent's window.
+- A grant seat on an aweb registry other than the default may still need `AWID_REGISTRY_URL`, which a pi thread is not given.
+- The real mail stage of the checks runs by hand, not in CI.
+
+### The plugin
+
+- **Terminal, for an agent on tmux** (#94). The agent's page, in its Session card, gets **Terminal**:
+  - It opens bb's own Terminal tab on the kernel's viewer of the agent (`oats session attach --home`), titled with the agent's name.
+  - Pressing it again, or reloading, shows the same tab.
+  - What is typed there is typed to the agent. Closing the tab leaves the agent running.
+  - Where the tab doesn't come up, the page says "Terminal did not open.", with the command and why under Details.
+
+  The attach command to copy stays beside it. It needs `oats` reachable by an absolute path on the machine: the plugin's `oatsBin` setting, or the first `oats` on the host's PATH. It uses bb's `experimental_openTerminal`.
+- **Mail, read-only** (#97). An agent with a messaging layer gets a Mail tab:
+  - It shows the mail the agent received, newest first. A press opens one message as plain text.
+  - Reading marks nothing read, and nothing can be sent or answered from bb.
+  - Message text is filtered line by line on the machine, and a line that looks like a credential reads "[withheld]".
+  - "Unverified sender" or "Signature failed" says what the messaging layer could not confirm.
+
+  It reads through `oats operation run messaging:mail`, the same read as the OATS Desktop's mail sheet.
+- **A retire never calls a child "stopped" that did not stop** (#102). It names that child first, in the Stop result's words, with its code, and the result is not shown as done. Today's kernel refuses such a retire whole, so this is a guard.
+
+### Development
+
+- **The checks never read a record half-written** (#103): the harness writes its files whole and renames them into place, and reads appended logs by complete lines.
+- **The real run waits for Claude Code's state file to be whole** (#106) before reading it, since Claude Code rewrites it while agents are up. A file that stays broken fails the run, naming the file and never its contents.
+
+## 0.5.1
+
+The pilot's fixes. The session provider changes:
+- a pi agent with a grant identity can send its mail (#87);
+- `hostDaemonPort` alone works (#88);
+- readiness says when the pi model check is off.
+
+The plugin closes 0.5.0's first Known line.
+
+**Upgrade:**
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.5.1`, then `oats sync`. The floor stays OATS 0.70.5, and bb-app stays 0.50.1.
+- Install the plugin in bb again at `v0.5.1` (`plugin/README.md`, "Install").
+- A home's provider copy moves with `oats instance upgrade` on a stopped home, or with a new spawn. A pi home's new identity variable reaches its thread at its next launch.
+- A deployment that set `daemon` beside `hostDaemonPort` as a workaround can remove the `daemon` line, or leave it.
+
+**Known in this release:**
+- New agent needs the `oats.bb` package in the workspace. Without it, the form says "bb is not set up for this workspace." and spawns nothing. Spawning a tmux agent from bb comes later.
+- A workspace whose lock doesn't yet hold `oats.bb` (run `oats sync`), or a member missing the capability, also reads "bb is not set up for this workspace.". The form keeps that answer for 30 seconds and has no Retry.
+- bb can't type to an agent on tmux.
+- A grant seat on an aweb registry other than the default may still need `AWID_REGISTRY_URL`, which a pi thread is not given.
+
+### The plugin
+
+- **An asking agent's card is off while "Reading…"** (#96). On the home, the card of a running agent that asks says "Reading…" in its state's place, with its reply field and choices off, until OATS has read the agent again after an act. 0.5.0's first Known line is closed: a reply pressed in the second after a Stop no longer reaches bb's refusal from this window. A replayed receipt ("Check again") now marks the agents it names, like any other. A host clock set back no longer stalls the roster's reads.
 
 ### The session provider
 
+- **A pi agent with a grant identity can send its mail** (#87). A pi thread was given
+  three variables and no more (`OATS_INSTANCE`, `OATS_INSTANCE_HOME`, `PATH`), so
+  oats.aweb's `AWEB_IDENTITY_HOME` was left out with the rest of a capability's launch
+  env. `aw` finds an identity in `.aw` of the directory it runs in: a local seat's `aw`
+  worked from the home, and a seat with a global identity through a session grant, whose
+  identity is in `<home>/.aweb-identity`, received mail and could not send ("current
+  directory is not initialized for aw"). A pi launch now carries a fourth name,
+  `AWEB_IDENTITY_HOME`, where a capability's entry names with it a path that is the home
+  or inside it, not marked secret; any other value of it is left out as before, and the
+  launch now says so on its standard error (never the value). The rule
+  stays a list of names (now four), since nothing marks a launch env name as holding no
+  secret: no other entry of a capability or a launch configuration is carried. The home's
+  bb project env therefore holds one more name, written whole at each pi launch and
+  removed by the retire hook, by a move to another backend and by a Claude launch of the
+  home, as the other three are. README, "pi".
+- **`hostDaemonPort` alone works under a real kernel** (#88). The manifest declared a
+  default for `daemon` (bb's own default address), and the kernel hands a provider its
+  manifest's defaults as values. So a deployment that set `hostDaemonPort` and no
+  `daemon`, as "Two bbs on one host" tells a second bb to, was refused at every spawn and
+  every readiness read: `E_BACKEND_SETTINGS`, "hostDaemonPort is … and
+  settings.oats.bb.daemon names port 38887". The manifest no longer declares that
+  default. Nothing else moves: with neither set the provider still reads bb's default,
+  `http://127.0.0.1:38887` (its own fallback, the same address); a `daemon` a deployment
+  sets is still the address. One sentence is better for it: where the daemon at bb's
+  default address does not answer, the finding names `hostDaemonPort` as what to set
+  (it named `daemon`, taking the default for the deployment's own). **This retires the
+  workaround** of setting `daemon` on the same port beside `hostDaemonPort`: a
+  deployment that wrote it can remove the `daemon` line, or leave it (the two agree).
+  A unit test now reads the manifest's defaults into the settings it checks.
 - **Readiness says when the pi model check is off.** The check refuses a model only where
   bb's list of pi's models is whole, and bb's pi keeps the settings it started with: after
   a change to bb's pi `settings.json` under a running bb (pi writes it itself), every id
@@ -35,6 +130,7 @@
   and that test now fails a run in which it does. What is not locked is named in the locks'
   README (the aweb extension pi installs into the second pi configuration brings
   `@awebai/aw` by a range).
+- **The plugin's checks:** the image holds fd and ripgrep, so pi fetches neither by itself (#92); the pi run waits for the state each assertion reads (#95).
 
 ## 0.5.0
 

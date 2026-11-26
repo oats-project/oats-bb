@@ -123,8 +123,10 @@ function outsideOf(source: z.output<typeof row>, features: readonly string[]): {
  * (a fact or an open question), and that it ASKS: its board holds an open question AND the row's
  * needs-input claim is the board's own (the kernel names a claim's producer; the agent's own claim,
  * or a failed turn's, can be live beside the board's, and the row shows the newest: a place that
- * says why the agent needs a person then says THAT claim, not the board's question). A claim of a
- * row that names no producer is taken as the board's where a question is open.
+ * says why the agent needs a person then says THAT claim, not the board's question). The board's
+ * own claim is the one whose producer is `oats.board` (model/board.ts `BOARD_PRODUCER`, read by
+ * `boardClaim`); every other producer (`agent`, `oats.core`, a capability's) is another claim. A
+ * claim of a row that names no producer is taken as the board's where a question is open.
  */
 function boardOf(board: unknown, waiting: { producer?: string | null } | null | undefined, features: readonly string[]): { hasBoard?: true; boardAsks?: true } {
   const read = features.includes(BOARD_FEATURE) ? boardData(board) : null;

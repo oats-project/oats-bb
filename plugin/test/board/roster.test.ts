@@ -45,6 +45,17 @@ describe("the roster's row and the agent's board", () => {
     }
   });
 
+  it("a claim of ANOTHER producer and NO open question: neither asks; it has a board only where a fact is there", () => {
+    const facts = recorded();
+    rowOf(facts).board!.questions = [];
+    (rowOf(facts) as unknown as { waitingOnYou: { producer: string } }).waitingOnYou.producer = "agent";
+    expect(said(facts)).toEqual({ hasBoard: true, boardAsks: undefined, keys: ["hasBoard"] });
+    const nothing = recorded();
+    rowOf(nothing).board = { facts: [], questions: [] };
+    (rowOf(nothing) as unknown as { waitingOnYou: { producer: string } }).waitingOnYou.producer = "agent";
+    expect(said(nothing)).toEqual({ hasBoard: undefined, boardAsks: undefined, keys: [] });
+  });
+
   it("an open question with NO claim on the row (the agent cleared its claim, or the kernel has not set it yet) does not ask; a claim that names no producer is taken as the board's", () => {
     const none = recorded();
     (rowOf(none) as unknown as { waitingOnYou: unknown }).waitingOnYou = null;

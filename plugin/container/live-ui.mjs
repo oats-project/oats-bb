@@ -72,9 +72,21 @@ function rpc(method) {
   const answer = bbJson("plugin", "rpc", "call", "oats", method, "--input-file", input);
   return answer.result ?? answer;
 }
-const fake = (verbs = {}) =>
+let fakedNow = {};
+const fake = (verbs = {}) => {
+  fakedNow = verbs;
   // (Written whole and renamed into place: every fake oats the plugin starts reads it, at any moment.)
   atomicWrite(FAKE_CONFIG, JSON.stringify({ fixtures: join(PLUGIN, "test/fixtures"), log: FAKE_LOG, verbs }));
+};
+/**
+ * For a scene of a stage it does not own (the busy stage's): the verbs the stage answers now, with `verbs` over them.
+ * → what puts the stage's own answers back; the scene calls it before it ends. (After the Automations developer's.)
+ */
+const fakeOver = (verbs) => {
+  const before = fakedNow;
+  fake({ ...before, ...verbs });
+  return () => fake(before);
+};
 
 /**
  * By hand only, never in CI: LIVE_PILOT_IMAGES=1 takes the image set of the pilot's six screens as
@@ -956,7 +968,7 @@ try {
           const page = await themedPage(browser, viewport, theme, at);
           try {
             for (const scene of mine) {
-              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads, recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, retitle: (fixtureId, title) => void bb("thread", "update", threads.get(fixtureId).id, "--title", title) /* bb's own rename of a thread */, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
+              const given = { page, at, viewport, theme, threads, fixtureThreads, check, sleep, pages, ALL_PAGES, pilot: PILOT, record: (changes) => record(threads, changes), fake, fakeOver, tmuxStatus: (as, roster) => tmuxRoster(threads, as, roster), ownThreads, recordFor: (who, what) => recordFor(threads, who, what), statusAnsweredSinceRecord, retitle: (fixtureId, title) => void bb("thread", "update", threads.get(fixtureId).id, "--title", title) /* bb's own rename of a thread */, snapshot: () => rpc("snapshot") /* the server's roster as the app gets it now, with no read asked */ };
               if (!PILOT) await scene.run(given);
               else {
                 // The image pass: a scene that needs a page the default does not show stops there, said, and the next one runs.

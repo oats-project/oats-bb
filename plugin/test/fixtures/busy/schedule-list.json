@@ -32,7 +32,7 @@
    "agent": "oats-developer",
    "backend": "bb",
    "purpose": "review",
-   "task": "Review the open pull requests.\nReport what blocks each.",
+   "task": "1. Review the open pull requests.\nReport what blocks each.\n\n2. Review the open pull requests.\nReport what blocks each.\n\n3. Review the open pull requests.\nReport what blocks each.\n\n4. Review the open pull requests.\nReport what blocks each.\n\n5. Review the open pull requests.\nReport what blocks each.\n\n6. Review the open pull requests.\nReport what blocks each.\n\n7. Review the open pull requests.\nReport what blocks each.\n\n8. Review the open pull requests.\nReport what blocks each.\n\n9. Review the open pull requests.\nReport what blocks each.\n\n10. Review the open pull requests.\nReport what blocks each.\n\n11. Review the open pull requests.\nReport what blocks each.\n\n12. Review the open pull requests.\nReport what blocks each.",
    "yolo": true,
    "wake": {
     "cron": "*/30 * * * *",
@@ -58,8 +58,8 @@
    "lastRun": {
     "scheduledFor": "2026-11-21T20:17:00.000Z",
     "startedAt": "2026-11-21T20:17:32.946Z",
-    "instance": "customer-onboarding-redesign-for-enterprise-tier-lead",
-    "home": "/abs/deployment/agents/code-reviewer/instances/customer-onboarding-redesign-for-enterprise-tier-lead",
+    "instance": "oats-developer-review-202611212017",
+    "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
     "launched": true,
     "kind": "spawn",
     "materialized": "workspace",
@@ -196,8 +196,8 @@
      ],
      "legacy": false,
      "session": {
-      "instance": "customer-onboarding-redesign-for-enterprise-tier-lead",
-      "home": "/abs/deployment/agents/code-reviewer/instances/customer-onboarding-redesign-for-enterprise-tier-lead",
+      "instance": "oats-developer-review-202611212017",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
       "incarnation": null,
       "server": null,
       "delivery": "launched"
@@ -207,17 +207,17 @@
      "runId": "00014ee63dec280096616896",
      "scheduledFor": "2026-11-21T19:17:00.000Z",
      "startedAt": "2026-11-21T19:17:32.946Z",
-     "instance": "oats-developer-review-202611212017",
-     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+     "instance": "customer-onboarding-redesign-for-enterprise-tier-lead",
+     "home": "/abs/deployment/agents/code-reviewer/instances/customer-onboarding-redesign-for-enterprise-tier-lead",
      "launched": true,
      "kind": "spawn",
      "materialized": "workspace",
      "wakeSchedule": {
-      "id": "wake-oats-developer-review-202611212017",
+      "id": "wake-customer-onboarding-redesign-for-enterprise-tier-lead",
       "cron": "*/30 * * * *",
       "tz": "Europe/Madrid",
       "kind": "wake",
-      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+      "home": "/abs/deployment/agents/code-reviewer/instances/customer-onboarding-redesign-for-enterprise-tier-lead",
       "message": "Anything new on your review?",
       "createdAt": "2026-11-21T20:17:35.939Z",
       "updatedAt": "2026-11-21T20:17:35.939Z",
@@ -238,7 +238,7 @@
       },
       "recentRuns": [],
       "running": false,
-      "name": "wake-oats-developer-review-202611212017",
+      "name": "wake-customer-onboarding-redesign-for-enterprise-tier-lead",
       "origin": {
        "kind": "local",
        "path": "oats-schedules.json",
@@ -251,7 +251,81 @@
       "runsHere": true,
       "reason": null,
       "enabledHere": true,
-      "qualifiedId": "local/wake-oats-developer-review-202611212017",
+      "qualifiedId": "local/wake-customer-onboarding-redesign-for-enterprise-tier-lead",
+      "soul": null,
+      "task": null,
+      "teams": [],
+      "launchConfig": null,
+      "harness": null,
+      "model": null,
+      "concurrency": null,
+      "nextDue": "2026-11-21T20:30:00.000Z",
+      "enabled": true
+     },
+     "outcome": "launched",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:17:36.253Z",
+     "transitions": [
+      "launched"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": "customer-onboarding-redesign-for-enterprise-tier-lead",
+      "home": "/abs/deployment/agents/code-reviewer/instances/customer-onboarding-redesign-for-enterprise-tier-lead",
+      "incarnation": null,
+      "server": null,
+      "delivery": "launched"
+     }
+    },
+    {
+     "runId": "00024ee63dec280096616896",
+     "scheduledFor": "2026-11-21T18:17:00.000Z",
+     "startedAt": "2026-11-21T18:17:32.946Z",
+     "instance": "customer-onboarding-redesign-for-the-starter-tier-developer-3",
+     "home": "/abs/deployment/agents/compliance-quality-and-release-readiness-oats-developer/instances/customer-onboarding-redesign-for-the-starter-tier-developer-3",
+     "launched": true,
+     "kind": "spawn",
+     "materialized": "workspace",
+     "wakeSchedule": {
+      "id": "wake-customer-onboarding-redesign-for-the-starter-tier-developer-3",
+      "cron": "*/30 * * * *",
+      "tz": "Europe/Madrid",
+      "kind": "wake",
+      "home": "/abs/deployment/agents/compliance-quality-and-release-readiness-oats-developer/instances/customer-onboarding-redesign-for-the-starter-tier-developer-3",
+      "message": "Anything new on your review?",
+      "createdAt": "2026-11-21T20:17:35.939Z",
+      "updatedAt": "2026-11-21T20:17:35.939Z",
+      "scope": "/abs/deployment",
+      "scheduleApi": 2,
+      "scheduleHistoryApi": 3,
+      "executionStatus": {
+       "kind": "legacy",
+       "capture": "unknown",
+       "migrationRequired": true
+      },
+      "nextRun": "2026-11-21T20:30:00.000Z",
+      "lastRun": null,
+      "history": {
+       "status": "ok",
+       "stored": 0,
+       "truncated": false
+      },
+      "recentRuns": [],
+      "running": false,
+      "name": "wake-customer-onboarding-redesign-for-the-starter-tier-developer-3",
+      "origin": {
+       "kind": "local",
+       "path": "oats-schedules.json",
+       "url": null,
+       "localPath": "/abs/deployment/oats-schedules.json"
+      },
+      "description": null,
+      "owner": null,
+      "runsOn": null,
+      "runsHere": true,
+      "reason": null,
+      "enabledHere": true,
+      "qualifiedId": "local/wake-customer-onboarding-redesign-for-the-starter-tier-developer-3",
       "soul": null,
       "task": null,
       "teams": [],
@@ -278,20 +352,20 @@
      }
     },
     {
-     "runId": "00024ee63dec280096616896",
-     "scheduledFor": "2026-11-21T18:17:00.000Z",
-     "startedAt": "2026-11-21T18:17:32.946Z",
-     "instance": "oats-developer-review-202611212017",
-     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+     "runId": "00034ee63dec280096616896",
+     "scheduledFor": "2026-11-21T17:17:00.000Z",
+     "startedAt": "2026-11-21T17:17:32.946Z",
+     "instance": "customer-onboarding-redesign-for-enterprise-tier-developer-2",
+     "home": "/abs/deployment/agents/oats-okf--growth-quality-and-release-readiness-knowledge-maintainer/instances/customer-onboarding-redesign-for-enterprise-tier-developer-2",
      "launched": true,
      "kind": "spawn",
      "materialized": "workspace",
      "wakeSchedule": {
-      "id": "wake-oats-developer-review-202611212017",
+      "id": "wake-customer-onboarding-redesign-for-enterprise-tier-developer-2",
       "cron": "*/30 * * * *",
       "tz": "Europe/Madrid",
       "kind": "wake",
-      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+      "home": "/abs/deployment/agents/oats-okf--growth-quality-and-release-readiness-knowledge-maintainer/instances/customer-onboarding-redesign-for-enterprise-tier-developer-2",
       "message": "Anything new on your review?",
       "createdAt": "2026-11-21T20:17:35.939Z",
       "updatedAt": "2026-11-21T20:17:35.939Z",
@@ -312,7 +386,7 @@
       },
       "recentRuns": [],
       "running": false,
-      "name": "wake-oats-developer-review-202611212017",
+      "name": "wake-customer-onboarding-redesign-for-enterprise-tier-developer-2",
       "origin": {
        "kind": "local",
        "path": "oats-schedules.json",
@@ -325,7 +399,7 @@
       "runsHere": true,
       "reason": null,
       "enabledHere": true,
-      "qualifiedId": "local/wake-oats-developer-review-202611212017",
+      "qualifiedId": "local/wake-customer-onboarding-redesign-for-enterprise-tier-developer-2",
       "soul": null,
       "task": null,
       "teams": [],
@@ -346,80 +420,6 @@
      "session": {
       "instance": "customer-onboarding-redesign-for-enterprise-tier-developer-2",
       "home": "/abs/deployment/agents/oats-okf--growth-quality-and-release-readiness-knowledge-maintainer/instances/customer-onboarding-redesign-for-enterprise-tier-developer-2",
-      "incarnation": null,
-      "server": null,
-      "delivery": "launched"
-     }
-    },
-    {
-     "runId": "00034ee63dec280096616896",
-     "scheduledFor": "2026-11-21T17:17:00.000Z",
-     "startedAt": "2026-11-21T17:17:32.946Z",
-     "instance": "oats-developer-review-202611212017",
-     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
-     "launched": true,
-     "kind": "spawn",
-     "materialized": "workspace",
-     "wakeSchedule": {
-      "id": "wake-oats-developer-review-202611212017",
-      "cron": "*/30 * * * *",
-      "tz": "Europe/Madrid",
-      "kind": "wake",
-      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
-      "message": "Anything new on your review?",
-      "createdAt": "2026-11-21T20:17:35.939Z",
-      "updatedAt": "2026-11-21T20:17:35.939Z",
-      "scope": "/abs/deployment",
-      "scheduleApi": 2,
-      "scheduleHistoryApi": 3,
-      "executionStatus": {
-       "kind": "legacy",
-       "capture": "unknown",
-       "migrationRequired": true
-      },
-      "nextRun": "2026-11-21T20:30:00.000Z",
-      "lastRun": null,
-      "history": {
-       "status": "ok",
-       "stored": 0,
-       "truncated": false
-      },
-      "recentRuns": [],
-      "running": false,
-      "name": "wake-oats-developer-review-202611212017",
-      "origin": {
-       "kind": "local",
-       "path": "oats-schedules.json",
-       "url": null,
-       "localPath": "/abs/deployment/oats-schedules.json"
-      },
-      "description": null,
-      "owner": null,
-      "runsOn": null,
-      "runsHere": true,
-      "reason": null,
-      "enabledHere": true,
-      "qualifiedId": "local/wake-oats-developer-review-202611212017",
-      "soul": null,
-      "task": null,
-      "teams": [],
-      "launchConfig": null,
-      "harness": null,
-      "model": null,
-      "concurrency": null,
-      "nextDue": "2026-11-21T20:30:00.000Z",
-      "enabled": true
-     },
-     "outcome": "launched",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:17:36.253Z",
-     "transitions": [
-      "launched"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": "oats-developer-review-202611212017",
-      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
       "incarnation": null,
       "server": null,
       "delivery": "launched"
@@ -3869,7 +3869,7 @@
    "agent": "oats-developer",
    "backend": "bb",
    "purpose": "review",
-   "task": "1. Review the open pull requests. Report what blocks each.\n2. Review the open pull requests. Report what blocks each.\n3. Review the open pull requests. Report what blocks each.\n4. Review the open pull requests. Report what blocks each.\n5. Review the open pull requests. Report what blocks each.\n6. Review the open pull requests. Report what blocks each.\n7. Review the open pull requests. Report what blocks each.\n8. Review the open pull requests. Report what blocks each.\n9. Review the open pull requests. Report what blocks each.\n10. Review the open pull requests. Report what blocks each.\n11. Review the open pull requests. Report what blocks each.\n12. Review the open pull requests. Report what blocks each.",
+   "task": "Review the open pull requests.\nReport what blocks each.",
    "yolo": true,
    "wake": {
     "cron": "*/30 * * * *",
@@ -4705,1315 +4705,103 @@
    "enabled": true
   },
   {
-   "id": "hourly-check-after-each-release-train-leaves-the-staging-c-5",
-   "cron": "0 * * * *",
-   "tz": "UTC",
+   "id": "daily-review-after-each-release-train-leaves-the-staging-c-5",
+   "cron": "0 9 * * 1-5",
+   "tz": "Europe/Madrid",
    "kind": "spawn",
+   "description": "Review open pull requests every weekday morning (daily review after each release train leaves the staging c 5): every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone",
    "agent": "oats-developer",
    "backend": "bb",
-   "task": "Check the build queue.",
-   "createdAt": "2026-11-21T20:17:25.920Z",
-   "updatedAt": "2026-11-21T20:17:25.920Z",
+   "purpose": "review",
+   "task": "Review the open pull requests.\nReport what blocks each.",
+   "yolo": true,
+   "wake": {
+    "cron": "*/30 * * * *",
+    "tz": "Europe/Madrid",
+    "message": "Anything new on your review?"
+   },
+   "createdAt": "2026-11-21T20:17:25.238Z",
+   "updatedAt": "2026-11-21T20:17:25.238Z",
    "scope": "/abs/deployment",
    "scheduleApi": 2,
    "scheduleHistoryApi": 3,
    "executionStatus": {
     "kind": "legacy",
     "capture": "unknown",
-    "migrationRequired": true
+    "migrationRequired": true,
+    "intent": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    }
    },
-   "nextRun": "2026-11-21T21:00:00.000Z",
+   "nextRun": "2026-11-23T08:00:00.000Z",
    "lastRun": {
     "scheduledFor": "2026-11-21T20:17:00.000Z",
-    "startedAt": "2026-11-21T20:17:36.251Z",
+    "startedAt": "2026-11-21T20:17:32.946Z",
+    "instance": "oats-developer-review-202611212017",
+    "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+    "launched": true,
     "kind": "spawn",
-    "launched": false,
-    "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-    "errorCode": "E_BACKEND_SANDBOXED_MODE",
-    "unconfirmed": false,
-    "outcome": "launch-failed",
-    "runId": "6cf7aab1e86c9bb37cfb5acc",
+    "materialized": "workspace",
+    "wakeSchedule": {
+     "id": "wake-oats-developer-review-202611212017",
+     "cron": "*/30 * * * *",
+     "tz": "Europe/Madrid",
+     "kind": "wake",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+     "message": "Anything new on your review?",
+     "createdAt": "2026-11-21T20:17:35.939Z",
+     "updatedAt": "2026-11-21T20:17:35.939Z",
+     "scope": "/abs/deployment",
+     "scheduleApi": 2,
+     "scheduleHistoryApi": 3,
+     "executionStatus": {
+      "kind": "legacy",
+      "capture": "unknown",
+      "migrationRequired": true
+     },
+     "nextRun": "2026-11-21T20:30:00.000Z",
+     "lastRun": null,
+     "history": {
+      "status": "ok",
+      "stored": 0,
+      "truncated": false
+     },
+     "recentRuns": [],
+     "running": false,
+     "name": "wake-oats-developer-review-202611212017",
+     "origin": {
+      "kind": "local",
+      "path": "oats-schedules.json",
+      "url": null,
+      "localPath": "/abs/deployment/oats-schedules.json"
+     },
+     "description": null,
+     "owner": null,
+     "runsOn": null,
+     "runsHere": true,
+     "reason": null,
+     "enabledHere": true,
+     "qualifiedId": "local/wake-oats-developer-review-202611212017",
+     "soul": null,
+     "task": null,
+     "teams": [],
+     "launchConfig": null,
+     "harness": null,
+     "model": null,
+     "concurrency": null,
+     "nextDue": "2026-11-21T20:30:00.000Z",
+     "enabled": true
+    },
+    "outcome": "active",
+    "runId": "32b84ee63dec280096616896",
     "session": {
-     "instance": null,
-     "home": null,
+     "instance": "oats-developer-review-202611212017",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
      "incarnation": null,
      "server": null,
-     "delivery": "none"
-    }
-   },
-   "history": {
-    "status": "ok",
-    "stored": 50,
-    "truncated": false
-   },
-   "recentRuns": [
-    {
-     "runId": "6cf7aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T20:17:00.000Z",
-     "startedAt": "2026-11-21T20:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0501aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T19:17:00.000Z",
-     "startedAt": "2026-11-21T19:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0502aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T18:17:00.000Z",
-     "startedAt": "2026-11-21T18:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0503aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T17:17:00.000Z",
-     "startedAt": "2026-11-21T17:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0504aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T16:17:00.000Z",
-     "startedAt": "2026-11-21T16:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0505aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T15:17:00.000Z",
-     "startedAt": "2026-11-21T15:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0506aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T14:17:00.000Z",
-     "startedAt": "2026-11-21T14:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0507aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T13:17:00.000Z",
-     "startedAt": "2026-11-21T13:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0508aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T12:17:00.000Z",
-     "startedAt": "2026-11-21T12:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0509aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T11:17:00.000Z",
-     "startedAt": "2026-11-21T11:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0510aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T10:17:00.000Z",
-     "startedAt": "2026-11-21T10:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0511aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T09:17:00.000Z",
-     "startedAt": "2026-11-21T09:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0512aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T08:17:00.000Z",
-     "startedAt": "2026-11-21T08:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0513aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T07:17:00.000Z",
-     "startedAt": "2026-11-21T07:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0514aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T06:17:00.000Z",
-     "startedAt": "2026-11-21T06:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0515aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T05:17:00.000Z",
-     "startedAt": "2026-11-21T05:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0516aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T04:17:00.000Z",
-     "startedAt": "2026-11-21T04:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0517aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T03:17:00.000Z",
-     "startedAt": "2026-11-21T03:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0518aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T02:17:00.000Z",
-     "startedAt": "2026-11-21T02:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0519aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T01:17:00.000Z",
-     "startedAt": "2026-11-21T01:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0520aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-21T00:17:00.000Z",
-     "startedAt": "2026-11-21T00:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0521aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T23:17:00.000Z",
-     "startedAt": "2026-11-20T23:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0522aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T22:17:00.000Z",
-     "startedAt": "2026-11-20T22:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0523aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T21:17:00.000Z",
-     "startedAt": "2026-11-20T21:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0524aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T20:17:00.000Z",
-     "startedAt": "2026-11-20T20:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0525aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T19:17:00.000Z",
-     "startedAt": "2026-11-20T19:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0526aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T18:17:00.000Z",
-     "startedAt": "2026-11-20T18:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0527aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T17:17:00.000Z",
-     "startedAt": "2026-11-20T17:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0528aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T16:17:00.000Z",
-     "startedAt": "2026-11-20T16:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0529aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T15:17:00.000Z",
-     "startedAt": "2026-11-20T15:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0530aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T14:17:00.000Z",
-     "startedAt": "2026-11-20T14:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0531aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T13:17:00.000Z",
-     "startedAt": "2026-11-20T13:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0532aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T12:17:00.000Z",
-     "startedAt": "2026-11-20T12:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0533aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T11:17:00.000Z",
-     "startedAt": "2026-11-20T11:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0534aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T10:17:00.000Z",
-     "startedAt": "2026-11-20T10:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0535aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T09:17:00.000Z",
-     "startedAt": "2026-11-20T09:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0536aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T08:17:00.000Z",
-     "startedAt": "2026-11-20T08:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0537aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T07:17:00.000Z",
-     "startedAt": "2026-11-20T07:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0538aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T06:17:00.000Z",
-     "startedAt": "2026-11-20T06:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0539aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T05:17:00.000Z",
-     "startedAt": "2026-11-20T05:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0540aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T04:17:00.000Z",
-     "startedAt": "2026-11-20T04:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0541aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T03:17:00.000Z",
-     "startedAt": "2026-11-20T03:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0542aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T02:17:00.000Z",
-     "startedAt": "2026-11-20T02:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0543aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T01:17:00.000Z",
-     "startedAt": "2026-11-20T01:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0544aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-20T00:17:00.000Z",
-     "startedAt": "2026-11-20T00:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0545aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-19T23:17:00.000Z",
-     "startedAt": "2026-11-19T23:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0546aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-19T22:17:00.000Z",
-     "startedAt": "2026-11-19T22:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0547aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-19T21:17:00.000Z",
-     "startedAt": "2026-11-19T21:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0548aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-19T20:17:00.000Z",
-     "startedAt": "2026-11-19T20:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    },
-    {
-     "runId": "0549aab1e86c9bb37cfb5acc",
-     "scheduledFor": "2026-11-19T19:17:00.000Z",
-     "startedAt": "2026-11-19T19:17:36.251Z",
-     "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-after-each-release-train-leaves-the-staging-c-5-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
-     "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
-     "transitions": [
-      "launch-failed"
-     ],
-     "legacy": false,
-     "session": {
-      "instance": null,
-      "home": null,
-      "incarnation": null,
-      "server": null,
-      "delivery": "none"
-     }
-    }
-   ],
-   "running": false,
-   "name": "hourly-check-after-each-release-train-leaves-the-staging-c-5",
-   "origin": {
-    "kind": "local",
-    "path": "oats-schedules.json",
-    "url": null,
-    "localPath": "/abs/deployment/oats-schedules.json"
-   },
-   "description": null,
-   "owner": null,
-   "runsOn": null,
-   "runsHere": true,
-   "reason": null,
-   "enabledHere": true,
-   "qualifiedId": "local/hourly-check-after-each-release-train-leaves-the-staging-c-5",
-   "soul": {
-    "name": "oats-developer",
-    "origin": {
-     "kind": "member",
-     "repoKey": "local//abs/real/src/oats-real",
-     "member": "oats-real"
-    }
-   },
-   "teams": [],
-   "launchConfig": null,
-   "harness": null,
-   "model": null,
-   "concurrency": null,
-   "nextDue": "2026-11-21T21:00:00.000Z",
-   "enabled": true
-  },
-  {
-   "id": "hourly-check-with-a-summary-for-the-owning-team-and-follow-6",
-   "cron": "0 * * * *",
-   "tz": "UTC",
-   "kind": "spawn",
-   "agent": "oats-developer",
-   "backend": "bb",
-   "task": "Check the build queue.",
-   "createdAt": "2026-11-21T20:17:25.920Z",
-   "updatedAt": "2026-11-21T20:17:25.920Z",
-   "scope": "/abs/deployment",
-   "scheduleApi": 2,
-   "scheduleHistoryApi": 3,
-   "executionStatus": {
-    "kind": "legacy",
-    "capture": "unknown",
-    "migrationRequired": true
-   },
-   "nextRun": "2026-11-21T21:00:00.000Z",
-   "lastRun": {
-    "scheduledFor": "2026-11-21T20:17:00.000Z",
-    "startedAt": "2026-11-21T20:17:36.251Z",
-    "kind": "spawn",
-    "launched": false,
-    "error": "oats-developer-hourly-check-with-a-summary-for-the-owning-team-and-follow-6-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-    "errorCode": "E_BACKEND_SANDBOXED_MODE",
-    "unconfirmed": false,
-    "outcome": "launch-failed",
-    "runId": "6cf7aab1e86c9bb37cfb5acc",
-    "session": {
-     "instance": null,
-     "home": null,
-     "incarnation": null,
-     "server": null,
-     "delivery": "none"
+     "delivery": "launched"
     }
    },
    "history": {
@@ -6023,45 +4811,94 @@
    },
    "recentRuns": [
     {
-     "runId": "6cf7aab1e86c9bb37cfb5acc",
+     "runId": "32b84ee63dec280096616896",
      "scheduledFor": "2026-11-21T20:17:00.000Z",
-     "startedAt": "2026-11-21T20:17:36.251Z",
+     "startedAt": "2026-11-21T20:17:32.946Z",
+     "instance": "oats-developer-review-202611212017",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+     "launched": true,
      "kind": "spawn",
-     "launched": false,
-     "error": "oats-developer-hourly-check-with-a-summary-for-the-owning-team-and-follow-6-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
-     "errorCode": "E_BACKEND_SANDBOXED_MODE",
-     "unconfirmed": false,
-     "outcome": "launch-failed",
+     "materialized": "workspace",
+     "wakeSchedule": {
+      "id": "wake-oats-developer-review-202611212017",
+      "cron": "*/30 * * * *",
+      "tz": "Europe/Madrid",
+      "kind": "wake",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+      "message": "Anything new on your review?",
+      "createdAt": "2026-11-21T20:17:35.939Z",
+      "updatedAt": "2026-11-21T20:17:35.939Z",
+      "scope": "/abs/deployment",
+      "scheduleApi": 2,
+      "scheduleHistoryApi": 3,
+      "executionStatus": {
+       "kind": "legacy",
+       "capture": "unknown",
+       "migrationRequired": true
+      },
+      "nextRun": "2026-11-21T20:30:00.000Z",
+      "lastRun": null,
+      "history": {
+       "status": "ok",
+       "stored": 0,
+       "truncated": false
+      },
+      "recentRuns": [],
+      "running": false,
+      "name": "wake-oats-developer-review-202611212017",
+      "origin": {
+       "kind": "local",
+       "path": "oats-schedules.json",
+       "url": null,
+       "localPath": "/abs/deployment/oats-schedules.json"
+      },
+      "description": null,
+      "owner": null,
+      "runsOn": null,
+      "runsHere": true,
+      "reason": null,
+      "enabledHere": true,
+      "qualifiedId": "local/wake-oats-developer-review-202611212017",
+      "soul": null,
+      "task": null,
+      "teams": [],
+      "launchConfig": null,
+      "harness": null,
+      "model": null,
+      "concurrency": null,
+      "nextDue": "2026-11-21T20:30:00.000Z",
+      "enabled": true
+     },
+     "outcome": "launched",
      "settled": false,
-     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "recordedAt": "2026-11-21T20:17:36.253Z",
      "transitions": [
-      "launch-failed"
+      "launched"
      ],
      "legacy": false,
      "session": {
-      "instance": null,
-      "home": null,
+      "instance": "oats-developer-review-202611212017",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
       "incarnation": null,
       "server": null,
-      "delivery": "none"
+      "delivery": "launched"
      }
     }
    ],
-   "running": false,
-   "name": "hourly-check-with-a-summary-for-the-owning-team-and-follow-6",
+   "running": true,
+   "name": "daily-review-after-each-release-train-leaves-the-staging-c-5",
    "origin": {
     "kind": "local",
     "path": "oats-schedules.json",
     "url": null,
     "localPath": "/abs/deployment/oats-schedules.json"
    },
-   "description": null,
    "owner": null,
    "runsOn": null,
    "runsHere": true,
    "reason": null,
    "enabledHere": true,
-   "qualifiedId": "local/hourly-check-with-a-summary-for-the-owning-team-and-follow-6",
+   "qualifiedId": "local/daily-review-after-each-release-train-leaves-the-staging-c-5",
    "soul": {
     "name": "oats-developer",
     "origin": {
@@ -6075,7 +4912,218 @@
    "harness": null,
    "model": null,
    "concurrency": null,
-   "nextDue": "2026-11-21T21:00:00.000Z",
+   "nextDue": "2026-11-23T08:00:00.000Z",
+   "enabled": true
+  },
+  {
+   "id": "daily-review-with-a-summary-for-the-owning-team-and-follow-6",
+   "cron": "0 9 * * 1-5",
+   "tz": "Europe/Madrid",
+   "kind": "spawn",
+   "description": "Review open pull requests every weekday morning (daily review with a summary for the owning team and follow 6): every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone",
+   "agent": "oats-developer",
+   "backend": "bb",
+   "purpose": "review",
+   "task": "Review the open pull requests.\nReport what blocks each.",
+   "yolo": true,
+   "wake": {
+    "cron": "*/30 * * * *",
+    "tz": "Europe/Madrid",
+    "message": "Anything new on your review?"
+   },
+   "createdAt": "2026-11-21T20:17:25.238Z",
+   "updatedAt": "2026-11-21T20:17:25.238Z",
+   "scope": "/abs/deployment",
+   "scheduleApi": 2,
+   "scheduleHistoryApi": 3,
+   "executionStatus": {
+    "kind": "legacy",
+    "capture": "unknown",
+    "migrationRequired": true,
+    "intent": {
+     "kind": "legacy",
+     "capture": "unknown",
+     "migrationRequired": true
+    }
+   },
+   "nextRun": "2026-11-23T08:00:00.000Z",
+   "lastRun": {
+    "scheduledFor": "2026-11-21T20:17:00.000Z",
+    "startedAt": "2026-11-21T20:17:32.946Z",
+    "instance": "oats-developer-review-202611212017",
+    "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+    "launched": true,
+    "kind": "spawn",
+    "materialized": "workspace",
+    "wakeSchedule": {
+     "id": "wake-oats-developer-review-202611212017",
+     "cron": "*/30 * * * *",
+     "tz": "Europe/Madrid",
+     "kind": "wake",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+     "message": "Anything new on your review?",
+     "createdAt": "2026-11-21T20:17:35.939Z",
+     "updatedAt": "2026-11-21T20:17:35.939Z",
+     "scope": "/abs/deployment",
+     "scheduleApi": 2,
+     "scheduleHistoryApi": 3,
+     "executionStatus": {
+      "kind": "legacy",
+      "capture": "unknown",
+      "migrationRequired": true
+     },
+     "nextRun": "2026-11-21T20:30:00.000Z",
+     "lastRun": null,
+     "history": {
+      "status": "ok",
+      "stored": 0,
+      "truncated": false
+     },
+     "recentRuns": [],
+     "running": false,
+     "name": "wake-oats-developer-review-202611212017",
+     "origin": {
+      "kind": "local",
+      "path": "oats-schedules.json",
+      "url": null,
+      "localPath": "/abs/deployment/oats-schedules.json"
+     },
+     "description": null,
+     "owner": null,
+     "runsOn": null,
+     "runsHere": true,
+     "reason": null,
+     "enabledHere": true,
+     "qualifiedId": "local/wake-oats-developer-review-202611212017",
+     "soul": null,
+     "task": null,
+     "teams": [],
+     "launchConfig": null,
+     "harness": null,
+     "model": null,
+     "concurrency": null,
+     "nextDue": "2026-11-21T20:30:00.000Z",
+     "enabled": true
+    },
+    "outcome": "active",
+    "runId": "32b84ee63dec280096616896",
+    "session": {
+     "instance": "oats-developer-review-202611212017",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+     "incarnation": null,
+     "server": null,
+     "delivery": "launched"
+    }
+   },
+   "history": {
+    "status": "ok",
+    "stored": 1,
+    "truncated": false
+   },
+   "recentRuns": [
+    {
+     "runId": "32b84ee63dec280096616896",
+     "scheduledFor": "2026-11-21T20:17:00.000Z",
+     "startedAt": "2026-11-21T20:17:32.946Z",
+     "instance": "oats-developer-review-202611212017",
+     "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+     "launched": true,
+     "kind": "spawn",
+     "materialized": "workspace",
+     "wakeSchedule": {
+      "id": "wake-oats-developer-review-202611212017",
+      "cron": "*/30 * * * *",
+      "tz": "Europe/Madrid",
+      "kind": "wake",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+      "message": "Anything new on your review?",
+      "createdAt": "2026-11-21T20:17:35.939Z",
+      "updatedAt": "2026-11-21T20:17:35.939Z",
+      "scope": "/abs/deployment",
+      "scheduleApi": 2,
+      "scheduleHistoryApi": 3,
+      "executionStatus": {
+       "kind": "legacy",
+       "capture": "unknown",
+       "migrationRequired": true
+      },
+      "nextRun": "2026-11-21T20:30:00.000Z",
+      "lastRun": null,
+      "history": {
+       "status": "ok",
+       "stored": 0,
+       "truncated": false
+      },
+      "recentRuns": [],
+      "running": false,
+      "name": "wake-oats-developer-review-202611212017",
+      "origin": {
+       "kind": "local",
+       "path": "oats-schedules.json",
+       "url": null,
+       "localPath": "/abs/deployment/oats-schedules.json"
+      },
+      "description": null,
+      "owner": null,
+      "runsOn": null,
+      "runsHere": true,
+      "reason": null,
+      "enabledHere": true,
+      "qualifiedId": "local/wake-oats-developer-review-202611212017",
+      "soul": null,
+      "task": null,
+      "teams": [],
+      "launchConfig": null,
+      "harness": null,
+      "model": null,
+      "concurrency": null,
+      "nextDue": "2026-11-21T20:30:00.000Z",
+      "enabled": true
+     },
+     "outcome": "launched",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:17:36.253Z",
+     "transitions": [
+      "launched"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": "oats-developer-review-202611212017",
+      "home": "/abs/deployment/agents/oats-developer/instances/oats-developer-review-202611212017",
+      "incarnation": null,
+      "server": null,
+      "delivery": "launched"
+     }
+    }
+   ],
+   "running": true,
+   "name": "daily-review-with-a-summary-for-the-owning-team-and-follow-6",
+   "origin": {
+    "kind": "local",
+    "path": "oats-schedules.json",
+    "url": null,
+    "localPath": "/abs/deployment/oats-schedules.json"
+   },
+   "owner": null,
+   "runsOn": null,
+   "runsHere": true,
+   "reason": null,
+   "enabledHere": true,
+   "qualifiedId": "local/daily-review-with-a-summary-for-the-owning-team-and-follow-6",
+   "soul": {
+    "name": "oats-developer",
+    "origin": {
+     "kind": "member",
+     "repoKey": "local//abs/real/src/oats-real",
+     "member": "oats-real"
+    }
+   },
+   "teams": [],
+   "launchConfig": null,
+   "harness": null,
+   "model": null,
+   "concurrency": null,
+   "nextDue": "2026-11-23T08:00:00.000Z",
    "enabled": true
   },
   {
@@ -6117,7 +5165,7 @@
    },
    "history": {
     "status": "ok",
-    "stored": 1,
+    "stored": 50,
     "truncated": false
    },
    "recentRuns": [
@@ -6125,6 +5173,1182 @@
      "runId": "6cf7aab1e86c9bb37cfb5acc",
      "scheduledFor": "2026-11-21T20:17:00.000Z",
      "startedAt": "2026-11-21T20:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0701aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T19:17:00.000Z",
+     "startedAt": "2026-11-21T19:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0702aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T18:17:00.000Z",
+     "startedAt": "2026-11-21T18:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0703aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T17:17:00.000Z",
+     "startedAt": "2026-11-21T17:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0704aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T16:17:00.000Z",
+     "startedAt": "2026-11-21T16:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0705aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T15:17:00.000Z",
+     "startedAt": "2026-11-21T15:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0706aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T14:17:00.000Z",
+     "startedAt": "2026-11-21T14:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0707aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T13:17:00.000Z",
+     "startedAt": "2026-11-21T13:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0708aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T12:17:00.000Z",
+     "startedAt": "2026-11-21T12:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0709aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T11:17:00.000Z",
+     "startedAt": "2026-11-21T11:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0710aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T10:17:00.000Z",
+     "startedAt": "2026-11-21T10:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0711aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T09:17:00.000Z",
+     "startedAt": "2026-11-21T09:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0712aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T08:17:00.000Z",
+     "startedAt": "2026-11-21T08:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0713aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T07:17:00.000Z",
+     "startedAt": "2026-11-21T07:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0714aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T06:17:00.000Z",
+     "startedAt": "2026-11-21T06:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0715aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T05:17:00.000Z",
+     "startedAt": "2026-11-21T05:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0716aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T04:17:00.000Z",
+     "startedAt": "2026-11-21T04:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0717aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T03:17:00.000Z",
+     "startedAt": "2026-11-21T03:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0718aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T02:17:00.000Z",
+     "startedAt": "2026-11-21T02:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0719aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T01:17:00.000Z",
+     "startedAt": "2026-11-21T01:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0720aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-21T00:17:00.000Z",
+     "startedAt": "2026-11-21T00:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0721aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T23:17:00.000Z",
+     "startedAt": "2026-11-20T23:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0722aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T22:17:00.000Z",
+     "startedAt": "2026-11-20T22:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0723aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T21:17:00.000Z",
+     "startedAt": "2026-11-20T21:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0724aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T20:17:00.000Z",
+     "startedAt": "2026-11-20T20:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0725aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T19:17:00.000Z",
+     "startedAt": "2026-11-20T19:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0726aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T18:17:00.000Z",
+     "startedAt": "2026-11-20T18:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0727aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T17:17:00.000Z",
+     "startedAt": "2026-11-20T17:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0728aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T16:17:00.000Z",
+     "startedAt": "2026-11-20T16:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0729aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T15:17:00.000Z",
+     "startedAt": "2026-11-20T15:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0730aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T14:17:00.000Z",
+     "startedAt": "2026-11-20T14:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0731aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T13:17:00.000Z",
+     "startedAt": "2026-11-20T13:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0732aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T12:17:00.000Z",
+     "startedAt": "2026-11-20T12:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0733aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T11:17:00.000Z",
+     "startedAt": "2026-11-20T11:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0734aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T10:17:00.000Z",
+     "startedAt": "2026-11-20T10:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0735aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T09:17:00.000Z",
+     "startedAt": "2026-11-20T09:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0736aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T08:17:00.000Z",
+     "startedAt": "2026-11-20T08:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0737aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T07:17:00.000Z",
+     "startedAt": "2026-11-20T07:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0738aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T06:17:00.000Z",
+     "startedAt": "2026-11-20T06:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0739aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T05:17:00.000Z",
+     "startedAt": "2026-11-20T05:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0740aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T04:17:00.000Z",
+     "startedAt": "2026-11-20T04:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0741aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T03:17:00.000Z",
+     "startedAt": "2026-11-20T03:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0742aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T02:17:00.000Z",
+     "startedAt": "2026-11-20T02:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0743aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T01:17:00.000Z",
+     "startedAt": "2026-11-20T01:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0744aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-20T00:17:00.000Z",
+     "startedAt": "2026-11-20T00:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0745aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-19T23:17:00.000Z",
+     "startedAt": "2026-11-19T23:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0746aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-19T22:17:00.000Z",
+     "startedAt": "2026-11-19T22:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0747aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-19T21:17:00.000Z",
+     "startedAt": "2026-11-19T21:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0748aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-19T20:17:00.000Z",
+     "startedAt": "2026-11-19T20:17:36.251Z",
+     "kind": "spawn",
+     "launched": false,
+     "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",
+     "errorCode": "E_BACKEND_SANDBOXED_MODE",
+     "unconfirmed": false,
+     "outcome": "launch-failed",
+     "settled": false,
+     "recordedAt": "2026-11-21T20:19:12.723Z",
+     "transitions": [
+      "launch-failed"
+     ],
+     "legacy": false,
+     "session": {
+      "instance": null,
+      "home": null,
+      "incarnation": null,
+      "server": null,
+      "delivery": "none"
+     }
+    },
+    {
+     "runId": "0749aab1e86c9bb37cfb5acc",
+     "scheduledFor": "2026-11-19T19:17:00.000Z",
+     "startedAt": "2026-11-19T19:17:36.251Z",
      "kind": "spawn",
      "launched": false,
      "error": "oats-developer-hourly-check-accessibility-contrast-audit-202611212017 was not launched: oats.bb's session provider bb is not ready (needs-configuration): E_BACKEND_SANDBOXED_MODE: this launch would run in bb's accept-edits mode, a sandboxed mode, and the bb backend launches in bb's full mode only: sandboxed modes are not offered (bb lets a command leave its sandbox, so they are no boundary between an agent and your account). Launch in full mode: spawn or start with --yolo (or a launch configuration's --permission-mode bypassPermissions). Nothing was started — spawn rolled back",

@@ -313,14 +313,16 @@ export function build() {
   const triggerDoc = recorded("automations/trigger-list.json");
   const schedule = (id) => scheduleDoc.schedules.find((row) => row.id === id);
   const trigger = (id) => triggerDoc.triggers.find((row) => row.id === id);
-  // [recorded id, how many]: the FAILING ones are hourly-check (not launched) ×3 and legacy-herdr (invalid) ×1;
-  // status-check ×1 is a launch whose state is UNKNOWN: a warning, not a failure.
-  const SCHEDULES = [["daily-review", 5], ["hourly-check", 3], ["legacy-herdr", 1], ["notes-checkpoint", 4], ["status-check", 1], ["weekly-cleanup", 4], ["oats-real/nightly-digest", 3], ["oats-real/reconcile", 1], ["oats-real/release-check", 1], ["oats-real/weekly-report", 2]];
-  // …and among the triggers harvest-closed (invalid) ×1: five failing in all.
+  // [recorded id, how many]. FIVE FAIL, by the Automations page's one rule of what is failing (a launch that failed, a
+  // definition that cannot run, an account that is not the one it acts as, no trust, a source's check that failed):
+  // hourly-check (launch failed) ×1, legacy-herdr (invalid) ×1, oats-real/reconcile (wrong account) ×1,
+  // oats-real/release-check (not trusted) ×1, and among the triggers harvest-closed (its source's check failed) ×1.
+  // One more, status-check, is a launch whose state is UNKNOWN: a warning there, not a failure, and not one of the five.
+  const SCHEDULES = [["daily-review", 7], ["hourly-check", 1], ["legacy-herdr", 1], ["notes-checkpoint", 4], ["status-check", 1], ["weekly-cleanup", 4], ["oats-real/nightly-digest", 3], ["oats-real/reconcile", 1], ["oats-real/release-check", 1], ["oats-real/weekly-report", 2]];
   const TRIGGERS = [["local/graph-watch", 2], ["local/old-prs", 2], ["local/pr-triage", 2], ["oats-real/docs-review", 1], ["oats-real/harvest-closed", 1], ["oats-real/harvest-review", 2], ["oats-real/proposal-review", 2]];
   const bare = (id) => id.slice(id.lastIndexOf("/") + 1);
-  const agentOf = (kind) => made.agents.find((each) => each.kind === kind && each.row.backend === "bb").row;
-  const RUN_AGENTS = [agentOf("ask"), agentOf("stopped"), agentOf("work")];
+  // The three busy agents that runs of the first schedule name: the first of the roster that asks, that is stopped, that works.
+  const RUN_AGENTS = ["ask", "stopped", "work"].map((kind) => made.agents.find((each) => each.kind === kind).row);
   let s = 0;
   for (const [id, count] of SCHEDULES) {
     for (let k = 0; k < count; k += 1, s += 1) {
@@ -330,8 +332,9 @@ export function build() {
       const name = s >= 2 && s <= 6 ? sixty(LONG_AUTOMATION[Math.max(0, s - 3)], s === 2 ? 1 : s === 3 ? 2 : s) : `${bare(id)}-${ALONE[s % ALONE.length]}`;
       const set = [];
       if (typeof from.description === "string") set.push([["description"], LONG(`${from.description} (${name.replace(/-/g, " ")})`)]);
-      // ONE long instruction (the first schedule's second copy): the recorded task, twelve times, numbered.
-      if (s === 1 && typeof from.task === "string" && from.task !== "") set.push([["task"], Array.from({ length: 12 }, (_, line) => `${line + 1}. ${from.task.replace(/\n/g, " ")}`).join("\n")]);
+      // ONE LONG INSTRUCTION, on the first schedule (the one whose runs name busy agents, below): the recorded instruction
+      // twelve times over, numbered, as an instruction of several paragraphs is long. No word of it is written here.
+      if (s === 0) set.push([["task"], Array.from({ length: 12 }, (_, line) => `${line + 1}. ${from.task}`).join("\n\n")]);
       // Fifty runs: the recorded run, fifty times, each with its own id and times; the history's count follows.
       if (k === 0 && Array.isArray(from.recentRuns) && from.recentRuns.length > 0 && typeof from.recentRuns[0].runId === "string") {
         const runs = Array.from({ length: 50 }, (_, r) => {
@@ -339,16 +342,16 @@ export function build() {
           const first = from.recentRuns[0];
           const earlier = (time) => new Date(Date.parse(time) - r * 3_600_000).toISOString();
           // (Each carries the schedule's name wherever the recorded run writes it, as the row's `lastRun` does.)
-          // A RELATION, on the first schedule alone: its three newest runs were of three agents of the set (one that
-          // asks, one that is stopped, one that works): the run's session names that agent and its home.
-          const of = s === 0 && r < RUN_AGENTS.length && first.session && typeof first.session.instance === "string" ? [[["session", "instance"], RUN_AGENTS[r].instance], [["session", "home"], RUN_AGENTS[r].home]] : [];
-          const run = r === 0 ? vary(first, [[bare(id), name]], of) : vary(first, [[bare(id), name], [first.runId, `${String(s).padStart(2, "0")}${String(r).padStart(2, "0")}${first.runId.slice(4)}`]], [[["scheduledFor"], earlier(first.scheduledFor)], [["startedAt"], earlier(first.startedAt)], ...of]);
+          // THE AGENT A RUN MADE is a relation: on the first schedule, the three runs AFTER the newest name three agents
+          // of the busy roster (one that asks, one that is stopped, one that works) wherever the recorded run names the
+          // agent it made (its `instance`, its `home`, its wake schedule). The newest stays the recorded run.
+          const agent = s === 0 ? RUN_AGENTS[r - 1] : undefined;
+          const agentSwaps = agent === undefined ? [] : [[first.home.slice(0, first.home.lastIndexOf("/instances/") + 1), agent.home.slice(0, agent.home.lastIndexOf("/instances/") + 1)], [first.instance, agent.instance]];
+          const run = r === 0 ? vary(first, [[bare(id), name]], []) : vary(first, [[bare(id), name], [first.runId, `${String(s).padStart(2, "0")}${String(r).padStart(2, "0")}${first.runId.slice(4)}`], ...agentSwaps], [[["scheduledFor"], earlier(first.scheduledFor)], [["startedAt"], earlier(first.startedAt)]]);
           made.runs.push(run);
           return run.row;
         });
         set.push([["recentRuns"], runs]);
-        // …and the row's `lastRun` is of its newest run: where that run is an agent of the set's, it names the same one.
-        if (s === 0 && from.lastRun && typeof from.lastRun.instance === "string" && runs[0].session?.instance !== from.recentRuns[0].session?.instance) set.push([["lastRun", "instance"], runs[0].session.instance], [["lastRun", "home"], runs[0].session.home]);
         if (from.history && typeof from.history.stored === "number") set.push([["history", "stored"], runs.length]);
       }
       made.schedules.push(vary(from, [[bare(id), name]], set));

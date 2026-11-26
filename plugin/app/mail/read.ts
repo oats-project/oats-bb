@@ -41,6 +41,9 @@ export type MailRead = {
  * How long what was read is FRESH: the one bound of the view. While it is fresh the head says no
  * age and a view that is mounted reads nothing; once it is older, the head says "Read <age>." and
  * a view that is mounted reads again behind it. Refresh reads at any time.
+ * The plugin has no one constant for this: the instance panel's Readiness says "Read <age>." beside
+ * its Refresh by the same minute, as a number of its own (app/panel/Readiness.tsx), and
+ * `readAge` (app/ui/words.ts) says "less than a minute ago" under it. This is that minute, named.
  */
 export const FRESH_MS = 60_000;
 

@@ -295,8 +295,8 @@ container alone. Run by mistake on a person's machine, each REFUSES before it to
 
     refused: live-ui.mjs runs only inside the container of the oats-bb plugin checks (it changes the machine it runs on); start it with plugin/container/ci.sh, never by hand
 
-(exit 97). The guard is one line at the very top of each: `. "$(dirname "$0")/guard.sh"` in a shell
-script, `import "./guard.mjs";` as the first import of a `.mjs`.
+(exit 97). The guard is one line at the very top of each: `. "$(dirname "$0")/guard.sh" || exit 97` in a shell
+script (a copy of the script with no guard beside it stops there too), `import "./guard.mjs";` as the first import of a `.mjs`.
 
 **The mark** is a file that only the image built from this directory's `Dockerfile` carries,
 `/etc/oats-bb-checks-image`. A file and not an environment variable: the scripts start their own

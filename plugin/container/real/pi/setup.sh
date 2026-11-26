@@ -10,7 +10,7 @@
 #   and NOT the aweb extension for pi (@awebai/pi) in that configuration;
 #   the provider `mock` of that configuration (models.json) and its endpoint (mock-openai.mjs);
 #   one extension of the run's own, whose tool opens a dialog of pi (ask-dialog.ts).
-. "$(dirname "$0")/../../guard.sh" # refuses outside the checks' container, before anything is touched
+. "$(dirname "$0")/../../guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 REAL=${REAL:-/home/node/real}

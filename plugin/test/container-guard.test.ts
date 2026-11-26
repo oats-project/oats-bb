@@ -82,9 +82,24 @@ describe("only inside the checks' container", () => {
         expect([script, first]).toEqual([script, `import "${up === "" ? "." : up}/guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched`]);
       } else {
         const first = lines.slice(1).find((line) => line.trim() !== "" && !line.startsWith("#"));
-        expect([script, first]).toEqual([script, `. "$(dirname "$0")/${up === "" ? "" : `${up}/`}guard.sh" # refuses outside the checks' container, before anything is touched`]);
+        expect([script, first]).toEqual([script, `. "$(dirname "$0")/${up === "" ? "" : `${up}/`}guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)`]);
       }
     }
+  });
+
+  it.each(Object.entries(GUARDED).filter(([, runner]) => runner !== "node"))("%s, copied somewhere WITHOUT the guard beside it, does not run on: it ends there, and changes nothing", (script, runner) => {
+    // (bash goes on after a `.` of a file that is not there: `|| exit 97` on the guard's own line stops it. A `.mjs` whose import is not there does not load at all.)
+    const person = home();
+    const alone = mkdtempSync(join(tmpdir(), "oats-bb-guard-alone-"));
+    made.push(alone);
+    const copy = join(alone, script.slice(script.lastIndexOf("/") + 1));
+    writeFileSync(copy, readFileSync(join(CONTAINER, script)));
+    const before = holds(person);
+    const ran = spawnSync(runner, [copy], { cwd: person, encoding: "utf8", timeout: 30_000, env: { HOME: person, USER: "person", PATH: `${join(person, ".local", "bin")}:${dirname(process.execPath)}:/usr/bin:/bin` } });
+    expect([ran.status !== 0 && ran.status !== null, ran.stdout, runner === "bash" ? ran.status : 97]).toEqual([true, "", 97]);
+    expect(ran.stderr).toMatch(/guard\.sh/);
+    expect(holds(person)).toEqual(before);
+    expect(readdirSync(alone)).toEqual([script.slice(script.lastIndexOf("/") + 1)]);
   });
 
   it("where the mark is, the guard lets a script run; and the switch that makes it absent can only refuse", () => {

@@ -12,7 +12,7 @@
 #     (`trust: container`, the pinned version) and NO launch configuration: nothing on the host
 #     chooses bb's full mode, so a spawn launches in it only because it asks (`--yolo`: the
 #     plugin's on every spawn, the scenario's own for the agents it makes on the command line).
-. "$(dirname "$0")/../guard.sh" # refuses outside the checks' container, before anything is touched
+. "$(dirname "$0")/../guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)
 set -eu
 REAL=${REAL:-/home/node/real}
 BB_VERSION=${BB_VERSION:-$(bb --version)}

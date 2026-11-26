@@ -2,7 +2,7 @@
 # Runs inside the container, as node, in the plugin's directory: installs bb at the pinned version
 # and the plugin's dependencies. Inside the container so that the installs run under
 # its CPU and memory limits and never touch the host.
-. "$(dirname "$0")/guard.sh" # refuses outside the checks' container, before anything is touched
+. "$(dirname "$0")/guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)
 set -eu
 cd "$(dirname "$0")/.."
 # The version: the repository's pin when ci.sh read one (BB_VERSION, from bb-version at the

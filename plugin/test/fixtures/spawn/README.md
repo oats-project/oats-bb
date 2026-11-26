@@ -47,6 +47,24 @@ edit. `../README.md` says how the first two were recorded.
   These seven were recorded by `container/real/parts/spawn.mjs` on 2026-11-22 (OATS 0.70.0 from
   npm); the live checks' stages (`container/scenes/spawn.mjs`, `stages`) answer them.
 
+## A deployment with no bb session provider
+
+Four answers of the real kernel (OATS 0.70.5) on the real run's SECOND deployment
+(`container/real/workspace.sh`: a workspace whose catalog holds no `oats.bb`), recorded by
+`container/real/parts/plain.mjs` on 2026-11-24, whole, with the real run's substitutions and no
+other edit:
+
+- `capabilities-show-bb-absent.json`: `oats capabilities show oats.bb --json` there: refused,
+  `E_CAPABILITY_UNKNOWN`, `details: { name }` alone.
+- `spawn-preview-no-provider.json`: `oats spawn <soul> --name … --preview --json`, as the form
+  asks it there: no `--backend`, no `--yolo`, no `--harness`, no `--model`. The kernel decided:
+  `backend: "tmux"`, `backendStatus`, the soul's harness and model, and NO mode
+  (`decision.effective.yolo: null`).
+- `spawn-no-provider.json`: the apply of that decision: launched in a window of the OATS tmux
+  server (`tmux`, `attach`), `session: null`, no thread.
+- `status-row-no-provider.json`: the new agent's row of `oats status --json` there: `backend:
+  "tmux"`, `running: true`.
+
 No file above is shaped. One answer of a spawn that is shaped is made where it is used, and says
 so there: a spawn the kernel refused and could not roll back completely (`details.unconfirmed`),
 which the real run cannot make (the kernel's own removal of the home would have to fail). The live

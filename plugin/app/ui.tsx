@@ -119,18 +119,6 @@ export function Lines({ text }: { text: string }) {
   );
 }
 
-/** A kernel refusal or a failed call: the kernel's code and message, through the display filter. */
-export function ErrorLine({ children, onRetry }: { children: string; onRetry?: () => void }) {
-  return (
-    <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive-text">
-      <span className="min-w-0 break-words">
-        <Lines text={children} />
-      </span>
-      {onRetry === undefined ? null : <Button onClick={onRetry}>Retry</Button>}
-    </div>
-  );
-}
-
 /** The frame of a full page (a navPanel): scrolls by itself, padded, readable width. */
 export function Page({ children, testId }: { children: ReactNode; testId: string }) {
   return (

@@ -45,6 +45,8 @@ export type Oats = {
   threads: readonly PluginSidebarThread[];
   threadById: ReadonlyMap<string, PluginSidebarThread>;
   retry(): void;
+  /** The roster read again with NO person asking (a look of the plugin's own): the same read as `retry`, and not counted as a press of the roster's Retry (`useRosterAsked`). */
+  reread(): void;
   /**
    * The soul to print for an agent: the key of the matching soul (`<package>/<soul>` for a
    * package soul) once the souls are read, else the roster's name for it.
@@ -122,6 +124,7 @@ export function useOats(): Oats {
       noteAsked();
       read.retry();
     },
+    reread: () => read.retry(),
     soulOf,
   };
   // Why OATS cannot be read now, if it cannot: the call to the plugin's server failed, or the server says so.

@@ -201,7 +201,20 @@ describe("the form's own rows of the preview", () => {
     const { decision: _silent, ...undecided } = preview as Record<string, unknown>;
     expect(formFacts(undecided).facts.filter((fact) => fact.label === "Access").map((fact) => fact.parts[0]!.text)).toEqual(["full mode: no sandbox"]);
     expect(formFacts({ ...preview, decision: { revision: "r1" } }).facts.filter((fact) => fact.label === "Access").map((fact) => fact.parts[0]!.text)).toEqual(["full mode: no sandbox"]);
-    expect(formFacts({ ...preview, backend: "tmux", decision: { effective: { yolo: false } } }).facts.filter((fact) => ["Session", "Access"].includes(fact.label)).map((fact) => fact.parts[0]!.text)).toEqual(["tmux", "the harness asks before it acts"]);
+    // An agent the kernel puts on tmux (a deployment with no bb session provider): where it runs, in the words of the instance panel's Session card; never "Session".
+    expect(formFacts({ ...preview, backend: "tmux", decision: { effective: { yolo: false } } }).facts.filter((fact) => ["Session", "Runs in", "Access"].includes(fact.label)).map((fact) => [fact.label, fact.parts[0]!.text])).toEqual([["Runs in", "tmux session"], ["Access", "the harness asks before it acts"]]);
+    // The Access row follows what was ASKED. The kernel's own preview of a spawn with no backend and no mode named, on a
+    // deployment with no bb session provider (recorded by the real run): `yolo: null`. Full mode was not asked, so
+    // nothing says "no sandbox": no Access row at all (the harness runs as its own settings say). A decision the
+    // preview does carry is said either way.
+    const plain = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: { backend: string; decision: { effective: { yolo: boolean | null } } } }).result;
+    expect([plain.backend, plain.decision.effective.yolo]).toEqual(["tmux", null]);
+    const drawn = (facts: ReturnType<typeof formFacts>) => facts.facts.filter((fact) => ["Session", "Runs in", "Access"].includes(fact.label)).map((fact) => [fact.label, fact.parts[0]!.text]);
+    expect(drawn(formFacts(plain, { fullMode: false }))).toEqual([["Runs in", "tmux session"]]);
+    expect(drawn(formFacts({ ...plain, decision: { effective: { yolo: true } } }, { fullMode: false }))).toEqual([["Runs in", "tmux session"], ["Access", "full mode: no sandbox"]]);
+    expect(drawn(formFacts({ ...plain, decision: { effective: { yolo: false } } }, { fullMode: false }))).toEqual([["Runs in", "tmux session"], ["Access", "the harness asks before it acts"]]);
+    expect(formFacts({}, { fullMode: false }).facts).toEqual([]);
+    expect(formFacts({ ...preview, backend: "bb" }).facts.filter((fact) => ["Session", "Runs in"].includes(fact.label)).map((fact) => [fact.label, fact.parts[0]!.text])).toEqual([["Session", "bb thread"]]);
   });
 
   it("a harness with no model resolved, on bb: the row says bb's default for it, never an empty value nor another harness's model", () => {

@@ -23,7 +23,7 @@ import * as workspace from "../workspace/handlers";
 import { fixtureAgents, fixtureThreads } from "./fixtures";
 
 // The unit tests draw every page: a slot rendered with no settings stands for a deployment that
-// shows them all. The release's default (`home` alone) is what a test names: `settings: { pages: "home" }`.
+// shows them all. A deployment that shows the home alone is what a test names: `settings: { pages: "home" }`; the release's default (the home and the Workspace page's four tabs) is `showEveryPageWhenUnset(false)`.
 showEveryPageWhenUnset(true);
 /** Every page's id, for a test that names the setting. */
 export const ALL_PAGES = PAGE_IDS.join(", ");

@@ -74,14 +74,11 @@ describe("the choices of the New agent form, at the server", () => {
     await expect(backend.rpc("spawnPlan", { soul: "oats-developer", task: "t", relation: { kind: "sibling", to: "flaky-ci-developer", root: "/elsewhere" } })).rejects.toThrow();
   });
 
-  it("a preview that is no decision a spawn could apply is refused to the form with the kernel's code; a soul's page still gets it as a problem line", async () => {
+  it("a preview that is no decision a spawn could apply is refused to the form with the kernel's code", async () => {
     const document = JSON.parse(await readFile(join(process.cwd(), "test/fixtures/spawn/spawn-preview.json"), "utf8")) as { result: { launch: Record<string, unknown> } };
     document.result.launch.problem = { code: "E_LAUNCH_EXECUTABLE", message: "pi is not on PATH" };
     await backend.fake.behave({ "spawn --preview": { stdout: JSON.stringify(document) } });
     expect(await refusalOf(backend.rpc("spawnPlan", { soul: "oats-developer", task: "" }))).toEqual({ code: "conflict", message: "E_LAUNCH_EXECUTABLE: pi is not on PATH" });
-    const old = (await backend.rpc("spawnPreview", { soul: "oats-developer", name: "x-developer", task: "t" })) as { summary: { problems: string[] } };
-    expect(Object.keys(old)).toEqual(["summary"]);
-    expect(old.summary.problems).toEqual(["E_LAUNCH_EXECUTABLE: pi is not on PATH"]);
   });
 
   it("the agents root of a home: the home without <agent>/instances/<instance>; a home of another shape names none", async () => {

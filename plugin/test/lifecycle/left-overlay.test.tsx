@@ -58,6 +58,26 @@ async function overlay(after: object | (() => object | null) = {}, over: Partial
   await new Promise((resolve) => setTimeout(resolve, 0));
   return slot;
 }
+// The look's own re-read is no person's press of the roster's Retry: the count that the places with a read of their own
+// listen to (app/oats.ts `useRosterAsked`: the panel's failed parts read again on a press) does not move for it.
+test("the look reads the roster again without counting as a press of the roster's Retry", async () => {
+  const { render } = await import("@testing-library/react");
+  const { useRosterAsked } = await import("../../app/oats");
+  const counts: number[] = [];
+  const Probe = () => {
+    counts.push(useRosterAsked());
+    return null;
+  };
+  const probe = render(<Probe />);
+  const before = counts.at(-1)!;
+  const slot = await overlay();
+  archiveInBb();
+  await waitFor(() => expect(notified()).toHaveLength(1));
+  expect(refreshes(slot)).toBeGreaterThan(0); // it did ask OATS again
+  expect(counts.at(-1)).toBe(before);
+  probe.unmount();
+});
+
 const archiveInBb = () => act(() => bbList.set(fixtureThreads().filter((thread) => thread.id !== "thr_redesign")));
 const refreshes = (slot: Awaited<ReturnType<typeof overlay>>) => slot.inspection.rpcCalls.filter((call) => call.method === "refresh").length;
 

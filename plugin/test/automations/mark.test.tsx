@@ -20,10 +20,10 @@ async function sidebar(over: Partial<Handlers> = {}) {
 const lists = (schedule = schedules()) => () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedule }, trigger: { ok: true as const, list: triggers() } });
 const mark = (row: HTMLElement) => row.querySelector('[data-testid="oats-mark"]');
 
-test("Automations is a row of the block, under the four pages, and opens its page", async () => {
+test("Automations is a row of the block, under Workspace, and opens its page", async () => {
   const slot = await sidebar();
   const row = await slot.findByTestId("oats-page-link-automations");
-  expect(Array.from(slot.container.querySelectorAll('[data-testid^="oats-page-link-"]')).map((link) => link.textContent)).toEqual(["Souls", "Capabilities", "Teams", "Machines", "Automations"]);
+  expect(Array.from(slot.container.querySelectorAll('[data-testid^="oats-page-link-"]')).map((link) => link.textContent)).toEqual(["Workspace", "Automations"]);
   fireEvent.click(row);
   expect(slot.inspection.navigateCalls).toEqual([{ method: "toPluginPanel", path: "automations" }]);
 });

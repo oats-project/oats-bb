@@ -162,12 +162,17 @@ export function previewFacts(preview: unknown, { name = null, unnamed }: { name?
  * The preview's facts as the form's column lists them: the Desktop's (`previewFacts`), and three
  * of the plugin's own, each read from the same answer (never assumed, but the access where the
  * answer is silent on it: below): the soul (the Desktop's
- * dialog names it in its title alone), that the session is a bb thread (the Desktop's Session
- * backend is a control; here it is always bb, and said), and the access the agent runs with (the
- * plugin asks for bb's full mode on every spawn: the row says what the kernel decided). The
+ * dialog names it in its title alone), where the session is (the Desktop's Session
+ * backend is a control; here the row says the place the kernel's preview names), and the access the agent runs with
+ * (the plugin asks for bb's full mode on every spawn of a bb thread, and for no mode otherwise: the row says what
+ * the kernel decided). The
  * launch-prompt note (`prompts`) is not the form's yet, and is left out.
  */
 export type FormFacts = Omit<PreviewFacts, "prompts">;
+/** The preview's row of an agent that will not run on a bb thread: where it runs (the instance panel's Session card says the same of it). */
+export const RUNS_IN = "Runs in";
+/** A session backend as a person reads it: where the agent's session is. One the plugin has no words for is its id. */
+const backendLabel = (backend: string): string => (backend === "bb" ? "bb thread" : backend === "tmux" ? "tmux session" : backend);
 /** The model of a spawn on bb that names none for its harness: bb's own default for it. */
 export const bbDefaultModel = (harness: string): string => `bb’s default for ${harnessLabel(harness)}`;
 
@@ -222,7 +227,11 @@ export function withoutDefault<Row extends { label: string; parts: { text: strin
   const promised = `${harnessLabel(harness)} · ${bbDefaultModel(harness)}`;
   return rows.map((row) => (row.label === "Harness" && row.parts[0]?.text === promised ? { ...row, parts: [{ ...row.parts[0], text: harnessLabel(harness) }, ...row.parts.slice(1)] } : row));
 }
-export function formFacts(preview: unknown, options: { name?: string | null } = {}): FormFacts {
+/**
+ * `fullMode`: whether the plugin asks for bb's full mode in the spawn this preview is of (`--yolo`, which it passes with
+ * `--backend bb`). Not given: it does (the spawn on bb, the only one there was).
+ */
+export function formFacts(preview: unknown, options: { name?: string | null; fullMode?: boolean } = {}): FormFacts {
   const { prompts: _later, ...facts } = previewFacts(preview, options);
   const data: Json = record(preview) ? preview : {};
   const rows = [...facts.facts];
@@ -243,14 +252,19 @@ export function formFacts(preview: unknown, options: { name?: string | null } = 
   if (soul !== null) rows.unshift({ label: "Soul", parts: [{ text: soul }] });
   const decision = record(data.decision) && record(data.decision.effective) ? data.decision.effective : {};
   const backend = text(data.backend);
-  // What the agent may do: ALWAYS a row (it is the one place the form says it, in view of Spawn). The kernel's own
-  // decision where the preview carries it; where it carries none, what the plugin asks on every spawn (`--yolo`: bb's
-  // full mode): a preview that is silent on it never leaves a Spawn that can be pressed with nothing saying "no sandbox"
-  // (the review of part 7).
-  const access = decision.yolo === false ? "the harness asks before it acts" : "full mode: no sandbox";
+  // What the agent may do (the one place the form says it, in view of Spawn): the kernel's own decision where the
+  // preview carries one. Where it carries none, what the plugin ASKS: on bb it asks for full mode (`--yolo`), so a
+  // preview that is silent never leaves a Spawn that can be pressed with nothing saying "no sandbox" (the review of
+  // part 7). Where the plugin asks for no mode (an agent the kernel puts on tmux) and the kernel decided none
+  // (`yolo: null`, recorded: `spawn-preview-no-provider.json`), the harness runs as its own settings say, which the
+  // plugin does not know: NO row, never "no sandbox" by a rule of bb's that does not hold there.
+  const access = decision.yolo === true ? "full mode: no sandbox" : decision.yolo === false ? "the harness asks before it acts" : options.fullMode === false ? null : "full mode: no sandbox";
   // After the harness: where its session is, then what it may do.
-  after("Harness", { label: "Access", parts: [{ text: access }] });
-  if (backend !== null) after("Harness", { label: "Session", parts: [{ text: backend === "bb" ? "bb thread" : backend }] });
+  if (access !== null) after("Harness", { label: "Access", parts: [{ text: access }] });
+  // Where it will run, from the preview's own `backend`. On bb: "Session / bb thread", as it was. On tmux (a deployment
+  // with no bb session provider: the kernel decided): "Runs in / tmux session", the words of the instance panel's
+  // Session card, in view in the form's column.
+  if (backend !== null) after("Harness", backend === "tmux" ? { label: RUNS_IN, parts: [{ text: backendLabel(backend) }] } : { label: "Session", parts: [{ text: backendLabel(backend) }] });
   return { ...facts, facts: rows };
 }
 

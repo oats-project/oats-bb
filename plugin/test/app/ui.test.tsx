@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Button, Card, Code, Confirm, CopyButton, DisabledReason, Disclosure, Empty, Fact, Facts, Field, Loading, Menu, Notice, Result, SearchField, Section, Segmented, Stale, State, StateMark, StatusLine, Switch, Tabs, Toned } from "../../app/ui";
 import type { ConfirmProps } from "../../app/ui";
 import type { AgentState } from "../../model/types";
-import { instanceDisplayName, readAge, STATE, waitedText, waitingClock, waitingDetail, waitingLabel, waitingSince } from "../../app/ui/words";
+import { FRESH_MS, instanceDisplayName, readAge, STATE, waitedText, waitingClock, waitingDetail, waitingLabel, waitingSince } from "../../app/ui/words";
 
 afterEach(cleanup);
 
@@ -67,6 +67,8 @@ describe("the words", () => {
     expect([readAge(ago(61 * 60_000), now), readAge(ago(3 * 3_600_000 + 50 * 60_000), now), readAge(ago(23 * 3_600_000 + 59 * 60_000), now)]).toEqual(["1 h ago", "3 h ago", "23 h ago"]);
     expect([readAge(ago(24 * 3_600_000), now), readAge(ago(2 * 86_400_000 + 5 * 3_600_000), now)]).toEqual(["1 d ago", "2 d ago"]);
     expect([readAge("not a date", now), readAge(now + 60_000, now)]).toEqual([null, "less than a minute ago"]); // not readable: no age
+    // The bound of "fresh" (`FRESH_MS`: a minute): under it no age in minutes is said; at it, the first.
+    expect([FRESH_MS, readAge(now - (FRESH_MS - 1), now), readAge(now - FRESH_MS, now)]).toEqual([60_000, "less than a minute ago", "1 min ago"]);
   });
 });
 

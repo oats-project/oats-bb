@@ -1151,6 +1151,140 @@ entry (bb takes both from a plugin command registered with a default shortcut).
 `test/fixtures/automations/` holds what the real kernel printed for every command the feature
 runs, and `record/` there makes the recording again (its README says what was arranged).
 
+## The act log
+
+Every ACT the plugin asks of the kernel is written to bb's log of the plugin (bb's own logger: the
+plugin's lines stand beside bb's, with bb's level and time before them): one line when the kernel
+is asked, one when it ends, and one where the plugin HELD the act before it asked. It answers "what
+did this bb do to that agent, and when" after the fact (a stop nobody remembers pressing; "I
+pressed Stop and nothing happened").
+
+An act is a verb that changes something: `start`, `restart`, `stopApply`, `retireApply`, `spawn`,
+and the automations' `automationEnable`, `scheduleRun`, `automationDescribe`, `scheduleRemove`,
+`scheduleReconcile`, `schedulerEnable`; and a trigger's TEST that RUNS its source's command on the
+machine (`automationTest` on a confirmed press: an act by its argument). A read, a preview, a plan
+and a test that runs nothing are not logged (the roster is read every few seconds). Nor is the
+terminal of an agent on tmux: `terminalCommand` answers the viewer's command and bb's own terminal
+runs it, so the plugin asks the kernel for nothing that changes; it is GUARDED like an act (refused
+while OATS cannot be read), which is a rule of who may ask, not of what is logged.
+
+The line is a contract: one act, one line, `key=value` separated by one space, in this order
+(`server/act-log.ts`):
+
+```
+oats act <verb> asked <subject> caller=<c> host=<h> at=<iso> n=<k>
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=ok ms=<n> [homes=<ok>/<all>] [made=<instance>]
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=INCOMPLETE ms=<n> [homes=<ok>/<all>] [code=<CODE>]
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=DEFERRED ms=<n> homes=<ok>/<all>
+oats act <verb> ended <subject> caller=<c> host=<h> at=<iso> n=<k> result=<CODE> ms=<n>
+oats act <verb> held <subject> caller=<c> host=<h> at=<iso> n=<k> result=HELD:<code> why=<word>
+```
+
+- `<subject>`: `instance=<name>`; for a spawn `soul=<soul> name=<the name asked, or ->`; for an
+  automation `automation=<kind>:<id>` (the row's own id once it was found: the one the kernel is
+  asked with); for the scheduler `scheduler=-`.
+- `caller`: what bb says of who asked: `plugin:<id>` (another plugin), or `client`: EVERYTHING
+  else: the app's window, the `bb` CLI, an agent that calls bb, bb itself. bb tells those apart no
+  further: `caller=client` does not say that a person pressed it. **bb has no person to name**: a
+  bb is one person's, and it gives a plugin no user.
+- `host`: bb's id of the machine the act was SENT to: the same on an act's two lines, whatever the
+  server reads meanwhile. `-` on a hold: no machine was asked.
+- `at`: the plugin server's clock, UTC.
+- `n`: the act's number in this run of the plugin's server: the lines of one act carry the same
+  number, so two acts on one agent at the same time are told apart. It starts again with each run
+  of the server. An `asked` with no `ended` under its number: the server ended while the act ran.
+- `asked` means SENT to the machine that runs `oats`.
+- `result`, of an act that was sent: `ok`; `INCOMPLETE`; `DEFERRED`; or a CODE. THE RULE for the
+  first three: **the line never says more than the window says of the same answer**: an answer the
+  window words as not done, not yet, failed or unknown is never `ok` ("I pressed Stop and nothing
+  happened" never reads as a success). Act by act (`server/act-log.ts` `outcomeOf`):
+
+  | act | the kernel's answer | `result` |
+  |---|---|---|
+  | `start`, `restart` | it started (a start that resumed nothing started fresh) | `ok` |
+  | `stopApply` | every home its receipt names does not run after it (stopped, or idle already) | `ok homes=n/n` |
+  | `stopApply` | a home still runs or was busy; the receipt is not ok; or it names no home | `INCOMPLETE homes=k/n` |
+  | `retireApply` | the home is gone, nothing left, every child stopped | `ok homes=n+1/n+1` |
+  | `retireApply` | accepted, finishes in the background | `DEFERRED homes=k/n+1` |
+  | `retireApply` | the home is still there, something is left undone, or a child did not stop | `INCOMPLETE homes=k/n+1` |
+  | `spawn` | a new agent | `ok made=<instance>` |
+  | `automationEnable`, `automationDescribe`, `scheduleRemove` | done | `ok` |
+  | `scheduleRun` | a run that launched an agent, or delivered its wake (`launched`, `active`, `running`, `delivered`) | `ok made=<the run's instance>` |
+  | `scheduleRun` | no run, or any other outcome (launch failed, unknown, skipped, stopped, ended, …) | `INCOMPLETE code=<the run's code, where it has one>` |
+  | `scheduleReconcile` | the run's state is still unknown | `INCOMPLETE` |
+  | `scheduleReconcile` | a state, or none said ("checked") | `ok` |
+  | `schedulerEnable` | the timer is installed, active, and not said to be unregistered for this deployment (a kernel that does not say is not held against it) | `ok` |
+  | `schedulerEnable` | it is not installed, not active, or not registered here | `INCOMPLETE` |
+  | `automationTest` (one that runs its source) | the test is ok, and its source's poll is ok or not named | `ok` |
+  | `automationTest` (one that runs its source) | the test, or the poll, says not ok | `INCOMPLETE` |
+
+  (Stricter than the window in one row, on purpose: a run that was skipped, stopped or ended
+  reads "done" in the window and `INCOMPLETE` here: the log says whether what was ASKED happened.
+  The retire row "a child did not stop" is an answer OATS 0.70.5 does not give: it refuses the
+  whole retire then, `E_CHILDREN_RUNNING`, which the line carries as the code; the row holds for a
+  kernel that answers such a receipt, and the window words it the same way: retired, not done.)
+- A CODE: one that starts `E_` is the kernel's refusal (never its sentence). Any other is the
+  plugin's own: `INVALID_INPUT`, `OATS_NOT_FOUND`: no `oats` ran (the host entry refused what was
+  asked; the binary is not there). Every other (`OATS_TIMEOUT`, `OATS_ABORTED`, `OATS_FAILED`,
+  `OATS_NOT_JSON`, `OATS_BAD_ANSWER`, `HOST_UNREACHABLE`, …): the act was sent and its outcome is
+  NOT KNOWN: the command may have run: look at the agent. `FAILED`: it ended with no code.
+- `homes`: of a stop, the homes its receipt says do not run after it (stopped by it, OR idle
+  already: a stop of an agent that was idle reads `ok homes=1/1`), of those it names; of a retire,
+  the children the same way and the retired agent with them, counted as done only once its home is
+  gone. `made`: the instance a spawn made or a schedule's run launched. `code`: the kernel's code
+  on a run that did not launch. `ms`: how long the kernel took, from the moment the act was sent.
+- `HELD:<code>`: the kernel was NOT asked. `<code>` is `invalid` (the plugin's guard refused what
+  was asked), the CODE of a read the act rests on, which was refused (the kernel's, or the plugin's
+  own where OATS was not reached), `error` (the guard itself failed), or the code of an act that
+  could not be sent. `why` is ONE word of a closed list, never
+  a message (a refusal's message quotes what a caller sent and may hold a path: it is the window's,
+  not the log's):
+
+  | `why` | the hold |
+  |---|---|
+  | `agent-not-in-roster` | the agent, or a spawn's relative, is not one the roster names now |
+  | `harness-not-declared` | a harness the bb session provider does not declare |
+  | `resume-not-tmux` | a resume asked of a home that is not on tmux, or with a harness or a model |
+  | `choice-not-bb` | a harness or a model chosen for a home that is not on bb |
+  | `soul-not-listed` | a spawn's soul that `oats souls` does not list |
+  | `spawn-input` | what a spawn names (its model) that is refused before any process |
+  | `key-reused` | a spawn's key that belongs to another spawn |
+  | `row-gone` | an automation's row that the list does not hold |
+  | `no-source` | a test asked to run a source the trigger has none of |
+  | `read-refused` | a read the act rests on was refused (the roster, a row's list, the provider, a spawn's decision): `HELD:<its code>` says which |
+  | `machine-not-reached` | the act could not be sent: no machine, no deployment |
+  | `cancelled-before-sent` | the act's call was cancelled before it left (its caller was gone; the plugin was ending) |
+  | `fault` | the guard itself failed, with no refusal |
+  | `refused` | a refusal of the plugin's that names no word |
+
+  A button that is OFF in the window (while the roster is stale, or "Reading…") asks the server
+  nothing: there is no line for a press that could not be made.
+- `asked` and `ok` are written at bb's level `info`; `INCOMPLETE`, `DEFERRED`, a refusal and a hold
+  at `warn`. A line that cannot be written never changes an act: the act goes on, and the fault is
+  told to the server process's error stream.
+
+WHERE the lines are: bb writes what a plugin logs in two places under its data directory:
+`plugins/oats/logs/plugin.log` (the plugin's own file: JSON lines `{"ts","level","message"}`, every
+level, written before the act goes on; it holds the plugin's other lines too, and bb rotates it at
+5 MB keeping one older file), and bb's server log `logs/server.N.log` (the same message after
+`[plugin:oats] `, at bb's own log level: `info` and above by default, written a moment later). To
+read what bb did to an agent: `grep 'oats act' plugins/oats/logs/plugin.log | grep 'instance=<name> '`.
+
+**A line carries no path and no sentence in ANY field:** `why` is a word of the closed list, and a
+CODE is letters, digits and `_` alone. What never goes in: a spawn's opening instruction, a description's text, a message, a path, the
+kernel's sentence, the plugin's own refusal's message, a secret. Every value is one word: whatever is not a letter, a digit or one of
+`._:/@-` becomes `_`, cut at 120 characters; and a CODE (a result, a hold's code, a run's code) is
+letters, digits and `_` alone (`-` for an empty one), whatever a kernel prints as its code.
+
+No act can go round it: `core.act` (`server/core.ts`) is the only way a verb that changes something
+reaches the kernel (`core.call` refuses one, in its types and when it runs), and every verb of the
+host's contract is a read (marked `experimental_retryable`), an act, or named with why it is
+neither (`NOT_ACTS`), or an act by its argument (`ACTS_BY_ARGUMENT`): a new verb fails
+`test/server/act-log.test.ts` until it is one of them. (A verb that changes something and is
+marked `experimental_retryable` by mistake is a read to every test: the mark is the contract's word.) A value a caller sent (an id, a name) is
+never written as it came: it is one token of the line (above), so it cannot forge a line or a
+result.
+
 ## How it is built
 
 | File | Runs in | Does |

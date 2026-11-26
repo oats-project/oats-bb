@@ -35,6 +35,7 @@ import {
   filterList,
   LIST_FILTERS,
   oneList,
+  lineText,
   rowLine,
   runLine,
   runWhen,
@@ -345,6 +346,19 @@ describe("what is failing: one rule for the row's red, the filter's count and th
     expect(found("acme/app")).toEqual(["pr-triage"]);
     expect(found("  ")).toHaveLength(18);
     expect(found("no such thing")).toEqual([]);
+  });
+
+  it("EVERY TEXT A ROW DRAWS IS SEARCHABLE: each part of its small line, as drawn (the machine by the name the row says, the owner, the last run and what came of it, what is wrong)", () => {
+    const here = hereOf("falcon");
+    const drawn = (row: (typeof all)[number]) => lineText(rowLine(row, null, NOW, { here }));
+    for (const row of all) {
+      for (const part of drawn(row)) expect(searchRows(all, part, drawn).map((entry) => entry.id), `${row.id}: "${part}"`).toContain(row.id);
+    }
+    // What the kernel's fields do not hold as text: the machine by bb's name, "@owner", what is wrong.
+    expect(searchRows(all, "runs on falcon", drawn).length).toBeGreaterThan(0);
+    expect(searchRows(all, "@ana", drawn).map((entry) => entry.name)).toEqual(expect.arrayContaining(["release-check"]));
+    expect(searchRows(all, "wrong account", drawn).map((entry) => entry.name)).toEqual(["reconcile"]);
+    expect(searchRows(all, "launch failed", drawn).map((entry) => entry.name)).toEqual(["hourly-check"]);
   });
 });
 

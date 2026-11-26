@@ -60,11 +60,12 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, newest, open
       <div className={`${RUN_ROW} ${TARGET} relative`}>
         {/* The WHOLE row is the way into the chat of the agent the run made: one button under the row's content. A run whose agent is gone, or that made none, has none, and no chevron. */}
         {agent === null ? null : <button type="button" data-testid="oats-run-row" aria-label={`Open ${shown(line.agent ?? "")}`} title={when?.title} className="absolute inset-0 cursor-pointer rounded-sm hover:bg-accent" onClick={agent.open} />}
-        <span role="img" aria-label={mark.name} className={`${THROUGH} inline-flex shrink-0 ${mark.tone}`}>
+        {/* One column for every mark, whichever glyph it is: the times under it stand in one line. */}
+        <span role="img" aria-label={mark.name} className={`${THROUGH} inline-flex size-4 shrink-0 items-center justify-center ${mark.tone}`}>
           {agent?.asks ? <StateMark state="needs-you" hidden /> : <Icon name={mark.icon} className="size-4" />}
         </span>
         {/* The whole time is one hover away: on the row's own button where it has one (what lies over the button lets the pointer through), else on the time. */}
-        <time dateTime={line.at ?? undefined} title={agent === null ? when?.title : undefined} className={`${agent === null ? "relative" : THROUGH} min-w-[16ch] shrink-0 whitespace-nowrap text-sm tabular-nums text-foreground`}>
+        <time dateTime={line.at ?? undefined} title={agent === null ? when?.title : undefined} className={`${agent === null ? "relative" : THROUGH} min-w-[16ch] flex-1 whitespace-nowrap text-sm tabular-nums text-foreground @2xl:flex-none @2xl:shrink-0`}>
           {when?.label ?? "—"}
         </time>
         {withOwner ? (
@@ -72,17 +73,20 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, newest, open
             {shown(entry.owner.name)}
           </button>
         ) : null}
-        {/* At a phone's width what came of it takes the line's room, so that the row's controls stay on the run's own line and the agent goes under. */}
-        <span data-testid="oats-run-said" className={`${THROUGH} min-w-0 flex-1 text-xs @2xl:flex-none ${agent?.asks ? "whitespace-nowrap" : "break-words"} ${tone}`}>
-          {word}
-        </span>
-        {line.agent === null ? null : (
-          <span data-testid="oats-run-agent" data-listed={agent !== null} className={`${THROUGH} order-last min-w-0 basis-full break-words pl-[1.625rem] text-xs text-muted-foreground @2xl:order-none @2xl:basis-auto @2xl:pl-0 @2xl:text-right ${withOwner ? "" : "@2xl:ml-auto"}`}>
-            {shown(line.agent)}
+        {/* At a phone's width the run's own line is its mark, its time and its controls; what came of it and the agent go under, together where
+            they fit, so that no word is squeezed into the room the controls leave (a short word broken in two, or run under a button). */}
+        <span className={`${THROUGH} order-last flex min-w-0 basis-full flex-wrap items-baseline gap-x-2.5 gap-y-0.5 pl-[1.625rem] @2xl:contents`}>
+          <span data-testid="oats-run-said" className={`${THROUGH} min-w-0 break-words text-xs ${tone}`}>
+            {word}
           </span>
-        )}
+          {line.agent === null ? null : (
+            <span data-testid="oats-run-agent" data-listed={agent !== null} className={`${THROUGH} min-w-0 break-words text-xs text-muted-foreground @2xl:text-right ${withOwner ? "" : "@2xl:ml-auto"}`}>
+              {shown(line.agent)}
+            </span>
+          )}
+        </span>
         {agent?.asks ? (
-          <button type="button" data-testid="oats-run-answer" aria-label={`Answer ${shown(line.agent ?? "")}`} className={`${BUTTON_OUTLINE} relative ${line.agent === null ? "ml-auto" : ""}`} onClick={agent.open}>
+          <button type="button" data-testid="oats-run-answer" aria-label={`Answer ${shown(line.agent ?? "")}`} className={`${BUTTON_OUTLINE} relative`} onClick={agent.open}>
             Answer
           </button>
         ) : null}

@@ -3,6 +3,8 @@
 // (Automations, Runs), the ONE list with its filter, search and order, a row's small line, a row's
 // own page with its Runs table and its Details, and the Runs tab. Nothing here reads or acts: the
 // page is handed its lists and every trigger's state (Page.tsx reads them).
+import { readdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { useState } from "react";
@@ -13,6 +15,7 @@ import { PROSE_BOUND } from "../../app/automations/Detail";
 import { CARD_FLOOR } from "../../app/automations/List";
 import { View } from "../../app/automations/View";
 import type { Gate, ListRead, Open, Tab, ViewProps } from "../../app/automations/View";
+import { automationRowOf } from "../../kernel/automations-read";
 import { rowOf, schedules, statusOf, triggers } from "./fixtures";
 import { STATUSES } from "./handlers";
 
@@ -770,6 +773,16 @@ describe("an automation's runs", () => {
     expect(view.text("oats-runs-empty")).toBe("No runs");
   });
 
+  it("a trigger that never fired says no Last in its row, and its own page is not silent: its Runs say No runs", () => {
+    // The recorded trigger that never fired.
+    const never = STATUSES().statuses.find((entry) => entry.id === "local/old-prs")!.status;
+    expect([never.fired.length, never.pending.length]).toEqual([0, 0]);
+    const view = page();
+    expect(parts(view.row("local/old-prs")).some((part) => /^Last/.test(part ?? ""))).toBe(false);
+    view.open("local/old-prs");
+    expect(view.text("oats-runs-empty")).toBe("No runs");
+  });
+
   it("fifty runs are not a wall: ten, then Older, ten more a press; and where older ones were dropped, the table says so at its end", () => {
     const run = rowOf(schedules(), "local/daily-review").recentRuns[0]!;
     const fifty = Array.from({ length: 50 }, (_, at) => ({ ...run, runId: `run-${at}`, startedAt: new Date(Date.parse(run.startedAt!) - at * 86400e3).toISOString() }));
@@ -882,10 +895,28 @@ describe("an automation's Details: one closed fold, in bb's own rows, of what is
     const view = page();
     view.open("local/daily-review");
     const row = rowOf(schedules(), "local/daily-review");
-    expect(rowsOf(view).slice(0, 3)).toEqual(["runs-on", "schedule", "file"]);
+    expect(rowsOf(view).slice(0, 4)).toEqual(["id", "runs-on", "schedule", "file"]);
+    expect(value(view, "id")).toBe("Idlocal/daily-review");
     expect(value(view, "runs-on")).toBe("Runs onThis computer");
     expect(value(view, "schedule")).toBe(`Schedule${row.cron} · ${row.tz}`);
     expect(value(view, "file")).toBe(`File${row.origin.path ?? row.origin.localPath}`);
+  });
+
+  it("its id, whole: two automations of one name in two members are told apart there", () => {
+    // The recorded nightly digest, and a second of the same name in another member.
+    const list = schedules();
+    const twin = { ...rowOf(list, "oats-real/nightly-digest"), id: "acme-tools/nightly-digest" };
+    const view = page({ schedule: ready({ ...list, rows: [...list.rows, twin] }) });
+    const names = view.rows().filter((row) => ["oats-real/nightly-digest", "acme-tools/nightly-digest"].includes(row.dataset.id!)).map((row) => within(row).getByTestId("oats-automation-name").textContent);
+    expect(names).toEqual(["nightly-digest", "nightly-digest"]);
+    const ids: (string | null)[] = [];
+    for (const id of ["oats-real/nightly-digest", "acme-tools/nightly-digest"]) {
+      view.open(id);
+      ids.push(value(view, "id"));
+      expect(view.getByTestId("oats-automation-detail-id").querySelector(".truncate, .line-clamp-1")).toBeNull();
+      back(view);
+    }
+    expect(ids).toEqual(["Idoats-real/nightly-digest", "Idacme-tools/nightly-digest"]);
   });
 
   it("one that does not run here says why, in the kernel's words", () => {
@@ -898,11 +929,11 @@ describe("an automation's Details: one closed fold, in bb's own rows, of what is
   it("teams, a concurrency, a launch configuration: only where they are set", () => {
     const view = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, teams: [], concurrency: null, launchConfig: null, wake: null }))) });
     view.open("local/daily-review");
-    expect(rowsOf(view)).toEqual(["runs-on", "schedule", "file"]);
+    expect(rowsOf(view)).toEqual(["id", "runs-on", "schedule", "file"]);
     cleanup();
     const set = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, teams: ["platform", "support"], concurrency: { max: 2, perKey: null }, launchConfig: "fast", wake: null }))) });
     set.open("local/daily-review");
-    expect(rowsOf(set)).toEqual(["runs-on", "schedule", "file", "teams", "concurrency", "launch-config"]);
+    expect(rowsOf(set)).toEqual(["id", "runs-on", "schedule", "file", "teams", "concurrency", "launch-config"]);
     expect([value(set, "teams"), value(set, "concurrency"), value(set, "launch-config")]).toEqual(["Teamsplatform, support", "Concurrency2 at once", "Launch configurationfast"]);
   });
 
@@ -1020,5 +1051,114 @@ describe("the Runs tab: every automation's runs, newest first", () => {
     const view = page({ tab: "runs", schedule: ready(schedules("schedule-list-scheduler-off.json")), statuses: [] });
     expect(view.text("oats-runs-empty")).toBe("No runs");
     expect(view.queryByRole("combobox")).toBeNull();
+  });
+});
+
+// What the page drew before the rework and still draws, each held again here: the audit of the base's expectations
+// (the branch's hand-back lists every one of them, with where its fact is now or the ruling that cut it).
+describe("kept from before the rework", () => {
+  it("Home and End go to the first and the last tab", () => {
+    const view = page();
+    const [list, runs] = view.getAllByRole("tab");
+    fireEvent.keyDown(list!, { key: "End" });
+    expect([runs!.getAttribute("aria-selected"), document.activeElement]).toEqual(["true", view.getAllByRole("tab")[1]]);
+    fireEvent.keyDown(view.getAllByRole("tab")[1]!, { key: "Home" });
+    expect(view.getAllByRole("tab")[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("a scheduler that is off with nothing that would run on the machine says nothing", () => {
+    const view = page({ schedule: ready(schedules("schedule-list-empty.json")), trigger: ready(triggers("trigger-list-empty.json")), statuses: [] });
+    expect(schedules("schedule-list-empty.json").scheduler).not.toBeNull();
+    expect(view.queryByTestId("oats-automations-scheduler-off")).toBeNull();
+  });
+
+  it("the panel is named by its tab, and in a word on a row's page, where no tab is drawn", () => {
+    const view = page();
+    const panel = () => view.getByRole("tabpanel");
+    expect(document.getElementById(panel().getAttribute("aria-labelledby")!)?.textContent).toMatch(/^Automations/);
+    expect(panel().getAttribute("aria-label")).toBeNull();
+    view.open("local/daily-review");
+    expect([panel().getAttribute("aria-labelledby"), panel().getAttribute("aria-label")]).toEqual([null, "Automation"]);
+  });
+
+  it("an unreadable row says so in the list, in red, and on its page, with the kernel's code and message one press away", () => {
+    const list = schedules();
+    const unreadable = automationRowOf({ id: "broken", scope: "/abs/deployment", unreadable: { code: "E_SCHEDULE_INVALID", message: "the job's record cannot be read" }, history: { status: "corrupt" }, recentRuns: [], origin: { kind: "local" } }, "schedule")!;
+    const view = page({ schedule: ready({ ...list, rows: [...list.rows, unreadable] }) });
+    expect([parts(view.row("broken")), tones(view.row("broken")), view.row("broken").dataset.failing]).toEqual([["Unreadable"], ["bad"], "true"]);
+    view.open("broken");
+    expect(view.getByTestId("oats-automation-problem").textContent).toBe("UnreadableOATS cannot read this definition, so it does not run.▸DetailsCodeE_SCHEDULE_INVALIDMessagethe job's record cannot be read");
+  });
+
+  it("each kind of run with nothing to send says so", () => {
+    const list = schedules();
+    const bare = (raw: Record<string, unknown>) => automationRowOf({ scope: "/abs/deployment", origin: { kind: "local" }, runsHere: true, ...raw }, "schedule")!;
+    const rows = [bare({ id: "w", kind: "wake" }), bare({ id: "c", kind: "command" }), bare({ id: "o", kind: "operation" }), bare({ id: "s", kind: "spawn" }), bare({ id: "x", kind: "later-kind" })];
+    const view = page({ schedule: ready({ ...list, rows }), trigger: ready(triggers("trigger-list-empty.json")), statuses: [] });
+    const sends = (id: string) => {
+      view.open(id);
+      const text = view.getByTestId("oats-automation-sends").textContent;
+      back(view);
+      return text;
+    };
+    expect([sends("w"), sends("c"), sends("o"), sends("s"), sends("x")]).toEqual(["MessageNo wake message reported.", "CommandNo command reported.", "OperationNo operation reported.", "InstructionNo prompt reported.", "InstructionNothing to show for a later-kind run."]);
+    // A row the kernel reported no cron for says no "when": nothing stands in its place.
+    expect(rows.map((row) => parts(view.row(row.id)))).toEqual(rows.map(() => ["Runs on this computer"]));
+  });
+
+  it("only the person's own definition text is drawn whole: a kernel message on the same page, with a line break and a secret-looking word, still goes through the display filter", () => {
+    const list = schedules();
+    const prompt = "Line one.\n\npassword=hunter2 stays, as written.";
+    const rows = list.rows.map((row) =>
+      row.id === "local/daily-review"
+        ? { ...row, task: prompt, invalid: { code: "E_SCHEDULE_INVALID", message: "the cron is not valid\nsecond line", field: null, at: null }, recentRuns: [{ ...row.recentRuns[0]!, outcome: "launch-failed", errorCode: "E_LAUNCH", error: "the launch failed with password=hunter2\nand a second line" }, ...row.recentRuns.slice(1)] }
+        : row,
+    );
+    const view = page({ schedule: ready({ ...list, rows }) });
+    view.open("local/daily-review");
+    expect(view.getByTestId("oats-automation-prose").textContent).toBe(prompt);
+    // The kernel's words: one line each, a line break folded, a secret-looking text withheld whole.
+    const problem = view.getByTestId("oats-automation-problem").textContent ?? "";
+    expect(problem).toContain("the cron is not valid second line");
+    expect(problem).not.toContain("\n");
+    const error = view.getAllByTestId("oats-run-error")[0]!.textContent ?? "";
+    expect(error).toBe("E_LAUNCH[withheld]");
+    // Every call of shownBlock in the feature is an instruction or a wake's message: row.task, row.message.
+    const source = readFileSync(resolve(process.cwd(), "app/automations/Detail.tsx"), "utf8");
+    expect(source.match(/shownBlock\(([^)]*)\)/g)).toEqual(["shownBlock(row.message)", "shownBlock(row.task)"]);
+    for (const file of readdirSync(resolve(process.cwd(), "app/automations")).filter((name) => name !== "Detail.tsx")) expect(readFileSync(resolve(process.cwd(), "app/automations", file), "utf8")).not.toContain("shownBlock");
+  });
+
+  it("what a member's file or the kernel names is drawn through the filter under Details too", () => {
+    const list = schedules();
+    const odd = withRow(withRow(list, "local/status-check", (row) => ({ ...row, cwd: "/srv/\u202egnp.exe", launchConfig: "fast\u0007\u200b" })), "oats-real/nightly-digest", (row) => ({ ...row, origin: { ...row.origin, path: "services/\u202egnp.yaml" } }));
+    const view = page({ schedule: ready(odd) });
+    for (const id of ["local/status-check", "oats-real/nightly-digest"]) {
+      view.open(id);
+      const fold = view.getByTestId("oats-automation-details");
+      expect(`${fold.textContent} ${Array.from(fold.querySelectorAll("[title]")).map((element) => element.getAttribute("title")).join(" ")}`).not.toMatch(/[\u202e\u0007\u200b]/);
+      back(view);
+    }
+  });
+
+  it("what fired a trigger last is a source's text of any length, and a cron the page has no words for is the cron: each wraps, and nothing in the line is held on one line", () => {
+    const all = triggers();
+    const subject = "harvest/2026-11-21-weekly-knowledge-digest-for-the-billing-team-and-what-it-found";
+    const view = page({ trigger: ready(withRow(all, "oats-real/harvest-review", (row) => (row.lastRun === null ? row : { ...row, lastRun: { ...row.lastRun, subject } }))), statuses: null });
+    const line = within(view.row("oats-real/harvest-review")).getByTestId("oats-automation-line");
+    expect(line.textContent).toContain(subject);
+    expect(line.querySelector(".whitespace-nowrap, .truncate")).toBeNull();
+    for (const part of Array.from(line.querySelectorAll("[data-part]"))) expect(part.className).toContain("break-words");
+    cleanup();
+    const cron = "0,5,10,15,20,25,30,35,40,45,50,55 9-17 * * 1-5";
+    const minutes = page({ schedule: ready(withRow(schedules(), "local/daily-review", (row) => ({ ...row, cron }))) });
+    expect(parts(minutes.row("local/daily-review"))[0]).toBe(cron);
+  });
+
+  it("a source check that failed at a poll: the problem in a person's words, with the kernel's message, code, field and when one press away; the kernel's last error, which repeats it, is not said twice", () => {
+    const view = page();
+    view.open("oats-real/harvest-closed");
+    expect(view.getByTestId("oats-automation-problem").textContent).toMatch(/^Source check failedThe source's check failed at the last poll \(.+ago\), so this trigger did not fire\.▸DetailsMessageon\.events: acme\.graph:harvest-branches has no event closed \(its events: opened, updated\)CodeE_TRIGGER_INVALIDFieldon\.eventsChecked.+ago$/);
+    expect(view.queryByTestId("oats-automation-last-error")).toBeNull();
   });
 });

@@ -97,3 +97,19 @@ test("the amber dot is by the row's own rule: an agent that runs outside OATS is
   await slot.findByTestId("oats-tree");
   expect(mark(row)).toBeNull();
 });
+
+test("with every trigger's state refused while the lists stand, the marks are what the lists alone say: a failing schedule still marks, and nothing is claimed of a trigger", async () => {
+  const refused = { ok: false as const, code: "E_TRIGGER_STATE", message: "the trigger state cannot be read" };
+  const answer = (schedule = schedules()) => () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: refused, schedule: { ok: true as const, list: schedule }, trigger: { ok: true as const, list: calm(triggers("trigger-list-poll-failed.json")) } });
+  const slot = await sidebar({ automations: answer() });
+  const row = await slot.findByTestId("oats-page-link-automations");
+  await waitFor(() => expect(mark(row)).not.toBeNull());
+  expect(mark(row)!.getAttribute("aria-label")).toBe("Automations, a failure");
+  resetApp();
+  // The trigger whose poll failed is not known to fail without its state: with every schedule calm there is no mark.
+  const calmSlot = await sidebar({ automations: answer(calm(schedules())) });
+  const calmRow = await calmSlot.findByTestId("oats-page-link-automations");
+  await waitFor(() => expect(calmSlot.inspection.rpcCalls.map((call) => call.method)).toContain("automations"));
+  await calmSlot.findByTestId("oats-tree");
+  expect(mark(calmRow)).toBeNull();
+});

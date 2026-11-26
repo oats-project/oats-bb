@@ -298,6 +298,8 @@ function Details({ row, host, status, source, running, file, onOpenFile, canOpen
   const add = (label: string, testId: string, value: ReactNode | null | undefined | "") => {
     if (value !== null && value !== undefined && value !== "") rows.push({ label, testId, value });
   };
+  // Its address: what `oats schedule … <id>` takes, and what tells two automations of one name in two members apart. Whole, never cut.
+  add("Id", "id", <span className="break-all font-mono text-xs">{shown(row.id)}</span>);
   add(
     "Runs on",
     "runs-on",

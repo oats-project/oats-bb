@@ -16,7 +16,7 @@ import type { MenuItem } from "../ui";
 import { shown } from "../ui/text";
 import { BUTTON_OUTLINE, CARD, Chevron, FilterPills, ICON_BUTTON, ICONS, NAME, ROW, ROW_ICON, ROWS, SearchBox, SMALL } from "./bb";
 import { useHere } from "./here";
-import { attention, EMPTY, filterList, inOrder, hostNameHow, hostUnnamed, LIST_FILTERS, listBanners, NO_MATCH, oneList, rowLine, schedulerOffLine, SEARCH_FROM, searchRows, statusFor } from "./words";
+import { attention, EMPTY, filterList, inOrder, hostNameHow, hostUnnamed, LIST_FILTERS, listBanners, NO_MATCH, oneList, lineText, rowLine, schedulerOffLine, SEARCH_FROM, searchRows, statusFor } from "./words";
 import type { Asking, Attention, LinePart, ListFilter } from "./words";
 
 /** The least height of the card of rows: room for a busy row or two at a phone's width. Under it the card is not squeezed: the page scrolls whole. */
@@ -47,7 +47,8 @@ export function SmallLine({ parts }: { parts: readonly LinePart[] }) {
             </span>
           )}
           {part.lead === undefined ? null : `${shown(part.lead)} `}
-          {part.tone === undefined ? shown(part.text) : <span className={TONE[part.tone]}>{shown(part.text)}</span>}
+          {/* What is wrong, or that it asks, is a short word or two of the page's own: never broken in two (a kernel's own word, which may be long, wraps). */}
+          {part.tone === undefined ? shown(part.text) : <span className={`${part.text.length <= 24 ? "whitespace-nowrap" : ""} ${TONE[part.tone]}`}>{shown(part.text)}</span>}
         </span>
       ))}
     </span>
@@ -152,7 +153,9 @@ export function List({ schedules, triggers, statuses, now, filter, onFilter, que
   const host = schedules ?? triggers;
   const both = [schedules, triggers].filter((list): list is AutomationList => list !== undefined).map(listBanners);
   const banners = { hostUnnamed: both.some((banner) => banner.hostUnnamed), schedulerOff: both.some((banner) => banner.schedulerOff) };
-  const drawn = inOrder(searchRows(filterList(all, filter, statuses, asking), query), statuses, asking);
+  // A row's small line, as it is drawn: one place for the row and for the search.
+  const lineOf = (row: AutomationRow) => rowLine(row, statusFor(row, statuses), now, { here, asks: (asking?.(row) ?? null) !== null });
+  const drawn = inOrder(searchRows(filterList(all, filter, statuses, asking), query, (row) => lineText(lineOf(row))), statuses, asking);
   const count = (id: ListFilter): number => filterList(all, id, statuses, asking).length;
   return (
     // The notices, the search and the filter keep their place; the card of rows takes what is left and scrolls alone.
@@ -194,7 +197,7 @@ export function List({ schedules, triggers, statuses, now, filter, onFilter, que
                   <Row
                     key={`${row.kind}:${row.id}`}
                     row={row}
-                    parts={rowLine(row, status, now, { here, asks: asks !== null })}
+                    parts={lineOf(row)}
                     state={attention(row, status, asking)}
                     onOpen={onOpen}
                     onAnswer={asks === null || onAnswer === undefined ? undefined : () => onAnswer(asks)}

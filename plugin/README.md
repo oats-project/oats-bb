@@ -1093,7 +1093,9 @@ difference). Where it departs from bb's page, on purpose, `WORDS.md` says why.
   machine does not say "Runs on": it says why, in red ("Wrong account", "Not trusted", "Invalid",
   "Unreadable"). Then **Answer** (where an agent asks: it opens that agent's chat), the row's
   **switch** (bb's own: alone, 28 x 16, dark when on), its **"…" menu** and a chevron. The list
-  says no next run: an automation's own page does. The kernel places every row (`runsHere`,
+  says no next run: an automation's own page does. The search (from twelve rows) reads every text
+  a row draws, and its id, who it starts and its instruction. What the page does not show, and
+  by whose ruling, is in WORDS.md ("NOT SHOWN"). The kernel places every row (`runsHere`,
   `reason`, `enabledHere`); the plugin reads those facts and derives none.
 - **What is failing, and what needs a person, is ONE rule** (`words.ts` `attention`, `failing`),
   read by the row's mark and line, by the filter's two counts, and by the sidebar's link, which
@@ -1137,8 +1139,9 @@ difference). Where it departs from bb's page, on purpose, `WORDS.md` says why.
   it, and nothing claims a history. Where a trigger fired more often than its state lists, the
   table ends with the kernel's own count ("3 earlier runs are not kept").
 - **Details**, one closed fold under Runs, in bb's own rows (`experimental_DetailRow`), for the
-  few facts bb's manner has no place for, each only where it is set: where it runs (and why not
-  here, in the kernel's words), a schedule's cron and time zone, a trigger's event, labels, base
+  few facts bb's manner has no place for, each only where it is set: its id (the address `oats
+  schedule … <id>` takes, whole: two automations of one name in two members are told apart
+  there), where it runs (and why not here, in the kernel's words), a schedule's cron and time zone, a trigger's event, labels, base
   and poll (or its capability's source, which opens the Capabilities page where that page lists
   the capability once), its file (which opens it: a preview from the machine that holds the
   deployment, or its web page for a member with no clone there), teams, concurrency, a launch

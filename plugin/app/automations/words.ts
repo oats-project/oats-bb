@@ -528,12 +528,18 @@ export const LIST_FILTERS: readonly { id: ListFilter; label: string }[] = [
   { id: "failing", label: "Failing" },
 ];
 
-/** The search over the one list: the name, the id, who it starts, the instruction or message, the summary. */
-export function searchRows(rows: readonly AutomationRow[], query: string): AutomationRow[] {
+/**
+ * The search over the one list. EVERY TEXT A ROW DRAWS IS SEARCHABLE: its name, its sentence, and each part of its small line as it
+ * is drawn (`drawn`: the machine by the name the row says, "@owner", the last run and what came of it, what is wrong); and what a
+ * person knows it by without seeing it there: its id, who it starts, the instruction or the message.
+ */
+export function searchRows(rows: readonly AutomationRow[], query: string, drawn: (row: AutomationRow) => readonly string[] = () => []): AutomationRow[] {
   const needle = query.trim().toLowerCase();
   if (needle === "") return [...rows];
-  return rows.filter((row) => [row.name, row.id, whoWords(row), whenWords(row), row.task, row.message, row.description, row.runsOn, row.owner].some((value) => typeof value === "string" && value.toLowerCase().includes(needle)));
+  return rows.filter((row) => [row.name, row.id, whoWords(row), whenWords(row), row.task, row.message, row.description, row.runsOn, row.owner, ...drawn(row)].some((value) => typeof value === "string" && value.toLowerCase().includes(needle)));
 }
+/** A row's small line as text, part by part, as it is drawn: for the search. */
+export const lineText = (parts: readonly LinePart[]): string[] => parts.map((part) => `${part.lead ?? ""}${part.lead === undefined ? "" : " "}${part.text}`.replace(/\s+/g, " ").trim());
 /** From this many rows the list has a search field (bb's own page has one always; a short list needs none). */
 export const SEARCH_FROM = 12;
 /** The rows of both lists in the one list's order: what runs on the machine, what needs attention there, what runs elsewhere; in each, schedules then triggers, as the kernel lists them. */

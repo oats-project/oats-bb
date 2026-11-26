@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { gateOf, routeOf, subPathOf } from "../../app/automations/Page";
+import { fixtureAgents, fixtureSnapshot } from "../helpers/fixtures";
 import { handlers, loadApp, resetApp, sidebarThreads } from "../helpers/render";
 import type { Contract, Handlers } from "../helpers/render";
 import { AT, OATS, STATUSES } from "./handlers";
@@ -168,6 +169,93 @@ describe("the lists", () => {
     const slot = await page("", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: refusedList, schedule: { ok: true as const, list: schedules() }, trigger: refusedList }) });
     await slot.findByTestId("oats-automations-failed");
     expect(slot.queryByTestId("oats-automations-state-failed")).toBeNull();
+  });
+
+  // MENDED AFTER A REFUSAL, read by read: what was said of the refusal is gone, and what was held is given back.
+  it("a list that was refused and is read again: its notice is gone, its rows are there, and no act is held", async () => {
+    let asked = 0;
+    const slot = await page("", {
+      automations: () => {
+        asked += 1;
+        const refused = { ok: false as const, code: "E_SCHEDULE_INVALID", message: "oats-schedules.json cannot be read" };
+        return { at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: asked === 2 ? refused : { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } };
+      },
+    });
+    expect(await slot.findAllByTestId("oats-automation-row")).toHaveLength(18);
+    const toggle = () => within(slot.getAllByTestId("oats-automation-row").find((entry) => entry.dataset.id === "local/daily-review")!).getByRole("switch") as HTMLButtonElement;
+    fireEvent.click(slot.getByTestId("oats-automations-refresh"));
+    await slot.findByTestId("oats-automations-failed");
+    expect(toggle().disabled).toBe(true);
+    fireEvent.click(slot.getByTestId("oats-automations-retry"));
+    await waitFor(() => expect(slot.queryByTestId("oats-automations-failed")).toBeNull());
+    expect(slot.getAllByTestId("oats-automation-row")).toHaveLength(18);
+    expect(toggle().disabled).toBe(false);
+  });
+
+  it("every trigger's state that was refused and is read again: its notice is gone, and a trigger that fails is drawn failing again", async () => {
+    let asked = 0;
+    const slot = await page("", {
+      automations: () => {
+        asked += 1;
+        return { at: AT, hostId: "host_falcon", oats: OATS, statuses: asked === 1 ? { ok: false as const, code: "E_TRIGGER_STATE", message: "the trigger state cannot be read" } : STATUSES("trigger-status-poll-failed.json"), schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers("trigger-list-poll-failed.json") } };
+      },
+    });
+    const watch = () => slot.getAllByTestId("oats-automation-row").find((entry) => entry.dataset.id === "local/graph-watch")!;
+    await slot.findByTestId("oats-automations-state-failed");
+    // With no state read, nothing is said of its poll: the row is not drawn failing.
+    expect(watch().dataset.failing).toBe("false");
+    fireEvent.click(slot.getByTestId("oats-automations-state-retry"));
+    await waitFor(() => expect(slot.queryByTestId("oats-automations-state-failed")).toBeNull());
+    expect(watch().dataset.failing).toBe("true");
+    expect(within(watch()).getByTestId("oats-automation-line").textContent).toContain("Poll failed");
+  });
+
+  it("a row's page whose list was refused at first says the refusal in its place, and draws the row once the list is read", async () => {
+    let asked = 0;
+    const slot = await page("schedules/local/daily-review", {
+      automations: () => {
+        asked += 1;
+        const refused = { ok: false as const, code: "E_SCHEDULE_INVALID", message: "oats-schedules.json cannot be read" };
+        return { at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: asked === 1 ? refused : { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } };
+      },
+    });
+    const notice = await slot.findByTestId("oats-automations-failed");
+    expect(notice.textContent).toContain("Schedules could not be read");
+    expect(slot.queryByTestId("oats-automation-detail")).toBeNull();
+    fireEvent.click(slot.getByTestId("oats-automations-retry"));
+    expect((await slot.findByTestId("oats-automation-name-heading")).textContent).toBe("daily-review");
+    expect(slot.queryByTestId("oats-automations-failed")).toBeNull();
+  });
+
+  it("the Runs tab with one list refused at first says so over the other list's runs", async () => {
+    const slot = await page("runs", {
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: false as const, code: "E_SCHEDULE_INVALID", message: "oats-schedules.json cannot be read" }, trigger: { ok: true as const, list: triggers() } }),
+    });
+    expect((await slot.findByTestId("oats-automations-failed")).textContent).toContain("Schedules could not be read");
+    const owners = slot.getAllByTestId("oats-run").map((run) => within(run).getByTestId("oats-run-owner").textContent);
+    expect(owners.length).toBeGreaterThan(0);
+    expect(owners).not.toContain("daily-review");
+  });
+
+  it("a roster that cannot be read: the runs are drawn with their agents as plain names, nothing asks and nothing is answered; once it is read, an agent it lists is the way to its chat", async () => {
+    let fail = true;
+    const list = schedules();
+    const asks = { ...list, rows: list.rows.map((row) => (row.id === "local/daily-review" ? { ...row, recentRuns: row.recentRuns.map((run) => ({ ...run, instance: "release-070-maintainer" })) } : row)) };
+    const slot = await page("", {
+      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: STATUSES(), schedule: { ok: true as const, list: asks }, trigger: { ok: true as const, list: triggers() } }),
+      snapshot: () => {
+        if (fail) throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped");
+        return fixtureSnapshot(fixtureAgents());
+      },
+    });
+    const review = () => slot.getAllByTestId("oats-automation-row").find((entry) => entry.dataset.id === "local/daily-review")!;
+    await slot.findAllByTestId("oats-automation-row");
+    expect([review().dataset.state, within(review()).queryAllByTestId("oats-automation-answer")]).toEqual(["calm", []]);
+    fail = false;
+    await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
+    await waitFor(() => expect(review().dataset.state).toBe("needs"));
+    // (Two are in the row: one for each width; the page draws the one its width has room for.)
+    expect(within(review()).getAllByTestId("oats-automation-answer").map((answer) => answer.textContent)).toEqual(["Answer", "Answer"]);
   });
 
   it("the plugin's own lack (no deployment, no machine chosen) is its own sentence, its code after", async () => {

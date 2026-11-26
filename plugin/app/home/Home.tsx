@@ -22,6 +22,8 @@ import { OATS_FLOOR, OATS_TESTED_MINOR } from "../../kernel/compat";
 import { lineActs, lineParts, LOST_WORD, outsideNeeds, outsideOf, OutsideWarning, rowParts, rowWords } from "../outside";
 import { useNow } from "../roster/now";
 import { messageResumes } from "../../model/rest";
+import { BoardAsk } from "../board";
+import { guarded, sendText } from "./send";
 import { READING as READING_WORD, ReadingFacts, ReadingLine, readingNow, useActed } from "../roster/reading";
 import { LastObservation, RosterNotice, useLineShowsNotice } from "../roster/unreadable";
 import { attempt, errorMessage, onWindowReset, useRead } from "../store";
@@ -288,17 +290,8 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
     setBusy(kind);
     setFailure(null);
     setSaid(null);
-    attempt(async () => {
-      const now = await rpc.call("snapshot", null);
-      if (!now.ok) throw new Error(NOT_NOW_UNREAD);
-      const agent = now.agents.find((each) => each.instance === entry.agent.instance);
-      if (agent === undefined) throw new Error(NOT_NOW_GONE);
-      // The AGENT is the server's roster's, read now; the THREAD is the card's own (bb's row as it
-      // was drawn): the guard is fresh on what OATS says, not on what bb says of the thread.
-      const why = refusal(agent, entry.thread);
-      if (why !== null) throw new Error(why === "unreachable" ? NOT_NOW_UNREACHABLE : NOT_NOW_STOPPED);
-      return run();
-    }).then(
+    // The one guarded send (send.ts): the roster asked of the server at the press.
+    attempt(() => guarded(rpc, { agent: entry.agent, thread: entry.thread, held }, run)).then(
       () => {
         pressed.current = false;
         setBusy(null);
@@ -323,7 +316,7 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const send = () => {
     const body = text.trim();
     if (body === "" || threadId === undefined) return;
-    act("send", () => sdk.threads.send({ threadId, mode: "auto", input: [{ type: "text", text: body, mentions: [] }] }), () => {
+    act("send", () => sendText(sdk, threadId, body), () => {
       setText("");
       setSaid(SENT);
     });
@@ -355,6 +348,25 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
   const line = useRef<HTMLDivElement>(null);
   const fit = useFit(line, "card", "oats-needs-where");
   const reply = <Reply name={name} text={text} onText={setText} busy={busy !== null} sending={busy === "send"} held={held || reading} said={said} onSend={send} />;
+  // The agent needs the person FOR A QUESTION OF ITS BOARD (the row's claim is the board's own: the ROSTER's word,
+  // `boardAsks`; another claim in front of the board's keeps this card as it is). ONE FACT says whether this card
+  // draws that question by the board's own component (app/board: one thing to a person, here and on the agent's
+  // Board tab): `drawsBoard`, computed from THE ARM THAT IS REALLY DRAWN below, and the claim's text is taken away
+  // by that fact alone: a card is never left with no question. The arms: where the card offers a reply, the board's
+  // question stands in the reply's place; where bb's own request was just answered on the card ("Answered: Allow."),
+  // under that line (the approval is done: the question is what the card is about now). Under every other offer
+  // (bb's request with choices, in the thread, stopped, unreachable, tmux) the card is as ever, the text included.
+  // While the board is read the card says what is asked (the claim's text is the question's own), and where the
+  // board cannot be read it is the card as ever. (The text keeps its order: a `detail` is drawn only beside choices.)
+  // (THE ARM: what the card draws under its line, one of these and no other; the JSX below switches on it alone.)
+  const arm = offer === "unreachable" || offer === "stopped" ? offer : answered !== null ? "answered" : offer;
+  const drawsBoard = entry.agent.boardAsks === true && (arm === "reply" || (arm === "answered" && offer === "reply"));
+  const asks =
+    message === null ? null : (
+      <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
+        {shown(message)}
+      </p>
+    );
   // A message beside a request that has an answer of its own: behind a fold, after what a message does not do.
   const instead = (
     <Disclosure summary={MESSAGE_INSTEAD} testId="oats-needs-message">
@@ -392,22 +404,18 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
           </Button>
         </div>
         {waitInline ? null : wait}
-        {message === null ? null : (
-          <p data-testid="oats-needs-question" dir="auto" className="m-0 break-words text-foreground">
-            {shown(message)}
-          </p>
-        )}
+        {drawsBoard ? null : asks}
         {detail === null ? null : (
           <p data-testid="oats-needs-detail" dir="auto" className="m-0 break-words text-xs text-muted-foreground">
             {shown(detail)}
           </p>
         )}
-        {offer === "unreachable" ? (
+        {arm === "unreachable" ? (
           // Nobody can tell where an answer or a message would go: none is offered, and no Start (the lifecycle has none for it).
           <p data-testid="oats-needs-unreachable" className="m-0 text-xs text-muted-foreground">
             {entry.status.state === "unreachable" ? UNREACHABLE_WAITS : `${UNREACHABLE} ${UNREACHABLE_WAITS}`}
           </p>
-        ) : offer === "stopped" ? (
+        ) : arm === "stopped" ? (
           <div data-testid="oats-needs-stopped" className="flex min-w-0 flex-col gap-2">
             {/* Behind a result that says it started, until the roster is read again: never "Not running." stated plainly; "Reading…" in its place, Start… off (L13). */}
             <p role={reading ? "status" : undefined} data-testid={reading ? "oats-needs-reading" : undefined} className="m-0 text-xs text-muted-foreground">
@@ -419,12 +427,16 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
               </Button>
             </div>
           </div>
-        ) : answered !== null ? (
+        ) : arm === "answered" && answered !== null ? (
           // A choice was pressed and bb took it: said here until the agent goes on (its card then leaves) or asks again.
-          <p role="status" data-testid="oats-needs-answered" className="m-0 text-muted-foreground">
-            {answeredWith(shown(answered.label))}
-          </p>
-        ) : offer === "choices" ? (
+          <>
+            <p role="status" data-testid="oats-needs-answered" className="m-0 text-muted-foreground">
+              {answeredWith(shown(answered.label))}
+            </p>
+            {/* bb's own request is answered, and the agent still needs the person for a question of its board: the question, under that line. */}
+            {drawsBoard ? <BoardAsk instance={entry.agent.instance} pending={asks} fallback={asks} /> : null}
+          </>
+        ) : arm === "choices" ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
               {(asked?.choices ?? []).map((choice, index) => (
@@ -435,11 +447,24 @@ function NeedsYouCard({ entry, oats, held }: { entry: Entry; oats: Ready; held: 
             </div>
             {instead}
           </>
-        ) : offer === "in-thread" ? (
+        ) : arm === "in-thread" ? (
           // Answered in its thread: the card's button says "Answer" and leads there; a message is not an answer.
           instead
-        ) : offer === "reply" ? (
-          reply
+        ) : arm === "reply" ? (
+          drawsBoard ? (
+            <BoardAsk
+              instance={entry.agent.instance}
+              pending={asks}
+              fallback={
+                <>
+                  {asks}
+                  {reply}
+                </>
+              }
+            />
+          ) : (
+            reply
+          )
         ) : entry.agent.backend === "tmux" ? (
           // Nothing can be sent from bb to an agent on tmux: where to answer it. The command that
           // reaches its terminal is on its page, where Open leads.

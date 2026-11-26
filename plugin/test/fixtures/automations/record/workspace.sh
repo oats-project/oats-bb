@@ -11,6 +11,7 @@
 #     open pull requests in $REAL/pulls.json. The `gh` is a double of GitHub, the one boundary the
 #     recording cannot cross; the OATS repository's own tests use the same double
 #     (test/helpers/trigger-source-fixture.mjs).
+. "$(dirname "$0")/../../../../container/guard.sh" && [ -f /etc/oats-bb-checks-image ] || exit 97 # refuses outside the checks' container, before anything is touched (also where the guard is not beside it, or another file of its name is)
 set -eu
 REAL=${REAL:-/home/node/real}
 HOST_NAME=${HOST_NAME:-bb-box}

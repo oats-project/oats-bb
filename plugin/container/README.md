@@ -286,6 +286,69 @@ docker rm -f bb-plugin-dev
 `test/kernel-compat.test.ts` holds the plugin's OATS floor against theirs. A container made by hand
 needs them there too.
 
+## Only inside the checks' container
+
+The entry scripts here CHANGE THE MACHINE THEY RUN ON: `live-ui.mjs` renames `oats` and `claude` and
+sets bb's concurrency limit; the setups install bb, Claude Code, the kernel and pi for the user and
+write the user's settings; the real run removes and makes a workspace. They are for the checks'
+container alone. Run by mistake on a person's machine, each REFUSES before it touches anything:
+
+    refused: live-ui.mjs runs only inside the container of the oats-bb plugin checks (it changes the machine it runs on); start it with plugin/container/ci.sh, never by hand
+
+(exit 97). The guard is one line at the very top of each: `. "$(dirname "$0")/guard.sh" && [ -f /etc/oats-bb-checks-image ] || exit 97`
+in a shell script (the line asks for the mark itself too: a copy of the script with no guard beside it stops there, and so
+does one started in a way that leads to another file of the guard's name), `import "./guard.mjs";` as the first import of a `.mjs`.
+
+**The mark** is a file that only the image built from this directory's `Dockerfile` carries,
+`/etc/oats-bb-checks-image`. A file and not an environment variable: the scripts start their own
+processes with a bare environment (`env -i`), and a variable is inherited by whatever a person's
+shell starts. Not `/.dockerenv`: every container has that one, a person's too.
+
+`test/container-guard.test.ts` holds the lists (the guarded; the four that run on the host; the
+tools; the modules): they are written there once, and not here. What is NOT guarded, and why:
+- the four that run ON THE HOST and start the container for everything else (`ci.sh`, `real/run.sh`,
+  `real/mail/run.sh`, `relock.sh`). On the host they write `out/` directories of this one; and,
+  each where it is asked to: `relock.sh` the locks, `real/run.sh` with `UPDATE_FIXTURES=1` the
+  recorded fixtures, `real/mail/run.sh` a clone of aweb under `real/out/mail/` and its stack of
+  containers. None touches a person's tools or settings;
+- `unit.sh`: it does what a developer does in a checkout (typecheck, the unit tests, the plugin's
+  build into `dist/`), and no more;
+- the tools that write only the directory or the file they are handed, or only read, which unit
+  tests run on any machine (the two `no-…-fetch.sh`, `fake-oats.mjs`, the mocks,
+  `real/oats-record.mjs`, `real/bb-logs.sh`, `real/bb-plugin-command.sh` and its own test).
+
+The test runs each guarded script in a made-up home that holds a `claude`, an `oats` and settings,
+where the mark is not, and reads that nothing of it changed. IT STARTS AN ENTRY ONLY INSIDE THE
+CHECKS' CONTAINER (the mark is there; or it is `ci.sh`'s second pass, which the test knows by the
+pass's variable AND the moved mark lying where `ci.sh` put it): the thing it would start is the
+thing the guard exists to stop. On any other machine those tests are not run and say so by name
+("not run here: it would start …"); what runs everywhere is all that only reads, and the guard
+alone. Before it starts one, the guard alone has refused there, and the test has read that the
+guard is the script's first line that does something. In the image the mark is there, so the
+first pass asks for the refusal by the guard's own switch (`OATS_BB_CHECKS_MARK_ABSENT=1`, which
+can only refuse); `ci.sh` then runs the test A SECOND TIME with the mark truly moved away, and
+puts it back: that pass is what fails a guard that no longer looks for the mark. The lists
+themselves are a reminder to CLASSIFY a new file of this directory, not a proof that an unguarded
+one is harmless: whoever adds a file puts it in a list, and the review of that change holds it.
+
+A `.mjs` entry in a checkout whose other imports do not resolve (no `node_modules`) ends on node's
+own "module not found" before the guard can say its line: nothing is touched there either.
+
+Two entries outside this directory are guarded the same way, since the container runs them too:
+`test/fixtures/automations/record/workspace.sh` and `record.mjs` (the Automations fixtures' recorder;
+its `record.sh` runs on the host and starts the container).
+
+**An entry outside `plugin/`** that runs in a container made from THIS image can take the same
+guard by its path from the repository's root: `. "<up to the root>/plugin/container/guard.sh" && [ -f /etc/oats-bb-checks-image ] || exit 97`
+as a shell script's first statement, `import "<up to the root>/plugin/container/guard.mjs";` as a
+`.mjs`'s first import. The line it says names the script by `$0`. An entry whose container is made
+from another image has no mark there: it needs that image to write the same file first.
+
+**A container made from an older image has no mark**: build the image again (`ci.sh` does) before
+you run a guarded script in it. And a KEPT container (`KEEP=1`) whose unit stage was interrupted in its
+second pass may be left with its mark moved away: `docker exec -u root <name> mv
+/etc/oats-bb-checks-image.moved /etc/oats-bb-checks-image` puts it back.
+
 ## The busy workspace: every screen's worst case
 
 The stage `busy` (`live-ui.mjs`, `busyStage`) answers the ONE shared busy set
@@ -326,7 +389,10 @@ was built), and its `NOTE BUSY` line says the seconds of each part in every run'
    agents' threads; bb's request for a star is turned off (the chat alone is ten prompts).
 When it leaves, each thing it changed is put back and READ: the held turns are answered (no
 thread of its own is active), its threads are archived, bb says of the host's limit what it said
-before, the star request is turned on again (bb's answer to that is checked), the fixtures' threads are back and the fake `oats` answers
+before (asked once the held turns have ended, each asking's outcome kept: where bb gives no answer
+(our own limit ended the command, or bb's CLI gave up by itself: "bb did not respond at …"), or accepts and
+does not say so yet, it is asked again, and no asking starts once a minute has passed; where bb answers no, the
+check fails at once on that answer; it is asked back also where the leave's lines before it threw; the loop is `ask-back.mjs`, held by `test/container-ask-back.test.ts`), the star request is turned on again (bb's answer to that is checked), the fixtures' threads are back and the fake `oats` answers
 the fixtures' roster again, which is waited for. A run that is killed while Claude Code is away
 finds where it was at its next start and puts it back.
 

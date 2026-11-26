@@ -684,8 +684,20 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
+| **Board** | the agent's questions and facts ("The board", below). With neither: "No questions.". |
 | **Instance** | the instance's name as words, with the two letters of that name in a tile beside it (the name's own initials, never its soul's), its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message alone (with none, "approval" for a tool approval). How long it waits is the status line's to say, once ("Needs you · 5 d"); since when, by the clock, is no second line of the page and no tooltip: the Activity's "Waiting claim" row holds the claim's instant. **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the card's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: **Terminal**, which opens bb's own Terminal tab on its session ("A tmux agent's terminal", below), and under it "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`, for a person's own terminal), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: on the page's face the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; under its fold (**Details**, closed) the owning human and the messaging ID, with its Copy: asked for, not read on every page. |
 | **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls tab is shown in this release (the setting `pages`; the default shows it; where a deployment hides it the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's: its fold says what was observed, the soul and the agents root). No fold stands alone at the tab's foot. The soul's description is two lines at most here, whole on the soul's page. |
+| **Mail** | the mail the agent received, read-only ("An agent's mail", below). For an agent with no messaging layer: "No messaging.", and nothing is read. |
+
+EVERY AGENT's PANEL HAS THESE FOUR TABS, ALWAYS, in this order: nothing about a tab depends on
+what has been read, and a tab with nothing behind it says so.
+THE PANEL NEVER CHOOSES A TAB BY ITSELF: WHAT IT SHOWS IS A FUNCTION OF THE WINDOW ALONE, at
+every draw: the tab of the last press (one memory for the window); but where that is Mail and
+Mail was pressed for another agent: Instance. ONLY A PRESS WRITES THE WINDOW: a tab, the thread
+line's **Answer**, the palette's Board, the header's soul link. The panel holds no tab of its
+own: so a screen never moves under a reader, and what bb mounts twice shows the same tab twice,
+by construction (`app/panel/tab-state.ts`, `tabOf`; its truth table:
+`test/panel/tab-state.test.ts`).
 
 The Instance tab ends with two more sections. **Readiness** (`oats readiness`): one line
 that says whether it is ready ("Ready", or how many checks fail), then, behind "Checks and
@@ -864,12 +876,20 @@ reads again behind it; shown while a read of that agent's first page is still on
 way, it takes that read's answer and starts no second one. "Read <age>." stands beside Refresh once what is shown is older
 than a minute.
 
-**Where the tab stands, and when.** The tab is drawn only for an agent whose roster row gives a
-messaging id (the panel's `messagingId`): an agent with no messaging layer has no mail to read,
-and what cannot be done is not offered. (Where the row and the read disagree, the tab says "No
-messaging.") And Mail is the one tab the panel does NOT remember from one agent to the next:
-showing an agent's mail reads it, and that takes a press on that agent's own tab. Left on Mail,
-another agent's panel opens on Instance (`app/panel/Panel.tsx`, `tabOf`).
+**Where the tab stands, and when.** The tab is there for every agent, as the panel's other
+three. For an agent whose roster row gives no messaging id (the panel's `messagingId`) it says
+"No messaging." from the row alone, and starts no read: an agent with no messaging layer has no
+mail to read. (Where the row gives one and the read says none, the mail's view says the same
+line.) And Mail is the one tab the window's memory does NOT open for another agent: showing an
+agent's mail reads it, and that takes a press on that agent's own tab. Left on Mail, another
+agent's panel opens on Instance; back at the first agent, its panel is on Mail again, as a
+person left it. Whose press Mail's was is written by a press on Mail and replaced by the next
+one, on any agent's tab; nothing else changes it. Where two agents' panels are mounted at once
+(bb keeps a thread's tab mounted while it is hidden), a press on one's Mail shows Mail in that
+panel alone, and Instance in the other (`app/panel/tab-state.ts`; `app/panel/Panel.tsx`,
+`pressTab`). While nothing of the agent
+could be read (the roster is the last one read and its instance was never read), the tab says
+"Mail can't be read.".
 
 **Mail is other people's text.** Every word of a message is untrusted. The adapter turns it into
 display lines on the machine, before it leaves it (`kernel/mail.ts`, with `model/text.ts`): the
@@ -930,6 +950,94 @@ read". The messaging layer's word for why is not drawn.
 scenes `container/scenes/mail.mjs`, and a real run of its own, `container/real/mail/`, which is run
 BY HAND and is in neither `ci.sh all` nor CI: it needs aweb's local stack, five containers
 (`container/real/mail/README.md`).
+
+## The board
+
+An agent's **board** is what it tells its person outside its conversation (`oats instance board`,
+run by the agent in its own home): the **questions** it needs answered and the **facts** it keeps
+in view. The plugin draws it as a view of its own (`app/board`, `<Board instance>`), which takes the
+agent's name and nothing of the place that mounts it, on the panel's **Board** tab, which every
+agent has. With neither a question nor a fact it says "No questions.", and nothing else. A board
+that CANNOT BE SHOWN says so: a board in a shape the plugin does not know ("This agent's board
+could not be read."), entries left out as out of the kernel's contract ("N entries of this
+agent's board could not be shown."), a read that failed (the same line, with Retry), an OATS
+older than the feature ("This OATS sends no board."): never the board's silence. It needs a kernel that lists the feature `instance-board`.
+
+| Part | Shows |
+|---|---|
+| **Questions** (first: they are what needs the person) | one question at a time, with its place among the open ones ("2 of 3"), its age, ‹ and › and a dot per question (the arrow keys turn them too); the question, whole; its options, numbered; and **Context**, a fold, only where the agent sent one: the agent's own text, plain, in a box of at most a third of the window that scrolls alone. |
+| **Facts** | bb's own section and list: three, and bb's "N more" for the rest. EVERY fact is the same two lines (ours: bb's own row keeps one line). Line 1: the **value** and unit, whole (a long one wraps: a value is never cut), the small line of its numbers' history right after it where it has one, and at the row's end its age and **×**. Line 2, small and muted: its **label** and, where it has an address, the address's host: one line, cut at its end; the label gives way first and keeps a few characters (its whole text is its title), and a long host is cut too (its whole text in its title; the whole address is one press away). **×** hides a fact on this computer alone (it comes back when its value changes; "N hidden · show" brings all back). |
+| A fact's **address** | who says it is said once, on the heading's line ("<Name> says"); each fact then shows its address's host alone, as text, after its label. A press shows the whole address, still as text; only then **Open in browser**. An address that looks like it holds a secret is never shown. |
+
+Every word of a board is the agent's: plain text through the display filter, never markup.
+
+**Answering.** Where the agent is on a bb thread and may be written to, an option is a button, and
+**a press SENDS** `<id>: <option>` to the agent's thread, at once, through the one guarded send the
+home's card uses (`app/home/send.ts`): the same guards, plus two of its own. This is A NAMED
+DIFFERENCE from the OATS Desktop, which puts that text in the terminal's input, unsent, for the
+person to send: bb has no way to put text in a thread's composer.
+- The answer is built from the server's row AT THE PRESS: the same question id, the same
+  occurrence (`since`) and that very option, else nothing is sent and the place says **No longer
+  asked. Nothing sent.**
+- While bb itself shows a request on the thread, or the agent waits on an approval of its harness,
+  no option is offered; if that is found only at the press: **It waits on an approval. Nothing sent.**
+  At the press bb itself is asked, once, whether it holds a request on the thread (bb's own call,
+  no process); where bb cannot say, nothing is sent. A NAMED LIMIT: of the kernel's claims the
+  press reads the ONE the row shows (the newest with a message), so the board's own claim can
+  stand in front of a harness's `permission` claim that has no message (the Desktop reads every
+  live claim for that). For an agent on bb the harness's approval IS a request bb shows on the
+  thread, which is what the press asks bb for; an agent on tmux is offered no button at all.
+- While the roster is the last one read, or behind a lifecycle result ("Reading…"), no option is
+  offered either. An option that is not offered is drawn as text, never as a control that is off.
+- After a press the question stays until the agent clears it, with **Sent.** beside the option and
+  the options off for that occurrence of the question. One press is one send: "on its way" is
+  held for the window by the agent and the occurrence (`app/board/sent.ts`), so the options stay
+  off while an answer travels, however often they are drawn anew (‹ ›, a tab, the home's card).
+- Where the row the server answers at the press is the LAST roster's (OATS cannot be read at that
+  moment), nothing is sent on it; nor where the server's row of the agent names another thread
+  than the one the place was drawn for (the agent was started again on a new thread since): that
+  check is the guarded send's own, so the home's card has it too.
+- Options that take another question's place WITHOUT a person's turn (the agent cleared the
+  question shown, and the next one stands where it stood) are off for one second: a click meant
+  for the question that went answers nothing. "1 of 2" is what says the question changed.
+- An agent on tmux is not typed to from bb yet: its options are text.
+
+**One thing wherever it is drawn.** The home's needs-you card of an agent that needs the person
+FOR A QUESTION OF ITS BOARD draws that question by the board's own component (`BoardAsk`), in
+place of the claim's text and the free reply: the same options, the same send, the same "Sent."
+mark; without a border or an age of its own, which the card has. "For a question of its board" is
+the roster's row (`boardAsks`: `true` or absent): its board holds an open question AND the row's
+needs-input claim is the board's own. The kernel names whose a claim is, and the agent's own
+claim, or a failed turn's, can be live in front of the board's: the card then says THAT claim,
+with its reply, as for any other agent (the board's question is on the Board tab). The card is
+never left empty for it: while the board is read it says what is asked (the claim's text is the
+question's own), and where the board cannot be read it is the card as ever, the text and the
+reply. The thread line's **Answer** goes by the same fact: to Board, with the focus on the
+question's ZONE, for a claim that is the board's (never on an option: the focus does not land by
+itself on a control whose press sends; the arrow keys turn the questions there, and one Tab
+reaches the first option); to "Needs input" for any other.
+Whether an agent has a board at all (`hasBoard`) rides on the row too, for the palette's command
+alone: bb asks a command whether it applies with no read to wait for. The agent's own events between two status reads do not carry the
+two: a row learns them at the next status read, seconds later (for those seconds the card looks
+at whose the claim is once more, in the board's own read).
+
+**Where the panel opens.** On the tab it was left on, never on Board by itself: the rule is the
+panel's (above, "The instance panel"). A question asked while the panel is open on another tab
+is said by the thread's own line, "Needs you" with **Answer**, the press that leads to Board.
+
+**The command.** bb takes a plugin's commands once, when it starts, with fixed titles: so the board
+has ONE, **Board**, with no shortcut and nothing per question. It is listed only on the thread of
+an agent that has a board (not on a plugin's page, and so not at the phone's width, where bb has
+no side panel), and turns that agent's panel to Board: the focus on the question's zone where
+the board asks, on the tab where it holds facts alone.
+
+**What it reads and does.** Two reads, no act but the send above: the row's board comes with the
+roster the server already holds (no command); the history and the contexts are one
+`oats inspect --home <home> --board --json`, read when the board is in view and when the board
+changes, never on a timer. On the home's card it is read only once a Context fold is opened
+there: a home with eleven such cards starts no process by being shown. Of that answer the server passes on the board's part ALONE: the
+inspection also holds the workspace, the souls, the launch and the identity, and a view of a
+board is handed none of it (`kernel/board.ts`). The kernel's `set`, `unset`, `ask` and `ask --clear` are the agent's.
 
 ## The New agent form
 
@@ -1428,7 +1536,7 @@ result.
 
 The plugin's features are `roster` (the sidebar's tree and the thread's header row), `home`,
 `spawn` (the New agent form), `workspace` (the Workspace page and its four tabs), `lifecycle` (stop, start, restart,
-retire), `automations`, `panel` (the instance panel), `terminal` (a tmux agent's terminal in bb's own Terminal tab; no slot: its button is on the panel's page), `mail` (an agent's incoming mail, read-only: one view, mounted by the panel, with no slot of its own) and `outside` (what is said when something
+retire), `automations`, `panel` (the instance panel), `board` (an agent's questions and facts), `terminal` (a tmux agent's terminal in bb's own Terminal tab; no slot: its button is on the panel's page), `mail` (an agent's incoming mail, read-only: one view, mounted by the panel, with no slot of its own) and `outside` (what is said when something
 happened to an agent outside OATS; no slot, no read and no `oats` verb of its own). Each has one module, or one directory, in
 every layer, and the entry of a layer only composes them:
 

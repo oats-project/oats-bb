@@ -7,6 +7,7 @@
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk/host";
 import { hostContract, hostSignals } from "./contract/index.js";
 import * as automations from "./host/automations.js";
+import * as board from "./host/board.js";
 import { createHostCore } from "./host/core.js";
 import * as home from "./host/home.js";
 import * as lifecycle from "./host/lifecycle.js";
@@ -32,6 +33,7 @@ export function createHostEntry() {
       ...panel.handlers(core),
       ...terminal.handlers(core),
       ...mail.handlers(core),
+      ...board.handlers(core),
     },
     dispose: core.dispose,
   });

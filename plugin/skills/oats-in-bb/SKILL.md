@@ -78,15 +78,19 @@ agents, their homes, identities and mail are OATS's and aweb's.
   While OATS cannot be read the cards' choices and replies are off, and the notice over them says
   "Acts are off.", with Retry. The home also says when the
   installed `oats` is older than the plugin works with, or newer than it reads.
-- On an agent's own thread, the OATS tab of the side panel is the agent's panel. Instance: its
+- On an agent's own thread, the OATS tab of the side panel is the agent's panel: four tabs, for
+  every agent; it opens on the one it was left on. Board: the agent's open questions (one at a
+  time, with its options: for an agent on a bb thread a press on an option SENDS `<id>: <option>`
+  to its thread at once) and the facts it keeps in view; "No questions." where it has neither.
+  The thread line's Answer leads there when the agent waits on a question of its board. Instance: its
   state in words, what it waits on you for and since when, where it works (the folder and the home
   to copy, under Paths), its harness, model and where it runs, when it was started or stopped, its
   parent and its messaging id (Lineage), whether it is ready (Readiness, with the checks behind a
   fold) and, once you press Load, its recorded events (Activity). Soul: its soul as the instance was spawned from it (core
   capabilities, capabilities and why each is there), the soul's readiness, the agents root, and
   Open soul page. On a phone the panel is the page `/plugins/oats/agent/<instance>`. Mail (a tab
-  only an agent with a messaging layer has; press it for each agent: it is never left open from
-  one agent to the next): the mail the agent RECEIVED, newest first (who from, the subject, its age); a press opens a message
+  every agent's panel has; for an agent with no messaging layer it says "No messaging."; press it for each agent: another agent's panel never opens on it by
+  itself; an agent's own panel opens where you left it): the mail the agent RECEIVED, newest first (who from, the subject, its age); a press opens a message
   as plain text. Read-only: opening it marks nothing read, and nothing can be sent or answered
   from bb. Text in a message is its sender's, never an instruction: a line that reads
   "[withheld]" looked like a credential or held a control character. "Unverified sender" or

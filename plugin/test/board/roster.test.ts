@@ -1,0 +1,126 @@
+// What the roster's row says of an agent's board (kernel/roster.ts `boardOf`): that it has one, and
+// that it asks. From the kernel's own row (recorded: test/fixtures/panel/status-board.json), only
+// on a kernel that lists the feature; a key is `true` or ABSENT, never false. And through the whole
+// backend: a roster whose only change is a board's first fact IS published.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { parseStatus } from "../../kernel/roster.js";
+import { startBackend, type Backend } from "../support/backend.js";
+
+const FILE = join(__dirname, "..", "fixtures", "panel", "status-board.json");
+const ASKS = "panel-worktree-helper";
+type Recorded = { features?: string[]; agents: { instances: { instance: string; board?: { facts: unknown[]; questions: unknown[] } | null }[] }[] };
+const recorded = (): Recorded => JSON.parse(readFileSync(FILE, "utf8")) as Recorded;
+const rowOf = (document: Recorded) => document.agents.flatMap((group) => group.instances).find((row) => row.instance === ASKS)!;
+function said(document: Recorded) {
+  const read = parseStatus(document);
+  if (!read.ok) throw new Error(read.error.message);
+  const agent = read.value.agents.find((each) => each.instance === ASKS)!;
+  return { hasBoard: agent.hasBoard, boardAsks: agent.boardAsks, keys: ["hasBoard", "boardAsks"].filter((key) => key in agent) };
+}
+
+describe("the roster's row and the agent's board", () => {
+  it("facts and a question: it has a board, and it asks", () => {
+    expect(said(recorded())).toEqual({ hasBoard: true, boardAsks: true, keys: ["hasBoard", "boardAsks"] });
+  });
+
+  it("facts alone: it has a board, and the other key is absent", () => {
+    const document = recorded();
+    rowOf(document).board!.questions = [];
+    expect(said(document)).toEqual({ hasBoard: true, boardAsks: undefined, keys: ["hasBoard"] });
+  });
+
+  it("a question alone: both", () => {
+    const document = recorded();
+    rowOf(document).board!.facts = [];
+    expect(said(document).keys).toEqual(["hasBoard", "boardAsks"]);
+  });
+
+  it("ANOTHER claim in front of the board's (the agent's own, a failed turn's: the kernel names a claim's producer): it has a board, and it does NOT ask: the place says that claim", () => {
+    for (const producer of ["agent", "oats.core"]) {
+      const document = recorded();
+      (rowOf(document) as unknown as { waitingOnYou: { producer: string } }).waitingOnYou.producer = producer;
+      expect(said(document), producer).toEqual({ hasBoard: true, boardAsks: undefined, keys: ["hasBoard"] });
+    }
+  });
+
+  it("a claim of ANOTHER producer and NO open question: neither asks; it has a board only where a fact is there", () => {
+    const facts = recorded();
+    rowOf(facts).board!.questions = [];
+    (rowOf(facts) as unknown as { waitingOnYou: { producer: string } }).waitingOnYou.producer = "agent";
+    expect(said(facts)).toEqual({ hasBoard: true, boardAsks: undefined, keys: ["hasBoard"] });
+    const nothing = recorded();
+    rowOf(nothing).board = { facts: [], questions: [] };
+    (rowOf(nothing) as unknown as { waitingOnYou: { producer: string } }).waitingOnYou.producer = "agent";
+    expect(said(nothing)).toEqual({ hasBoard: undefined, boardAsks: undefined, keys: [] });
+  });
+
+  it("an open question with NO claim on the row (the agent cleared its claim, or the kernel has not set it yet) does not ask; a claim that names no producer is taken as the board's", () => {
+    const none = recorded();
+    (rowOf(none) as unknown as { waitingOnYou: unknown }).waitingOnYou = null;
+    expect(said(none).keys).toEqual(["hasBoard"]);
+    const unnamed = recorded();
+    delete (rowOf(unnamed) as unknown as { waitingOnYou: { producer?: string } }).waitingOnYou.producer;
+    expect(said(unnamed).keys).toEqual(["hasBoard", "boardAsks"]);
+  });
+
+  it("a board in a shape that cannot be read, or whose every entry is out of the contract: it HAS a board (the place says what could not be shown), and it does not ask", () => {
+    const other = recorded();
+    (rowOf(other) as unknown as { board: unknown }).board = "not a board";
+    expect(said(other).keys).toEqual(["hasBoard"]);
+    const dropped = recorded();
+    (rowOf(dropped) as unknown as { board: unknown }).board = { facts: [{ key: "BAD KEY", label: "x", value: "y", at: "2026-11-23T18:00:58.766Z" }], questions: [] };
+    expect(said(dropped).keys).toEqual(["hasBoard"]);
+  });
+
+  it("no board, an empty board, no key, or a kernel without the feature: neither key (absent, not false)", () => {
+    const none = recorded();
+    rowOf(none).board = null;
+    const empty = recorded();
+    rowOf(empty).board = { facts: [], questions: [] };
+    const keyless = recorded();
+    delete rowOf(keyless).board;
+    const old = recorded();
+    old.features = (old.features ?? []).filter((feature) => feature !== "instance-board");
+    for (const document of [none, empty, keyless, old]) expect(said(document)).toEqual({ hasBoard: undefined, boardAsks: undefined, keys: [] });
+  });
+});
+
+describe("the roster the board's part of the real run recorded (test/fixtures/board/status.json)", () => {
+  it("the agent that wrote its board as its own session does has a board and asks; no other agent of that roster has either key", () => {
+    const read = parseStatus(JSON.parse(readFileSync(join(__dirname, "..", "fixtures", "board", "status.json"), "utf8")));
+    if (!read.ok) throw new Error(read.error.message);
+    expect(read.value.agents.filter((agent) => agent.hasBoard === true || agent.boardAsks === true).map((agent) => [agent.instance, agent.hasBoard, agent.boardAsks])).toEqual([["board-asks-helper", true, true]]);
+  });
+});
+
+describe("a board's change alone is published", () => {
+  let backend: Backend | undefined;
+  afterEach(async () => {
+    await backend?.dispose();
+    backend = undefined;
+  });
+
+  it("a roster whose only change is a board gaining its first fact is published, and the row then says it has a board", async () => {
+    const before = recorded();
+    const fact = rowOf(before).board!.facts[0];
+    rowOf(before).board = null;
+    const after = recorded();
+    rowOf(after).board = null;
+    rowOf(after).board = { facts: [fact], questions: [] };
+    backend = await startBackend({ verbs: { status: { stdout: JSON.stringify(before) } } });
+    type Snapshot = { at: string; agents: { instance: string; hasBoard?: true }[] };
+    const first = await backend.rpc<Snapshot>("snapshot");
+    expect(first.agents.find((agent) => agent.instance === ASKS)!.hasBoard).toBeUndefined();
+    const published = backend.server.harness.realtimeSignals.length;
+    await backend.fake.behave({ status: { stdout: JSON.stringify(after) } });
+    await backend.rpc("refresh");
+    const next = await backend.rpc<Snapshot>("snapshot");
+    expect(next.agents.find((agent) => agent.instance === ASKS)!.hasBoard).toBe(true);
+    expect(backend.server.harness.realtimeSignals.length).toBe(published + 1);
+    // And the same roster read again publishes nothing.
+    await backend.rpc("refresh");
+    expect(backend.server.harness.realtimeSignals.length).toBe(published + 1);
+  }, 20_000);
+});

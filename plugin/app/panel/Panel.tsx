@@ -241,9 +241,12 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   const board = useBoardTab(agent.instance);
   // Which tabs are drawn for this agent (the rule over `Drawn`). The row's own word (`hasBoard`) draws the Board tab at
   // once, and keeps it where the board's read failed: what could not be read is said there, with Retry.
-  // (Once the board's own read has ANSWERED, it says: it is the board itself, where the row's word is a summary of it
-  // that the roster may hold a moment longer.)
-  const drawn: Drawn = { board: board.answered ? board.shown : agent.hasBoard === true, mail: read.data !== undefined && read.data.facts.messagingId !== null };
+  // (Once the board's own read has ANSWERED for this panel, the board says: it is the board itself, where the row's
+  // word is a summary of it that the roster may hold a moment longer. STICKY: what the board last answered stands
+  // while it is read again and where a later read fails; the row's word never comes back to decide.)
+  const boardSaid = useRef<boolean | null>(null);
+  if (board.answered) boardSaid.current = board.shown;
+  const drawn: Drawn = { board: boardSaid.current ?? agent.hasBoard === true, mail: read.data !== undefined && read.data.facts.messagingId !== null };
   // THE TAB SHOWN: a state of this panel (one agent's: `Pages` is keyed by the agent's name where it is drawn, so a
   // panel bb keeps open while the thread changes is mounted anew), moved by the four events of `TabState` and by
   // nothing else. (An event is taken as it is seen, in the draw that sees it: the state it leaves is kept.)

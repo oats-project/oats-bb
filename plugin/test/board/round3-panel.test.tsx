@@ -96,3 +96,30 @@ test("the board's read fails at first and answers later with a question open, an
   await act(async () => { slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" }); await new Promise((resolve) => setTimeout(resolve, 300)); });
   expect(tabs()).toEqual(["Board*", "Instance", "Soul"]);
 });
+
+test("once the board has answered for a panel, the board says which tabs are drawn, also while it is read again and where a LATER read fails: what it last answered stands, and the row's word never comes back to decide", async () => {
+  // The recorded row says the agent has a board; the board's own read answers that it has none.
+  let answer: () => unknown = () => ({ at: BOARD_AT, supported: true, stale: false, board: null, claim: null });
+  await loadApp();
+  const slot = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, {
+    rpc: handlers({ snapshot: () => panelSnapshot(), panelInstance: ({ instance }) => instanceAnswer(instance), board: (() => answer()) as never }),
+    sidebarThreads: panelThreads(),
+  });
+  await slot.findByTestId("oats-panel-header");
+  const tabs = () => within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab").map((tab) => `${tab.textContent}${tab.getAttribute("aria-selected") === "true" ? "*" : ""}`);
+  const again = async () => act(async () => { slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" }); await new Promise((resolve) => setTimeout(resolve, 250)); });
+  await waitFor(() => expect(tabs()).toEqual(["Instance*", "Soul"])); // the board answered: none. No tab, whatever the row says.
+  // A later read FAILS: the tab does not appear by the row's word.
+  answer = () => { throw new Error("The OATS roster is being read again: try once more."); };
+  await again();
+  expect(tabs()).toEqual(["Instance*", "Soul"]);
+  // And the other way: a board that answered a fact, pressed, then a later read fails: the tab and the panel stay.
+  answer = () => ({ at: BOARD_AT, supported: true, stale: false, board: { facts: [FACT], questions: [] }, claim: null });
+  await again();
+  await waitFor(() => expect(tabs()).toEqual(["Board", "Instance*", "Soul"]));
+  fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Board" }));
+  await waitFor(() => expect(tabs()).toEqual(["Board*", "Instance", "Soul"]));
+  answer = () => { throw new Error("The OATS roster is being read again: try once more."); };
+  await again();
+  expect(tabs()).toEqual(["Board*", "Instance", "Soul"]);
+});

@@ -4,7 +4,8 @@
 #   Claude Code, and a mock model for it (mock-anthropic.mjs): no login, nothing spent
 #   the OATS kernel, packed from the tree in $REAL/kernel with `npm pack --ignore-scripts`, or
 #     with KERNEL_NPM=<version> the registry's tarball of @awebai/oats@<version>, its integrity checked
-#   the bb session provider, from the tree in $REAL/provider, a workspace and a deployment (workspace.sh)
+#   the bb session provider, from the tree in $REAL/provider, a workspace and a deployment, and a
+#   second deployment that has no bb session provider (workspace.sh)
 #   bb-app, started with the mock model's address and a placeholder key in its own environment
 #   the plugin, installed from this checkout, with `oatsBin` set to the recording wrapper
 set -euo pipefail
@@ -101,7 +102,7 @@ bb plugin remove oats --yes > /dev/null 2>&1 || true
 (cd "$LIVE" && bb plugin install . --yes) > "$OUT/install.txt" 2>&1 || { cat "$OUT/install.txt"; exit 1; }
 # bb built it with the locked toolchain, and fetched none from npm (../no-toolchain-fetch.sh).
 sh "$PLUGIN/container/no-toolchain-fetch.sh"
-# Every page is shown for the run (the plugin's setting `pages`; a release's default is `home` alone).
+# Every page is shown for the run (the plugin's setting `pages`; a release's default is the home and the Workspace page's four tabs).
 bb plugin config oats set pages "home, automations, souls, capabilities, teams, machines" > /dev/null
 bb plugin list | grep -q '^oats@.* running' || { echo "setup: the plugin is not running" >&2; bb plugin list; exit 1; }
 bb plugin config oats set deployment "$REAL/deploy" > /dev/null

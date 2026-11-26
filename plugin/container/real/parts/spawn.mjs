@@ -6,7 +6,7 @@
 //      preview), a decision that moved (at the apply), and a spawn on a harness the provider
 //      declares that bb cannot launch in this container (pi, when bb has no pi provider here);
 //   3. the previews the live scenes answer, as the kernel prints them (named; a child of an agent);
-//   4. THE FORM, in a browser, from the sidebar's New agent under the release's default pages. In
+//   4. THE FORM, in a browser, from the sidebar's New agent with the home alone shown (`pages: home`). In
 //      every view (both themes, both widths) the same state: the empty form; filled as a child of
 //      an agent, with what will be created read; a spawn the kernel refuses (harness pi, where bb
 //      has not installed it). Then one agent spawned through the form with Mod+Enter, once, and
@@ -105,8 +105,8 @@ export default async (run) => {
     fixtures.keep("spawn/spawn-preview-model-refused.json", refusedCall.stdout);
   }
 
-  step("Spawn: through the form, from the sidebar's New agent under the release's default pages: one state in every view");
-  // The release's default: only the home is a page. New agent must still be there (the second UX read's S1).
+  step("Spawn: through the form, from the sidebar's New agent with the home alone shown: one state in every view");
+  // A deployment that shows the home alone (`pages: home`): New agent must still be there (the second UX read's S1).
   const ALL = "home, automations, souls, capabilities, teams, machines";
   const q = (id) => JSON.stringify(testId(id));
   const pi = Array.isArray(declared) && declared.includes("pi");
@@ -126,7 +126,7 @@ export default async (run) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
       const button = await page.until(`${visible(testId("oats-new-agent"))} && !document.querySelector('[data-testid^="oats-page-link-"]')`, 30);
-      check(Boolean(button), `${at} under the default pages the sidebar has New agent, and no page link`, await page.evaluate(textOf(testId("oats-sidebar"))));
+      check(Boolean(button), `${at} with the home alone shown the sidebar has New agent, and no page link`, await page.evaluate(textOf(testId("oats-sidebar"))));
       await page.evaluate(`document.querySelector(${q("oats-new-agent")}).click()`);
       // The form's own page, its first field the soul, with nothing chosen.
       const first = await page.until(`(() => { const f = document.querySelector(${q("oats-spawn-form")}); const c = f?.querySelector("button, select, textarea, input"); return c && c.disabled === false && document.querySelector(${q("oats-spawn-harness")})?.disabled !== true ? JSON.stringify({ path: location.pathname, first: c.getAttribute("data-testid"), title: document.querySelector(${q("oats-spawn-title")})?.innerText, soul: c.innerText.replace(/\\s+/g, " ").trim(), spawn: document.querySelector(${q("oats-spawn-submit")}).disabled, off: document.querySelector(${q("oats-disabled-reason")})?.innerText ?? "" }) : ""; })()`, 30);

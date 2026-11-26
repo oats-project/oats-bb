@@ -5,9 +5,14 @@
  * `unconfirmed` is the kernel's own marker, `error.details.unconfirmed: true` (docs/desktop-cli-api.md
  * "Spawn errors": "A code says nothing about how far the spawn got: details.unconfirmed does"): the
  * act was refused or failed AND the kernel could not confirm that nothing of it is left. Present
- * only when the kernel set it; it is the one thing of an error's `details` the plugin carries.
+ * only when the kernel set it.
+ *
+ * `within` is the one other thing of an error's `details` the plugin carries, and only its PRESENCE: the kernel's
+ * refusal named a package (`details.package`) or a member repository (`details.member`) the thing it refused is in.
+ * It tells the three meanings of `E_CAPABILITY_UNKNOWN` apart by structure, never by the sentence
+ * (kernel/spawn.ts `providerAbsent`).
  */
-export type KernelError = { code: string; message: string; unconfirmed?: true };
+export type KernelError = { code: string; message: string; unconfirmed?: true; within?: "package" | "member" };
 export type Result<Value> = { ok: true; value: Value } | { ok: false; error: KernelError };
 
 export const ok = <Value>(value: Value): Result<Value> => ({ ok: true, value });

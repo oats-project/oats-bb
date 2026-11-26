@@ -1,0 +1,68 @@
+{
+ "file": "/abs/home/.oats/servers.json",
+ "servers": [
+  {
+   "id": "devbox-oats",
+   "sshHost": "devbox.invalid",
+   "workspace": "/srv/oats",
+   "label": "devbox",
+   "workspaceKey": null,
+   "target": {
+    "sshHost": "devbox.invalid",
+    "workspace": "/srv/oats",
+    "oatsPath": "oats"
+   },
+   "snapshots": 0
+  },
+  {
+   "id": "build",
+   "sshHost": "build.invalid",
+   "workspace": "/home/ci/oats",
+   "workspaceKey": null,
+   "target": {
+    "sshHost": "build.invalid",
+    "workspace": "/home/ci/oats",
+    "oatsPath": "oats"
+   },
+   "snapshots": 0
+  },
+  {
+   "id": "gpu-training-cluster-east-box",
+   "sshHost": "gpu-training-cluster-east.invalid",
+   "workspace": "/srv/oats",
+   "label": "gpu-training-cluster-east",
+   "workspaceKey": null,
+   "target": {
+    "sshHost": "gpu-training-cluster-east.invalid",
+    "workspace": "/srv/oats",
+    "oatsPath": "oats"
+   },
+   "snapshots": 0
+  },
+  {
+   "id": "staging-eu-central-box",
+   "sshHost": "staging-eu-central.invalid",
+   "workspace": "/home/ci/oats",
+   "workspaceKey": null,
+   "target": {
+    "sshHost": "staging-eu-central.invalid",
+    "workspace": "/home/ci/oats",
+    "oatsPath": "oats"
+   },
+   "snapshots": 0
+  },
+  {
+   "id": "customer-sandbox-long-running-evaluations-box",
+   "sshHost": "customer-sandbox-long-running-evaluations.invalid",
+   "workspace": "/srv/oats",
+   "label": "customer-sandbox-long-running-evaluations",
+   "workspaceKey": null,
+   "target": {
+    "sshHost": "customer-sandbox-long-running-evaluations.invalid",
+    "workspace": "/srv/oats",
+    "oatsPath": "oats"
+   },
+   "snapshots": 0
+  }
+ ]
+}

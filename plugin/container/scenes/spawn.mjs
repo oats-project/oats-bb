@@ -95,29 +95,6 @@ async function fillNamed(page, { relation = false } = {}) {
 }
 
 export default [
-  // A soul's page keeps the earlier form (a name, a task, Preview) until the workspace's pages are rebuilt.
-  {
-    stage: "fixtures",
-    name: "the New agent form: the mode, a name it refuses, a name and a task and their preview",
-    run: async ({ page, at, viewport, check }) => {
-      await page.goto("/plugins/oats/souls/oats-developer");
-      await page.until(visible(testId("oats-spawn-form")), 30);
-      // the one line that says which mode a spawn asks for (text, no control); its contrast is checked at the screenshots below
-      check((await page.evaluate(textOf(testId("oats-spawn-mode")))) === "Runs in bb's full mode: no sandbox." && (await page.evaluate(visible(testId("oats-spawn-mode")))), `${at} the New agent form says it runs in bb's full mode, with no sandbox`, await page.evaluate(textOf(testId("oats-soul-detail"))));
-      // the spawn form: a name it refuses, then a name and a task it takes, and the preview
-      await page.evaluate(fill(testId("oats-spawn-name"), "Bad Name"));
-      const refused = await page.until(`(() => { const t = ${textOf(testId("oats-spawn-form"))}; return /Lower-case letters, digits and dashes/.test(t) ? t : ""; })()`, 10);
-      check(Boolean(refused), `${at} the form says why it refuses a name`, await page.evaluate(textOf(testId("oats-spawn-form"))));
-      await page.shot(`a13-${viewport.name}-soul-refused`);
-      await page.evaluate(fill(testId("oats-spawn-name"), "ranker-v4-probe"));
-      await page.evaluate(fill(testId("oats-spawn-task"), "Try depth 7."));
-      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-spawn-preview"))})?.disabled === false`, 10)), `${at} a name and a task enable Preview`);
-      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-spawn-preview"))}).click()`);
-      check(Boolean(await page.until(`document.querySelector(${JSON.stringify(testId("oats-spawn-submit"))})?.disabled === false && ${visible(testId("oats-preview"))}`, 30)), `${at} Preview shows what OATS would do, and enables the spawn`, await page.evaluate(textOf(testId("oats-spawn-form"))));
-      await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-spawn-submit"))}).scrollIntoView({ block: "center" })`);
-      await page.shot(`a13-${viewport.name}-soul-form`);
-    },
-  },
   {
     stage: "spawn-form",
     name: "the New agent form, empty: the soul first and in focus, nothing read, Spawn off with the empty field in view",
@@ -462,12 +439,12 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default pages: New agent is in the sidebar and on the home, and each opens the form, its first field the soul",
+    name: "the release's default pages (the home, and the Workspace page's four tabs): New agent is in the sidebar and on the home, and each opens the form, its first field the soul",
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      const there = await page.until(`${visible(testId("oats-new-agent"))} && document.querySelector(${q("oats-sidebar")}).querySelector(${q("oats-tree")}) !== null && !document.querySelector('[data-testid^="oats-page-link-"]') && ${textOf(testId("oats-new-agent"))}`, 30);
-      check(there === "New agent", `${at} with only the home shown, New agent is in the sidebar, on screen, with no page link beside it`, there ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      const there = await page.until(`${visible(testId("oats-new-agent"))} && document.querySelector(${q("oats-sidebar")}).querySelector(${q("oats-tree")}) !== null && JSON.stringify([...document.querySelectorAll('[data-testid^="oats-page-link-"]')].map((link) => link.getAttribute("data-testid"))) === '["oats-page-link-workspace"]' && ${textOf(testId("oats-new-agent"))}`, 30);
+      check(there === "New agent", `${at} under the default, New agent is in the sidebar, on screen, with the ONE page link (Workspace) beside it`, there ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       await page.evaluate(click(testId("oats-new-agent")));
       const opened = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: ${FIRST}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
       check(opened === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", shown: true }), `${at} it opens the form's own page, the soul field first: the form is not one of the pages a release leaves out`, opened ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
@@ -479,14 +456,15 @@ export default [
       if (!viewport.mobile) await page.shot(`pages-default-${viewport.name}-new-agent`, { targets: true });
       // And on the home, which is what a person sees at a phone's width (bb's sidebar is in a drawer there): New agent is in
       // the home's heading, can be pressed, and opens the same page. The checks hold it in the page; no image is taken here
-      // (the home's own image of this stage is of its summary and its one tile, further down), and where the press lands
+      // (the home's own image of this stage is of its summary and its four tiles, further down), and where the press lands
       // is the image above.
       await page.goto("/plugins/oats/home");
-      // Read once the home itself says the default has drawn: it has no tile at all (as the home's own
-      // scene of this stage waits). The button is drawn under every value of `pages`, so alone it would say nothing of them.
+      // Read once the home itself says the default has drawn: its four tiles, one per tab of the Workspace page (as the
+      // home's own scene of this stage waits). The button is drawn under every value of `pages`, so alone it would say nothing of them.
       const HOME = `(() => { const b = document.querySelector(${q("oats-home-new-agent")}); return JSON.stringify({ words: b?.innerText.trim() ?? null, off: b?.disabled ?? null, tiles: [...document.querySelectorAll(${q("oats-home-tiles")} + " button")].map((tile) => tile.getAttribute("data-testid")), links: document.querySelectorAll('[data-testid^="oats-page-link-"]').length }); })()`;
-      const onHome = await page.until(`${visible(testId("oats-home-new-agent"))} && document.querySelectorAll(${q("oats-home-tiles")} + " button").length === 0 && ${HOME}`, 30);
-      check(onHome === JSON.stringify({ words: "New agent", off: false, tiles: [], links: 0 }), `${at} with only the home shown (it has no tile), New agent is on the home too, on screen and pressable`, onHome ?? (await page.evaluate(HOME)));
+      const onHome = await page.until(`${visible(testId("oats-home-new-agent"))} && document.querySelectorAll(${q("oats-home-tiles")} + " button").length === 4 && ${HOME}`, 30);
+      const home = onHome ? JSON.parse(onHome) : null;
+      check(home !== null && home.words === "New agent" && home.off === false && home.tiles.length === 4, `${at} under the default (the home has its four tiles), New agent is on the home too, on screen and pressable`, onHome ?? (await page.evaluate(HOME)));
       await page.evaluate(click(testId("oats-home-new-agent")));
       // The form takes the focus in an effect after it is drawn: the wait is for the focus too, and a wait that ends without it prints where it was.
       const LANDED = `JSON.stringify({ path: location.pathname, first: document.querySelector(${q("oats-spawn-form")}) ? ${FIRST} : null, focus: ${FOCUSED}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`;

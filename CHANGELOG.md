@@ -1,5 +1,95 @@
 # Changelog
 
+## 0.7.0
+
+The plugin gets the **Workspace** page, and it is shown by default. New agent now works on a deployment with no bb session provider. The plugin logs every act it asks of OATS.
+
+The session provider doesn't change: package `oats.bb` 0.7.0 is 0.6.0's provider, unchanged apart from its version.
+
+**Upgrade:**
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.7.0`, then `oats sync`. The floor stays OATS 0.70.5, and bb-app stays 0.50.1.
+- Install the plugin in bb again at `v0.7.0` (`plugin/README.md`, "Install").
+- A home's provider copy needs no move: it is the same provider.
+- **The default of the plugin's `pages` setting changes** for every install that hasn't set it. It was the home alone; now it is the home plus the Workspace page's four tabs (`home, souls, capabilities, teams, machines`). The sidebar gets one row, **Workspace**, the home gets its four tiles back, and the panel's "Open soul page" is drawn. To keep the old view, set `pages` to `home` (`plugin config oats set pages home`). Automations stays out of the default.
+
+**Known in this release:**
+- New agent on a deployment with no bb session provider spawns where the kernel puts it (tmux). bb has no choice of "bb thread or tmux" on a deployment that has the provider.
+- bb can't send a message to an agent on tmux. Its Terminal tab types straight into the agent's window.
+- On the Workspace page nothing acts on the workspace yet. A capability's and a team's own page, the teams' acts and a machine's Check and Remove come in a later release.
+- For a moment, a soul's page can show an agent whose thread bb deleted as plain "Stopped" with Start…, until bb answers for that thread. The sidebar's row does the same; this is not new.
+- A grant seat on an aweb registry other than the default may still need `AWID_REGISTRY_URL`, which a pi thread is not given.
+- The real mail stage of the checks runs by hand, not in CI.
+
+### The plugin
+
+- **The Workspace page** (#101). One sidebar row, **Workspace**, and one page with four tabs: **Souls**, **Capabilities**, **Teams** and **Machines**.
+  - Each tab is a route of its own, so a link to a tab or to a soul keeps working.
+  - Descriptions sit on one line, cut at a word. A list of 12 or more has a search, and while a search narrows a list, its tab says "N of M".
+  - A tab whose read failed shows one notice with Retry.
+  - A soul's page shows:
+    - its key and where it comes from;
+    - harness · model, and its teams;
+    - its capabilities and why it has each one;
+    - its agents, as the roster says them, with their acts;
+    - **New agent**, which opens the New agent form with that soul chosen.
+  - The Teams tab is marked, and shows a notice, when the default team has no address yet.
+  - The page only reads. Every new field it reads is optional, so an older kernel draws less, never a guess.
+  - The soul page's earlier short spawn form is gone: the New agent form replaces it.
+- **New agent without the bb session provider** (#100).
+  - On a deployment whose workspace has no `oats.bb`, the form spawns the agent where the kernel puts it (tmux), offering the kernel's own harnesses. It says where the agent runs and opens the agent's own page.
+  - Where `oats.bb` is pinned but not synced, the form says "bb is not synced. Run `oats sync`.", with Retry, and spawns nothing.
+  - Where the provider is there, nothing changes: every spawn is a bb thread.
+
+  This closes 0.6.0's Known lines on "bb is not set up for this workspace."
+- **The act log** (#99). Every act the plugin asks of OATS is written to bb's log of the plugin. That covers start, restart, stop, retire, spawn, the automations' acts, and a trigger test that runs its source's command. Each act gets one line when it is asked, one when it ends (with its result), and one where the plugin held it.
+  - A line never says more than the window does of the same answer.
+  - A line carries no path, sentence, message or secret. Every value is a single token.
+  - `plugin/README.md`, "The act log", is the line's contract.
+- **The Mail tab reads once for one press** (#108). bb sometimes mounts its side panel twice. Now a view mounted again within a minute of a read shows what it holds and reads nothing. A read that was refused is still read again. Refresh reads at any time.
+
+## 0.6.0
+
+Two new plugin features:
+- **Terminal** on the page of an agent that runs on tmux;
+- a read-only **Mail** tab for every agent with a messaging layer.
+
+The session provider doesn't change: package `oats.bb` 0.6.0 is 0.5.1's provider, unchanged apart from its version.
+
+**Upgrade:**
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.6.0`, then `oats sync`. The floor stays OATS 0.70.5, and bb-app stays 0.50.1.
+- Install the plugin in bb again at `v0.6.0` (`plugin/README.md`, "Install").
+- A home's provider copy needs no move: it is the same provider.
+
+**Known in this release:**
+- New agent needs the `oats.bb` package in the workspace. Without it, the form says "bb is not set up for this workspace." and spawns nothing. Spawning a tmux agent from bb comes later.
+- A workspace whose lock doesn't yet hold `oats.bb` (run `oats sync`), or a member missing the capability, also reads "bb is not set up for this workspace.". The form keeps that answer for 30 seconds and has no Retry.
+- bb can't send a message to an agent on tmux. Its Terminal tab types straight into the agent's window.
+- A grant seat on an aweb registry other than the default may still need `AWID_REGISTRY_URL`, which a pi thread is not given.
+- The real mail stage of the checks runs by hand, not in CI.
+
+### The plugin
+
+- **Terminal, for an agent on tmux** (#94). The agent's page, in its Session card, gets **Terminal**:
+  - It opens bb's own Terminal tab on the kernel's viewer of the agent (`oats session attach --home`), titled with the agent's name.
+  - Pressing it again, or reloading, shows the same tab.
+  - What is typed there is typed to the agent. Closing the tab leaves the agent running.
+  - Where the tab doesn't come up, the page says "Terminal did not open.", with the command and why under Details.
+
+  The attach command to copy stays beside it. It needs `oats` reachable by an absolute path on the machine: the plugin's `oatsBin` setting, or the first `oats` on the host's PATH. It uses bb's `experimental_openTerminal`.
+- **Mail, read-only** (#97). An agent with a messaging layer gets a Mail tab:
+  - It shows the mail the agent received, newest first. A press opens one message as plain text.
+  - Reading marks nothing read, and nothing can be sent or answered from bb.
+  - Message text is filtered line by line on the machine, and a line that looks like a credential reads "[withheld]".
+  - "Unverified sender" or "Signature failed" says what the messaging layer could not confirm.
+
+  It reads through `oats operation run messaging:mail`, the same read as the OATS Desktop's mail sheet.
+- **A retire never calls a child "stopped" that did not stop** (#102). It names that child first, in the Stop result's words, with its code, and the result is not shown as done. Today's kernel refuses such a retire whole, so this is a guard.
+
+### Development
+
+- **The checks never read a record half-written** (#103): the harness writes its files whole and renames them into place, and reads appended logs by complete lines.
+- **The real run waits for Claude Code's state file to be whole** (#106) before reading it, since Claude Code rewrites it while agents are up. A file that stays broken fails the run, naming the file and never its contents.
+
 ## 0.5.1
 
 The pilot's fixes. The session provider changes:

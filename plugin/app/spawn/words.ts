@@ -9,8 +9,11 @@ export const TITLE = "New agent";
 
 export const SOUL_LABEL = "Soul";
 export const CHOOSE_SOUL = "Choose a soul…";
-/** A deployment whose workspace does not have the bb session provider: the form's ONE line (ruled). The kernel's own sentence and code are under its Details. */
-export const NO_BB = "bb is not set up for this workspace.";
+/**
+ * The workspace pins the bb session provider and it is not synced yet: the form's ONE line, two short sentences (ruled):
+ * "bb is not synced. Run oats sync.", the command in the code face. The kernel's own sentence and code are under its Details.
+ */
+export const NOT_SYNCED = { before: "bb is not synced. Run ", command: "oats sync", after: "." } as const;
 /** The Model field where a model is required and nothing is its default: what it wants, as the Soul field says it. */
 export const CHOOSE_MODEL = "Choose a model…";
 export const READING_SOULS = "Reading the souls…";

@@ -1,6 +1,6 @@
 {
   "name": "@awebai/oats-bb",
-  "version": "0.5.1",
+  "version": "0.7.0",
   "description": "OATS on bb: the bb session provider (an OATS instance as one bb thread).",
   "type": "module",
   "private": true,

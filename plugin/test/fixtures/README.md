@@ -11,7 +11,10 @@ history) and two questions (the first with a context) as its own session does, a
 the roster with that agent's row: both recorded by the real run's board part
 (`container/real/parts/board.mjs`). `mail/` has a README of its own too: its files are answers of the real
 kernel and messaging layer to the mail read, recorded by hand on aweb's local stack, and every word
-of mail in them was made up for the recording.
+of mail in them was made up for the recording. `busy/` has a README of its own too: the busy
+workspace (the worst case every screen is judged by first), MADE by its generator from the recorded
+answers of the other directories, each row a recorded row with only its names, ids, times and
+relations varied: the one set that is multiplied, never shaped, and for scenes and images only.
 
 Pinned by the spec.
 - `status.json`: `oats status --json` reduced to the fields the plugin reads, in the shape agreed

@@ -1,0 +1,104 @@
+{
+ "teamsApi": 2,
+ "deployment": "/abs/deployment",
+ "localTeams": true,
+ "defaultTeam": {
+  "label": "oats",
+  "team": "default:oats.aweb.ai",
+  "from": "deployment"
+ },
+ "teams": [
+  {
+   "label": "oats",
+   "team": "default:oats.aweb.ai",
+   "description": "The OATS framework team",
+   "from": "shared",
+   "default": true,
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/oats"
+  },
+  {
+   "label": "payments-and-billing-platform",
+   "team": "payments-and-billing-platform:busy.invalid",
+   "description": "The payments and billing platform team: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone",
+   "from": "shared",
+   "default": false,
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/payments-and-billing-platform"
+  },
+  {
+   "label": "search-and-discovery",
+   "team": null,
+   "description": null,
+   "from": "shared",
+   "default": false,
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/search-and-discovery"
+  },
+  {
+   "label": "mobile-clients",
+   "team": "mobile-clients:busy.invalid",
+   "description": "The mobile clients team: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone",
+   "from": "shared",
+   "default": false,
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/mobile-clients"
+  },
+  {
+   "label": "docs",
+   "team": null,
+   "description": null,
+   "from": "shared",
+   "default": false,
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/docs"
+  },
+  {
+   "label": "compliance-and-audit-evidence",
+   "team": "compliance-and-audit-evidence:busy.invalid",
+   "description": "The compliance and audit evidence team: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone",
+   "from": "shared",
+   "default": false,
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/compliance-and-audit-evidence"
+  },
+  {
+   "label": "developer-experience",
+   "team": null,
+   "description": null,
+   "from": "shared",
+   "default": false,
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/developer-experience"
+  }
+ ],
+ "souls": {
+  "*": {
+   "teams": [
+    "oats"
+   ]
+  }
+ },
+ "problems": [
+  {
+   "code": "team-unmapped",
+   "label": "search-and-discovery",
+   "default": false,
+   "severity": "warning",
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/search-and-discovery",
+   "message": "shared team search-and-discovery has no provider id yet",
+   "fix": "its owner runs `oats aweb setup`, then commits the id"
+  },
+  {
+   "code": "team-unmapped",
+   "label": "docs",
+   "default": false,
+   "severity": "warning",
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/docs",
+   "message": "shared team docs has no provider id yet",
+   "fix": "its owner runs `oats aweb setup`, then commits the id"
+  },
+  {
+   "code": "team-unmapped",
+   "label": "developer-experience",
+   "default": false,
+   "severity": "warning",
+   "at": "github.com/awebai/oats:oats-workspace.yaml#/teams/developer-experience",
+   "message": "shared team developer-experience has no provider id yet",
+   "fix": "its owner runs `oats aweb setup`, then commits the id"
+  }
+ ]
+}

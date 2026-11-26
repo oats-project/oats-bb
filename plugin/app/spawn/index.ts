@@ -1,8 +1,8 @@
 // Spawn's slots: the New agent form, a page of its own (Page.tsx). It is not one of the pages a
 // release can leave out (the setting `pages`): whatever is shown, "New agent" opens it: the button
 // at the sidebar's foot and the one in the home's heading; any place opens it the same way
-// (`openNewAgent` of app/workspace/pages.ts, with a soul chosen or with none). A soul's page still draws the earlier
-// form (NewAgent.tsx). Like the plugin's other pages it stays out of bb's own navigation.
+// (`openNewAgent` of app/workspace/pages.ts, with a soul chosen or with none). A soul's page opens it with
+// that soul chosen (its "New agent"). Like the plugin's other pages it stays out of bb's own navigation.
 import type { PluginAppBuilder } from "@get-bb/plugin-sdk/app";
 import type { BbNavigate } from "@get-bb/plugin-sdk/app";
 import { setNewAgent } from "../workspace/pages";

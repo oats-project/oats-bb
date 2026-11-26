@@ -13,7 +13,7 @@ import type { MailMessage } from "../../kernel/mail";
 import { age } from "../format";
 import { useNow } from "../roster/now";
 import { Button, Loading, Notice, TARGET } from "../ui";
-import { readAge, showingRead } from "../ui/words";
+import { FRESH_MS, readAge, showingRead } from "../ui/words";
 import { useMail } from "./read";
 import { MAIL, codeOf, refusalLine, senderWord, unreadLine } from "./words";
 
@@ -143,7 +143,7 @@ export function Mail({ instance }: { instance: string }) {
   const failedOlder = error?.of === "older" ? notice : null;
 
   const readAgo = readAge(held.readAt, now);
-  const old = now - held.readAt >= 60_000;
+  const old = now - held.readAt >= FRESH_MS;
   return (
     <div data-testid="oats-mail" className="flex min-w-0 flex-col gap-2">
       {failed ?? (

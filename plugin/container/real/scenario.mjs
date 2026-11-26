@@ -580,10 +580,11 @@ async function archivedShots(scene, { instance, soul, threadId }) {
 /** What the archived thread's row says of a stopped agent: the plugin's reason (WORDS.md, "Outside OATS"; app/outside/words.ts). */
 const ARCHIVED_IN_BB = "archived in bb";
 /**
- * With the release's DEFAULT pages (the home alone: what a person sees first), at both widths: the
- * sidebar holds the real agent's row, no link to a page that is not shown, and no line at its foot. The
- * setting is left as a fresh install has it, UNSET (bb's own `plugin config oats unset pages`),
- * not set to "home": so this holds what an unset setting hides. All six are set again after.
+ * With the release's DEFAULT pages (the home and the Workspace page's four tabs: what a person sees
+ * first), at both widths: the sidebar holds the real agent's row, ONE page link (Workspace; none to
+ * Automations, which the default leaves out), and no line at its foot. The setting is left as a
+ * fresh install has it, UNSET (bb's own `plugin config oats unset pages`), not set to a value: so
+ * this holds what an unset setting shows and hides. All six are set again after.
  */
 async function defaultPagesShots(scene, { instance, threadId }) {
   bb("plugin", "config", "oats", "unset", "pages");
@@ -599,7 +600,7 @@ async function defaultPagesShots(scene, { instance, threadId }) {
         // Waited for: the row, and bb's settings read (the sidebar says so: until then no page is known shown under any value).
         // Nobody waits in this roster (its one agent works): the foot has no line at all, which is asserted too.
         const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(row)})) return ""; if (s.getAttribute("data-pages") !== "known") return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: s.querySelectorAll('[data-testid^="oats-page-link-"]').length, needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))}) !== null, said: /needs you|need you/i.test(s.innerText) }); })()`, 30);
-        check(side === JSON.stringify({ pages: false, links: 0, needs: false, said: false }), `${at}: with the setting left as installed (unset) the sidebar has ${instance}'s row, no link to a page that is not shown, and (nobody waits) no line at its foot`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        check(side === JSON.stringify({ pages: true, links: 1, needs: false, said: false }), `${at}: with the setting left as installed (unset) the sidebar has ${instance}'s row, ONE page link (Workspace), and (nobody waits) no line at its foot`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
         await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
       } finally {
         await page.close();
@@ -609,7 +610,7 @@ async function defaultPagesShots(scene, { instance, threadId }) {
     bb("plugin", "config", "oats", "set", "pages", "home, automations, souls, capabilities, teams, machines");
   }
 }
-/** At both widths: the agent stays in the roster, as a row that says its thread was deleted in bb, and its soul's page says "thread missing", with Start and Retire. */
+/** At both widths: the agent stays in the roster, as a row that says its thread was deleted in bb, and its soul's page says the same of it, with Start… and Retire…. */
 async function missingShots(scene, { instance, soul }) {
   for (const view of VIEWS) {
     const { viewport, suffix } = view;
@@ -617,8 +618,8 @@ async function missingShots(scene, { instance, soul }) {
     const page = await viewPage(browser, view, at);
     try {
       await page.goto(`/plugins/oats/souls/${soul}`);
-      const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent-detached")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return t; })()`, 30);
-      check(Boolean(line) && /thread missing/.test(line) && /Start…/.test(line) && /Retire…/.test(line), `${at}: the soul's page says "thread missing" for ${instance}, with Start… and Retire… (each opens its dialog)`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
+      const line = await page.until(`(() => { const t = (document.querySelector(${JSON.stringify(`${testId("oats-soul-agent")}[data-instance="${instance}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim(); return /Retire…/.test(t) && /deleted in bb/.test(t) ? t : ""; /* what bb did to its thread is bb's answer by id, which comes after the roster's */ })()`, 30);
+      check(Boolean(line) && /deleted in bb/.test(line) && !/thread missing/.test(line) && /Start…/.test(line) && /Retire…/.test(line), `${at}: the soul's page says of ${instance} what its row says, "deleted in bb", with Start… and Retire… (each opens its dialog)`, line ?? (await page.evaluate(textOf(testId("oats-soul-detail")))));
       show("line", line);
       await page.shot(`${scene}-${viewport.name}-soul${suffix}`);
       await page.goto("/");
@@ -778,8 +779,9 @@ try {
   step("A1 spawn preview");
   hold(A.instance);
   const task = taskOf(A.instance, "Fix the flaky CI job.");
-  const preview = act("spawn preview", "spawnPreview", { soul: A.soul, name: A.instance, task });
-  check(preview?.summary.problems.length === 0 && /^claude · /.test(preview?.summary.launch ?? ""), "the preview names the launch and no problem", JSON.stringify(preview));
+  // (The form's own read: it answers only a preview that is a decision a spawn could apply; a problem is a refusal.)
+  const preview = act("spawn preview", "spawnPlan", { soul: A.soul, name: A.instance, task });
+  check(preview?.facts?.resolved?.harness === "claude" && typeof preview?.revision === "string", "the preview names the launch (claude) and its decision, and no problem", JSON.stringify(preview));
   const previewRecord = recorded(["spawn", A.soul], ["--preview"]);
   evidence.keep("spawn-preview.json", previewRecord.stdout);
   // The deployment has no full-mode default (workspace.sh): the mode is the plugin's own `--yolo`.
@@ -938,6 +940,20 @@ try {
   show("the kernel's plan, for an idle agent", JSON.parse(idlePlan.stdout).result);
   const stopAt = Date.now();
   act("stop apply", "stopApply", { instance: A.instance, revision: plan.revision, key: "stop-a1b2c3d4e5f6" });
+  // THE ACT LOG (P-51; README, "The act log"): bb's log of the plugin holds the stop's two lines: the kernel was asked,
+  // and it ended ok. Read from the PLUGIN's own log file, which bb appends to before the handler goes on (bb's server
+  // log gets the same lines through a writer of its own, a moment later: not read here). The file holds JSON lines;
+  // each of ours is looked for by its own words.
+  {
+    const file = join(homedir(), "bbdata", "plugins", "oats", "logs", "plugin.log");
+    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    // (ONE of each: this is the first stop of that agent in the run, read before the next ones; in the run's fresh
+    // container the file holds no earlier run's lines.)
+    const of = (phase) => text.split("\n").filter((line) => line.includes(`oats act stopApply ${phase} instance=${A.instance} `));
+    const [asked, ended] = [of("asked"), of("ended")];
+    check(asked.length === 1 && / caller=\S+ host=\S+ at=\d{4}-\d\d-\d\dT[\d:.]+Z n=\d+/.test(asked[0]), "the act log: bb's log of the plugin holds ONE line that the plugin asked the kernel to stop the agent (who asked, the machine, when)", `${asked.length} line(s) in ${file}${existsSync(file) ? "" : " (no such file)"}`);
+    check(ended.length === 1 && / result=ok ms=\d+ homes=1\/1/.test(ended[0]) && ended[0].match(/ n=(\d+)/)?.[1] === asked[0]?.match(/ n=(\d+)/)?.[1], "the act log: and ONE line that the stop ended ok, with how long it took and the home it took, under the same number", `${ended.length} line(s)${ended[0] ? `: …${ended[0].slice(ended[0].indexOf("oats act"))}` : ""}`);
+  }
   // The stop is the plugin's own act: it rereads by itself afterwards, so this one measures how soon an act's result is on hand, not the watch (that the act rereads is test/lifecycle/server.test.ts's).
   await fresh("the agent stopped (the plugin's own act)", { instance: A.instance, home, kind: "stopped", since: stopAt }, (agent) => agent.runtimeState === "stopped");
   row = await untilRow(A.instance, "stopped by OATS", (r) => r.running === false && r.runtimeState === "stopped");

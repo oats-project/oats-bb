@@ -1,7 +1,7 @@
 // The sidebar's thread list (experimental_threadList): the workspace's name, the roster (every agent
 // OATS has, as a tree whose parents open), under it New agent, the plugin's pages under "Workspace",
 // then every other bb thread. With no roster ever read, bb's threads are still all listed and usable.
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { AnchorHTMLAttributes, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   ThreadTitle,
   experimental_ThreadActionsContextMenu as ThreadActionsContextMenu,
@@ -10,6 +10,7 @@ import {
   useBbNavigate,
   useSidebarThreadDraftIds,
   useSidebarThreadRowStatuses,
+  useSidebarThreadShortcut,
 } from "@get-bb/plugin-sdk/app";
 import type {
   PluginSidebarThread,
@@ -27,7 +28,7 @@ import { openAgentPage } from "../home/agent-tab";
 import { useCli } from "../home/cli";
 import { GONE_MARK } from "./gone";
 import { agentStatus, rowState } from "./status";
-import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown } from "../workspace/pages";
+import { hasNewAgent, newAgentHeld, openNewAgent, pageLinks, openSoul, useOpenPage, usePagesShown, WORKSPACE } from "../workspace/pages";
 import type { PageLink } from "../workspace/pages";
 import { RowFacts } from "../ui/row-facts";
 import { shown } from "../ui/text";
@@ -37,6 +38,27 @@ import { ReadingFacts, ReadingMark, readingNow, useActed } from "./reading";
 import { LastObservation, Unreadable, usePageShowsNotice } from "./unreadable";
 import { useNow } from "./now";
 import { FoldToggle, foldKeys, GUTTERED, useOpened } from "./fold";
+
+/**
+ * A thread row's anchor, as bb's own rows are: it carries the two attributes bb's own keys go by
+ * (previous / next thread walk these rows in the order drawn; "Open thread 1..9" jumps to them), and
+ * WHILE bb's modifier is held it shows the jump key bb gave this row, as bb's rows do, and says it
+ * in `aria-keyshortcuts`. (bb numbers the rows that carry `data-sidebar-thread-shortcut-target`,
+ * in the order drawn: a row with no thread carries none and has no key.) The key is bb's own word.
+ */
+function ThreadAnchor({ threadId, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement> & { threadId: string; "data-testid": string }) {
+  const shortcut = useSidebarThreadShortcut(threadId);
+  return (
+    <a {...rest} data-sidebar-thread-shortcut-target="" data-sidebar-thread-id={threadId} aria-keyshortcuts={shortcut?.ariaKeyshortcuts}>
+      {children}
+      {shortcut === null ? null : (
+        <kbd data-testid="oats-jump-key" aria-hidden="true" className="pointer-events-none absolute right-1 top-1 rounded border border-border bg-background px-1 font-sans text-xs text-foreground">
+          {shortcut.label}
+        </kbd>
+      )}
+    </a>
+  );
+}
 
 function target(thread: PluginSidebarThread): PluginThreadActionTarget {
   return {
@@ -93,6 +115,8 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   // link here, and no mark.
   const pagesNow = usePagesShown();
   const links = pageLinks().filter((page) => pagesNow.has(page.path));
+  // The list is the ONE row "Workspace": no visible heading over it.
+  const alone = links.length === 1 && links[0]!.path === WORKSPACE.path;
   const newAgentShown = hasNewAgent(pagesNow.has("souls"));
   // Where the installed `oats` stands, read once the sidebar is seen: "New agent" here is held by the rule that holds the home's.
   const { cli } = useCli(newAgentShown, oats.phase === "ready");
@@ -127,18 +151,17 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     <li key={thread.id} className="relative">
       {before}
       <ThreadActionsContextMenu thread={target(thread)}>
-        <a
+        <ThreadAnchor
+          threadId={thread.id}
           href={thread.href}
           data-testid={testId}
-          data-sidebar-thread-shortcut-target=""
-          data-sidebar-thread-id={thread.id}
           aria-current={thread.id === activeThreadId || onPage ? "page" : undefined}
           className={`${ROW} ${className} ${thread.id === activeThreadId || onPage ? "bg-accent" : ""}`}
           onClick={(event) => openThread(event, thread.id)}
           onKeyDown={onKeyDown}
         >
           {children}
-        </a>
+        </ThreadAnchor>
       </ThreadActionsContextMenu>
     </li>
   );
@@ -411,8 +434,11 @@ export function Sidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
 
       {links.length === 0 ? null : (
         <>
-          <h2 className={HEADING}>Workspace</h2>
-          <ul data-testid="oats-pages" className="flex flex-col">
+          {/* Where the list is the ONE row "Workspace" the heading is not drawn (the word would stand twice): it stays
+              for a screen reader, and the list keeps the place a heading's block gives it, so the row does not
+              stick to New agent. With another page's row under it (Automations) the heading stands. */}
+          <h2 data-testid="oats-pages-heading" className={alone ? "sr-only" : HEADING}>Workspace</h2>
+          <ul data-testid="oats-pages" className={`flex flex-col ${alone ? "pt-8" : ""}`}>
             {links.map((page) => (
               <PageRow key={page.path} page={page} open={openPath === page.path} onOpen={() => openPage(page.path)} />
             ))}

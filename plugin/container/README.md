@@ -326,8 +326,9 @@ was built), and its `NOTE BUSY` line says the seconds of each part in every run'
    agents' threads; bb's request for a star is turned off (the chat alone is ten prompts).
 When it leaves, each thing it changed is put back and READ: the held turns are answered (no
 thread of its own is active), its threads are archived, bb says of the host's limit what it said
-before (asked once the held turns have ended, and asked again until bb says so: bb is slow while
-fourteen turns end, and an asking can fail), the star request is turned on again (bb's answer to that is checked), the fixtures' threads are back and the fake `oats` answers
+before (asked once the held turns have ended, each asking's outcome kept: where bb gives no answer in
+time, or accepts and does not say so yet, it is asked again, for a minute at most; where bb answers no, the
+check fails at once on that answer), the star request is turned on again (bb's answer to that is checked), the fixtures' threads are back and the fake `oats` answers
 the fixtures' roster again, which is waited for. A run that is killed while Claude Code is away
 finds where it was at its next start and puts it back.
 

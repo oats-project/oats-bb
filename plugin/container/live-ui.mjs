@@ -163,6 +163,20 @@ function tell(...args) {
     return `(bb ${args.slice(0, 2).join(" ")} failed: ${String(error.stderr || error.message).trim().slice(0, 300)})`;
   }
 }
+/**
+ * One command asked of bb, with its OUTCOME kept: → `{ outcome, said }`, where `outcome` is "accepted" (bb did it:
+ * `said` is what it printed), "no-answer" (bb did not answer within `ASK_MS`: the command was ended), or "refused"
+ * (bb answered with an error: `said` is that error). A caller that asks again does so on "no-answer" only.
+ */
+const ASK_MS = 20_000;
+function asked(...args) {
+  try {
+    return { outcome: "accepted", said: execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: ASK_MS }).trim() };
+  } catch (error) {
+    if (error.code === "ETIMEDOUT") return { outcome: "no-answer", said: `no answer in ${ASK_MS / 1000} s` };
+    return { outcome: "refused", said: String(error.stderr || error.message).trim() };
+  }
+}
 /** The status bb gives one thread now (`bb thread show`), or what it printed where that is none. */
 function statusNow(id) {
   const printed = tell("thread", "show", id, "--json");
@@ -783,22 +797,34 @@ function busyStage() {
       while (Date.now() < deadline && running().length > 0) await sleep(2000);
       const still = running();
       check(still.length === 0, "BUSY no turn of the stage's is still held when it leaves: bb shows none of its threads active", still.map((thread) => thread.title).join(" | "));
-      // bb's own concurrency limit is back: ASKED UNTIL bb SAYS SO, and only now, once the held turns have ended.
-      // (It was asked ONCE, right after the turns were let go, and read at once: in one light run bb was then so busy
-      // ending fourteen turns, 12.8 s for the two commands, that the asking failed, unseen, and the read said the
-      // raised limit. Each asking's answer is kept: the check says them.)
+      // bb's own concurrency limit is back: asked only now, once the held turns have ended, and each asking KEEPS ITS
+      // OUTCOME (`asked`, above), which the loop tells apart:
+      //   bb accepted, and its read says what it said before the stage: done;
+      //   bb accepted but its read does not say so yet, or bb gave NO ANSWER in time: "not yet": asked again, for a
+      //   minute at most;
+      //   bb ANSWERED NO (an error it returned): the check fails at once on that answer: asked once, never again.
+      // (It was asked ONCE through the helper that swallows a failed command, right after the turns were let go, and
+      // read at once: in one light run bb was then so busy ending fourteen turns, 12.8 s for the two commands, that
+      // the asking failed, unseen, and the read said the raised limit.)
       for (const { host, before } of limited.splice(0)) {
         const answers = [];
         let after = "";
+        let refused = null;
         const until = Date.now() + 60_000;
         for (;;) {
-          answers.push(tell("concurrency-limit", "host", host, "auto").replace(/\s+/g, " ").slice(0, 140));
+          const answer = asked("concurrency-limit", "host", host, "auto");
+          answers.push(`${answer.outcome}: ${answer.said.replace(/\s+/g, " ").slice(0, 140)}`);
+          if (answer.outcome === "refused") {
+            refused = answer.said;
+            break;
+          }
           after = tell("concurrency-limit", "host", host, "--json");
           if (after === before || Date.now() > until) break;
           await sleep(2000);
         }
-        check(after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${answers.length} time(s); bb answered: ${[...new Set(answers)].join(" | ")}`);
-        if (answers.length > 1) console.log(`NOTE BUSY bb's limit was asked back ${answers.length} times before bb said so; bb answered: ${[...new Set(answers)].join(" | ")}`);
+        const detail = `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${answers.length} time(s); bb answered: ${[...new Set(answers)].join(" | ")}`;
+        check(refused === null && after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", refused === null ? detail : `bb answered NO to the asking, which is not asked again: ${refused.slice(0, 300)} | ${detail}`);
+        if (refused === null && answers.length > 1) console.log(`NOTE BUSY bb's limit was asked back ${answers.length} times before bb said so; bb answered: ${[...new Set(answers)].join(" | ")}`);
       }
       const failed = [];
       for (const id of ids) {

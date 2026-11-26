@@ -178,10 +178,13 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const gate = gateOf(refused, here);
   const unreadable = refused !== null && isUnreadable(refused.code) && reads.schedule.list === undefined && reads.trigger.list === undefined ? refused : null;
   // Every trigger's state, of the same read as the lists; kept while a later read of it fails, like a list.
-  const keptStatuses = useRef<Result<"automations">["statuses"] & { ok: true } | null>(null);
+  const keptStatuses = useRef<{ answer: Result<"automations">["statuses"] & { ok: true }; at: string } | null>(null);
   const answered = read.data?.statuses;
-  if (answered !== undefined && answered.ok) keptStatuses.current = answered;
-  const statuses = keptStatuses.current?.statuses ?? null;
+  if (answered !== undefined && answered.ok && read.data !== undefined) keptStatuses.current = { answer: answered, at: read.data.at };
+  const statuses = keptStatuses.current?.answer.statuses ?? null;
+  // A refusal of that read while the triggers' list stands (a list that is refused says so itself, and no state is asked of it): said
+  // over the list and the Runs tab, which then draw the triggers by the state read before (with its age), or with none.
+  const statusesFailure = answered !== undefined && !answered.ok && reads.trigger.error === null && reads.trigger.list !== undefined ? { code: answered.code, message: answered.message, readAt: keptStatuses.current?.at ?? null } : null;
 
   // A trigger's recorded state, read when its page opens and again when the lists are. An answer
   // for a row that is no longer the open one changes nothing. A read that fails is said, over the
@@ -298,6 +301,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
         onTab={(next) => navigate.toPluginPanel(PATH, { subPath: subPathOf(next) })}
         reads={reads}
         statuses={statuses}
+        statusesFailure={statusesFailure}
         gate={gate}
         now={now}
         onRefresh={refresh}

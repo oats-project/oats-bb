@@ -32,9 +32,10 @@ holds their fields:
 
 - **A trigger's failed spawns** (`failures[]`, `failuresTotal` on a row of `oats trigger status`).
   The recorded states have neither key, and the plugin then claims no history (`failures: null`:
-  test/automations/runs.test.ts holds that on every recorded trigger). The ONE test of the rows a
-  history would draw (test/automations/view.test.tsx, its name starts "NAMED FIELDS ADDED TO A
-  RECORDED ANSWER") adds, by hand, to a recorded state, the fields the kernel's contract names
+  test/automations/runs.test.ts holds that on every recorded trigger). The THREE tests of a
+  history (the rows it would draw: test/automations/view.test.tsx; its read, with the kernel's
+  feature listed and without: two of test/automations/server.test.ts; each name starts "NAMED
+  FIELDS ADDED TO A RECORDED ANSWER") add, by hand, to a recorded state or answer, the fields the kernel's contract names
   (awebai/oats docs/desktop-cli-api.md: `attempt, at, key, event, subject, code, message,
   resolved`): it is a test of the drawing on those names, not of a kernel's answer. It is to be
   replaced by a recording as soon as a released kernel answers them.

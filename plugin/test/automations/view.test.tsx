@@ -312,6 +312,10 @@ describe("a row", () => {
     cleanup();
     const never = page({ statuses: withStatus("local/old-prs", (status) => ({ ...status, lastError: { at: new Date(NOW - 60e3).toISOString(), code: "E_TRIGGER_POLL", message: "gh: not logged in", key: null, says: null } })) });
     expect(never.row("local/old-prs").dataset.failing).toBe("false");
+    // Its page keeps the kernel's last error, as what it is: an old one, muted, with when it was; not a red line under a calm head.
+    never.open("local/old-prs");
+    const old = never.getByTestId("oats-automation-last-error");
+    expect([old.dataset.stands, old.className.includes("text-destructive-text"), old.textContent]).toEqual(["false", false, "Last error: gh: not logged in E_TRIGGER_POLL · 1 min ago"]);
   });
 
   it("one that is off is drawn muted; one another machine runs says which", () => {
@@ -480,6 +484,32 @@ describe("an automation's page", () => {
     back(view);
     view.open("local/notes-checkpoint");
     expect(view.text("oats-automation-sends")).toBe("Operationknowledge:checkpoint");
+  });
+
+  it("a wake says which agent it wakes, by its name, and is the way to its chat where the roster lists it; an operation and a command say where they run, under Details", () => {
+    const wake = rowOf(schedules(), "local/wake-oats-developer-review-202611212017");
+    const opened: string[] = [];
+    const listed = page({ agentLink: (instance) => ({ open: () => opened.push(instance), asks: false, start: null }) });
+    listed.open(wake.id);
+    expect(listed.text("oats-automation-sends")).toBe("MessageAnything new on your review?Wakes oats-developer-review-202611212017");
+    fireEvent.click(listed.getByTestId("oats-automation-wakes-open"));
+    expect(opened).toEqual(["oats-developer-review-202611212017"]);
+    cleanup();
+    // An agent the roster no longer lists is named still, as text.
+    const gone = page({ agentLink: () => null });
+    gone.open(wake.id);
+    expect(gone.text("oats-automation-wakes")).toBe("Wakes oats-developer-review-202611212017");
+    expect(gone.queryByTestId("oats-automation-wakes-open")).toBeNull();
+    back(gone);
+    gone.open("local/notes-checkpoint");
+    expect(gone.text("oats-automation-detail-runs-in")).toBe("Runs in/abs/deployment/agents/note-keeper/instances/team-notes-keeper");
+    back(gone);
+    gone.open("local/status-check");
+    expect(gone.text("oats-automation-detail-runs-in")).toBe(`Runs in${rowOf(schedules(), "local/status-check").cwd}`);
+    back(gone);
+    // A spawn has neither: its soul is at the foot.
+    gone.open("local/daily-review");
+    expect([gone.queryByTestId("oats-automation-wakes"), gone.queryByTestId("oats-automation-detail-runs-in")]).toEqual([null, null]);
   });
 
   it("an invalid definition says so in a person's words, with the kernel's code, field and message one press away", () => {

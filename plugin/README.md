@@ -1109,7 +1109,8 @@ difference). Where it departs from bb's page, on purpose, `WORDS.md` says why.
   sentence; the same small line, with the next run ("Next in 8 h"; "Was due 3 min ago" for a time
   that has passed; none while the scheduler is off); what is wrong under it, in red. Then **what
   it does** as plain text between bb's separators, headed by what a run does (**Instruction**,
-  **Message**, **Command**, **Operation**), with the soul, the harness and the model at its foot:
+  **Message**, **Command**, **Operation**), with the soul, the harness and the model at its foot
+  (a wake: "Wakes <agent>", the way to that agent's chat where the roster lists it):
   no box around it. A long text is drawn to a bound, with **Show more** to the rest. A schedule's
   or a trigger's instruction and a wake's message are the one exception to the display filter:
   they are drawn whole (their lines, blank lines and indentation kept, nothing withheld), because
@@ -1167,7 +1168,9 @@ per roster read. The sidebar's marks read which agents ask from the window's own
 roster, with no read of their own. An automation's page of a trigger also reads that trigger's
 own state when it opens (`oats trigger status <id> --json`), and shows the one read beside the
 lists until it answers. A list or a state that could not be read says so in a person's words,
-with the kernel's code and Retry, over what was read before; one fault that fails both lists is
+with the kernel's code and Retry, over what was read before (every trigger's state refused while
+the lists stand: "Triggers' state could not be read", over the list and the Runs tab, whose
+triggers are then drawn by the state read before, with its age, or with no fire and no failure); one fault that fails both lists is
 said once ("Automations could not be read"). An OATS that does not list the feature `automations`
 (before 0.29) is not asked: the page says which OATS it needs.
 

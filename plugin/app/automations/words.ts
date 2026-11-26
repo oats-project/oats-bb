@@ -379,7 +379,7 @@ export function refusalParts(text: string): { code: string | null; message: stri
 // "Needs you" where an agent it made asks. No sentence of the page's own.
 
 /** The last part of a home's path: the agent a wake wakes, by the name of its home. */
-const agentOf = (home: string | null): string | null => (home === null ? null : (displayLine(home.replace(/\/+$/, "").split("/").pop()) ?? null));
+export const agentOf = (home: string | null): string | null => (home === null ? null : (displayLine(home.replace(/\/+$/, "").split("/").pop()) ?? null));
 
 /** Who a run starts: the soul it spawns, the agent it wakes, "Command", or the operation by its name. */
 export function whoWords(row: AutomationRow): string | null {
@@ -431,6 +431,17 @@ const time = (iso: string | null): number => {
   return Number.isFinite(at) ? at : -Infinity;
 };
 /**
+ * Whether the kernel's last error of a trigger is a failed launch that stands, where it keeps no history of failures.
+ * Without a history, the kernel's last error is a failed SPAWN only where it names the event it was for (`key`): a failed poll or
+ * source check writes the same field with no key, and the kernel never clears it, so a poll that failed once and mended would read
+ * as a failed launch until the next fire.
+ */
+export function launchErrorStands(status: Pick<LineStatus, "lastError" | "fired">): boolean {
+  const fired = Math.max(-Infinity, ...status.fired.map((entry) => time(entry.at)));
+  return status.lastError !== null && status.lastError.key !== null && time(status.lastError.at) > fired;
+}
+
+/**
  * What failed last on a trigger: its failed last poll, or its failed spawn that no later spawn
  * followed (with a failure history: the newest failure, unless resolved; without: the last error
  * of a spawn, unless a fire is newer). A schedule's failure is its last run's outcome, said with the run.
@@ -445,10 +456,7 @@ function triggerFailure(row: AutomationRow, status: LineStatus | null): LinePart
     const newest = status.failures[0];
     return newest !== undefined && newest.resolved === null && time(newest.at) >= fired ? { text: "Launch failed", tone: "bad" } : null;
   }
-  // Without a history, the kernel's last error is a failed SPAWN only where it names the event it was for (`key`): a failed poll or
-  // source check writes the same field with no key, and the kernel never clears it, so a poll that failed once and mended would read
-  // as a failed launch until the next fire.
-  return status.lastError !== null && status.lastError.key !== null && time(status.lastError.at) > fired ? { text: "Launch failed", tone: "bad" } : null;
+  return launchErrorStands(status) ? { text: "Launch failed", tone: "bad" } : null;
 }
 
 /** A schedule's last run: when, then what came of it in a person's word, red where it did not launch and a warning where nobody knows. Null where it never ran. */

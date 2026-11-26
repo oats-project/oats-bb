@@ -44,6 +44,8 @@ export type ViewProps = {
   reads: Record<AutomationKind, ListRead>;
   /** Every trigger's state, as last read; null where it could not be: nothing is then said of a trigger's fires and failures. */
   statuses: TriggerStatuses | null;
+  /** Why every trigger's state could not be read (again) while the triggers' list stands; `readAt`: when the state shown was read, null where none is. */
+  statusesFailure?: { code: string | null; message: string; readAt: string | null } | null;
   gate: Gate | null;
   now: number;
   onRefresh: () => void;
@@ -81,7 +83,7 @@ export const STALE_MS = 30_000;
 // bb's own page's frame (its width and its paddings), with that room under it.
 const FRAME = "mx-auto box-border flex w-full max-w-5xl flex-col gap-4 px-4 pb-16 pt-3 text-sm text-foreground md:px-5 md:pt-4";
 
-export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, canOpenCapability, onOpenCapability, agentLink, asking, onAnswer }: ViewProps) {
+export function View({ tab, onTab, reads, statuses, statusesFailure = null, gate, now, onRefresh, open, onOpen, status, statusFailure, rowParts, schedulerAction, refreshing = false, result, rowActs, held, gateNotice, onOpenFile, canOpenCapability, onOpenCapability, agentLink, asking, onAnswer }: ViewProps) {
   // The filter and the search are the list's own, kept while a row's page or the other tab is shown.
   const [filter, setFilter] = useState<ListFilter>("all");
   const [query, setQuery] = useState("");
@@ -167,6 +169,27 @@ export function View({ tab, onTab, reads, statuses, gate, now, onRefresh, open, 
             </div>
           );
         })
+      )}
+      {/* The triggers' state could not be read while their list stands: a trigger's last fire, its failure and its runs are then the ones
+          read before, or none. Said over the list and over the Runs tab; a trigger's own page reads its own state and says its own. */}
+      {statusesFailure === null || onRowPage ? null : (
+        <div data-testid="oats-automations-state-failed">
+          <Notice
+            tone="error"
+            title="Triggers' state could not be read"
+            code={statusesFailure.code}
+            details={statusesFailure.message}
+            {...(statusesFailure.readAt === null ? {} : { age: readAge(statusesFailure.readAt, now) })}
+            actions={
+              <Button data-testid="oats-automations-state-retry" disabled={refreshing} onClick={onRefresh}>
+                Retry
+              </Button>
+            }
+          >
+            <p>{statusesFailure.readAt === null ? "Nothing can be shown of what the triggers fired, or of what failed, until it is read." : "What is below is the last state that was read."}</p>
+            {refreshing ? <p role="status">Refreshing…</p> : null}
+          </Notice>
+        </div>
       )}
       {result}
     </>

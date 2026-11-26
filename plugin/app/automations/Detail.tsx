@@ -23,6 +23,8 @@ import type { QuoteLine } from "./parts";
 import { Runs } from "./Runs";
 import type { AgentLink } from "./Runs";
 import {
+  agentOf,
+  launchErrorStands,
   capabilitySource,
   causeWords,
   cronInWords,
@@ -142,8 +144,22 @@ function SourceLists({ refused, skipped, source }: { refused: TriggerStatus["ref
 export const doesTitle = (row: AutomationRow): string => (row.run === "wake" ? "Message" : row.run === "command" ? "Command" : row.run === "operation" ? "Operation" : "Instruction");
 
 /** What a run does, whole: a spawn's or a trigger's instruction, a wake's message, a command's argv, an operation; at its foot the soul, the harness and the model. */
-function Does({ row }: { row: AutomationRow }) {
-  const foot = [row.soul === null ? null : shown(row.soul.name), row.harness === null ? null : shown(harnessName(row.harness)), row.model === null ? null : shown(row.model)].filter((part): part is string => part !== null && part !== "");
+function Does({ row, agentLink }: { row: AutomationRow } & Pick<DetailProps, "agentLink">) {
+  // The agent a wake wakes, by its name (the name of its home): the way to its chat where the roster lists it.
+  const woken = row.run === "wake" ? agentOf(row.home) : null;
+  const chat = woken === null ? null : (agentLink?.(woken) ?? null);
+  const wakes: ReactNode =
+    woken === null ? null : chat === null ? (
+      <span data-testid="oats-automation-wakes">{`Wakes ${woken}`}</span>
+    ) : (
+      <span data-testid="oats-automation-wakes">
+        {"Wakes "}
+        <button type="button" data-testid="oats-automation-wakes-open" aria-label={`Open ${woken}`} className={`${LINK} ${TARGET} inline-flex items-center`} onClick={chat.open}>
+          {woken}
+        </button>
+      </span>
+    );
+  const foot: ReactNode[] = [wakes, row.soul === null ? null : shown(row.soul.name), row.harness === null ? null : shown(harnessName(row.harness)), row.model === null ? null : shown(row.model)].filter((part) => part !== null && part !== "");
   const body = (): ReactNode => {
     if (row.run === "wake") return row.message !== null ? <Prose text={row.message}>{shownBlock(row.message)}</Prose> : <Empty>No wake message reported.</Empty>;
     if (row.run === "command")
@@ -229,6 +245,7 @@ function TriggerTrouble({ status, source, check, now }: { status: TriggerStatus;
   // same failure, and after a failed check it repeats `invalid`.
   const samePoll = source !== null && poll !== null && !poll.ok && poll.cause !== null && err !== null && err.at === poll.at && err.message === poll.error;
   const sameCheck = check !== null && check.at !== null && err !== null && err.at === check.at && err.message === displayLine(check.message);
+  const stands = launchErrorStands(status);
   const says = (value: { code: string | null; message: string | null } | null | undefined) =>
     value == null || source === null ? null : <Quote testId="oats-automation-source-says" leadIn={LEAD_INS.source(source.capability, source.name)} lines={[{ text: [value.code, value.message] }]} />;
   return (
@@ -246,11 +263,19 @@ function TriggerTrouble({ status, source, check, now }: { status: TriggerStatus;
         </div>
       ) : null}
       {/* With a history of failures each one is a row of the table, with its code and message: the last error alone is said only where the kernel keeps no such history. */}
+      {/* By the row's own rule (words.ts `triggerFailure`): red only while it is the failure that stands (a spawn's, with no later fire). The kernel
+          keeps its last error for ever, a mended poll's too: that one is drawn muted, with when it was. */}
       {err !== null && status.failures === null && !samePoll && !sameCheck ? (
         <>
-          <p data-testid="oats-automation-last-error" className={`${LINE} text-destructive-text`}>
+          <p data-testid="oats-automation-last-error" data-stands={stands} className={`${LINE} ${stands ? "text-destructive-text" : "text-muted-foreground"}`}>
             {`Last error: ${err.message ?? ""}`}
             {err.code !== null ? <code className="font-mono text-xs">{`${err.message !== null ? " " : ""}${err.code}`}</code> : null}
+            {stands || err.at === null ? null : (
+              <>
+                {" · "}
+                <Time iso={err.at} now={now} />
+              </>
+            )}
           </p>
           {says(err.says)}
         </>
@@ -281,6 +306,8 @@ function Details({ row, host, status, source, running, file, onOpenFile, canOpen
       {row.reasonDetail === null ? null : <span className={NOTE}>{shown(row.reasonDetail)}</span>}
     </span>,
   );
+  // Where an operation or a command runs: the home of the agent the operation is for; the command's directory.
+  add("Runs in", "runs-in", row.run === "operation" && row.home !== null ? <span className="break-all">{shown(row.home)}</span> : row.run === "command" && row.cwd !== null ? <span className="break-all">{shown(row.cwd)}</span> : null);
   if (row.kind === "schedule") add("Schedule", "schedule", [row.cron, row.tz].filter(Boolean).map((part) => shown(part as string)).join(" · "));
   else if (source === null) {
     add("Event", "event", on === null ? null : shown(on.title));
@@ -453,7 +480,7 @@ export function Detail({ row, host, now, running = true, status, statusFailure =
           {answers}
         </div>
         <Problem row={row} check={check} now={now} />
-        <Does row={row} />
+        <Does row={row} agentLink={agentLink} />
         <section data-testid="oats-automation-history" aria-label="Runs" className={`${SECTION} ${SEPARATED}`}>
           <h3 className={SECTION_HEAD}>Runs</h3>
           {statusFailure == null ? null : (

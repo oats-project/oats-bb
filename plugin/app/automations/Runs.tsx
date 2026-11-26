@@ -165,7 +165,7 @@ export function Runs({ entries, now, withOwner = false, onOpenOwner, agentLink, 
           return <Row key={key} entry={entry} line={line} now={now} withOwner={withOwner} onOpenOwner={onOpenOwner} agentLink={agentLink} newest={line.agent !== null && newestOf.get(line.agent) === entry} open={open} onToggle={() => setToggled((before) => new Map(before).set(key, !open))} />;
         })}
         {entries.length > shownCount ? (
-          <div className="p-1">
+          <div role="listitem" className="p-1">
             <button type="button" data-testid="oats-runs-older" className={`${BUTTON_OUTLINE} w-full border-transparent`} onClick={() => setShownCount((count) => count + step)}>
               {OLDER}
             </button>

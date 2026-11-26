@@ -680,6 +680,14 @@ const scenes = [
       const none = await page.evaluate(`[document.querySelector(${JSON.stringify(testId("oats-runs-empty"))}) === null, document.querySelectorAll(${JSON.stringify(RUN)}).length].join(" ")`);
       check(none === "true 0", `${at} and nothing is said of its runs: not that there are none`, none);
       await page.shot(`automations-${viewport.name}-status-failed`, { targets: true });
+      // Every trigger's state is refused with it (the same verb), while the lists stand: the list says so, and so does the Runs tab.
+      const over = await open(page, "", testId("oats-automations-state-failed"));
+      const rows = await page.evaluate(count(ROW));
+      check(/^Triggers' state could not be read Nothing can be shown of what the triggers fired, or of what failed, until it is read\. E_TRIGGER_UNKNOWN ▸ Details Retry$/.test(over ?? "") && rows === 18, `${at} every trigger's state refused while the lists stand is said over the list, which keeps its 18 rows`, `${rows} ${String(over)}`);
+      await page.shot(`automations-${viewport.name}-state-failed-list`, { targets: true });
+      const tab = await open(page, "/runs", testId("oats-automations-state-failed"));
+      check(/^Triggers' state could not be read/.test(tab ?? ""), `${at} and over the Runs tab, whose table is then the schedules' runs alone`, String(tab).slice(0, 80));
+      await page.shot(`automations-${viewport.name}-state-failed-runs`, { targets: true });
     },
   },
   {

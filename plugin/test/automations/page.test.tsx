@@ -121,6 +121,55 @@ describe("the lists", () => {
     await waitFor(() => expect(calls(slot)).toEqual(["automations", "refresh", "automations"]));
   });
 
+  it("every trigger's state refused while the lists stand is SAID, over the list and over the Runs tab: no trigger is drawn calm in silence", async () => {
+    const refusedState = { ok: false as const, code: "E_TRIGGER_STATE", message: "the trigger state cannot be read" };
+    const answer = () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: refusedState, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } });
+    const slot = await page("", { automations: answer });
+    const notice = await slot.findByTestId("oats-automations-state-failed");
+    expect(notice.textContent).toBe("Triggers' state could not be readNothing can be shown of what the triggers fired, or of what failed, until it is read.E_TRIGGER_STATE▸Detailsthe trigger state cannot be readRetry");
+    // Both lists stand, with every row.
+    expect(slot.getAllByTestId("oats-automation-row")).toHaveLength(18);
+    expect(slot.queryByTestId("oats-automations-failed")).toBeNull();
+    fireEvent.click(within(notice).getByText("Retry"));
+    await waitFor(() => expect(calls(slot)).toEqual(["automations", "refresh", "automations"]));
+    resetApp();
+    // The Runs tab says it too: its table is then the schedules' runs alone.
+    const runs = await page("runs", { automations: answer });
+    expect((await runs.findByTestId("oats-automations-state-failed")).textContent).toContain("Triggers' state could not be read");
+    resetApp();
+    // A schedule's own page is not about it.
+    const own = await page("schedules/oats-real/nightly-digest", { automations: answer });
+    await own.findByTestId("oats-automation-detail");
+    expect(own.queryByTestId("oats-automations-state-failed")).toBeNull();
+  });
+
+  it("a later read of every trigger's state that is refused keeps the state read before, and says how old it is", async () => {
+    let reads = 0;
+    const slot = await page("", {
+      automations: () => {
+        reads += 1;
+        // The server's stamp of each read: the age said is from the stamp of the read whose state is kept.
+        return { at: new Date(Date.now() - (reads === 1 ? 20e3 : 0)).toISOString(), hostId: "host_falcon", oats: OATS, statuses: reads === 1 ? STATUSES() : { ok: false as const, code: "E_TRIGGER_STATE", message: "the trigger state cannot be read" }, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } };
+      },
+    });
+    const lineOf = () => within(slot.getAllByTestId("oats-automation-row").find((row) => row.dataset.id === "oats-real/proposal-review")!).getByTestId("oats-automation-line").textContent;
+    await slot.findAllByTestId("oats-automation-row");
+    const before = lineOf();
+    expect(before).toContain("Last");
+    expect(slot.queryByTestId("oats-automations-state-failed")).toBeNull();
+    await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
+    const notice = await slot.findByTestId("oats-automations-state-failed");
+    expect(notice.textContent).toBe("Triggers' state could not be readWhat is below is the last state that was read.Read less than a minute ago.E_TRIGGER_STATE▸Detailsthe trigger state cannot be readRetry");
+    expect(lineOf()).toBe(before);
+  });
+
+  it("a triggers' list that is refused says so itself: no second notice for the state nobody asked of it", async () => {
+    const refusedList = { ok: false as const, code: "E_TRIGGER_INVALID", message: "oats-triggers.json cannot be read" };
+    const slot = await page("", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, statuses: refusedList, schedule: { ok: true as const, list: schedules() }, trigger: refusedList }) });
+    await slot.findByTestId("oats-automations-failed");
+    expect(slot.queryByTestId("oats-automations-state-failed")).toBeNull();
+  });
+
   it("the plugin's own lack (no deployment, no machine chosen) is its own sentence, its code after", async () => {
     const message = 'This bb server has 2 machines (falcon, osprey). Choose the one that holds the OATS homes: set "Machine" in the OATS plugin\'s settings.';
     const refused = { ok: false as const, code: "CHOOSE_HOST", message };

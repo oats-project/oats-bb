@@ -1,5 +1,5 @@
 // Automations' slots: the page, and its row in the "oats" block at the top of the plugin's thread
-// list, which carries a mark while a schedule's last run failed. Like the workspace's pages it
+// list, which carries two marks: amber while an agent an automation made asks, red while one is failing. Like the workspace's pages it
 // stays out of bb's own navigation. The components are in this directory.
 import type { PluginAppBuilder } from "@get-bb/plugin-sdk/app";
 import { addPageLink, shownPage } from "../workspace/pages";

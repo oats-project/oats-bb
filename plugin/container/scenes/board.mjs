@@ -212,10 +212,11 @@ export default [
         const asks = await page.until(`/Needs you/.test((${flat})(document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-panel-state")}`)}))) ? "yes" : ""`, 60);
         await page.until("false", 2); // what a jump would need to show
         check(asks === "yes" && (await page.evaluate(selected)) === "Instance", `${at} the agent asks while the page is on Instance: the header says "Needs you", and the page STAYS on Instance`, `asks: ${asks}; selected: ${await page.evaluate(selected)}`);
+        // The image is of THAT: the page that stayed. (Board, pressed, is the state the stage "board" already has an image of.)
+        await page.shot(`board-${viewport.name}-later-stays`);
         await page.evaluate(`document.getElementById("oats-panel-page-tab-board")?.click()`);
         const there = await page.until(`(${flat})(document.querySelector(${JSON.stringify(inBoard("oats-board-question"))}))`, 30);
         check(there === "Which base branch?", `${at} a press on Board shows the question`, String(there));
-        await page.shot(`board-${viewport.name}-later`);
         return;
       }
       await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);

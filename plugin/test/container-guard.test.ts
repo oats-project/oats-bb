@@ -5,7 +5,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -46,9 +46,11 @@ const MODULE_DIRECTORIES = ["scenes/", "real/parts/"];
 const MARKED = existsSync(MARK);
 const ABSENT: Record<string, string> = MARKED ? { OATS_BB_CHECKS_MARK_ABSENT: "1" } : {};
 
+/** Every end of a line a shell or JavaScript knows: a bare CR ends a `//` comment too. */
+const LINE_END = /\r\n|[\n\r\u2028\u2029]/;
 /** The first line of a script that DOES something: after the shebang, blank lines and whole-line comments. A statement on a comment's line counts. */
 function firstEffective(script: string, runner: "sh" | "bash" | "node"): string | undefined {
-  const lines = readFileSync(join(CONTAINER, script), "utf8").split("\n");
+  const lines = readFileSync(join(CONTAINER, script), "utf8").split(LINE_END);
   if (runner !== "node") return lines.slice(1).find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"));
   let inComment = false;
   for (const [index, line] of lines.entries()) {
@@ -80,12 +82,26 @@ function guardLine(script: string, runner: "sh" | "bash" | "node"): string {
     : `. "$(dirname "$0")/${up === "" ? "" : `${up}/`}guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)`;
 }
 /**
- * BEFORE this test RUNS a guarded script (on whatever machine vitest runs on), it has READ that the guard is the
- * script's first line that does something, and that a shell script's line 1 is a plain shebang: a script whose guard
- * is lost, or has a statement above it, is never started here.
+ * THE GUARD ITSELF REFUSES HERE, run alone (it touches nothing): asked with the environment the entries are started
+ * with. Read once, before any entry is started: with a guard that no longer refuses, NO entry is started by this test.
+ */
+function guardRefusesAlone(): string {
+  const env = { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, ...ABSENT };
+  const shell = spawnSync("sh", ["-c", `. "${join(CONTAINER, "guard.sh")}"; echo ran`], { encoding: "utf8", env });
+  const node = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(join(CONTAINER, "guard.mjs"))}); console.log("ran");`], { encoding: "utf8", env });
+  return JSON.stringify([shell.status, shell.stdout, node.status, node.stdout]);
+}
+let refusesAlone: string | undefined;
+/**
+ * BEFORE this test RUNS a guarded script (on whatever machine vitest runs on), it has seen that the guard, alone,
+ * refuses here, and has READ that the guard is the script's first line that does something and that a shell
+ * script's line 1 is a plain shebang: a script whose guard is lost, or has a statement above it, or whose guard no
+ * longer refuses, is never started here.
  */
 function readToBeGuarded(script: string, runner: "sh" | "bash" | "node") {
-  const first = readFileSync(join(CONTAINER, script), "utf8").split("\n")[0];
+  refusesAlone ??= guardRefusesAlone();
+  expect(refusesAlone).toBe(JSON.stringify([97, "", 97, ""]));
+  const first = readFileSync(join(CONTAINER, script), "utf8").split(LINE_END)[0];
   if (runner !== "node") expect([script, first]).toEqual([script, runner === "bash" ? "#!/bin/bash" : "#!/bin/sh"]);
   expect([script, firstEffective(script, runner)]).toEqual([script, guardLine(script, runner)]);
 }
@@ -146,6 +162,7 @@ describe("only inside the checks' container", () => {
     expect(first('/* */ import "./evil.mjs";\nimport "./guard.mjs";\n', "node")).toBe('/* */ import "./evil.mjs";');
     expect(first('/*\n a block */ await import("./evil.mjs");\nimport "./guard.mjs";\n', "node")).toBe(' a block */ await import("./evil.mjs");');
     expect(first('#!/usr/bin/env node\nrmSync(home);\nimport "./guard.mjs";\n', "node")).toBe("rmSync(home);");
+    expect(first('// a comment\rimport "./evil.mjs";\nimport "./guard.mjs";\n', "node")).toBe('import "./evil.mjs";'); // a bare CR ends the comment
     expect(first("#!/bin/sh\n# a comment\n\n  # another\n. ./guard.sh\nrm -rf x\n", "sh")).toBe(". ./guard.sh");
     expect(first("#!/bin/sh\n: > /tmp/x # a comment\n. ./guard.sh\n", "sh")).toBe(": > /tmp/x # a comment");
   });
@@ -156,6 +173,8 @@ describe("only inside the checks' container", () => {
     expect(ci).toContain(`  docker exec -u root "$NAME" mv ${MARK} ${MARK}.moved\n  gone=0\n  run env OATS_BB_GUARD_PASS=mark-gone npx vitest run test/container-guard.test.ts || gone=$?\n  docker exec -u root "$NAME" mv ${MARK}.moved ${MARK}\n`);
     expect(ci.match(/^ {4}run sh container\/unit\.sh\n {4}mark_gone_pass$/gm)?.length).toBe(2); // in `unit` and in `all`
     expect(ci.match(/run sh container\/unit\.sh/g)?.length).toBe(2);
+    // …and from its clean-up too, first of all: an interrupted pass does not leave a kept container without its mark.
+    expect(ci).toContain(`cleanup() {\n  status=$?\n  docker exec -u root "$NAME" sh -c '[ ! -e ${MARK}.moved ] || mv ${MARK}.moved ${MARK}' > /dev/null 2>&1 || true\n`);
     // In that pass the mark IS gone: every refusal above was made with no switch.
     if (process.env.OATS_BB_GUARD_PASS === "mark-gone") expect([MARKED, ABSENT]).toEqual([false, {}]);
     else expect(process.env.OATS_BB_GUARD_PASS).toBeUndefined();
@@ -167,14 +186,20 @@ describe("only inside the checks' container", () => {
     const person = home();
     const alone = mkdtempSync(join(tmpdir(), "oats-bb-guard-alone-"));
     made.push(alone);
-    const copy = join(alone, script.slice(script.lastIndexOf("/") + 1));
+    // The copy sits DEEP in the private directory: the path its guard line leads to (up to four levels, then down) stays
+    // inside that directory, where nothing is: never a `guard.sh` of the system's temporary directory or of `/`.
+    const name = script.slice(script.lastIndexOf("/") + 1);
+    const copy = join(alone, "a", "b", "c", "d", "e", name);
+    const guardOfCopy = resolve(dirname(copy), relative(dirname(join(CONTAINER, script)), CONTAINER), "guard.sh");
+    expect([guardOfCopy.startsWith(`${alone}/`), existsSync(guardOfCopy)]).toEqual([true, false]);
+    mkdirSync(dirname(copy), { recursive: true });
     writeFileSync(copy, readFileSync(join(CONTAINER, script)));
     const before = holds(person);
     const ran = spawnSync(runner, [copy], { cwd: person, encoding: "utf8", timeout: 30_000, env: { HOME: person, USER: "person", PATH: `${join(person, ".local", "bin")}:${dirname(process.execPath)}:/usr/bin:/bin` } });
     expect([ran.status !== 0 && ran.status !== null, ran.stdout, runner === "bash" ? ran.status : 97]).toEqual([true, "", 97]);
     expect(ran.stderr).toMatch(/guard\.sh/);
     expect(holds(person)).toEqual(before);
-    expect(readdirSync(alone)).toEqual([script.slice(script.lastIndexOf("/") + 1)]);
+    expect((readdirSync(alone, { recursive: true }) as string[]).filter((entry) => statSync(join(alone, entry)).isFile())).toEqual([join("a", "b", "c", "d", "e", name)]);
   });
 
   it("where the mark is, the guard lets a script run; and the switch that makes it absent can only refuse", () => {

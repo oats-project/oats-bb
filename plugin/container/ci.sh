@@ -68,6 +68,7 @@ MACHINE_NAME=${MACHINE_NAME:-falcon}
 docker run -d --name "$NAME" --hostname "$MACHINE_NAME" -e "MACHINE_NAME=$MACHINE_NAME" --init --cpus 2 --memory 6g -e BB_TELEMETRY=false ${DOCKER_RUN_ARGS:-} "$IMAGE" sleep infinity > /dev/null
 cleanup() {
   status=$?
+  docker exec -u root "$NAME" sh -c '[ ! -e /etc/oats-bb-checks-image.moved ] || mv /etc/oats-bb-checks-image.moved /etc/oats-bb-checks-image' > /dev/null 2>&1 || true
   # A failed run keeps bb's own logs too (real/bb-logs.sh): a bb that did not start says why only
   # there. A unit stage has no bb: the script then says that there is no log.
   [ "$status" = 0 ] || docker exec -u node "$NAME" sh /home/node/plugin/container/real/bb-logs.sh /home/node/bbdata/logs /home/node/out || echo "ci: bb's logs could not be copied"
@@ -108,6 +109,7 @@ run sh container/setup.sh
 # stage's first pass can make the mark absent only by the guard's own switch, so a guard that no longer looked for the
 # mark at all would pass it. Here the mark is moved away as root, the test runs with no switch (it says which pass it
 # is in, and holds that the mark is gone), and the mark is put back whatever the test said: the live stage follows.
+# (An interrupt in between: the clean-up puts it back too, so that a kept container has its mark.)
 mark_gone_pass() {
   docker exec -u root "$NAME" mv /etc/oats-bb-checks-image /etc/oats-bb-checks-image.moved
   gone=0

@@ -4,14 +4,18 @@
  *
  * `ask()` → `{ outcome, said }` asks once and KEEPS ITS OUTCOME: "accepted" (bb did it), "no-answer" (bb did not
  * answer in time) or "refused" (bb answered with an error). `read()` → what bb says of the thing now. Then:
- *   accepted, and the read equals `before`: done;
- *   accepted and not yet so, or no answer: NOT YET: asked again after `everyMs`, until `withinMs` have passed;
- *   refused: over AT ONCE: bb said no, and a wait covers "not yet", never "no". It is asked once, never again.
+ *   refused: over AT ONCE: bb said no, and a wait covers "not yet", never "no". It is asked once, never again, and
+ *   bb is not read;
+ *   otherwise bb is READ, and THE READ IS THE TRUTH: where it equals `before`, the thing is back: done. Also after
+ *   an asking that got no answer: an asking we ended may have reached bb all the same;
+ *   the read does not say so (after an accepted asking, or one with no answer): NOT YET: asked again after
+ *   `everyMs`.
  * → `{ back, refused, after, answers }`: `back` is true only where bb's read said `before`; `refused` is bb's answer
  * where it said no, else null; `answers` is every asking, in order, as "<outcome>: <what bb said>".
  *
- * THE BOUND is on when the last asking STARTS: no asking starts once `withinMs` have passed since the first; the
- * last asking and its read are still waited for (an asking takes `ASK_MS` at most; a read has bb's own limits).
+ * THE BOUND: no asking STARTS once `withinMs` have passed since the first: a wait that would end past the bound is
+ * not begun. An asking that started in time, and its read, are still waited for (an asking takes the caller's own
+ * limit at most; a read has bb's).
  */
 export async function askedBack({ ask, read, before, withinMs = 60_000, everyMs = 2_000, now = () => Date.now(), sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
   const answers = [];
@@ -23,7 +27,7 @@ export async function askedBack({ ask, read, before, withinMs = 60_000, everyMs 
     if (answer.outcome === "refused") return { back: false, refused: String(answer.said), after, answers };
     after = await read();
     if (after === before) return { back: true, refused: null, after, answers };
-    if (now() >= until) return { back: false, refused: null, after, answers };
+    if (now() + everyMs > until) return { back: false, refused: null, after, answers };
     await sleep(everyMs);
   }
 }
@@ -45,4 +49,14 @@ export function outcomeOfFailure(error) {
   const said = String(error?.stderr ?? "");
   if (typeof error?.status === "number" && error.status !== 0 && NO_ANSWER.some((words) => words.test(said))) return "no-answer";
   return "refused";
+}
+
+/**
+ * The ONE line of a failed command's error that says what happened, for the check's detail: bb's own words for
+ * giving up where the failure is one (the line `NO_ANSWER` matched), else the LAST line that is not empty (bb prints
+ * its error last; a warning of node's may stand above it), else the error's own message.
+ */
+export function wordsOfFailure(error) {
+  const lines = String(error?.stderr ?? "").split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  return lines.find((line) => NO_ANSWER.some((words) => words.test(line))) ?? lines.at(-1) ?? String(error?.message ?? "").trim().split("\n")[0];
 }

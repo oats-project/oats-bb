@@ -615,6 +615,18 @@ function busyStage() {
       starOff = !tell("plugin", "disable", "bb--github-star").startsWith("(bb plugin disable failed");
       const status = set();
       const onBb = rowsOf(status).filter((row) => row.backend === "bb" && typeof row.session?.threadId === "string");
+      // bb holds a new turn in line once as many threads run as the host has processors (its own "concurrency limit":
+      // two in this container), and everything made after waits behind it. The limit is raised FIRST, before a
+      // thread is made, for the stage's length (to more than its threads), and put back to bb's own when it leaves.
+      // FIRST, because a FORK that has to wait FAILS: bb 0.50.1 then stores the wait of a thread that has no message
+      // ("Stored queued message … is malformed", HTTP 500). In the whole live run the limit was reached while the
+      // forks were made (the PR's first run of the light check), though never in the stage run alone.
+      const machines = bbJson("machine", "list");
+      const host = (Array.isArray(machines) ? machines : (machines.machines ?? machines.hosts ?? machines.items ?? []))[0]?.id;
+      if (typeof host !== "string") throw new Error("live-ui: bb lists no machine to raise the concurrency limit of");
+      // (What bb says of the host's limit BEFORE, kept: the stage's leave reads that it says the same again.)
+      limited.push({ host, before: tell("concurrency-limit", "host", host, "--json") });
+      bb("concurrency-limit", "host", host, String(onBb.length + 8));
       const source = threads.get("thr_harvest"); // an idle fixture thread: its one turn was answered
       const list = () => listOf(bbJson("thread", "list"), "threads");
       let existing = list();
@@ -654,10 +666,8 @@ function busyStage() {
       // that an agent on a thread works). (Not the busy chat's: a held turn would add a message to its conversation,
       // and it asks: the screen says so whatever bb says.)
       const working = onBb.filter((row) => row.running === true && row.outsideOats === undefined && row.instance !== chat.agent);
-      // Every other one: an idle fork of a healthy fixture thread (no turn is run, no harness started). The forks
-      // come FIRST: bb 0.50.1 refuses a fork while another thread's first message is
-      // still queued, and a thread that failed at its start keeps its one ("Stored queued message … is malformed", HTTP
-      // 500; seen in this stage's third look): so they come before both.
+      // Every other one: an idle fork of a healthy fixture thread (no turn is run, no harness started). (The forks
+      // still come before the failed starts and the held turns: fewer things run while they are made.)
       for (const row of onBb.filter((each) => !working.includes(each) && !failedAtStart.includes(each.instance))) {
         const title = providerTitle(row.instance);
         if (!existing.some((thread) => thread.title === title)) bb("thread", "fork", source.id, "--title", title);
@@ -693,15 +703,6 @@ function busyStage() {
         }
       }
       const failedMade = Date.now();
-      // bb holds a new turn in line once as many threads run as the host has processors (its own "concurrency limit":
-      // two in this container), and everything spawned after waits behind it: the limit is raised for the stage's
-      // length to what the busy set's working agents need, and put back to bb's own when the stage leaves.
-      const machines = bbJson("machine", "list");
-      const host = (Array.isArray(machines) ? machines : (machines.machines ?? machines.hosts ?? machines.items ?? []))[0]?.id;
-      if (typeof host !== "string") throw new Error("live-ui: bb lists no machine to raise the concurrency limit of");
-      // (What bb says of the host's limit BEFORE, kept: the stage's leave reads that it says the same again.)
-      limited.push({ host, before: tell("concurrency-limit", "host", host, "--json") });
-      bb("concurrency-limit", "host", host, String(working.length + 4));
       mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
       writeFileSync(BUSY_HOLD_FILE, "");
       {

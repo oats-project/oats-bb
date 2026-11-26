@@ -310,8 +310,9 @@ was built), and its `NOTE BUSY` line says the seconds of each part in every run'
 1. the busy chat's thread is made and its ten turns are had with the mock model (`say.json`,
    `real/mock-anthropic.mjs`);
 2. every busy agent on bb with no turn to run gets a thread of this run, an idle fork of a fixture
-   thread, titled as the provider titles it (the forks come first: bb 0.50.1 refuses a fork
-   while another thread's first message waits in line);
+   thread, titled as the provider titles it (bb's limit of running threads is raised BEFORE any
+   thread is made: a fork that has to wait fails in bb 0.50.1, "Stored queued message … is
+   malformed", HTTP 500, because the wait of a thread with no message cannot be stored);
 3. the three agents that FAILED AT THEIR START get a thread that did: Claude Code is taken away
    for the length of their spawns, the model named (with none, bb asks the harness for its
    default and refuses the spawn), and bb's record of each is checked: an error and never a turn;
@@ -319,8 +320,9 @@ was built), and its `NOTE BUSY` line says the seconds of each part in every run'
 4. each agent the set says runs gets a thread of its own whose first turn is HELD open (bb, not
    the kernel, says that an agent on a thread works). bb holds a new turn in line once as many
    threads run as the host has processors (its built-in "concurrency limit": two in this
-   container), and everything spawned after waits behind it: the stage raises the host's limit for
-   its length (`bb concurrency-limit host <id> <n>`) and puts bb's own back (`auto`), which is read back;
+   container), and everything made after waits behind it: the stage raises the host's limit for
+   its length, at its very start (`bb concurrency-limit host <id> <n>`), and puts bb's own back
+   (`auto`), which is read back;
 5. the thread of each agent whose session was lost on bb is archived, and so are the fixtures' own
    agents' threads; bb's request for a star is turned off (the chat alone is ten prompts).
 When it leaves, each thing it changed is put back and READ: the held turns are answered (no

@@ -1,4 +1,5 @@
 #!/bin/sh
+# Runs only at the build of the contract images (test/contract/*/Dockerfile): NEVER by hand on a person's machine: it replaces its tools' commands in the user's global npm bin with links into this tree.
 # Runs at the build of a contract image, as node: installs the image's tools from its committed
 # lock (test/contract/locks/<image>/: a package.json that names each package at an exact version,
 # and the package-lock.json npm wrote for it; README.md here), and puts the tools' commands on the

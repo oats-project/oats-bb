@@ -1,4 +1,5 @@
 #!/bin/sh
+# Runs only inside the pi contract container (pi-run.mjs starts it): NEVER by hand on a person's machine: it removes and remakes the directories under $RUN.
 # Runs inside the pi kernel-run container, as node (kernel/pi-run.mjs calls it): the OATS
 # kernel the image installed from npm, this provider as a package, a throwaway workspace
 # and one deployment whose two souls run on bb, one on pi and one on Claude Code.

@@ -6,7 +6,7 @@
 //   3  NOTHING IS MARKED READ: the agent's unread count (`aw mail inbox --count-only`) is the same
 //      before the plugin read anything and after it read, opened and read again
 //   4  every `oats` the plugin ran for the mail is the one argv that marks nothing read
-//   5  an agent with no messaging layer has no Mail tab
+//   5  an agent with no messaging layer has the Mail tab as every agent, and it says "No messaging." (no read)
 // No check prints a body: a failing one prints subjects, counts or an argv.
 import "../../guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched
 import { execFileSync } from "node:child_process";
@@ -63,8 +63,10 @@ try {
     check(unread() === before, `${at} 3 NOTHING IS MARKED READ: unread after the list, a message and a Refresh is what it was before (${before})`, unread());
     // an agent with no messaging layer
     await page.goto("/plugins/oats/agent/mail-none");
-    const panel = await page.until(visible(testId("oats-tab-instance")), 60);
-    check(Boolean(panel) && !(await page.evaluate(visible(testId("oats-tab-mail")))), `${at} 5 an agent with no messaging layer has no Mail tab`);
+    const panel = await page.until(visible(testId("oats-tab-mail")), 60);
+    await page.evaluate(click(testId("oats-tab-mail")));
+    const said = await page.until(`(document.querySelector(${JSON.stringify(testId("oats-panel-no-messaging"))})?.innerText ?? "").trim()`, 30);
+    check(Boolean(panel) && said === "No messaging.", `${at} 5 an agent with no messaging layer has the Mail tab as every agent, and it says "No messaging."`, String(said));
   }
   const calls = mailCalls();
   const wanted = JSON.stringify(["operation", "run", "messaging:mail", "--home", READER, "--arg", "limit=50", "--json"]);

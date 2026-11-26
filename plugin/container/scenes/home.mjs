@@ -302,9 +302,9 @@ export default [
       // the tiles, with their counts read, and who works
       const tiles = await page.until(`(() => { const tiles = ${texts(`${within("oats-home-tiles")} button`)}; return tiles.length >= 4 && tiles.slice(0, 4).every((tile) => /\\d$/.test(tile)) ? JSON.stringify(tiles) : ""; })()`, 20);
       check(Boolean(tiles) && JSON.parse(tiles).every((tile) => !/^Agents\b/.test(tile)), `${at} the tiles: the pages that are shown, each the home counts with its count; no tile for the agents (the sidebar lists them)`, tiles ?? (await page.evaluate(`JSON.stringify(${texts(`${within("oats-home-tiles")} button`)})`)));
-      // the Automations tile carries the mark its row in the sidebar carries (a run failed, in these fixtures)
+      // the Automations tile carries the mark its row in the sidebar carries (an automation is failing, in these fixtures)
       const mark = await page.until(`document.querySelector(${JSON.stringify(`${within("oats-tile-automations")} [aria-label]`)})?.getAttribute("aria-label") ?? ""`, 15);
-      check(mark === "Automations, a run failed", `${at} the Automations tile is marked while a run failed, as its row in the sidebar`, mark);
+      check(mark === "Automations, a failure", `${at} the Automations tile is marked while an automation is failing, as its row in the sidebar`, mark);
       const working = await page.evaluate(`JSON.stringify(${texts(within("oats-working-row"))})`);
       const repeats = await page.evaluate(`document.querySelectorAll(${JSON.stringify(`${within("oats-working-row")} ${testId("oats-state")}, ${within("oats-finished-row")} ${testId("oats-state")}`)}).length`);
       check(JSON.parse(working).length > 0 && JSON.parse(working).every((row) => !/(Working|Running)$/.test(row) && /\b(oats-[a-z-]+|knowledge-harvester|research-expert)\b/.test(row)) && repeats === 0, `${at} every agent at work is a row under the heading "Running", with its soul beside its name: no row repeats the state's word`, working);

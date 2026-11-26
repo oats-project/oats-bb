@@ -310,7 +310,7 @@ const shellWord = (value: string): string => (/^[\w./@%+=:,-]+$/.test(value) ? v
 // ---- the failed-run mark ----
 /** The producer's words for a run that did not happen. */
 export const FAILED_OUTCOMES: readonly string[] = ["launch-failed", "invalid"];
-/** What the mark says, after the row's name: "Automations, a run failed". */
+/** What the red mark says, after the row's name: "Automations, a failure". */
 export const FAILED_RUN_TEXT = ", a failure";
 
 // ---- a row's file ----

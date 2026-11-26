@@ -439,12 +439,12 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default pages (the home, and the Workspace page's four tabs): New agent is in the sidebar and on the home, and each opens the form, its first field the soul",
+    name: "the release's default pages (the home, the Workspace page's four tabs, and Automations): New agent is in the sidebar and on the home, and each opens the form, its first field the soul",
     run: async ({ page, at, viewport, check }) => {
       await page.goto("/");
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      const there = await page.until(`${visible(testId("oats-new-agent"))} && document.querySelector(${q("oats-sidebar")}).querySelector(${q("oats-tree")}) !== null && JSON.stringify([...document.querySelectorAll('[data-testid^="oats-page-link-"]')].map((link) => link.getAttribute("data-testid"))) === '["oats-page-link-workspace"]' && ${textOf(testId("oats-new-agent"))}`, 30);
-      check(there === "New agent", `${at} under the default, New agent is in the sidebar, on screen, with the ONE page link (Workspace) beside it`, there ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      const there = await page.until(`${visible(testId("oats-new-agent"))} && document.querySelector(${q("oats-sidebar")}).querySelector(${q("oats-tree")}) !== null && JSON.stringify([...document.querySelectorAll('[data-testid^="oats-page-link-"]')].map((link) => link.getAttribute("data-testid"))) === '["oats-page-link-workspace","oats-page-link-automations"]' && ${textOf(testId("oats-new-agent"))}`, 30);
+      check(there === "New agent", `${at} under the default, New agent is in the sidebar, on screen, with the two page links (Workspace, Automations) beside it`, there ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       await page.evaluate(click(testId("oats-new-agent")));
       const opened = await page.until(`${visible(testId("oats-spawn-form"))} && ${SOULS_READ} && JSON.stringify({ path: location.pathname, first: ${FIRST}, shown: document.querySelector(${q("oats-page-not-shown")}) === null })`, 30);
       check(opened === JSON.stringify({ path: "/plugins/oats/new-agent", first: "oats-spawn-soul", shown: true }), `${at} it opens the form's own page, the soul field first: the form is not one of the pages a release leaves out`, opened ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));

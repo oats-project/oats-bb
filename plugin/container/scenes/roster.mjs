@@ -627,14 +627,14 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default, with the setting left as installed (unset): the home and the Workspace page with its four tabs; Automations has no link, no mark and no route",
+    name: "the release's default, with the setting left as installed (unset): the home, the Workspace page with its four tabs, and Automations: every page has its link and its route",
     run: async ({ page, at, viewport, threads, check }) => {
       const mockups = threads.get("thr_mockups");
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
-      // The sidebar: the roster; no line that counts who waits; ONE page link, Workspace (its four tabs are no rows), and none to Automations.
+      // The sidebar: the roster; no line that counts who waits; TWO page links: Workspace (its four tabs are no rows), then Automations.
       const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(testId("oats-tree"))})) return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: [...s.querySelectorAll('[data-testid^="oats-page-link-"]')].map((e) => e.getAttribute("data-testid")), needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))})?.tagName ?? "" }); })()`, 30);
-      check(side === JSON.stringify({ pages: true, links: ["oats-page-link-workspace"], needs: "" }), `${at} with the setting left as installed the sidebar has the roster, ONE page link (Workspace), and no line that counts who waits`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+      check(side === JSON.stringify({ pages: true, links: ["oats-page-link-workspace", "oats-page-link-automations"], needs: "" }), `${at} with the setting left as installed the sidebar has the roster, its two page links (Workspace, then Automations), and no line that counts who waits`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
       // The thread's own row: no soul on it and no link at all (who the agent is is the instance panel's): nothing leads to a page that is not shown.
       // Read AFTER the sidebar: bb gives the settings a moment after the roster.
       const soul = await page.until(`(() => { const e = document.querySelector(${JSON.stringify(testId("oats-identity-row"))}); return e && e.querySelector(${JSON.stringify(testId("oats-status-line"))}) ? JSON.stringify({ text: e.innerText.replace(/\\s+/g, ""), links: e.querySelectorAll("a").length }) : ""; })()`, 30);
@@ -646,13 +646,12 @@ export default [
         const tab = await page.until(`document.querySelector(${JSON.stringify(testId(`oats-${path}-page`))}) !== null && document.querySelector(${JSON.stringify(testId(`oats-tab-${path}`))})?.getAttribute("aria-selected") === "true" ? "shown" : ""`, 30);
         check(tab === "shown", `${at} /plugins/oats/${path} draws its tab of the Workspace page, selected`, tab ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
       }
-      // A page that is not shown has no route: its path answers one line and the way back.
-      for (const path of ["automations"]) {
-        await page.goto(`/plugins/oats/${path}`);
-        const said = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-page-not-shown")}[data-page="${path}"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
-        check(said === "This page is not shown in this release of the OATS plugin. Back to Home", `${at} /plugins/oats/${path} says it is not shown, with the way back`, said ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
-      }
-      await page.shot(`pages-default-${viewport.name}-not-shown`, { targets: true });
+      // The default leaves no page out: Automations has its route too, and draws its page (what a page that IS left out
+      // answers, "This page is not shown…", is held where a deployment names its pages: test/workspace/pages.test.tsx).
+      await page.goto("/plugins/oats/automations");
+      const drawn = await page.until(`document.querySelector(${JSON.stringify(testId("oats-automations-page"))}) !== null && document.querySelector(${JSON.stringify(testId("oats-page-not-shown"))}) === null ? "shown" : ""`, 30);
+      check(drawn === "shown", `${at} /plugins/oats/automations draws the Automations page: no page is left out of the default`, drawn ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
+      await page.shot(`pages-default-${viewport.name}-automations`, { targets: true });
     },
   },
   {

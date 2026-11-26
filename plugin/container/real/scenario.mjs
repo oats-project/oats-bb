@@ -580,11 +580,11 @@ async function archivedShots(scene, { instance, soul, threadId }) {
 /** What the archived thread's row says of a stopped agent: the plugin's reason (WORDS.md, "Outside OATS"; app/outside/words.ts). */
 const ARCHIVED_IN_BB = "archived in bb";
 /**
- * With the release's DEFAULT pages (the home and the Workspace page's four tabs: what a person sees
- * first), at both widths: the sidebar holds the real agent's row, ONE page link (Workspace; none to
- * Automations, which the default leaves out), and no line at its foot. The setting is left as a
- * fresh install has it, UNSET (bb's own `plugin config oats unset pages`), not set to a value: so
- * this holds what an unset setting shows and hides. All six are set again after.
+ * With the release's DEFAULT pages (every page: what a person sees first), at both widths: the
+ * sidebar holds the real agent's row, its two page links (Workspace, then Automations), and no
+ * line at its foot. The setting is left as a fresh install has it, UNSET (bb's own `plugin config
+ * oats unset pages`), not set to a value: so this holds what an unset setting shows. All six are
+ * set again after.
  */
 async function defaultPagesShots(scene, { instance, threadId }) {
   bb("plugin", "config", "oats", "unset", "pages");
@@ -600,7 +600,7 @@ async function defaultPagesShots(scene, { instance, threadId }) {
         // Waited for: the row, and bb's settings read (the sidebar says so: until then no page is known shown under any value).
         // Nobody waits in this roster (its one agent works): the foot has no line at all, which is asserted too.
         const side = await page.until(`(() => { const s = document.querySelector(${JSON.stringify(testId("oats-sidebar"))}); if (!s || !s.querySelector(${JSON.stringify(row)})) return ""; if (s.getAttribute("data-pages") !== "known") return ""; return JSON.stringify({ pages: s.querySelector(${JSON.stringify(testId("oats-pages"))}) !== null, links: s.querySelectorAll('[data-testid^="oats-page-link-"]').length, needs: s.querySelector(${JSON.stringify(testId("oats-needs-line"))}) !== null, said: /needs you|need you/i.test(s.innerText) }); })()`, 30);
-        check(side === JSON.stringify({ pages: true, links: 1, needs: false, said: false }), `${at}: with the setting left as installed (unset) the sidebar has ${instance}'s row, ONE page link (Workspace), and (nobody waits) no line at its foot`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
+        check(side === JSON.stringify({ pages: true, links: 2, needs: false, said: false }), `${at}: with the setting left as installed (unset) the sidebar has ${instance}'s row, its two page links (Workspace, Automations), and (nobody waits) no line at its foot`, side ?? (await page.evaluate(textOf(testId("oats-sidebar")))));
         await page.shot(`${scene}-${viewport.name}-sidebar${suffix}`);
       } finally {
         await page.close();

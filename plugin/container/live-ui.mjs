@@ -112,7 +112,7 @@ const pages = (value) => void (PILOT && value === ALL_PAGES ? bb("plugin", "conf
 /**
  * The setting `pages` as a fresh install has it: UNSET (bb's own `plugin config <id> unset <key>`),
  * not set to its default's value. A stage that shows the release's default leaves it so, and so
- * proves what an unset setting shows (the home, the Workspace page) and hides (Automations), not only what a value does.
+ * proves what an unset setting shows (every page: the home, the Workspace page, Automations), not only what a value does.
  */
 const pagesAsInstalled = () => void bb("plugin", "config", "oats", "unset", "pages");
 

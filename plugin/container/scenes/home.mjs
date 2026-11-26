@@ -3,7 +3,7 @@
 //
 //   detached     an agent whose session failed, one the kernel cannot reach, one whose bb thread is
 //                gone: in the summary and in Home › Agents
-//   pages-default  the release's default: the home and the Workspace page's four tabs, so four tiles
+//   pages-default  the release's default: the home, the Workspace page's four tabs and Automations, so five tiles
 //   fixtures     the recorded roster: three agents need the person (each card with its own reply),
 //                the summary, the tiles, who works, what is finished; Home › Agents; a tile whose
 //                count cannot be read; how soon a change the kernel records is on the home
@@ -494,14 +494,14 @@ export default [
   },
   {
     stage: "pages-default",
-    name: "the release's default: the home has a tile for each tab of the Workspace page, and none for Automations",
+    name: "the release's default: the home has a tile for each tab of the Workspace page, and one for Automations after them",
     run: async ({ page, at, viewport, check: plain }) => {
       const check = printing(plain);
       check(await open(page, within("oats-home-needs")), `${at} the home draws who needs the person`, await page.evaluate(textOf(PAGE)));
       // (bb gives the plugin's settings a moment after the page: a tile of a page that is not shown, if it was drawn first, goes.)
       const TILES = `JSON.stringify(${texts(`${within("oats-home-tiles")} button`)}.map((tile) => tile.replace(/[^A-Za-z].*$/s, "")))`;
-      const tiles = await page.until(`(() => { const now = ${TILES}; return now === '["Souls","Capabilities","Teams","Machines"]' ? now : ""; })()`, 30);
-      check(Boolean(tiles), `${at} with the default the home has one tile for each tab of the Workspace page, in its order: a tile leads to a page that is shown; Automations has none, and the agents have none`, tiles ?? (await page.evaluate(TILES)));
+      const tiles = await page.until(`(() => { const now = ${TILES}; return now === '["Souls","Capabilities","Teams","Machines","Automations"]' ? now : ""; })()`, 30);
+      check(Boolean(tiles), `${at} with the default the home has one tile for each tab of the Workspace page, in its order, then Automations: a tile leads to a page that is shown; the agents have none`, tiles ?? (await page.evaluate(TILES)));
       await shown(page, check, at, within("oats-home-needs"), "what needs the person");
       await sound(page, viewport, check, at, "the home under the default");
       await page.shot(`home-${viewport.name}-default`);

@@ -746,7 +746,26 @@ const scenes = [
   },
 ];
 
-export default scenes.map(iconsChecked).map(atTheRecording);
+/**
+ * By hand only (LIVE_KEEP_GOING=1), for a run against a build that is broken on purpose (the mutation pass of these
+ * checks): a scene that throws is one failed check and the run goes on, so that every other check still says what it
+ * sees. In the gate a scene that throws stops the run, as ever.
+ */
+const keptGoing = (scene) =>
+  process.env.LIVE_KEEP_GOING !== "1"
+    ? scene
+    : {
+        ...scene,
+        run: async (context) => {
+          try {
+            await scene.run(context);
+          } catch (error) {
+            context.check(false, `${context.at} the scene "${scene.name}" ran to its end`, String(error?.message ?? error).slice(0, 300));
+          }
+        },
+      };
+
+export default scenes.map(keptGoing).map(iconsChecked).map(atTheRecording);
 
 const lists = (schedule, trigger) => ({ "schedule list": { file: `automations/${schedule}` }, "trigger list": { file: `automations/${trigger}` } });
 const settled = (untilSnapshot) => untilSnapshot((snapshot) => snapshot.ok === true);

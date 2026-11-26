@@ -182,7 +182,7 @@ open, a confirmation before its act, in progress, done, refused and with another
   `local-roster`, from an `oats status --json` answer of a real deployment, with the release's
   default pages (the setting `pages` left as a fresh install has it, unset with bb's own `plugin
   config oats unset pages`, as in the stage `pages-default` and the real run's default-pages
-  images: an unset setting is what is proven to hide the other pages, not the value "home"), and
+  images: an unset setting is what a fresh install has, and what is proven there is what IT shows), and
   nothing else of the live run's scenes. The file is copied to the
   container's `/tmp`, never into the tree; the stage archives the run's own bb threads first
   (and puts them back), so that what stands under the roster is what that deployment's bb would

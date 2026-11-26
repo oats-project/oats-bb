@@ -21,10 +21,11 @@
 // tmux server, Claude Code's first-run answers): this part asks for the same, for its own
 // deployment's folder, and takes the server as it finds it (one per user: never ended here).
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fill, showSidebar, testId, textOf, visible } from "../../browser.mjs";
+import { atomicWrite, wholeJson } from "../../files.mjs";
 import { click, dialog, phaseIs } from "../../scenes/lifecycle.mjs";
 import { choose } from "../../scenes/spawn.mjs";
 
@@ -69,10 +70,10 @@ export default async (run) => {
   }
   // Claude Code's first-run answers, and its trust of this deployment's folder (as parts/lost.mjs for the first).
   const state = join(homedir(), ".claude.json");
-  const held = existsSync(state) ? JSON.parse(readFileSync(state, "utf8")) : {};
+  // (Claude Code itself rewrites that file while agents of the earlier parts are up: the read waits for a whole one.)
+  const held = existsSync(state) ? wholeJson(state) : {};
   const approved = new Set([...(held.customApiKeyResponses?.approved ?? []), KEY.slice(-20)]);
-  writeFileSync(`${state}.plain-part`, JSON.stringify({ ...held, hasCompletedOnboarding: true, customApiKeyResponses: { approved: [...approved], rejected: held.customApiKeyResponses?.rejected ?? [] } }, null, 2));
-  renameSync(`${state}.plain-part`, state);
+  atomicWrite(state, JSON.stringify({ ...held, hasCompletedOnboarding: true, customApiKeyResponses: { approved: [...approved], rejected: held.customApiKeyResponses?.rejected ?? [] } }, null, 2));
   const trust = oats("harness", "trust", "--dir", PLAIN, "--harness", "claude", "--json");
   check(trust.exit === 0 && JSON.parse(trust.stdout).ok === true, "oats harness trust: Claude Code trusts the second deployment's folder", trust.stdout.slice(0, 400) || trust.stderr);
   const session = "oats-agents";

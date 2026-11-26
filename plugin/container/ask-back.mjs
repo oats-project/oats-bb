@@ -60,3 +60,60 @@ export function wordsOfFailure(error) {
   const lines = String(error?.stderr ?? "").split("\n").map((line) => line.trim()).filter((line) => line !== "");
   return lines.find((line) => NO_ANSWER.some((words) => words.test(line))) ?? lines.at(-1) ?? String(error?.message ?? "").trim().split("\n")[0];
 }
+
+/**
+ * A thing MADE in bb exactly once, where bb may not answer the making: the busy stage's held spawns.
+ * `make()` → `{ outcome, said }` (as `ask` above); `isThere()` → whether bb now lists the thing; `settle()` waits
+ * until bb answers again (the caller's pacing). Then:
+ *   accepted: made;
+ *   no answer: bb is asked whether the thing is there: it is: made (the making reached bb all the same; it is
+ *   NEVER made twice); it is not: made again, `times` times at most in all;
+ *   refused: over at once: `{ made: false, refused }`.
+ * → `{ made, refused, attempts }`: `attempts` is every making, in order, as "<outcome>: <what bb said>", with
+ * "; bb lists it all the same" where a making with no answer had happened.
+ */
+export async function madeOnce({ make, isThere, settle = async () => {}, times = 3 }) {
+  const attempts = [];
+  for (let attempt = 1; attempt <= times; attempt += 1) {
+    const answer = await make();
+    const said = `${answer.outcome}: ${String(answer.said).replace(/\s+/g, " ").slice(0, 200)}`;
+    if (answer.outcome === "accepted") return { made: true, refused: null, attempts: [...attempts, said] };
+    if (answer.outcome === "refused") return { made: false, refused: String(answer.said), attempts: [...attempts, said] };
+    await settle();
+    if (await isThere()) return { made: true, refused: null, attempts: [...attempts, `${said}; bb lists it all the same`] };
+    attempts.push(said);
+  }
+  return { made: false, refused: null, attempts };
+}
+
+/**
+ * A wait until bb ANSWERS QUICKLY AGAIN, on bb's state and with a bound: `read()` is a cheap read of bb's (its list);
+ * it is read until one read takes under `underMs`, or `withinMs` have passed. → `{ quick, reads, waitedMs, slowestMs }`.
+ * (The busy stage paces its held spawns with it: fourteen back to back stalled bb's event loop for 22 s in one run.)
+ */
+export async function untilQuickAgain({ read, underMs = 1_000, withinMs = 30_000, everyMs = 500, now = () => Date.now(), sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
+  const from = now();
+  let reads = 0;
+  let slowestMs = 0;
+  for (;;) {
+    const before = now();
+    await read();
+    const took = now() - before;
+    reads += 1;
+    slowestMs = Math.max(slowestMs, took);
+    if (took < underMs) return { quick: true, reads, waitedMs: now() - from, slowestMs };
+    if (now() - from >= withinMs) return { quick: false, reads, waitedMs: now() - from, slowestMs };
+    await sleep(everyMs);
+  }
+}
+
+/**
+ * bb's own 5xx for a request it could not serve because a fetch INSIDE bb failed while it was stalled ("HTTP 502: …
+ * failed to validate the request: fetch failed"): no answer on the thing asked, not a "no". Read with
+ * `outcomeOfFailure` for a making: `outcomeOfMaking`.
+ */
+export const STALLED = /\bHTTP 50[234]: .*\bfetch failed\b/;
+export function outcomeOfMaking(error) {
+  if (outcomeOfFailure(error) === "no-answer") return "no-answer";
+  return typeof error?.status === "number" && error.status !== 0 && STALLED.test(String(error?.stderr ?? "")) ? "no-answer" : "refused";
+}

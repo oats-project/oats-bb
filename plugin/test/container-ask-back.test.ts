@@ -20,6 +20,9 @@ interface Failure {
 interface AskBack {
   outcomeOfFailure(error: Failure): "no-answer" | "refused";
   wordsOfFailure(error: Failure & { message?: string }): string;
+  outcomeOfMaking(error: Failure): "no-answer" | "refused";
+  madeOnce(options: { make: () => Answer; isThere: () => boolean; settle?: () => Promise<void>; times?: number }): Promise<{ made: boolean; refused: string | null; attempts: string[] }>;
+  untilQuickAgain(options: { read: () => void; underMs?: number; withinMs?: number; everyMs?: number; now: () => number; sleep: (ms: number) => Promise<void> }): Promise<{ quick: boolean; reads: number; waitedMs: number; slowestMs: number }>;
   askedBack(options: { ask: () => Answer; read: () => string; before: string; withinMs?: number; everyMs?: number; now: () => number; sleep: (ms: number) => Promise<void> }): Promise<Result>;
 }
 const module = (): Promise<AskBack> => import(pathToFileURL(join(__dirname, "..", "container", "ask-back.mjs")).href) as Promise<AskBack>;
@@ -170,4 +173,114 @@ test("the one line said of a failed command: bb's own words for giving up, else 
   expect(wordsOfFailure({ status: 1, stderr: "(node:1) Warning: something\n  Unknown host: host_x  \n" })).toBe("Unknown host: host_x");
   expect(wordsOfFailure({ code: "ENOENT", stderr: "", message: "spawnSync bb ENOENT\nmore" })).toBe("spawnSync bb ENOENT");
   expect(wordsOfFailure({ code: "ETIMEDOUT", message: "spawnSync bb ETIMEDOUT" })).toBe("spawnSync bb ETIMEDOUT");
+});
+
+// A THING MADE IN bb EXACTLY ONCE (`madeOnce`): the busy stage's held spawns.
+function making(answers: Answer[], there: boolean[]) {
+  const count = { made: 0, asked: 0, settled: 0 };
+  return {
+    count,
+    options: {
+      make: () => {
+        if (count.made >= 20) throw new Error(`made ${count.made} times: the loop does not end`);
+        return answers[Math.min(count.made++, answers.length - 1)]!;
+      },
+      isThere: () => there[Math.min(count.asked++, there.length - 1)]!,
+      settle: async () => void (count.settled += 1),
+    },
+  };
+}
+const SILENT: Answer = { outcome: "no-answer", said: "exit 1 in 10.9 s: bb did not respond" };
+
+test("a making bb accepted is made, once: bb's list is not even asked", async () => {
+  const { madeOnce } = await module();
+  const { options, count } = making([ACCEPTED], [false]);
+  expect(await madeOnce(options)).toEqual({ made: true, refused: null, attempts: ["accepted: falcon: auto"] });
+  expect([count.made, count.asked, count.settled]).toEqual([1, 0, 0]);
+});
+
+test("a making with NO ANSWER that bb lists all the same HAPPENED: it is never made twice", async () => {
+  const { madeOnce } = await module();
+  const { options, count } = making([SILENT, ACCEPTED], [true]);
+  const result = await madeOnce(options);
+  expect([result.made, result.refused, count.made, count.asked, count.settled]).toEqual([true, null, 1, 1, 1]);
+  expect(result.attempts).toEqual(["no-answer: exit 1 in 10.9 s: bb did not respond; bb lists it all the same"]);
+});
+
+test("a making with no answer that bb does not list is made again, after bb has settled; then accepted", async () => {
+  const { madeOnce } = await module();
+  const { options, count } = making([SILENT, ACCEPTED], [false]);
+  const result = await madeOnce(options);
+  expect([result.made, count.made, count.asked, count.settled, result.attempts.length]).toEqual([true, 2, 1, 1, 2]);
+});
+
+test("THREE times at most: no answer and never listed: not made, every making said", async () => {
+  const { madeOnce } = await module();
+  const { options, count } = making([SILENT], [false]);
+  const result = await madeOnce(options);
+  expect([result.made, result.refused, count.made, count.asked, result.attempts.length]).toEqual([false, null, 3, 3, 3]);
+});
+
+test("a making bb REFUSED is over at once: not made again, bb's list not asked", async () => {
+  const { madeOnce } = await module();
+  const { options, count } = making([{ outcome: "refused", said: "HTTP 503: no model" }, ACCEPTED], [true]);
+  expect(await madeOnce(options)).toEqual({ made: false, refused: "HTTP 503: no model", attempts: ["refused: HTTP 503: no model"] });
+  expect([count.made, count.asked, count.settled]).toEqual([1, 0, 0]);
+});
+
+// bb ANSWERS QUICKLY AGAIN (`untilQuickAgain`): a wait on bb's state, with a bound, on a manual clock.
+function reading(tookMs: number[]) {
+  let at = 0;
+  let read = 0;
+  const slept: number[] = [];
+  return {
+    slept,
+    reads: () => read,
+    options: {
+      read: () => {
+        if (read >= 200) throw new Error(`read ${read} times: the wait does not end`);
+        at += tookMs[Math.min(read++, tookMs.length - 1)]!;
+      },
+      now: () => at,
+      sleep: async (ms: number) => {
+        slept.push(ms);
+        at += ms;
+      },
+    },
+  };
+}
+
+test("bb's read is quick at once: no wait", async () => {
+  const { untilQuickAgain } = await module();
+  const { options, slept } = reading([120]);
+  expect(await untilQuickAgain(options)).toEqual({ quick: true, reads: 1, waitedMs: 120, slowestMs: 120 });
+  expect(slept).toEqual([]);
+});
+
+test("bb's read is slow twice, then quick: waited until it is; exactly a second is not under a second", async () => {
+  const { untilQuickAgain } = await module();
+  const { options, slept } = reading([4000, 1000, 300]);
+  expect(await untilQuickAgain(options)).toEqual({ quick: true, reads: 3, waitedMs: 4000 + 500 + 1000 + 500 + 300, slowestMs: 4000 });
+  expect(slept).toEqual([500, 500]);
+});
+
+test("the wait is BOUNDED: bb stays slow: not quick, after thirty seconds, and it says its slowest read", async () => {
+  const { untilQuickAgain } = await module();
+  const { options, reads } = reading([2500]);
+  const result = await untilQuickAgain(options);
+  // Reads of 2.5 s with half a second between: ten reads end at 29.5 s, the eleventh at 32.5 s: past the bound.
+  expect([result.quick, result.reads, reads(), result.waitedMs, result.slowestMs]).toEqual([false, 11, 11, 32_500, 2500]);
+});
+
+// WHAT A FAILED MAKING WAS (`outcomeOfMaking`): as a failed asking, and bb's own 5xx of a fetch that failed inside it.
+test("bb's 502 for a fetch that failed inside it is NO ANSWER on the making; another 5xx, or a 502 of another kind, is a refusal", async () => {
+  const { outcomeOfMaking } = await module();
+  const stalled = 'Error: Failed to create thread: HTTP 502: The "project-checkout" environment provider (plugin "environment-project-checkout") failed to validate the request: fetch failed\n';
+  expect(outcomeOfMaking({ status: 1, signal: null, stderr: stalled })).toBe("no-answer");
+  expect(outcomeOfMaking({ status: 1, signal: null, stderr: `${DID_NOT_RESPOND}\n` })).toBe("no-answer");
+  expect(outcomeOfMaking({ code: "ETIMEDOUT", status: null, signal: "SIGTERM", stderr: "" })).toBe("no-answer");
+  expect(outcomeOfMaking({ status: 1, signal: null, stderr: "Error: Failed to create thread: HTTP 503: the harness gave no default model\n" })).toBe("refused");
+  expect(outcomeOfMaking({ status: 1, signal: null, stderr: "Error: Failed to create thread: HTTP 502: Terminal failed to open: ENOENT\n" })).toBe("refused");
+  expect(outcomeOfMaking({ status: 1, signal: null, stderr: "Error: Failed to create thread: HTTP 400: fetch failed\n" })).toBe("refused");
+  expect(outcomeOfMaking({ status: null, signal: "SIGKILL", stderr: stalled })).toBe("refused");
 });

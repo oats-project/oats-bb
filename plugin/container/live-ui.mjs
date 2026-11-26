@@ -24,7 +24,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, lowTargets, gapsIn, tight, loose, MAX_GAP } from "./browser.mjs";
-import { askedBack, outcomeOfFailure, wordsOfFailure } from "./ask-back.mjs";
+import { askedBack, madeOnce, outcomeOfFailure, outcomeOfMaking, untilQuickAgain, wordsOfFailure } from "./ask-back.mjs";
 import { atomicWrite, completeLines } from "./files.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
@@ -724,10 +724,38 @@ function busyStage() {
       const failedMade = Date.now();
       mkdirSync(dirname(BUSY_HOLD_FILE), { recursive: true });
       writeFileSync(BUSY_HOLD_FILE, "");
+      // THE HELD SPAWNS ARE PACED ON bb's STATE, and each KEEPS ITS OUTCOME. Fourteen back to back stalled bb's event
+      // loop for 22 s in one run of the checks, and bb answered one of them 502 ("… fetch failed"); the bare call threw.
+      //   - after each spawn the stage waits until bb answers a cheap read (its list) in under a second again;
+      //   - a spawn bb did not answer (our limit, bb's CLI giving up, or bb's own 5xx of a fetch that failed inside
+      //     it) is looked for in bb's list: there: it happened; not there: spawned again, three times at most; a
+      //     thread is never made twice; any other answer of bb's throws, as before.
+      // By hand: LIVE_BUSY_HELD=<n> holds a turn on the first n working agents only (the others' one turn is answered).
+      const heldCount = Math.min(working.length, Number.parseInt(process.env.LIVE_BUSY_HELD ?? `${working.length}`, 10) || working.length);
+      const held = working.slice(0, heldCount);
+      const paces = [];
       {
+        const quick = () => untilQuickAgain({ read: () => list() });
         for (const row of working) {
           const title = providerTitle(row.instance);
-          if (!existing.some((thread) => thread.title === title)) bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", title, "--prompt", `hello MOCK-HOLD:${BUSY_HOLD}`, "--json");
+          if (existing.some((thread) => thread.title === title)) continue;
+          const prompt = held.includes(row) ? `hello MOCK-HOLD:${BUSY_HOLD}` : "hello";
+          const spawned = await madeOnce({
+            make: () => {
+              const from = Date.now();
+              try {
+                bb("thread", "spawn", "--project", project.id, "--environment", root, "--provider", "claude-code", "--title", title, "--prompt", prompt, "--json");
+                return { outcome: "accepted", said: `in ${((Date.now() - from) / 1000).toFixed(1)} s` };
+              } catch (error) {
+                return { outcome: outcomeOfMaking(error), said: `exit ${error.status ?? `by ${error.signal ?? error.code}`} in ${((Date.now() - from) / 1000).toFixed(1)} s: ${wordsOfFailure(error)}` };
+              }
+            },
+            isThere: () => list().some((thread) => thread.title === title),
+            settle: async () => void paces.push(await quick()),
+          });
+          if (spawned.attempts.length > 1 || !spawned.made || spawned.attempts[0].includes("bb lists it")) console.log(`NOTE BUSY the held spawn of ${row.instance}: ${spawned.attempts.map((attempt, index) => `(${index + 1}) ${attempt}`).join(" | ")}`);
+          if (!spawned.made) throw new Error(`live-ui: bb did not make the busy thread titled "${title}": ${spawned.refused ?? "no answer, and bb does not list it"}: ${spawned.attempts.join(" | ")}`);
+          paces.push(await quick());
         }
         existing = list();
       }
@@ -736,7 +764,7 @@ function busyStage() {
       const heldIds = new Map(working.map((row) => [row.instance, existing.find((thread) => thread.title === providerTitle(row.instance))?.id]));
       {
         const deadline = Date.now() + 180_000;
-        while (Date.now() < deadline && working.some((row) => statusNow(heldIds.get(row.instance)) !== "active")) await sleep(2000);
+        while (Date.now() < deadline && held.some((row) => statusNow(heldIds.get(row.instance)) !== "active")) await sleep(2000);
       }
       const heldAt = Date.now();
       existing = list();
@@ -752,9 +780,30 @@ function busyStage() {
         bb("thread", "archive", thread.id);
         away.push(thread.id);
       }
-      const all = Object.fromEntries(working.map((row) => [row.instance, statusNow(byInstance.get(row.instance).id)]));
-      const idle = working.filter((row) => all[row.instance] !== "active");
-      check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${working.length} busy agents that work`, idle.map((row) => `${row.instance}: ${all[row.instance]}`).join(" | "));
+      const all = Object.fromEntries(held.map((row) => [row.instance, statusNow(byInstance.get(row.instance).id)]));
+      const idle = held.filter((row) => all[row.instance] !== "active");
+      // WHAT A THREAD THAT DID NOT HOLD ITS TURN SAYS is KEPT, whole, in the run's artefacts: bb's own log of the thread
+      // (in one run five of fourteen ended in an error, and nothing kept what the error was).
+      if (idle.length > 0) {
+        const kept = Object.fromEntries(idle.map((row) => [row.instance, { status: all[row.instance], log: tell("thread", "log", byInstance.get(row.instance).id, "--json") }]));
+        writeFileSync(join(OUT, "busy-threads-not-held.json"), JSON.stringify(kept, null, 2));
+        for (const row of idle) console.log(`NOTE BUSY did not hold its turn, ${row.instance}: bb says ${recordOf(byInstance.get(row.instance)).slice(0, 600)} (its whole log: busy-threads-not-held.json in the artefacts)`);
+      }
+      check(idle.length === 0, `BUSY bb has a turn running on the threads of the ${held.length} busy agents that work${held.length === working.length ? "" : ` (of ${working.length}: LIVE_BUSY_HELD)`}`, idle.map((row) => `${row.instance}: ${all[row.instance]}`).join(" | "));
+      // HOW bb CARRIED THE START: its longest event-loop stall while the stage started (bb's own log line), and how
+      // long the stage waited for bb to answer quickly again between spawns.
+      {
+        const stalls = completeLines(join(homedir(), "bbdata", "logs", "server.1.log")).flatMap((line) => {
+          try {
+            const entry = JSON.parse(line);
+            return entry.msg === "Event loop stalled" && entry.time >= started ? [entry.maxDelayMs] : [];
+          } catch {
+            return []; // (a line of the log that is not JSON is not a stall's line)
+          }
+        });
+        const waited = paces.reduce((sum, pace) => sum + pace.waitedMs, 0);
+        console.log(`NOTE BUSY bb under the stage's start: ${stalls.length} event-loop stalls, the longest ${Math.round(Math.max(0, ...stalls))} ms; ${held.length} held turns of ${working.length} working agents; between spawns the stage waited ${Math.round(waited / 1000)} s in all for bb's list to answer in under a second (its slowest read ${Math.round(Math.max(0, ...paces.map((pace) => pace.slowestMs)))} ms; ${paces.filter((pace) => !pace.quick).length} waits ran to their bound)`);
+      }
       // The three failed starts, read AGAIN now that Claude Code is back and the held turns run: still an error and never a turn.
       {
         const now = list();

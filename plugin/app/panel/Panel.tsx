@@ -66,8 +66,8 @@ let mailOf: string | null = null;
 /** A tab pressed in the panel of `instance`. */
 function pressTab(instance: string, tab: TabId): void {
   // THE ORDER: the marker FIRST, then the press is counted and told. The marker is a plain variable the panels read at
-  // a draw: the draw the press causes must see whose press it was (the other way round, the panel that was pressed
-  // would not turn to Mail itself: test/board/panel-tabs.test.tsx, "ONE press on one agent's Mail", holds it).
+  // a draw, and the draw the press causes must see whose press it was. (Both lines run in one handler, and React draws
+  // after it returns: so no test can tell this order from the other. It is kept so that it does not rest on that.)
   if (tab === "mail") mailOf = instance;
   showPanelTab(tab);
 }

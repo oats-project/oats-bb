@@ -177,7 +177,7 @@ test("with no roster ever read, every thread's menu has one entry, off, that say
 // The lead's ruling R4 (2026-11-22) reversed "acts are offered as of <age>": on a roster that is
 // the last one read the OATS acts are HELD, as on the Desktop (D-085).
 test("while OATS cannot be read after it was, the acts stay in the menu, off, with no reason of their own (the roster's notice says it); nothing runs", async () => {
-  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   const stale = () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last });
   const { shown, item, slot } = await menu("thr_redesign", { snapshot: stale });
   expect(shown()).toEqual(["stop", "restart", "retire"]);
@@ -676,7 +676,7 @@ test("Start opens a dialog first: nothing is started on one press; it checks the
   expect(slot.queryByTestId("oats-start-thread")).toBeNull();
   // One press away, under the dialog's one Details: a start from bb runs in bb's full mode (there is no control for it), and the agent's facts.
   expect(under(slot, "oats-start-details", "p")).toEqual(["The model is saved for later starts too.", "Runs in bb's full mode: no sandbox."]); // (that the model is saved is under Details, not under the field: L9)
-  expect(under(slot, "oats-start-details", "dt, dd")).toEqual(["Machine", "falcon", "Home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
+  expect(under(slot, "oats-start-details", "dt, dd")).toEqual(["Machine", "checks", "Home", "/abs/deployment/agents/oats-expert/instances/weekly-digest-helper"]);
   expect(dialog.textContent).not.toMatch(/existing home|saved briefing|stays readable/);
   // A start that can run says nothing more: no status line, and no "Refresh status" (it is for a Start that is off).
   expect(slot.queryByTestId("oats-start-status")).toBeNull();
@@ -928,7 +928,7 @@ test("a command on an agent that runs outside OATS: Stop and Start open their di
 });
 
 test("a command pressed while the roster is the last one read is held, and says when the acts come back", async () => {
-  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   const { slot } = await menu("thr_redesign", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
   const { commands } = await import("../../app/lifecycle");
   await commands.find((each) => each.id === "agent-stop")!.run({ threadId: "thr_redesign", projectId: null, experimental_panel: {} as never });
@@ -995,7 +995,7 @@ test("the model field suggests bb's own models for the harness that will run, an
   chooseHarness(slot, "pi");
   await waitFor(() => expect(options()).toEqual(["anthropic/claude-opus-5-5"]));
   // Asked of the machine that holds the deployment, with no project: never a listing that starts a harness in an agent's home.
-  expect(asked).toEqual([{ hostId: "host_falcon", providerId: "claude-code", preferCached: true }, { hostId: "host_falcon", providerId: "pi", preferCached: true }]);
+  expect(asked).toEqual([{ hostId: "host_checks", providerId: "claude-code", preferCached: true }, { hostId: "host_checks", providerId: "pi", preferCached: true }]);
 });
 
 test("AgentActs offers the acts of an agent with no bb thread too: Start and Retire for one whose thread is gone; the acts of its state for one on tmux, as for one on bb; held on a roster that is the last one read", async () => {
@@ -1014,7 +1014,7 @@ test("AgentActs offers the acts of an agent with no bb thread too: Start and Ret
   const tmux = fixtureAgents().find((agent) => agent.backend === "tmux")!;
   expect(await acts(tmux.instance)).toEqual({ labels: ["Stop…", "Restart…", "Retire…"], reason: null });
   expect(await acts("no-such-agent")).toEqual({ labels: [], reason: null });
-  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   expect(await acts("redesign-ui-lead", { snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) })).toEqual({
     labels: ["Stop… (off)", "Restart… (off)", "Retire… (off)"],
     reason: null, // off, with no reason of their own: the place that draws them draws the notice ("Acts are off.", Retry)
@@ -2332,7 +2332,7 @@ test("tmux, rule 3: one act per press: opening the dialog starts nothing, and a 
 
 test("tmux, rule 4: on a roster kept as last read the acts of a tmux agent are held, with no reason of their own (the place that draws them draws the notice), and its Start opens nothing", async () => {
   const { AgentActs } = await import("../../app/lifecycle");
-  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: lostRoster() };
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: lostRoster() };
   const slot = renderSlot<object, Contract>(
     { component: () => <AgentActs instance={TMUX} /> },
     {},

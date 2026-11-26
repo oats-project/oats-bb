@@ -62,7 +62,7 @@ printf '%s\n' "$OWNER" > "$OUT/.owner"
 
 docker build -q -t "$IMAGE" "$HERE" > /dev/null
 # shellcheck disable=SC2086 # DOCKER_RUN_ARGS is a list of arguments
-MACHINE_NAME=${MACHINE_NAME:-falcon}
+MACHINE_NAME=${MACHINE_NAME:-checks}
 # The machine has a name, as a person's has: bb names its machine by the host's, and the plugin
 # shows a machine by the name bb gives it (the images would else show a container id).
 docker run -d --name "$NAME" --hostname "$MACHINE_NAME" -e "MACHINE_NAME=$MACHINE_NAME" --init --cpus 2 --memory 6g -e BB_TELEMETRY=false ${DOCKER_RUN_ARGS:-} "$IMAGE" sleep infinity > /dev/null

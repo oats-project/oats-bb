@@ -43,7 +43,7 @@ test("the home's card: an agent's message with a line break and a bidi override 
 
 test("the sidebar: the workspace's name and a soul's name are each one filtered line; the machine is not drawn", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, soul: `oats${BIDI}developer` } : agent));
-  const snapshot = { ...fixtureSnapshot(agents), deployment: { root: "/abs/deployment", workspace: `oats${BIDI}`, machine: "fal\ncon" } };
+  const snapshot = { ...fixtureSnapshot(agents), deployment: { root: "/abs/deployment", workspace: `oats${BIDI}`, machine: "che\ncks" } };
   const app = await loadApp();
   const slot = renderSlot<PluginThreadListProps, Contract>(
     app.threadLists[0]!,
@@ -54,7 +54,7 @@ test("the sidebar: the workspace's name and a soul's name are each one filtered 
   // The soul is on the row, through the display filter; the machine is not on the line.
   const row = slot.getAllByTestId("oats-agent-row").find((candidate) => candidate.getAttribute("data-sidebar-thread-id") === "thr_ci")!;
   expect(within(row).getByTestId("oats-row-facts").textContent).toBe(`Needs you · oats${GONE}developer`);
-  expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/fal con|falcon/);
+  expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/che cks|checks/);
   expect(slot.getByTestId("oats-sidebar").textContent).not.toMatch(/[\n\u202E]/);
 });
 
@@ -72,7 +72,7 @@ test("the home: what bb says an agent asks (its title, its choices) and an agent
 
 test("the machines page: a server's id, its route and its folder are each one filtered line", async () => {
   const machines = [
-    { id: "falcon", route: null, isThisMachine: true, label: null, folder: null },
+    { id: "checks", route: null, isThisMachine: true, label: null, folder: null },
     { id: `dev${BIDI}box`, route: "ssh://joan:pw@devbox.invalid", isThisMachine: false, label: null, folder: "/srv/oats\nmore" },
   ];
   const slot = await page("machines", "", handlers({ machines: () => ({ machines }) }));

@@ -37,7 +37,7 @@ const changeDuringRead = async (nth: number) => {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   expect(asked()).toBe(nth);
-  const sent = server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed", files: [] }); // sent before anything is awaited
+  const sent = server.harness.experimental_emitHostSignal("host_checks", "changed", { reason: "changed", files: [] }); // sent before anything is awaited
   await sent;
 };
 /** What the server said of each read asked for while another was in flight (its debug log, server/core.ts `reread`). */
@@ -70,9 +70,9 @@ beforeEach(async () => {
     experimental_paths: { dataDir: join(fake.deployment, "data"), tempDir: fake.tempDir },
     experimental_watch: () => ({ dispose: async () => undefined }),
   });
-  hosts = [makeHostResponse({ id: "host_falcon", name: "falcon" })];
+  hosts = [makeHostResponse({ id: "host_checks", name: "checks" })];
   born = Date.now();
-  projects = [{ id: "proj_release", sources: [{ hostId: "host_falcon", path: join(fake.deployment, "agents", "oats-maintainer", "instances", "release-070-maintainer") }] }];
+  projects = [{ id: "proj_release", sources: [{ hostId: "host_checks", path: join(fake.deployment, "agents", "oats-maintainer", "instances", "release-070-maintainer") }] }];
   await load();
 });
 afterEach(async () => {
@@ -96,7 +96,7 @@ describe("snapshot", () => {
     expect(first.ok).toBe(true);
     expect(first.deployment.root).toBe(fake.deployment);
     expect(first.deployment.workspace).toBe("oats");
-    expect(first.deployment.machine).toBe("falcon"); // the name bb gives the machine, not the host's own
+    expect(first.deployment.machine).toBe("checks"); // the name bb gives the machine, not the host's own
     expect(first.agents).toHaveLength(8);
     const again = await Promise.all([rpc("snapshot"), rpc("snapshot"), rpc("snapshot")]);
     expect(again.every((snapshot) => snapshot.at === first.at)).toBe(true);
@@ -108,7 +108,7 @@ describe("snapshot", () => {
     expect(Date.parse(tokenOf(server.harness.realtimeSignals[0]))).toBeGreaterThanOrEqual(born); // the read's start, not a count from nothing
     // The watch on the event log was asserted on the machine that holds the homes.
     await expect.poll(() => server.harness.experimental_hostRpcCalls.map((call) => call.method)).toEqual(["discover", "status", "watch"]);
-    expect(server.harness.experimental_hostRpcCalls.every((call) => call.hostId === "host_falcon")).toBe(true);
+    expect(server.harness.experimental_hostRpcCalls.every((call) => call.hostId === "host_checks")).toBe(true);
   });
 
   it("rereads on refresh, never sooner than the floor, and publishes only a change", async () => {
@@ -236,7 +236,7 @@ describe("snapshot", () => {
     const deadline = Date.now() + 23_500;
     while (Date.now() < deadline) {
       // A burst: every event asks for a read; they share the one that is queued.
-      await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed", files: [] });
+      await server.harness.experimental_emitHostSignal("host_checks", "changed", { reason: "changed", files: [] });
       const calls = (await fake.calls()).filter((call) => call.verb === "status");
       const living = (await Promise.all(calls.map((call) => alive(call.pid)))).filter(Boolean).length;
       most = Math.max(most, living);
@@ -254,7 +254,7 @@ describe("snapshot", () => {
   it("rereads when the host entry signals a change, and publishes it", async () => {
     await rpc("snapshot");
     await fake.behave({ status: { stdout: JSON.stringify({ root: "/abs/deployment", agents: [] }) } });
-    await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed", files: [] });
+    await server.harness.experimental_emitHostSignal("host_checks", "changed", { reason: "changed", files: [] });
     await expect.poll(() => server.harness.realtimeSignals.length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
     const next = await rpc("snapshot");
     expect(next.agents).toEqual([]);
@@ -291,7 +291,7 @@ describe("snapshot", () => {
 
   it("says that no deployment was found when no project is inside one", async () => {
     await server.harness.dispose();
-    projects = [{ id: "proj_other", sources: [{ hostId: "host_falcon", path: "/tmp" }] }];
+    projects = [{ id: "proj_other", sources: [{ hostId: "host_checks", path: "/tmp" }] }];
     await load();
     const snapshot = await rpc("snapshot");
     expect(snapshot).toMatchObject({ ok: false, code: codes.noDeployment });
@@ -330,7 +330,7 @@ describe("snapshot", () => {
     // no client is shown the old one's agents, and no act is lent their homes.
     const failed = await rpc("snapshot");
     expect(failed.last).toBeNull();
-    expect(failed.machine).toBe("falcon"); // the machine it looked on, by the name bb gives it
+    expect(failed.machine).toBe("checks"); // the machine it looked on, by the name bb gives it
   }, 20_000);
 
   it("a read in flight across a settings change keeps nothing: a client waits for the new deployment's answer, and an act is refused, never given the old deployment's home", async () => {
@@ -374,13 +374,13 @@ describe("snapshot", () => {
 
   it("asks to choose a machine when the server has several and none is set", async () => {
     await server.harness.dispose();
-    hosts = [makeHostResponse({ id: "host_falcon", name: "falcon" }), makeHostResponse({ id: "host_kite", name: "kite" })];
+    hosts = [makeHostResponse({ id: "host_checks", name: "checks" }), makeHostResponse({ id: "host_kite", name: "kite" })];
     await load();
     const snapshot = await rpc("snapshot");
     expect(snapshot).toMatchObject({ ok: false, code: codes.chooseHost });
-    expect(snapshot.message).toContain("falcon, kite");
+    expect(snapshot.message).toContain("checks, kite");
     await server.harness.dispose();
-    await load({ host: "falcon" });
+    await load({ host: "checks" });
     expect((await rpc("snapshot")).ok).toBe(true);
     await server.harness.dispose();
     await load({ host: "osprey" });
@@ -408,7 +408,7 @@ describe("the event path", () => {
   const eventsAnswer = (over: Record<string, unknown> = {}) =>
     JSON.stringify({ schemaVersion: 1, ok: true, result: { eventsApi: 2, instance: LEAD, incarnation: "2026-11-23T09:00:00.000Z", count: 0, returned: 0, truncated: false, events: [], lastEvent: null, waitingOnYou: null, waitingClaims: [], ...over } });
   const claimed = () => eventsAnswer({ waitingOnYou: CLAIM, waitingClaims: [{ producer: "agent", waiting: true, since: CLAIM.since, reason: "attention", message: CLAIM.message }] });
-  const named = (files: string[] = [FILE]) => server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed", files });
+  const named = (files: string[] = [FILE]) => server.harness.experimental_emitHostSignal("host_checks", "changed", { reason: "changed", files });
   type Shown = { ok: boolean; at: string; agents: { instance: string; running: boolean | null; runtimeState: string | null; waiting: { message: string | null } | null }[] };
   const lead = (snapshot: Shown) => snapshot.agents.find((agent) => agent.instance === LEAD)!;
   // (An events read is told by its words, not by the fake's verb: with no answer set for it the fake names it by the panel's verb.)

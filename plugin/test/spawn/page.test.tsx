@@ -158,7 +158,7 @@ test("What will be created: in view what a person decides on (the name, where it
   expect(drawn.folded).toEqual([
     ["Home", "agents/oats-developer/instances/flaky-ci-2-developer"],
     ["Soul", "oats-developer"],
-    ["Runs on", "falcon"],
+    ["Runs on", "checks"],
     ["Harness", "this computer's default for every soul"],
     ["Session", "bb thread"],
     ["Team", "oats · default"],
@@ -224,7 +224,7 @@ test("the harness: the soul's default passes nothing and says what the kernel re
   await waitFor(() => expect(calls(slot, "spawnPlan").at(-1)).toEqual({ soul: "oats-developer", task: "", harness: "claude" }));
   slot.unmount();
   resetApp();
-  const one = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["claude"], hostId: "host_falcon" }) }));
+  const one = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["claude"], hostId: "host_checks" }) }));
   expect(one.queryByTestId("oats-spawn-harness")).toBeNull();
   expect(calls(one, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]);
 });
@@ -234,7 +234,7 @@ test("while the provider's harnesses are read the field is in its place, off and
   const slot = await form("oats-developer", previews({ spawnHarnesses: () => new Promise((resolve) => (arrive = resolve)) }));
   const harness = (await slot.findByTestId("oats-spawn-harness")) as HTMLButtonElement;
   expect([harness.disabled, harness.textContent]).toEqual([true, "Reading the harnesses…▾"]);
-  await act(async () => arrive({ harnesses: ["claude", "pi"], hostId: "host_falcon" }));
+  await act(async () => arrive({ harnesses: ["claude", "pi"], hostId: "host_checks" }));
   await waitFor(() => expect((slot.getByTestId("oats-spawn-harness") as HTMLButtonElement).disabled).toBe(false));
   expect(slot.getByTestId("oats-spawn-harness").textContent).toMatch(/^The soul's default/);
 });
@@ -638,7 +638,7 @@ test("a deployment with NO bb session provider: nothing of bb's and no red sente
   let listed = 0;
   const slot = await ready(
     {
-      spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] }),
+      spawnHarnesses: () => ({ harnesses: [], hostId: "host_checks", provider: false, kernelHarnesses: ["pi", "claude", "codex"] }),
       spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }),
       spawn: () => ({ instance: "oats-developer-3", threadId: null }),
     },
@@ -673,7 +673,7 @@ test("a deployment with NO bb session provider: nothing of bb's and no red sente
 
 test("where the deployment has the bb session provider the form has NO choice of where the agent runs: every spawn is a bb thread, and nothing it sends names a backend", async () => {
   // (The server answers no list of places any more; one that did, from an older build, draws nothing either.)
-  const slot = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true, backends: ["bb", "tmux"] }) as never }));
+  const slot = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["claude", "pi"], hostId: "host_checks", provider: true, backends: ["bb", "tmux"] }) as never }));
   expect(slot.queryByTestId("oats-spawn-backend")).toBeNull();
   expect(slot.getByTestId("oats-spawn-form").textContent).not.toMatch(/Runs in|tmux session/);
   expect(options(slot, "oats-spawn-harness").map(([label]) => label).slice(1)).toEqual(["Claude Code", "pi"]);
@@ -697,7 +697,7 @@ test("the preview waits for the harness read: in flight, with a soul chosen, the
   expect([submit(slot).disabled, reason(slot)]).toEqual([true, "Reading…"]);
   // The read answers that the provider is absent: the preview is asked, and it is the kernel's own choice of a place.
   await act(async () => {
-    answer({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] });
+    answer({ harnesses: [], hostId: "host_checks", provider: false, kernelHarnesses: ["pi", "claude", "codex"] });
   });
   await waitFor(() => expect(calls(slot, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
   await waitFor(() => expect(rows(slot).inView).toContainEqual(["Runs in", "tmux session"]));
@@ -712,20 +712,20 @@ test("the preview waits for the harness read: in flight, with a soul chosen, the
   });
   expect(calls(present, "spawnPlan")).toEqual([]);
   await act(async () => {
-    answer({ harnesses: ["claude", "pi"], hostId: "host_falcon" });
+    answer({ harnesses: ["claude", "pi"], hostId: "host_checks" });
   });
   await waitFor(() => expect(calls(present, "spawnPlan")).toEqual([{ soul: "oats-developer", task: "" }]));
   await waitFor(() => expect(column(present).textContent).toContain("numbered by the kernel"));
 });
 
 test("no bb session provider, while the roster cannot be read: the roster's notice stands alone and holds the form; nothing is asked of the kernel until it reads again", async () => {
-  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
   let stale = true;
   const live = handlers().snapshot;
   const slot = await form("oats-developer", {
     snapshot: (input) => (stale ? { ok: false as const, at: "2026-11-23T18:16:56.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last } : live(input)),
-    spawnHarnesses: () => ({ harnesses: [], hostId: "host_falcon", provider: false, kernelHarnesses: ["pi", "claude", "codex"] }),
+    spawnHarnesses: () => ({ harnesses: [], hostId: "host_checks", provider: false, kernelHarnesses: ["pi", "claude", "codex"] }),
     spawnPlan: (input) => ({ facts: formFacts(onTmux, { name: input.name ?? null, fullMode: false }), revision: REVISION }),
   });
   await waitFor(() => expect(slot.queryByTestId("oats-unreadable")).not.toBeNull());
@@ -742,7 +742,7 @@ test("no bb session provider, while the roster cannot be read: the roster's noti
 test("the bb session provider is pinned and not synced: ONE line, \"bb is not synced. Run oats sync.\", the command in the code face, the kernel's sentence under Details, Retry; no preview is asked, the fields and Spawn are held; after the sync, Retry opens the form", async () => {
   const kernelSays = "package oats.bb is not in the lock — run `oats sync`";
   let synced = false;
-  const slot = await form("oats-developer", previews({ spawnHarnesses: () => (synced ? { harnesses: ["claude", "pi"], hostId: "host_falcon", provider: true } : { harnesses: [], hostId: "host_falcon", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: kernelSays } }) }));
+  const slot = await form("oats-developer", previews({ spawnHarnesses: () => (synced ? { harnesses: ["claude", "pi"], hostId: "host_checks", provider: true } : { harnesses: [], hostId: "host_checks", unsynced: { code: "E_CAPABILITY_UNKNOWN", message: kernelSays } }) }));
   const notice = within(await slot.findByTestId("oats-spawn-not-synced")).getByTestId("oats-notice");
   // ONE line: the notice's own heading holds both sentences, the command in the code face; no row under it but Details and Retry.
   expect([notice.querySelector("h3")!.textContent, notice.querySelector("h3 code")!.textContent]).toEqual(["bb is not synced. Run oats sync.", "oats sync"]);
@@ -1007,7 +1007,7 @@ test("the same refusal without the kernel's marker is what its code says, whatev
 // ONE Retry on a screen (T3; PR E's fourth review round): while OATS cannot be read the roster's notice has it; the
 // harness list, which fails for the same cause, keeps its sentence and draws no second button named Retry.
 test("while OATS cannot be read the form draws ONE button named Retry, the notice's: the harness list's own is not drawn beside it", async () => {
-  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   let stale = false;
   const live = handlers().snapshot;
   const slot = await ready(
@@ -1037,12 +1037,12 @@ test("while OATS cannot be read the form draws ONE button named Retry, the notic
 });
 
 test("held as it is, the form keeps saying why: the word of an unknown outcome stays when the roster is read again, and Check result is held like the acts while OATS cannot be read", async () => {
-  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   let stale = false;
   const live = handlers().snapshot;
   const slot = await ready(
     previews({
-      snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last } : live(input)),
+      snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there", machine: "checks", last } : live(input)),
       spawn: () => {
         throw new Error("OATS_TIMEOUT: oats spawn did not answer");
       },
@@ -1302,10 +1302,10 @@ test("a soul that cannot be spawned says why under the soul, once, and Spawn is 
 });
 
 test("while OATS cannot be read the form is held like the acts: the roster's own notice, the fields and Spawn off with no second reason, and nothing asked of the kernel", async () => {
-  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
-  const slot = await form("oats-developer", previews({ snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last }) }));
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
+  const slot = await form("oats-developer", previews({ snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there", machine: "checks", last }) }));
   const notice = await slot.findByTestId("oats-unreadable");
-  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks");
   expect(notice.textContent).toContain("Read 40 min ago.");
   expect(slot.getAllByTestId("oats-held")).toHaveLength(1);
   expect(fieldset(slot).disabled).toBe(true);
@@ -1320,11 +1320,11 @@ test("while OATS cannot be read the form is held like the acts: the roster's own
 });
 
 test("held, the column keeps only the facts of the values on screen: those read for other values are not drawn as theirs, nor is the foot", async () => {
-  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   let stale = false;
   const live = handlers().snapshot;
   const slot = await ready({
-    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last } : live(input)),
+    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there", machine: "checks", last } : live(input)),
     spawnPlan: (input) => (input.name === undefined ? answer(input) : new Promise(() => undefined)),
   });
   // Held with the preview of the values on screen: its facts and its foot stay.
@@ -1338,7 +1338,7 @@ test("held, the column keeps only the facts of the values on screen: those read 
   // Held while the values on screen have no preview of their own: nothing of another's is drawn.
   stale = false;
   const other = await ready({
-    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there", machine: "falcon", last } : live(input)),
+    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there", machine: "checks", last } : live(input)),
     spawnPlan: (input) => (input.name === undefined ? answer(input) : new Promise(() => undefined)),
   });
   set(other, "oats-spawn-name", "ranker-v4-probe");
@@ -1374,7 +1374,7 @@ test("when the provider's harness list cannot be read the field says so with the
     previews({
       spawnHarnesses: () => {
         if (fail) throw new Error('E_CAPABILITY_UNKNOWN: no capability "oats.bb" in this workspace');
-        return { harnesses: ["claude", "pi"], hostId: "host_falcon" };
+        return { harnesses: ["claude", "pi"], hostId: "host_checks" };
       },
     }),
   );
@@ -1411,7 +1411,7 @@ test("a harness bb cannot run here is marked at the choice and said under the fi
 });
 
 test("with one harness declared there is no Harness field: what bb says of that harness is still said, and names no field to pick another in", async () => {
-  const slot = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["pi"], hostId: "host_falcon" }) }), { states: () => ({ providers: [{ providerId: "pi", status: "not_installed" }] }) });
+  const slot = await ready(previews({ spawnHarnesses: () => ({ harnesses: ["pi"], hostId: "host_checks" }) }), { states: () => ({ providers: [{ providerId: "pi", status: "not_installed" }] }) });
   expect(slot.queryByTestId("oats-spawn-harness")).toBeNull();
   await waitFor(() => expect(slot.queryByTestId("oats-spawn-harness-state")).not.toBeNull());
   expect(slot.getByTestId("oats-spawn-harness-state").textContent).toBe("bb has not installed pi on this machine, so a spawn on it is refused. Install it in bb’s settings.");
@@ -1426,7 +1426,7 @@ test("while bb has not said what it can run, or says a state the plugin does not
 
 test("a refusal sends a person to the Harness field only where the form has one", async () => {
   const refuse = { spawnPlan: () => { throw new Error("E_BACKEND_HARNESS: the bb session provider cannot launch codex"); } };
-  const one = await form("oats-developer", { ...refuse, spawnHarnesses: () => ({ harnesses: ["claude"], hostId: "host_falcon" }) });
+  const one = await form("oats-developer", { ...refuse, spawnHarnesses: () => ({ harnesses: ["claude"], hostId: "host_checks" }) });
   await waitFor(() => expect(column(one).querySelector('[data-testid="oats-notice"] div p')?.textContent).toBe("bb can’t run the harness this soul would use. See Details."));
   expect(one.queryByTestId("oats-spawn-harness")).toBeNull();
 });

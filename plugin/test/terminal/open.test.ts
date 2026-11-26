@@ -3,7 +3,7 @@
 import { describe, expect, test } from "vitest";
 import { openTerminal, SETTLE_MS, TerminalLeft, type TerminalIo } from "../../app/terminal/open";
 
-const COMMAND = { hostId: "host_falcon", argv: ["/usr/local/bin/oats", "session", "attach", "--home", "/srv/oats/agents/a/instances/kernel-fix-developer"], cwd: "/srv/oats/agents/a/instances/kernel-fix-developer" };
+const COMMAND = { hostId: "host_checks", argv: ["/usr/local/bin/oats", "session", "attach", "--home", "/srv/oats/agents/a/instances/kernel-fix-developer"], cwd: "/srv/oats/agents/a/instances/kernel-fix-developer" };
 const TITLE = "Kernel fix developer";
 
 type Session = { id: string; title: string | null; status: string; exitCode?: number | null; initialCwd?: string | null };
@@ -47,8 +47,8 @@ describe("opening the terminal", () => {
     const { io, calls } = bb();
     expect(await openTerminal(io, COMMAND, TITLE)).toEqual({ kind: "opened", terminalId: "term_new", reused: false });
     expect(calls).toEqual([
-      "list host_path host_falcon",
-      `create host_falcon ${COMMAND.cwd} "${TITLE}" 100x30 argv ${COMMAND.argv.join(" ")}`,
+      "list host_path host_checks",
+      `create host_checks ${COMMAND.cwd} "${TITLE}" 100x30 argv ${COMMAND.argv.join(" ")}`,
       "show term_new",
       `sleep ${SETTLE_MS}`,
       "get term_new",

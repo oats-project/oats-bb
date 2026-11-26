@@ -1,4 +1,5 @@
 #!/bin/sh
+# Runs only inside a contract container (kernel-run.mjs starts it): NEVER by hand on a person's machine: its `npm install -g` REPLACES that machine's global oats.
 # Runs inside the kernel-run container, as node (kernel-run.mjs calls it): a real OATS
 # kernel, this provider as a package, a throwaway workspace and a deployment, in $RUN.
 #

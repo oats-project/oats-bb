@@ -228,7 +228,7 @@ test("under the roster's notice a tab's failed read keeps no notice: when the ro
   const slot = await souls("", {
     snapshot: () => (down ? failed(null)() : fixtureSnapshot()),
     souls: async () => {
-      if (down) throw new Error("oats was not found on falcon");
+      if (down) throw new Error("oats was not found on checks");
       await held;
       return handlers().souls(null);
     },
@@ -415,7 +415,7 @@ test("while bb is still listing its threads a soul's agents are not drawn at all
 
 // A soul's agents are the roster's: while OATS cannot be read the page says so with the notice
 // every place shows, above the agents as last read; with no roster ever read, the notice alone.
-const last = (minutes: number) => ({ at: new Date(Date.now() - minutes * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() });
+const last = (minutes: number) => ({ at: new Date(Date.now() - minutes * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() });
 // Behind a result (an act of ours ended and the window's roster is not yet one read after it) a soul's agent says
 // "Reading…" in its state's place and its acts are off, as every place that says an agent's state (app/roster/reading.tsx).
 test("behind a result a soul's agent says \"Reading…\" and its acts are off and press nothing; a roster read after the act's end brings both back", async () => {
@@ -448,19 +448,19 @@ test("behind a result a soul's agent says \"Reading…\" and its acts are off an
   expect(acts().every((button) => !button.disabled)).toBe(true);
 });
 
-const failed = (kept: ReturnType<typeof last> | null, code = "OATS_NOT_FOUND") => () => ({ ok: false as const, at: new Date().toISOString(), code, message: "oats was not found on falcon: install OATS there", machine: "falcon", last: kept });
+const failed = (kept: ReturnType<typeof last> | null, code = "OATS_NOT_FOUND") => () => ({ ok: false as const, at: new Date().toISOString(), code, message: "oats was not found on checks: install OATS there", machine: "checks", last: kept });
 
 test("a soul's page and the Souls tab while OATS cannot be read: ONE notice with the age, above what was last read; with no roster, the notice and nothing of the agents", async () => {
   const stale = await souls("oats-developer", { snapshot: failed(last(40)) });
   const notice = await stale.findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks");
   expect(notice.textContent).toContain("Read 40 min ago.");
   expect(stale.getAllByTestId("oats-unreadable")).toHaveLength(1);
   expect(stale.getByTestId("oats-soul-detail").textContent).toContain("Flaky ci developer");
   stale.unmount();
   resetApp();
   const never = await souls("oats-developer", { snapshot: failed(null) });
-  expect((await never.findByRole("alert")).querySelector("h3")!.textContent).toBe("OATS is not installed on falcon");
+  expect((await never.findByRole("alert")).querySelector("h3")!.textContent).toBe("OATS is not installed on checks");
   expect(never.getByTestId("oats-soul-detail").textContent).not.toContain("Flaky ci developer");
   expect(never.getByRole("button", { name: "Retry" })).toBeTruthy();
   // With the roster never read New agent is held, as the home and the sidebar offer none then.

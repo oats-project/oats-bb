@@ -234,7 +234,7 @@ test("the block wraps and nothing in it scrolls out of sight or is cut", async (
 });
 
 test("on the last roster read, while OATS cannot be read: the line as last read, its act off, and under it the one drawing of why: the age, that the acts are off, Retry", async () => {
-  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
   expect((await slot.findByTestId("oats-status-line")).textContent).toBe("WorkingStop…Instance panel");
   // SAFETY: the act that applies is held: in its place, off, and a press does nothing. No reason of its
@@ -247,7 +247,7 @@ test("on the last roster read, while OATS cannot be read: the line as last read,
   const stale = slot.getByTestId("oats-unreadable");
   expect(slot.getByTestId("oats-identity-row").contains(stale)).toBe(true);
   expect(stale.getAttribute("data-compact")).toBe("");
-  expect(stale.textContent).toBe("OATS did not answer on falconRead 2 min ago. Acts are off.Retry");
+  expect(stale.textContent).toBe("OATS did not answer on checksRead 2 min ago. Acts are off.Retry");
   fireEvent.click(within(stale).getByRole("button", { name: "Retry" }));
   await vi.waitFor(() => expect(slot.inspection.rpcCalls.some((call) => call.method === "refresh")).toBe(true));
   slot.unmount();
@@ -255,7 +255,7 @@ test("on the last roster read, while OATS cannot be read: the line as last read,
   const stopped = await render("thr_digest", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "oats did not answer", last }) });
   const start = (await stopped.findByTestId("oats-status-act")) as HTMLButtonElement;
   expect([start.textContent, start.disabled, start.title]).toEqual(["Start…", true, ""]);
-  expect(stopped.getByTestId("oats-unreadable").textContent).toBe("OATS did not answer on falconRead 2 min ago. Acts are off.Retry");
+  expect(stopped.getByTestId("oats-unreadable").textContent).toBe("OATS did not answer on checksRead 2 min ago. Acts are off.Retry");
   fireEvent.click(start);
   expect(asked()).toBeNull();
 });
@@ -333,7 +333,7 @@ test("a session started after the last recorded stop: the line says Stopped and 
 // The settings can mend what Retry cannot (which machine holds the agents): the notice then has no
 // Retry, and its one act is the link to them.
 test("on the last roster read with no Retry to offer, the one-line notice says the acts are off and links to the settings", async () => {
-  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   const slot = await render("thr_mockups", fixtureAgents(), { snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "CHOOSE_HOST", message: "This bb server has 2 machines", last }) });
   const stale = await slot.findByTestId("oats-unreadable");
   expect(stale.textContent).toBe("Choose the machine that holds your agentsRead 2 min ago. Acts are off.Open settings");

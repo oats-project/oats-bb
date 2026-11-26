@@ -18,7 +18,7 @@ describe("terminalCommand", () => {
     backend = await startBackend();
     const answer = await backend.rpc<{ hostId: string; argv: string[]; cwd: string }>("terminalCommand", { instance: TMUX });
     const home = "/abs/deployment/agents/oats-developer/instances/kernel-fix-developer";
-    expect(answer).toEqual({ hostId: "host_falcon", argv: [backend.fake.bin, "session", "attach", "--home", home, "--detach-key", "C-\\", "--no-status-line"], cwd: home });
+    expect(answer).toEqual({ hostId: "host_checks", argv: [backend.fake.bin, "session", "attach", "--home", home, "--detach-key", "C-\\", "--no-status-line"], cwd: home });
     expect(answer.argv[0]!.startsWith("/")).toBe(true);
     // Nothing of the viewer is run by the plugin: the roster's read and the kernel's version, no more.
     expect((await backend.verbs()).sort()).toEqual(["status", "version"]);

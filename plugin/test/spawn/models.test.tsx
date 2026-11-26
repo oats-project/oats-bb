@@ -32,11 +32,11 @@ describe("the harness choice", () => {
   it("offers what the provider declares, by the names a person knows", async () => {
     const { read } = probe(null);
     await waitFor(() => expect(read().harnesses.status).toBe("ready"));
-    expect(read().harnesses).toEqual({ status: "ready", options: [{ id: "claude", label: "Claude Code" }, { id: "pi", label: "pi" }], choice: true, hostId: "host_falcon" });
+    expect(read().harnesses).toEqual({ status: "ready", options: [{ id: "claude", label: "Claude Code" }, { id: "pi", label: "pi" }], choice: true, hostId: "host_checks" });
   });
 
   it("with one harness, or none declared, there is nothing to choose", async () => {
-    const one = probe(null, { spawnHarnesses: () => ({ harnesses: ["claude"], hostId: "host_falcon" }) });
+    const one = probe(null, { spawnHarnesses: () => ({ harnesses: ["claude"], hostId: "host_checks" }) });
     await waitFor(() => expect(one.read().harnesses.status).toBe("ready"));
     expect(one.read().harnesses.choice).toBe(false);
     resetApp();
@@ -57,7 +57,7 @@ describe("a harness's model suggestions", () => {
     const { read, asked } = probe("pi", {}, () => ({ modelLoadError: null, models: [bbModel("anthropic/claude-sonnet-5", "Claude Sonnet 5"), bbModel("openai/o3")] }));
     await waitFor(() => expect(read().models.status).toBe("ready"));
     expect(read().models).toEqual({ status: "ready", models: [{ id: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5 · anthropic/claude-sonnet-5", provider: null }, { id: "openai/o3", label: "openai/o3", provider: null }] });
-    expect(asked).toEqual([{ hostId: "host_falcon", providerId: "pi", preferCached: true }]);
+    expect(asked).toEqual([{ hostId: "host_checks", providerId: "pi", preferCached: true }]);
     expect(asked.every((args) => !("projectId" in args))).toBe(true);
   });
 

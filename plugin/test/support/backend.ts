@@ -22,7 +22,7 @@ export type Backend = {
 };
 
 /**
- * One machine (`host_falcon`) with one bb project inside the fake's deployment. `load` is what is
+ * One machine (`host_checks`) with one bb project inside the fake's deployment. `load` is what is
  * loaded on the fake host: the plugin's server entry, unless a test loads a part of it.
  */
 export async function startBackend(
@@ -35,8 +35,8 @@ export async function startBackend(
     experimental_paths: { dataDir: join(fake.deployment, "data"), tempDir: fake.tempDir },
     experimental_watch: () => ({ dispose: async () => undefined }),
   });
-  const hosts = [makeHostResponse({ id: "host_falcon", name: "falcon" })];
-  const projects = [{ id: "proj_release", sources: [{ hostId: "host_falcon", path: join(fake.deployment, "agents", "oats-maintainer", "instances", "release-070-maintainer") }] }];
+  const hosts = [makeHostResponse({ id: "host_checks", name: "checks" })];
+  const projects = [{ id: "proj_release", sources: [{ hostId: "host_checks", path: join(fake.deployment, "agents", "oats-maintainer", "instances", "release-070-maintainer") }] }];
   const server = createFakePluginHost({
     pluginId: "oats",
     settings: { oatsBin: fake.bin, ...options.settings },

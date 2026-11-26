@@ -99,7 +99,7 @@ test("a row is two blocks: its name, then on one line its state in a word and it
 
 test("two failures are two words: Failed for a session that ended, Unreachable for one the kernel cannot reach", async () => {
   const agents = fixtureAgents().map((agent) => (agent.instance === "harvest-knowledge-helper" ? { ...agent, runtimeState: "shell" } : agent.instance === "weekly-digest-helper" ? { ...agent, running: null, runtimeState: "unreachable" } : agent));
-  const { slot } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents }) });
+  const { slot } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents }) });
   await openParents(slot);
   const rows = await slot.findAllByTestId("oats-agent-row");
   const facts = (id: string) => within(rows.find((row) => row.getAttribute("data-sidebar-thread-id") === id)!).getByTestId("oats-row-facts").textContent;
@@ -691,16 +691,16 @@ test("a feature's own page is a row under Workspace, with its mark while its hoo
 });
 
 test("while OATS cannot be read after it was, the tree stays as last read under the one notice: its age said once, that the acts are off, Retry; never bb's flat list", async () => {
-  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   const { slot } = await sidebar({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) });
   await openParents(slot);
   const rows = await slot.findAllByTestId("oats-agent-row");
   expect(rows).toHaveLength(7); // the same seven agents, joined to their threads
   expect(slot.getAllByTestId("oats-agent-row-threadless")).toHaveLength(1); // and the one that runs in tmux
   const notice = slot.getByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on falcon");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on checks");
   // The notice's face: its title, the age said once and in one form, that the acts are off, its one fold and Retry.
-  expect(notice.textContent).toBe(`OATS did not answer on falconRead 2 min ago. Acts are off.▸Details${slot.getByTestId("oats-notice-details").querySelector("div")!.textContent}Retry`);
+  expect(notice.textContent).toBe(`OATS did not answer on checksRead 2 min ago. Acts are off.▸Details${slot.getByTestId("oats-notice-details").querySelector("div")!.textContent}Retry`);
   expect(slot.getByTestId("oats-sidebar").textContent!.match(/2 min ago/g)).toHaveLength(1);
   expect(slot.queryByTestId("oats-last-observation")).toBeNull();
   expect(slot.getByTestId("oats-held").textContent).toBe("Acts are off.");
@@ -788,7 +788,7 @@ test("an agent on tmux is drawn under its parent, on a thread or not, indented b
     ),
     { ...lead, instance: "tmux-grandchild", home: lead.home.replace("kernel-fix-developer", "tmux-grandchild"), alias: "tmux-grandchild", parent: "kernel-fix-developer" },
   ];
-  const { slot, navigated } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents }) });
+  const { slot, navigated } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents }) });
   // As the page loads every parent is closed, the one on tmux as the one on a thread: the roots alone are drawn.
   await slot.findByTestId("oats-tree");
   const rowsNow = () => Array.from(slot.getByTestId("oats-tree").querySelectorAll('[data-testid="oats-agent-row"], [data-testid="oats-agent-row-threadless"]'));
@@ -828,7 +828,7 @@ test("a parent with no bb thread is a parent like any other: Left on its row clo
   const lead = fixtureAgents().find((agent) => agent.instance === "kernel-fix-developer")!;
   const claim = { reason: "attention" as const, message: "Which branch?", since: "2026-11-19T12:00:00.000Z" };
   const agents = [...fixtureAgents(), { ...lead, instance: "tmux-child", home: lead.home.replace("kernel-fix-developer", "tmux-child"), alias: "tmux-child", parent: "kernel-fix-developer", running: true, runtimeState: null, waiting: claim }];
-  const { slot } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents }) });
+  const { slot } = await sidebar({ snapshot: () => ({ ok: true, at: new Date().toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents }) });
   await slot.findByTestId("oats-tree");
   const row = (instance: string) => slot.queryAllByTestId("oats-agent-row-threadless").find((each) => each.getAttribute("data-instance") === instance);
   const toggle = () => slot.getAllByTestId("oats-row-toggle").find((each) => each.getAttribute("data-instance") === "kernel-fix-developer")!;
@@ -1298,16 +1298,16 @@ test("while bb is still reading the settings no page is known to be shown or hid
 // Never two Retry on a screen, never none. (The tab beside a thread draws no notice: test/panel/panel.test.tsx.)
 // (A fixed clock: the age these tests read, "Read 2 min ago.", is counted from it, never from the real one.)
 const T3_NOW = Date.parse("2026-11-19T12:40:00.000Z");
-const T3_LAST = () => ({ at: new Date(T3_NOW - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "falcon" }, agents: fixtureAgents() });
+const T3_LAST = () => ({ at: new Date(T3_NOW - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() });
 const retries = (...places: HTMLElement[]) => places.flatMap((place) => within(place).queryAllByRole("button", { name: "Retry" }));
 
 test("T3, no pane shows the notice: the sidebar's own notice is the whole one, with the one Retry", async () => {
   vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
-  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "checks", last: T3_LAST() }) };
   const { slot } = await sidebar(failed);
   await slot.findAllByTestId("oats-agent-row");
   expect(slot.getByTestId("oats-held").textContent).toBe("Acts are off.");
-  expect(within(slot.container).getByRole("alert").textContent).toContain("OATS did not answer on falcon");
+  expect(within(slot.container).getByRole("alert").textContent).toContain("OATS did not answer on checks");
   expect(slot.queryByTestId("oats-last-observation")).toBeNull();
   expect(retries(slot.container)).toHaveLength(1);
   fireEvent.click(retries(slot.container)[0]!);
@@ -1316,7 +1316,7 @@ test("T3, no pane shows the notice: the sidebar's own notice is the whole one, w
 
 test("T3, a page shows the notice: the sidebar beside it says one line, \"Read <age>. Acts are off.\", with nothing to press; the ONE Retry is the page's", async () => {
   vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
-  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "checks", last: T3_LAST() }) };
   const { slot } = await sidebar(failed);
   await openParents(slot);
   await slot.findAllByTestId("oats-agent-row");
@@ -1353,14 +1353,14 @@ test("T3, a page shows the notice: the sidebar beside it says one line, \"Read <
 
 test("T3, an agent's thread is on screen: its own line says the notice (the age, that the acts are off, the ONE Retry); the sidebar beside it says its one line, with nothing to press", async () => {
   vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
-  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "checks", last: T3_LAST() }) };
   const { slot } = await sidebar(failed);
   await slot.findAllByTestId("oats-agent-row");
   expect(retries(slot.container)).toHaveLength(1); // alone, it is the whole notice
   const app = await loadApp();
   const line = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(app.threadHeaderRows[0]! as never, { threadId: "thr_mockups", projectId: "p", environment: null }, { rpc: handlers(failed), sidebarThreads: sidebarThreads() });
   const said = await within(line.container).findByTestId("oats-unreadable");
-  expect([said.getAttribute("data-compact"), said.textContent]).toEqual(["", "OATS did not answer on falconRead 2 min ago. Acts are off.Retry"]);
+  expect([said.getAttribute("data-compact"), said.textContent]).toEqual(["", "OATS did not answer on checksRead 2 min ago. Acts are off.Retry"]);
   const beside = await waitFor(() => within(slot.container).getByTestId("oats-last-observation"));
   expect(beside.textContent).toBe("Read 2 min ago. Acts are off.");
   expect(within(slot.container).queryByRole("alert")).toBeNull();
@@ -1373,7 +1373,7 @@ test("T3, an agent's thread is on screen: its own line says the notice (the age,
 // Where OATS was NEVER read (no roster, no age): the same rule. Beside a pane that shows the notice the sidebar says
 // ONE line, the notice's TITLE alone, with nothing to press; alone it keeps the whole notice with the Retry (ruled).
 test("T3, OATS never read: alone the sidebar's notice is whole with the one Retry; beside a page that shows it, the sidebar says its title alone and the ONE Retry is the page's", async () => {
-  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: null }) };
+  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "checks", last: null }) };
   const { slot } = await sidebar(never);
   await within(slot.container).findByTestId("oats-unreadable");
   expect([retries(slot.container).length, within(slot.container).queryByTestId("oats-last-observation")]).toEqual([1, null]);
@@ -1382,7 +1382,7 @@ test("T3, OATS never read: alone the sidebar's notice is whole with the one Retr
   const page = renderSlot<{ subPath: string }, Contract>(panel, { subPath: "" }, { rpc: handlers(never), sidebarThreads: sidebarThreads() });
   await within(page.container).findByTestId("oats-unreadable");
   const line = await waitFor(() => within(slot.container).getByTestId("oats-last-observation"));
-  expect(line.textContent).toBe("OATS did not answer on falcon");
+  expect(line.textContent).toBe("OATS did not answer on checks");
   expect([line.querySelectorAll("button").length, line.querySelectorAll("a").length, within(slot.container).queryByTestId("oats-unreadable")]).toEqual([0, 0, null]);
   expect([retries(slot.container).length, retries(page.container).length]).toEqual([0, 1]);
   page.unmount();
@@ -1392,7 +1392,7 @@ test("T3, OATS never read: alone the sidebar's notice is whole with the one Retr
 // The second review round: where OATS was never read, the panel in a thread's TAB drew the roster's notice whole beside
 // the thread's own line: the notice twice, two Retry. The tab draws none there either.
 test("T3, OATS never read, an agent's thread with its panel's tab shown: the thread's line says the notice with the ONE Retry; the tab draws none", async () => {
-  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: null }), panelInstance: () => { throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped"); } };
+  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "checks", last: null }), panelInstance: () => { throw new Error("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped"); } };
   const app = await loadApp();
   const line = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(app.threadHeaderRows[0]! as never, { threadId: "thr_mockups", projectId: "p", environment: null }, { rpc: handlers(never), sidebarThreads: sidebarThreads() });
   await within(line.container).findByTestId("oats-unreadable");
@@ -1407,13 +1407,13 @@ test("T3, OATS never read, an agent's thread with its panel's tab shown: the thr
 // Where OATS was never read, every thread's line says the notice: the home in that thread's tab does not say it a
 // second time, and is never an empty pane: ONE line, the notice's title alone, with nothing to press (ruled).
 test("T3, OATS never read, a thread with the home's tab shown: the line says the notice with the ONE Retry; the tab's home says the title alone", async () => {
-  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: null }) };
+  const never = { snapshot: () => ({ ok: false as const, at: "2026-11-19T12:40:00.000Z", code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "checks", last: null }) };
   const app = await loadApp();
   const line = renderSlot<{ threadId: string; projectId: string; environment: null }, Contract>(app.threadHeaderRows[0]! as never, { threadId: "thr_no_agent", projectId: "p", environment: null }, { rpc: handlers(never), sidebarThreads: sidebarThreads() });
   await within(line.container).findByTestId("oats-unreadable");
   const tab = renderSlot<{ threadId: string; environment: null }, Contract>(app.tabs[0]! as never, { threadId: "thr_no_agent", environment: null }, { rpc: handlers(never), sidebarThreads: sidebarThreads(), tabVisible: true });
   const said = await waitFor(() => within(tab.container).getByTestId("oats-last-observation"));
-  expect([said.textContent, said.querySelectorAll("button, a").length, within(tab.container).queryByTestId("oats-unreadable")]).toEqual(["OATS did not answer on falcon", 0, null]);
+  expect([said.textContent, said.querySelectorAll("button, a").length, within(tab.container).queryByTestId("oats-unreadable")]).toEqual(["OATS did not answer on checks", 0, null]);
   expect([retries(line.container).length, retries(tab.container).length]).toEqual([1, 0]);
 });
 
@@ -1421,7 +1421,7 @@ test("T3, OATS never read, a thread with the home's tab shown: the line says the
 // another tab is chosen). A notice in a place nobody sees is no pane's notice: it must not take the sidebar's Retry.
 test("T3, a thread that is no agent's, the home's tab HIDDEN (bb keeps it mounted): the tab says no notice and the sidebar keeps its own, whole, with the one Retry; shown, the tab says it and the sidebar says its line", async () => {
   vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
-  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "checks", last: T3_LAST() }) };
   const { slot } = await sidebar(failed);
   await slot.findAllByTestId("oats-agent-row");
   const app = await loadApp();
@@ -1441,7 +1441,7 @@ test("T3, a thread that is no agent's, the home's tab HIDDEN (bb keeps it mounte
 
 test("T3, a thread whose own line says the notice, with the home's tab open beside it: the tab's home says none (it would be a second, with a second Retry)", async () => {
   vi.useFakeTimers({ now: T3_NOW, toFake: ["Date"] });
-  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "falcon", last: T3_LAST() }) };
+  const failed = { snapshot: () => ({ ok: false as const, at: new Date(T3_NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", machine: "checks", last: T3_LAST() }) };
   const app = await loadApp();
   // The home in a thread's tab (shown), and on the same screen a thread's line that says the notice.
   const tab = renderSlot<{ threadId: string; environment: null }, Contract>(app.tabs[0]! as never, { threadId: "thr_no_agent", environment: null }, { rpc: handlers(failed), sidebarThreads: sidebarThreads(), tabVisible: true });

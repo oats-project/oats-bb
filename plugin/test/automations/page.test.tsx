@@ -67,7 +67,7 @@ describe("the lists", () => {
 
   it("a list the kernel refused shows the kernel's code and message with Retry; the other tab still lists", async () => {
     const slot = await page("", {
-      automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: false as const, code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" }, trigger: { ok: true as const, list: triggers() } }),
+      automations: () => ({ at: AT, hostId: "host_checks", oats: OATS, schedule: { ok: false as const, code: "E_SCHEDULE_INVALID", message: "/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}" }, trigger: { ok: true as const, list: triggers() } }),
     });
     const alert = await slot.findByRole("alert");
     expect(alert.textContent).toBe("Schedules could not be readNothing can be shown of this deployment's schedules until they are read.E_SCHEDULE_INVALID▸Details/abs/deployment/oats-schedules.json must be {version: 1|2, jobs: {}}Retry");
@@ -77,7 +77,7 @@ describe("the lists", () => {
   });
 
   it("the plugin's own lack (no deployment, no machine chosen) is its own sentence, its code after", async () => {
-    const message = 'This bb server has 2 machines (falcon, osprey). Choose the one that holds the OATS homes: set "Machine" in the OATS plugin\'s settings.';
+    const message = 'This bb server has 2 machines (checks, osprey). Choose the one that holds the OATS homes: set "Machine" in the OATS plugin\'s settings.';
     const refused = { ok: false as const, code: "CHOOSE_HOST", message };
     const slot = await page("", { automations: () => ({ at: AT, hostId: null, oats: null, schedule: refused, trigger: refused }) });
     // The plugin's one notice for an OATS that cannot be read: a person's words, the server's own one press away, and the way to the settings.
@@ -90,7 +90,7 @@ describe("the lists", () => {
       automations: () => {
         asked += 1;
         if (asked > 1) throw new Error("the plugin's server is restarting");
-        return { at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } };
+        return { at: AT, hostId: "host_checks", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } };
       },
     });
     expect(await slot.findAllByTestId("oats-automation-row")).toHaveLength(11);
@@ -142,9 +142,9 @@ describe("the lists", () => {
 describe("what cannot be shown at all (D-285)", () => {
   it("no oats on the machine: the notice every place of the plugin shows for it, naming the machine, with Retry and the way to the settings", async () => {
     const refused = { ok: false as const, code: "OATS_NOT_FOUND", message: "`oats` could not be run (ENOENT)" };
-    const named = await page("", { automations: () => ({ at: AT, hostId: null, machine: "falcon", oats: null, schedule: refused, trigger: refused }) });
+    const named = await page("", { automations: () => ({ at: AT, hostId: null, machine: "checks", oats: null, schedule: refused, trigger: refused }) });
     const gate = await named.findByTestId("oats-automations-gate");
-    expect(gate.textContent).toBe("OATS is not installed on falcon▸DetailsInstall OATS there, or set the path to oats in the plugin's settings.OATS_NOT_FOUND: `oats` could not be run (ENOENT)RetryOpen settings"); // (the plugin's one notice since the text cut: the sentence and "code: message" under its one Details)
+    expect(gate.textContent).toBe("OATS is not installed on checks▸DetailsInstall OATS there, or set the path to oats in the plugin's settings.OATS_NOT_FOUND: `oats` could not be run (ENOENT)RetryOpen settings"); // (the plugin's one notice since the text cut: the sentence and "code: message" under its one Details)
     expect(within(gate).getByTestId("oats-unreadable").dataset.code).toBe("OATS_NOT_FOUND");
     expect(within(gate).getByRole("link", { name: "Open settings" }).getAttribute("href")).toMatch(/^\/settings\/plugins\//);
     // Retry asks the server to read OATS again.
@@ -152,16 +152,16 @@ describe("what cannot be shown at all (D-285)", () => {
     await waitFor(() => expect(named.inspection.rpcCalls.filter((call) => call.method === "refresh")).toHaveLength(1));
     expect(named.getAllByRole("tab")).toHaveLength(2);
     resetApp();
-    const slot = await page("", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: refused, trigger: refused }) });
+    const slot = await page("", { automations: () => ({ at: AT, hostId: "host_checks", oats: OATS, schedule: refused, trigger: refused }) });
     expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("OATS is not installed on this machine▸DetailsInstall OATS there, or set the path to oats in the plugin's settings.OATS_NOT_FOUND: `oats` could not be run (ENOENT)RetryOpen settings");
     resetApp();
-    const other = await page("triggers", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: refused, trigger: refused }) });
+    const other = await page("triggers", { automations: () => ({ at: AT, hostId: "host_checks", oats: OATS, schedule: refused, trigger: refused }) });
     expect((await other.findByTestId("oats-automations-gate")).textContent).toBe("OATS is not installed on this machine▸DetailsInstall OATS there, or set the path to oats in the plugin's settings.OATS_NOT_FOUND: `oats` could not be run (ENOENT)RetryOpen settings");
   });
 
   it("an OATS without the automations lists, as the server answers for one", async () => {
     const none = { ok: false as const, code: "OATS_NO_AUTOMATIONS", message: "OATS 0.28.0 has no automations lists: they need OATS 0.29 or later." };
-    const slot = await page("triggers", { automations: () => ({ at: AT, hostId: "host_falcon", oats: { version: "0.28.0", features: ["schedule"], automationsApi: null }, schedule: none, trigger: none }) });
+    const slot = await page("triggers", { automations: () => ({ at: AT, hostId: "host_checks", oats: { version: "0.28.0", features: ["schedule"], automationsApi: null }, schedule: none, trigger: none }) });
     expect((await slot.findByTestId("oats-automations-gate")).textContent).toBe("Triggers need OATS 0.29 or laterUpdate OATS to see the workspace's triggers and this computer's own, and where each one runs.OATS_NO_AUTOMATIONS");
     expect(slot.queryByRole("alert")).toBeNull();
   });
@@ -171,7 +171,7 @@ describe("what cannot be shown at all (D-285)", () => {
     expect(gateOf("schedule", none)).toEqual({ title: "Schedules need OATS 0.29 or later", detail: "Update OATS to see the workspace's schedules and this computer's own, and where each one runs.", code: "OATS_NO_AUTOMATIONS" });
     expect(gateOf("trigger", none)).toMatchObject({ title: "Triggers need OATS 0.29 or later" });
     // No `oats` at all is not this gate: it is the plugin's one notice for an OATS that cannot be read.
-    expect(gateOf("trigger", { code: "OATS_NOT_FOUND", message: "oats was not found on falcon: install OATS there." })).toBeNull();
+    expect(gateOf("trigger", { code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there." })).toBeNull();
     expect(gateOf("schedule", { code: "E_SCHEDULE_INVALID", message: "x" })).toBeNull();
     expect(gateOf("schedule", null)).toBeNull();
   });
@@ -219,7 +219,7 @@ describe("a row's page", () => {
     let reads = 0;
     const slot = await page("triggers/oats-real/proposal-review", {
       // Each read of the lists is another answer of the server.
-      automations: () => ({ at: `2026-11-21T20:4${++reads}:00.000Z`, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } }),
+      automations: () => ({ at: `2026-11-21T20:4${++reads}:00.000Z`, hostId: "host_checks", oats: OATS, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } }),
       triggerStatus: ({ id }) => {
         asked += 1;
         if (asked > 1) throw new Error("E_TRIGGER_FAILED: the trigger state cannot be read");
@@ -266,7 +266,7 @@ describe("a row's page", () => {
     const list = schedules();
     const web = "https://github.com/acme/agents/blob/0123abc/oats-schedules/nightly-digest.yaml";
     const rows = list.rows.map((row) => (row.id === "oats-real/nightly-digest" ? { ...row, origin: { ...row.origin, localPath: null, url: web } } : row));
-    const slot = await page("schedules/oats-real/nightly-digest", { automations: () => ({ at: AT, hostId: "host_falcon", oats: OATS, schedule: { ok: true as const, list: { ...list, rows } }, trigger: { ok: true as const, list: triggers() } }) });
+    const slot = await page("schedules/oats-real/nightly-digest", { automations: () => ({ at: AT, hostId: "host_checks", oats: OATS, schedule: { ok: true as const, list: { ...list, rows } }, trigger: { ok: true as const, list: triggers() } }) });
     fireEvent.click(await slot.findByTestId("oats-automation-open-file"));
     expect(slot.inspection.navigateCalls).toEqual([{ method: "openUrl", url: web }]);
   });
@@ -277,7 +277,7 @@ describe("a row's page", () => {
     expect(button.title).toBe(schedules().rows.find((row) => row.id === "oats-real/nightly-digest")!.origin.localPath);
     fireEvent.click(button);
     expect(slot.inspection.navigateCalls).toEqual([
-      { method: "experimental_openFilePreview", options: { target: { kind: "host", hostId: "host_falcon", path: "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml" }, location: null } },
+      { method: "experimental_openFilePreview", options: { target: { kind: "host", hostId: "host_checks", path: "/abs/deployment/oats-real/oats-schedules/nightly-digest.yaml" }, location: null } },
     ]);
   });
 });

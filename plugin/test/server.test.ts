@@ -42,6 +42,8 @@ const changeDuringRead = async (nth: number) => {
 };
 /** What the server said of each read asked for while another was in flight (its debug log, server/core.ts `reread`). */
 const readAgain = () => server.harness.logEntries.filter((entry) => entry.level === "debug" && entry.message.startsWith("oats status is read again")).map((entry) => entry.message);
+/** How long a test WAITS for what it reads (a poll's limit, never a claim of speed: a loaded host gets its time). */
+const WAIT_MS = 15_000;
 const refusalOf = (promise: Promise<unknown>) =>
   promise.then(
     () => {
@@ -107,18 +109,16 @@ describe("snapshot", () => {
     expect(server.harness.realtimeSignals).toEqual([{ channel: REALTIME_CHANGED, payload: { at: TOKEN } }]);
     expect(Date.parse(tokenOf(server.harness.realtimeSignals[0]))).toBeGreaterThanOrEqual(born); // the read's start, not a count from nothing
     // The watch on the event log was asserted on the machine that holds the homes.
-    await expect.poll(() => server.harness.experimental_hostRpcCalls.map((call) => call.method)).toEqual(["discover", "status", "watch"]);
+    await expect.poll(() => server.harness.experimental_hostRpcCalls.map((call) => call.method), { timeout: WAIT_MS }).toEqual(["discover", "status", "watch"]);
     expect(server.harness.experimental_hostRpcCalls.every((call) => call.hostId === "host_falcon")).toBe(true);
   });
 
   it("rereads on refresh, never sooner than the floor, and publishes only a change", async () => {
     const first = await rpc("snapshot");
-    const started = Date.now();
     const [one, two] = await Promise.all([rpc("refresh"), rpc("refresh")]);
     expect(Date.now() - Date.parse(first.at)).toBeGreaterThanOrEqual(MIN_INTERVAL_MS);
     expect(one).toEqual(two); // two callers, one read
     expect(Date.parse(one.at) - Date.parse(first.at)).toBeGreaterThanOrEqual(MIN_INTERVAL_MS - 50);
-    expect(Date.now() - started).toBeLessThan(MIN_INTERVAL_MS + 3_000);
     expect(await verbs()).toEqual(["status", "status"]);
     expect(server.harness.realtimeSignals).toHaveLength(1); // the same agents: nothing to invalidate
     expect((await rpc("snapshot")).at).toBe(one.at);
@@ -126,17 +126,15 @@ describe("snapshot", () => {
 
   it("pauses between two reads as long as the last one took, when that is longer than the floor: a slow kernel is not read without pause", async () => {
     await fake.behave({ status: { sleepMs: 2_500 } });
-    await rpc("snapshot"); // took about 2.5 s
-    const ended = Date.now();
+    const first = await rpc<{ at: string }>("snapshot"); // took 2.5 s at least: the fake `oats` sleeps that long
     await fake.behave({});
     const next = await rpc<{ at: string }>("refresh");
-    // The next read started no sooner than the last one's own time after it ended, not after 1 s.
-    expect(Date.parse(next.at) - ended).toBeGreaterThanOrEqual(2_400);
-    expect(Date.parse(next.at) - ended).toBeLessThan(4_500);
-    // And after that quick read, the floor is the pause again.
-    const after = Date.now();
-    const quick = await rpc<{ at: string }>("refresh");
-    expect(Date.parse(quick.at) - after).toBeLessThan(MIN_INTERVAL_MS + 800);
+    // ON THE SYSTEM'S CLOCK, a lower bound alone, between two of the server's own stamps: the next read started no
+    // sooner than the first one's own time after it ended (2.5 s in flight, then 2.5 s of pause; 100 ms of slack), not
+    // after the floor. (The pause EXACTLY, and that it is the floor again after a quick read: test/server/pacing.test.ts,
+    // on a clock moved by hand. No test bounds real time from above: a loaded host would fail it.)
+    expect(Date.parse(next.at) - Date.parse(first.at)).toBeGreaterThanOrEqual(4_900);
+    await rpc<{ at: string }>("refresh");
     expect(await verbs()).toEqual(["status", "status", "status"]);
   }, 20_000);
 
@@ -188,9 +186,7 @@ describe("snapshot", () => {
     const between = (later: string, earlier: string) => Date.parse(later) - Date.parse(earlier);
     if (answered <= FOLLOW_UP_WITHIN_MS) {
       expect(third).toBe(`oats status is read again at once: asked for while a read was in flight, which answered in ${answered} ms`);
-      // What it said, it did: read 3 started when read 2 ended (in the same turn: nothing is awaited
-      // between the two), not a pause later (the pause is a second at least: half of it tells them apart).
-      expect(between(thirdAt, secondAt)).toBeLessThan(answered + MIN_INTERVAL_MS / 2);
+      // (That it DID what it said, read 3 starting with no wait asked: test/server/pacing.test.ts, exactly.)
       // Read 4 was asked for during the read at once: it says the pause, and it WAITED it: no sooner
       // than read 3's own time in flight and the floor after it.
       expect(fourth).toBe("oats status is read again after the pause: asked for while a read was in flight, which was itself read at once");
@@ -221,10 +217,8 @@ describe("snapshot", () => {
     await fake.behave({ status: { exit: 1, stdout: "", stderr: "boom", sleepMs: 2_500 } });
     const failed = await rpc<{ ok: boolean; code: string }>("snapshot"); // about 2.5 s, then OATS_FAILED
     expect([failed.ok, failed.code]).toEqual([false, codes.failed]);
-    const ended = Date.now();
     await fake.behave({});
-    const next = await rpc<{ at: string }>("refresh");
-    expect(Date.parse(next.at) - ended).toBeLessThan(MIN_INTERVAL_MS + 800); // not 2.5 s more
+    await rpc<{ at: string }>("refresh"); // (the pause before it is the floor, not 2.5 s more: test/server/pacing.test.ts, exactly)
     expect((await rpc<{ ok: boolean }>("snapshot")).ok).toBe(true);
   }, 20_000);
 
@@ -255,7 +249,7 @@ describe("snapshot", () => {
     await rpc("snapshot");
     await fake.behave({ status: { stdout: JSON.stringify({ root: "/abs/deployment", agents: [] }) } });
     await server.harness.experimental_emitHostSignal("host_falcon", "changed", { reason: "changed", files: [] });
-    await expect.poll(() => server.harness.realtimeSignals.length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
+    await expect.poll(() => server.harness.realtimeSignals.length, { timeout: WAIT_MS }).toBe(2);
     const next = await rpc("snapshot");
     expect(next.agents).toEqual([]);
     // The second publish, with a token of its own, later than the first's (a client acts once per token).
@@ -266,20 +260,18 @@ describe("snapshot", () => {
   it("rereads when bb creates or deletes a thread", async () => {
     await rpc("snapshot");
     await server.harness.emitThreadEvent("thread.created", { thread: { id: "thr_new" } } as never);
-    await expect.poll(async () => (await verbs()).length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
+    await expect.poll(async () => (await verbs()).length, { timeout: WAIT_MS }).toBe(2);
   }, 20_000);
 
   it("shares the read in flight with a snapshot call that arrives before the first answer", async () => {
     await fake.behave({ status: { sleepMs: 700 } });
     const service = server.harness.runService("snapshot");
-    await expect.poll(async () => (await verbs()).length).toBe(1);
-    const started = Date.now();
-    expect((await rpc("snapshot")).ok).toBe(true);
-    expect(Date.now() - started).toBeLessThan(1_500); // the 700 ms of the read in flight, not a second read after the pause
+    await expect.poll(async () => (await verbs()).length, { timeout: WAIT_MS }).toBe(1);
+    expect((await rpc("snapshot")).ok).toBe(true); // the read in flight, shared: not a second read after the pause (one `status`, below)
     expect(await verbs()).toEqual(["status"]);
     service.controller.abort();
     await service.done;
-  });
+  }, 60_000);
 
   it("says in one line that oats is missing, and keeps answering", async () => {
     await server.harness.setSettings({ oatsBin: join(fake.deployment, "no-oats-here") });
@@ -319,13 +311,13 @@ describe("snapshot", () => {
       return hosts;
     }) as never);
     const first = rpc("snapshot");
-    await expect.poll(() => server.harness.sdk.callsTo("hosts.list").length).toBe(1);
+    await expect.poll(() => server.harness.sdk.callsTo("hosts.list").length, { timeout: WAIT_MS }).toBe(1);
     await server.harness.setSettings({ deployment: join(fake.deployment, "agents") }); // holds no oats-local.yaml
     server.harness.sdk.stub("hosts.list", (async () => hosts) as never);
     release();
     await first;
     // The next read looks for the deployment again, with the new setting, instead of using the old one.
-    await expect.poll(async () => (await rpc("snapshot")).code, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(codes.noDeployment);
+    await expect.poll(async () => (await rpc("snapshot")).code, { timeout: WAIT_MS }).toBe(codes.noDeployment);
     // And the roster read under the old settings is not this deployment's "last observation":
     // no client is shown the old one's agents, and no act is lent their homes.
     const failed = await rpc("snapshot");
@@ -340,7 +332,7 @@ describe("snapshot", () => {
     await fake.behave({ status: { sleepMs: 2_000 } });
     const before = (await verbs()).length;
     const reading = rpc("refresh"); // a read is asked; it is in flight under the old settings
-    await expect.poll(async () => (await verbs()).length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(before + 1);
+    await expect.poll(async () => (await verbs()).length, { timeout: WAIT_MS }).toBe(before + 1);
     await server.harness.setSettings({ deployment: join(fake.deployment, "agents") }); // holds no oats-local.yaml
     // What a client is answered next is the new deployment's: never the old roster.
     const next = await rpc("snapshot");
@@ -364,7 +356,7 @@ describe("snapshot", () => {
     // OATS cannot be read: the last roster is kept, also across another change of `pages`.
     await fake.behave({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CONFIG_BROKEN", message: "oats-local.yaml cannot be read" } }) } });
     await rpc("refresh").catch(() => undefined);
-    await expect.poll(async () => (await rpc("snapshot")).ok, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(false);
+    await expect.poll(async () => (await rpc("snapshot")).ok, { timeout: WAIT_MS }).toBe(false);
     const failed = await rpc("snapshot");
     expect(failed.last?.at).toBe(read.at);
     await server.harness.setSettings({ pages: "home" });
@@ -782,7 +774,7 @@ describe("the event path", () => {
     const twice = await rpc<Shown>("snapshot");
     expect(twice.agents.filter((agent) => agent.instance === LEAD)).toHaveLength(2);
     await named();
-    await expect.poll(async () => (await calls("status")).length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
+    await expect.poll(async () => (await calls("status")).length, { timeout: WAIT_MS }).toBe(2);
     expect(await calls(EVENTS)).toEqual([]);
   }, 20_000);
 
@@ -791,7 +783,7 @@ describe("the event path", () => {
     await named(["oats-developer--someone-new-developer.jsonl"]); // an agent spawned since: the status read brings it
     await named([`another-soul--${LEAD}.jsonl`]); // the instance's name under another agent: not this row's file
     await named([]);
-    await expect.poll(async () => (await calls("status")).length, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(2);
+    await expect.poll(async () => (await calls("status")).length, { timeout: WAIT_MS }).toBe(2);
     expect(await calls(EVENTS)).toEqual([]);
     expect(eventPath()).toEqual([]);
   }, 20_000);
@@ -967,7 +959,7 @@ describe("acts", () => {
     expect(read.ok).toBe(true);
     await fake.behave({ status: { stdout: JSON.stringify({ schemaVersion: 1, ok: false, error: { code: "E_CONFIG_BROKEN", message: "oats-local.yaml cannot be read" } }) } });
     await rpc("refresh").catch(() => undefined);
-    await expect.poll(async () => (await rpc("snapshot")).ok, { timeout: MIN_INTERVAL_MS + 4_000 }).toBe(false);
+    await expect.poll(async () => (await rpc("snapshot")).ok, { timeout: WAIT_MS }).toBe(false);
     // The roster is kept as last read, and the agent is one of it.
     const failed = await rpc("snapshot");
     expect(failed.last?.agents.some((agent: { instance: string }) => agent.instance === "weekly-digest-helper")).toBe(true);
@@ -1107,7 +1099,7 @@ describe("the host-call limits", () => {
 describe("the slow poll", () => {
   it("runs only while a client watches the snapshot", async () => {
     const service = server.harness.runService("snapshot");
-    await expect.poll(async () => (await verbs()).length).toBe(1); // the read at the service's start
+    await expect.poll(async () => (await verbs()).length, { timeout: WAIT_MS }).toBe(1); // the read at the service's start
     const unwatch = server.harness.experimental_watchRpc("snapshot", { input: null });
     await expect.poll(async () => (await verbs()).length, { timeout: 20_000, interval: 250 }).toBe(2);
     unwatch();

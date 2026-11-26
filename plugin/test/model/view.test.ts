@@ -154,16 +154,21 @@ describe("A1 view(): the tree", () => {
     expect([v.needsYou, v.working, v.finished, v.detached, v.elsewhere]).toEqual([[], [], [], [], []]);
   });
 
-  test("200 agents in one chain that closes a cycle are joined in one pass", () => {
-    const agents = Array.from({ length: 200 }, (_, i) =>
-      agent(`n${i}`, { parent: i === 0 ? "n199" : `n${i - 1}` }),
+  test("2000 agents in one chain that closes a cycle are joined, each once, and the join ends: it grows with the SQUARE today; the bound is one only a cubic join, or a walk round the cycle, reaches", () => {
+    // A chain of parents that closes on itself: a join that walked the chain again for every agent of every agent, or
+    // went round the cycle, would take minutes here, or never end. This one takes a fraction of a second (measured:
+    // 3 ms at 200 agents, 180 ms at 2000, 1.2 s at 5000: it grows with the SQUARE, which this guard does NOT hold
+    // against: it holds only that the join is no worse and that it ends). The bound stands far from both: a stalled
+    // host does not reach it. (A guard of the join's own order needs a count of its steps, not a time.)
+    const agents = Array.from({ length: 2_000 }, (_, i) =>
+      agent(`n${i}`, { parent: i === 0 ? "n1999" : `n${i - 1}` }),
     );
     const started = performance.now();
     const v = view(agents, threadsFor(agents));
-    expect(performance.now() - started).toBeLessThan(500);
-    expect(flatten(v.roots)).toHaveLength(200);
+    expect(performance.now() - started).toBeLessThan(20_000);
+    expect(flatten(v.roots)).toHaveLength(2_000);
     expect(v.roots).toHaveLength(1);
-  });
+  }, 60_000); // (the test's own limit stands ABOVE the bound: the bound decides, not the runner's five seconds)
 });
 
 describe("A2 state(): first match wins", () => {

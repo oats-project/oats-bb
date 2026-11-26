@@ -355,13 +355,16 @@ export default [
       await page.evaluate(click(inMail("oats-mail-back")));
       await page.until(visible(inMail("oats-mail-list")), 30);
 
-      // THE LONG REPORT (the second message: the recorded 16 KiB body, cut by the messaging layer): it opens, and says so at its end.
-      await page.evaluate(`${rows}[1].click()`);
+      // THE LONG REPORT (the first message of the set that the messaging layer cut: the recorded 16 KiB body): it opens, and says so at its end.
+      const cut = received.findIndex((message) => message.truncated === true);
+      check(cut >= 0, `${at} the set's mail holds a message the messaging layer cut`, String(cut));
+      if (cut < 0) return;
+      await page.evaluate(`${rows}[${cut}].click()`);
       // Its last line is far under the screen (16 KiB of lines): it is waited for as an element, brought into view, and only then read as drawn.
       await page.until(`document.querySelector(${JSON.stringify(inMail("oats-mail-shortened"))}) !== null`, 30);
       await page.evaluate(`document.querySelector(${JSON.stringify(inMail("oats-mail-shortened"))})?.scrollIntoView({ block: "end" })`);
       const said = await page.until(`${visible(inMail("oats-mail-shortened"))} ? ${textOf(inMail("oats-mail-shortened"))} : ""`, 15);
-      check(said === "Shortened." && received[1].truncated === true, `${at} a long message of the busy agent's mail opens, and says "Shortened." at its end`, String(said));
+      check(said === "Shortened.", `${at} a long message of the busy agent's mail opens, and says "Shortened." at its end`, String(said));
       await settled(page, viewport);
       await fitted(page, viewport, check, at, "the long report, at its end");
       await page.shot(`busy-${viewport.name}-mail-shortened`);

@@ -198,59 +198,56 @@ export default [
     },
   },
   {
-    // The worst case (specs: the busy workspace). Until the shared busy set is in the repository this scene MULTIPLIES
-    // the recorded answers itself: every row keeps a recorded row's shape and values; only names and ids are varied.
-    stage: "fixtures",
-    name: "the busy workspace: 124 souls with long names, 30 capabilities, 7 teams: the strip fits or scrolls inside itself, the head stays in view, a team's description is one line, a soul's agents stand before fifteen capabilities",
+    // THE WORST CASE: the Workspace page on the shared busy set (test/fixtures/busy: 24 souls with names of up to 66
+    // characters, 7 teams with long descriptions, 5 machines, sixty agents). Its images are the ones a change to these
+    // screens is judged by FIRST. What the set does not hold is held by unit tests alone: a soul of more than eight
+    // capabilities ("Show all N"), a core place of more than three, a three-digit count in the strip.
+    stage: "busy",
+    name: "the busy workspace, the Workspace page: the strip whole while a search narrows, the head in view after a scroll, a team's one line, a soul's agents before its capabilities",
     run: async ({ page, at, viewport, check }) => {
-      const WORDS = ["release", "kernel", "desktop", "knowledge", "messaging", "onboarding", "integration", "automation", "observability", "compliance", "localisation", "performance"];
-      const long = (i) => `${WORDS[i % 12]}-${WORDS[(i * 5 + 3) % 12]}-${WORDS[(i * 7 + 1) % 12]}-${["developer", "maintainer", "specialist", "reviewer"][i % 4]}-${i}`;
-      const manyCapabilities = (result) => { const rows = result.capabilities; result.capabilities = Array.from({ length: 30 }, (_, i) => (i < rows.length ? rows[i] : { ...rows[i % rows.length], name: `oats.${WORDS[i % 12]}-${WORDS[(i * 3 + 2) % 12]}-tools-${i}` })); return result.capabilities; };
-      let names = [];
-      setVerb("capabilities", derived("capabilities.json", (result) => { names = manyCapabilities(result).map((row) => row.name); }));
-      setVerb("souls", derived("souls.json", (result) => {
-        const rows = result.souls.filter((soul) => soul.capabilities !== null && !soul.package);
-        const fifteen = names.slice(0, 15).map((name) => ({ name, from: "workspace" }));
-        result.souls = [...result.souls.map((soul) => (soul.key === "oats-developer" ? { ...soul, capabilities: fifteen } : soul)), ...Array.from({ length: 124 - result.souls.length }, (_, i) => { const name = long(i); return { ...rows[i % rows.length], name, key: name, qualifiedName: name }; })];
-      }));
-      setVerb("teams", derived("teams.json", (result) => {
-        const team = result.teams[0];
-        result.teams = [...result.teams, ...Array.from({ length: 7 - result.teams.length }, (_, i) => ({ ...team, label: `${WORDS[i]}-${WORDS[i + 3]}-team`, team: `${WORDS[i]}-${WORDS[i + 3]}:oats.aweb.ai`, default: false, description: "The team of everyone who works on this part of the framework, its reviewers and the people who decide what lands in it." }))];
-      }));
-      try {
-        refresh();
-        // Souls: a three-digit count in the strip. Every tab is whole (none cut, none wrapped), and the strip passes the page's edge only by scrolling INSIDE itself.
-        await page.goto("/plugins/oats/souls");
-        const strip = await page.until(`(() => { const strip = document.querySelector(${q("oats-tabs")}); const tabs = [...(strip?.querySelectorAll('[role="tab"]') ?? [])]; if (!/^Souls 124$/.test((tabs[0]?.innerText ?? "").replace(/\\s+/g, " ").trim())) return ""; const selected = strip.querySelector('[aria-selected="true"]').getBoundingClientRect(); const box = strip.getBoundingClientRect(); return JSON.stringify({ inside: box.right <= innerWidth + 1 && box.left >= 0, page: document.documentElement.scrollWidth <= innerWidth + 1, whole: tabs.every((tab) => tab.scrollWidth <= tab.clientWidth + 1 && tab.getBoundingClientRect().height < 60), selected: selected.left >= box.left - 1 && selected.right <= box.right + 1 }); })()`, 30);
-        const fits = strip ? JSON.parse(strip) : null;
-        check(fits !== null && fits.inside && fits.page && fits.whole && fits.selected, `${at} busy: "Souls 124" in the strip: the strip is inside the page (it scrolls inside itself, never the page), every tab is whole on one line, the selected tab is in view`, strip || (await page.evaluate(textOf(testId("oats-tabs")))));
-        await page.shot(`workspace-${viewport.name}-busy-souls`, { targets: true });
-        // The head (the strip and the search) stays in view after the list is scrolled to its end.
-        const stays = JSON.parse(await page.evaluate(`(() => { const scroller = document.querySelector(${q("oats-souls-page")}); scroller.scrollTop = scroller.scrollHeight; const head = document.querySelector(${q("oats-workspace-head")}).getBoundingClientRect(); const search = document.querySelector(${q("oats-search")})?.getBoundingClientRect(); const last = [...document.querySelectorAll(${q("oats-soul-row")})].at(-1).getBoundingClientRect(); const top = scroller.getBoundingClientRect().top; return JSON.stringify({ scrolled: scroller.scrollTop > 500, head: Math.abs(head.top - top) <= 1, search: Boolean(search) && search.top >= top && search.bottom <= innerHeight, last: last.bottom <= innerHeight + 1 && last.top >= head.bottom - 1 }); })()`));
-        check(stays.scrolled && stays.head && stays.search && stays.last, `${at} busy: with the 124 rows scrolled to their end the strip and the search field are still at the page's top, and the last row is in view under them`, JSON.stringify(stays));
-        await page.shot(`workspace-${viewport.name}-busy-souls-end`);
-        // Capabilities: thirty, the one most souls have first; the Core part names at most three of a place, then "+N".
-        await page.goto("/plugins/oats/capabilities");
-        const capabilities = await page.until(`(() => { const rows = [...document.querySelectorAll(${q("oats-capability-souls")})].map((cell) => Number(cell.innerText.split(" ")[0])); if (rows.length !== 30) return ""; const core = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-capabilities-core")} dd`)})].map((value) => value.innerText.replace(/\\s+/g, " ").trim()); return JSON.stringify({ sorted: rows.every((n, i) => i === 0 || rows[i - 1] >= n), core }); })()`, 30);
-        const drawn = capabilities ? JSON.parse(capabilities) : null;
-        check(drawn !== null && drawn.sorted && drawn.core.every((value) => value.replace(/ \+\d+$/, "").split(", ").length <= 3), `${at} busy: thirty capabilities in the order of how many souls have each; a core place names at most three (a unit test holds the "+N" after them)`, capabilities || "");
-        await page.shot(`workspace-${viewport.name}-busy-capabilities`, { targets: true });
-        // Teams: seven; what a team is for is ONE line, cut at a word.
-        await page.goto("/plugins/oats/teams");
-        await page.until(`document.querySelectorAll(${q("oats-team-row")}).length === 7 && document.querySelector(${q("oats-team-does")})?.clientWidth > 0`, 30);
-        const wrong = JSON.parse(await page.evaluate(oneLines("oats-team-does")));
-        check(wrong.length === 0, `${at} busy: seven teams; what each is for is ONE line, inside its row, and one that is cut ends at a word with "…"`, JSON.stringify(wrong.slice(0, 3)));
-        await page.shot(`workspace-${viewport.name}-busy-teams`, { targets: true });
-        // A soul of fifteen capabilities: its agents stand first and are in view without a scroll; eight capabilities, then "Show all 15".
-        await page.goto("/plugins/oats/souls/oats-developer");
-        const soul = await page.until(`(() => { const agents = document.querySelector(${q("oats-soul-agents")}); const capabilities = document.querySelector(${q("oats-soul-capabilities")}); const rows = document.querySelectorAll(${q("oats-soul-agent")}); if (!agents || !capabilities || rows.length === 0) return ""; return JSON.stringify({ before: Boolean(agents.compareDocumentPosition(capabilities) & Node.DOCUMENT_POSITION_FOLLOWING), inView: [...rows].every((row) => row.getBoundingClientRect().bottom <= innerHeight), listed: document.querySelectorAll(${q("oats-soul-capability")}).length, all: document.querySelector(${q("oats-soul-capabilities-all")})?.innerText.trim() ?? null }); })()`, 30);
-        const page15 = soul ? JSON.parse(soul) : null;
-        check(page15 !== null && page15.before && page15.inView && page15.listed === 8 && page15.all === "Show all 15", `${at} busy: a soul of fifteen capabilities: its agents stand before them and are in view without a scroll; eight capabilities are listed, then "Show all 15"`, soul || (await page.evaluate(textOf(testId("oats-souls-page")))));
-        await page.shot(`workspace-${viewport.name}-busy-soul`, { targets: true });
-      } finally {
-        for (const verb of ["souls", "capabilities", "teams"]) setVerb(verb, null);
-        refresh();
-      }
+      // Souls: 24. Every tab is whole on one line; the strip passes the page's edge only by scrolling INSIDE itself; the selected tab is in view.
+      const stripNow = `(() => { const strip = document.querySelector(${q("oats-tabs")}); const tabs = [...(strip?.querySelectorAll('[role="tab"]') ?? [])]; if (tabs.length === 0) return null; const selected = strip.querySelector('[aria-selected="true"]').getBoundingClientRect(); const box = strip.getBoundingClientRect(); return { first: tabs[0].innerText.replace(/\\s+/g, " ").trim(), inside: box.right <= innerWidth + 1 && box.left >= 0, page: document.documentElement.scrollWidth <= innerWidth + 1, whole: tabs.every((tab) => tab.scrollWidth <= tab.clientWidth + 1 && tab.getBoundingClientRect().height < 60), selected: selected.left >= box.left - 1 && selected.right <= box.right + 1 }; })()`;
+      await page.goto("/plugins/oats/souls");
+      const loaded = await page.until(`(() => { const now = ${stripNow}; return now !== null && /^Souls \\d+$/.test(now.first) && document.querySelectorAll(${q("oats-soul-row")}).length >= 20 ? JSON.stringify(now) : ""; })()`, 40);
+      const strip = loaded ? JSON.parse(loaded) : null;
+      check(strip !== null && strip.inside && strip.page && strip.whole && strip.selected, `${at} busy Workspace: the strip is inside the page (it scrolls inside itself, never the page), every tab whole on one line, the selected tab in view`, loaded || (await page.evaluate(textOf(testId("oats-souls-page")))));
+      const names = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll(${q("oats-soul-row")})].map((row) => { const name = row.querySelector(${q("oats-soul-name")}); const counts = [...row.querySelectorAll(${q("oats-soul-running")} + ", " + ${q("oats-soul-capabilities-count")} + ", " + ${q("oats-soul-cannot")})]; return { name: name.innerText.trim(), cut: name.scrollWidth > name.clientWidth + 1, counts: counts.every((cell) => cell.scrollWidth <= cell.clientWidth + 1 && cell.getBoundingClientRect().right <= innerWidth) }; }))`));
+      check(names.length >= 20 && names.every((row) => !row.cut && row.counts) && new Set(names.map((row) => row.name)).size >= names.length - 2, `${at} busy Workspace: ${names.length} souls: no name is cut (a long one wraps beside its counts), and no count is cut or pushed off the row`, JSON.stringify(names.filter((row) => row.cut || !row.counts).slice(0, 4)));
+      await page.shot(`workspace-${viewport.name}-busy-souls`, { targets: true });
+      // The head (the strip and the search) stays in view after the list is scrolled to its end.
+      const stays = JSON.parse(await page.evaluate(`(() => { const scroller = document.querySelector(${q("oats-souls-page")}); scroller.scrollTop = scroller.scrollHeight; const head = document.querySelector(${q("oats-workspace-head")}).getBoundingClientRect(); const search = document.querySelector(${q("oats-search")})?.getBoundingClientRect(); const last = [...document.querySelectorAll(${q("oats-soul-row")})].at(-1).getBoundingClientRect(); const top = scroller.getBoundingClientRect().top; return JSON.stringify({ scrolled: scroller.scrollTop > 200, head: Math.abs(head.top - top) <= 1, search: Boolean(search) && search.top >= top && search.bottom <= innerHeight, last: last.bottom <= innerHeight + 1 && last.top >= head.bottom - 1 }); })()`));
+      check(stays.scrolled && stays.head && stays.search && stays.last, `${at} busy Workspace: with the souls scrolled to their end the strip and the search field are still at the page's top, and the last row is in view under them`, JSON.stringify(stays));
+      await page.shot(`workspace-${viewport.name}-busy-souls-end`);
+      // A search narrows: the tab's longest form ("N of 24") still leaves every tab whole and the strip inside the page.
+      await page.evaluate(fill(testId("oats-search"), "developer"));
+      const narrowed = await page.until(`(() => { const now = ${stripNow}; return now !== null && /^Souls \\d+ of \\d+$/.test(now.first) ? JSON.stringify(now) : ""; })()`, 15);
+      const narrow = narrowed ? JSON.parse(narrowed) : null;
+      check(narrow !== null && narrow.inside && narrow.page && narrow.whole && narrow.selected, `${at} busy Workspace: while a search narrows (${narrow?.first ?? "?"}) the strip is still inside the page and every tab whole`, narrowed || (await page.evaluate(textOf(testId("oats-tabs")))));
+      await page.shot(`workspace-${viewport.name}-busy-souls-search`, { targets: true });
+      // Capabilities: in the order of how many souls have each; a core place names at most three.
+      await page.goto("/plugins/oats/capabilities");
+      const capabilities = await page.until(`(() => { const rows = [...document.querySelectorAll(${q("oats-capability-souls")})].map((cell) => Number(cell.innerText.split(" ")[0])); if (rows.length === 0) return ""; const core = [...document.querySelectorAll(${JSON.stringify(`${testId("oats-capabilities-core")} dd`)})].map((value) => value.innerText.replace(/\\s+/g, " ").trim()); return JSON.stringify({ n: rows.length, sorted: rows.every((n, i) => i === 0 || rows[i - 1] >= n), core }); })()`, 30);
+      const drawn = capabilities ? JSON.parse(capabilities) : null;
+      check(drawn !== null && drawn.sorted && drawn.core.every((value) => value.replace(/ \+\d+$/, "").split(", ").length <= 3), `${at} busy Workspace: ${drawn?.n ?? "?"} capabilities in the order of how many souls have each; a core place names at most three`, capabilities || "");
+      await page.shot(`workspace-${viewport.name}-busy-capabilities`, { targets: true });
+      // Teams: seven, with long descriptions: what each is for is ONE line, cut at a word.
+      await page.goto("/plugins/oats/teams");
+      await page.until(`document.querySelectorAll(${q("oats-team-row")}).length >= 7 && document.querySelector(${q("oats-team-does")})?.clientWidth > 0`, 30);
+      const wrong = JSON.parse(await page.evaluate(oneLines("oats-team-does")));
+      const teams = await page.evaluate(`document.querySelectorAll(${q("oats-team-row")}).length`);
+      check(teams >= 7 && wrong.length === 0, `${at} busy Workspace: ${teams} teams; what each is for is ONE line, inside its row, and one that is cut ends at a word with "…"`, JSON.stringify(wrong.slice(0, 3)));
+      await page.shot(`workspace-${viewport.name}-busy-teams`, { targets: true });
+      // Machines: five; a long name wraps, none is cut.
+      await page.goto("/plugins/oats/machines");
+      const machines = await page.until(`(() => { const rows = [...document.querySelectorAll(${q("oats-machine-row")})]; return rows.length >= 5 ? JSON.stringify(rows.map((row) => row.firstElementChild.scrollWidth <= row.firstElementChild.clientWidth + 1)) : ""; })()`, 30);
+      check(Boolean(machines) && JSON.parse(machines).every(Boolean), `${at} busy Workspace: the machines: no name is cut`, machines || (await page.evaluate(textOf(testId("oats-machines-page")))));
+      await page.shot(`workspace-${viewport.name}-busy-machines`, { targets: true });
+      // A soul with agents (the set's fullest: three): its agents stand before its capabilities and are in view without a scroll.
+      await page.goto("/plugins/oats/souls/code-reviewer");
+      const soul = await page.until(`(() => { const agents = document.querySelector(${q("oats-soul-agents")}); const capabilities = document.querySelector(${q("oats-soul-capabilities")}); const rows = document.querySelectorAll(${q("oats-soul-agent")}); if (!agents || !capabilities || rows.length < 2) return ""; return JSON.stringify({ rows: rows.length, before: Boolean(agents.compareDocumentPosition(capabilities) & Node.DOCUMENT_POSITION_FOLLOWING), inView: [...rows].every((row) => row.getBoundingClientRect().bottom <= innerHeight) }); })()`, 40);
+      const fullest = soul ? JSON.parse(soul) : null;
+      check(fullest !== null && fullest.before && fullest.inView, `${at} busy Workspace: a soul's ${fullest?.rows ?? "?"} agents stand before its capabilities and are in view without a scroll`, soul || (await page.evaluate(textOf(testId("oats-souls-page")))));
+      await page.shot(`workspace-${viewport.name}-busy-soul`, { targets: true });
     },
   },
   {

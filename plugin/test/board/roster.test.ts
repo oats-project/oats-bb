@@ -50,6 +50,14 @@ describe("the roster's row and the agent's board", () => {
   });
 });
 
+describe("the roster the board's part of the real run recorded (test/fixtures/board/status.json)", () => {
+  it("the agent that wrote its board as its own session does has a board and asks; no other agent of that roster has either key", () => {
+    const read = parseStatus(JSON.parse(readFileSync(join(__dirname, "..", "fixtures", "board", "status.json"), "utf8")));
+    if (!read.ok) throw new Error(read.error.message);
+    expect(read.value.agents.filter((agent) => agent.hasBoard === true || agent.boardAsks === true).map((agent) => [agent.instance, agent.hasBoard, agent.boardAsks])).toEqual([["board-asks-helper", true, true]]);
+  });
+});
+
 describe("a board's change alone is published", () => {
   let backend: Backend | undefined;
   afterEach(async () => {

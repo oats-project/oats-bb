@@ -74,7 +74,7 @@
      "repoKey": "local//abs/real/oats-bb.git"
     },
     "composedFrom": null,
-    "dir": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/c7109869bfcde2941972c13246d3fdd1846b2d4e736a1232b6d9aeb454d859f8/51dac965b6b2/oats.bb",
+    "dir": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/c7109869bfcde2941972c13246d3fdd1846b2d4e736a1232b6d9aeb454d859f8/e78943245c0e/oats.bb",
     "settings": {
      "server": "http://127.0.0.1:38886",
      "version": "0.50.1",
@@ -113,7 +113,7 @@
      "repoKey": "github.com/awebai/oats"
     },
     "composedFrom": null,
-    "dir": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/c7109869bfcde2941972c13246d3fdd1846b2d4e736a1232b6d9aeb454d859f8/51dac965b6b2/oats.core",
+    "dir": "/abs/deployment/agents/oats-expert/instances/.oats-retirement/modules/c7109869bfcde2941972c13246d3fdd1846b2d4e736a1232b6d9aeb454d859f8/e78943245c0e/oats.core",
     "settings": {},
     "declares": [],
     "compatibility": {
@@ -182,7 +182,7 @@
    "launchConfig": null,
    "launchConfigDefault": false,
    "launched": true,
-   "createdAt": "2026-11-26T00:05:34.058Z",
+   "createdAt": "2026-11-26T01:04:25.809Z",
    "color": null,
    "resolution": "955a9f0e4970d4c8d61b6842",
    "soulDir": "/abs/deployment/agents/oats-expert/souls/48a34db749d3",
@@ -213,11 +213,11 @@
       "value": "#42",
       "unit": null,
       "link": "https://github.com/oats-project/oats-bb/pull/42",
-      "at": "2026-11-26T00:05:35.652Z",
+      "at": "2026-11-26T01:04:27.263Z",
       "history": [
        {
         "value": "#42",
-        "at": "2026-11-26T00:05:35.652Z"
+        "at": "2026-11-26T01:04:27.263Z"
        }
       ]
      },
@@ -227,19 +227,19 @@
       "value": "3",
       "unit": "failing",
       "link": null,
-      "at": "2026-11-26T00:05:36.359Z",
+      "at": "2026-11-26T01:04:27.720Z",
       "history": [
        {
         "value": "12",
-        "at": "2026-11-26T00:05:35.933Z"
+        "at": "2026-11-26T01:04:27.426Z"
        },
        {
         "value": "7",
-        "at": "2026-11-26T00:05:36.155Z"
+        "at": "2026-11-26T01:04:27.574Z"
        },
        {
         "value": "3",
-        "at": "2026-11-26T00:05:36.359Z"
+        "at": "2026-11-26T01:04:27.720Z"
        }
       ]
      }
@@ -253,7 +253,7 @@
        "release: the 0.1 line"
       ],
       "hasContext": true,
-      "since": "2026-11-26T00:05:36.485Z",
+      "since": "2026-11-26T01:04:27.848Z",
       "context": "main is protected and moved twice today.\nThe release line is 0.1 and carries the pilot's fix.\nI will cut the branch from the one you pick."
      },
      {
@@ -264,7 +264,7 @@
        "Merge: keep the three"
       ],
       "hasContext": false,
-      "since": "2026-11-26T00:05:36.732Z",
+      "since": "2026-11-26T01:04:28.040Z",
       "context": null
      }
     ]

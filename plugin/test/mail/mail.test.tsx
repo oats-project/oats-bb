@@ -115,16 +115,21 @@ test("a message with no subject reads (no subject) (a recorded answer with ONE f
 
 // ---- one message
 
-test("a press on a row shows the message in the list's place: its subject, its age, the sender's alias as its first line, then the body's lines; Back returns to the list and the focus to that row", async () => {
+test("a press on a row shows the message in the list's place: its subject; under it, on one line, who wrote it and its age; then the body's lines, the alias not among them; Back returns to the list and the focus to that row", async () => {
   const slot = mail();
   const list = await slot.findByTestId("oats-mail-list");
   fireEvent.click(rows(list)[2] as HTMLElement);
   const message = await slot.findByTestId("oats-mail-message");
   expect(slot.queryByTestId("oats-mail-list")).toBeNull();
   expect(text(message.querySelector("h3"))).toBe("Parser ready for a first read");
-  expect(text(message.querySelector("header p"))).toBe("15 min ago");
+  // Who wrote it and when: ONE line under the subject, the alias first, then the age.
+  expect(text(within(message).getByTestId("oats-mail-who"))).toBe("mail-writer · 15 min ago");
+  expect(text(within(message).getByTestId("oats-mail-from"))).toBe("mail-writer");
+  expect(within(message).getByTestId("oats-mail-who").className).toContain("text-muted-foreground");
   const lines = Array.from(within(message).getByTestId("oats-mail-body").querySelectorAll("p")).map(text);
-  expect(lines).toEqual(["mail-writer", "The parser is ready for a first read.", "", "Two things are still open:", "- the list at 390 px", "- the words of the refusals"]);
+  // The body starts with the body's own first line: the sender's alias is not one of its lines.
+  expect(lines).toEqual(["The parser is ready for a first read.", "", "Two things are still open:", "- the list at 390 px", "- the words of the refusals"]);
+  expect(within(message).getByTestId("oats-mail-body").contains(within(message).getByTestId("oats-mail-from"))).toBe(false);
   expect(within(message).queryByTestId("oats-mail-shortened")).toBeNull();
   // The message takes the focus on Back.
   const back = within(message).getByTestId("oats-mail-back");
@@ -142,7 +147,6 @@ test("the hostile message: markup and a link are text, never an element; a line 
   fireEvent.click(rows(await slot.findByTestId("oats-mail-list"))[0] as HTMLElement);
   const body = within(await slot.findByTestId("oats-mail-message")).getByTestId("oats-mail-body");
   expect(Array.from(body.querySelectorAll("p")).map(text)).toEqual([
-    "mail-writer",
     "<b>bold?</b> <script>alert(1)</script>",
     "[a link](https://example.invalid/x) https://example.invalid/y",
     "[withheld]",
@@ -158,7 +162,7 @@ test("the 300 KB message, which the messaging layer cut: its first lines, and Sh
   fireEvent.click(rows(await slot.findByTestId("oats-mail-list"))[1] as HTMLElement);
   const message = await slot.findByTestId("oats-mail-message");
   expect(text(within(message).getByTestId("oats-mail-shortened"))).toBe("Shortened.");
-  expect(text(within(message).getByTestId("oats-mail-body").querySelectorAll("p")[1] ?? null)).toBe("Line 1 of a long report about nothing in particular.");
+  expect(text(within(message).getByTestId("oats-mail-body").querySelectorAll("p")[0] ?? null)).toBe("Line 1 of a long report about nothing in particular.");
 });
 
 // ---- reading again, and further back

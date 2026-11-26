@@ -206,7 +206,7 @@ specialist on 25 Nov 2026 (`app/mail/words.ts`).
 | While it reads | "Reading mail…" / "Reading older mail…" | **Reading…** | The tab says what. |
 | No mail | "Nothing in the agent's mail." | **No mail.** | Little text. |
 | Read again, read further back | "Refresh mail", "Older mail" | **Refresh**, **Older** | The tab says what. |
-| Who wrote a message | "From <alias>", and "<alias> wrote:" over the body | the alias alone: on the row, and as the message's first line | Only received mail is shown, so "From" says nothing. |
+| Who wrote a message | "From <alias>", and "<alias> wrote:" over the body | the alias alone: on the row, and on the message's line under its subject, before its age ("<alias> · 21 h ago"), apart from the body | Only received mail is shown, so "From" says nothing; and who wrote a message must not read as its body's first line. |
 | A message that was cut | "Shortened: the message is too long to show whole." | **Shortened.** | Little text. |
 | The agent's messaging has no mail operation (`E_OPERATION_UNKNOWN`) | "This agent's messaging is too old to show mail; stop it and upgrade it (oats instance upgrade), or start a new agent of its soul." | **Its messaging is too old for mail.** | One line; the kernel's sentence is under Details. |
 | No messaging layer (`E_OPERATION_UNAVAILABLE`) | "This agent has no messaging layer, so it has no mail." | **No messaging.** | The same. |

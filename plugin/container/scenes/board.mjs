@@ -1,7 +1,8 @@
 // The board's live scenes (container/live-ui.mjs says what a scene is): an agent's questions and
 // facts, on its Board tab and on the home's card.
 //   board       the board the real kernel printed (test/fixtures/panel/status-board.json: two facts,
-//               one question, the board's own claim): the panel OPENS on Board, first in the row;
+//               one question, the board's own claim): Board is first in the panel's row, and the panel
+//               does NOT open on it by itself (it opens where it was left: Instance); by a press:
 //               the question with its options; the facts in bb's own list; the home's card draws
 //               the same question.
 //   board-later an agent that ASKS while its panel is open on another tab: a screen never moves
@@ -155,7 +156,14 @@ async function openPanel(page, threads) {
   await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
   await page.until(visible(testId("oats-open-panel")), 30);
   await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-open-panel"))}).click()`);
-  return page.until(`${visible(testId("oats-panel"))} && document.querySelector(${JSON.stringify(inBoard("oats-board-question"))}) !== null`, 40);
+  // The panel opens where it was left (Instance): the Board tab is there, first, and is PRESSED, as a person does.
+  const board = `document.getElementById("oats-panel-page-tab-board")`;
+  const opened = await page.until(`(() => { const tab = ${board}; const first = document.querySelector('[role="tablist"][aria-label="Instance context"] [role="tab"]'); const on = document.querySelector('[role="tablist"][aria-label="Instance context"] [role="tab"][aria-selected="true"]'); return ${visible(testId("oats-panel"))} && tab !== null && first === tab && on ? on.innerText.trim() : ""; })()`, 40);
+  await page.until("false", 1); // what a move of the panel's own would need to show
+  const stayed = await page.evaluate(`document.querySelector('[role="tablist"][aria-label="Instance context"] [role="tab"][aria-selected="true"]')?.innerText.trim() ?? ""`);
+  await page.evaluate(`${board}?.click()`);
+  const shown = await page.until(`${visible(testId("oats-panel"))} && document.querySelector(${JSON.stringify(inBoard("oats-board-question"))}) !== null`, 40);
+  return shown ? { opened, stayed } : null;
 }
 /** What the board shows: the tabs, the question's place, its text, its options, the facts' rows in view, and whether anything is pushed off sideways. */
 const read = `(() => { const flat = ${flat}; const board = document.querySelector(${JSON.stringify(testId("oats-board"))}); if (!board) return ""; const zone = board.querySelector(${JSON.stringify(testId("oats-board-questions"))}); const box = (e) => { const r = e.getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom) }; }; const pane = board.closest('[role="tabpanel"]') ?? board.parentElement; return JSON.stringify({ tabs: [...document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]')].map((t) => flat(t) + (t.getAttribute("aria-selected") === "true" ? "*" : "")), place: flat(zone?.querySelector(${JSON.stringify(testId("oats-board-place"))})), question: flat(zone?.querySelector(${JSON.stringify(testId("oats-board-question"))})), options: [...(zone?.querySelectorAll(${JSON.stringify(testId("oats-board-option"))}) ?? [])].map(flat), answers: zone?.querySelectorAll(${JSON.stringify(testId("oats-board-answer"))}).length ?? 0, turn: [zone?.querySelector(${JSON.stringify(testId("oats-board-previous"))}), zone?.querySelector(${JSON.stringify(testId("oats-board-next"))})].filter(Boolean).map((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth; }), facts: [...board.querySelectorAll(${JSON.stringify(testId("oats-board-fact"))})].filter((f) => f.getClientRects().length > 0).length, more: [...board.querySelectorAll(${JSON.stringify(testId("oats-board-facts"))} + " button")].map(flat).filter((t) => /more/.test(t)), sideways: pane.scrollWidth > pane.clientWidth + 1 || document.documentElement.scrollWidth > innerWidth + 1, zone: zone ? box(zone) : null, pane: box(pane), window: innerHeight }); })()`;
@@ -163,11 +171,12 @@ const read = `(() => { const flat = ${flat}; const board = document.querySelecto
 export default [
   {
     stage: "board",
-    name: "the board the kernel printed: the panel opens on Board, first in the row; the question with its options, then the facts; the home's card draws the same question",
+    name: "the board the kernel printed: Board is first in the row and the panel does not open on it by itself; pressed: the question with its options, then the facts; the home's card draws the same question",
     run: async ({ page, at, viewport, threads, check }) => {
       const shown = await openPanel(page, threads);
       const drawn = shown ? JSON.parse(await page.evaluate(read)) : null;
-      check(drawn !== null && drawn.tabs[0] === "Board*" && drawn.tabs.includes("Instance") && drawn.place === "" && drawn.question === "Which base branch?" && drawn.options.length === 2 && drawn.facts === 2 && drawn.sideways === false, `${at} the agent's panel opens on Board (first in the row): its one question ("Which base branch?") with two options, then its two facts; nothing is pushed off sideways`, JSON.stringify(drawn));
+      check(shown !== null && shown.opened === "Instance" && shown.stayed === "Instance", `${at} the panel of an agent whose board asks opens where it was left (Instance), with Board first in the row, and stays there: it never chooses a tab by itself`, JSON.stringify(shown));
+      check(drawn !== null && drawn.tabs[0] === "Board*" && drawn.tabs.includes("Instance") && drawn.place === "" && drawn.question === "Which base branch?" && drawn.options.length === 2 && drawn.facts === 2 && drawn.sideways === false, `${at} Board, pressed: its one question ("Which base branch?") with two options, then its two facts; nothing is pushed off sideways`, JSON.stringify(drawn));
       await targets(page, viewport, check, at, `board-${viewport.name}-tab`);
       await page.shot(`board-${viewport.name}-tab`);
       await page.goto("/plugins/oats/home");

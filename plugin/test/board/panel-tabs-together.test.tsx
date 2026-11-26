@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// The Board tab and the Mail tab on one panel (each has its own rule for when it shows; they meet
-// in app/panel/Panel.tsx): the row's order, and which tab an agent's panel opens on when the
-// memory was left on Mail for another agent.
+// The Board tab and the Mail tab on one panel (each has its own rule for when it is DRAWN; the tab
+// SHOWN is the panel's one state: app/panel/tab-state.ts): the row's order, and where an agent's
+// panel opens: where it was left, never on a tab of its own choosing.
 import { useState } from "react";
 import { afterEach, expect, test } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
@@ -44,26 +44,28 @@ test("an agent with a board and a messaging id: Board, Instance, Soul, Mail, in 
   await waitFor(() => expect(tabs()).toEqual(["Board false", "Instance true", "Soul false", "Mail false"]));
 });
 
-test("left on Mail for another agent: a panel whose board asks opens on Board, one whose board has facts alone on Instance; neither reads mail", async () => {
-  for (const [board, wanted] of [[{ facts: [], questions: [QUESTION] }, "Board true"], [{ facts: [FACT], questions: [] }, "Instance true"]] as const) {
+test("left on Mail for another agent: the panel opens on Instance, whether its board asks or holds facts alone (the panel never chooses a tab); it reads no mail", async () => {
+  for (const board of [{ facts: [], questions: [QUESTION] }, { facts: [FACT], questions: [] }]) {
     const { slot, tabs } = await panel(board, () => showPanelTab("mail")); // the memory says Mail, pressed for no agent
-    await waitFor(() => expect(tabs().find((tab) => tab.endsWith("true")), JSON.stringify(board)).toBe(wanted));
-    await act(async () => {});
-    expect(tabs().find((tab) => tab.endsWith("true"))).toBe(wanted); // and it stays there once the memory has left Mail
+    await waitFor(() => expect(tabs(), JSON.stringify(board)).toEqual(["Board false", "Instance true", "Soul false", "Mail false"]));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    expect(tabs()).toEqual(["Board false", "Instance true", "Soul false", "Mail false"]);
     expect(slot.inspection.rpcCalls.map((call) => call.method)).not.toContain("mail");
     resetApp();
   }
 });
 
-test("on a panel that opened on Board, a press on Mail shows this agent's mail, and a press on Board comes back", async () => {
+test("the tabs are a person's: Board by a press, then Mail (this agent's mail), then Board again, then Instance: each press is obeyed and kept", async () => {
   const { slot, tabs } = await panel({ facts: [], questions: [QUESTION] });
+  await waitFor(() => expect(tabs()).toEqual(["Board false", "Instance true", "Soul false", "Mail false"]));
+  fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Board" }));
   await waitFor(() => expect(tabs()[0]).toBe("Board true"));
   fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Mail" }));
   await waitFor(() => expect(tabs()).toEqual(["Board false", "Instance false", "Soul false", "Mail true"]));
   fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Board" }));
   await waitFor(() => expect(tabs()[0]).toBe("Board true"));
   fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Instance" }));
-  await waitFor(() => expect(tabs()[1]).toBe("Instance true")); // a chosen tab is kept: the panel no longer opens by itself
+  await waitFor(() => expect(tabs()[1]).toBe("Instance true"));
 });
 
 // ---- one panel, shown for one agent and then for another (bb's side panel is one component: the thread in view changes)
@@ -101,54 +103,40 @@ async function two(boards: Record<string, unknown>) {
 const ASKS = { facts: [], questions: [QUESTION] };
 const FACTS = { facts: [FACT], questions: [] };
 
-test("a tab chosen on one agent's panel does not keep ANOTHER agent's panel from opening on Board: the choice is that panel's", async () => {
+test("the memory is the window's, for every agent: left on Board for one agent, another agent's panel opens on Board where it has a board, on Instance where it has none; left on Instance, both open on Instance though both boards ask", async () => {
   const { shown, press, to } = await two({ [CHILD]: ASKS, [PARENT]: ASKS });
-  await waitFor(() => expect(shown()).toBe("Board"));
-  press("Instance"); // a choice, on the child's panel
-  await waitFor(() => expect(shown()).toBe("Instance"));
+  await waitFor(() => expect(shown()).toBe("Instance")); // the child's board asks: the panel does not open on it by itself
   await to(PARENT);
-  await waitFor(() => expect(shown()).toBe("Board")); // the parent's board asks, and nobody chose a tab on ITS panel
+  await waitFor(() => expect(shown()).toBe("Instance")); // nor the parent's
+  press("Board");
+  await waitFor(() => expect(shown()).toBe("Board"));
   await to(CHILD);
-  await waitFor(() => expect(shown()).toBe("Board")); // and the child's opens anew: it still asks
+  await waitFor(() => expect(shown()).toBe("Board")); // where it was left
+  resetApp();
+  const other = await two({ [CHILD]: ASKS });
+  await waitFor(() => expect(other.shown()).toBe("Instance"));
+  other.press("Board");
+  await waitFor(() => expect(other.shown()).toBe("Board"));
+  await other.to(PARENT); // the parent has no board: the tab is not drawn for it
+  await waitFor(() => expect(other.shown()).toBe("Instance"));
 });
 
-test("opens on Board, is left on Mail, is opened for another agent: in every order, a panel whose board asks opens on Board, one with facts alone on Instance, and mail is read only by a press on that agent's Mail", async () => {
-  // A asks, B asks
-  let run = await two({ [CHILD]: ASKS, [PARENT]: ASKS });
-  await waitFor(() => expect(run.shown()).toBe("Board"));
-  run.press("Mail");
-  await waitFor(() => expect(run.shown()).toBe("Mail"));
-  await waitFor(() => expect(run.mailReads()).toBe(1)); // the child's mail, by the press
-  await run.to(PARENT);
-  await waitFor(() => expect(run.shown()).toBe("Board"));
-  await run.to(CHILD);
-  await waitFor(() => expect(run.shown()).toBe("Board")); // not Mail: it takes a press again
-  await act(async () => {});
-  expect(run.mailReads()).toBe(1);
-  resetApp();
-  // A asks, B has facts alone
-  run = await two({ [CHILD]: ASKS, [PARENT]: FACTS });
-  await waitFor(() => expect(run.shown()).toBe("Board"));
-  run.press("Mail");
-  await waitFor(() => expect(run.shown()).toBe("Mail"));
-  await run.to(PARENT);
-  await waitFor(() => expect(run.shown()).toBe("Instance"));
-  run.press("Board"); // the parent's facts, chosen
-  await waitFor(() => expect(run.shown()).toBe("Board"));
-  await run.to(CHILD);
-  await waitFor(() => expect(run.shown()).toBe("Board"));
-  resetApp();
-  // A has no board, B asks: the memory left on Mail for A
-  run = await two({ [PARENT]: ASKS });
-  await waitFor(() => expect(run.shown()).toBe("Instance"));
-  run.press("Mail");
-  await waitFor(() => expect(run.shown()).toBe("Mail"));
-  await run.to(PARENT);
-  await waitFor(() => expect(run.shown()).toBe("Board"));
-  await run.to(CHILD);
-  await waitFor(() => expect(run.shown()).toBe("Instance")); // no board, and Mail takes a press
-  await act(async () => {});
-  expect(run.mailReads()).toBe(1);
+test("left on Mail, opened for another agent, and back, in every order: no panel opens on a tab by itself (whether its board asks or not), and mail is read only by a press on that agent's Mail", async () => {
+  for (const boards of [{ [CHILD]: ASKS, [PARENT]: ASKS }, { [CHILD]: ASKS, [PARENT]: FACTS }, { [PARENT]: ASKS }] as Record<string, unknown>[]) {
+    const run = await two(boards);
+    await waitFor(() => expect(run.shown()).toBe("Instance"));
+    run.press("Mail");
+    await waitFor(() => expect(run.shown()).toBe("Mail"));
+    await waitFor(() => expect(run.mailReads()).toBe(1)); // the child's mail, by the press
+    await run.to(PARENT);
+    await waitFor(() => expect(run.shown(), JSON.stringify(boards)).toBe("Instance")); // not Mail (pressed for another agent), and not Board
+    await run.to(CHILD);
+    await waitFor(() => expect(run.shown(), JSON.stringify(boards)).toBe("Instance")); // not Mail: it takes a press again
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    expect(run.shown()).toBe("Instance");
+    expect(run.mailReads()).toBe(1);
+    resetApp();
+  }
 });
 
 test("a board that starts to ask while a person reads the agent's mail does not throw them out of it", async () => {

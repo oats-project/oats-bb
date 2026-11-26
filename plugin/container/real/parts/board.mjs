@@ -8,8 +8,9 @@
 //      that it asks;
 //   3. the detail (`boardDetail`) is the kernel's own `oats inspect --home <home> --board --json`,
 //      kept as the feature's fixture (test/fixtures/board/inspect-board.json);
-//   4. as a person sees it: the agent's page opens on Board, with the question, its place, its
-//      options and the facts; a press on an option SENDS `<id>: <option>` to the agent's thread:
+//   4. as a person sees it: the agent's page opens where it was left (Instance: it never opens on
+//      Board by itself); Board, pressed, has the question, its place, its options and the facts;
+//      a press on an option SENDS `<id>: <option>` to the agent's thread:
 //      the option reads "Sent.", the model is asked again in that agent's conversation, and the
 //      text stands in the thread. Once in each view (both themes, both widths).
 // Runs before the panel's part and needs nothing of it (the files' order): its agent is its own.
@@ -92,7 +93,7 @@ export default async (run) => {
   check(held?.facts?.find((fact) => fact.key === "tests")?.history?.map((each) => each.value).join(",") === "12,7,3" && typeof held?.questions?.[0]?.context === "string" && held.questions[0].context.includes("main is protected"), "the kernel's detail holds the fact's three values, oldest first, and the first question's context", JSON.stringify(held).slice(0, 900));
   fixtures.keep("board/inspect-board.json", call.stdout);
 
-  step("C board 4: as a person sees it: the page opens on Board; a press on an option sends the answer to the agent's thread");
+  step("C board 4: as a person sees it: the page opens where it was left, Board is a press away; a press on an option sends the answer to the agent's thread");
   const first = row.board.questions[0];
   const ANSWER = `${first.id}: ${OPTIONS[0]}`;
   const thread = bbThread(row.session?.threadId);
@@ -102,11 +103,15 @@ export default async (run) => {
     // At rest before each press: the turn the view before started is over.
     await until(`${NAME} at rest again`, () => (run.atRest(rowOf(NAME)) ? true : undefined));
     await page.goto(`/plugins/oats/agent/${NAME}`);
+    // The page of an agent whose board asks opens on Instance (the window's memory): the panel never chooses a tab.
+    const opened = await page.until(`(() => { const tab = document.querySelector('[data-testid="oats-tab-board"]'); const on = document.querySelector('[role="tablist"][aria-label="Instance context"] [role="tab"][aria-selected="true"]'); return tab && on ? on.innerText.trim() : ""; })()`, 60);
+    check(opened === "Instance", `${at}: the real agent's page opens on Instance, with a Board tab: it does not open on Board by itself`, String(opened));
+    await page.evaluate(`document.querySelector('[data-testid="oats-tab-board"]')?.click()`);
     const drawn = await page.until(`(() => { const flat = ${flat}; const q = document.querySelector(${JSON.stringify(inBoard("oats-board-question"))}); const answers = document.querySelectorAll(${JSON.stringify(inBoard("oats-board-answer"))}); if (!q || answers.length !== 2 || document.querySelectorAll(${JSON.stringify(inBoard("oats-board-spark"))}).length !== 1) return ""; return JSON.stringify({ tab: document.querySelector('[role="tab"][aria-selected="true"]')?.innerText.trim(), place: flat(document.querySelector(${JSON.stringify(inBoard("oats-board-place"))})), question: flat(q), options: [...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-option"))})].map(flat), facts: [...document.querySelectorAll(${JSON.stringify(inBoard("oats-board-fact"))})].map((f) => flat(f.querySelector('[data-testid="oats-board-fact-value"]')) + " | " + flat(f.querySelector('[data-testid="oats-board-fact-label"]')?.parentElement)), says: flat(document.querySelector(${JSON.stringify(inBoard("oats-board-says"))})) }); })()`, 60);
     const read = drawn ? JSON.parse(drawn) : null;
     check(
       read !== null && read.tab === "Board" && read.place === "1 of 2" && read.question === QUESTION && read.options.join(" / ") === `1 ${OPTIONS[0]} / 2 ${OPTIONS[1]}` && read.facts.join(" / ") === "#42 | Pull request · github.com / 3 failing | Tests" && read.says === "Board asks helper says",
-      `${at}: the real agent's page opens on Board: the question, "1 of 2", its two options as buttons, the two facts (value over label, the address after it), one history line, and who says the address`,
+      `${at}: Board, pressed: the question, "1 of 2", its two options as buttons, the two facts (value over label, the address after it), one history line, and who says the address`,
       drawn ?? (await page.evaluate(`(${flat})(document.querySelector('[data-testid="oats-panel"]'))`)),
     );
     await page.until(`document.getAnimations().every((animation) => animation.playState !== "running")`, 5);

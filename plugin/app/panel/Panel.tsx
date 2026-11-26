@@ -79,35 +79,21 @@ let shownTab: TabId = "instance";
 /**
  * How many times a tab was ASKED FOR (a press on a tab, or another feature's `showPanelTab`). A
  * press is an EVENT, not a change of the memory: a press that names the tab the memory already
- * holds is a choice all the same, on a panel that opened elsewhere by itself (on Board, where the
- * agent's board asks). A panel takes any press since it was mounted as its person's choice.
+ * holds moves a panel all the same (one that fell to Instance when the tab it showed went).
  */
 let presses = 0;
-/**
- * A press made FOR an agent whose panel is not open yet (the thread line's Answer, which then opens
- * it): that panel opens on the tab asked for. Short-lived: it is good for every mount of THAT
- * agent's panel within `SHOT_MS` (bb may mount a panel twice a moment apart), dropped by another
- * agent's panel, replaced by the next press of anyone, and it lapses by itself: a press whose
- * panel never opened (the open refused, the thread gone) does not decide where that agent's
- * panel opens when a person opens it by hand much later.
- */
-let pressedFor: { instance: string; at: number } | null = null;
-/** How long a press waits for the panel it opens: a navigation and a first draw (the phone's own page), with room. */
-export const SHOT_MS = 10_000;
-const takesShot = (instance: string): boolean => pressedFor !== null && pressedFor.instance === instance && Date.now() - pressedFor.at < SHOT_MS;
 const listeners = new Set<() => void>();
 const tell = (): void => {
   for (const listener of listeners) listener();
 };
 /**
- * Shows one of the panel's tabs, from anywhere: an open panel turns to it, and the next one opens
- * on it. `focus`: the tab takes the focus too, for a control that leaves the page as the tab turns.
- * `for`: the agent whose panel the press is meant for, where that panel may not be open yet.
+ * Shows one of the panel's tabs, from anywhere, as a press does: it writes the window's memory, so
+ * an open panel turns to the tab and the next one that mounts (bb may mount it twice) opens on
+ * it. `focus`: the tab takes the focus too, for a control that leaves the page as the tab turns.
  */
-export function showPanelTab(tab: TabId, { focus = false, for: instance = null }: { focus?: boolean; for?: string | null } = {}): void {
+export function showPanelTab(tab: TabId, { focus = false }: { focus?: boolean } = {}): void {
   shownTab = tab;
   presses += 1;
-  pressedFor = instance === null ? null : { instance, at: Date.now() };
   tell();
   // Once the open panel has drawn the tab selected (the store's change is drawn before this runs).
   if (focus) queueMicrotask(() => document.getElementById(`${PANEL_ID}-tab-${tab}`)?.focus());
@@ -122,7 +108,6 @@ onWindowReset(() => {
   mailOf = null;
   shownTab = "instance";
   presses = 0;
-  pressedFor = null;
   tell();
 });
 
@@ -238,31 +223,30 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   const line = pageParts(agent, oats, status);
   const reading = useReading(agent.instance);
   const soul = shown(oats.soulOf(agent));
-  // The agent's board, for the tabs: whether there is one to show, whether it asks, and whether its first read has answered.
+  // The agent's board, for the tabs: whether there is one to show, as this mount's own read of it says.
   const board = useBoardTab(agent.instance);
   // Which tabs are drawn for this agent (the rule over `Drawn`). The row's own word (`hasBoard`) draws the Board tab at
   // once, and keeps it where the board's read failed: what could not be read is said there, with Retry.
-  // (Once the board's own read has ANSWERED for this panel, the board says: it is the board itself, where the row's
-  // word is a summary of it that the roster may hold a moment longer. STICKY: what the board last answered stands
-  // while it is read again and where a later read fails; the row's word never comes back to decide.)
+  // (Once the board's own read has ANSWERED for this panel, since its mount, the board says: it is the board itself,
+  // where the row's word is a summary of it that the roster may hold a moment longer. STICKY: what the board last
+  // answered stands while it is read again and where a later read fails; the row's word never comes back to decide.
+  // An answer bb holds from before the mount decides nothing.)
   const boardSaid = useRef<boolean | null>(null);
   if (board.answered) boardSaid.current = board.shown;
   const drawn: Drawn = { board: boardSaid.current ?? agent.hasBoard === true, mail: read.data !== undefined && read.data.facts.messagingId !== null };
   // THE TAB SHOWN: a state of this panel (one agent's: `Pages` is keyed by the agent's name where it is drawn, so a
-  // panel bb keeps open while the thread changes is mounted anew), moved by the four events of `TabState` and by
-  // nothing else. (An event is taken as it is seen, in the draw that sees it: the state it leaves is kept.)
+  // panel bb keeps open while the thread changes is mounted anew), moved by the three events of `TabState` and by
+  // nothing else: the panel never chooses a tab by itself. (An event is taken as it is seen, in the draw that sees
+  // it: the state it leaves is kept.)
   const pressed = usePresses();
-  const [held, setHeld] = useState(() => mountedOn({ memory: shownTab, mailOf, presses, pressedFor: takesShot(agent.instance) }, agent.instance, drawn));
-  const tabNow = moved(held, { presses: pressed, pressedTab: remembered, board, drawn });
+  const [held, setHeld] = useState(() => mountedOn({ memory: shownTab, mailOf, presses }, agent.instance, drawn));
+  const tabNow = moved(held, { presses: pressed, pressedTab: remembered, drawn });
   if (tabNow !== held) setHeld(tabNow);
   const tab = tabNow.tab;
   useEffect(() => {
-    // A press made for an agent is good for EVERY mount of that agent's panel within its time (bb may mount a panel
-    // twice a moment apart: a mount is not always an opening); another agent's panel drops it (so does the next press
-    // of anyone, and its own lapse). And a press on Mail is good for its agent until another agent's panel is shown.
-    if (pressedFor !== null && pressedFor.instance !== agent.instance) pressedFor = null;
+    // A press on Mail is good for its agent until another agent's panel is shown: that panel drops the marker.
     if (mailOf !== null && mailOf !== agent.instance) mailOf = null;
-  }, [agent.instance, pressed]);
+  }, [agent.instance]);
   return (
     <>
       {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}

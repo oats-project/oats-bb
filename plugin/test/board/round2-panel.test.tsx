@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // What a fresh reviewer's second round found in the panel's tabs (its own proofs, kept as tests): a press is an EVENT. One that
-// names the tab the memory already holds moves a panel that opened on Board by itself, and one made for an agent
-// whose panel is not open yet decides where that panel opens.
+// names the tab the memory already holds moves a panel that shows another tab, and one made before a panel is open
+// (the thread line's Answer) writes the memory that panel reads: it opens on the tab asked for.
 import { useState } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
@@ -20,7 +20,7 @@ const FACT = { key: "tests", label: "Tests", value: "3", unit: "failing", link: 
 const QUESTION = { id: "q3", question: "Which base branch?", options: ["main: the default", "release: the 0.1 line"], hasContext: false, since: "2026-11-23T18:01:45.724Z" };
 const selected = (slot: { getByRole: (role: string, options: object) => HTMLElement }) => within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab").find((tab) => tab.getAttribute("aria-selected") === "true")?.textContent;
 
-test("memory left on Soul, panel opens on Board (a question is open); a press on the header's soul link must show Soul", async () => {
+test("memory left on Soul, for an agent whose board asks: the panel opens on Soul (where it was left); pressed to Board, a press on the header's soul link, which names the tab the memory first held, shows Soul", async () => {
   await loadApp();
   showPanelTab("soul");
   const slot = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, {
@@ -28,10 +28,12 @@ test("memory left on Soul, panel opens on Board (a question is open); a press on
     sidebarThreads: panelThreads(),
   });
   await slot.findByTestId("oats-panel-header");
+  await waitFor(() => expect(within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab")).toHaveLength(3));
+  expect(selected(slot)).toBe("Soul");
+  fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Board" }));
   await waitFor(() => expect(selected(slot)).toBe("Board"));
   fireEvent.click(slot.getByTestId("oats-panel-soul-link"));
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
-  expect(selected(slot)).toBe("Soul");
+  await waitFor(() => expect(selected(slot)).toBe("Soul"));
 });
 
 for (const open of [true, false]) {
@@ -65,7 +67,12 @@ for (const open of [true, false]) {
       expect(button.textContent).toBe("Answer");
       return button;
     }, { timeout: 4000 });
-    if (open) await waitFor(() => expect(selected(slot)).toBe("Board")); // it opened on Board: the board has an open question
+    if (open) {
+      // The panel is on Board by a person's press (the board has an open question behind the agent's own claim).
+      await waitFor(() => expect(within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab")).toHaveLength(3));
+      fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Board" }));
+      await waitFor(() => expect(selected(slot)).toBe("Board"));
+    }
     fireEvent.click(answer);
     if (!open) { withPanel = true; await act(async () => rerender()); }
     await slot.findByTestId("oats-panel-header", {}, { timeout: 4000 });
@@ -95,28 +102,3 @@ for (const [what, board, said] of [
   });
 }
 
-test("a press made for an agent whose panel never opened lapses: that agent's panel, opened by hand much later, opens by its own rule (on Board, its board asks), not on the tab a press long ago asked for", async () => {
-  const { SHOT_MS } = await import("../../app/panel/Panel");
-  vi.useFakeTimers({ now: Date.parse("2026-11-23T18:17:26.000Z"), toFake: ["Date"] });
-  await loadApp();
-  const draw = () =>
-    renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, {
-      rpc: handlers({ snapshot: () => panelSnapshot(), panelInstance: ({ instance }) => instanceAnswer(instance), board: () => ({ at: BOARD_AT, supported: true, stale: false, board: { facts: [FACT], questions: [QUESTION] }, claim: null }) }),
-      sidebarThreads: panelThreads(),
-    });
-  // Within its time, the press decides where the panel it was made for opens.
-  showPanelTab("instance", { for: CHILD });
-  vi.setSystemTime(Date.now() + SHOT_MS - 1000);
-  const soon = draw();
-  await soon.findByTestId("oats-panel-header");
-  await waitFor(() => expect(within(soon.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab")).toHaveLength(3));
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-  expect(selected(soon)).toBe("Instance");
-  soon.unmount();
-  // Past it, the press is nobody's: the panel opens by its own rule.
-  showPanelTab("instance", { for: CHILD });
-  vi.setSystemTime(Date.now() + SHOT_MS + 1000);
-  const late = draw();
-  await late.findByTestId("oats-panel-header");
-  await waitFor(() => expect(selected(late)).toBe("Board"));
-});

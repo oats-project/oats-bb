@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // What a fresh reviewer's third round found in the panel's tabs (its own proofs, kept as tests): a tab that stops
 // being drawn leaves the panel on Instance and it STAYS there, whatever the window's memory holds; and a failed read
-// of the board is not its first answer. (The rule itself, as a table: test/panel/tab-state.test.ts.)
+// of the board is not what decides whether its tab is drawn (the row's word does, until the board has answered). (The rule itself, as a table: test/panel/tab-state.test.ts.)
 import { afterEach, expect, test } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -77,11 +77,11 @@ test("the board's own read FAILS (the server refuses it) for an agent whose row 
   fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Instance" }));
   fail = false;
   await act(async () => { slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" }); await new Promise((resolve) => setTimeout(resolve, 300)); });
-  // A press came since the mount (the two above): the first answer moves nothing. The tab stays drawn, now by the board itself.
+  // The answer moves nothing: the panel stays where the person left it. The tab stays drawn, now by the board itself.
   expect(tabs()).toEqual(["Board", "Instance*", "Soul"]);
 });
 
-test("the board's read fails at first and answers later with a question open, and nobody pressed a tab meanwhile: THAT answer is the first, and the panel opens on Board", async () => {
+test("the board's read fails at first and answers later with a question open: the panel stays where it is (it never chooses a tab); the Board tab is there all along", async () => {
   let fail = true;
   await loadApp();
   const slot = renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, {
@@ -94,7 +94,7 @@ test("the board's read fails at first and answers later with a question open, an
   expect(tabs()).toEqual(["Board", "Instance*", "Soul"]);
   fail = false;
   await act(async () => { slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" }); await new Promise((resolve) => setTimeout(resolve, 300)); });
-  expect(tabs()).toEqual(["Board*", "Instance", "Soul"]);
+  expect(tabs()).toEqual(["Board", "Instance*", "Soul"]);
 });
 
 test("once the board has answered for a panel, the board says which tabs are drawn, also while it is read again and where a LATER read fails: what it last answered stands, and the row's word never comes back to decide", async () => {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// What a fresh reviewer's first round found in the panel's tabs (its own proofs, kept as tests): where a panel
-// opens is decided ONCE, when the board's first read lands; an open panel never turns by itself.
+// What a fresh reviewer's first round found in the panel's tabs (its own proofs, kept as tests): an open panel never
+// turns by itself. (Since then the panel no longer opens on Board by itself either: it opens where it was left, and
+// Board is reached by a press: the tab, the thread line's Answer, the palette.)
 import { afterEach, expect, test } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -36,8 +37,10 @@ async function panel(first: unknown, before: () => void = () => {}) {
   return { slot, shown, change };
 }
 
-test("a panel that opened on Board stays there when the agent clears its question under a person reading its facts", async () => {
+test("a person reads the facts on Board (their press); the agent clears its question: the panel stays on Board while the tab is drawn", async () => {
   const { slot, shown, change } = await panel({ facts: [FACT], questions: [QUESTION] });
+  await waitFor(() => expect(shown()).toBe("Instance")); // it opens where it was left: never on Board by itself
+  fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Board" }));
   await waitFor(() => expect(shown()).toBe("Board"));
   // what a person does on the Board that is not a press on a tab: hides a fact
   fireEvent.click(await slot.findByTestId("oats-board-fact-hide"));
@@ -53,7 +56,9 @@ test("a panel the memory opened on another tab stays there when the agent asks: 
 });
 
 test("a Board tab that goes (its last fact and question gone) leaves the panel on Instance, and the panel does not come back to Board by itself when the agent asks again", async () => {
-  const { shown, change } = await panel({ facts: [], questions: [QUESTION] });
+  const { slot, shown, change } = await panel({ facts: [], questions: [QUESTION] });
+  await waitFor(() => expect(shown()).toBe("Instance"));
+  fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Board" }));
   await waitFor(() => expect(shown()).toBe("Board"));
   await change({ facts: [], questions: [] });
   expect(shown()).toBe("Instance");

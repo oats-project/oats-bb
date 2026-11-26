@@ -448,40 +448,38 @@ test("Answer on an agent whose board asks shows the Board tab, opens the panel a
   expect(slot.queryByTestId("oats-panel-waiting")).toBeNull(); // "Needs input" is on the Instance tab: not shown, and not looked for
 });
 
-// The press is FOR the agent of the line: a panel that then opens for ANOTHER agent does not take it.
-test("Answer on one agent, then a panel that opens for another agent: that panel opens by its own rule (on Board, its board asks), not on the tab the press asked for; the shot is spent", async () => {
+// Answer is a PRESS: it writes the window's one memory of the panel's tab and opens the panel. A panel reads that
+// memory when it mounts (bb may mount it twice): it opens on the tab the press asked for, and on no tab of its own choosing.
+test("Answer for a claim that is not the board's asks for Instance: the panel that opens is on Instance, at its first mount and at a second one, though the agent's board holds an open question", async () => {
   const app = await loadApp();
   const { InstancePanel } = await import("../../app/panel/Panel");
   const Row = app.threadHeaderRows[0]!.component;
-  const other = fixtureAgents().find((agent) => agent.threadId === "thr_research")!.instance;
   const question = { id: "q3", question: "Which base branch?", options: ["main: the default", "release: the 0.1 line"], hasContext: false, since: "2026-11-23T18:01:45.724Z" };
-  let panelOf: string | null = null;
+  const agents = fixtureAgents().map((agent) => (agent.threadId === "thr_release" ? { ...agent, hasBoard: true as const } : agent));
+  let mount: number | null = null;
   let redraw: () => void = () => {};
   const Both = (props: ExperimentalThreadHeaderRowProps) => {
     const [, set] = useState(0);
     redraw = () => set((count: number) => count + 1);
-    return (<><Row {...props} />{panelOf === null ? null : <InstancePanel threadId={panelOf} />}</>);
+    return (<><Row {...props} />{mount === null ? null : <InstancePanel key={mount} threadId={props.threadId} />}</>);
   };
   const slot = renderSlot<ExperimentalThreadHeaderRowProps, Contract>(
     { component: Both } as never,
     { threadId: "thr_release", projectId: "p", environment: null },
     {
-      rpc: handlers({ board: ({ instance }: { instance: string }) => ({ at: "2026-11-23T18:17:00.000Z", supported: true, stale: false, board: { facts: [], questions: [question] }, claim: instance === other ? null : { producer: "agent", reason: "question" } }) } as never),
+      rpc: handlers({ board: () => ({ at: "2026-11-23T18:17:00.000Z", supported: true, stale: false, board: { facts: [], questions: [question] }, claim: { producer: "agent", reason: "question" } }) } as never, agents),
       sidebarThreads: sidebarThreads(),
       sdk: { threads: { interactions: { list: async () => [] } } } as never,
       experimental_panel: { openTab: () => true } as never,
     },
   );
-  fireEvent.click(await slot.findByTestId("oats-status-act")); // Answer, for the agent of thr_release: it asks for Instance
   const selected = () => slot.container.querySelector('[role="tab"][aria-selected="true"]')?.textContent;
-  panelOf = "thr_research"; // the panel that opens next is another agent's
-  await act(async () => redraw());
-  await vi.waitFor(() => expect(slot.getByTestId("oats-panel-name").getAttribute("title")).toBe(other));
-  await vi.waitFor(() => expect(selected()).toBe("Board")); // by its own rule: the press was not for it
-  // And the shot is spent: the first agent's panel, opened LATER, opens by its own rule too (its board holds an open
-  // question behind its own claim: Board), not on the Instance tab a press long ago asked for.
-  panelOf = "thr_release";
-  await act(async () => redraw());
-  await vi.waitFor(() => expect(slot.getByTestId("oats-panel-name").getAttribute("title")).not.toBe(other));
-  await vi.waitFor(() => expect(selected()).toBe("Board"));
+  const tabs = () => Array.from(slot.container.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]')).map((tab) => tab.textContent);
+  fireEvent.click(await slot.findByTestId("oats-status-act")); // Answer: the row's claim is the agent's own, not its board's
+  for (mount of [0, 1]) {
+    await act(async () => redraw());
+    await vi.waitFor(() => expect(tabs().slice(0, 2), `mount ${mount}`).toEqual(["Board", "Instance"])); // its Board tab is there, with the question
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    expect(selected(), `mount ${mount}`).toBe("Instance");
+  }
 });

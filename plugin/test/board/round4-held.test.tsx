@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // A mount is not always an opening (a fresh reviewer's fourth round, its own proofs kept as tests): bb's query client
-// may HOLD a board answer from an earlier visit. That one may be shown; it decides nothing: where the panel opens is
-// decided on a read of the board that ENDED SINCE THIS MOUNT.
+// may HOLD a board answer from an earlier visit. That one may be shown; it decides nothing: which tabs are drawn is
+// decided on a read of the board that ENDED SINCE THIS MOUNT (and where the panel opens, on the memory alone).
 import { useState } from "react";
 import { afterEach, expect, test } from "vitest";
 import { act, waitFor, within } from "@testing-library/react";
@@ -26,37 +26,35 @@ function Shown({ threadId }: { threadId: string }) {
   return <InstancePanel threadId={now} />;
 }
 const ASKS = { facts: [FACT], questions: [QUESTION] };
-const FACTS = { facts: [FACT], questions: [] };
+const NONE = null;
 
-for (const [what, before, after, wanted] of [
-  ["the agent ASKED while its panel was not shown", FACTS, ASKS, "Board"],
-  ["the agent CLEARED its question while its panel was not shown", ASKS, FACTS, "Instance"],
+for (const [what, before, after, tabsThen] of [
+  ["the agent ASKED while its panel was not shown", NONE, ASKS, ["Board", "Instance*", "Soul"]],
+  ["the agent CLEARED its board while its panel was not shown", ASKS, NONE, ["Instance*", "Soul"]],
 ] as const) {
-  test(`${what}: the panel, shown again, opens by what the board says NOW (${wanted})`, async () => {
+  test(`${what}: the panel, shown again, opens where it was left (Instance), and WHICH TABS ARE DRAWN follows what the board says NOW, not the answer bb holds from the earlier showing`, async () => {
     const boards: Record<string, unknown> = { [CHILD]: before };
     await loadApp();
     const slot = renderSlot<{ threadId: string }, Contract>({ component: Shown }, { threadId: threadOf(CHILD) }, {
       rpc: handlers({
-        snapshot: () => panelSnapshot(),
+        // (The roster's row says what the board says at each moment: `hasBoard` follows it.)
+        snapshot: () => panelSnapshot(panelAgents().map((agent) => { if (agent.instance !== CHILD) return agent; const { hasBoard: _has, boardAsks: _asks, ...row } = agent; return boards[CHILD] === ASKS ? { ...row, hasBoard: true as const } : row; })),
         panelInstance: ({ instance }) => instanceAnswer(instance),
         board: ({ instance }) => ({ at: BOARD_AT, supported: true, stale: false, board: boards[instance] ?? null, claim: null }),
       }),
       sidebarThreads: panelThreads(),
     });
     const name = () => slot.getByTestId("oats-panel-name").getAttribute("title");
-    const shown = () => within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab").find((tab) => tab.getAttribute("aria-selected") === "true")?.textContent;
+    const tabs = () => within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab").map((tab) => `${tab.textContent}${tab.getAttribute("aria-selected") === "true" ? "*" : ""}`);
     const to = async (instance: string) => { act(() => showThread(threadOf(instance))); await waitFor(() => expect(name()).toBe(instance)); };
     await waitFor(() => expect(name()).toBe(CHILD));
-    await waitFor(() => expect(shown()).toBe(before === ASKS ? "Board" : "Instance"));
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 200)); });
+    await waitFor(() => expect(tabs()).toEqual(before === ASKS ? ["Board", "Instance*", "Soul"] : ["Instance*", "Soul"]));
     await to(PARENT);
     boards[CHILD] = after; // the agent changes its board while another agent's panel is shown
+    await act(async () => { slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" }); await new Promise((resolve) => setTimeout(resolve, 150)); });
     await to(CHILD);
-    // The answer held from the first visit decides nothing; the read this mount asks for does, when it ends.
-    await waitFor(() => expect(shown()).toBe(wanted));
+    await waitFor(() => expect(tabs()).toEqual([...tabsThen]));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 200)); });
-    expect(shown()).toBe(wanted);
-    const boardCalls = slot.inspection.rpcCalls.filter((call) => call.method === "board" && (call.input as { instance: string }).instance === CHILD).length;
-    expect(boardCalls).toBeGreaterThanOrEqual(2); // read again at the mount: no wait for bb's own two seconds
+    expect(tabs()).toEqual([...tabsThen]);
   });
 }

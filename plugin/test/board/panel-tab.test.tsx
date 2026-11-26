@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // The Board as a tab of the instance panel: drawn, first, only for an agent whose board has a fact
-// or a question; the panel opens on it where a question is open; its body is the board alone.
+// or a question; the panel never opens on it by itself (it opens where it was left); its body is
+// the board alone.
 import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -62,22 +63,28 @@ test("an agent with a fact has the Board tab, FIRST; the panel opens as before (
   expect(slot.getByTestId("oats-panel-name").textContent).toBe("Panel worktree helper"); // the header stays over the tabs
 });
 
-test("an agent whose board has an OPEN QUESTION: the panel opens on Board; a tab chosen on this panel stays chosen", async () => {
+test("an agent whose board has an OPEN QUESTION: the panel does NOT open on Board by itself: it opens where it was left (Instance); Board is first in the row, one press away, and a chosen tab stays", async () => {
   const { slot, tabs } = await panel({ facts: [FACT], questions: [QUESTION] });
+  await waitFor(() => expect(tabs()).toEqual(["Board false", "Instance true", "Soul false"]));
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
+  expect(tabs()).toEqual(["Board false", "Instance true", "Soul false"]); // and it stays: the panel never chooses a tab
+  fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Board" }));
   await waitFor(() => expect(tabs()).toEqual(["Board true", "Instance false", "Soul false"]));
   expect(within(slot.getByRole("tabpanel")).getByTestId("oats-board-question").textContent).toBe("Which base branch?");
-  // A press on Instance: the panel no longer turns to Board by itself.
-  fireEvent.click(within(slot.getByRole("tablist")).getByRole("tab", { name: "Instance" }));
-  await slot.findByTestId("oats-panel-work");
-  await act(async () => slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:00.000Z" }));
-  await act(async () => {});
-  expect(tabs()).toEqual(["Board false", "Instance true", "Soul false"]);
+  await act(async () => { await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:00.000Z" }); });
+  expect(tabs()).toEqual(["Board true", "Instance false", "Soul false"]);
 });
 
-test("another feature that turns the panel to a tab is obeyed on a panel that opened on Board", async () => {
+test("another feature that turns the panel to a tab (a press: the thread line's Answer, the palette's Board) is obeyed, also where it names the tab the memory already holds", async () => {
   const { slot, tabs } = await panel({ facts: [], questions: [QUESTION] });
+  await waitFor(() => expect(tabs()).toEqual(["Board false", "Instance true", "Soul false"]));
+  act(() => showPanelTab("board"));
   await waitFor(() => expect(tabs()[0]).toBe("Board true"));
   act(() => showPanelTab("soul"));
   await waitFor(() => expect(tabs()).toEqual(["Board false", "Instance false", "Soul true"]));
   expect(slot.getByRole("tabpanel").getAttribute("data-testid")).toBe("oats-panel-page-soul");
+  // The window's memory holds Soul: a press that names it again is still a press (nothing to move here, and nothing breaks).
+  act(() => showPanelTab("soul"));
+  await act(async () => {});
+  expect(tabs()[2]).toBe("Soul true");
 });

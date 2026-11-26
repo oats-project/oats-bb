@@ -1,16 +1,19 @@
-// The panel's shown tab: ONE state, four transitions (app/panel/tab-state.ts), as a table. Each
-// row is one event and what the state becomes; the paths three review rounds of the board found
-// are rows of it, named by their round. The same paths through the panel itself, as a person
-// meets them, are test/board/round1-panel, round2-panel, round3-panel and panel-tabs-together.
+// The panel's shown tab: ONE state, THREE events (app/panel/tab-state.ts), as a table: the mount,
+// a press, the tab shown no longer being drawn. THE PANEL NEVER CHOOSES A TAB BY ITSELF: the
+// paths four review rounds of the board found, while the panel still opened on Board where the
+// agent's board asked, are rows here: the ones that are still possible as they were, and the ones
+// about the panel moving by itself as ONE row each of "it does not move". The same paths through
+// the panel itself, as a person meets them: test/board/panel-tab, panel-tabs-together and
+// round1 to round4 of the panel.
 import { describe, expect, it } from "vitest";
 import { mountedOn, moved, type Drawn, type Now, type TabId, type TabState, type Window } from "../../app/panel/tab-state";
 
 const ALL: Drawn = { board: true, mail: true };
 const NO_BOARD: Drawn = { board: false, mail: true };
 const NO_MAIL: Drawn = { board: true, mail: false };
-const window = (over: Partial<Window> = {}): Window => ({ memory: "instance", mailOf: null, presses: 0, pressedFor: false, ...over });
-const state = (tab: TabId, over: Partial<TabState> = {}): TabState => ({ tab, presses: 0, pressed: false, answered: false, ...over });
-const now = (over: Partial<Now> = {}): Now => ({ presses: 0, pressedTab: "instance", board: { answered: false, asks: false }, drawn: ALL, ...over });
+const window = (over: Partial<Window> = {}): Window => ({ memory: "instance", mailOf: null, presses: 0, ...over });
+const state = (tab: TabId, presses = 0): TabState => ({ tab, presses });
+const now = (over: Partial<Now> = {}): Now => ({ presses: 0, pressedTab: "instance", drawn: ALL, ...over });
 
 describe("1. MOUNT: the memory's tab", () => {
   const cases: [string, Window, string, Drawn, TabId][] = [
@@ -24,108 +27,70 @@ describe("1. MOUNT: the memory's tab", () => {
   ];
   for (const [what, held, instance, drawn, tab] of cases) it(what, () => expect(mountedOn(held, instance, drawn).tab).toBe(tab));
 
-  it("a press made FOR this agent just before its panel opened is the memory it reads, and counts as a press on this panel (round 2: Answer for a claim that is not the board's)", () => {
-    const mounted = mountedOn(window({ memory: "instance", presses: 7, pressedFor: true }), "a", ALL);
-    expect(mounted).toEqual({ tab: "instance", presses: 7, pressed: true, answered: false });
-    // so the board's first answer, with a question open, does not take the panel to Board
-    expect(moved(mounted, now({ presses: 7, board: { answered: true, asks: true } })).tab).toBe("instance");
-  });
-
-  it("presses made before the mount are not this panel's (round 2: the memory left on Soul, then a panel whose board asks)", () => {
-    const mounted = mountedOn(window({ memory: "soul", presses: 3 }), "a", ALL);
-    expect([mounted.pressed, moved(mounted, now({ presses: 3, pressedTab: "soul", board: { answered: true, asks: true } })).tab]).toEqual([false, "board"]);
-  });
-});
-
-describe("2. THE BOARD's FIRST READ ANSWERS, once per panel", () => {
-  it("Board, where a question is open then and no press came since the mount", () => {
-    expect(moved(state("instance"), now({ board: { answered: true, asks: true } }))).toEqual(state("board", { answered: true }));
-  });
-  it("nothing, where no question is open then (facts alone): the memory's tab stays", () => {
-    expect(moved(state("soul"), now({ board: { answered: true, asks: false } }))).toEqual(state("soul", { answered: true }));
-  });
-  it("nothing, where a press came since the mount", () => {
-    expect(moved(state("soul", { pressed: true }), now({ board: { answered: true, asks: true } })).tab).toBe("soul");
-  });
-  it("a read that FAILED is not an answer: nothing moves, and the answer that comes later is the first (round 3, minor)", () => {
-    const held = state("instance");
-    const failed = moved(held, now({ board: { answered: false, asks: false } }));
-    expect(failed).toBe(held); // the same object back: no event
-    expect(failed.answered).toBe(false);
-    expect(moved(failed, now({ board: { answered: true, asks: true } })).tab).toBe("board");
-  });
-  it("an answer bb HOLDS from before the mount is not this panel's first answer (round 4, major): it is not `answered`, so nothing moves; the read that ends since the mount decides, both ways", () => {
-    // (What is held is shown by the board itself; to the state it is `answered: false`, whatever it says.)
-    const mounted = mountedOn(window({ memory: "instance" }), "a", ALL);
-    expect(moved(mounted, now({ board: { answered: false, asks: true } }))).toBe(mounted); // held: "a question is open": not Board yet
-    expect(moved(mounted, now({ board: { answered: true, asks: false } })).tab).toBe("instance"); // this mount's read: cleared meanwhile: not Board
-    expect(moved(mounted, now({ board: { answered: false, asks: false } }))).toBe(mounted); // held: "no question"
-    expect(moved(mounted, now({ board: { answered: true, asks: true } })).tab).toBe("board"); // this mount's read: asked meanwhile: Board
-  });
-  it("a press made FOR this agent holds at every mount of its panel within its time (round 4, major: bb mounts a panel twice a moment apart)", () => {
-    for (const mount of [1, 2]) {
-      const mounted = mountedOn(window({ memory: "instance", presses: 5, pressedFor: true }), "a", ALL);
-      expect(moved(mounted, now({ presses: 5, board: { answered: true, asks: true } })).tab, `mount ${mount}`).toBe("instance");
+  it("whatever bb mounts TWICE reads the same memory twice: the same tab (round 4: bb's second mount of a panel; round 2: the panel opened by Answer for a claim that is not the board's)", () => {
+    for (const memory of ["instance", "board", "soul"] as const) {
+      const first = mountedOn(window({ memory, presses: 7 }), "a", ALL);
+      const second = mountedOn(window({ memory, presses: 7 }), "a", ALL);
+      expect([first.tab, second.tab], memory).toEqual([memory, memory]);
     }
   });
-  it("ONCE: a question asked AFTER the first answer does not move an open panel (round 1: the agent asks under a reader)", () => {
-    const answered = moved(state("instance"), now({ board: { answered: true, asks: false } }));
-    expect(moved(answered, now({ board: { answered: true, asks: true } }))).toBe(answered);
-  });
-  it("ONCE: a question CLEARED after the panel opened on Board leaves it there while the tab is drawn (round 1: the agent clears its question under a person reading its facts)", () => {
-    const onBoard = moved(state("instance"), now({ board: { answered: true, asks: true } }));
-    expect(moved(onBoard, now({ board: { answered: true, asks: false } }))).toBe(onBoard);
+
+  it("the memory on Instance, for an agent whose board asks: Instance. The panel does not open on Board by itself (the cut)", () => {
+    expect(mountedOn(window({ memory: "instance" }), "a", ALL).tab).toBe("instance");
   });
 });
 
-describe("3. A PRESS: the tab pressed", () => {
+describe("2. A PRESS: the tab pressed", () => {
   it("a press names another tab", () => {
-    expect(moved(state("instance", { answered: true }), now({ presses: 1, pressedTab: "soul", board: { answered: true, asks: false } }))).toEqual(state("soul", { presses: 1, pressed: true, answered: true }));
+    expect(moved(state("instance"), now({ presses: 1, pressedTab: "soul" }))).toEqual(state("soul", 1));
   });
-  it("a press that names the tab the MEMORY already holds moves a panel that opened on Board by itself (round 2, major: the soul link, Answer for a claim that is not the board's)", () => {
-    const onBoard = moved(mountedOn(window({ memory: "soul", presses: 2 }), "a", ALL), now({ presses: 2, pressedTab: "soul", board: { answered: true, asks: true } }));
-    expect(onBoard.tab).toBe("board");
-    expect(moved(onBoard, now({ presses: 3, pressedTab: "soul", board: { answered: true, asks: true } })).tab).toBe("soul");
+  it("a press that names the tab the MEMORY already holds moves a panel that fell to Instance when its tab went (the press is an event, not a change of the memory)", () => {
+    const fell = moved(state("board", 1), now({ presses: 1, pressedTab: "board", drawn: NO_BOARD }));
+    expect(fell.tab).toBe("instance");
+    expect(moved(fell, now({ presses: 2, pressedTab: "board", drawn: ALL })).tab).toBe("board");
   });
-  it("a chosen tab is kept: a board that starts to ask does not take a reader from Mail, nor from any tab they pressed (round 1)", () => {
-    const onMail = moved(state("instance", { answered: true }), now({ presses: 1, pressedTab: "mail", board: { answered: true, asks: false } }));
-    expect(moved(onMail, now({ presses: 1, pressedTab: "mail", board: { answered: true, asks: true } }))).toBe(onMail);
+  it("the thread line's Answer, the home's card, the palette's Board are presses: Board for the board's own claim, Instance for any other, whatever tab is shown (round 2, major)", () => {
+    expect(moved(state("soul", 3), now({ presses: 4, pressedTab: "board" })).tab).toBe("board");
+    expect(moved(state("board", 3), now({ presses: 4, pressedTab: "instance" })).tab).toBe("instance");
   });
   it("a press that names a tab not drawn for this agent lands on Instance", () => {
-    expect(moved(state("soul", { answered: true }), now({ presses: 1, pressedTab: "board", board: { answered: true, asks: false }, drawn: NO_BOARD })).tab).toBe("instance");
-  });
-  it("a press and the board's first answer seen in one draw: the press is the person's, and it wins", () => {
-    expect(moved(state("instance"), now({ presses: 1, pressedTab: "soul", board: { answered: true, asks: true } })).tab).toBe("soul");
+    expect(moved(state("soul"), now({ presses: 1, pressedTab: "board", drawn: NO_BOARD })).tab).toBe("instance");
   });
 });
 
-describe("4. THE TAB SHOWN STOPS BEING DRAWN: Instance, and it stays", () => {
+describe("3. THE TAB SHOWN STOPS BEING DRAWN: Instance, and it stays", () => {
   it("the Board tab goes (its last fact and question gone): Instance", () => {
-    const onBoard = state("board", { answered: true });
-    expect(moved(onBoard, now({ board: { answered: true, asks: false }, drawn: NO_BOARD })).tab).toBe("instance");
+    expect(moved(state("board"), now({ drawn: NO_BOARD })).tab).toBe("instance");
   });
   it("and a Board tab that is drawn AGAIN does not take the panel back, whatever the memory holds (round 3, major: Answer, the question cleared, the next question asked)", () => {
-    // (The memory holds Board: the panel mounted on it, or a press named it. It is read at a mount and at a press only.)
-    const fell = moved(state("board", { answered: true, pressed: true, presses: 1 }), now({ presses: 1, pressedTab: "board", board: { answered: true, asks: false }, drawn: NO_BOARD }));
-    expect(fell.tab).toBe("instance");
-    expect(moved(fell, now({ presses: 1, pressedTab: "board", board: { answered: true, asks: true }, drawn: ALL }))).toBe(fell);
-  });
-  it("the same for a panel that opened on Board by itself (round 1)", () => {
-    const fell = moved(state("board", { answered: true }), now({ board: { answered: true, asks: false }, drawn: NO_BOARD }));
-    expect(moved(fell, now({ board: { answered: true, asks: true }, drawn: ALL }))).toBe(fell);
+    const fell = moved(state("board", 1), now({ presses: 1, pressedTab: "board", drawn: NO_BOARD }));
+    expect(moved(fell, now({ presses: 1, pressedTab: "board", drawn: ALL }))).toBe(fell);
   });
   it("the Mail tab goes (the row no longer gives a messaging id): Instance, and it stays", () => {
-    const fell = moved(state("mail", { answered: true, pressed: true }), now({ pressedTab: "mail", board: { answered: true, asks: false }, drawn: NO_MAIL }));
+    const fell = moved(state("mail"), now({ pressedTab: "mail", drawn: NO_MAIL }));
     expect(fell.tab).toBe("instance");
-    expect(moved(fell, now({ pressedTab: "mail", board: { answered: true, asks: false }, drawn: ALL }))).toBe(fell);
+    expect(moved(fell, now({ pressedTab: "mail", drawn: ALL }))).toBe(fell);
   });
 });
 
-describe("no event, no move", () => {
-  it("the same state back, the same object, for every tab", () => {
+describe("IT DOES NOT MOVE: no event, the same state back (the same object), whatever the agent's board does", () => {
+  // The state is not given the board at all: only the presses counted, the tab the last press named, the tabs drawn.
+  it("the agent ASKS while the panel is open on Instance (rounds 1 and 4): it stays; the thread's own line says it", () => {
+    const held = state("instance", 2);
+    expect(moved(held, now({ presses: 2, pressedTab: "instance", drawn: ALL }))).toBe(held);
+  });
+  it("the agent CLEARS its question while a person reads its facts on Board (round 1): it stays while the tab is drawn", () => {
+    const held = state("board", 2);
+    expect(moved(held, now({ presses: 2, pressedTab: "board", drawn: ALL }))).toBe(held);
+  });
+  it("the agent asks AGAIN after the panel fell to Instance (round 3): it stays on Instance", () => {
+    const fell = moved(state("board", 2), now({ presses: 2, pressedTab: "board", drawn: NO_BOARD }));
+    expect(moved(fell, now({ presses: 2, pressedTab: "board", drawn: ALL }))).toBe(fell);
+  });
+  it("a board that starts to ask does not take a reader from Mail, nor from any tab (round 1)", () => {
     for (const tab of ["board", "instance", "soul", "mail"] as const) {
-      const held = state(tab, { answered: true, pressed: tab !== "board", presses: 4 });
-      expect(moved(held, now({ presses: 4, pressedTab: "soul", board: { answered: true, asks: true } }))).toBe(held);
+      const held = state(tab, 4);
+      expect(moved(held, now({ presses: 4, pressedTab: "soul", drawn: ALL })), tab).toBe(held);
     }
   });
 });

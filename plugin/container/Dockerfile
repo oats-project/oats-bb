@@ -10,6 +10,10 @@ FROM node:22
 RUN apt-get update \
   && apt-get install -y --no-install-recommends chromium fd-find procps ripgrep tmux \
   && rm -rf /var/lib/apt/lists/*
+# THE MARK of this image: the entry scripts that change the machine they run on (they rename binaries, install
+# tools for the user, set bb's limits, remove directories) refuse to run where this file is not
+# (container/guard.sh, container/guard.mjs; container/README.md, "Only inside the checks' container").
+RUN printf 'the image of the oats-bb plugin checks (plugin/container/Dockerfile)\n' > /etc/oats-bb-checks-image
 USER node
 ENV BB_TELEMETRY=false \
     NPM_CONFIG_PREFIX=/home/node/.npm-global \

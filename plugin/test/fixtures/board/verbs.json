@@ -1,0 +1,5 @@
+{
+ "inspect --home --board": {
+  "file": "inspect-board.json"
+ }
+}

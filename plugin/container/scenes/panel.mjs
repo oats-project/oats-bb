@@ -280,7 +280,8 @@ const first = [
       }
       await page.until(visible(inPanel("oats-panel-work-sentence")), 30);
       const tabs = await page.evaluate(`[...document.querySelectorAll('${testId("oats-panel")} [role="tablist"][aria-label="Instance context"] [role="tab"]')].map((e) => e.innerText.trim() + ":" + e.getAttribute("aria-selected")).join(" ")`);
-      check(tabs === "Instance:true Soul:false", `${at} the tabs, named Instance context: Instance (selected), Soul`, tabs);
+      // Every agent's panel has the four tabs; it opens where it was left, on Instance.
+      check(tabs === "Board:false Instance:true Soul:false Mail:false", `${at} the tabs, named Instance context: Board, Instance (selected), Soul, Mail`, tabs);
       {
         const read = await page.evaluate(textOf(inPanel("oats-panel-name")));
         check(read === "Panel worktree helper", `${at} the header names the instance as words`, read);

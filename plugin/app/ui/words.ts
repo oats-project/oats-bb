@@ -90,6 +90,13 @@ export function waitingSince(since: string | null, now: number = Date.now()): st
 }
 
 /**
+ * How long what was read is FRESH: under it `readAge` says "less than a minute ago", and a place
+ * that says "Read <age>." beside its Refresh says none (the instance panel's Readiness, an agent's
+ * Mail, which also reads nothing again while what it holds is fresh).
+ */
+export const FRESH_MS = 60_000;
+
+/**
  * How old a read is, for a place that shows what it read earlier ("Read <age>."):
  * always relative, in ONE form everywhere: "less than a minute ago", "12 min ago", "3 h ago",
  * "2 d ago" (minutes to the nearest one, hours and days whole). Never a bare clock time, and never "just now": what is
@@ -97,13 +104,6 @@ export function waitingSince(since: string | null, now: number = Date.now()): st
  * on the stale state; the Desktop's `observedAgeText` says "just now" and "at 14:05"). null for an
  * instant that cannot be read, and the place then says "Last read.".
  */
-/**
- * How long what was read is FRESH: under it `readAge` says "less than a minute ago", and a place
- * that says "Read <age>." beside its Refresh says none (the instance panel's Readiness, an agent's
- * Mail, which also reads nothing again while what it holds is fresh).
- */
-export const FRESH_MS = 60_000;
-
 export function readAge(at: string | number, now: number = Date.now()): string | null {
   const then = typeof at === "number" ? at : Date.parse(at);
   if (!Number.isFinite(then)) return null;

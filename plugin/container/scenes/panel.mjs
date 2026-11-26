@@ -221,7 +221,7 @@ async function open(page, viewport, threads, agent) {
  * element that holds both the tab strip and the plugin's panel is that inner one (bb gives it
  * `flex-1`; the column itself has `h-full`): from then on bb does not mount the panel again.
  */
-const panelWhole = `(() => { const strip = document.querySelector('[data-testid="thread-secondary-panel-top-chrome"]'); const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); if (!strip || !panel) return false; let both = strip; while (both && !both.contains(panel)) both = both.parentElement; return Boolean(both) && both.classList.contains("flex-1"); })()`;
+export const panelWhole = `(() => { const strip = document.querySelector('[data-testid="thread-secondary-panel-top-chrome"]'); const panel = document.querySelector(${JSON.stringify(testId("oats-panel"))}); if (!strip || !panel) return false; let both = strip; while (both && !both.contains(panel)) both = both.parentElement; return Boolean(both) && both.classList.contains("flex-1"); })()`;
 
 /**
  * What is measured of the panel before a screenshot: nothing it draws reaches past the panel's own

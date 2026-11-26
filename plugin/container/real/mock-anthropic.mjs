@@ -15,8 +15,12 @@
 // tool with <json> as its input (`{"questions": [{"question", "header", "options", "multiSelect"}]}`).
 // The request that brings the tool's result back has that result as its last message, and is
 // answered with the one line of text.
+// A long answer (the busy workspace's chat: paragraphs, a list, a code block): where the file
+// <directory>/say.json is, `{ "<a person's message>": "<the answer>" }`, and what the
+// person said since the model last spoke holds one of its messages, the answer is that text instead of
+// the one line. The file is read at each request: whoever needs it writes it, and removes it.
 // Every request is one line of <directory>/requests.jsonl.
-import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 
@@ -30,6 +34,18 @@ const holds = join(directory, "hold");
 mkdirSync(holds, { recursive: true });
 const log = join(directory, "requests.jsonl");
 let count = 0;
+
+const says = join(directory, "say.json");
+/** The answer say.json gives to a person's message, or null (no file, not JSON, no message of it in `last`). */
+function sayTo(last) {
+  if (last === "" || !existsSync(says)) return null;
+  try {
+    const found = Object.entries(JSON.parse(readFileSync(says, "utf8"))).find(([message]) => message !== "" && last.includes(message));
+    return found !== undefined && typeof found[1] === "string" ? found[1] : null;
+  } catch {
+    return null; // a file half written or not JSON: the one line
+  }
+}
 
 const ASK_TOOL = "AskUserQuestion";
 const textOf = (content) =>
@@ -95,7 +111,9 @@ createServer((request, response) => {
     record({ event: question === null ? "answered" : "asked-a-question" });
 
     const id = `msg_mock${n}`;
-    const text = `MOCK-REPLY ${n}`;
+    // What the person said since the model last spoke (a harness may add a message of its own after the person's).
+    const since = messages.slice(messages.findLastIndex((message) => message.role === "assistant") + 1).filter((message) => message.role === "user").map((message) => textOf(message.content)).join("\n");
+    const text = (tools.length === 0 ? null : sayTo(since)) ?? `MOCK-REPLY ${n}`;
     const usage = { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
     const call = { type: "tool_use", id: `toolu_mock${n}`, name: ASK_TOOL };
     if (!asked.stream) {

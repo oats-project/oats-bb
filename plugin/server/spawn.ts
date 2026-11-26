@@ -2,7 +2,7 @@
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
 import type { host, rpc } from "../contract/spawn.js";
-import { checkHarness, checkModel } from "../kernel/spawn.js";
+import { checkHarness, checkModel, idsOf } from "../kernel/spawn.js";
 import type { Agent } from "../model/types.js";
 import { HOST_TIMEOUT, invalid, refusal, refusedWith, type Core, type Value } from "./core.js";
 import { soulsOf } from "./workspace.js";
@@ -12,13 +12,25 @@ import { soulsOf } from "./workspace.js";
  * order: one read for every client and every feature, reused like a page's answer. A spawn, a
  * start and a restart refuse a harness that is not in it before any process.
  */
-export const harnessesOf = async (core: Core): Promise<string[]> => (await providerOf(core)).harnesses;
+export const harnessesOf = async (core: Core): Promise<string[]> => (await synced(core)).harnesses;
+/** The provider's read, for whatever ACTS on it (a spawn, a start that names a harness): a provider that is pinned and not synced is the kernel's refusal, with its sentence (which names `oats sync`). Only the New agent form's own read takes it as an answer, to say the way on. */
+const synced = async (core: Core): Promise<Value<"spawnHarnesses">> => {
+  const provider = await providerOf(core);
+  if (provider.unsynced !== undefined) throw refusal(provider.unsynced);
+  return provider;
+};
 /**
  * The bb session provider's own version, as the kernel prints it for the capability the
  * deployment resolves (a release, or a commit for one taken from a repository); null when the
  * kernel prints none. From the same read as the harness list: no second process.
  */
 export const providerVersionOf = async (core: Core): Promise<string | null> => (await providerOf(core)).version;
+/**
+ * The harnesses the kernel launches itself: what a spawn that is not a bb thread (a deployment with no bb session
+ * provider) may name. From the version read every feature shares: no process of its own. Only ids, each once: nothing
+ * else of the kernel's list is offered, drawn or named.
+ */
+const kernelHarnessesOf = async (core: Core): Promise<string[]> => idsOf((await core.versionOf()).harnesses);
 /** The one read behind both (`oats capabilities show oats.bb --json`), kept like a page's answer. */
 const providerOf = (core: Core): Promise<Value<"spawnHarnesses">> => core.page("spawnHarnesses", (signal) => core.call("spawnHarnesses", {}, HOST_TIMEOUT.read, signal));
 
@@ -54,8 +66,25 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
    */
   const checked = async ({ soul, name, task, harness, model, relation }: Choices): Promise<HostChoices> => {
     if (!(await soulsOf(core)).some((row) => row.name === soul)) throw invalid(`"${soul}" is not a soul \`oats souls\` lists for this deployment`, "soul-not-listed");
+    // Where it runs. A deployment with no bb session provider: the spawn names no backend.
+    let absent: boolean;
+    if (harness === undefined) {
+      // NOTHING of a list is named, so no list is needed: the spawn does not wait on them. A provider read that
+      // FAILS (an answer the plugin cannot read, a timeout, a member with no such capability) leaves the spawn what it
+      // always was: a bb thread on the soul's default, which the kernel takes or refuses in its
+      // own words (the form says "the soul's default is used"). What the read ANSWERS still decides: no provider (the
+      // kernel's own place), or pinned and not synced (refused, with the way on).
+      const provider = await providerOf(core).catch((): null => null);
+      if (provider !== null && provider.unsynced !== undefined) throw refusal(provider.unsynced);
+      absent = provider !== null && provider.absent === true;
+    } else {
+      // A harness IS named: it is one of a list, so the read of where the list is must answer.
+      absent = (await synced(core)).absent === true;
+    }
+    const onBb = !absent;
     if (harness !== undefined) {
-      const named = checkHarness(harness, await harnessesOf(core));
+      // A bb thread: a harness the provider declares. Anywhere else: one the kernel itself launches.
+      const named = onBb ? checkHarness(harness, await harnessesOf(core)) : checkHarness(harness, await kernelHarnessesOf(core), "this OATS launches");
       if (!named.ok) throw invalid(named.error.message, "harness-not-declared");
     }
     if (model !== undefined) {
@@ -70,13 +99,17 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
       anchor = { ...relation, ...(root === null ? {} : { root }) };
     }
     // Only what was chosen goes to the host entry: a call carries no key without a value.
-    return { soul, task, ...(name === undefined ? {} : { name }), ...(harness === undefined ? {} : { harness }), ...(model === undefined ? {} : { model }), ...(anchor === undefined ? {} : { relation: anchor }) };
+    return { soul, task, ...(name === undefined ? {} : { name }), ...(harness === undefined ? {} : { harness }), ...(model === undefined ? {} : { model }), ...(anchor === undefined ? {} : { relation: anchor }), ...(absent ? { provider: false } : {}) };
   };
   return {
     /** What the bb session provider declares: one read for every client and every place that offers the choice. */
     async spawnHarnesses() {
       const provider = await providerOf(core);
-      return { harnesses: provider.harnesses, hostId: core.target()?.hostId ?? null, ...(provider.absent === undefined ? {} : { absent: provider.absent }) };
+      // Pinned and not synced: the form's read answers it (the way on is said there); nothing else is offered.
+      if (provider.unsynced !== undefined) return { harnesses: [], hostId: core.target()?.hostId ?? null, unsynced: provider.unsynced };
+      // No provider: the harnesses a spawn may name are the kernel's own (one more shared read, asked only there).
+      if (provider.absent === true) return { harnesses: [], hostId: core.target()?.hostId ?? null, provider: false, kernelHarnesses: await kernelHarnessesOf(core) };
+      return { harnesses: provider.harnesses, hostId: core.target()?.hostId ?? null, provider: true };
     },
     async spawnPreview(input, context) {
       const { summary } = await core.call("spawnPreview", await checked(input), HOST_TIMEOUT.preview, context.experimental_signal);
@@ -90,8 +123,11 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
     },
     async spawn({ key, revision, ...input }, context) {
       // What the plugin checks and reads before it asks the kernel to spawn: `core.act` runs it, and logs what it refuses as a hold (server/act-log.ts).
+      // (Whether the agent will have a bb thread is read off the checked choices, for what is answered after the spawn.)
+      let noThread = false;
       const guards = async () => {
       const choices = await checked(input);
+      noThread = choices.provider === false;
       // One key is one intent: the same choices, and the same decision when the caller names one.
       // Kept as a digest: a task may be 100 000 characters, and a caller has no login.
       const of = await digest(JSON.stringify([choices, revision ?? null]));
@@ -118,6 +154,8 @@ export const handlers = (core: Core): ExperimentalPluginRpcHandlersWithContext<t
         if (error instanceof Error && refusedWith.get(error) === "E_DECISION_STALE") spawns.delete(key);
         throw error;
       }
+      // Where the deployment has no bb session provider the new agent has no bb thread, and none is asked for: it runs where the kernel decided.
+      if (noThread) return { instance: spawned.instance, threadId: spawned.threadId };
       return { instance: spawned.instance, threadId: await core.threadOf(spawned.instance, spawned.threadId, "Spawned") };
     },
   };

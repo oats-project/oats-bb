@@ -94,7 +94,7 @@ together.
 | `run.sh` | on the host | starts the container, copies in the plugin, the provider's tree and, for an unreleased kernel, the kernel's tree (this checkout's `oats-package/` as committed at `HEAD`; uncommitted changes there stop the run), runs the two scripts below, copies the artefacts back to `real/out/` |
 | `setup.sh` | in the container | the installs and the services, in this order (below) |
 | `bb-logs.sh` | in the container, by `run.sh` (and `../ci.sh`) when the run failed | copies bb's own logs, cut short, and its crash reports beside the artefacts (`bb-logs/`), and says what bb's log directory holds |
-| `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment |
+| `workspace.sh` | in the container | the provider as a package, the throwaway workspace, the deployment; and a second workspace and deployment with NO bb session provider (`$REAL/plain/deploy`: oats.core alone), for `parts/plain.mjs` |
 | `bb-plugin-command.sh` | by `setup.sh` and `scenario.mjs` | runs a command one of bb's plugins adds to its CLI (`bb concurrency-limit status`), waiting up to 60 s for bb to have it; `bb-plugin-command.test.sh` is its test, run by `container/unit.sh` |
 | `mock-anthropic.mjs` | in the container | the mock model |
 | `oats-record.mjs` | as the plugin's `oats` | the recording wrapper |
@@ -177,7 +177,7 @@ thread's own row says its agent's state at every width).
   in a directory. Its commits have fixed dates, so the same trees give the same commit ids.
 - **The deployment** (`oats onboard`): `settings.oats.bb` holds `trust: container` and the bb
   version, and there is **no launch configuration**: nothing on the host chooses bb's full mode.
-  The provider launches in full mode only, and the plugin asks for it on every spawn (`--yolo`),
+  The provider launches in full mode only, and the plugin asks for it on every spawn of a bb thread (`--yolo`),
   so the run shows that the plugin's Spawn needs no default of the host: its preview's decision
   and its spawn's answer have `yolo: true` and name no launch configuration. The agents the
   scenario makes on the command line (part B's children) are spawned with `--yolo` too. Start and
@@ -239,7 +239,7 @@ can launch a pi agent on bb. In plain words, on the machine that runs bb:
    `launch: { harness: pi, model: <provider>/<id> }`. A soul whose `launch:` names a Claude model
    and is spawned with the harness pi gets NO model from the kernel (the preview's
    `launch.effective.model` is `null`), and bb's pi then starts on its own default.
-6. Every spawn from the plugin already asks for bb's full mode (`--yolo`), which a pi launch
+6. Every spawn of a bb thread from the plugin already asks for bb's full mode (`--yolo`), which a pi launch
    needs.
 
 The provider's README ("pi") has the detail and the reasons; `oats bb doctor` in the deployment and

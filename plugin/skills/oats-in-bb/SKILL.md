@@ -36,8 +36,12 @@ agents, their homes, identities and mail are OATS's and aweb's.
   waits), the harness and the model (the defaults are the kernel's), a relationship to another
   agent, a name (lower-case letters, digits and dashes; empty: the kernel numbers it). "What will
   be created" is the kernel's preview of what is on screen; Spawn applies exactly that, and opens
-  the new agent's thread. It runs in bb's full mode, with no sandbox between it and the account bb
-  runs as: the plugin asks for that on every spawn (`--yolo`), and the form says so in one line.
+  the new agent's thread. As a bb thread it runs in bb's full mode, with no sandbox between it and
+  the account bb runs as: the plugin asks for that on every spawn of a bb thread (`--yolo`), and the
+  form's column says so ("Access: full mode: no sandbox"). On a deployment with no bb session
+  provider the agent is spawned where the kernel puts it, in a tmux window: no mode is asked for it
+  (its soul and its harness decide), it has no bb thread, and its own page opens; the form's column
+  says "Runs in: tmux session".
 - **Answer an agent in bb**: in its thread, or on the OATS home's "Needs you" cards. A card
   answers in place where the question has plain choices (a permission: Allow once or Deny; a
   question with options; pi's confirm and select); anything richer has Open. The plugin never types

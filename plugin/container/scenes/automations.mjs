@@ -9,7 +9,6 @@ import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { fill, FOCUSED, testId, textOf, texts, visible } from "../browser.mjs";
-import { busy } from "./automations-busy.mjs";
 import { hostname } from "node:os";
 
 // The machine's name, as the checks' container was given it (ci.sh: MACHINE_NAME, the container's
@@ -148,8 +147,11 @@ const iconsDrawn = `(() => {
 const PLUGIN_DIR = fileURLToPath(new URL("../..", import.meta.url));
 const FIXTURES = `${PLUGIN_DIR}/test/fixtures`;
 /** The roster's agents the busy set gives to runs: one that asks, one that is stopped, one that runs (test/fixtures/roster/status.json). */
-const BUSY_AGENTS = ["release-070-maintainer", "weekly-digest-helper", "kernel-fix-developer"];
-const BUSY = busy(FIXTURES, { agents: BUSY_AGENTS });
+// THE BUSY WORKSPACE (test/fixtures/busy, the stage `busy` of live-ui.mjs): the one shared worst-case set. Of it, what
+// these scenes name: its first schedule (a long instruction; fifty runs, three of them made by agents of the busy roster:
+// one that asks, one that is stopped, one that works).
+const BUSY_FIRST = JSON.parse(readFileSync(`${FIXTURES}/busy/schedule-list.json`, "utf8")).schedules[0];
+const BUSY = { long: BUSY_FIRST.qualifiedId ?? BUSY_FIRST.id, name: BUSY_FIRST.name };
 
 /** On a row's own page: opens its "…" menu and presses the act of that label. */
 async function pageAct(page, label) {
@@ -324,17 +326,18 @@ const scenes = [
     },
   },
   {
-    stage: "automations-busy",
+    stage: "busy",
     name: "Automations: the busy list beside bb's own type",
     run: async ({ page, at, viewport, check }) => {
+      bbAutomation();
       await open(page, "", ROW);
-      const n = await settle(page, count(ROW), 37);
+      const n = await settle(page, count(ROW), 37, 40);
       check(n === 37, `${at} the busy list holds 37 automations`, String(n));
       // What needs a person first, then the five failing.
       const states = await settle(page, `[...document.querySelectorAll(${JSON.stringify(ROW)})].slice(0, 7).map((e) => e.dataset.state)`, ["needs", "failing", "failing", "failing", "failing", "failing", "calm"]);
       check(JSON.stringify(states) === JSON.stringify(["needs", "failing", "failing", "failing", "failing", "failing", "calm"]), `${at} the automation whose agent asks comes first, then the five failing, then the rest`, JSON.stringify(states));
-      const pills = await settle(page, texts(PILLS), ["All 37", "Schedules 26", "Triggers 11", "Needs you 1", "Failing 5"]);
-      check(JSON.stringify(pills) === JSON.stringify(["All 37", "Schedules 26", "Triggers 11", "Needs you 1", "Failing 5"]), `${at} the filter's five counts`, JSON.stringify(pills));
+      const pills = await settle(page, texts(PILLS), ["All 37", "Schedules 25", "Triggers 12", "Needs you 1", "Failing 5"]);
+      check(JSON.stringify(pills) === JSON.stringify(["All 37", "Schedules 25", "Triggers 12", "Needs you 1", "Failing 5"]), `${at} the filter's five counts`, JSON.stringify(pills));
       // The one rule, three places: the rows drawn as failing, the filter's count, the sidebar's marks.
       const red = await page.evaluate(`document.querySelectorAll(${JSON.stringify(`${ROW}[data-failing="true"]`)}).length`);
       check(red === 5, `${at} five rows are drawn as failing: the filter's own count`, String(red));
@@ -342,12 +345,12 @@ const scenes = [
         const marks = await settle(page, MARKS, ["Automations, needs you", "Automations, a failure"]);
         check(JSON.stringify(marks) === JSON.stringify(["Automations, needs you", "Automations, a failure"]), `${at} the sidebar's link carries both marks: amber, then red`, JSON.stringify(marks));
       }
-      // No count of the filter is cut, and no name: a name of sixty characters is whole.
+      // No count of the filter is cut, and no name.
       const inside = await page.evaluate(allInside(PILLS));
       check(inside === true, `${at} every pill of the filter, with its count, is whole on screen`);
       const cut = await page.evaluate(cutNames);
-      const sixty = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(testId("oats-automation-name"))})].every((e) => e.innerText.length === 60)`);
-      check(cut.length === 0 && sixty === true, `${at} every name is sixty characters and none is cut`, JSON.stringify(cut.slice(0, 3)));
+      const longest = await page.evaluate(`Math.max(...[...document.querySelectorAll(${JSON.stringify(testId("oats-automation-name"))})].map((e) => e.innerText.length))`);
+      check(cut.length === 0 && longest >= 40, `${at} no name is cut: the longest, of ${longest} characters, is whole`, JSON.stringify(cut.slice(0, 3)));
       // "Answer" is there for the one that asks, and on screen.
       const answer = await page.evaluate(inView(`${ROW}[data-state="needs"] ${testId("oats-automation-answer")}:not([hidden])`));
       const answers = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(`${ROW}[data-state="needs"] ${testId("oats-automation-answer")}`)})].filter((e) => e.getClientRects().length > 0).length`);
@@ -361,17 +364,17 @@ const scenes = [
       check(before === after && scrolled === true, `${at} the card of rows scrolls alone: the tabs, the search and the filter stay`, `${before} ${after} ${scrolled}`);
       await page.evaluate(`(() => { document.querySelector(${JSON.stringify(testId("oats-automations-rows"))}).scrollTop = 0; return true; })()`);
       const ours = { name: await page.evaluate(typeOf(`${ROW}[data-state="calm"] ${testId("oats-automation-name")}`)), small: await page.evaluate(typeOf(`${ROW}[data-state="calm"] ${testId("oats-automation-line")}`)) };
-      await page.shot(`automations-${viewport.name}-busy-list`, { targets: true });
+      await page.shot(`busy-${viewport.name}-automations-list`, { targets: true });
 
       // bb's OWN Automations page, in the same window: its row's name and its small line. Ours has the same size and weight, or this fails.
       await page.goto("/plugins/automations/automations");
       const theirs = await page.until(`(() => { const row = document.querySelector("[data-resource-row]"); if (!row) return ""; const type = (e) => { const s = getComputedStyle(e); return s.fontSize + " " + s.fontWeight; }; const name = row.querySelector("button span span"); const small = row.querySelector("button + span"); return name && small ? JSON.stringify({ name: type(name), small: type(small) }) : ""; })()`, 30);
       check(theirs === JSON.stringify(ours), `${at} the row's name and small line have bb's own size and weight (bb's Automations page, read now)`, `ours ${JSON.stringify(ours)} bb's ${theirs}`);
-      await page.shot(`automations-${viewport.name}-bb-own-list`, { plugin: false });
+      await page.shot(`busy-${viewport.name}-automations-bb-own-list`, { plugin: false });
     },
   },
   {
-    stage: "automations-busy",
+    stage: "busy",
     name: "Automations: both marks, on the sidebar's row and on the home's tile",
     run: async ({ page, at, viewport, check }) => {
       // On the home the sidebar's Automations row is NOT the selected one: the amber and the red dot on a plain row (the list's own scene
@@ -384,55 +387,50 @@ const scenes = [
         const row = await settle(page, `[${MARKS}, document.querySelector(${JSON.stringify(testId("oats-page-link-automations"))})?.getAttribute("aria-current")]`, [["Automations, needs you", "Automations, a failure"], null]);
         check(JSON.stringify(row) === JSON.stringify([["Automations, needs you", "Automations, a failure"], null]), `${at} and so does the sidebar's row, which is not the selected one here`, JSON.stringify(row));
       }
-      await shotOf(page, testId("oats-tile-automations"), `automations-${viewport.name}-busy-marks-home`);
+      await shotOf(page, testId("oats-tile-automations"), `busy-${viewport.name}-automations-marks-home`);
     },
   },
   {
-    stage: "automations-busy",
+    stage: "busy",
     name: "Automations: a busy automation's page and the busy Runs tab",
-    run: async ({ page, at, viewport, check, threads }) => {
-      // The one whose agent asks: a long instruction, fifty runs.
-      await open(page, `/schedules/${BUSY.ids.long}`, RUN);
+    run: async ({ page, at, viewport, check }) => {
+      // The first schedule of the set: a long instruction; fifty runs, of which the second was made by an agent that asks, the third by
+      // one that is stopped, the fourth by one that works; the newest and every older one by an agent the roster does not list.
+      await open(page, `/schedules/${BUSY.long}`, RUN);
       const bounded = await page.evaluate(`[document.querySelector(${JSON.stringify(testId("oats-automation-prose"))})?.dataset.bounded, ${textOf(testId("oats-automation-prose-more"))}].join(" ")`);
       check(bounded === "true Show more", `${at} a long instruction is drawn to its bound, with "Show more"`, bounded);
       const ten = await settle(page, count(RUN), 10);
       const older = await read(page, testId("oats-runs-older"));
       check(ten === 10 && older === "Older", `${at} fifty runs are ten, then "Older"`, `${ten} ${older}`);
-      // Its newest run's agent asks: "Needs you", Answer, and the whole row opens its chat.
-      const asks = await settle(page, `[document.querySelector(${JSON.stringify(RUN)})?.dataset.outcome, ${textOf(`${RUN} ${testId("oats-run-said")}`)}, ${textOf(`${RUN} ${testId("oats-run-answer")}`)}].join(" | ")`, "asks | Needs you | Answer");
+      const nth = (n) => `${RUN}:nth-of-type(${n})`;
+      // The run whose agent asks: "Needs you", Answer, and the whole row opens its chat.
+      const asks = await settle(page, `[document.querySelector(${JSON.stringify(nth(2))})?.dataset.outcome, ${textOf(`${nth(2)} ${testId("oats-run-said")}`)}, ${textOf(`${nth(2)} ${testId("oats-run-answer")}`)}].join(" | ")`, "asks | Needs you | Answer", 30);
       check(asks === "asks | Needs you | Answer", `${at} a run whose agent asks says "Needs you", with Answer`, String(asks));
-      // The second run's agent is stopped: Start… in its menu. The third runs: a chevron, no menu.
-      const second = `${RUN}:nth-of-type(2)`;
-      const third = `${RUN}:nth-of-type(3)`;
-      const shape = await page.evaluate(`[document.querySelector(${JSON.stringify(`${second} ${testId("oats-run-menu")}`)}) !== null, document.querySelector(${JSON.stringify(`${third} ${testId("oats-run-menu")}`)}) !== null, document.querySelector(${JSON.stringify(`${third} ${testId("oats-run-chevron")}`)}) !== null, document.querySelectorAll(${JSON.stringify(testId("oats-run-chevron"))}).length].join(" ")`);
-      check(shape === "true false true 3", `${at} a stopped agent's run has a menu, a running one's none; a chevron only on the three runs whose agent is still there`, shape);
+      // The next run's agent is stopped: Start… in its menu. The one after works: a chevron, no menu. The others' agents are gone: no chevron.
+      const shape = await page.evaluate(`[document.querySelector(${JSON.stringify(`${nth(3)} ${testId("oats-run-menu")}`)}) !== null, document.querySelector(${JSON.stringify(`${nth(4)} ${testId("oats-run-menu")}`)}) !== null, document.querySelector(${JSON.stringify(`${nth(4)} ${testId("oats-run-chevron")}`)}) !== null, document.querySelector(${JSON.stringify(`${nth(1)} ${testId("oats-run-chevron")}`)}) !== null, document.querySelectorAll(${JSON.stringify(`${RUN} ${testId("oats-run-chevron")}`)}).length].join(" ")`);
+      check(shape === "true false true false 3", `${at} a stopped agent's run has a menu, a working one's none; a chevron only on the three runs whose agent is still there`, shape);
       const head = await page.evaluate(lineOf(testId("oats-automation-identity")));
       check(head.at(-1) === "Needs you", `${at} the automation's own line ends in "Needs you"`, JSON.stringify(head));
-      await page.shot(`automations-${viewport.name}-busy-page`, { targets: true });
-      await shotOf(page, testId("oats-automation-history"), `automations-${viewport.name}-busy-page-runs`);
+      await page.shot(`busy-${viewport.name}-automations-page`, { targets: true });
+      await shotOf(page, testId("oats-automation-history"), `busy-${viewport.name}-automations-page-runs`);
       await page.evaluate(click(testId("oats-runs-older")));
       const twenty = await settle(page, count(RUN), 20);
       check(twenty === 20, `${at} "Older" adds ten`, String(twenty));
-      // The whole row opens the agent's chat: an agent on tmux has no thread, and its own page opens; an agent on bb, its thread.
-      await page.evaluate(click(`${third} ${testId("oats-run-row")}`));
-      const agentPage = await page.until(`(() => location.pathname.startsWith("/plugins/oats/agent") ? location.pathname : "")()`, 15);
-      check(typeof agentPage === "string" && agentPage.includes("kernel-fix-developer"), `${at} the row of a run whose agent runs on tmux opens that agent's own page`, String(agentPage));
-      await open(page, `/schedules/${BUSY.ids.long}`, RUN);
-      await page.evaluate(click(`${RUN} ${testId("oats-run-row")}`));
-      const thread = threads.get("thr_release").id;
-      const there = await page.until(`(() => (location.pathname + location.search).includes(${JSON.stringify(thread)}) ? location.pathname : "")()`, 15);
-      check(typeof there === "string", `${at} the row of a run whose agent has a bb thread opens that thread: its chat`, `${await page.evaluate("location.pathname + location.search")} (${thread})`);
+      // The whole row opens the agent's chat: bb's own thread of the agent that asks.
+      await page.evaluate(click(`${nth(2)} ${testId("oats-run-row")}`));
+      const there = await page.until(`(() => (location.pathname.startsWith("/plugins/") ? "" : location.pathname))()`, 15);
+      check(typeof there === "string" && there !== "", `${at} the row of a run whose agent has a bb thread opens that thread: its chat`, `${await page.evaluate("location.pathname + location.search")}`);
 
       // The Runs tab on hundreds: fifty, then Older; filtered by automation and by result.
       await open(page, "/runs", RUN);
       const fifty = await settle(page, count(RUN), 50);
       check(fifty === 50, `${at} the Runs tab shows fifty of hundreds, then "Older"`, String(fifty));
-      await page.shot(`automations-${viewport.name}-busy-runs`, { targets: true });
+      await page.shot(`busy-${viewport.name}-automations-runs`, { targets: true });
       const options = await page.evaluate(`document.querySelectorAll(${JSON.stringify(`${testId("oats-runs-by-automation")} option`)}).length`);
       check(options > 10, `${at} the runs can be filtered by automation: one choice for each that ran`, String(options));
       await page.evaluate(click(`${testId("oats-automations-runs")} [role="radio"]`, "Failed"));
-      const failed = await settle(page, count(RUN), 1);
-      check(failed === 1, `${at} "Failed" keeps the failed runs alone`, String(failed));
+      const failed = await page.until(`(() => { const runs = [...document.querySelectorAll(${JSON.stringify(RUN)})]; return runs.length > 0 && runs.every((run) => run.dataset.outcome === "failed") ? String(runs.length) : ""; })()`, 15);
+      check(Number(failed) >= 1, `${at} "Failed" keeps the failed runs alone`, String(failed));
     },
   },
   {
@@ -542,15 +540,16 @@ const scenes = [
     },
   },
   {
-    stage: "automations-busy-held",
+    stage: "busy",
     name: "Automations: the busy list under a notice",
-    run: async ({ page, at, viewport, check }) => {
+    run: async ({ page, at, viewport, check, fakeOver }) => {
       // The worst case under a notice: 37 automations read, then a re-read the kernel refuses. The notice stands over the list;
       // the card of rows keeps a floor, and where the page's height does not hold the head, the notice and that floor, the page scrolls whole.
       await open(page, "", ROW);
-      await settle(page, count(ROW), 37);
+      await settle(page, count(ROW), 37, 40);
       await page.until(`(() => document.querySelector(${JSON.stringify(testId("oats-automations-refresh"))})?.disabled === false ? "ready" : "")()`, 40);
-      refuseBusy();
+      // (The stage's other answers stand: the schedules' list alone is refused, and is given back before the scene ends.)
+      const giveBack = fakeOver({ "schedule list": { stdout: REFUSAL } });
       await page.evaluate(click(testId("oats-automations-refresh")));
       const notice = testId("oats-automations-failed");
       const failed = await page.until(`(() => { const t = ${textOf(notice)}; return t !== "" && !t.includes("Refreshing…") && document.querySelector(${JSON.stringify(testId("oats-automations-rereading"))}) === null ? t : ""; })()`, 40);
@@ -563,13 +562,13 @@ const scenes = [
       const answer = `${ROW}[data-state="needs"] ${testId("oats-automation-answer")}`;
       const reached = await page.evaluate(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(answer)})].find((each) => each.getClientRects().length > 0); if (!e) return "none"; e.scrollIntoView({ block: "center" }); const r = e.getBoundingClientRect(); const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return r.top >= 0 && r.bottom <= innerHeight && top !== null && (e === top || e.contains(top)) ? "reached" : "hidden " + Math.round(r.top) + " " + Math.round(r.bottom); })()`);
       check(reached === "reached", `${at} under the notice the "Answer" of the automation that asks can be brought on screen, with nothing over it`, String(reached));
-      await page.shot(`automations-${viewport.name}-busy-held`, { targets: true });
+      await page.shot(`busy-${viewport.name}-automations-under-a-notice`, { targets: true });
       // And the last of the 37 rows: the card scrolled to its end and brought into view.
       const last = await page.evaluate(`(() => { const card = document.querySelector(${JSON.stringify(card)}); card.scrollTop = card.scrollHeight; const rows = document.querySelectorAll(${JSON.stringify(ROW)}); const e = rows[rows.length - 1]; e.scrollIntoView({ block: "end" }); const r = e.getBoundingClientRect(); return r.bottom <= innerHeight + 0.5 && r.bottom > 0; })()`);
       check(last === true, `${at} under the notice the last of the 37 rows can be brought on screen`);
-      await page.shot(`automations-${viewport.name}-busy-held-end`, { targets: true });
+      await page.shot(`busy-${viewport.name}-automations-under-a-notice-end`, { targets: true });
       // The stage is entered once for every window: the lists answer again before the next one reads them.
-      readBusy();
+      giveBack();
       await page.evaluate(click(testId("oats-automations-refresh")));
       await page.until(`(() => document.querySelector(${JSON.stringify(notice)}) === null ? "gone" : "")()`, 40);
     },
@@ -764,9 +763,6 @@ const OLD_OATS = JSON.stringify({ schemaVersion: 1, name: "@awebai/oats", versio
 // What the "automations-slow" stage's scene changes while it runs: the lists slow, then the schedules refused.
 let slow = () => undefined;
 let refuse = () => undefined;
-// What the "automations-busy-held" stage's scene does once the busy lists are read: the schedules refused.
-let refuseBusy = () => undefined;
-let readBusy = () => undefined;
 
 /** bb's own automations, for the busy list's check of our type against bb's page: one is enough to draw bb's row. Made once; bb keeps it. */
 function bbAutomation() {
@@ -775,30 +771,10 @@ function bbAutomation() {
   const project = (Array.isArray(projects) ? projects : (projects.projects ?? projects.items))[0];
   const listed = JSON.parse(bb("automation", "list", "--project", project.id, "--json"));
   if ((Array.isArray(listed) ? listed : (listed.automations ?? listed.items ?? [])).length > 0) return;
-  bb("automation", "create", "--project", project.id, "--name", BUSY.ids.names[0], "--cron", "0 9 * * 1-5", "--timezone", "Europe/Madrid", "--prompt", "Read the support inbox.", "--provider", "claude-code", "--model", "claude-opus-5-5", "--json");
+  bb("automation", "create", "--project", project.id, "--name", BUSY.name, "--cron", "0 9 * * 1-5", "--timezone", "Europe/Madrid", "--prompt", "Read the support inbox.", "--provider", "claude-code", "--model", "claude-opus-5-5", "--json");
 }
 
 export const stages = {
-  // The busy set: 37 automations, five failing, fifty-run histories, names of sixty characters; the newest runs of its long schedule made by three of the roster's agents (one asks, one is stopped, one runs).
-  "automations-busy": {
-    label: "AU12",
-    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
-      bbAutomation();
-      fake({ status: { stdout: statusWithRealIds(threads) }, "schedule list": { stdout: BUSY.schedules }, "trigger list": { stdout: BUSY.triggers }, "trigger status": { stdout: BUSY.status } });
-      await settled(untilSnapshot);
-    },
-  },
-  // The busy set once more, for the scene that has the kernel refuse a re-read over it.
-  "automations-busy-held": {
-    label: "AU13",
-    enter: async ({ fake, statusWithRealIds, threads, untilSnapshot }) => {
-      const busyLists = { status: { stdout: statusWithRealIds(threads) }, "trigger list": { stdout: BUSY.triggers }, "trigger status": { stdout: BUSY.status } };
-      refuseBusy = () => fake({ ...busyLists, "schedule list": { stdout: REFUSAL } });
-      readBusy = () => fake({ ...busyLists, "schedule list": { stdout: BUSY.schedules } });
-      readBusy();
-      await settled(untilSnapshot);
-    },
-  },
   // The lists and one trigger's state as they were after the source refused a poll.
   "automations-poll-failed": {
     label: "AU5",

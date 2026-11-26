@@ -45,7 +45,9 @@ import {
   whoWords,
 } from "../../app/automations/words";
 import { allRuns, pageRuns } from "../../model/automation-runs";
-import { busy } from "./busy";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { parseScheduleList, parseTriggerList, parseTriggerStatuses } from "../../kernel/automations-read";
 import { STATUSES } from "./handlers";
 import { rowOf, schedules, triggers } from "./fixtures";
 
@@ -318,11 +320,16 @@ describe("what is failing: one rule for the row's red, the filter's count and th
     expect(first.slice(5)).toEqual(all.map((entry) => entry.id).filter((id) => !bad(all).includes(id)));
   });
 
-  it("THE BUSY SET (37 automations, five failing, names of sixty characters): the rows drawn red, the filter's count and the dot's verdict agree", () => {
-    const set = busy();
+  it("THE BUSY WORKSPACE (the shared worst-case set, test/fixtures/busy: 37 automations, five failing, long names): the rows drawn red, the filter's count and the dot's verdict agree", () => {
+    const file = (name: string): unknown => JSON.parse(readFileSync(resolve(process.cwd(), "test/fixtures/busy", name), "utf8"));
+    const read = <Value,>(parsed: { ok: true; value: Value } | { ok: false; error: { code: string; message: string } }): Value => {
+      if (!parsed.ok) throw new Error(`${parsed.error.code}: ${parsed.error.message}`);
+      return parsed.value;
+    };
+    const set = { schedules: read(parseScheduleList(file("schedule-list.json"))), triggers: read(parseTriggerList(file("trigger-list.json"))), statuses: read(parseTriggerStatuses(file("trigger-status.json"), {})) };
     const rows = oneList(set.schedules.rows, set.triggers.rows);
     expect(rows).toHaveLength(37);
-    expect(rows.every((entry) => entry.name.length === 60)).toBe(true);
+    expect(Math.max(...rows.map((entry) => entry.name.length))).toBeGreaterThanOrEqual(40);
     expect(new Set(rows.map((entry) => `${entry.kind}:${entry.id}`)).size).toBe(37);
     const red = rows.filter((entry) => rowLine(entry, statusFor(entry, set.statuses), NOW).some((part) => part.tone === "bad"));
     const counted = filterList(rows, "failing", set.statuses);

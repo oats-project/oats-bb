@@ -108,7 +108,7 @@ const MAIL_BODIES = ["The audit of the fourteen lockfiles is done. 63 packages a
 const LONG = (what) => `${what}: every weekday at the start of the working day in each region, with a summary posted to the owning team and a follow-up opened for anything left undone`;
 
 export function build() {
-  const made = { agents: [], souls: [], schedules: [], triggers: [], teams: [], servers: [], runs: [], facts: [], questions: [], mail: [], messages: [], conversations: [], groups: [], problems: [] };
+  const made = { agents: [], souls: [], schedules: [], triggers: [], statuses: [], teams: [], servers: [], runs: [], facts: [], questions: [], mail: [], messages: [], conversations: [], groups: [], problems: [] };
 
   // ---- souls: the recorded souls, each multiplied (24) ----
   const soulsDoc = recorded("workspace/souls.json");
@@ -260,11 +260,16 @@ export function build() {
   const triggerDoc = recorded("automations/trigger-list.json");
   const schedule = (id) => scheduleDoc.schedules.find((row) => row.id === id);
   const trigger = (id) => triggerDoc.triggers.find((row) => row.id === id);
-  // [recorded id, how many]: the failing ones are hourly-check (not launched) ×2, legacy-herdr (invalid) ×1, status-check (unknown) ×1.
-  const SCHEDULES = [["daily-review", 6], ["hourly-check", 2], ["legacy-herdr", 1], ["notes-checkpoint", 4], ["status-check", 1], ["weekly-cleanup", 4], ["oats-real/nightly-digest", 3], ["oats-real/reconcile", 1], ["oats-real/release-check", 1], ["oats-real/weekly-report", 2]];
-  // …and among the triggers harvest-closed (invalid) ×1: five in all.
+  // [recorded id, how many]. FIVE FAIL, by the Automations page's one rule of what is failing (a launch that failed, a
+  // definition that cannot run, an account that is not the one it acts as, no trust, a source's check that failed):
+  // hourly-check (launch failed) ×1, legacy-herdr (invalid) ×1, oats-real/reconcile (wrong account) ×1,
+  // oats-real/release-check (not trusted) ×1, and among the triggers harvest-closed (its source's check failed) ×1.
+  // One more, status-check, is a launch whose state is UNKNOWN: a warning there, not a failure, and not one of the five.
+  const SCHEDULES = [["daily-review", 7], ["hourly-check", 1], ["legacy-herdr", 1], ["notes-checkpoint", 4], ["status-check", 1], ["weekly-cleanup", 4], ["oats-real/nightly-digest", 3], ["oats-real/reconcile", 1], ["oats-real/release-check", 1], ["oats-real/weekly-report", 2]];
   const TRIGGERS = [["local/graph-watch", 2], ["local/old-prs", 2], ["local/pr-triage", 2], ["oats-real/docs-review", 1], ["oats-real/harvest-closed", 1], ["oats-real/harvest-review", 2], ["oats-real/proposal-review", 2]];
   const bare = (id) => id.slice(id.lastIndexOf("/") + 1);
+  // The three busy agents that runs of the first schedule name: the first of the roster that asks, that is stopped, that works.
+  const RUN_AGENTS = ["ask", "stopped", "work"].map((kind) => made.agents.find((each) => each.kind === kind).row);
   let s = 0;
   for (const [id, count] of SCHEDULES) {
     for (let k = 0; k < count; k += 1, s += 1) {
@@ -272,6 +277,9 @@ export function build() {
       const name = `${bare(id)}-${ALONE[s % ALONE.length]}`;
       const set = [];
       if (typeof from.description === "string") set.push([["description"], LONG(`${from.description} (${name.replace(/-/g, " ")})`)]);
+      // ONE LONG INSTRUCTION, on the first schedule (the one whose runs name busy agents, below): the recorded instruction
+      // twelve times over, numbered, as an instruction of several paragraphs is long. No word of it is written here.
+      if (s === 0) set.push([["task"], Array.from({ length: 12 }, (_, n) => `${n + 1}. ${from.task}`).join("\n\n")]);
       // Fifty runs: the recorded run, fifty times, each with its own id and times; the history's count follows.
       if (k === 0 && Array.isArray(from.recentRuns) && from.recentRuns.length > 0 && typeof from.recentRuns[0].runId === "string") {
         const runs = Array.from({ length: 50 }, (_, r) => {
@@ -279,7 +287,12 @@ export function build() {
           const first = from.recentRuns[0];
           const earlier = (time) => new Date(Date.parse(time) - r * 3_600_000).toISOString();
           // (Each carries the schedule's name wherever the recorded run writes it, as the row's `lastRun` does.)
-          const run = r === 0 ? vary(first, [[bare(id), name]], []) : vary(first, [[bare(id), name], [first.runId, `${String(s).padStart(2, "0")}${String(r).padStart(2, "0")}${first.runId.slice(4)}`]], [[["scheduledFor"], earlier(first.scheduledFor)], [["startedAt"], earlier(first.startedAt)]]);
+          // THE AGENT A RUN MADE is a relation: on the first schedule, the three runs after the newest name three agents
+          // of the busy roster (one that asks, one that is stopped, one that works) wherever the recorded run names the
+          // agent it made (its `instance`, its `home`, its wake schedule). The newest stays the recorded run.
+          const agent = s === 0 ? RUN_AGENTS[r - 1] : undefined;
+          const agentSwaps = agent === undefined ? [] : [[first.home.slice(0, first.home.lastIndexOf("/instances/") + 1), agent.home.slice(0, agent.home.lastIndexOf("/instances/") + 1)], [first.instance, agent.instance]];
+          const run = r === 0 ? vary(first, [[bare(id), name]], []) : vary(first, [[bare(id), name], [first.runId, `${String(s).padStart(2, "0")}${String(r).padStart(2, "0")}${first.runId.slice(4)}`], ...agentSwaps], [[["scheduledFor"], earlier(first.scheduledFor)], [["startedAt"], earlier(first.startedAt)]]);
           made.runs.push(run);
           return run.row;
         });
@@ -297,6 +310,15 @@ export function build() {
       made.triggers.push(vary(from, [[bare(id), name]], typeof from.description === "string" ? [[["description"], LONG(`${from.description} (${name.replace(/-/g, " ")})`)]] : []));
     }
   }
+  // ---- every busy trigger's STATE: the recorded answer of `oats trigger status` (every trigger's state in one read),
+  // the state of the recorded trigger each busy one was made from, under the busy trigger's name ----
+  const statusDoc = recorded("automations/trigger-status.json");
+  for (const each of made.triggers) {
+    const from = statusDoc.triggers.find((row) => row.id === each.from.id);
+    if (from === undefined) throw new Error(`busy: the recorded trigger status holds no state of ${each.from.id}`);
+    made.statuses.push(vary(from, each.swaps, []));
+  }
+  const statuses = { ...copy(statusDoc), triggers: made.statuses.map((each) => each.row) };
   const schedules = { ...copy(scheduleDoc), schedules: made.schedules.map((each) => each.row), triggers: { ...copy(scheduleDoc.triggers), count: made.triggers.length } };
   const triggers = { ...copy(triggerDoc), triggers: made.triggers.map((each) => each.row) };
 
@@ -326,7 +348,7 @@ export function build() {
   });
   const servers = { ...copy(serversDoc), servers: made.servers.map((each) => each.row) };
 
-  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "mail.json": mail.row, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
+  return { files: { "status.json": busyStatus, "souls.json": souls, "schedule-list.json": schedules, "trigger-list.json": triggers, "trigger-status.json": statuses, "teams.json": teams, "servers.json": servers, "threads.json": { failedAtStart: made.agents.filter((each) => each.kind === "failed").map((each) => each.row.instance) }, "mail.json": mail.row, "chat.json": { agent: chatAgent, turns: CHAT.map(([you, agent]) => ({ you, agent })) } }, made };
 }
 
 // (Run as a program, by any path to this file: a symlinked one too.)

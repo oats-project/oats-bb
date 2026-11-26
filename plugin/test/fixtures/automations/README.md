@@ -42,14 +42,13 @@ holds their fields:
 - **The automation that made an agent** (`automation` on a row of `oats status`): not read by the
   plugin yet.
 
-The busy sets (test/automations/busy.ts for the unit tests, container/scenes/automations-busy.mjs
-for the live scenes: 37 automations, five failing, fifty-run histories, names of sixty
-characters) are no recording either: they MULTIPLY the recorded rows of this directory (every row
-is a recorded row; only its id, its name and the times and ids of its repeated runs are varied;
-the live one also names, as the agent of three runs, three agents of the scenes' roster, and
-repeats the recorded instruction of one schedule twelve times, numbered, for a long one). They
-are for the worst-case scenes and images, and for the one test that the row's red, the filter's
-count and the sidebar's dot agree; a parser's tests stay on the recorded answers.
+The worst case (37 automations, five failing, fifty-run histories, long names, a long
+instruction, runs made by agents that ask, are stopped and work, every trigger with its state) is
+NOT made here: it is the plugin's one shared busy set, `test/fixtures/busy/` (its README says how
+it multiplies the recorded rows of this directory, and what alone it varies). The Automations
+page's busy scenes run on the live stage `busy`, and one unit test holds, on that set, that the
+row's red, the filter's count and the sidebar's dot agree; a parser's tests stay on the recorded
+answers of this directory.
 
 ## What was arranged, and what was not
 

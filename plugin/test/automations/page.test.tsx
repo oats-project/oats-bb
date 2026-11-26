@@ -438,13 +438,33 @@ describe("a row's page", () => {
       },
     });
     const notice = await slot.findByTestId("oats-automation-status-failed");
-    expect(notice.textContent).toBe("This trigger's state could not be readOATS_TIMEOUT▸Details`oats` did not answer within 20 s and was stoppedRetry");
+    // What is drawn under it is the state read beside the lists: the notice says how old THAT is.
+    expect(notice.textContent).toMatch(/^This trigger's state could not be readRead .+ ago\.OATS_TIMEOUT▸Details`oats` did not answer within 20 s and was stoppedRetry$/);
     expect(within(notice).getByRole("alert")).toBeTruthy();
     expect(said(slot)).toEqual(PROPOSAL);
     // Retry reads it again.
     fail = false;
     fireEvent.click(slot.getByTestId("oats-automation-status-retry"));
     await waitFor(() => expect(slot.queryByTestId("oats-automation-status-failed")).toBeNull());
+    expect(said(slot)).toEqual(PROPOSAL);
+  });
+
+  it("a trigger's own read refused from its first ask, over a state KEPT from an earlier read of the lists: the notice says the age of the state that is drawn", async () => {
+    let reads = 0;
+    const slot = await page("triggers/oats-real/proposal-review", {
+      // The first read of the lists has every trigger's state, stamped ten minutes ago; every later one is refused of it.
+      automations: () => {
+        reads += 1;
+        return { at: new Date(Date.now() - (reads === 1 ? 10 * 60e3 : 0)).toISOString(), hostId: "host_falcon", oats: OATS, statuses: reads === 1 ? STATUSES() : { ok: false as const, code: "E_TRIGGER_STATE", message: "the trigger state cannot be read" }, schedule: { ok: true as const, list: schedules() }, trigger: { ok: true as const, list: triggers() } };
+      },
+      triggerStatus: () => {
+        throw new Error("E_TRIGGER_STATE: the trigger state cannot be read");
+      },
+    });
+    await slot.findByTestId("oats-automation-status-failed");
+    await slot.behavior.emitRealtime("oats/changed", { at: "2026-11-21T20:50:00.000Z" });
+    await waitFor(() => expect(reads).toBeGreaterThan(1));
+    await waitFor(() => expect(slot.getByTestId("oats-automation-status-failed").textContent).toBe("This trigger's state could not be readRead 10 min ago.E_TRIGGER_STATE▸Detailsthe trigger state cannot be readRetry"));
     expect(said(slot)).toEqual(PROPOSAL);
   });
 

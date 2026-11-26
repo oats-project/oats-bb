@@ -21,8 +21,8 @@ import type { RunLine, RunMark } from "./words";
  * generic glyph, silently: the live check holds every icon's DRAWING against that glyph's (bb.tsx IconProbe), on bb-app 0.50.1.
  * `asks` has no icon of its own: it is drawn with the plugin's needs-you mark (`StateMark`), as the tree's row is.
  */
-export const MARKS: Record<RunMark | "asks", { icon: string; name: string; tone: string }> = {
-  asks: { icon: "AlertCircle", name: "Needs you", tone: "text-warning-text" },
+export const MARKS: Record<RunMark, { icon: string; name: string; tone: string }> & { asks: { name: string; tone: string } } = {
+  asks: { name: "Needs you", tone: "text-warning-text" },
   done: { icon: "CircleCheck", name: "Done", tone: "text-muted-foreground" },
   failed: { icon: "CircleX", name: "Failed", tone: "text-destructive-text" },
   unknown: { icon: "CircleQuestion", name: "Not known", tone: "text-warning-text" },
@@ -49,7 +49,8 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, newest, open
   // every run wakes the one agent) does not turn each of them into "Needs you". Every run of it still opens its chat, and says what came of that run.
   const agent = known === null ? null : newest ? known : { ...known, asks: false, start: null };
   // An agent that asks is the first thing its newest run says.
-  const mark = MARKS[agent?.asks ? "asks" : line.mark];
+  const asks = agent?.asks === true;
+  const mark = asks ? MARKS.asks : MARKS[line.mark];
   const word = agent?.asks ? "Needs you" : [line.what, line.word].filter(Boolean).map((text) => shown(text as string)).join(" · ");
   const tone = agent?.asks || line.mark === "unknown" ? "text-warning-text" : line.mark === "failed" ? "text-destructive-text" : "text-muted-foreground";
   // What is drawn over the row's own button lets a press through to it; a control of its own (the automation's name, Answer, the menu) takes its press.
@@ -62,7 +63,7 @@ function Row({ entry, line, now, withOwner, onOpenOwner, agentLink, newest, open
         {agent === null ? null : <button type="button" data-testid="oats-run-row" aria-label={`Open ${shown(line.agent ?? "")}`} title={when?.title} className="absolute inset-0 cursor-pointer rounded-sm hover:bg-accent" onClick={agent.open} />}
         {/* One column for every mark, whichever glyph it is: the times under it stand in one line. */}
         <span role="img" aria-label={mark.name} className={`${THROUGH} inline-flex size-4 shrink-0 items-center justify-center ${mark.tone}`}>
-          {agent?.asks ? <StateMark state="needs-you" hidden /> : <Icon name={mark.icon} className="size-4" />}
+          {asks ? <StateMark state="needs-you" hidden /> : <Icon name={MARKS[line.mark].icon} className="size-4" />}
         </span>
         {/* The whole time is one hover away: on the row's own button where it has one (what lies over the button lets the pointer through), else on the time. */}
         <time dateTime={line.at ?? undefined} title={agent === null ? when?.title : undefined} className={`${agent === null ? "relative" : THROUGH} min-w-[16ch] flex-1 whitespace-nowrap text-sm tabular-nums text-foreground @2xl:flex-none @2xl:shrink-0`}>

@@ -171,7 +171,7 @@ export const RUN_ROW = "flex w-full min-w-0 flex-wrap items-center gap-x-2.5 gap
 /** A failed run's own words: bb's type for them, but plain text on the page's ground, where bb's own is a filled box (WORDS.md). */
 export const RUN_ERROR = "mb-2 ml-[2.125rem] mr-2 flex min-w-0 flex-col gap-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground";
 
-/** A filter of a few choices, in bb's pills' look and small enough that four with their counts stand on a phone's line: a radio group (the arrows move the choice). */
+/** A filter of a few choices, in bb's pills' look and small enough that four with their counts stand on a phone's line and a fifth wraps under them: a radio group (the arrows move the choice). */
 export function FilterPills<Id extends string>({ label, options, value, onChange }: { label: string; options: readonly { id: Id; label: string; count?: number }[]; value: Id; onChange: (id: Id) => void }) {
   const group = useRef<HTMLDivElement>(null);
   return (

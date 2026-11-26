@@ -161,7 +161,7 @@ function Does({ row, agentLink }: { row: AutomationRow } & Pick<DetailProps, "ag
     );
   const foot: ReactNode[] = [wakes, row.soul === null ? null : shown(row.soul.name), row.harness === null ? null : shown(harnessName(row.harness)), row.model === null ? null : shown(row.model)].filter((part) => part !== null && part !== "");
   const body = (): ReactNode => {
-    if (row.run === "wake") return row.message !== null ? <Prose text={row.message}>{shownBlock(row.message)}</Prose> : <Empty>No wake message reported.</Empty>;
+    if (row.run === "wake") return row.message !== null ? <Prose text={row.message}>{shownBlock(row.message)}</Prose> : <Empty>No message</Empty>;
     if (row.run === "command")
       return row.argv !== null && row.argv.length > 0 ? (
         // The argv, one chip per argument, so the boundaries show; each through the display filter, like every text of OATS but a prompt.
@@ -173,10 +173,11 @@ function Does({ row, agentLink }: { row: AutomationRow } & Pick<DetailProps, "ag
           ))}
         </ol>
       ) : (
-        <Empty>No command reported.</Empty>
+        <Empty>No command</Empty>
       );
-    if (row.run === "operation") return row.operation !== null ? <p className={`${LINE} font-mono text-foreground`}>{shown(row.operation)}</p> : <Empty>No operation reported.</Empty>;
-    if (row.task === null) return <Empty>{row.run !== null && row.run !== "spawn" ? `Nothing to show for a ${shown(row.run)} run.` : "No prompt reported."}</Empty>;
+    if (row.run === "operation") return row.operation !== null ? <p className={`${LINE} font-mono text-foreground`}>{shown(row.operation)}</p> : <Empty>No operation</Empty>;
+    // (Also for a kind of run this plugin does not know: it is drawn as an instruction, and has none.)
+    if (row.task === null) return <Empty>No instruction</Empty>;
     const text = shownBlock(row.task);
     return (
       <Prose text={row.task}>

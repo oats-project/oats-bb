@@ -1101,7 +1101,7 @@ describe("kept from before the rework", () => {
       back(view);
       return text;
     };
-    expect([sends("w"), sends("c"), sends("o"), sends("s"), sends("x")]).toEqual(["MessageNo wake message reported.", "CommandNo command reported.", "OperationNo operation reported.", "InstructionNo prompt reported.", "InstructionNothing to show for a later-kind run."]);
+    expect([sends("w"), sends("c"), sends("o"), sends("s"), sends("x")]).toEqual(["MessageNo message", "CommandNo command", "OperationNo operation", "InstructionNo instruction", "InstructionNo instruction"]);
     // A row the kernel reported no cron for says no "when": nothing stands in its place.
     expect(rows.map((row) => parts(view.row(row.id)))).toEqual(rows.map(() => ["Runs on this computer"]));
   });

@@ -309,7 +309,8 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
         open={open}
         onOpen={onOpen}
         status={mine?.value ?? beside}
-        statusFailure={mine === null || mine.error === null ? null : { ...mine.error, readAt: mine.value === null ? null : mine.readAt, onRetry: () => setStatusRetry((n) => n + 1) }}
+        // The age said is of the state that is DRAWN: the trigger's own read where one answered; else the one read beside the lists, which may be a kept one.
+        statusFailure={mine === null || mine.error === null ? null : { ...mine.error, readAt: mine.value !== null ? mine.readAt : beside !== null ? (keptStatuses.current?.at ?? null) : null, onRetry: () => setStatusRetry((n) => n + 1) }}
         onOpenFile={onOpenFile}
         canOpenCapability={canOpenCapability}
         onOpenCapability={onOpenCapability}

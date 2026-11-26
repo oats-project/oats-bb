@@ -104,20 +104,24 @@ export const NEEDS_TEXT = ", needs you";
  * "Automations, needs you", while an agent an automation made asks; a red one, "Automations, a
  * failure", while an automation is failing (its row's small line holds a red part). The verdict
  * is of a whole read (both lists); a list that could not be read keeps the last verdict of its
- * own rows, and before the first read there is no mark.
+ * own rows, and before the first read there is no mark. While every trigger's state could not be
+ * read, the triggers are judged as the page judges them: by the state read before, where one was
+ * (Page.tsx keeps it too), else by their list's rows alone: a trigger that fails by its row (a
+ * source's check that failed, an invalid definition, a wrong account, no trust) marks with no state.
  */
 export function useFailedRunMark(): PageMark[] | null {
   const read = useAutomations();
   const agents = useAsksNow();
   const statuses = read.data?.statuses;
-  const known = statuses !== undefined && statuses.ok ? statuses.statuses : null;
+  // Every trigger's state, as last read: kept while a later read of it is refused, as the page keeps it.
+  const keptStatuses = useRef<TriggerStatuses | null>(null);
+  if (statuses !== undefined && statuses.ok) keptStatuses.current = statuses.statuses;
+  const known = keptStatuses.current;
   const asking = askingOf(agents, known);
   const kept = useRef<Record<AutomationKind, { failing: boolean; needs: boolean }>>({ schedule: { failing: false, needs: false }, trigger: { failing: false, needs: false } });
   for (const kind of ["schedule", "trigger"] as const) {
     const answer = read.data?.[kind];
     if (answer === undefined || !answer.ok) continue;
-    // A trigger's failed poll or spawn, and the agents it made, are read from its state: while that could not be read, the verdict of the triggers stands as it was.
-    if (kind === "trigger" && known === null) continue;
     kept.current[kind] = { failing: answer.list.rows.some((row) => failing(row, statusFor(row, known))), needs: answer.list.rows.some((row) => asking(row) !== null) };
   }
   const { schedule, trigger } = kept.current;

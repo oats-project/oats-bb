@@ -4,7 +4,7 @@
 // small line (when · the machine it runs on · its owner · its last run · what is wrong, in red),
 // then its switch, its "…" menu and a chevron; "Answer" where an agent of it asks. What needs a
 // person comes first, then what is failing.
-// Over the card, from twelve rows, a search; and one filter of four with counts. The card scrolls
+// Over the card, from twelve rows, a search; and one filter of five with counts. The card scrolls
 // alone: the search and the filter stay. Every part has a fixed place, so a name of sixty
 // characters runs into nothing: it is never cut, and wraps whole where it must (bb's own row cuts
 // a name with an ellipsis; names that differ only in their last word must be told apart: WORDS.md).

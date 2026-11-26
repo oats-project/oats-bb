@@ -24,7 +24,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, lowTargets, gapsIn, tight, loose, MAX_GAP } from "./browser.mjs";
-import { askedBack } from "./ask-back.mjs";
+import { askedBack, outcomeOfFailure } from "./ask-back.mjs";
 import { atomicWrite, completeLines } from "./files.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
@@ -166,9 +166,10 @@ function tell(...args) {
 }
 /**
  * One command asked of bb, with its OUTCOME kept: → `{ outcome, said }`, where `outcome` is "accepted" (bb did it),
- * "no-answer" (bb did not answer within `ASK_MS`: the command was ended), or "refused" (bb answered with an error:
- * a non-zero exit). `said` holds how long it took and, by the outcome, what bb printed, or its exit and the first
- * line of its error. A caller that asks again does so on "no-answer" only, never on "refused".
+ * "no-answer" (bb did not answer: our limit of `ASK_MS` ended the command, or bb's CLI gave up by itself) or
+ * "refused" (bb answered with an error); which of the last two a failed command is: `outcomeOfFailure`
+ * (ask-back.mjs). `said` holds how long it took and what bb printed, or its exit and the first line of its error.
+ * A caller that asks again does so on "no-answer" only, never on "refused".
  */
 const ASK_MS = 20_000;
 function asked(...args) {
@@ -178,9 +179,8 @@ function asked(...args) {
     const printed = execFileSync("bb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: ASK_MS }).trim();
     return { outcome: "accepted", said: `in ${seconds()}: ${printed}` };
   } catch (error) {
-    if (error.code === "ETIMEDOUT") return { outcome: "no-answer", said: `no answer in ${seconds()}, the command was ended` };
     const first = String(error.stderr || error.message).trim().split("\n")[0];
-    return { outcome: "refused", said: `exit ${error.status ?? `by ${error.signal ?? error.code}`} in ${seconds()}: ${first}` };
+    return { outcome: outcomeOfFailure(error), said: `${error.code === "ETIMEDOUT" ? "ended by our limit" : `exit ${error.status ?? `by ${error.signal ?? error.code}`}`} in ${seconds()}: ${first}` };
   }
 }
 /** The status bb gives one thread now (`bb thread show`), or what it printed where that is none. */
@@ -810,13 +810,16 @@ function busyStage() {
       //   minute at most;
       //   bb ANSWERED NO (an error it returned): the check fails at once on that answer: asked once, never again.
       // (It was asked ONCE through the helper that swallows a failed command, right after the turns were let go, and
-      // read at once: in one light run bb was then so busy ending fourteen turns, 12.8 s for the two commands, that
-      // the asking failed, unseen, and the read said the raised limit.)
+      // read at once. In one light run the read then said the raised limit. What was SEEN: 12.8 s for the two
+      // commands, bb's event loop stalled for seconds. The cause is one of two and was not kept: bb had not yet taken
+      // the override away at the read, or the one asking failed.)
       for (const { host, before } of limited.splice(0)) {
         const { back, refused, after, answers } = await askedBack({ ask: () => asked("concurrency-limit", "host", host, "auto"), read: () => tell("concurrency-limit", "host", host, "--json"), before });
-        const detail = `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${answers.length} time(s); bb answered: ${[...new Set(answers)].join(" | ")}`;
+        // EVERY asking is said, numbered, in order: askings that answered alike are not folded into one.
+        const all = answers.map((answer, index) => `(${index + 1}) ${answer}`).join(" | ");
+        const detail = `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${answers.length} time(s); bb answered: ${all}`;
         check(back && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", refused === null ? detail : `bb answered NO to the asking, which is not asked again: ${refused.slice(0, 300)} | ${detail}`);
-        if (back && answers.length > 1) console.log(`NOTE BUSY bb's limit was asked back ${answers.length} times before bb said so; bb answered: ${[...new Set(answers)].join(" | ")}`);
+        if (back && answers.length > 1) console.log(`NOTE BUSY bb's limit was asked back ${answers.length} times before bb said so; bb answered: ${all}`);
       }
       const failed = [];
       for (const id of ids) {

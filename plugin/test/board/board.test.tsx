@@ -46,17 +46,21 @@ async function drawn(given: Given, over: Parameters<typeof handlers>[0] = {}) {
 }
 const texts = (root: HTMLElement, id: string) => within(root).queryAllByTestId(id).map((each) => each.textContent);
 
-test("an agent with no board, and one whose board is empty, says the one line; a kernel that reports no boards draws nothing", async () => {
+test("an agent with no board, and one whose board is empty, says the one line, alone; a kernel that reports no boards says so", async () => {
   const none = await drawn({ board: null });
   expect(none.slot.getByTestId("oats-board").getAttribute("data-state")).toBe("empty");
-  expect(texts(none.slot.container, "oats-board-nothing")).toEqual(["This agent has no questions or facts to show."]);
+  expect(none.slot.getByTestId("oats-board").textContent).toBe("No questions.");
   expect(none.asked).toEqual([]); // nothing to read a detail for
   resetApp();
   const empty = await drawn({ board: { facts: [], questions: [] } });
-  expect(texts(empty.slot.container, "oats-board-nothing")).toEqual(["This agent has no questions or facts to show."]);
+  expect(empty.slot.getByTestId("oats-board").textContent).toBe("No questions.");
+  resetApp();
+  // An agent with facts and no question shows its facts, and no line.
+  const facts = await drawn({ board: { facts: [fact("tests")], questions: [] } });
+  expect(texts(facts.slot.container, "oats-board-nothing")).toEqual([]);
   resetApp();
   const old = await drawn({ supported: false });
-  expect(old.slot.getByTestId("oats-board").textContent).toBe("");
+  expect(old.slot.getByTestId("oats-board").textContent).toBe("This OATS sends no board.");
 });
 
 test("questions come first, then facts; a question is its age, its text and its numbered options, and nothing tells how to answer", async () => {

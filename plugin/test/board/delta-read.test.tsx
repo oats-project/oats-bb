@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// What the delta read on the cut found in round 4's own fixes (the reader's proofs, kept as tests): a read of the
-// board that FAILS at a mount is no answer (what bb held decides nothing); a detail held from an earlier showing is
-// read again where the board changed while no part showed it; a person's own turn ends the one second's wait.
+// What the delta read on the cut found in round 4's own fixes (the reader's proofs, kept as tests): a detail held
+// from an earlier showing is read again where the board changed while no part showed it; a person's own turn ends the
+// one second's wait. (Its third, a failed read of the board taken as an answer, went with what it served: which tabs
+// are drawn no longer depends on any read.)
 import { useState } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
@@ -63,33 +64,6 @@ test("the detail: a question WITH CONTEXT asked while the Board tab was not show
   expect(slot.queryByTestId("oats-board-context-text")?.textContent).toBe("main is protected.");
 }, 30000);
 
-for (const how of ["FAILS", "is still on its way (control)"] as const) test(`fresh: an answer held from an earlier showing (no board), the row says hasBoard now, and the board's read at this mount ${how}: the row's word must draw the Board tab`, async () => {
-  await loadApp();
-  let phase: "none" | "fails" = "none";
-  const slot = renderSlot<{ threadId: string }, Contract>({ component: Shown }, { threadId: threadOf(CHILD) }, {
-    rpc: handlers({
-      snapshot: () => panelSnapshot(rowsWith(() => phase === "fails")),
-      panelInstance: ({ instance }) => instanceAnswer(instance),
-      board: ({ instance }) => { if (instance === CHILD && phase === "fails") { if (how === "FAILS") throw new Error("oats status failed"); return new Promise(() => {}) as never; } return { at: BOARD_AT, supported: true, stale: false, board: null, claim: null }; },
-    }),
-    sidebarThreads: panelThreads(),
-  });
-  const name = () => slot.getByTestId("oats-panel-name").getAttribute("title");
-  await waitFor(() => expect(name()).toBe(CHILD));
-  await waitFor(() => expect(tabs(slot)).toEqual(["Instance*", "Soul"]));
-  await sleep(200);
-  act(() => show({ threadId: threadOf(PARENT), mount: 0 }));
-  await waitFor(() => expect(name()).toBe(PARENT));
-  phase = "fails";
-  await act(async () => { slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" }); await new Promise((resolve) => setTimeout(resolve, 200)); });
-  act(() => show({ threadId: threadOf(CHILD), mount: 0 }));
-  await waitFor(() => expect(name()).toBe(CHILD));
-  const seen: string[][] = [tabs(slot)];
-  await sleep(400);
-  seen.push(tabs(slot));
-  expect(seen[1]).toEqual(["Board", "Instance*", "Soul"]);
-});
-
 test("the one second: a person's own turn (›) inside the second after options took a question's place: no wait for the question turned to", async () => {
   await loadApp();
   let questions: unknown = [Q1, Q2, Q3];
@@ -113,28 +87,3 @@ test("the one second: a person's own turn (›) inside the second after options 
 }, 20000);
 
 
-test("fresh: the memory on Board; the answer bb holds from the earlier showing says the agent has NO board; the agent asked while its panel was not shown: the panel, shown again, is on Board (the row's word draws the tab until this mount's own read has ended; what was held decides nothing)", async () => {
-  await loadApp();
-  let asks = false;
-  const slot = renderSlot<{ threadId: string }, Contract>({ component: Shown }, { threadId: threadOf(CHILD) }, {
-    rpc: handlers({
-      snapshot: () => panelSnapshot(rowsWith(() => asks)),
-      panelInstance: ({ instance }) => instanceAnswer(instance),
-      // (This mount's own read of the board never ends: the held answer is all there is besides the row.)
-      board: ({ instance }) => (instance === CHILD && asks ? (new Promise(() => {}) as never) : { at: BOARD_AT, supported: true, stale: false, board: null, claim: null }),
-    }),
-    sidebarThreads: panelThreads(),
-  });
-  const name = () => slot.getByTestId("oats-panel-name").getAttribute("title");
-  await waitFor(() => expect(name()).toBe(CHILD));
-  await waitFor(() => expect(tabs(slot)).toEqual(["Instance*", "Soul"])); // read: no board
-  act(() => show({ threadId: threadOf(PARENT), mount: 0 }));
-  await waitFor(() => expect(name()).toBe(PARENT));
-  asks = true;
-  await act(async () => { slot.behavior.emitRealtime("oats/changed", { at: "2026-11-23T18:17:30.000Z" }); await new Promise((resolve) => setTimeout(resolve, 200)); });
-  act(() => showPanelTab("board")); // a press that names Board (the thread line's Answer, the palette)
-  act(() => show({ threadId: threadOf(CHILD), mount: 0 }));
-  await waitFor(() => expect(name()).toBe(CHILD));
-  await sleep(300);
-  expect(tabs(slot)).toEqual(["Board*", "Instance", "Soul"]);
-});

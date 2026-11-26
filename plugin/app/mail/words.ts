@@ -25,9 +25,11 @@ export const MAIL = {
 /** What a message's sender is known to be, where it is a safety fact. */
 export const senderWord = (sender: "unverified" | "failed" | null): string | null => (sender === null ? null : sender === "failed" ? MAIL.failed : MAIL.unverified);
 
+/** An agent with no messaging layer: what its Mail tab says, from the row alone (no read is started), and what the read's own refusal says. */
+export const NO_MESSAGING = "No messaging.";
 const REFUSALS: Record<string, string> = {
   E_OPERATION_UNKNOWN: "Its messaging is too old for mail.",
-  E_OPERATION_UNAVAILABLE: "No messaging.",
+  E_OPERATION_UNAVAILABLE: NO_MESSAGING,
   E_AW_TOO_OLD: "aw is too old to read mail.",
   E_MAIL_UNREADABLE: "Its mail can't be read.",
   E_MAIL_TOO_LARGE: "Too much mail to read.",

@@ -682,9 +682,18 @@ a page of its own, `/plugins/oats/agent/<instance>`, with the way back.
 
 | Tab | Shows |
 |---|---|
-| **Board** | the agent's questions and facts ("The board", below): first in the row, and drawn only for an agent whose board holds a fact or an open question, or whose board could not be read or shown whole (the tab then says so). The panel never opens on it by itself: it opens where it was left, and a question is reached by a press (the tab, the thread line's **Answer**, the home's card, the palette's Board). |
+| **Board** | the agent's questions and facts ("The board", below). With neither: "No questions.". |
 | **Instance** | the instance's name as words, with the two letters of that name in a tile beside it (the name's own initials, never its soul's), its state on the status line every place shares: the same word as its row and its thread ("Working", "Needs you · 12 min", "Stopped", "Idle", "Failed · session ended", "Unreachable"), with what the kernel itself says of an agent it cannot reach one press away, under **Details** in the header ("OATS says: …": the shared piece the thread's row draws too), the lifecycle's **acts** that apply to its state (Stop…, Start…, Restart…, Retire…: each opens its dialog, nothing runs on the press; off while the roster is the last one read, when the panel's notice says "Acts are off." beside the age of what is shown, with Retry; an agent with no thread in bb has them here, on its own page: Start… and Retire… for one whose thread is gone, Stop…, Restart… and Retire… for one that runs on tmux), and the soul's name (it opens the Soul tab). An **older build** chip when its soul or one of its capabilities moved since the spawn; it opens to what moved. While the agent waits on a person, first on the page and under no heading: its message alone (with none, "approval" for a tool approval). How long it waits is the status line's to say, once ("Needs you · 5 d"); since when, by the clock, is no second line of the page and no tooltip: the Activity's "Waiting claim" row holds the claim's instant. **Work**: the work mode as a fact ("worktree · <branch>", "shared checkout · <repo>", "<parent>'s tree", "own folder", "workspace"), with **Paths**, the card's one fold for what is wanted and not needed: the folder and the home, each with its Copy ("shared" where the folder is a link to a tree other instances use), then the session's own id, where the model came from, and what OATS says of the session when it has something to say and the status line has not said it (with no Work card the fold is the Session card's). **Session**: the harness, the model, where the session runs ("bb thread", "tmux session"; for an agent on tmux the kernel itself says runs (`running: true`: it works, or it waits on a person; not one it cannot reach, also when that one still carries a claim), also how to reach it: **Terminal**, which opens bb's own Terminal tab on its session ("A tmux agent's terminal", below), and under it "Attach:" and the kernel's own command to copy, `oats session attach --home <its home>`, for a person's own terminal), since when it was started ("Last started" for an agent that does not run), and for an agent OATS stopped when it stopped ("Stopped 14:03": the time of its last recorded stop, read from its events for this one agent, and again each time it is seen to turn stopped). **Lineage**: on the page's face the parent, the sibling and the children, each by its name as words and a link when it has a thread in bb; under its fold (**Details**, closed) the owning human and the messaging ID, with its Copy: asked for, not read on every page. |
 | **Soul** | the soul's mark, key and description, and under them **Open soul page**, where the Souls page is shown in this release (the setting `pages`; with the default, `home` alone, the button is not drawn: a link leads somewhere). It is off, with the reason beside it, for a soul OATS does not list; the soul **as this instance was spawned from it**: where it was spawned from (soul and commit), its **Core capabilities** (Knowledge, Messaging, Tasks: what fills each; a filled slot's row opens to why), its **Capabilities**, each a row that opens: its name and why it is there in a word ("workspace", "soul", "team · eng", "default", "off"), and, once opened, why in a sentence and its source; the capability **Warnings**; **Readiness** (the soul's: its fold says what was observed, the soul and the agents root). No fold stands alone at the tab's foot. The soul's description is two lines at most here, whole on the soul's page. |
+| **Mail** | the mail the agent received, read-only ("An agent's mail", below). For an agent with no messaging layer: "No messaging.", and nothing is read. |
+
+EVERY AGENT's PANEL HAS THESE FOUR TABS, ALWAYS, in this order: nothing about a tab depends on
+what has been read, and a tab with nothing behind it says so.
+THE PANEL NEVER CHOOSES A TAB BY ITSELF: it opens on the tab it was left on (one memory for the
+window, which only a press writes; Mail only where it was pressed for this agent, else Instance).
+ONLY A PRESS MOVES IT: a tab, the thread line's **Answer**, the palette's Board, the header's
+soul link. So a screen never moves under a reader, and what bb mounts twice shows the same tab
+twice (`app/panel/tab-state.ts`; its table: `test/panel/tab-state.test.ts`).
 
 The Instance tab ends with two more sections. **Readiness** (`oats readiness`): one line
 that says whether it is ready ("Ready", or how many checks fail), then, behind "Checks and
@@ -860,12 +869,14 @@ at once and reads again behind it; shown while a read of that agent's first page
 way, it takes that read's answer and starts no second one. "Read <age>." stands beside Refresh once what is shown is older
 than a minute.
 
-**Where the tab stands, and when.** The tab is drawn only for an agent whose roster row gives a
-messaging id (the panel's `messagingId`): an agent with no messaging layer has no mail to read,
-and what cannot be done is not offered. (Where the row and the read disagree, the tab says "No
-messaging.") And Mail is the one tab the panel does NOT remember from one agent to the next:
-showing an agent's mail reads it, and that takes a press on that agent's own tab. Left on Mail,
-another agent's panel opens on Instance (`app/panel/Panel.tsx`, `tabOf`).
+**Where the tab stands, and when.** The tab is there for every agent, as the panel's other
+three. For an agent whose roster row gives no messaging id (the panel's `messagingId`) it says
+"No messaging." from the row alone, and starts no read: an agent with no messaging layer has no
+mail to read. (Where the row gives one and the read says none, the mail's view says the same
+line.) And Mail is the one tab the panel does NOT remember from one agent to the next: showing
+an agent's mail reads it, and that takes a press on that agent's own tab. Left on Mail, another
+agent's panel opens on Instance, and back at the first agent it takes a press again
+(`app/panel/tab-state.ts`; `app/panel/Panel.tsx`, `mailOf`).
 
 **Mail is other people's text.** Every word of a message is untrusted. The adapter turns it into
 display lines on the machine, before it leaves it (`kernel/mail.ts`, with `model/text.ts`): the
@@ -932,11 +943,12 @@ BY HAND and is in neither `ci.sh all` nor CI: it needs aweb's local stack, five 
 An agent's **board** is what it tells its person outside its conversation (`oats instance board`,
 run by the agent in its own home): the **questions** it needs answered and the **facts** it keeps
 in view. The plugin draws it as a view of its own (`app/board`, `<Board instance>`), which takes the
-agent's name and nothing of the place that mounts it, on the panel's **Board** tab; nothing is
-drawn for an agent with neither. A board that CANNOT BE SHOWN has its tab too, and says so on
-it: a board in a shape the plugin does not know ("This agent's board could not be read."), or
-entries left out as out of the kernel's contract ("N entries of this agent's board could not be
-shown."): never the board's silence. It needs a kernel that lists the feature `instance-board`.
+agent's name and nothing of the place that mounts it, on the panel's **Board** tab, which every
+agent has. With neither a question nor a fact it says "No questions.", and nothing else. A board
+that CANNOT BE SHOWN says so: a board in a shape the plugin does not know ("This agent's board
+could not be read."), entries left out as out of the kernel's contract ("N entries of this
+agent's board could not be shown."), a read that failed (the same line, with Retry), an OATS
+older than the feature ("This OATS sends no board."): never the board's silence. It needs a kernel that lists the feature `instance-board`.
 
 | Part | Shows |
 |---|---|
@@ -991,29 +1003,14 @@ reply. The thread line's **Answer** goes by the same fact: to Board, with the fo
 question's ZONE, for a claim that is the board's (never on an option: the focus does not land by
 itself on a control whose press sends; the arrow keys turn the questions there, and one Tab
 reaches the first option); to "Needs input" for any other.
-Whether an agent has a board at all (`hasBoard`) rides on the row too: a card or a command needs
-no read of its own to know. The agent's own events between two status reads do not carry the
+Whether an agent has a board at all (`hasBoard`) rides on the row too, for the palette's command
+alone: bb asks a command whether it applies with no read to wait for. The agent's own events between two status reads do not carry the
 two: a row learns them at the next status read, seconds later (for those seconds the card looks
 at whose the claim is once more, in the board's own read).
 
-**With the other tabs.** The row is Board, Instance, Soul, Mail. Board is drawn where the
-agent's board has a fact, a question, or could not be read or shown, and, until the board's own
-read has answered and where that read failed, where the agent's row says it has a board (the tab
-is there at once, and "could not be read" with Retry can be reached); Mail where the row gives a
-messaging id; Instance and Soul always.
-
-THE PANEL NEVER CHOOSES A TAB BY ITSELF: it opens where it was left (the window's one memory,
-which only a press writes; Mail only where it was pressed for this agent; a tab not drawn:
-Instance), and then only a press moves it, or the tab shown no longer being drawn (Instance,
-and it stays). A question asked meanwhile is said by the thread's own line, whose **Answer** is
-the press that leads to Board (`app/panel/tab-state.ts`; `test/panel/tab-state.test.ts`).
-A NAMED DIFFERENCE from 0.6.0: whether an agent has mail is known only once its instance is
-read, and a tab not known to be drawn at the mount is not drawn. Where the instance's read is
-still HELD by bb (the panel closed and opened again soon, and bb's own second mount of a panel a
-moment after it opens), Mail is known in the mount's first draw and the panel is still on Mail.
-Where it is not held any more, the SAME agent's panel, left on Mail and opened again, opens on
-Instance: one more press on Mail. (0.6.0 turned to Mail by itself once the read answered: a
-move under a reader.)
+**Where the panel opens.** On the tab it was left on, never on Board by itself: the rule is the
+panel's (above, "The instance panel"). A question asked while the panel is open on another tab
+is said by the thread's own line, "Needs you" with **Answer**, the press that leads to Board.
 
 **The command.** bb takes a plugin's commands once, when it starts, with fixed titles: so the board
 has ONE, **Board**, with no shortcut and nothing per question. It is listed only on the thread of

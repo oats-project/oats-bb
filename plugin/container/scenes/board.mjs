@@ -206,7 +206,7 @@ export default [
       if (viewport.mobile) {
         // At the phone's width bb has no side panel: the agent's panel is a page of its own, with no thread line beside it.
         await page.goto(`/plugins/oats/agent/${CHILD.instance}`);
-        const opened = await page.until(`(() => { const now = ${selected}; return document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]').length === 3 && now === "Instance" ? now : ""; })()`, 60);
+        const opened = await page.until(`(() => { const now = ${selected}; return document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]').length === 4 && now === "Instance" ? now : ""; })()`, 60);
         check(opened === "Instance", `${at} the page of an agent with facts alone opens on Instance, with a Board tab`, String(opened));
         fake({ status: { stdout: JSON.stringify(after) }, "inspect --home --board": detailOf(rowOf(after).board) });
         const asks = await page.until(`/Needs you/.test((${flat})(document.querySelector(${JSON.stringify(`${testId("oats-panel")} ${testId("oats-panel-state")}`)}))) ? "yes" : ""`, 60);
@@ -222,7 +222,7 @@ export default [
       await page.goto(`/projects/${thread.projectId}/threads/${thread.id}`);
       await page.until(visible(testId("oats-open-panel")), 30);
       await page.evaluate(`document.querySelector(${JSON.stringify(testId("oats-open-panel"))}).click()`);
-      const opened = await page.until(`(() => { const now = ${selected}; return ${visible(testId("oats-panel"))} && document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]').length === 3 && now === "Instance" ? now : ""; })()`, 60);
+      const opened = await page.until(`(() => { const now = ${selected}; return ${visible(testId("oats-panel"))} && document.querySelectorAll('[role="tablist"][aria-label="Instance context"] [role="tab"]').length === 4 && now === "Instance" ? now : ""; })()`, 60);
       check(opened === "Instance", `${at} the panel of an agent with facts alone opens on Instance, with a Board tab`, String(opened));
       // The agent asks.
       fake({ status: { stdout: JSON.stringify(after) }, "inspect --home --board": detailOf(rowOf(after).board) });

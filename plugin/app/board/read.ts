@@ -16,51 +16,17 @@ export type BoardRead =
   /** the read failed and nothing is held */
   | { status: "error"; error: string; retry(): void }
   /** this kernel says nothing of boards (an older OATS): nothing is drawn */
-  | { status: "unsupported"; fresh: boolean }
-  /**
-   * (A later read that fails leaves what was read: the roster's own notice says that OATS cannot be read, and holds every act.)
-   * `fresh`: a read of the board ENDED SINCE THIS MOUNT. bb's query client may hold an answer from before the mount
-   * (the same agent shown earlier in this window): that one is shown, and it decides nothing about where a place opens.
-   */
-  | { status: "ready"; board: Board | null; claim: BoardClaim; fresh: boolean; retry(): void };
+  | { status: "unsupported" }
+  /** (A later read that fails leaves what was read: the roster's own notice says that OATS cannot be read, and holds every act.) */
+  | { status: "ready"; board: Board | null; claim: BoardClaim; retry(): void };
 
-/**
- * The row's board of `instance`, kept fresh. `again`: where an answer is held from before this mount, read once more
- * at the mount (for a place that must know what the board says NOW, not what it said when it was last shown).
- */
-export function useBoard(instance: string, { again = false }: { again?: boolean } = {}): BoardRead {
+/** The row's board of `instance`, kept fresh. */
+export function useBoard(instance: string): BoardRead {
   const query = useRpcQuery({ contract: rpcContract, method: "board", input: { instance } });
   const refetch = useRef(query.refetch);
   useEffect(() => {
     refetch.current = query.refetch;
   });
-  // A read that ended since this mount, with an answer (a read that failed is none). Known two ways, since a read can
-  // start and end between two draws: an answer that is not the one held at the mount (none was held, or a new one
-  // came), or a read seen on its way and then seen ended (the same answer again: bb keeps the object it held).
-  const atMount = useRef(query.data);
-  const heldAtMount = useRef(query.data !== undefined);
-  const onItsWay = useRef(false);
-  const [fresh, setFresh] = useState(false);
-  useEffect(() => {
-    const answered = query.error === null && query.data !== undefined;
-    if (answered && query.data !== atMount.current) setFresh(true);
-    if (query.isFetching) onItsWay.current = true;
-    else if (onItsWay.current) {
-      onItsWay.current = false;
-      if (answered) setFresh(true);
-    }
-  }, [query.isFetching, query.error, query.data]);
-  useEffect(() => {
-    // (Where the read asked for here ends between two draws with the very answer that was held, no draw sees it on
-    // its way: its end is noted here, and its OUTCOME is read at the draw that follows, below: bb says what a read
-    // ended with in the query's state, not in what the call answers.)
-    if (again && heldAtMount.current) void refetch.current().then(() => setEnded(true));
-  }, [again]);
-  const [ended, setEnded] = useState(false);
-  useEffect(() => {
-    // A read that FAILED is no answer: what bb held stays what it was, not fresh.
-    if (ended && query.error === null && query.data !== undefined) setFresh(true);
-  }, [ended, query.error, query.data]);
   const first = useRef(false);
   first.current = query.isFetching && query.data === undefined;
   useRealtime(REALTIME_CHANGED, () => reread(`board ${instance}`, first.current, () => refetch.current()));
@@ -69,8 +35,8 @@ export function useBoard(instance: string, { again = false }: { again?: boolean 
   const board = useMemo(() => (data === undefined ? null : boardData(data.board)), [data]);
   const retry = () => void refetch.current();
   if (data === undefined) return query.error === null ? { status: "loading" } : { status: "error", error: errorMessage(query.error), retry };
-  if (!data.supported) return { status: "unsupported", fresh };
-  return { status: "ready", board, claim: data.claim, fresh, retry };
+  if (!data.supported) return { status: "unsupported" };
+  return { status: "ready", board, claim: data.claim, retry };
 }
 
 /** What each agent's held detail was read for (the board's signature), in this app window. */

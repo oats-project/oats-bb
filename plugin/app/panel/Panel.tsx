@@ -3,8 +3,8 @@
 // assumes the agent has a bb thread: the thread only adds the state the tree draws and the links.
 // Drawn with the patterns of app/ui.tsx; its own parts are in parts.tsx.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { BOARD, Board, useBoardTab } from "../board";
-import { MAIL, Mail } from "../mail";
+import { BOARD, Board } from "../board";
+import { MAIL, Mail, NO_MESSAGING } from "../mail";
 import { TerminalButton } from "../terminal/Terminal";
 import { OutsideAgent, OutsideAgentDetails, pageActs, pageParts, words as outsideWords } from "../outside";
 import type { ReactNode } from "react";
@@ -32,8 +32,8 @@ import { useNow, usePanelEvents, usePanelInstance, usePanelSoul } from "./read";
 import type { PanelRead } from "./read";
 import { SoulBody } from "./SoulBody";
 import { codeOf } from "./state";
-import { isDrawn, mountedOn, moved } from "./tab-state";
-import type { Drawn, TabId } from "./tab-state";
+import { mountedOn, moved } from "./tab-state";
+import type { TabId } from "./tab-state";
 import { ATTACH, SHARED_TITLE, ageText, attachCommand, attachOffered, driftLines, harnessName, modelFromText, sessionWhere, sharedWork, workFolder, workSentence } from "./words";
 
 type InstanceRead = PanelRead<"panelInstance">;
@@ -47,17 +47,15 @@ type RosterFailure = { code: string; message: string; machine: string | null; li
 
 /** The panel's tabs. */
 export type { TabId } from "./tab-state";
+/** The panel's tabs: the four, ALWAYS, for every agent (tab-state.ts): a tab with nothing behind it says so. */
 const TABS: readonly TabItem<TabId>[] = [
   // The agent's questions and facts, FIRST: a view of its own (app/board) that takes the agent's name and nothing of the panel's.
-  // When it is drawn: `Drawn`, in tab-state.ts.
   { id: "board", label: BOARD.tab },
   { id: "instance", label: "Instance" },
   { id: "soul", label: "Soul" },
   // The agent's incoming mail, read-only: a view of its own (app/mail) that takes the agent's name and nothing of the panel's.
-  // Drawn only for an agent that has a messaging id (`tabsOf`): what cannot be done is not offered.
   { id: "mail", label: MAIL.tab },
 ];
-const tabsOf = (drawn: Drawn): readonly TabItem<TabId>[] => TABS.filter((tab) => isDrawn(tab.id, drawn));
 /**
  * The agent whose Mail tab a person pressed. Mail is NOT remembered from one agent to the next, as
  * the other tabs are: showing an agent's mail reads it (over the network, with the agent's own
@@ -223,30 +221,20 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   const line = pageParts(agent, oats, status);
   const reading = useReading(agent.instance);
   const soul = shown(oats.soulOf(agent));
-  // The agent's board, for the tabs: whether there is one to show, as this mount's own read of it says.
-  const board = useBoardTab(agent.instance);
-  // Which tabs are drawn for this agent (the rule over `Drawn`). The row's own word (`hasBoard`) draws the Board tab at
-  // once, and keeps it where the board's read failed: what could not be read is said there, with Retry.
-  // (Once the board's own read has ANSWERED for this panel, since its mount, the board says: it is the board itself,
-  // where the row's word is a summary of it that the roster may hold a moment longer. STICKY: what the board last
-  // answered stands while it is read again and where a later read fails; the row's word never comes back to decide.
-  // An answer bb holds from before the mount decides nothing.)
-  const boardSaid = useRef<boolean | null>(null);
-  if (board.answered) boardSaid.current = board.shown;
-  const drawn: Drawn = { board: boardSaid.current ?? agent.hasBoard === true, mail: read.data !== undefined && read.data.facts.messagingId !== null };
   // THE TAB SHOWN: a state of this panel (one agent's: `Pages` is keyed by the agent's name where it is drawn, so a
-  // panel bb keeps open while the thread changes is mounted anew), moved by the three events of `TabState` and by
-  // nothing else: the panel never chooses a tab by itself. (An event is taken as it is seen, in the draw that sees
-  // it: the state it leaves is kept.)
+  // panel bb keeps open while the thread changes is mounted anew), moved by the two events of `TabState` and by
+  // nothing else: the mount reads the window's memory, a press writes it. Nothing here depends on what has been read.
   const pressed = usePresses();
-  const [held, setHeld] = useState(() => mountedOn({ memory: shownTab, mailOf, presses }, agent.instance, drawn));
-  const tabNow = moved(held, { presses: pressed, pressedTab: remembered, drawn });
+  const [held, setHeld] = useState(() => mountedOn({ memory: shownTab, mailOf, presses }, agent.instance));
+  const tabNow = moved(held, { presses: pressed, pressedTab: remembered });
   if (tabNow !== held) setHeld(tabNow);
   const tab = tabNow.tab;
   useEffect(() => {
     // A press on Mail is good for its agent until another agent's panel is shown: that panel drops the marker.
     if (mailOf !== null && mailOf !== agent.instance) mailOf = null;
   }, [agent.instance]);
+  // An agent with no messaging layer has no mail to read: its Mail tab says so, from the row alone, and starts no read.
+  const messaging = read.data === undefined ? undefined : read.data.facts.messagingId !== null;
   return (
     <>
       {/* Who this is and where it is, over the tabs: it stays in view whatever tab is shown and however far its page is scrolled. */}
@@ -298,14 +286,22 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
       <div className="shrink-0 px-3">
         <Tabs
           label="Instance context"
-          tabs={tabsOf(drawn)}
+          tabs={TABS}
           value={tab}
           onChange={(id) => pressTab(agent.instance, id)}
           panelId={PANEL_ID}
         />
       </div>
       <div role="tabpanel" id={PANEL_ID} data-testid={`oats-panel-page-${tab}`} aria-labelledby={`${PANEL_ID}-tab-${tab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
-        {tab === "board" ? <Board instance={agent.instance} /> : tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} unread={failure !== null} /> : tab === "soul" ? <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} /> : <Mail instance={agent.instance} />}
+        {tab === "board" ? <Board instance={agent.instance} /> : tab === "instance" ? <InstancePage oats={oats} agent={agent} read={read} now={now} state={state} status={status.state} held={failure !== null || reading} reading={reading} unread={failure !== null} /> : tab === "soul" ? <SoulPage oats={oats} agent={agent} read={read} now={now} state={state} unread={failure !== null} /> : messaging === undefined ? (
+          <Loading />
+        ) : messaging ? (
+          <Mail instance={agent.instance} />
+        ) : (
+          <p data-testid="oats-panel-no-messaging" className="m-0 text-sm text-muted-foreground">
+            {NO_MESSAGING}
+          </p>
+        )}
       </div>
     </>
   );

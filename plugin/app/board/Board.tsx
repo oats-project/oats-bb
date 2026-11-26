@@ -407,7 +407,14 @@ export function Board({ instance }: { instance: string }) {
       </div>
     );
   }
-  if (read.status === "unsupported") return <div data-testid="oats-board" data-state="unsupported" />;
+  if (read.status === "unsupported") {
+    // An older OATS says nothing of boards: the tab is there for every agent, and says so.
+    return (
+      <div data-testid="oats-board" data-state="unsupported">
+        <Quiet testId="oats-board-unsupported">{BOARD.unsupported}</Quiet>
+      </div>
+    );
+  }
   if (read.status === "error") {
     return (
       <div data-testid="oats-board" data-state="failed" className="flex min-w-0 flex-wrap items-center gap-2">

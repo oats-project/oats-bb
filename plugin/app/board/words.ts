@@ -23,8 +23,10 @@ export const BOARD = {
   noLongerAsked: "No longer asked. Nothing sent.",
   /** At the press, the agent waits on an approval of its harness: a message then would answer that. Nothing was sent. */
   approvalFirst: "It waits on an approval. Nothing sent.",
-  /** An agent with neither a question nor a fact, where its board is drawn all the same (an agent's page opened on it). */
-  nothing: "This agent has no questions or facts to show.",
+  /** An agent with neither a question nor a fact: its Board tab is there all the same (every agent's panel has the four tabs), and says this, alone. */
+  nothing: "No questions.",
+  /** An OATS that says nothing of boards (older than the feature). */
+  unsupported: "This OATS sends no board.",
 } as const;
 
 /** "2 of 3": a question's place among the open ones; null for the only one. */

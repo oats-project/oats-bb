@@ -45,23 +45,26 @@ function panel(messaging: readonly string[], over: Partial<Handlers> = {}) {
 const tabs = (slot: { getByRole(role: string, options: { name: string }): HTMLElement }) => within(slot.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab").map((tab) => `${text(tab)} ${tab.getAttribute("aria-selected")}`);
 const reads = (slot: { inspection: { rpcCalls: { method: string; input: unknown }[] } }) => slot.inspection.rpcCalls.filter((call) => call.method === "mail").map((call) => call.input);
 
-test("an agent with a messaging id: a third tab, Mail; nothing of its mail is read until the tab is pressed, and then it is", async () => {
+test("an agent with a messaging id: the tab Mail, the last of the four; nothing of its mail is read until the tab is pressed, and then it is", async () => {
   const slot = panel([CHILD]);
   await slot.findByTestId("oats-tab-mail");
-  expect(tabs(slot)).toEqual(["Instance true", "Soul false", "Mail false"]);
+  expect(tabs(slot)).toEqual(["Board false", "Instance true", "Soul false", "Mail false"]);
   expect(reads(slot)).toEqual([]);
   fireEvent.click(slot.getByTestId("oats-tab-mail"));
   await slot.findByTestId("oats-mail-list");
-  expect(tabs(slot)).toEqual(["Instance false", "Soul false", "Mail true"]);
+  expect(tabs(slot)).toEqual(["Board false", "Instance false", "Soul false", "Mail true"]);
   expect(slot.getByRole("tabpanel").getAttribute("data-testid")).toBe("oats-panel-page-mail");
   expect(reads(slot)).toEqual([{ instance: CHILD, older: null }]);
 });
 
-test("an agent with no messaging id: no Mail tab is drawn (what cannot be done is not offered), and no mail is read", async () => {
+test("an agent with no messaging id: the Mail tab is there (every agent's panel has the four tabs), and it says No messaging. from the row alone: no mail is read", async () => {
   const slot = panel([]);
   await slot.findByTestId("oats-panel-work");
-  expect(tabs(slot)).toEqual(["Instance true", "Soul false"]);
-  expect(slot.queryByTestId("oats-tab-mail")).toBeNull();
+  expect(tabs(slot)).toEqual(["Board false", "Instance true", "Soul false", "Mail false"]);
+  fireEvent.click(slot.getByTestId("oats-tab-mail"));
+  await waitFor(() => expect(slot.getByRole("tabpanel").textContent).toBe("No messaging."));
+  expect(slot.queryByTestId("oats-mail")).toBeNull(); // the mail's view is not mounted: nothing is read
+  await act(async () => {});
   expect(reads(slot)).toEqual([]);
 });
 
@@ -72,7 +75,7 @@ test("Mail is not remembered: left on Mail, another agent's panel opens on Insta
   act(() => showThread(threadOf(PARENT)));
   await waitFor(() => expect(slot.getByTestId("oats-panel-name").getAttribute("title")).toBe(PARENT));
   await slot.findByTestId("oats-tab-mail");
-  expect(tabs(slot)).toEqual(["Instance true", "Soul false", "Mail false"]);
+  expect(tabs(slot)).toEqual(["Board false", "Instance true", "Soul false", "Mail false"]);
   expect(slot.getByRole("tabpanel").getAttribute("data-testid")).toBe("oats-panel-page-instance");
   expect(slot.queryByTestId("oats-mail")).toBeNull();
   expect(reads(slot)).toEqual([{ instance: CHILD, older: null }]);
@@ -83,7 +86,7 @@ test("Mail is not remembered: left on Mail, another agent's panel opens on Insta
   // And back at the first agent: Instance again.
   act(() => showThread(threadOf(CHILD)));
   await waitFor(() => expect(slot.getByTestId("oats-panel-name").getAttribute("title")).toBe(CHILD));
-  expect(tabs(slot)).toEqual(["Instance true", "Soul false", "Mail false"]);
+  expect(tabs(slot)).toEqual(["Board false", "Instance true", "Soul false", "Mail false"]);
   expect(reads(slot)).toHaveLength(2);
 });
 
@@ -92,7 +95,7 @@ test("the other tabs are still remembered: left on Soul, another agent opens on 
   fireEvent.click(await slot.findByTestId("oats-tab-soul"));
   act(() => showThread(threadOf(PARENT)));
   await waitFor(() => expect(slot.getByTestId("oats-panel-name").getAttribute("title")).toBe(PARENT));
-  expect(tabs(slot).slice(0, 2)).toEqual(["Instance false", "Soul true"]);
+  expect(tabs(slot).slice(0, 3)).toEqual(["Board false", "Instance false", "Soul true"]);
 });
 
 test("the row says messaging and the read says none: the tab is drawn, and it says the one line, No messaging.", async () => {

@@ -2,4 +2,4 @@
 // mounted by the place that shows an agent (today the tab "Mail" of the agent's panel), and takes
 // the agent's instance name and nothing else.
 export { Mail } from "./Mail";
-export { MAIL } from "./words";
+export { MAIL, NO_MESSAGING } from "./words";

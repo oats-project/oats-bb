@@ -91,7 +91,7 @@ const REFUSALS = [
 export default [
   scene("mail: the list, one message in its place, Back, and the message that was cut", null, async ({ page, at, viewport, check }) => {
     const tabs = await page.evaluate(`[...document.querySelectorAll('${testId("oats-panel")} [role="tab"]')].map((e) => e.innerText.trim() + ":" + e.getAttribute("aria-selected")).join(" ")`);
-    check(tabs === "Instance:false Soul:false Mail:true", `${at} the control is ONE tab of the agent's panel, "Mail", selected`, tabs);
+    check(tabs === "Board:false Instance:false Soul:false Mail:true", `${at} the control is ONE tab of the agent's panel, "Mail", the last of its four, selected`, tabs);
     await page.until(visible(inMail("oats-mail-row")), 30);
     {
       const read = await page.evaluate(subjects);

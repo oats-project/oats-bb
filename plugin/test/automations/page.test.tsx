@@ -2,7 +2,10 @@
 // The Automations page as bb mounts it: registered beside the workspace's pages, its tab and its
 // open row in its route, the lists read once through the plugin's server, a trigger's state read
 // when its page opens.
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { DEFAULT_PAGES } from "../../model/pages";
 import { fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { gateOf, routeOf, subPathOf } from "../../app/automations/Page";
@@ -27,6 +30,17 @@ describe("the page's registration and its route", () => {
     const app = await loadApp();
     const panel = app.navPanels.find((candidate) => candidate.id === "automations")!;
     expect([panel.path, panel.title, panel.experimental_hideFromNavigation]).toEqual(["automations", "Automations", true]);
+  });
+
+  it("is shown by default, and what says the default says THIS default: the setting's description (bb draws it under the field) and the README's table name the pages of DEFAULT_PAGES, and count them", () => {
+    const ids = DEFAULT_PAGES.split(", ");
+    expect(ids).toContain("automations");
+    const WORDS = ["none", "one", "two", "three", "four", "five", "six", "seven", "eight"];
+    const core = readFileSync(resolve(process.cwd(), "server/core.ts"), "utf8");
+    const described = /label: "Pages shown",\s+description:\s+"([^"]+)"/.exec(core)?.[1] ?? "";
+    expect(described).toContain(`by id, separated by commas: ${DEFAULT_PAGES} (the default: all ${WORDS[ids.length]};`);
+    const readme = readFileSync(resolve(process.cwd(), "README.md"), "utf8");
+    expect(readme).toContain(`| \`pages\` | \`"${DEFAULT_PAGES}"\` |`);
   });
 
   it("the route names the tab and the open row; an id keeps its slash; the earlier tabs' addresses are the list", () => {

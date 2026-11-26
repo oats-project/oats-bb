@@ -628,7 +628,7 @@ export default [
   {
     stage: "pages-default",
     name: "the release's default, with the setting left as installed (unset): the home, the Workspace page with its four tabs, and Automations: every page has its link and its route",
-    run: async ({ page, at, viewport, threads, check }) => {
+    run: async ({ page, at, viewport, threads, check, pages, pagesAsInstalled }) => {
       const mockups = threads.get("thr_mockups");
       await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
       check(await showSidebar(page, viewport), `${at} the thread list is the OATS sidebar`);
@@ -652,6 +652,26 @@ export default [
       const drawn = await page.until(`document.querySelector(${JSON.stringify(testId("oats-automations-page"))}) !== null && document.querySelector(${JSON.stringify(testId("oats-page-not-shown"))}) === null ? "shown" : ""`, 30);
       check(drawn === "shown", `${at} /plugins/oats/automations draws the Automations page: no page is left out of the default`, drawn ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
       await page.shot(`pages-default-${viewport.name}-automations`, { targets: true });
+      // A page a deployment DOES leave out: `pages` set to a value without Automations, for these lines alone (the stage's
+      // own state, the setting UNSET, is put back whatever happens: the stage's other scenes read it). Its path answers one
+      // line and the way back, and its link is gone from the sidebar.
+      pages("home, souls, capabilities, teams, machines");
+      try {
+        await page.goto("/plugins/oats/automations");
+        const said = await page.until(`(document.querySelector(${JSON.stringify(`${testId("oats-page-not-shown")}[data-page="automations"]`)})?.innerText ?? "").replace(/\\s+/g, " ").trim()`, 30);
+        check(said === "This page is not shown in this release of the OATS plugin. Back to Home", `${at} where a deployment leaves Automations out, /plugins/oats/automations says it is not shown, with the way back`, said ?? (await page.evaluate("document.body.innerText.slice(0, 300)")));
+        await page.shot(`pages-default-${viewport.name}-not-shown`, { targets: true });
+      } finally {
+        pagesAsInstalled();
+      }
+      // The setting is as installed again before the next scene reads it: the default's two links are back.
+      await page.goto(`/projects/${mockups.projectId}/threads/${mockups.id}`);
+      const shownAgain = await showSidebar(page, viewport);
+      check(shownAgain, `${at} the thread list is the OATS sidebar again`);
+      if (shownAgain) {
+        const back = await page.until(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} [data-testid^="oats-page-link-"]`)})].map((link) => link.getAttribute("data-testid"))) === '["oats-page-link-workspace","oats-page-link-automations"]' ? "back" : ""`, 30);
+        check(back === "back", `${at} and with the setting as installed again, both page links are back`, String(back));
+      }
     },
   },
   {

@@ -14,6 +14,7 @@
 //     answer for a host without one is recorded (host-install-refused.json).
 // And one file nobody validated: a job naming `backend: herdr` written into oats-schedules.json by
 // hand, which is how a stored definition that no longer validates gets there.
+import "../../../../container/guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";

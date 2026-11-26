@@ -33,7 +33,7 @@ login, nothing spent: the stack is local, and no agent is launched.
 4. Every `oats` the plugin ran for the mail is
    `operation run messaging:mail --home <the agent's home> --arg limit=50 --json`, and nothing
    else (the plugin's `oatsBin` is a wrapper that keeps each argv and runs the real `oats`).
-5. An agent with no messaging layer has no Mail tab.
+5. An agent with no messaging layer has the Mail tab as every agent, and it says "No messaging."; no read is started for it.
 
 ## What it sets up (`run.sh` on the host, `inside.sh` in the client container)
 

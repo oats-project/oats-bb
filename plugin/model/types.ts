@@ -40,6 +40,10 @@ export type Agent = {
    * report; on a kernel without the feature its absence says nothing.
    */
   outsideOats?: OutsideOats | null;
+  /** The agent needs a person FOR A QUESTION OF ITS BOARD: its board holds an open question and the row's needs-input claim is the board's own (the kernel's row `board` and the claim's producer): `true`, or absent. Another claim live in front of the board's (the agent's own, a failed turn's) is not this. The question itself, its options and the facts are the board's own read (app/board). */
+  boardAsks?: true;
+  /** The agent has a board to show: a fact or an open question. `true`, or absent. (What bb asks a command before it lists it is answered from the roster alone.) */
+  hasBoard?: true;
 };
 
 export type OutsideOats = { code: "running-outside-oats"; backend: string; message: string };

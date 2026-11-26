@@ -1,5 +1,6 @@
 // `oats status --json`: the roster, read into the plugin's Agent rows (the interface agreed with the
 // kernel side, v3). Unknown fields are ignored; a row with no `instance` fails the whole read.
+import { BOARD_FEATURE, boardClaim, boardData } from "../model/board.js";
 import { z } from "zod";
 import type { Agent } from "../model/types.js";
 import { shaped } from "./envelope.js";
@@ -26,10 +27,11 @@ const row = z.looseObject({
   runtimeState: text,
   runtimeError: text,
   startedAt: text,
-  waitingOnYou: z.looseObject({ since: text, reason: text, message: text }).nullish(),
+  waitingOnYou: z.looseObject({ since: text, reason: text, message: text, producer: text }).nullish(),
   sessionEnd: text,
   // Read with its own schema, only where the kernel lists the feature (kernel/outside.ts): a key of another shape is no report, never a failed read.
   outsideOats: z.unknown().optional(),
+  board: z.unknown().optional(),
 });
 const roster = z.looseObject({
   root: z.string(),
@@ -101,6 +103,9 @@ function toAgent(group: { name: string }, source: z.output<typeof row>, features
     // `features` lists `provider-outside-oats`: on a kernel without it nothing is said of it.
     ...(source.sessionEnd ? { sessionEnd: source.sessionEnd } : {}),
     ...outsideOf(source, features),
+    // Whether the agent's BOARD holds an open question (the row's `board`, read by model/board.ts): only where
+    // this kernel lists the feature. A place that says the agent needs a person then draws that question itself.
+    ...boardOf(source.board, waiting, features),
     waiting: waiting
       ? { reason: waiting.reason ?? "attention", message: waiting.message ?? null, since: waiting.since ?? null }
       : null,
@@ -111,6 +116,25 @@ function outsideOf(source: z.output<typeof row>, features: readonly string[]): {
   if (!features.includes(OUTSIDE_FEATURE)) return {};
   const report = readOutsideOats(source.outsideOats, { backend: source.backend ?? null, running: source.running ?? null, runtimeState: source.runtimeState ?? null });
   return report === null ? {} : { outsideOats: report };
+}
+
+/**
+ * What a row says of its agent's board, only where this kernel lists the feature: that it has one
+ * (a fact or an open question; or a board in a shape that cannot be read, or entries that had to
+ * be left out: what could not be shown is said on the board's own tab), and that it ASKS: its board holds an open question AND the row's
+ * needs-input claim is the board's own (the kernel names a claim's producer; the agent's own claim,
+ * or a failed turn's, can be live beside the board's, and the row shows the newest: a place that
+ * says why the agent needs a person then says THAT claim, not the board's question). The board's
+ * own claim is the one whose producer is `oats.board` (model/board.ts `BOARD_PRODUCER`, read by
+ * `boardClaim`); every other producer (`agent`, `oats.core`, a capability's) is another claim. A
+ * claim of a row that names no producer is taken as the board's where a question is open.
+ */
+function boardOf(board: unknown, waiting: { producer?: string | null } | null | undefined, features: readonly string[]): { hasBoard?: true; boardAsks?: true } {
+  const read = features.includes(BOARD_FEATURE) ? boardData(board) : null;
+  // (A board that cannot be read, or whose entries were left out, is a board to show too: the place says so.)
+  if (read === null || (read.facts.length + read.questions.length === 0 && !read.malformed && read.dropped === 0)) return {};
+  const asks = read.questions.length > 0 && waiting != null && (waiting.producer == null || boardClaim(waiting));
+  return asks ? { hasBoard: true, boardAsks: true } : { hasBoard: true };
 }
 
 /** The roster's instances, in the kernel's order. */

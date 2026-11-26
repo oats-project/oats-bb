@@ -3,6 +3,7 @@
 // schema into the plugin's types). No bb and no React import, so plain unit tests cover it.
 // A new feature adds its module and one line below; a command is added in the feature's own module.
 import * as automations from "./automations.js";
+import * as board from "./board.js";
 import * as lifecycle from "./lifecycle.js";
 import * as mail from "./mail.js";
 import * as panel from "./panel.js";
@@ -19,6 +20,7 @@ const verbs = (runner: Runner) => ({
   ...automations.verbs(runner),
   ...panel.verbs(runner),
   ...mail.verbs(runner),
+  ...board.verbs(runner),
 });
 
 /** Every `oats` command the plugin runs, in one deployment. */

@@ -5,7 +5,11 @@ its `verbs.json`: the `oats` verbs the fake answers for that feature, and the fi
 `teams.json`, `servers.json`), `spawn/` (`spawn-preview.json`, `spawn.json`) and `lifecycle/` (the
 stop, start, restart and retire answers). `outside/` has a README of its own: its five files are
 recorded live by the real run's outside part (`container/real/parts/outside.mjs`), the kernel's own
-`outsideOats` among them. `mail/` has a README of its own too: its files are answers of the real
+`outsideOats` among them. `board/` holds `inspect-board.json`, the real kernel's answer to `oats
+inspect --home <home> --board --json` for an agent that wrote two facts (one set three times: its
+history) and two questions (the first with a context) as its own session does, and `status.json`,
+the roster with that agent's row: both recorded by the real run's board part
+(`container/real/parts/board.mjs`). `mail/` has a README of its own too: its files are answers of the real
 kernel and messaging layer to the mail read, recorded by hand on aweb's local stack, and every word
 of mail in them was made up for the recording. `busy/` has a README of its own too: the busy
 workspace (the worst case every screen is judged by first), MADE by its generator from the recorded

@@ -812,12 +812,14 @@ function busyStage() {
         //   bb accepted but its read does not say so yet, or bb gave NO ANSWER: "not yet": asked again, within a minute;
         //   bb ANSWERED NO (an error it returned): the check fails at once on that answer: asked once, never again.
         for (const { host, before } of limited.splice(0)) {
-          // (What bb said before the stage could not be read: nothing can equal it. Said at once, not after a minute of askings.)
+          // (What bb said before the stage could not be read: nothing can equal it, so the check fails at once, not
+          // after a minute of askings. The limit is ASKED BACK all the same, once: the stage may have raised it.)
           const unread = before.startsWith("(bb ");
-          const { back, refused, after, answers } = unread ? { back: false, refused: null, after: "", answers: [] } : await askedBack({ ask: () => asked("concurrency-limit", "host", host, "auto"), read: () => tell("concurrency-limit", "host", host, "--json"), before });
+          const once = unread ? asked("concurrency-limit", "host", host, "auto") : null;
+          const { back, refused, after, answers } = once !== null ? { back: false, refused: null, after: "", answers: [`${once.outcome}: ${once.said.replace(/\s+/g, " ").slice(0, 140)}`] } : await askedBack({ ask: () => asked("concurrency-limit", "host", host, "auto"), read: () => tell("concurrency-limit", "host", host, "--json"), before });
           // EVERY asking is said, numbered, in order: askings that answered alike are not folded into one.
           const all = answers.map((answer, index) => `(${index + 1}) ${answer}`).join(" | ");
-          const detail = unread ? `what bb said of the limit before the stage could not be read, so it was not asked back: ${before.slice(0, 300)}` : `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${answers.length} time(s); bb answered: ${all}`;
+          const detail = unread ? `what bb said of the limit before the stage could not be read (${before.slice(0, 200)}), so nothing can be compared; it was asked back once all the same; bb answered: ${all}` : `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${answers.length} time(s); bb answered: ${all}`;
           check(back, "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", refused === null ? detail : `bb answered NO to the asking, which is not asked again: ${refused.slice(0, 300)} | ${detail}`);
           if (back && answers.length > 1) console.log(`NOTE BUSY bb's limit was asked back ${answers.length} times before bb said so; bb answered: ${all}`);
         }

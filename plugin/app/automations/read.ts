@@ -7,12 +7,13 @@ import { experimental_useRpcQuery as useRpcQuery, experimental_useSidebarThreads
 import { rpcContract } from "../../contract";
 import { attempt, onWindowReset, useRead } from "../store";
 import type { Contract, Read, Result } from "../store";
-import type { AutomationKind, TriggerStatuses } from "../../contract/automations";
+import { NO_AUTOMATIONS } from "../../contract/automations";
+import type { AutomationList, TriggerStatuses } from "../../contract/automations";
 import type { Agent, AgentState, BbThread } from "../../model/types";
-import { state as stateOf } from "../../model/view";
+import { flatten, state as stateOf, view } from "../../model/view";
 import { useOats } from "../oats";
 import type { PageMark } from "../workspace/pages";
-import { FAILED_RUN_TEXT, failing, statusFor } from "./words";
+import { attention, FAILED_RUN_TEXT, failing, oneList, statusFor } from "./words";
 import type { Asking } from "./words";
 
 /** The timer of the sidebar's mark, when no page is open: the Desktop rereads the lists for its mark this often. */
@@ -25,6 +26,40 @@ let rereadAt = 0;
 onWindowReset(() => {
   rereadAt = 0;
 });
+
+/**
+ * WHAT WAS READ LAST, ONE COPY PER WINDOW: each list's rows and every trigger's state, each with the stamp of the read
+ * it came from. A list or a state that a later read refuses stays as it was read, and EVERY place that judges an
+ * automation reads this one copy: the page (its rows, its filter's counts) and the sidebar's marks. So they cannot
+ * disagree on what is kept: neither holds a copy, or a verdict, of its own.
+ */
+export type Kept = { schedule?: { list: AutomationList; at: string }; trigger?: { list: AutomationList; at: string }; statuses?: { statuses: TriggerStatuses; at: string } };
+let kept: Kept = {};
+onWindowReset(() => {
+  kept = {};
+});
+/**
+ * A kept copy after one more answer: what the answer READ replaces what was kept of it; what it was REFUSED stays as
+ * it was kept (or is not there, if nothing of it was ever read); an OATS with no lists at all keeps nothing. Nothing
+ * else: no verdict, no count.
+ */
+export function keptAfter(before: Kept, data: Result<"automations">): Kept {
+  // An OATS that has no automations lists (the server's own word for it): the page then shows that in the lists' place, and
+  // no row. What was kept is of an OATS that did have them: it is not shown, so it is not kept, and no dot is drawn from it.
+  if ((["schedule", "trigger"] as const).some((kind) => !data[kind].ok && data[kind].code === NO_AUTOMATIONS)) return {};
+  let after = before;
+  for (const kind of ["schedule", "trigger"] as const) {
+    const answer = data[kind];
+    if (answer.ok && (after[kind]?.list !== answer.list || after[kind]?.at !== data.at)) after = { ...after, [kind]: { list: answer.list, at: data.at } };
+  }
+  if (data.statuses.ok && (after.statuses?.statuses !== data.statuses.statuses || after.statuses?.at !== data.at)) after = { ...after, statuses: { statuses: data.statuses.statuses, at: data.at } };
+  return after;
+}
+/** The window's kept copy, with what this answer holds taken into it. Every reader of the answer passes it through here; taking it in twice changes nothing. */
+export function keptOf(data: Result<"automations"> | undefined): Kept {
+  if (data !== undefined) kept = keptAfter(kept, data);
+  return kept;
+}
 
 export function useAutomations(every: number = REREAD_MS): Read<Result<"automations">> & { retry(): void; refresh(): Promise<void> } {
   const read = useRead("automations");
@@ -53,34 +88,42 @@ export function useAutomations(every: number = REREAD_MS): Read<Result<"automati
   return { ...read, refresh };
 }
 
-/** Every agent of the window's roster by its instance, with its state: the tree's own for an agent the tree draws, else the kernel's row alone (an agent with no bb thread). Null until the roster is read. */
+/**
+ * Every agent of a roster by its instance, with its state: the tree's own for an agent the tree draws (its node), else
+ * the kernel's row alone (an agent with no bb thread, or whose thread the tree does not draw: hidden, archived, another
+ * agent's). THE ONE FUNCTION for the page and for the sidebar's marks: who asks is read the same by both.
+ */
+export function agentStates(agents: readonly Agent[], nodeByInstance: ReadonlyMap<string, { state: AgentState }>): Map<string, { agent: Agent; state: AgentState }> {
+  return new Map(agents.map((agent) => [agent.instance, { agent, state: nodeByInstance.get(agent.instance)?.state ?? stateOf(agent, null) }]));
+}
+
+/** The window's roster by instance, with each agent's state (`agentStates`). Null until the roster is read. */
 export function useAgents(): ReadonlyMap<string, { agent: Agent; state: AgentState }> | null {
   const oats = useOats();
   const ready = oats.phase === "ready" ? oats : null;
-  return useMemo(() => {
-    if (ready === null) return null;
-    return new Map(ready.agents.map((agent) => [agent.instance, { agent, state: ready.nodeByInstance.get(agent.instance)?.state ?? stateOf(agent, null) }]));
-  }, [ready?.agents, ready?.nodeByInstance]);
+  return useMemo(() => (ready === null ? null : agentStates(ready.agents, ready.nodeByInstance)), [ready?.agents, ready?.nodeByInstance]);
 }
 
 /**
  * Which agents of the roster ask, for the sidebar's mark: read from the window's own copy of the
  * roster and bb's own list of threads, and never by a read of its own (the sidebar reads the
- * roster once: a second reader there would read it twice at every change). An agent's state is the
- * tree's own rule over the kernel's row and the thread bb lists for it, so the dot, the row and the
- * filter cannot disagree on who asks.
+ * roster once: a second reader there would read it twice at every change). The states are the
+ * page's (`agentStates`), over the tree the same roster and threads make (model/view.ts `view`):
+ * an agent whose thread the tree does not draw is judged by the kernel's row alone, here as there.
  */
 function useAsksNow(): ReadonlyMap<string, { state: AgentState }> | null {
   // Not enabled, not live: this reader starts no read of the roster and repeats none; it sees the copy the sidebar's own reader keeps.
   const snapshot = useRead("snapshot", { live: false, enabled: false }).data;
-  const threads = useSidebarThreads().threads;
+  const sidebar = useSidebarThreads();
+  const threads = sidebar.threads;
   const roster = snapshot === undefined ? undefined : snapshot.ok ? snapshot.agents : snapshot.last?.agents;
+  // Until bb has listed its threads nobody is known to ask, here as on the page (app/oats.ts: the window's roster is ready only then).
+  const listed = sidebar.status === "ready";
   return useMemo(() => {
-    if (roster === undefined) return null;
-    // By the tree's own rule (model/view.ts `state`), with the thread bb lists for the agent: "outside" comes before "needs-you" there, and so it does here.
-    const byId = new Map(threads.map((thread) => [thread.id, thread]));
-    return new Map(roster.map((agent) => [agent.instance, { state: stateOf(agent, agent.threadId === null ? null : ((byId.get(agent.threadId) as BbThread | undefined) ?? null)) }]));
-  }, [roster, threads]);
+    if (roster === undefined || !listed) return null;
+    const nodes = flatten(view(roster, threads as readonly BbThread[]).roots);
+    return agentStates(roster, new Map(nodes.map((node) => [node.agent.instance, node])));
+  }, [roster, threads, listed]);
 }
 
 /**
@@ -102,31 +145,24 @@ export const NEEDS_TEXT = ", needs you";
 /**
  * The sidebar row's marks, by the one rule of the page (words.ts `attention`): an amber dot,
  * "Automations, needs you", while an agent an automation made asks; a red one, "Automations, a
- * failure", while an automation is failing (its row's small line holds a red part). The verdict
- * is of a whole read (both lists); a list that could not be read keeps the last verdict of its
- * own rows, and before the first read there is no mark. While every trigger's state could not be
- * read, the triggers are judged as the page judges them: by the state read before, where one was
- * (Page.tsx keeps it too), else by their list's rows alone: a trigger that fails by its row (a
- * source's check that failed, an invalid definition, a wrong account, no trust) marks with no state.
+ * failure", while an automation is failing (its row's small line holds a red part). It holds no
+ * verdict of its own: at every draw it judges the rows and the state of the window's kept copy
+ * (`keptOf`: what the page draws too, also while a later read is refused) by the roster of now.
+ * Before the first read there are no rows, and no mark.
  */
+export function marksFor(copy: Kept, agents: ReadonlyMap<string, { state: AgentState }> | null): PageMark[] {
+  const known = copy.statuses?.statuses ?? null;
+  const asking = askingOf(agents, known);
+  // The rows the page lists, in the page's own list of them.
+  const rows = oneList(copy.schedule?.list.rows ?? [], copy.trigger?.list.rows ?? []);
+  const marks: PageMark[] = [];
+  if (rows.some((row) => attention(row, statusFor(row, known), asking) === "needs")) marks.push({ label: `Automations${NEEDS_TEXT}`, tone: "warning" });
+  if (rows.some((row) => failing(row, statusFor(row, known)))) marks.push({ label: `Automations${FAILED_RUN_TEXT}` });
+  return marks;
+}
 export function useFailedRunMark(): PageMark[] | null {
   const read = useAutomations();
   const agents = useAsksNow();
-  const statuses = read.data?.statuses;
-  // Every trigger's state, as last read: kept while a later read of it is refused, as the page keeps it.
-  const keptStatuses = useRef<TriggerStatuses | null>(null);
-  if (statuses !== undefined && statuses.ok) keptStatuses.current = statuses.statuses;
-  const known = keptStatuses.current;
-  const asking = askingOf(agents, known);
-  const kept = useRef<Record<AutomationKind, { failing: boolean; needs: boolean }>>({ schedule: { failing: false, needs: false }, trigger: { failing: false, needs: false } });
-  for (const kind of ["schedule", "trigger"] as const) {
-    const answer = read.data?.[kind];
-    if (answer === undefined || !answer.ok) continue;
-    kept.current[kind] = { failing: answer.list.rows.some((row) => failing(row, statusFor(row, known))), needs: answer.list.rows.some((row) => asking(row) !== null) };
-  }
-  const { schedule, trigger } = kept.current;
-  const marks: PageMark[] = [];
-  if (schedule.needs || trigger.needs) marks.push({ label: `Automations${NEEDS_TEXT}`, tone: "warning" });
-  if (schedule.failing || trigger.failing) marks.push({ label: `Automations${FAILED_RUN_TEXT}` });
+  const marks = marksFor(keptOf(read.data), agents);
   return marks.length === 0 ? null : marks;
 }

@@ -1275,7 +1275,12 @@ difference). Where it departs from bb's page, on purpose, `WORDS.md` says why.
   `reason`, `enabledHere`); the plugin reads those facts and derives none.
 - **What is failing, and what needs a person, is ONE rule** (`words.ts` `attention`, `failing`),
   read by the row's mark and line, by the filter's two counts, and by the sidebar's link, which
-  carries an amber dot ("Automations, needs you") beside a red one ("Automations, a failure"). A
+  carries an amber dot ("Automations, needs you") beside a red one ("Automations, a failure"). And
+  its INPUTS are one too: what was read last is kept ONCE per window (`read.ts` `keptOf`: each
+  list's rows and every trigger's state, each kept while a later read of it is refused), the page
+  and the link's marks both read that copy, who asks is read by one function (`agentStates`), and
+  neither keeps a verdict: each computes what it shows at the draw. A test walks every sequence of
+  reads, refusals and rosters and holds that the three say the same (`test/automations/agree-walk.test.ts`). A
   row is failing exactly when its line holds a red part: a schedule's last run that did not
   launch, a trigger's failed last poll or a failed spawn that no later spawn followed, or a
   definition that cannot run here. A run whose state nobody knows is a warning, not a failure.

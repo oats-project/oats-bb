@@ -15,7 +15,7 @@ import { HELD_REASON, isUnreadable, Unreadable } from "../roster/unreadable";
 import { displayLine } from "../ui/text";
 import { useActs } from "./acts";
 import { HereContext } from "./here";
-import { askingOf, PAGE_REREAD_MS, useAgents, useAutomations } from "./read";
+import { askingOf, keptOf, PAGE_REREAD_MS, useAgents, useAutomations } from "./read";
 import { KINDS, View } from "./View";
 import type { Gate, ListRead, Open, Tab } from "./View";
 import { capabilitySource, HERE, hereOf, refusalParts } from "./words";
@@ -97,8 +97,8 @@ export function HeaderTitle(props: PluginNavPanelProps) {
 }
 
 type Lists = Result<"automations">;
-type Kept = { list: NonNullable<ListRead["list"]>; at: string };
-function listRead(answer: Lists[AutomationKind] | undefined, at: string | undefined, loading: boolean, failure: string | null, kept: Kept | undefined): ListRead {
+type KeptList = { list: NonNullable<ListRead["list"]>; at: string };
+function listRead(answer: Lists[AutomationKind] | undefined, at: string | undefined, loading: boolean, failure: string | null, kept: KeptList | undefined): ListRead {
   const shown = { list: kept?.list, readAt: kept?.at ?? null };
   // The server did not answer, now or at this re-read: its own words, over what was read before.
   if (failure !== null) return { ...shown, loading, error: { code: null, message: failure } };
@@ -127,17 +127,12 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const kind = open?.kind ?? null;
   const openId = open?.id ?? null;
 
-  // A list that was read stays on screen while a later read fails or is under way.
-  const kept = useRef<Partial<Record<AutomationKind, Kept>>>({});
+  // A list that was read stays on screen while a later read fails or is under way: the window's ONE kept copy
+  // (read.ts `keptOf`), which the sidebar's marks judge too. The page keeps none of its own.
+  const kept = keptOf(read.data);
   const loading = read.status === "loading";
   const failure = read.status === "error" ? read.error : null;
-  const reads = Object.fromEntries(
-    KINDS.map((id) => {
-      const one = listRead(read.data?.[id], read.data?.at, loading, failure, kept.current[id]);
-      if (one.list !== undefined && one.readAt !== null && one.error === null) kept.current[id] = { list: one.list, at: one.readAt };
-      return [id, one];
-    }),
-  ) as Record<AutomationKind, ListRead>;
+  const reads = Object.fromEntries(KINDS.map((id) => [id, listRead(read.data?.[id], read.data?.at, loading, failure, kept[id])])) as Record<AutomationKind, ListRead>;
 
   // Refresh and Retry: the page says it is reading again from the press until that read settles,
   // whatever it answers (a server that does not answer twice says so twice).
@@ -178,13 +173,11 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
   const gate = gateOf(refused, here);
   const unreadable = refused !== null && isUnreadable(refused.code) && reads.schedule.list === undefined && reads.trigger.list === undefined ? refused : null;
   // Every trigger's state, of the same read as the lists; kept while a later read of it fails, like a list.
-  const keptStatuses = useRef<{ answer: Result<"automations">["statuses"] & { ok: true }; at: string } | null>(null);
   const answered = read.data?.statuses;
-  if (answered !== undefined && answered.ok && read.data !== undefined) keptStatuses.current = { answer: answered, at: read.data.at };
-  const statuses = keptStatuses.current?.answer.statuses ?? null;
+  const statuses = kept.statuses?.statuses ?? null;
   // A refusal of that read while the triggers' list stands (a list that is refused says so itself, and no state is asked of it): said
   // over the list and the Runs tab, which then draw the triggers by the state read before (with its age), or with none.
-  const statusesFailure = answered !== undefined && !answered.ok && reads.trigger.error === null && reads.trigger.list !== undefined ? { code: answered.code, message: answered.message, readAt: keptStatuses.current?.at ?? null } : null;
+  const statusesFailure = answered !== undefined && !answered.ok && reads.trigger.error === null && reads.trigger.list !== undefined ? { code: answered.code, message: answered.message, readAt: kept.statuses?.at ?? null } : null;
 
   // A trigger's recorded state, read when its page opens and again when the lists are. An answer
   // for a row that is no longer the open one changes nothing. A read that fails is said, over the
@@ -310,7 +303,7 @@ export function AutomationsPage({ subPath }: PluginNavPanelProps) {
         onOpen={onOpen}
         status={mine?.value ?? beside}
         // The age said is of the state that is DRAWN: the trigger's own read where one answered; else the one read beside the lists, which may be a kept one.
-        statusFailure={mine === null || mine.error === null ? null : { ...mine.error, readAt: mine.value !== null ? mine.readAt : beside !== null ? (keptStatuses.current?.at ?? null) : null, onRetry: () => setStatusRetry((n) => n + 1) }}
+        statusFailure={mine === null || mine.error === null ? null : { ...mine.error, readAt: mine.value !== null ? mine.readAt : beside !== null ? (kept.statuses?.at ?? null) : null, onRetry: () => setStatusRetry((n) => n + 1) }}
         onOpenFile={onOpenFile}
         canOpenCapability={canOpenCapability}
         onOpenCapability={onOpenCapability}

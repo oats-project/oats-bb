@@ -154,14 +154,18 @@ describe("A1 view(): the tree", () => {
     expect([v.needsYou, v.working, v.finished, v.detached, v.elsewhere]).toEqual([[], [], [], [], []]);
   });
 
-  test("200 agents in one chain that closes a cycle are joined in one pass", () => {
-    const agents = Array.from({ length: 200 }, (_, i) =>
-      agent(`n${i}`, { parent: i === 0 ? "n199" : `n${i - 1}` }),
+  test("2000 agents in one chain that closes a cycle are joined, each once: a bound only a wrong algorithm reaches", () => {
+    // A chain of parents that closes on itself: a join that walked the chain again for every agent of every agent, or
+    // went round the cycle, would take minutes here, or never end. This one takes a fraction of a second (measured:
+    // 3 ms at 200 agents, 180 ms at 2000: it grows with the square). The bound stands far from both: a stalled host
+    // does not reach it, a wrong algorithm does.
+    const agents = Array.from({ length: 2_000 }, (_, i) =>
+      agent(`n${i}`, { parent: i === 0 ? "n1999" : `n${i - 1}` }),
     );
     const started = performance.now();
     const v = view(agents, threadsFor(agents));
-    expect(performance.now() - started).toBeLessThan(500);
-    expect(flatten(v.roots)).toHaveLength(200);
+    expect(performance.now() - started).toBeLessThan(20_000);
+    expect(flatten(v.roots)).toHaveLength(2_000);
     expect(v.roots).toHaveLength(1);
   });
 });

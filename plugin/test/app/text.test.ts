@@ -133,12 +133,15 @@ describe("the Desktop's display filter", () => {
     expect(NOT_NOTE_TEXT.source).toBe(String.raw`[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069\u200B\u2060\uFEFF\u{E0000}-\u{E007F}]`);
   });
 
-  test("its time grows with the length of the text, not with its square", () => {
-    // A long run of scheme characters before no "://": the scheme-first form of the URL alternative took seconds here.
+  test("its time grows with the length of the text, not with its square: a bound only a wrong algorithm reaches", () => {
+    // A long run of scheme characters before no "://": the scheme-first form of the URL alternative took SECONDS at
+    // 200 000 characters, and its time grew with the square. Here the run is ten times longer: that form would take
+    // minutes; the one that grows with the length takes a few hundredths of a second. The bound stands between the two, far
+    // from both: a stalled host does not reach it, a wrong algorithm does.
     const started = performance.now();
-    expect(displayLine("a".repeat(200_000))).toHaveLength(2048);
-    expect(displayLine(`${"a".repeat(200_000)}://u@h`)).toBe(DETAIL_WITHHELD);
-    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(displayLine("a".repeat(2_000_000))).toHaveLength(2048);
+    expect(displayLine(`${"a".repeat(2_000_000)}://u@h`)).toBe(DETAIL_WITHHELD);
+    expect(performance.now() - started).toBeLessThan(20_000);
   });
 });
 

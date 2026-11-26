@@ -130,9 +130,18 @@ type Extra<Method extends Verb> = Omit<z.input<(typeof hostContract)[Method]["in
 /** What a verb answers when `oats` did not refuse. */
 export type Value<Method extends Verb> = Extract<z.output<(typeof hostContract)[Method]["output"]>, { ok: true }>["value"];
 
+/**
+ * THE CLOCK of a core: the time now, and a wait. Every reading of the time and every wait in this file goes
+ * through it (a test scans for a bare one), so that the pacing can be tested on a clock a test moves by hand: the
+ * pauses are then what the server ASKED for, exactly, and no test waits or bounds real time. The server passes none:
+ * the system's (`SYSTEM_CLOCK`). `now` is asked anew at each reading (never a reference kept to `Date.now`).
+ */
+export type Clock = { now(): number; sleep(ms: number, signal: AbortSignal): Promise<void> };
+export const SYSTEM_CLOCK: Clock = { now: () => Date.now(), sleep };
+
 export type Core = ReturnType<typeof createCore>;
 
-export function createCore(bb: BbPluginApi) {
+export function createCore(bb: BbPluginApi, clock: Clock = SYSTEM_CLOCK) {
   const settings = bb.settings.define({
     deployment: {
       type: "string",
@@ -311,11 +320,11 @@ export function createCore(bb: BbPluginApi) {
     const forAct = owedToActs;
     owedToActs = false;
     // Two clocks, on purpose. `lastStart` is the BARE clock: the pacing (`reread`), the poll a client's snapshot asks
-    // for and the patches' order all compare it with `Date.now()`, as they did before there was a stamp. The roster's
+    // for and the patches' order all compare it with `clock.now()`, as they did before there was a stamp. The roster's
     // `at` is the STAMP: a read that starts in the millisecond an act ended is later than the act's end. (With one
     // value for both, a stamp that ran ahead of a clock set back held the poll off until the clock caught up, and a
     // read's length came out negative, which reads as "answered fast": the next read then followed at once.)
-    lastStart = Date.now();
+    lastStart = clock.now();
     const at = new Date(stamp()).toISOString();
     let next: Snapshot;
     let rows: Map<string, RawRow> | null = null;
@@ -372,7 +381,7 @@ export function createCore(bb: BbPluginApi) {
     // nothing keeps it (the change emptied `cached`, and the read it queued brings the new one), so
     // no client is shown it and no act finds an agent, or a home, of the old deployment in it.
     if (generation !== settingsGeneration) {
-      lastEnd = Date.now();
+      lastEnd = clock.now();
       lastAnsweredInMs = null;
       if (forAct) owedToActs = true; // not this deployment's answer: the read the change queued owes the act its publish
       return next;
@@ -386,7 +395,7 @@ export function createCore(bb: BbPluginApi) {
     const changed = key !== comparable;
     cached = next;
     comparable = key;
-    lastEnd = Date.now();
+    lastEnd = clock.now();
     // Only a status that answered lengthens the pause: the guard is for a kernel that answers
     // slowly. After a read that failed (a timeout, an unreachable machine, no oats) the next one
     // waits the floor, so Retry and the watch are not held back by the failure's own length.
@@ -445,7 +454,7 @@ export function createCore(bb: BbPluginApi) {
    * clock, is dropped as older than the status read: fail safe, the status read carries it.)
    */
   function stamp(): number {
-    lastStamp = Math.max(Date.now(), lastStamp + 1);
+    lastStamp = Math.max(clock.now(), lastStamp + 1);
     return lastStamp;
   }
   /** When an act ended, for its answer's `endedAt`: taken as its `oats` command returned (server/lifecycle.ts). */
@@ -527,7 +536,7 @@ export function createCore(bb: BbPluginApi) {
     const at = target;
     const agent = from !== null && from.ok ? from.agents.find((candidate) => candidate.instance === instance) : undefined;
     if (from === null || !from.ok || agent === undefined || at === null) return dropped("the snapshot holds no such agent now");
-    const startedAt = Date.now();
+    const startedAt = clock.now();
     let answer: Answer<EventsSaid>;
     try {
       answer = await host.call(
@@ -538,7 +547,7 @@ export function createCore(bb: BbPluginApi) {
     } catch (error) {
       return dropped(`its events could not be read: ${String((error as Error).message)}`);
     }
-    const took = Date.now() - startedAt;
+    const took = clock.now() - startedAt;
     if (!answer.ok) return dropped(`oats instance events answered ${answer.error.code} in ${took} ms`);
     if (generation !== settingsGeneration || lifetime.signal.aborted) return dropped("the settings changed while its events were read");
     const now = cached;
@@ -598,7 +607,7 @@ export function createCore(bb: BbPluginApi) {
         // the machine's clock is set back, `lastEnd` lies ahead of it, and what was a pause of a second became a sleep
         // of the whole step (an hour set back: an hour with no read).
         const pause = Math.max(MIN_INTERVAL_MS, lastAnsweredInMs ?? 0);
-        await sleep(Math.min(pause, Math.max(0, lastEnd + pause - Date.now())), lifetime.signal);
+        await clock.sleep(Math.min(pause, Math.max(0, lastEnd + pause - clock.now())), lifetime.signal);
       }
       queued = null;
       lastStartedAtOnce = atOnce;
@@ -727,7 +736,7 @@ export function createCore(bb: BbPluginApi) {
     const n = (acts += 1);
     // The subject is read at each line: an act whose guard finds the row's own id names it by that from then on.
     const about = () => (typeof subject === "function" ? subject() : subject);
-    const who = (host: string | null) => ({ caller: callerOf(asker), host, at: new Date().toISOString(), n });
+    const who = (host: string | null) => ({ caller: callerOf(asker), host, at: new Date(clock.now()).toISOString(), n });
     const codeOf = (error: unknown): string | undefined => (typeof error === "object" && error !== null ? refusedWith.get(error) : undefined);
     // A line that cannot be written never changes an act: a logger that throws is told to the process's own error
     // stream and the act goes on (it matters more than its line).
@@ -755,22 +764,22 @@ export function createCore(bb: BbPluginApi) {
     // The machine the act is SENT to: named on "asked" and, the same, on "ended" (never the machine the server
     // happens to hold when the act ends: a status read that failed meanwhile, or a changed setting, moves that).
     let host: string | null = null;
-    let from = Date.now();
+    let from = clock.now();
     let took = 0;
     let answered: { value: Value<Method>; endedAt: string };
     try {
       const value = await ask(method, extra, timeoutMs, signal, (hostId) => {
         host = hostId;
-        from = Date.now(); // `ms` is the kernel's time: from the moment the act is sent
+        from = clock.now(); // `ms` is the kernel's time: from the moment the act is sent
         say("info", () => actLine(method, "asked", about(), who(host)));
       });
       answered = { value, endedAt: actEnded() };
-      took = Date.now() - from;
+      took = clock.now() - from;
     } catch (error) {
       // Not sent: the machine or the deployment was not found, or the call was cancelled before it left (its caller
       // was gone already; the plugin was ending): the kernel was not asked: a hold, with that refusal's code.
       if (host === null) say("warn", () => actLine(method, "held", about(), who(null), { held: codeOf(error) ?? "FAILED", why: signal.aborted ? "cancelled-before-sent" : "machine-not-reached" }));
-      else say("warn", () => actLine(method, "ended", about(), who(host), { result: codeOf(error) ?? "FAILED", ms: Date.now() - from }));
+      else say("warn", () => actLine(method, "ended", about(), who(host), { result: codeOf(error) ?? "FAILED", ms: clock.now() - from }));
       throw error;
     } finally {
       after?.();
@@ -810,9 +819,9 @@ export function createCore(bb: BbPluginApi) {
   /** One answer per page for all clients, reused for PAGE_TTL_MS; a failed read is not kept. */
   function page<Value>(name: string, load: (signal: AbortSignal) => Promise<Value>): Promise<Value> {
     const hit = pages.get(name);
-    if (hit && Date.now() - hit.at < PAGE_TTL_MS) return hit.value as Promise<Value>;
+    if (hit && clock.now() - hit.at < PAGE_TTL_MS) return hit.value as Promise<Value>;
     const value = load(lifetime.signal);
-    pages.set(name, { at: Date.now(), value });
+    pages.set(name, { at: clock.now(), value });
     value.catch(() => {
       if (pages.get(name)?.value === value) pages.delete(name);
     });
@@ -838,15 +847,15 @@ export function createCore(bb: BbPluginApi) {
 
   /** The snapshot for a client: the cached one, read again behind it when nobody refreshed it for a while. */
   async function clientSnapshot(): Promise<Snapshot> {
-    clientSeenAt = Date.now();
+    clientSeenAt = clock.now();
     // (A last read that started "after now" is one from before the clock was set back: as stale as an old one.)
-    const since = Date.now() - lastStart;
+    const since = clock.now() - lastStart;
     if (cached && (since > POLL_MS || since < 0)) rereadSoon();
     return current();
   }
   /** Retry: the pages' answers are dropped and OATS is read again now. */
   async function clientRefresh(): Promise<{ at: string }> {
-    clientSeenAt = Date.now();
+    clientSeenAt = clock.now();
     pages.clear();
     return { at: (await reread()).at };
   }
@@ -903,8 +912,8 @@ export function createCore(bb: BbPluginApi) {
         watchAsserted = false;
         rereadSoon();
         while (!signal.aborted && !lifetime.signal.aborted) {
-          await sleep(POLL_MS, AbortSignal.any([signal, lifetime.signal]));
-          const connected = watchers > 0 || Date.now() - clientSeenAt < CLIENT_SEEN_MS;
+          await clock.sleep(POLL_MS, AbortSignal.any([signal, lifetime.signal]));
+          const connected = watchers > 0 || clock.now() - clientSeenAt < CLIENT_SEEN_MS;
           if (connected && !signal.aborted) rereadSoon();
         }
       },

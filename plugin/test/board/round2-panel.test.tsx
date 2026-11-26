@@ -3,7 +3,7 @@
 // names the tab the memory already holds moves a panel that opened on Board by itself, and one made for an agent
 // whose panel is not open yet decides where that panel opens.
 import { useState } from "react";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { forgetHidden } from "../../app/board";
@@ -13,7 +13,7 @@ import type { Contract } from "../helpers/render";
 import { instanceAnswer, panelAgents, panelSnapshot, panelThreads } from "../panel/handlers";
 import { BOARD_AT } from "./handlers";
 
-afterEach(() => { resetApp(); forgetHidden(); });
+afterEach(() => { resetApp(); forgetHidden(); vi.useRealTimers(); });
 const CHILD_THREAD = "thr_u2jw8887aw";
 const CHILD = "panel-worktree-helper";
 const FACT = { key: "tests", label: "Tests", value: "3", unit: "failing", link: null, at: "2026-11-23T18:00:58.766Z" };
@@ -94,3 +94,29 @@ for (const [what, board, said] of [
     expect(slot.queryByTestId("oats-board-nothing")).toBeNull(); // never read as "nothing to show"
   });
 }
+
+test("a press made for an agent whose panel never opened lapses: that agent's panel, opened by hand much later, opens by its own rule (on Board, its board asks), not on the tab a press long ago asked for", async () => {
+  const { SHOT_MS } = await import("../../app/panel/Panel");
+  vi.useFakeTimers({ now: Date.parse("2026-11-23T18:17:26.000Z"), toFake: ["Date"] });
+  await loadApp();
+  const draw = () =>
+    renderSlot<{ threadId: string }, Contract>({ component: InstancePanel }, { threadId: CHILD_THREAD }, {
+      rpc: handlers({ snapshot: () => panelSnapshot(), panelInstance: ({ instance }) => instanceAnswer(instance), board: () => ({ at: BOARD_AT, supported: true, stale: false, board: { facts: [FACT], questions: [QUESTION] }, claim: null }) }),
+      sidebarThreads: panelThreads(),
+    });
+  // Within its time, the press decides where the panel it was made for opens.
+  showPanelTab("instance", { for: CHILD });
+  vi.setSystemTime(Date.now() + SHOT_MS - 1000);
+  const soon = draw();
+  await soon.findByTestId("oats-panel-header");
+  await waitFor(() => expect(within(soon.getByRole("tablist", { name: "Instance context" })).getAllByRole("tab")).toHaveLength(3));
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+  expect(selected(soon)).toBe("Instance");
+  soon.unmount();
+  // Past it, the press is nobody's: the panel opens by its own rule.
+  showPanelTab("instance", { for: CHILD });
+  vi.setSystemTime(Date.now() + SHOT_MS + 1000);
+  const late = draw();
+  await late.findByTestId("oats-panel-header");
+  await waitFor(() => expect(selected(late)).toBe("Board"));
+});

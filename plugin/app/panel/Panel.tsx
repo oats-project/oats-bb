@@ -91,8 +91,17 @@ let shownTab: TabId = "instance";
  * agent's board asks). A panel takes any press since it was mounted as its person's choice.
  */
 let presses = 0;
-/** A press made FOR an agent whose panel is not open yet (the thread line's Answer, which then opens it): that panel opens on the tab asked for. One shot. */
-let pressedFor: string | null = null;
+/**
+ * A press made FOR an agent whose panel is not open yet (the thread line's Answer, which then opens
+ * it): that panel opens on the tab asked for. ONE SHOT, and short-lived: it is spent by the panel
+ * that opens next (whoever's), replaced by the next press of anyone, and it lapses by itself
+ * (`SHOT_MS`): a press whose panel never opened (the open refused, the thread gone) does not decide
+ * where that agent's panel opens when a person opens it by hand much later.
+ */
+let pressedFor: { instance: string; at: number } | null = null;
+/** How long a press waits for the panel it opens: a navigation and a first draw (the phone's own page), with room. */
+export const SHOT_MS = 10_000;
+const takesShot = (instance: string): boolean => pressedFor !== null && pressedFor.instance === instance && Date.now() - pressedFor.at < SHOT_MS;
 const listeners = new Set<() => void>();
 const tell = (): void => {
   for (const listener of listeners) listener();
@@ -105,7 +114,7 @@ const tell = (): void => {
 export function showPanelTab(tab: TabId, { focus = false, for: instance = null }: { focus?: boolean; for?: string | null } = {}): void {
   shownTab = tab;
   presses += 1;
-  pressedFor = instance;
+  pressedFor = instance === null ? null : { instance, at: Date.now() };
   tell();
   // Once the open panel has drawn the tab selected (the store's change is drawn before this runs).
   if (focus) queueMicrotask(() => document.getElementById(`${PANEL_ID}-tab-${tab}`)?.focus());
@@ -250,7 +259,9 @@ function Pages({ oats, agent, node, thread, tab: remembered, failure, page }: { 
   // a press is an event, also where it names the tab the memory already holds), or one made FOR this agent just
   // before its panel opened (the thread line's Answer). The panel then no longer opens by itself.
   const pressed = usePresses();
-  const [mounted] = useState(() => ({ presses, chosen: pressedFor === agent.instance }));
+  // (Taken once per mount, and a mount is ONE agent's: `Pages` is keyed by the agent's name where it is drawn, so a
+  // panel that bb keeps open while the thread changes is mounted anew for the next agent, with a baseline of its own.)
+  const [mounted] = useState(() => ({ presses, chosen: takesShot(agent.instance) }));
   useEffect(() => {
     // The one shot is SPENT by the panel that opens after it: taken by the agent it was made for (above), and dropped
     // by any other agent's panel, so that a press made for one agent never decides where a later panel opens.

@@ -131,6 +131,17 @@ export const spawnArgv = (input: Checked, taskFile: string | null, apply: SpawnA
 ];
 
 const text = z.string().nullish();
+/**
+ * The kernel's preview, held to the shape of everything the plugin reads of it. Two readers:
+ * - the parser below reads four of these (`decision`, `preflight`, `backendStatus`, `launch`);
+ * - the form's column (`formFacts`, model/spawn.ts) reads the DOCUMENT itself, and draws `modules`, `teams`, `harness`,
+ *   `model`, `modelSource` and `warnings` from it. Those six are here for that reader: they are NOT dead, though
+ *   nothing below names them. This schema is the contract check for what the column draws: a preview where one of
+ *   them has another shape is refused WHOLE, as an answer the plugin cannot read (`OATS_BAD_ANSWER`), and nothing of
+ *   it is drawn. Without their line the column would quietly draw nothing of that field, or (a warning that is no
+ *   sentence) draw it as text. test/spawn/kernel.test.ts holds each of the six.
+ * A key of the preview that nothing reads is not parsed.
+ */
 const preview = z.looseObject({
   decision: z.looseObject({ revision: z.string().min(1) }),
   modules: z
@@ -140,7 +151,6 @@ const preview = z.looseObject({
   harness: text,
   model: text,
   modelSource: text,
-  launchConfig: text,
   warnings: z.array(z.string()).nullish(),
   preflight: z.looseObject({ status: text, budgetMs: z.number().nullish() }).nullish(),
   backendStatus: z.looseObject({ name: text, installed: z.boolean().nullish() }).nullish(),

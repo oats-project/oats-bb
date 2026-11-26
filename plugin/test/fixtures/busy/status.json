@@ -765,6 +765,10 @@
       "commit": "ca07fa89ba7bbb8397b1aafb4a08649fd7d530ea",
       "current": "bd67121a08cf55224dd4053449dd7220e54ba643",
       "status": "moved"
+     },
+     "identity": {
+      "alias": "nightly-dependency-audit-probe",
+      "team": "default:oats.aweb.ai"
      }
     }
    ]

@@ -745,9 +745,11 @@ function busyStage() {
       // The held turns are answered, and every thread this stage made is archived: no later stage sees one.
       rmSync(BUSY_HOLD_FILE, { force: true });
       for (const host of limited.splice(0)) tell("concurrency-limit", "host", host, "auto");
-      const ids = made.splice(0).map((thread) => thread.id);
-      const deadline = Date.now() + 120_000;
+      // (Found by their titles too: a stage that stopped half way made threads it had not yet counted.)
       const list = () => listOf(bbJson("thread", "list"), "threads");
+      const titles = new Set(rowsOf(set()).filter((row) => row.backend === "bb").map((row) => providerTitle(row.instance)));
+      const ids = [...new Set([...made.splice(0).map((thread) => thread.id), ...list().filter((thread) => titles.has(thread.title)).map((thread) => thread.id)])];
+      const deadline = Date.now() + 120_000;
       while (Date.now() < deadline && list().some((thread) => ids.includes(thread.id) && thread.status === "active")) await sleep(2000);
       const failed = [];
       for (const id of ids) {

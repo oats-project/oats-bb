@@ -38,7 +38,7 @@ describe("the busy set", () => {
 
   it("what is varied is a name, an id, a time, a relation or a text, and nothing else: no row is shaped", () => {
     const ALLOWED: Record<string, string[]> = {
-      agents: ["agent", "parentInstance", "waitingOnYou.since", "waitingOnYou.message", "board"],
+      agents: ["agent", "parentInstance", "waitingOnYou.since", "waitingOnYou.message", "board", "identity"],
       facts: ["key", "label", "value", "at"],
       questions: ["id", "question", "since"],
       mail: ["result.result.mail.messages", "result.result.mail.conversations"],
@@ -51,6 +51,9 @@ describe("the busy set", () => {
       runs: ["scheduledFor", "startedAt"],
     };
     for (const [list, rows] of Object.entries(made)) for (const each of rows) expect([list, each.was.map(([path]) => path.join(".")).filter((path) => !ALLOWED[list]!.includes(path))]).toEqual([list, []]);
+    // ONE field is joined from a second recorded row, on ONE row: the busy chat's agent's messaging identity (README.md).
+    const lent = made.agents.filter((each) => each.was.some(([path]) => path[0] === "identity"));
+    expect(lent.map((each) => [each.kind, each.from.identity ?? null, each.row.identity])).toEqual([["board", null, { ...(made.agents.find((each) => each.from.instance === "redesign-ui-lead")!.from.identity as object), alias: lent[0]!.row.instance }]]);
     // No row is shaped: a failed agent is the kernel's recorded row of one that failed at its start (a lost session's row).
     const failed = made.agents.filter((each) => each.kind === "failed");
     expect(failed.map((each) => [each.from.instance, each.row.running, each.row.runtimeState, each.row.sessionEnd, each.row.backend])).toEqual(Array.from({ length: 3 }, () => ["pi-unstarted-developer", false, "stopped", "lost", "bb"]));

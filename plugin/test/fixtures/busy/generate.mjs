@@ -202,6 +202,12 @@ export function build() {
         made.questions.push(asked);
         return asked.row;
       });
+      // ITS MESSAGING IDENTITY: the recorded board row has none (its agent was spawned with no messaging), and an agent
+      // with none has no Mail tab. So that ONE agent holds the conversation, the board AND the mail, this row takes the
+      // `identity` of a second recorded row (the roster's lead), with its own name as the alias: the one field of the
+      // set that is JOINED from another recorded row. README.md says so.
+      const lent = byName.get("redesign-ui-lead").row.identity;
+      set.push([["identity"], swapped(copy(lent), [[lent.alias, instance]])]);
       set.push([["board"], { ...copy(board), facts, questions }], [["waitingOnYou", "since"], questions[0].since], [["waitingOnYou", "message"], questions[0].question]);
     }
     const row = vary(model.row, swaps, set);

@@ -42,6 +42,12 @@ turn). So the live stage makes those three agents' threads fail at their start f
 (`threads.json` names them); a thread that could not be made to fail reads as a lost session, and
 the stage says so.
 
+**One field is joined from a second recorded row.** The recorded row with a board has no messaging
+identity (its agent was spawned with none), and the panel offers no Mail tab for such an agent. So
+that ONE agent holds the conversation, the board and the mail, the busy chat's row takes the
+`identity` of the recorded roster's lead, with its own name as the alias. No other row has a field
+of another's.
+
 **The one made-up text: the busy chat's conversation** (`chat.json`). A conversation is no answer
 of the kernel's, so none is recorded: the generator holds its ten turns, and the live stage has the
 conversation for real, with the mock model answering each `you` with its `agent`

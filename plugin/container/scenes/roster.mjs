@@ -1052,7 +1052,9 @@ export default [
           const keys = `[...document.querySelectorAll(${JSON.stringify(`${testId("oats-sidebar")} ${testId("oats-jump-key")}`)})]`;
           const shown = await page.until(`${keys}.length > 0 ? JSON.stringify(${keys}.map((key) => [key.closest("a")?.getAttribute("data-sidebar-thread-id"), key.innerText.trim()])) : ""`, 20);
           const labels = typeof shown === "string" && shown !== "" ? JSON.parse(shown) : [];
-          check(labels.length > 0 && labels.every(([id], n) => id === drawn.threads[n].id) && labels.every(([, label], n) => label.endsWith(String(n + 1))), `${at} while bb's modifiers are held our thread rows show the jump keys bb gave them, 1 upward in the order drawn, as bb's own rows do`, JSON.stringify(labels));
+          // (Against the order drawn NOW: bb's other threads may have changed places since the walk.)
+          const now = JSON.parse(await page.evaluate(`JSON.stringify([...document.querySelectorAll("[data-sidebar-thread-shortcut-target]")].map((row) => row.getAttribute("data-sidebar-thread-id")))`));
+          check(labels.length > 0 && labels.every(([id], n) => id === now[n]) && labels.every(([, label], n) => label.endsWith(String(n + 1))), `${at} while bb's modifiers are held our thread rows show the jump keys bb gave them, 1 upward in the order drawn, as bb's own rows do`, JSON.stringify(labels));
           await page.shot(`busy-${viewport.name}-jump-keys`);
         } finally {
           await letGo();

@@ -328,7 +328,7 @@ When it leaves, each thing it changed is put back and READ: the held turns are a
 thread of its own is active), its threads are archived, bb says of the host's limit what it said
 before (asked once the held turns have ended, each asking's outcome kept: where bb gives no answer in
 time, or accepts and does not say so yet, it is asked again, for a minute at most; where bb answers no, the
-check fails at once on that answer), the star request is turned on again (bb's answer to that is checked), the fixtures' threads are back and the fake `oats` answers
+check fails at once on that answer; the loop is `ask-back.mjs`, held by `test/container-ask-back.test.ts`), the star request is turned on again (bb's answer to that is checked), the fixtures' threads are back and the fake `oats` answers
 the fixtures' roster again, which is waited for. A run that is killed while Claude Code is away
 finds where it was at its next start and puts it back.
 

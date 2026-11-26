@@ -24,6 +24,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchBrowser, lowTargets, gapsIn, tight, loose, MAX_GAP } from "./browser.mjs";
+import { askedBack } from "./ask-back.mjs";
 import { atomicWrite, completeLines } from "./files.mjs";
 import { CONTRAST, failing, shown } from "./contrast.mjs";
 import { sameImages } from "./images.mjs";
@@ -798,7 +799,7 @@ function busyStage() {
       const still = running();
       check(still.length === 0, "BUSY no turn of the stage's is still held when it leaves: bb shows none of its threads active", still.map((thread) => thread.title).join(" | "));
       // bb's own concurrency limit is back: asked only now, once the held turns have ended, and each asking KEEPS ITS
-      // OUTCOME (`asked`, above), which the loop tells apart:
+      // OUTCOME (`asked`, above), which the loop (ask-back.mjs, held by a unit test) tells apart:
       //   bb accepted, and its read says what it said before the stage: done;
       //   bb accepted but its read does not say so yet, or bb gave NO ANSWER in time: "not yet": asked again, for a
       //   minute at most;
@@ -807,24 +808,10 @@ function busyStage() {
       // read at once: in one light run bb was then so busy ending fourteen turns, 12.8 s for the two commands, that
       // the asking failed, unseen, and the read said the raised limit.)
       for (const { host, before } of limited.splice(0)) {
-        const answers = [];
-        let after = "";
-        let refused = null;
-        const until = Date.now() + 60_000;
-        for (;;) {
-          const answer = asked("concurrency-limit", "host", host, "auto");
-          answers.push(`${answer.outcome}: ${answer.said.replace(/\s+/g, " ").slice(0, 140)}`);
-          if (answer.outcome === "refused") {
-            refused = answer.said;
-            break;
-          }
-          after = tell("concurrency-limit", "host", host, "--json");
-          if (after === before || Date.now() > until) break;
-          await sleep(2000);
-        }
+        const { back, refused, after, answers } = await askedBack({ ask: () => asked("concurrency-limit", "host", host, "auto"), read: () => tell("concurrency-limit", "host", host, "--json"), before });
         const detail = `before ${before.slice(0, 200)} | after ${after.slice(0, 200)} | asked ${answers.length} time(s); bb answered: ${[...new Set(answers)].join(" | ")}`;
-        check(refused === null && after === before && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", refused === null ? detail : `bb answered NO to the asking, which is not asked again: ${refused.slice(0, 300)} | ${detail}`);
-        if (refused === null && answers.length > 1) console.log(`NOTE BUSY bb's limit was asked back ${answers.length} times before bb said so; bb answered: ${[...new Set(answers)].join(" | ")}`);
+        check(back && !before.startsWith("(bb "), "BUSY bb's own concurrency limit is back for the host when the stage leaves: bb says of it what it said before the stage", refused === null ? detail : `bb answered NO to the asking, which is not asked again: ${refused.slice(0, 300)} | ${detail}`);
+        if (back && answers.length > 1) console.log(`NOTE BUSY bb's limit was asked back ${answers.length} times before bb said so; bb answered: ${[...new Set(answers)].join(" | ")}`);
       }
       const failed = [];
       for (const id of ids) {

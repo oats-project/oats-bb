@@ -104,11 +104,26 @@ run() { docker exec -u node -e BB_TELEMETRY=false -e "BB_VERSION=$BB_VERSION" -e
 (cd "$PLUGIN/.." && tar -c oats-package/oats-package.json oats-package/capabilities/oats-bb/oats.json oats-package/capabilities/oats-bb/lib/pi-model.mjs oats-package/capabilities/oats-bb/lib/errors.mjs oats-package/capabilities/oats-bb/lib/title.mjs) | docker exec -i -u node "$NAME" tar -x -C /home/node
 run mkdir -p /home/node/out
 run sh container/setup.sh
+# The guard's own test, a SECOND time, where the image's mark is TRULY gone (container/guard.sh): in the image the unit
+# stage's first pass can make the mark absent only by the guard's own switch, so a guard that no longer looked for the
+# mark at all would pass it. Here the mark is moved away as root, the test runs with no switch (it says which pass it
+# is in, and holds that the mark is gone), and the mark is put back whatever the test said: the live stage follows.
+mark_gone_pass() {
+  docker exec -u root "$NAME" mv /etc/oats-bb-checks-image /etc/oats-bb-checks-image.moved
+  gone=0
+  run env OATS_BB_GUARD_PASS=mark-gone npx vitest run test/container-guard.test.ts || gone=$?
+  docker exec -u root "$NAME" mv /etc/oats-bb-checks-image.moved /etc/oats-bb-checks-image
+  [ "$gone" = 0 ] || { echo "ci: the guard's test failed where the image's mark is truly gone" >&2; exit "$gone"; }
+}
 case "$STAGE" in
-  unit) run sh container/unit.sh ;;
+  unit)
+    run sh container/unit.sh
+    mark_gone_pass
+    ;;
   live) run bash container/live.sh ;;
   all)
     run sh container/unit.sh
+    mark_gone_pass
     run bash container/live.sh
     ;;
 esac

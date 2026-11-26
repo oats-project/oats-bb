@@ -26,13 +26,66 @@ const GUARDED: Record<string, "sh" | "bash" | "node"> = {
   "real/mail/inside.sh": "bash", // installs the kernel, aw and Claude Code for the user
   "real/mail/check.mjs": "node",
 };
-/** They run ON THE HOST, and do their work in a container they start: they write their own out/ alone. */
+/** They run ON THE HOST, and do their work in a container they start (what each writes on the host: container/README.md). */
 const HOST = ["ci.sh", "real/run.sh", "real/mail/run.sh", "relock.sh"];
-/** Tools that change nothing but the directory they are handed, or only read: run by the guarded, and by unit tests on any machine. */
+/** Tools: run by the guarded, by a developer in a checkout, and by unit tests on any machine; none does what the guard is for (container/README.md says what each does). */
 const TOOLS = ["unit.sh", "no-pi-tools-fetch.sh", "no-toolchain-fetch.sh", "fake-oats.mjs", "real/bb-logs.sh", "real/bb-plugin-command.sh", "real/bb-plugin-command.test.sh", "real/oats-record.mjs", "real/mock-anthropic.mjs", "real/pi/mock-openai.mjs"];
 /** Modules: imported, never run (the guards themselves among them). */
 const MODULES = ["guard.sh", "guard.mjs", "browser.mjs", "contrast.mjs", "files.mjs", "images.mjs", "tmux-roster.mjs", "real/fixtures.mjs"];
 const MODULE_DIRECTORIES = ["scenes/", "real/parts/"];
+
+/**
+ * WHERE THE MARK IS (the image), a refusal can only be asked for by the guard's own switch; where it is NOT (a
+ * person's machine; and the unit stage's SECOND pass of this file, for which ci.sh moves the mark away), nothing is
+ * passed: the guard refuses because the mark is truly absent. That second pass is what fails a guard that no longer
+ * looks for the mark.
+ */
+const MARKED = existsSync(MARK);
+const ABSENT: Record<string, string> = MARKED ? { OATS_BB_CHECKS_MARK_ABSENT: "1" } : {};
+
+/** The first line of a script that DOES something: after the shebang, blank lines and whole-line comments. A statement on a comment's line counts. */
+function firstEffective(script: string, runner: "sh" | "bash" | "node"): string | undefined {
+  const lines = readFileSync(join(CONTAINER, script), "utf8").split("\n");
+  if (runner !== "node") return lines.slice(1).find((line) => line.trim() !== "" && !line.trimStart().startsWith("#"));
+  let inComment = false;
+  for (const [index, line] of lines.entries()) {
+    let rest = line;
+    if (inComment) {
+      if (!rest.includes("*/")) continue;
+      rest = rest.slice(rest.indexOf("*/") + 2);
+      inComment = false;
+    }
+    for (;;) {
+      rest = rest.trimStart();
+      if (rest.startsWith("/*")) {
+        if (!rest.includes("*/")) {
+          inComment = true;
+          rest = "";
+        } else rest = rest.slice(rest.indexOf("*/") + 2);
+      } else break;
+    }
+    if (rest === "" || rest.startsWith("//") || (index === 0 && rest.startsWith("#!"))) continue;
+    return line;
+  }
+  return undefined;
+}
+/** The one line a guarded script must have first. */
+function guardLine(script: string, runner: "sh" | "bash" | "node"): string {
+  const up = relative(dirname(join(CONTAINER, script)), CONTAINER).split("/").filter(Boolean).map(() => "..").join("/");
+  return runner === "node"
+    ? `import "${up === "" ? "." : up}/guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched`
+    : `. "$(dirname "$0")/${up === "" ? "" : `${up}/`}guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)`;
+}
+/**
+ * BEFORE this test RUNS a guarded script (on whatever machine vitest runs on), it has READ that the guard is the
+ * script's first line that does something, and that a shell script's line 1 is a plain shebang: a script whose guard
+ * is lost, or has a statement above it, is never started here.
+ */
+function readToBeGuarded(script: string, runner: "sh" | "bash" | "node") {
+  const first = readFileSync(join(CONTAINER, script), "utf8").split("\n")[0];
+  if (runner !== "node") expect([script, first]).toEqual([script, runner === "bash" ? "#!/bin/bash" : "#!/bin/sh"]);
+  expect([script, firstEffective(script, runner)]).toEqual([script, guardLine(script, runner)]);
+}
 
 const made: string[] = [];
 afterEach(() => {
@@ -59,36 +112,55 @@ const holds = (directory: string): Record<string, string> =>
 
 describe("only inside the checks' container", () => {
   it.each(Object.entries(GUARDED))("%s, run where the image's mark is not, is REFUSED with one line and changes nothing: a person's claude, oats and settings are as they were", (script, runner) => {
+    readToBeGuarded(script, runner);
     const person = home();
     const before = holds(person);
     const ran = spawnSync(runner === "node" ? process.execPath : runner, [join(CONTAINER, script)], {
       cwd: person,
       encoding: "utf8",
       timeout: 30_000,
-      // (The mark made absent: this test also runs inside the image. Nothing else of the test's own environment is passed.)
-      env: { HOME: person, USER: "person", PATH: `${join(person, ".local", "bin")}:${dirname(process.execPath)}:/usr/bin:/bin`, OATS_BB_CHECKS_MARK_ABSENT: "1" },
+      // (Nothing of the test's own environment is passed; the switch only where the mark is: `ABSENT`.)
+      env: { HOME: person, USER: "person", PATH: `${join(person, ".local", "bin")}:${dirname(process.execPath)}:/usr/bin:/bin`, ...ABSENT },
     });
     expect([ran.status, ran.signal, ran.stdout]).toEqual([97, null, ""]);
     expect(ran.stderr).toBe(`refused: ${script.slice(script.lastIndexOf("/") + 1)} runs only inside the container of the oats-bb plugin checks (it changes the machine it runs on); start it with plugin/container/ci.sh, never by hand\n`);
     expect(holds(person)).toEqual(before);
   });
 
-  it("the guard is the FIRST thing a guarded script does: before its own first statement, and before any other import", () => {
-    for (const [script, runner] of Object.entries(GUARDED)) {
-      const lines = readFileSync(join(CONTAINER, script), "utf8").split("\n");
-      const up = relative(dirname(join(CONTAINER, script)), CONTAINER).split("/").filter(Boolean).map(() => "..").join("/");
-      if (runner === "node") {
-        const first = lines.find((line) => /^\s*(import|export|const|let|var|function|await|if|for|try)\b/.test(line));
-        expect([script, first]).toEqual([script, `import "${up === "" ? "." : up}/guard.mjs"; // FIRST: refuses outside the checks' container, before anything is touched`]);
-      } else {
-        const first = lines.slice(1).find((line) => line.trim() !== "" && !line.startsWith("#"));
-        expect([script, first]).toEqual([script, `. "$(dirname "$0")/${up === "" ? "" : `${up}/`}guard.sh" || exit 97 # refuses outside the checks' container, before anything is touched (and where the guard itself is not beside it)`]);
-      }
-    }
+  it("the guard is the FIRST thing a guarded script does: before its own first statement, and before any other import; a shell script's line 1 is a plain shebang", () => {
+    for (const [script, runner] of Object.entries(GUARDED)) readToBeGuarded(script, runner);
+  });
+
+  it("what counts as a script's first line that does something: a statement on a comment's line, or on line 1, is one", () => {
+    // (Held on made-up scripts: `firstEffective` reads from the container directory, so they are written beside it, in the system's temporary directory, and read by a path that leads there.)
+    const directory = mkdtempSync(join(tmpdir(), "oats-bb-guard-first-"));
+    made.push(directory);
+    const first = (text: string, runner: "sh" | "node") => {
+      writeFileSync(join(directory, "script"), text);
+      return firstEffective(relative(CONTAINER, join(directory, "script")), runner);
+    };
+    expect(first('// a comment\n/* one */\n/*\n * a block\n */\n\nimport "./guard.mjs";\nimport "./x.mjs";\n', "node")).toBe('import "./guard.mjs";');
+    expect(first('/* */ import "./evil.mjs";\nimport "./guard.mjs";\n', "node")).toBe('/* */ import "./evil.mjs";');
+    expect(first('/*\n a block */ await import("./evil.mjs");\nimport "./guard.mjs";\n', "node")).toBe(' a block */ await import("./evil.mjs");');
+    expect(first('#!/usr/bin/env node\nrmSync(home);\nimport "./guard.mjs";\n', "node")).toBe("rmSync(home);");
+    expect(first("#!/bin/sh\n# a comment\n\n  # another\n. ./guard.sh\nrm -rf x\n", "sh")).toBe(". ./guard.sh");
+    expect(first("#!/bin/sh\n: > /tmp/x # a comment\n. ./guard.sh\n", "sh")).toBe(": > /tmp/x # a comment");
+  });
+
+  it("the unit stage runs this file a second time where the mark is truly gone, and this is that pass when ci.sh says so", () => {
+    // ci.sh moves the mark away as root, says which pass it is, and puts the mark back whatever the test said.
+    const ci = readFileSync(join(CONTAINER, "ci.sh"), "utf8");
+    expect(ci).toContain(`  docker exec -u root "$NAME" mv ${MARK} ${MARK}.moved\n  gone=0\n  run env OATS_BB_GUARD_PASS=mark-gone npx vitest run test/container-guard.test.ts || gone=$?\n  docker exec -u root "$NAME" mv ${MARK}.moved ${MARK}\n`);
+    expect(ci.match(/^ {4}run sh container\/unit\.sh\n {4}mark_gone_pass$/gm)?.length).toBe(2); // in `unit` and in `all`
+    expect(ci.match(/run sh container\/unit\.sh/g)?.length).toBe(2);
+    // In that pass the mark IS gone: every refusal above was made with no switch.
+    if (process.env.OATS_BB_GUARD_PASS === "mark-gone") expect([MARKED, ABSENT]).toEqual([false, {}]);
+    else expect(process.env.OATS_BB_GUARD_PASS).toBeUndefined();
   });
 
   it.each(Object.entries(GUARDED).filter(([, runner]) => runner !== "node"))("%s, copied somewhere WITHOUT the guard beside it, does not run on: it ends there, and changes nothing", (script, runner) => {
     // (bash goes on after a `.` of a file that is not there: `|| exit 97` on the guard's own line stops it. A `.mjs` whose import is not there does not load at all.)
+    readToBeGuarded(script, runner);
     const person = home();
     const alone = mkdtempSync(join(tmpdir(), "oats-bb-guard-alone-"));
     made.push(alone);
@@ -116,19 +188,23 @@ describe("only inside the checks' container", () => {
     expect(readFileSync(join(CONTAINER, "Dockerfile"), "utf8")).toMatch(/^RUN printf '[^']+' > \/etc\/oats-bb-checks-image$/m);
   });
 
-  it("every script of the directory is guarded, runs on the host, is a tool that changes nothing of a person's, or is a module: a new one is put in a list", () => {
-    const scripts = (readdirSync(CONTAINER, { recursive: true }) as string[])
-      .filter((name) => /\.(sh|mjs)$/.test(name) && !/(^|\/)out(\.|\/|$)/.test(name) && !name.startsWith("locks/"))
-      .filter((name) => !MODULE_DIRECTORIES.some((directory) => name.startsWith(directory)))
+  it("every file of the directory that can be run is in one of the lists: a new one is CLASSIFIED by whoever adds it", () => {
+    // WHAT THIS IS: a reminder to classify, NOT a proof that an unguarded script is harmless: no pattern can tell
+    // that. Whoever adds a file here must put it in a list, and reads the lists' rule when they do; the review of
+    // that change is what holds a wrong classification. What IS proven is above: each guarded entry refuses.
+    // Every file counts but documents and data (a script under another extension is not let through unlisted).
+    const NOT_RUN = /(^|\/)(Dockerfile|\.gitignore)$|\.(md|json|yml|ts|png)$/;
+    const files = (readdirSync(CONTAINER, { recursive: true }) as string[])
+      .filter((name) => statSync(join(CONTAINER, name)).isFile() && !/(^|\/)out(\.|\/|$)/.test(name) && !name.startsWith("locks/") && !NOT_RUN.test(name))
       .sort();
     const listed = [...Object.keys(GUARDED), ...HOST, ...TOOLS, ...MODULES].sort();
-    expect(scripts).toEqual(listed);
+    expect(files.filter((name) => !MODULE_DIRECTORIES.some((directory) => name.startsWith(directory)))).toEqual(listed);
     expect(new Set(listed).size).toBe(listed.length);
-    // A script that is NOT guarded does none of what the guard is for (a host script starts a container for it).
+    // A module directory holds `.mjs` modules alone, none made to be run by itself (no shebang).
+    for (const name of files.filter((name) => MODULE_DIRECTORIES.some((directory) => name.startsWith(directory)))) expect([name, name.endsWith(".mjs") && !/^#!/.test(readFileSync(join(CONTAINER, name), "utf8"))]).toEqual([name, true]);
+    // A script that is NOT guarded does not do, in so many words, what the guarded do to a person's tools and settings (a host script starts a container for that).
     const CHANGES = /\.away\b|\bnpm (install|i) (-g|--global)|\.claude\/settings\.json|concurrency-limit["', ]+host|\.local\/bin\/(oats|claude)|\bln -sf\b/;
     for (const script of [...TOOLS, ...MODULES]) expect([script, CHANGES.test(readFileSync(join(CONTAINER, script), "utf8"))]).toEqual([script, false]);
     for (const script of HOST) expect([script, /\bdocker (run|exec|build)\b/.test(readFileSync(join(CONTAINER, script), "utf8"))]).toEqual([script, true]);
-    // …and a guarded one does import or source nothing BEFORE the guard that could (held by the test above), and every module of a module directory is reached through a guarded entry alone.
-    for (const directory of MODULE_DIRECTORIES) for (const name of readdirSync(join(CONTAINER, directory))) expect([name, /^#!/.test(readFileSync(join(CONTAINER, directory, name), "utf8"))]).toEqual([name, false]);
   });
 });

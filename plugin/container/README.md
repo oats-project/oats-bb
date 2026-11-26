@@ -303,16 +303,30 @@ script (a copy of the script with no guard beside it stops there too), `import "
 processes with a bare environment (`env -i`), and a variable is inherited by whatever a person's
 shell starts. Not `/.dockerenv`: every container has that one, a person's too.
 
-Guarded: `setup.sh`, `live.sh`, `live-ui.mjs`, `locked-install.sh`, `real/setup.sh`,
-`real/workspace.sh`, `real/scenario.mjs`, `real/pi/setup.sh`, `real/pi/scenario.mjs`,
-`real/mail/inside.sh`, `real/mail/check.mjs`. NOT guarded, and why: the four that run on the host
-and start the container (`ci.sh`, `real/run.sh`, `real/mail/run.sh`, `relock.sh`: they write their
-own `out/` alone); and the tools that change nothing but the directory they are handed, or only
-read, which unit tests run on any machine (`unit.sh`, the two `no-…-fetch.sh`, `fake-oats.mjs`,
-the mocks, `real/oats-record.mjs`, `real/bb-logs.sh`, `real/bb-plugin-command.sh`).
-`test/container-guard.test.ts` holds the lists: it runs each guarded script in a made-up home that
-holds a `claude`, an `oats` and settings, with the mark made absent, and reads that nothing of it
-changed; a new script of this directory must be put in one of the lists.
+`test/container-guard.test.ts` holds the lists (the guarded; the four that run on the host; the
+tools; the modules): they are written there once, and not here. What is NOT guarded, and why:
+- the four that run ON THE HOST and start the container for everything else (`ci.sh`, `real/run.sh`,
+  `real/mail/run.sh`, `relock.sh`). On the host they write `out/` directories of this one; and,
+  each where it is asked to: `relock.sh` the locks, `real/run.sh` with `UPDATE_FIXTURES=1` the
+  recorded fixtures, `real/mail/run.sh` a clone of aweb under `real/out/mail/` and its stack of
+  containers. None touches a person's tools or settings;
+- `unit.sh`: it does what a developer does in a checkout (typecheck, the unit tests, the plugin's
+  build into `dist/`), and no more;
+- the tools that write only the directory or the file they are handed, or only read, which unit
+  tests run on any machine (the two `no-…-fetch.sh`, `fake-oats.mjs`, the mocks,
+  `real/oats-record.mjs`, `real/bb-logs.sh`, `real/bb-plugin-command.sh` and its own test).
+
+The test runs each guarded script in a made-up home that holds a `claude`, an `oats` and settings,
+where the mark is not, and reads that nothing of it changed; before it runs one, it has read that
+the guard is the script's first line that does something. In the image the mark is there, so the
+first pass asks for the refusal by the guard's own switch (`OATS_BB_CHECKS_MARK_ABSENT=1`, which
+can only refuse); `ci.sh` then runs the test A SECOND TIME with the mark truly moved away, and
+puts it back: that pass is what fails a guard that no longer looks for the mark. The lists
+themselves are a reminder to CLASSIFY a new file of this directory, not a proof that an unguarded
+one is harmless: whoever adds a file puts it in a list, and the review of that change holds it.
+
+A `.mjs` entry in a checkout whose other imports do not resolve (no `node_modules`) ends on node's
+own "module not found" before the guard can say its line: nothing is touched there either.
 
 **A container made from an older image has no mark**: build the image again (`ci.sh` does) before
 you run a guarded script in it.

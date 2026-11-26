@@ -195,7 +195,7 @@ describe("what the plugin adds", () => {
 
   test("refusalLines: a refusal's code is kept, and its message is one display line", () => {
     expect(refusalLines("E_PLAN_STALE: the plan moved since it was read")).toEqual(["E_PLAN_STALE: the plan moved since it was read"]);
-    expect(refusalLines("oats was not found on checks-host")).toEqual(["oats was not found on checks-host"]);
+    expect(refusalLines("oats was not found on checks")).toEqual(["oats was not found on checks"]);
     expect(refusalLines("")).toEqual([]);
     expect(refusalLines(undefined)).toEqual([]);
   });
@@ -203,7 +203,7 @@ describe("what the plugin adds", () => {
   test("refusalCode: the code that leads a refusal, the kernel's or the plugin's own, and nothing else", () => {
     expect(refusalCode("E_PLAN_STALE: the plan moved since it was read")).toBe("E_PLAN_STALE");
     expect(refusalCode("OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped")).toBe("OATS_TIMEOUT");
-    for (const none of ["TOKEN: abc123", "NOTE: nothing to do", "oats was not found on checks-host", "E_SOUL_INVALID:", "E_: m", " E_X: m", "e_x: m", "the E_X: m", "E_X:\nm", "E_X:\tm", "", undefined, 7]) expect(refusalCode(none), String(none)).toBeNull();
+    for (const none of ["TOKEN: abc123", "NOTE: nothing to do", "oats was not found on checks", "E_SOUL_INVALID:", "E_: m", " E_X: m", "e_x: m", "the E_X: m", "E_X:\nm", "E_X:\tm", "", undefined, 7]) expect(refusalCode(none), String(none)).toBeNull();
   });
 
   test("refusalLines: each line of the kernel's is a line of its own, and no line break is left in one", () => {

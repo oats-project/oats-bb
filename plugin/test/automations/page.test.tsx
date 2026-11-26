@@ -77,7 +77,7 @@ describe("the lists", () => {
   });
 
   it("the plugin's own lack (no deployment, no machine chosen) is its own sentence, its code after", async () => {
-    const message = 'This bb server has 2 machines (checks-host, osprey). Choose the one that holds the OATS homes: set "Machine" in the OATS plugin\'s settings.';
+    const message = 'This bb server has 2 machines (checks, osprey). Choose the one that holds the OATS homes: set "Machine" in the OATS plugin\'s settings.';
     const refused = { ok: false as const, code: "CHOOSE_HOST", message };
     const slot = await page("", { automations: () => ({ at: AT, hostId: null, oats: null, schedule: refused, trigger: refused }) });
     // The plugin's one notice for an OATS that cannot be read: a person's words, the server's own one press away, and the way to the settings.
@@ -142,9 +142,9 @@ describe("the lists", () => {
 describe("what cannot be shown at all (D-285)", () => {
   it("no oats on the machine: the notice every place of the plugin shows for it, naming the machine, with Retry and the way to the settings", async () => {
     const refused = { ok: false as const, code: "OATS_NOT_FOUND", message: "`oats` could not be run (ENOENT)" };
-    const named = await page("", { automations: () => ({ at: AT, hostId: null, machine: "checks-host", oats: null, schedule: refused, trigger: refused }) });
+    const named = await page("", { automations: () => ({ at: AT, hostId: null, machine: "checks", oats: null, schedule: refused, trigger: refused }) });
     const gate = await named.findByTestId("oats-automations-gate");
-    expect(gate.textContent).toBe("OATS is not installed on checks-host▸DetailsInstall OATS there, or set the path to oats in the plugin's settings.OATS_NOT_FOUND: `oats` could not be run (ENOENT)RetryOpen settings"); // (the plugin's one notice since the text cut: the sentence and "code: message" under its one Details)
+    expect(gate.textContent).toBe("OATS is not installed on checks▸DetailsInstall OATS there, or set the path to oats in the plugin's settings.OATS_NOT_FOUND: `oats` could not be run (ENOENT)RetryOpen settings"); // (the plugin's one notice since the text cut: the sentence and "code: message" under its one Details)
     expect(within(gate).getByTestId("oats-unreadable").dataset.code).toBe("OATS_NOT_FOUND");
     expect(within(gate).getByRole("link", { name: "Open settings" }).getAttribute("href")).toMatch(/^\/settings\/plugins\//);
     // Retry asks the server to read OATS again.
@@ -171,7 +171,7 @@ describe("what cannot be shown at all (D-285)", () => {
     expect(gateOf("schedule", none)).toEqual({ title: "Schedules need OATS 0.29 or later", detail: "Update OATS to see the workspace's schedules and this computer's own, and where each one runs.", code: "OATS_NO_AUTOMATIONS" });
     expect(gateOf("trigger", none)).toMatchObject({ title: "Triggers need OATS 0.29 or later" });
     // No `oats` at all is not this gate: it is the plugin's one notice for an OATS that cannot be read.
-    expect(gateOf("trigger", { code: "OATS_NOT_FOUND", message: "oats was not found on checks-host: install OATS there." })).toBeNull();
+    expect(gateOf("trigger", { code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there." })).toBeNull();
     expect(gateOf("schedule", { code: "E_SCHEDULE_INVALID", message: "x" })).toBeNull();
     expect(gateOf("schedule", null)).toBeNull();
   });

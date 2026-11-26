@@ -33,7 +33,7 @@
    },
    "host": {
     "id": "host_checks",
-    "name": "checks-host"
+    "name": "checks"
    },
    "createdAt": 1795117000000,
    "updatedAt": 1795117007000
@@ -70,7 +70,7 @@
    },
    "host": {
     "id": "host_checks",
-    "name": "checks-host"
+    "name": "checks"
    },
    "createdAt": 1795117000000,
    "updatedAt": 1795117006000
@@ -107,7 +107,7 @@
    },
    "host": {
     "id": "host_checks",
-    "name": "checks-host"
+    "name": "checks"
    },
    "createdAt": 1795117000000,
    "updatedAt": 1795117005000
@@ -144,7 +144,7 @@
    },
    "host": {
     "id": "host_checks",
-    "name": "checks-host"
+    "name": "checks"
    },
    "createdAt": 1795117000000,
    "updatedAt": 1795117004000
@@ -181,7 +181,7 @@
    },
    "host": {
     "id": "host_checks",
-    "name": "checks-host"
+    "name": "checks"
    },
    "createdAt": 1795117000000,
    "updatedAt": 1795117003000
@@ -218,7 +218,7 @@
    },
    "host": {
     "id": "host_checks",
-    "name": "checks-host"
+    "name": "checks"
    },
    "createdAt": 1795117000000,
    "updatedAt": 1795117002000
@@ -255,7 +255,7 @@
    },
    "host": {
     "id": "host_checks",
-    "name": "checks-host"
+    "name": "checks"
    },
    "createdAt": 1795117000000,
    "updatedAt": 1795117001000
@@ -292,7 +292,7 @@
    },
    "host": {
     "id": "host_checks",
-    "name": "checks-host"
+    "name": "checks"
    },
    "createdAt": 1795117000000,
    "updatedAt": 1795117000500

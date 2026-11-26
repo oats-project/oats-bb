@@ -1,4 +1,4 @@
-Where a fixture names the machine, the name is the checks' neutral one, `checks-host`
+Where a fixture names the machine, the name is the checks' neutral one, `checks`
 (`container/ci.sh`'s default; a machine's name is a name: among what a fixture may be varied in).
 
 One directory per feature of the plugin (`../../README.md`, "One module per feature"), each with

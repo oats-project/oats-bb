@@ -104,7 +104,7 @@ test("a card says who (the name as words, its soul on its line, and no machine),
   expect([workerFacts.parentElement!.getAttribute("data-fit"), workerFacts.parentElement!.className.split(/\s+/).includes("flex-wrap")]).toEqual(["beside", false]);
   // The mark and the age stand at the end of that line (P5), not on a line of their own.
   expect(cardFacts.parentElement!.parentElement!.contains(within(release).getByTestId("oats-status-line"))).toBe(true);
-  expect(release.textContent).not.toMatch(/checks-host/);
+  expect(release.textContent).not.toMatch(/checks/);
   expect(within(release).getByTestId("oats-needs-where").querySelector('[data-phrase="reason"], [data-phrase="where"]')).toBeNull(); // on its thread: no reason, no glyph
   // Under "Needs you" the heading says the word: the card keeps the mark, named for a screen reader, and the wait.
   expect(within(release).getByTestId("oats-state").textContent).toBe("!");
@@ -569,14 +569,14 @@ test("while OATS cannot be read after it was, the home keeps what it showed, und
   const NOW = Date.parse("2026-11-20T10:00:00.000Z");
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   try {
-    const last = { at: new Date(NOW - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents: fixtureAgents() };
+    const last = { at: new Date(NOW - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
     const slot = await homePage({
       rpc: handlers({ snapshot: () => ({ ok: false, at: new Date(NOW).toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }),
     });
     const notice = await slot.findByRole("alert");
-    expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on checks-host");
+    expect(notice.querySelector("h3")!.textContent).toBe("OATS did not answer on checks");
     // Its face: the title, the age in one form, that the acts are off, its one fold, Retry.
-    expect(notice.textContent).toBe(`OATS did not answer on checks-hostRead 2 min ago. Acts are off.▸Details${within(notice).getByTestId("oats-notice-details").querySelector("div")!.textContent}Retry`);
+    expect(notice.textContent).toBe(`OATS did not answer on checksRead 2 min ago. Acts are off.▸Details${within(notice).getByTestId("oats-notice-details").querySelector("div")!.textContent}Retry`);
     expect(Array.from(within(notice).getByTestId("oats-notice-details").querySelectorAll("p")).map((line) => line.textContent)).toEqual(["It took more than 20 s.", "OATS_TIMEOUT: `oats` did not answer within 20 s and was stopped"]);
     expect(slot.getByTestId("oats-home-needs").textContent).toContain("Needs you");
     expect(slot.getAllByTestId("oats-needs-card").length).toBeGreaterThan(0);
@@ -634,7 +634,7 @@ test("Home › Agents: every agent OATS has, in the sidebar's order, each with i
   expect(within(tmux).getByTestId("oats-home-agent-where").getAttribute("title")).toBe("oats-maintainer · tmux");
   expect(within(tmux).getByTestId("oats-home-agent-where").previousElementSibling).toBe(within(tmux).getByTestId("oats-home-agent")); // on the name's line, after the name
   expect(within(within(tmux).getByTestId("oats-home-agent-where")).getByTestId("oats-tmux").parentElement!.className.split(/\s+/)).toContain("shrink-0"); // the glyph is never pushed out
-  expect(tmux.textContent).not.toMatch(/started by|Ana|checks-host/);
+  expect(tmux.textContent).not.toMatch(/started by|Ana|checks/);
   expect(within(tmux).getByTestId("oats-state").textContent).toContain("Needs you");
   // An agent on its bb thread: its soul alone, no reason and no glyph.
   expect(within(rows.find((row) => row.dataset.instance === "redesign-ui-lead")!).getByTestId("oats-home-agent-where").textContent).toBe("oats-product-expert");
@@ -686,7 +686,7 @@ test("an agent with no bb thread that needs the person has its card: what it ask
     expect(within(card).getByTestId("oats-needs-where").textContent).toBe("oats-maintainer · tmux");
     expect(within(card).getByTestId("oats-needs-elsewhere").textContent).toBe("Answer it in its terminal.");
     expect(card.textContent).toBe("Night watch helperoats-maintainer · tmux!4 dOpenWhich branch do I watch?Answer it in its terminal.");
-    expect(card.textContent).not.toMatch(/oats session attach|checks-host/);
+    expect(card.textContent).not.toMatch(/oats session attach|checks/);
     expect(within(card).queryByRole("button", { name: "Copy the command" })).toBeNull();
     expect(within(card).getByTestId("oats-needs-open").textContent).toBe("Open");
     expect(within(card).getByTestId("oats-needs-open").getAttribute("aria-label")).toBe("Open its page: Night watch helper");
@@ -747,7 +747,7 @@ test("a workspace with no agent says so in three words, and New agent is the one
 });
 
 test("while what is shown is the roster as last read, a card's answers and its reply are held, and the page's one notice says why; Open still opens", async () => {
-  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 2 * 60_000 - 5_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   const slot = await homePage({
     rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }),
     sdk: {
@@ -1167,7 +1167,7 @@ test("the Lost section holds the agents whose roster row says \"Lost\", and no o
   again.unmount();
   resetApp();
   // The roster shown is the last one read: the acts are off, this one too (the notice on the same screen says so).
-  const last = { at: new Date(Date.now() - 120_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents };
+  const last = { at: new Date(Date.now() - 120_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents };
   const stale = await homePage({ rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }) });
   const held = await stale.findByTestId("oats-lost-start");
   expect((held as HTMLButtonElement).disabled).toBe(true);
@@ -1569,7 +1569,7 @@ test("the same agent, running: its card offers bb's choices; and Start on a stop
   expect(within(card).queryByTestId("oats-needs-stopped")).toBeNull();
   running.unmount();
   const agents = fixtureAgents().map((agent) => (agent.instance === "flaky-ci-developer" ? { ...agent, running: false as const, runtimeState: "stopped" } : agent));
-  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents };
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents };
   const stale = await homePage({ rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }), sdk: BB_ASKS });
   const held = await cardOf(stale, "flaky-ci-developer");
   expect((within(held).getByTestId("oats-needs-start") as HTMLButtonElement).disabled).toBe(true);
@@ -1672,7 +1672,7 @@ test("New agent is on every home, first on the page: with agents too, on the pag
   expect(tab.queryByTestId("oats-home-title")).toBeNull();
   tab.unmount();
   // the roster as last read: off, with no reason beside it; the roster's notice under it, on the same screen, says why
-  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 2 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   const stale = await homePage({ rpc: handlers({ snapshot: () => ({ ok: false, at: new Date().toISOString(), code: "OATS_TIMEOUT", message: "`oats` did not answer within 20 s and was stopped", last }) }) });
   await stale.findByTestId("oats-home-needs");
   expect((stale.getByTestId("oats-home-new-agent") as HTMLButtonElement).disabled).toBe(true);

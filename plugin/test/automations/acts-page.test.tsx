@@ -441,15 +441,15 @@ describe("Enable scheduler (D-270)", () => {
   const off = () => ({ at: AT, hostId: "host_checks", oats: OATS, schedule: { ok: true as const, list: schedules("schedule-list-scheduler-off.json") }, trigger: { ok: true as const, list: triggers() } });
 
   it("names the machine bb chose, which need not be the one the person sits at: the notice, the confirmation, the rows and their switches", async () => {
-    const slot = await page("", { automations: () => ({ ...off(), machine: "checks-host" }) });
-    expect((await slot.findByTestId("oats-automations-scheduler-off")).textContent).toContain("The scheduler is not running on checks-host");
-    expect(slot.container.textContent).toContain("Set to run on checks-host");
+    const slot = await page("", { automations: () => ({ ...off(), machine: "checks" }) });
+    expect((await slot.findByTestId("oats-automations-scheduler-off")).textContent).toContain("The scheduler is not running on checks");
+    expect(slot.container.textContent).toContain("Set to run on checks");
     expect(slot.container.textContent).not.toMatch(/this (computer|machine)/i);
-    expect(within(await row(slot, "local/daily-review")).getByRole("switch").getAttribute("aria-label")).toBe("local/daily-review enabled on checks-host");
+    expect(within(await row(slot, "local/daily-review")).getByRole("switch").getAttribute("aria-label")).toBe("local/daily-review enabled on checks");
     fireEvent.click(await slot.findByTestId("oats-automations-enable-scheduler"));
     const dialog = await slot.findByRole("dialog");
-    expect(dialog.textContent).toContain("OATS installs its scheduler's timer on checks-host, for the account bb's machine runs as:");
-    expect(dialog.textContent).toContain("Nothing else on checks-host is changed.");
+    expect(dialog.textContent).toContain("OATS installs its scheduler's timer on checks, for the account bb's machine runs as:");
+    expect(dialog.textContent).toContain("Nothing else on checks is changed.");
     expect(dialog.textContent).not.toMatch(/this (computer|machine)/i);
   });
 

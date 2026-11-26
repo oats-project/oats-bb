@@ -158,7 +158,7 @@ test("What will be created: in view what a person decides on (the name, where it
   expect(drawn.folded).toEqual([
     ["Home", "agents/oats-developer/instances/flaky-ci-2-developer"],
     ["Soul", "oats-developer"],
-    ["Runs on", "checks-host"],
+    ["Runs on", "checks"],
     ["Harness", "this computer's default for every soul"],
     ["Session", "bb thread"],
     ["Team", "oats · default"],
@@ -719,7 +719,7 @@ test("the preview waits for the harness read: in flight, with a soul chosen, the
 });
 
 test("no bb session provider, while the roster cannot be read: the roster's notice stands alone and holds the form; nothing is asked of the kernel until it reads again", async () => {
-  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents: fixtureAgents() };
+  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   const onTmux = (JSON.parse(readFileSync(join(process.cwd(), "test/fixtures/spawn/spawn-preview-no-provider.json"), "utf8")) as { result: Record<string, unknown> }).result;
   let stale = true;
   const live = handlers().snapshot;
@@ -1007,7 +1007,7 @@ test("the same refusal without the kernel's marker is what its code says, whatev
 // ONE Retry on a screen (T3; PR E's fourth review round): while OATS cannot be read the roster's notice has it; the
 // harness list, which fails for the same cause, keeps its sentence and draws no second button named Retry.
 test("while OATS cannot be read the form draws ONE button named Retry, the notice's: the harness list's own is not drawn beside it", async () => {
-  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents: fixtureAgents() };
+  const last = { at: "2026-11-23T17:36:56.000Z", deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   let stale = false;
   const live = handlers().snapshot;
   const slot = await ready(
@@ -1037,12 +1037,12 @@ test("while OATS cannot be read the form draws ONE button named Retry, the notic
 });
 
 test("held as it is, the form keeps saying why: the word of an unknown outcome stays when the roster is read again, and Check result is held like the acts while OATS cannot be read", async () => {
-  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   let stale = false;
   const live = handlers().snapshot;
   const slot = await ready(
     previews({
-      snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks-host: install OATS there", machine: "checks-host", last } : live(input)),
+      snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there", machine: "checks", last } : live(input)),
       spawn: () => {
         throw new Error("OATS_TIMEOUT: oats spawn did not answer");
       },
@@ -1302,10 +1302,10 @@ test("a soul that cannot be spawned says why under the soul, once, and Spawn is 
 });
 
 test("while OATS cannot be read the form is held like the acts: the roster's own notice, the fields and Spawn off with no second reason, and nothing asked of the kernel", async () => {
-  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents: fixtureAgents() };
-  const slot = await form("oats-developer", previews({ snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks-host: install OATS there", machine: "checks-host", last }) }));
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
+  const slot = await form("oats-developer", previews({ snapshot: () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there", machine: "checks", last }) }));
   const notice = await slot.findByTestId("oats-unreadable");
-  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks-host");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks");
   expect(notice.textContent).toContain("Read 40 min ago.");
   expect(slot.getAllByTestId("oats-held")).toHaveLength(1);
   expect(fieldset(slot).disabled).toBe(true);
@@ -1320,11 +1320,11 @@ test("while OATS cannot be read the form is held like the acts: the roster's own
 });
 
 test("held, the column keeps only the facts of the values on screen: those read for other values are not drawn as theirs, nor is the foot", async () => {
-  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents: fixtureAgents() };
+  const last = { at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() };
   let stale = false;
   const live = handlers().snapshot;
   const slot = await ready({
-    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks-host: install OATS there", machine: "checks-host", last } : live(input)),
+    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there", machine: "checks", last } : live(input)),
     spawnPlan: (input) => (input.name === undefined ? answer(input) : new Promise(() => undefined)),
   });
   // Held with the preview of the values on screen: its facts and its foot stay.
@@ -1338,7 +1338,7 @@ test("held, the column keeps only the facts of the values on screen: those read 
   // Held while the values on screen have no preview of their own: nothing of another's is drawn.
   stale = false;
   const other = await ready({
-    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks-host: install OATS there", machine: "checks-host", last } : live(input)),
+    snapshot: (input) => (stale ? { ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there", machine: "checks", last } : live(input)),
     spawnPlan: (input) => (input.name === undefined ? answer(input) : new Promise(() => undefined)),
   });
   set(other, "oats-spawn-name", "ranker-v4-probe");

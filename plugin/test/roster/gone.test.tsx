@@ -159,14 +159,14 @@ test("an act asked while OATS itself cannot be read: the confirmation opens on t
   let fail = true;
   const { slot, ask } = await places({
     stopPlan: () => {
-      if (fail) throw new Error("OATS_NOT_FOUND: oats was not found on checks-host: install OATS there");
+      if (fail) throw new Error("OATS_NOT_FOUND: oats was not found on checks: install OATS there");
       return stopPlanOf(INSTANCE);
     },
   });
   act(() => ask().plan("stop"));
   const dialog = await slot.findByRole("dialog");
   const notice = within(await within(dialog).findByTestId("oats-unreadable")).getByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks-host");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks");
   expect(notice.textContent!.indexOf("OATS_NOT_FOUND")).toBeGreaterThan(notice.textContent!.indexOf("Install OATS there"));
   fail = false;
   fireEvent.click(within(dialog).getByRole("button", { name: "Retry" }));

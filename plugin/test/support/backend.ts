@@ -35,7 +35,7 @@ export async function startBackend(
     experimental_paths: { dataDir: join(fake.deployment, "data"), tempDir: fake.tempDir },
     experimental_watch: () => ({ dispose: async () => undefined }),
   });
-  const hosts = [makeHostResponse({ id: "host_checks", name: "checks-host" })];
+  const hosts = [makeHostResponse({ id: "host_checks", name: "checks" })];
   const projects = [{ id: "proj_release", sources: [{ hostId: "host_checks", path: join(fake.deployment, "agents", "oats-maintainer", "instances", "release-070-maintainer") }] }];
   const server = createFakePluginHost({
     pluginId: "oats",

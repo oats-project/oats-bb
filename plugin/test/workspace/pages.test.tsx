@@ -334,7 +334,7 @@ test("Machines: ONE list: this computer first, by its name, with its agents; the
   const slot = await page("machines", {
     machines: () => ({
       machines: [
-        { id: "checks-host", route: null, isThisMachine: true, label: null, folder: "/abs/deployment" },
+        { id: "checks", route: null, isThisMachine: true, label: null, folder: "/abs/deployment" },
         { id: "devbox-oats", route: "devbox.invalid", isThisMachine: false, label: "devbox", folder: "/srv/oats" },
         { id: "build", route: "build.invalid", isThisMachine: false, label: null, folder: null },
       ],
@@ -343,7 +343,7 @@ test("Machines: ONE list: this computer first, by its name, with its agents; the
   await slot.findAllByTestId("oats-machine-row");
   await waitFor(() =>
     expect(machineRows(slot)).toEqual([
-      [["checks-host", "this computer", "8 agents"], ["Folder: /abs/deployment"]],
+      [["checks", "this computer", "8 agents"], ["Folder: /abs/deployment"]],
       // A machine by its name; its id in the registry is under Details where the name is another.
       [["devbox"], ["Id: devbox-oats", "ssh host: devbox.invalid", "Folder: /srv/oats"]],
       [["build"], ["ssh host: build.invalid"]],
@@ -360,7 +360,7 @@ test("Machines: ONE list: this computer first, by its name, with its agents; the
 test("with this computer alone the list is its one row and nothing more; with no machine at all: two words", async () => {
   const slot = await page("machines"); // the default answer holds this machine only
   await slot.findAllByTestId("oats-machine-row");
-  await waitFor(() => expect(machineRows(slot)).toEqual([[["checks-host", "this computer", "8 agents"], []]]));
+  await waitFor(() => expect(machineRows(slot)).toEqual([[["checks", "this computer", "8 agents"], []]]));
   expect(slot.getByTestId("oats-machines-page").textContent).not.toMatch(/No other|no other/);
   slot.unmount();
   resetApp();
@@ -371,15 +371,15 @@ test("with this computer alone the list is its one row and nothing more; with no
 // What a tab draws of the roster (Machines: this computer's name and its agents; Teams: each team's
 // count) is as old as the roster: while OATS cannot be read the tab says so with the notice every
 // place shows, above what it keeps; with no roster ever read, the notice in the roster's place.
-const LAST = () => ({ at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks-host" }, agents: fixtureAgents() });
-const unread = (last: ReturnType<typeof LAST> | null) => () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks-host: install OATS there", machine: "checks-host", last });
+const LAST = () => ({ at: new Date(Date.now() - 40 * 60_000).toISOString(), deployment: { root: "/abs/deployment", workspace: "oats", machine: "checks" }, agents: fixtureAgents() });
+const unread = (last: ReturnType<typeof LAST> | null) => () => ({ ok: false as const, at: new Date().toISOString(), code: "OATS_NOT_FOUND", message: "oats was not found on checks: install OATS there", machine: "checks", last });
 
 test("Machines while OATS cannot be read after it was: the notice with the age, above this computer and its agents as last read", async () => {
   const slot = await page("machines", { snapshot: unread(LAST()) });
   const notice = await slot.findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks-host");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks");
   expect(notice.textContent).toContain("Read 40 min ago.");
-  await waitFor(() => expect(machineRows(slot)[0]![0]).toEqual(["checks-host", "this computer", "8 agents"]));
+  await waitFor(() => expect(machineRows(slot)[0]![0]).toEqual(["checks", "this computer", "8 agents"]));
   expect(notice.compareDocumentPosition(slot.getByTestId("oats-machine-row")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(slot.getAllByTestId("oats-unreadable")).toHaveLength(1);
 });
@@ -387,10 +387,10 @@ test("Machines while OATS cannot be read after it was: the notice with the age, 
 test("Machines with no roster ever read: the notice in a person's words, the code after them, Retry; this computer by the name the server knows, with no count", async () => {
   const slot = await page("machines", { snapshot: unread(null) });
   const notice = await slot.findByRole("alert");
-  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks-host");
+  expect(notice.querySelector("h3")!.textContent).toBe("OATS is not installed on checks");
   expect(notice.textContent!.indexOf("OATS_NOT_FOUND")).toBeGreaterThan(notice.textContent!.indexOf("Install OATS there"));
   expect(slot.getByRole("button", { name: "Retry" })).toBeTruthy();
-  await waitFor(() => expect(machineRows(slot)[0]![0]).toEqual(["checks-host", "this computer"]));
+  await waitFor(() => expect(machineRows(slot)[0]![0]).toEqual(["checks", "this computer"]));
 });
 
 test("Teams while OATS cannot be read after it was: the notice with the age, and the counts as last read", async () => {

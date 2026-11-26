@@ -70,7 +70,7 @@ beforeEach(async () => {
     experimental_paths: { dataDir: join(fake.deployment, "data"), tempDir: fake.tempDir },
     experimental_watch: () => ({ dispose: async () => undefined }),
   });
-  hosts = [makeHostResponse({ id: "host_checks", name: "checks-host" })];
+  hosts = [makeHostResponse({ id: "host_checks", name: "checks" })];
   born = Date.now();
   projects = [{ id: "proj_release", sources: [{ hostId: "host_checks", path: join(fake.deployment, "agents", "oats-maintainer", "instances", "release-070-maintainer") }] }];
   await load();
@@ -96,7 +96,7 @@ describe("snapshot", () => {
     expect(first.ok).toBe(true);
     expect(first.deployment.root).toBe(fake.deployment);
     expect(first.deployment.workspace).toBe("oats");
-    expect(first.deployment.machine).toBe("checks-host"); // the name bb gives the machine, not the host's own
+    expect(first.deployment.machine).toBe("checks"); // the name bb gives the machine, not the host's own
     expect(first.agents).toHaveLength(8);
     const again = await Promise.all([rpc("snapshot"), rpc("snapshot"), rpc("snapshot")]);
     expect(again.every((snapshot) => snapshot.at === first.at)).toBe(true);
@@ -330,7 +330,7 @@ describe("snapshot", () => {
     // no client is shown the old one's agents, and no act is lent their homes.
     const failed = await rpc("snapshot");
     expect(failed.last).toBeNull();
-    expect(failed.machine).toBe("checks-host"); // the machine it looked on, by the name bb gives it
+    expect(failed.machine).toBe("checks"); // the machine it looked on, by the name bb gives it
   }, 20_000);
 
   it("a read in flight across a settings change keeps nothing: a client waits for the new deployment's answer, and an act is refused, never given the old deployment's home", async () => {
@@ -374,13 +374,13 @@ describe("snapshot", () => {
 
   it("asks to choose a machine when the server has several and none is set", async () => {
     await server.harness.dispose();
-    hosts = [makeHostResponse({ id: "host_checks", name: "checks-host" }), makeHostResponse({ id: "host_kite", name: "kite" })];
+    hosts = [makeHostResponse({ id: "host_checks", name: "checks" }), makeHostResponse({ id: "host_kite", name: "kite" })];
     await load();
     const snapshot = await rpc("snapshot");
     expect(snapshot).toMatchObject({ ok: false, code: codes.chooseHost });
-    expect(snapshot.message).toContain("checks-host, kite");
+    expect(snapshot.message).toContain("checks, kite");
     await server.harness.dispose();
-    await load({ host: "checks-host" });
+    await load({ host: "checks" });
     expect((await rpc("snapshot")).ok).toBe(true);
     await server.harness.dispose();
     await load({ host: "osprey" });

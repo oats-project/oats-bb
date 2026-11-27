@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.8.0
+
+The plugin gets the **Board**: an agent's questions and facts in bb, answered from bb. Every agent's panel now has four tabs, and the panel never changes tab by itself.
+
+The session provider doesn't change: package `oats.bb` 0.8.0 is 0.6.0's provider, unchanged apart from its version.
+
+**Upgrade:**
+- Pin `oats.bb: git:github.com/oats-project/oats-bb@v0.8.0`, then `oats sync`. The floor stays OATS 0.70.5, and bb-app stays 0.50.1.
+- Install the plugin in bb again at `v0.8.0` (`plugin/README.md`, "Install").
+- A home's provider copy needs no move: it is the same provider.
+- **A press on an option of a question SENDS the answer.** The Desktop types the answer into the agent's input and leaves it unsent; bb sends it at once.
+- **The panel changes for every agent.** It has four tabs, always: Board, Instance, Soul and Mail. In 0.7.0 the Mail tab was drawn only for an agent with a messaging layer.
+
+**Known in this release:**
+- The worst-case scenes (a workspace of 60 agents) run by hand, not in CI: the live stage that draws them is out of the checks until its start holds under load.
+- The server tests keep their real-time upper bounds, so one can fail on a slow runner without a fault in the plugin.
+- Automations is built and tested, and stays out of the default `pages`.
+- 0.7.0's Known lines on tmux agents, the Workspace page, "Stopped" for a moment, the grant seat's registry and the real mail stage still hold.
+
+### The plugin
+
+- **The Board** (#115). An agent's questions and facts are drawn in bb, on the **Board** tab of its panel. With neither, the tab says "No questions.".
+  - Press an option on the Board tab, or on the agent's card on the home, and the answer is sent to the agent at once.
+  - A press that is stale or repeated sends nothing twice.
+  - A thread's line that says "Needs you" has **Answer**, which opens the Board tab on the question.
+- **Four tabs, and the panel never chooses one** (#115). Every agent's panel has Board, Instance, Soul and Mail.
+  - The panel opens on the tab you last pressed and never moves by itself.
+  - A tab with nothing to show says so ("No questions.", "No messaging.").
+  - Pressing Mail in one agent's panel shows that agent's mail only. Another agent's panel opens on Instance until you press its own Mail tab.
+- **Who wrote a message** (#118). An opened message shows who wrote it on one line under its subject, apart from its body.
+- **bb's jump keys on the sidebar** (#109). Every thread row shows the jump key bb gave it while bb's modifier is held, as bb's own rows do.
+- **The spawn preview's check** (#112). Three keys of the kernel's preview that the plugin doesn't read (`launchConfig`, and a team's `team` and `default`) are no longer held to a shape. A preview with another shape in one of them is now answered; it was refused whole.
+
+### The checks
+
+No change to what a deployment runs.
+
+- **One shared worst-case set** (#109): 60 agents, 24 souls, 37 automations, 7 teams and 5 machines, made from recorded answers by a generator, with a live stage that draws it. The roster and the Mail tab have their scenes on it (#109, #118). The stage is out of CI for now (#114), and it asks bb's limit back until bb says so (#113).
+- **The entry scripts refuse to run outside the checks' container** (#116). They change the machine they run on, so each now stops, before it touches anything, where the mark of the checks' image is absent. A dev container made from an older image has no mark: build the image again.
+- **The checks' machine has a neutral default name** (#120).
+- Two server tests no longer hold a publish's token equal to the roster's time (#110).
+
 ## 0.7.0
 
 The plugin gets the **Workspace** page, and it is shown by default. New agent now works on a deployment with no bb session provider. The plugin logs every act it asks of OATS.
